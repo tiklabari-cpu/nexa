@@ -593,9 +593,10 @@ interface RosterCount {
  * two "add a worker" flows (a teammate, a team) and the rail is where an
  * agent already reached for the first, so it grows into a menu rather than
  * gaining a second rail entry. A third item — creating an AI agent from
- * here — is deliberately not offered: `POST /ai-agents` does not exist yet
- * (`routes/playbook.ts` only lists and patches), so there is nothing this
- * menu could open for it (`#### K04.1` in PLAN.md has the fuller record).
+ * here — is deliberately not offered: `POST /ai-agents` exists now (tm 390), but
+ * a workspace has at most one AI agent and its creation lives on the empty
+ * Playbook › AI Agent screen, so a "+" item would be a second door to a one-time
+ * act (`#### K04.1` in PLAN.md has the fuller record).
  *
  * Each item gates on the same permission its own screen already enforces —
  * Invite on `canInvite` (IconRail, mirrors the server's `accounts--all:rw`),

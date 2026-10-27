@@ -47,7 +47,7 @@ test.describe('playbook — knowledge source actions', () => {
   test('edits, reindexes and (after confirming) deletes a source (FR-MOD-06.3.3)', async ({
     agentPage,
   }) => {
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     await agentPage
       .getByRole('tablist', { name: 'AI Agent' })
       .getByRole('tab', { name: 'Knowledge' })

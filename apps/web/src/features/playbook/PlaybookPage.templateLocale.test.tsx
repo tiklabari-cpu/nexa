@@ -23,6 +23,8 @@ const { PlaybookPage } = await import('./PlaybookPage.js');
 const { useAuth } = await import('../../lib/auth-store.js');
 
 beforeEach(() => {
+  // General is the landing tab (tm 390.2); these tests are about the Skills/Knowledge tabs.
+  window.history.replaceState(null, '', '/app/playbook?view=skills');
   api.get.mockReset();
   api.post.mockReset();
   // A real, stable `agent`: the page's own scopes selector mints a fresh `[]` on

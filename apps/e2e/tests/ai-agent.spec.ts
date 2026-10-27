@@ -18,18 +18,18 @@ import {
 
 test.describe('AI Agent (MOD-06)', () => {
   test('switches between the four tabs, each showing its own surface', async ({ agentPage }) => {
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
 
     const tabs = agentPage.getByRole('tablist', { name: 'AI Agent' });
-    for (const name of ['Performance', 'Profile', 'Skills', 'Knowledge']) {
+    for (const name of ['Performance', 'General settings', 'Skills', 'Knowledge']) {
       await expect(tabs.getByRole('tab', { name })).toBeVisible();
     }
 
     // Skills is the landing tab — the recommended strip is on screen.
     await expect(agentPage.getByRole('region', { name: 'Recommended skills' })).toBeVisible();
 
-    // Profile shows the persona form pre-filled from the seeded agent (Ada).
-    await tabs.getByRole('tab', { name: 'Profile' }).click();
+    // General settings shows the persona form pre-filled from the seeded agent (Ada).
+    await tabs.getByRole('tab', { name: 'General settings' }).click();
     await expect(agentPage.getByLabel('Name')).toHaveValue('Ada');
 
     // Performance shows the KPI cards, read from the reports the invoice trusts.
@@ -42,9 +42,9 @@ test.describe('AI Agent (MOD-06)', () => {
   test('a persona edit round-trips through the API and survives a reload (FR-MOD-06.4)', async ({
     agentPage,
   }) => {
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     const tabs = agentPage.getByRole('tablist', { name: 'AI Agent' });
-    await tabs.getByRole('tab', { name: 'Profile' }).click();
+    await tabs.getByRole('tab', { name: 'General settings' }).click();
 
     const save = agentPage.getByRole('button', { name: 'Save profile' });
 
@@ -65,9 +65,9 @@ test.describe('AI Agent (MOD-06)', () => {
     // Save settles back to disabled once the PATCH persists and the agent refetches.
     await expect(save).toBeDisabled();
 
-    // Reload and reopen Profile — the edit round-tripped through the API.
+    // Reload and reopen General settings — the edit round-tripped through the API.
     await agentPage.reload();
-    await tabs.getByRole('tab', { name: 'Profile' }).click();
+    await tabs.getByRole('tab', { name: 'General settings' }).click();
     await expect(agentPage.getByLabel('Tone')).toHaveValue(marker);
 
     await agentPage.screenshot({ path: 'kanit/33-ai-agent-profile.png', fullPage: true });
@@ -76,7 +76,7 @@ test.describe('AI Agent (MOD-06)', () => {
   test('adds a website knowledge source by crawling a URL (FR-MOD-06.3.2)', async ({
     agentPage,
   }) => {
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     await agentPage
       .getByRole('tablist', { name: 'AI Agent' })
       .getByRole('tab', { name: 'Knowledge' })
@@ -112,7 +112,7 @@ test.describe('AI Agent (MOD-06)', () => {
   test('uploads a markdown file into an indexed knowledge source (FR-MOD-06.3.2)', async ({
     agentPage,
   }) => {
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     await agentPage
       .getByRole('tablist', { name: 'AI Agent' })
       .getByRole('tab', { name: 'Knowledge' })
@@ -153,7 +153,7 @@ The **flugelbrace${run}** warranty covers cracked welds for ten years.
   test('refuses a file kind the knowledge base cannot parse (FR-MOD-06.3.2)', async ({
     agentPage,
   }) => {
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     await agentPage
       .getByRole('tablist', { name: 'AI Agent' })
       .getByRole('tab', { name: 'Knowledge' })
@@ -180,7 +180,7 @@ The **flugelbrace${run}** warranty covers cracked welds for ten years.
    * raises a dialog and that declining it leaves you where you were. jsdom can
    * assert the router did not move; it cannot assert a browser dialog existed.
    */
-  test('the batch window saved in Profile is what a visitor waits: two turns, then a burst answered once (AI-01)', async ({
+  test('the batch window saved in General settings is what a visitor waits: two turns, then a burst answered once (AI-01)', async ({
     agentPage,
     browser,
     organizationId,
@@ -194,7 +194,7 @@ The **flugelbrace${run}** warranty covers cracked welds for ten years.
       `Tracking for a ${marker} order is emailed the moment it dispatches.`;
 
     // --- A knowledge source only this run's questions can match --------------
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     const tabs = agentPage.getByRole('tablist', { name: 'AI Agent' });
     await tabs.getByRole('tab', { name: 'Knowledge' }).click();
     await agentPage.getByLabel('Title').fill(`Batch window proof ${run}`);
@@ -208,14 +208,14 @@ The **flugelbrace${run}** warranty covers cracked welds for ten years.
     ]);
 
     // --- The window: two seconds, set where an admin sets it, and kept --------
-    await tabs.getByRole('tab', { name: 'Profile' }).click();
+    await tabs.getByRole('tab', { name: 'General settings' }).click();
     const waitFor = agentPage.getByLabel('Wait for the visitor to stop typing');
     const save = agentPage.getByRole('button', { name: 'Save profile' });
     await waitFor.selectOption('2');
     await save.click();
     await expect(save).toBeDisabled();
     await agentPage.reload();
-    await tabs.getByRole('tab', { name: 'Profile' }).click();
+    await tabs.getByRole('tab', { name: 'General settings' }).click();
     await expect(agentPage.getByLabel('Wait for the visitor to stop typing')).toHaveValue('2');
 
     const context = await browser.newContext();
@@ -256,7 +256,7 @@ The **flugelbrace${run}** warranty covers cracked welds for ten years.
   test('opens the run log, and warns before leaving unsaved edits (FR-MOD-06.2.1)', async ({
     agentPage,
   }) => {
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     await agentPage.getByRole('button', { name: /Where is my order/ }).click();
 
     // Run log: the endpoint has answered this since the engine shipped; until
@@ -306,7 +306,7 @@ Edited at ${Date.now()}, not saved.`);
     expect(messages).toHaveLength(1);
 
     // Put the fixture back the way it was found.
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     await agentPage.getByRole('button', { name: /Where is my order/ }).click();
     await agentPage.getByLabel('Instruction').fill(original);
     const saveAgain = agentPage.getByRole('button', { name: 'Save changes' });

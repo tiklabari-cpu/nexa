@@ -35,7 +35,7 @@ test.describe('AI hand-over card (AI-10)', () => {
       `Tracking for a ${marker} order is emailed the moment it dispatches.`;
 
     // --- A knowledge source only this run's first question can match ----------
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     const tabs = agentPage.getByRole('tablist', { name: 'AI Agent' });
     await tabs.getByRole('tab', { name: 'Knowledge' }).click();
     await agentPage.getByLabel('Title').fill(`Hand-over card proof ${run}`);

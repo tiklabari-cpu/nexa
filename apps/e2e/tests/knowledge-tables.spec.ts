@@ -71,7 +71,7 @@ test.describe('structured knowledge tables (AI-13)', () => {
         .problems,
     ).toEqual([{ field: 'min_amount', code: 'min_above_max' }]);
     await agentPage.setViewportSize({ width: 1280, height: 1600 });
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     await agentPage
       .getByRole('tablist', { name: 'AI Agent' })
       .getByRole('tab', { name: 'Tables' })

@@ -155,6 +155,7 @@ export const shell: Messages = {
   'nav.customers': 'Customers',
   'nav.team': 'Team',
   'nav.playbook': 'Playbook',
+  'nav.aiAgent': 'AI Agent',
   'nav.reports': 'Reports',
   'nav.billing': 'Billing',
   'nav.settings': 'Settings',

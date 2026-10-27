@@ -110,7 +110,38 @@ export const playbook: Messages = {
   'playbook.actions.browseTemplates': 'Şablonlara göz at',
   'playbook.actions.newSkill': 'Yeni beceri',
   'playbook.tabs.performance': 'Performans',
-  'playbook.tabs.profile': 'Profil',
+  'playbook.tabs.general': 'Genel ayarlar',
+  'playbook.tabs.behaviour': 'Davranış',
+  // "AI ajanı ekle" (CreateAiAgentCard.tsx, tm 390.2)
+  'playbook.create.title': 'AI ajanı ekle',
+  'playbook.create.description':
+    'Asistana bir ad ve isterseniz bir ton verin. Kapalı başlar; ne zaman yayına gireceğine siz karar verirsiniz.',
+  'playbook.create.name': 'Ad',
+  'playbook.create.namePlaceholder': 'Destek asistanı',
+  'playbook.create.nameRequired': 'AI ajanına bir ad verin.',
+  'playbook.create.tone': 'Ton',
+  'playbook.create.tonePlaceholder': 'Samimi ve kısa',
+  'playbook.create.submit': 'AI ajanı ekle',
+  'playbook.create.noAgentTitle': 'Henüz AI ajanı yok',
+  'playbook.create.askAdmin':
+    'AI ajanını eklemesi için bu çalışma alanının bir yöneticisine başvurun.',
+  // Yayına girmeden önce kalanlar (SetupSteps.tsx)
+  'playbook.setup.title': 'Kurulum adımları',
+  'playbook.setup.knowledge': 'Yanıtlarını dayandıracağı bir bilgi kaynağı ekleyin',
+  'playbook.setup.skill': 'Adımları olan etkin bir beceri ekleyin',
+  'playbook.setup.open': 'Aç',
+  'playbook.setup.done': 'Tamamlandı',
+  'playbook.setup.todo': 'Henüz tamamlanmadı',
+  // Widget karşılama mesajı (WelcomeMessageCard.tsx)
+  'playbook.welcome.title': 'Karşılama mesajı',
+  'playbook.welcome.description': 'Ziyaretçinin sohbet widget’ında asistandan gördüğü ilk mesaj.',
+  'playbook.welcome.titleLabel': 'Başlık',
+  'playbook.welcome.textLabel': 'Mesaj',
+  'playbook.welcome.save': 'Karşılama mesajını kaydet',
+  'playbook.welcome.saved': 'Kaydedildi',
+  'playbook.welcome.perBrand': 'Her markanın kendi karşılama mesajı vardır.',
+  'playbook.welcome.readOnly': 'Karşılama mesajını görebilir ama değiştiremezsiniz.',
+  'playbook.welcome.goToWidget': 'Widget ayarlarına git',
   'playbook.tabs.skills': 'Beceriler',
   'playbook.tabs.knowledge': 'Bilgi',
   'playbook.tabs.kb': 'Genel Bilgi Bankası',
@@ -545,7 +576,7 @@ export const playbook: Messages = {
   'playbook.profile.noneYet': 'Henüz yok',
   'playbook.profile.noAgentTitle': 'AI ajanı yok',
   'playbook.profile.noAgentDescription':
-    'Bu çalışma alanında bir AI ajanı oluşturulduğunda kişiliği burada düzenlenir.',
+    'Önce Genel ayarlar sekmesinden AI ajanını ekleyin; bu sekme ajan oluştuktan sonra düzenlenir.',
 
   // AI performance (AiPerformance.tsx)
   'playbook.performance.noAccessTitle': 'Performansa erişim yok',

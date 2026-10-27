@@ -69,7 +69,7 @@ test.describe('knowledge store — one list, scoped (AI-14)', () => {
     agentPage,
   }) => {
     await agentPage.setViewportSize({ width: 1280, height: 1400 });
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     await agentPage
       .getByRole('tablist', { name: 'AI Agent' })
       .getByRole('tab', { name: 'Knowledge' })
@@ -164,7 +164,7 @@ test.describe('knowledge base — the AI switch (AI-14-S2)', () => {
     agentPage,
   }) => {
     await agentPage.setViewportSize({ width: 1280, height: 1600 });
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     await agentPage.getByRole('tab', { name: 'Public KB' }).click();
     await agentPage.getByRole('button', { name: 'New article' }).click();
 
@@ -213,7 +213,7 @@ test.describe('knowledge base — the AI switch (AI-14-S2)', () => {
     // --- The Playbook's list marks it as a Knowledge Base article's ----------
     // Leaving a form that was edited asks the browser to confirm; accept it.
     agentPage.on('dialog', (dialog) => void dialog.accept());
-    await agentPage.goto('/app/playbook');
+    await agentPage.goto('/app/playbook?view=skills');
     await agentPage
       .getByRole('tablist', { name: 'AI Agent' })
       .getByRole('tab', { name: 'Knowledge' })

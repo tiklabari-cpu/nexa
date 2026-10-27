@@ -88,7 +88,7 @@ beforeEach(() => {
   resetLocale();
   api.get.mockReset();
   api.post.mockReset();
-  window.history.replaceState(null, '', '/app/playbook');
+  window.history.replaceState(null, '', '/app/playbook?view=skills');
   useAuth.setState({
     status: 'signed-in',
     accessToken: 'test-token',

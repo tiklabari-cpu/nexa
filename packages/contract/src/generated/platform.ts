@@ -1831,6 +1831,309 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/billing/plans': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The plan catalogue
+     * @description Every plan, what it lists at and unlocks, its daily AI allowance as the
+     *     tenant API applies it (the panel's plan default, else the catalogue's;
+     *     `null` inherits the deployment's), and how many workspaces are on it.
+     */
+    get: operations['listPlatformBillingPlans'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/subscriptions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Every workspace's subscription
+     * @description The latest subscription of each workspace that has one (sandboxes
+     *     excluded), newest first, keyset-paged. `past_due=true` keeps the ones
+     *     whose subscription or licence is `past_due`.
+     */
+    get: operations['listPlatformSubscriptions'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/invoices': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Every issued statement
+     * @description The frozen statements of every workspace (`invoices`), newest period
+     *     first, keyset-paged. The open period is not a statement and is not
+     *     listed — a workspace's own estimate is `GET /workspaces/{id}/invoices`.
+     */
+    get: operations['listPlatformInvoices'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/invoices/{invoiceId}/download': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One statement as CSV
+     * @description The same CSV the workspace downloads for that period — its lines,
+     *     credit lines included, and the total. (The PDF arrives with #383.)
+     */
+    get: operations['downloadPlatformInvoice'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/packages': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The packages on sale, and this period's sales
+     * @description The API-call packages and the AI resolution pack, each with how many
+     *     were bought in the open period and for how much.
+     */
+    get: operations['listPlatformBillingPackages'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/revenue': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Revenue by month
+     * @description What the closed statements of the last `months` periods add up to, per
+     *     currency, oldest first — exact figures, not an estimate. The open period
+     *     is separate: the packages bought in it so far. And the credits granted
+     *     and not yet applied.
+     */
+    get: operations['getPlatformRevenue'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/credits': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Credits granted
+     * @description Every credit, newest first, keyset-paged — `open=true` keeps the ones no
+     *     statement has taken yet. A credit larger than the statement it landed on
+     *     shows as two rows: the applied part, and the rest (`remainder_of`).
+     */
+    get: operations['listPlatformCredits'];
+    put?: never;
+    /**
+     * Grant a workspace a credit
+     * @description Comes off the workspace's next statement as an `Account credit` line
+     *     (`invoice-close-sweep.ts`), never taking it below zero — what is left
+     *     waits for the one after. In the statements' currency (`USD`; any other
+     *     is 400 `currency_mismatch`).
+     */
+    post: operations['grantPlatformCredit'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/manual-subscription': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Subscribe a workspace by hand
+     * @description What a confirmed bank transfer or crypto payment earns (389.18 calls
+     *     this): the workspace's subscription on `plan`, `active` until
+     *     `period_end`, and its licence `active` with the trial ended. A suspended
+     *     or cancelled workspace is 409 `platform_workspace_state`
+     *     (`workspace_closed`); `period_end` must be in the future.
+     */
+    post: operations['createPlatformManualSubscription'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/usage/global': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The deployment's usage
+     * @description Daily AI tokens across the deployment for the last `days` days (the
+     *     deployment's own counter, which every workspace's live calls also
+     *     spend), today's figures against the deployment's caps, and the open
+     *     period's AI resolutions and API calls summed over every workspace.
+     */
+    get: operations['getPlatformGlobalUsage'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/usage/workspaces': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The heaviest workspaces on one meter
+     * @description The `top` workspaces by `meter`: today's tokens for `llm` and
+     *     `embedding` (with each one's cap as the tenant API resolves it), the
+     *     open period's count for `ai_resolutions` and `api_calls` (with what the
+     *     plan includes).
+     */
+    get: operations['listPlatformTopUsage'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/usage/workspaces/{licenseId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One workspace's AI allowance and usage
+     * @description Each layer of the workspace's daily AI caps and which one applies, the
+     *     override's end, today's counters (the simulation meters included) and
+     *     the last 30 days.
+     */
+    get: operations['getPlatformWorkspaceUsageDetail'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/usage/workspaces/{licenseId}/ai-caps': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Override the workspace's daily AI caps
+     * @description The whole override, as `PUT` says: a `null` cap inherits the plan's
+     *     default; both `null` removes the override. `expires_at` (future, and
+     *     only beside a cap) ends it — past it the workspace reads its plan's
+     *     figures again. The same values again are `unchanged` and record nothing.
+     */
+    put: operations['putPlatformWorkspaceAiCaps'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/ai-caps': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Each plan's default daily AI caps
+     * @description The panel's figure per plan and meter (`platform_settings` `ai.caps`),
+     *     the catalogue's it falls back to, and the deployment default under both.
+     */
+    get: operations['getPlatformPlanAiCaps'];
+    /**
+     * Set each plan's default daily AI caps
+     * @description Replaces the plans' figures (a plan or meter left out or `null` falls
+     *     back to the catalogue); anything else stored under `ai.caps` is kept.
+     *     Every workspace without an override of its own takes the new figure at
+     *     once. The same figures again are `unchanged` and record nothing.
+     */
+    put: operations['putPlatformPlanAiCaps'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/settings': {
     parameters: {
       query?: never;
@@ -3739,6 +4042,260 @@ export interface components {
         license_id: string;
         organization_name: string;
       }[];
+    };
+    /** @description A daily AI token figure per live meter; `null` inherits the next layer. */
+    PlatformAiDailyTokens: {
+      llm: number | null;
+      embedding: number | null;
+    };
+    PlatformBillingPlan: {
+      id: components['schemas']['PlatformPlan'];
+      /** @enum {string} */
+      pricing: 'listed' | 'quoted';
+      unit_price_cents: number | null;
+      ai_resolutions_included: number | null;
+      entitlements: string[];
+      ai_daily_tokens: components['schemas']['PlatformAiDailyTokens'];
+      /** @description Workspaces (sandboxes excluded) whose latest subscription is on this plan. */
+      workspaces: number;
+    };
+    PlatformBillingPlanList: {
+      data: components['schemas']['PlatformBillingPlan'][];
+    };
+    PlatformSubscriptionRow: {
+      license_id: string;
+      organization_name: string;
+      license_status: components['schemas']['PlatformLicenseStatus'];
+      plan: string;
+      status: string;
+      /** @enum {string} */
+      billing_cycle: 'monthly' | 'annual';
+      seats: number;
+      unit_price_cents: number;
+      /** Format: date-time */
+      current_period_end: string | null;
+      cancel_at_period_end: boolean;
+      /** Format: date-time */
+      created_at: string;
+    };
+    PlatformSubscriptionList: {
+      data: components['schemas']['PlatformSubscriptionRow'][];
+      next_cursor: string | null;
+    };
+    PlatformInvoiceRow: {
+      /** Format: uuid */
+      id: string;
+      license_id: string;
+      organization_name: string;
+      number: string;
+      period: string;
+      /** @enum {string} */
+      origin: 'issued' | 'reconstructed';
+      /** @enum {string} */
+      status: 'paid' | 'trial';
+      currency: string;
+      subtotal_cents: number;
+      /** @description What the platform's credits took off the statement (a positive figure). */
+      credit_cents: number;
+      total_cents: number;
+      /** Format: date-time */
+      issued_at: string;
+    };
+    PlatformInvoiceList: {
+      data: components['schemas']['PlatformInvoiceRow'][];
+      next_cursor: string | null;
+    };
+    PlatformPackageSales: {
+      count: number;
+      revenue_cents: number;
+    };
+    PlatformBillingPackages: {
+      period: string;
+      api_packages: {
+        id: string;
+        name: string;
+        api_calls: number;
+        price_cents: number;
+        sold: components['schemas']['PlatformPackageSales'];
+      }[];
+      ai_resolution_pack: {
+        resolutions_per_pack: number;
+        pack_price_cents: number;
+        max_packs: number;
+        /** @description `count` is packs, not purchases. */
+        sold: components['schemas']['PlatformPackageSales'];
+      };
+    };
+    PlatformRevenueMonth: {
+      period: string;
+      currency: string;
+      invoices: number;
+      subtotal_cents: number;
+      credit_cents: number;
+      total_cents: number;
+    };
+    PlatformRevenue: {
+      months: components['schemas']['PlatformRevenueMonth'][];
+      /** @description The period still running — not a statement; only what was already bought in it. */
+      open_period: {
+        period: string;
+        package_purchases_cents: number;
+      };
+      open_credits: {
+        currency: string;
+        amount_minor: number;
+        credits: number;
+      }[];
+    };
+    PlatformCredit: {
+      /** Format: uuid */
+      id: string;
+      license_id: string;
+      organization_name: string;
+      amount_minor: number;
+      currency: string;
+      reason: string;
+      admin_email: string | null;
+      /** Format: uuid */
+      invoice_id: string | null;
+      invoice_number: string | null;
+      invoice_period: string | null;
+      /** Format: uuid */
+      remainder_of: string | null;
+      /** Format: date-time */
+      created_at: string;
+    };
+    PlatformCreditList: {
+      data: components['schemas']['PlatformCredit'][];
+      next_cursor: string | null;
+    };
+    PlatformCreditEnvelope: {
+      credit: components['schemas']['PlatformCredit'];
+    };
+    PlatformCreditRequest: {
+      license_id: string;
+      amount_minor: number;
+      currency: string;
+      reason: string;
+    };
+    PlatformManualSubscriptionRequest: {
+      license_id: string;
+      plan: components['schemas']['PlatformPlan'];
+      /** Format: date-time */
+      period_end: string;
+      seats?: number;
+      /** @enum {string} */
+      billing_cycle?: 'monthly' | 'annual';
+      reason: string;
+    };
+    /** @enum {string} */
+    PlatformUsageTopMeter: 'llm' | 'embedding' | 'ai_resolutions' | 'api_calls';
+    PlatformAiCounter: {
+      used: number;
+      reserved: number;
+      cap: number;
+    };
+    PlatformGlobalUsage: {
+      days: number;
+      series: {
+        /** Format: date */
+        date: string;
+        llm: number;
+        embedding: number;
+      }[];
+      /** @description The deployment's own counter today, against its cap. */
+      today: {
+        llm: components['schemas']['PlatformAiCounter'];
+        embedding: components['schemas']['PlatformAiCounter'];
+      };
+      period: {
+        period: string;
+        ai_resolutions: number;
+        api_calls: number;
+      };
+    };
+    PlatformTopUsage: {
+      meter: components['schemas']['PlatformUsageTopMeter'];
+      /** @description `YYYY-MM-DD` (today, UTC) for the token meters, `yyyymm` for the others. */
+      window: string;
+      data: {
+        license_id: string;
+        organization_name: string;
+        plan: string;
+        used: number;
+        /** @description The workspace's cap (token meters) or what its plan includes (the others). */
+        limit: number | null;
+        percent: number | null;
+      }[];
+    };
+    PlatformAiCapLayers: {
+      effective: number;
+      /** @enum {string} */
+      source: 'override' | 'plan' | 'deployment';
+      override: number | null;
+      plan: number | null;
+      deployment: number;
+    };
+    PlatformWorkspaceAiCaps: {
+      llm: components['schemas']['PlatformAiCapLayers'];
+      embedding: components['schemas']['PlatformAiCapLayers'];
+      /** Format: date-time */
+      expires_at: string | null;
+      /** @description False once `expires_at` has passed — the override then reads as unset. */
+      in_force: boolean;
+    };
+    PlatformWorkspaceUsageDetail: {
+      license_id: string;
+      organization_name: string;
+      plan: string;
+      caps: components['schemas']['PlatformWorkspaceAiCaps'];
+      today: {
+        llm: components['schemas']['PlatformAiCounter'];
+        embedding: components['schemas']['PlatformAiCounter'];
+        llm_test: components['schemas']['PlatformAiCounter'];
+        embedding_test: components['schemas']['PlatformAiCounter'];
+      };
+      series: {
+        /** Format: date */
+        date: string;
+        llm: number;
+        embedding: number;
+      }[];
+    };
+    PlatformWorkspaceAiCapsRequest: {
+      llm_daily_tokens_cap: number | null;
+      embedding_daily_tokens_cap: number | null;
+      /** Format: date-time */
+      expires_at?: string | null;
+      reason: string;
+    };
+    PlatformWorkspaceAiCapsResult: {
+      unchanged: boolean;
+      usage: components['schemas']['PlatformWorkspaceUsageDetail'];
+    };
+    PlatformPlanAiCaps: {
+      plans: {
+        plan: components['schemas']['PlatformPlan'];
+        set: components['schemas']['PlatformAiDailyTokens'];
+        catalogue: components['schemas']['PlatformAiDailyTokens'];
+      }[];
+      deployment: {
+        llm: number;
+        embedding: number;
+      };
+      /** Format: date-time */
+      updated_at: string | null;
+    };
+    PlatformPlanAiCapsRequest: {
+      plans: {
+        growth?: components['schemas']['PlatformAiDailyTokens'];
+        enterprise?: components['schemas']['PlatformAiDailyTokens'];
+      };
+      reason: string;
+    };
+    PlatformPlanAiCapsResult: {
+      unchanged: boolean;
+      caps: components['schemas']['PlatformPlanAiCaps'];
     };
     PlatformOperationsJob: {
       name: string;
@@ -6785,6 +7342,400 @@ export interface operations {
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       409: components['responses']['Conflict'];
+    };
+  };
+  listPlatformBillingPlans: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The plans */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformBillingPlanList'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  listPlatformSubscriptions: {
+    parameters: {
+      query?: {
+        plan?: components['schemas']['PlatformPlan'];
+        status?: components['schemas']['PlatformLicenseStatus'];
+        past_due?: boolean;
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformSubscriptionList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  listPlatformInvoices: {
+    parameters: {
+      query?: {
+        license_id?: string;
+        period?: string;
+        status?: 'paid' | 'trial';
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformInvoiceList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  downloadPlatformInvoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        invoiceId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The statement */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/csv': string;
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  listPlatformBillingPackages: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The packages */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformBillingPackages'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformRevenue: {
+    parameters: {
+      query?: {
+        months?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The months */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformRevenue'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  listPlatformCredits: {
+    parameters: {
+      query?: {
+        license_id?: string;
+        open?: boolean;
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformCreditList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  grantPlatformCredit: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformCreditRequest'];
+      };
+    };
+    responses: {
+      /** @description The credit */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformCreditEnvelope'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  createPlatformManualSubscription: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformManualSubscriptionRequest'];
+      };
+    };
+    responses: {
+      /** @description The workspace after the action */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceActionResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  getPlatformGlobalUsage: {
+    parameters: {
+      query?: {
+        days?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The usage */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformGlobalUsage'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  listPlatformTopUsage: {
+    parameters: {
+      query?: {
+        meter?: components['schemas']['PlatformUsageTopMeter'];
+        top?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The workspaces */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformTopUsage'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformWorkspaceUsageDetail: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The workspace */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceUsageDetail'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  putPlatformWorkspaceAiCaps: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's licence number. Anything else is a 404, like an unknown one. */
+        licenseId: components['parameters']['LicenseId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformWorkspaceAiCapsRequest'];
+      };
+    };
+    responses: {
+      /** @description The workspace's allowance after the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformWorkspaceAiCapsResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  getPlatformPlanAiCaps: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The defaults */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformPlanAiCaps'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  putPlatformPlanAiCaps: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformPlanAiCapsRequest'];
+      };
+    };
+    responses: {
+      /** @description The defaults after the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformPlanAiCapsResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
     };
   };
   getPlatformSettings: {

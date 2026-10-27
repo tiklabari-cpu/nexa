@@ -333,6 +333,36 @@ describe('the platform audit chain (tm 389.5)', () => {
     ok(await action('delete', { confirm_name: name }));
     ok(await action('delete/cancel'));
 
+    // Billing and usage (tm 389.12), on B — A is suspended by now.
+    const billing = (method: string, path: string, body: Record<string, unknown>) =>
+      request(method, path, { token, body: { ...body, ...reason } });
+    const b = fx.b.licenseId.toString();
+    ok(
+      await billing('POST', '/billing/credits', {
+        license_id: b,
+        amount_minor: 1_000,
+        currency: 'USD',
+      }),
+    );
+    ok(
+      await billing('POST', '/billing/manual-subscription', {
+        license_id: b,
+        plan: 'growth',
+        period_end: new Date(clock.now + 30 * 86_400_000).toISOString(),
+      }),
+    );
+    ok(
+      await billing('PUT', `/usage/workspaces/${b}/ai-caps`, {
+        llm_daily_tokens_cap: 300_000,
+        embedding_daily_tokens_cap: null,
+      }),
+    );
+    ok(
+      await billing('PUT', '/settings/ai-caps', {
+        plans: { growth: { llm: 250_000, embedding: null } },
+      }),
+    );
+
     // Every account action (tm 389.11), on B's agent — A's agent owns A by now.
     const person = fx.b.agentAccountId;
     const onAccount = (path: string, body: Record<string, unknown> = {}) =>

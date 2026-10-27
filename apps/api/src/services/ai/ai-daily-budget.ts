@@ -258,7 +258,16 @@ export class AiDailyBudget {
     this.#log = options.logger;
     this.#now = options.now ?? (() => new Date());
     this.#caps = new AiCapResolver({
-      load: options.capInputs ?? prismaCapInputs(db),
+      load:
+        options.capInputs ??
+        prismaCapInputs(db, {
+          now: () => this.#now().getTime(),
+          onSettingsError: (error) =>
+            this.#log.warn(
+              { err: error },
+              'platform AI plan defaults unreadable; the plan catalogue applies',
+            ),
+        }),
       deployment: options.deploymentCaps ?? (() => caps),
       ttlMs: options.capTtlMs,
       now: () => this.#now().getTime(),

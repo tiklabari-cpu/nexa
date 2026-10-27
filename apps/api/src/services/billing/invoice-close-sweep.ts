@@ -47,6 +47,16 @@
  * the derivation it replaces: same guess, now permanent and no longer visibly a
  * guess.
  *
+ * **Credits (tm 389.12).** The root panel grants a workspace credits
+ * (`platform_credits`); each open one comes off the next statement this sweep
+ * freezes, as a negative `Account credit` line, in the same transaction —
+ * `billing_apply_platform_credits`, a SECURITY DEFINER function, because this
+ * sweep's role may not read the platform's table. A credit never takes a total
+ * below zero: what is left of it waits for the next statement. The statement's
+ * unique index is still the idempotency guarantee — a pass that loses the race
+ * for a period never reaches the credits — and the function locks the credit
+ * rows, so two periods closing at once cannot both take the same one.
+ *
  * **What is not swept.** A period with no usage record and no purchase gets no
  * statement, exactly as the derived path listed no such period. A workspace that
  * did nothing for a month leaves no evidence that the month happened, and
@@ -257,6 +267,10 @@ export class InvoiceCloseSweeper {
             amountCents: item.amount_cents,
           })),
         });
+
+        // The workspace's open credits, off this statement — or nothing, on a
+        // trial month or a statement that owes nothing.
+        await tx.$queryRaw`SELECT billing_apply_platform_credits(${invoice.id}::uuid) AS applied`;
       });
       return true;
     } catch (error) {

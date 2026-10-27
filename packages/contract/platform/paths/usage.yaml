@@ -1,0 +1,158 @@
+# Usage across every workspace, and the daily AI allowance (tm 389.12 ·
+# FR-ADMIN-13 · design.md §C usage, §B3). `x-platform-*` as in auth.yaml.
+#
+# A workspace's daily AI allowance is, per live meter,
+# `override ?? plan default ?? deployment default` (`services/ai/ai-caps.ts`):
+# the override is the licence's own (`PUT /usage/workspaces/{id}/ai-caps`), the
+# plan default the panel's (`PUT /settings/ai-caps`) or the plan catalogue's,
+# the deployment default the environment's. A change is announced on
+# `ai.caps_changed`, so the tenant API applies it at once rather than within
+# its cached minute. Responses carry counts and the organization's name only.
+
+global:
+  get:
+    tags: [Usage]
+    operationId: getPlatformGlobalUsage
+    summary: The deployment's usage
+    description: |
+      Daily AI tokens across the deployment for the last `days` days (the
+      deployment's own counter, which every workspace's live calls also
+      spend), today's figures against the deployment's caps, and the open
+      period's AI resolutions and API calls summed over every workspace.
+    x-platform-permission: usage.read
+    parameters:
+      - name: days
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 90, default: 30 }
+    responses:
+      "200":
+        description: The usage
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformGlobalUsage" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+workspaces:
+  get:
+    tags: [Usage]
+    operationId: listPlatformTopUsage
+    summary: The heaviest workspaces on one meter
+    description: |
+      The `top` workspaces by `meter`: today's tokens for `llm` and
+      `embedding` (with each one's cap as the tenant API resolves it), the
+      open period's count for `ai_resolutions` and `api_calls` (with what the
+      plan includes).
+    x-platform-permission: usage.read
+    parameters:
+      - name: meter
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/PlatformUsageTopMeter" }
+      - name: top
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    responses:
+      "200":
+        description: The workspaces
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformTopUsage" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+workspace:
+  get:
+    tags: [Usage]
+    operationId: getPlatformWorkspaceUsageDetail
+    summary: One workspace's AI allowance and usage
+    description: |
+      Each layer of the workspace's daily AI caps and which one applies, the
+      override's end, today's counters (the simulation meters included) and
+      the last 30 days.
+    x-platform-permission: usage.read
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    responses:
+      "200":
+        description: The workspace
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspaceUsageDetail" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+aiCaps:
+  put:
+    tags: [Usage]
+    operationId: putPlatformWorkspaceAiCaps
+    summary: Override the workspace's daily AI caps
+    description: |
+      The whole override, as `PUT` says: a `null` cap inherits the plan's
+      default; both `null` removes the override. `expires_at` (future, and
+      only beside a cap) ends it — past it the workspace reads its plan's
+      figures again. The same values again are `unchanged` and record nothing.
+    x-platform-permission: usage.manage
+    x-platform-audit: workspace.ai_caps_changed
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LicenseId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspaceAiCapsRequest" }
+    responses:
+      "200":
+        description: The workspace's allowance after the change
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspaceAiCapsResult" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+planCaps:
+  get:
+    tags: [Usage]
+    operationId: getPlatformPlanAiCaps
+    summary: Each plan's default daily AI caps
+    description: |
+      The panel's figure per plan and meter (`platform_settings` `ai.caps`),
+      the catalogue's it falls back to, and the deployment default under both.
+    x-platform-permission: usage.read
+    responses:
+      "200":
+        description: The defaults
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformPlanAiCaps" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+  put:
+    tags: [Usage]
+    operationId: putPlatformPlanAiCaps
+    summary: Set each plan's default daily AI caps
+    description: |
+      Replaces the plans' figures (a plan or meter left out or `null` falls
+      back to the catalogue); anything else stored under `ai.caps` is kept.
+      Every workspace without an override of its own takes the new figure at
+      once. The same figures again are `unchanged` and record nothing.
+    x-platform-permission: usage.manage
+    x-platform-audit: settings.updated
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformPlanAiCapsRequest" }
+    responses:
+      "200":
+        description: The defaults after the change
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformPlanAiCapsResult" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }

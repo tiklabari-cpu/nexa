@@ -2,6 +2,7 @@ import { useEffect, type ReactElement } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/AppShell.js';
 import { AccountsSection } from './features/accounts/AccountsSection.js';
+import { BillingPage } from './features/billing/BillingPage.js';
 import { AdminsPage } from './features/admins/AdminsPage.js';
 import { LoadingPage } from './components/LoadingPage.js';
 import { NotFoundPage } from './components/NotFoundPage.js';
@@ -17,6 +18,7 @@ import { PlaceholderPage } from './features/placeholder/PlaceholderPage.js';
 import { SecurityPage } from './features/security/SecurityPage.js';
 import { SettingsPage } from './features/settings/SettingsPage.js';
 import { SupportPage } from './features/support/SupportPage.js';
+import { UsageSection } from './features/usage/UsageSection.js';
 import { WorkspacesSection } from './features/workspaces/WorkspacesSection.js';
 import { useAuth } from './lib/auth-store.js';
 import { NAV_ITEMS, type NavItem } from './lib/navigation.js';
@@ -89,6 +91,10 @@ function SectionPage({ item }: { item: NavItem }): ReactElement {
       return <WorkspacesSection />;
     case 'accounts':
       return <AccountsSection />;
+    case 'billing':
+      return <BillingPage />;
+    case 'usage':
+      return <UsageSection />;
     case 'admins':
       return <AdminsPage />;
     case 'settings':

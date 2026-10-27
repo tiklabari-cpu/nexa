@@ -24,6 +24,7 @@ import {
   initialImpersonationState,
   type FakeImpersonationState,
 } from './fake-impersonations.js';
+import { handleBilling, initialBillingState } from './fake-billing.js';
 
 export interface RecordedRequest {
   method: string;
@@ -571,6 +572,7 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
   });
   Object.assign(settingsState.settings, options.settings ?? {});
   settingsState.config = options.effectiveConfig ?? 'fresh';
+  const billingState = initialBillingState();
   let issued = 0;
 
   const me = (stage: 'active'): Record<string, unknown> => ({
@@ -762,6 +764,19 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
       problem,
     );
     if (impersonationResponse) return impersonationResponse;
+
+    const billingResponse = handleBilling(
+      method,
+      path,
+      body,
+      search,
+      role,
+      billingState,
+      () => workspaceState.workspace,
+      json,
+      problem,
+    );
+    if (billingResponse) return billingResponse;
 
     return problem(404, 'not_found', `${method} ${path}`);
   }

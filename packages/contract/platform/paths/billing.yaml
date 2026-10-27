@@ -1,0 +1,238 @@
+# Billing across every workspace (tm 389.12 · FR-ADMIN-12 · design.md §C billing).
+# `x-platform-*` as in auth.yaml.
+#
+# Reads are counts, amounts, states and identities — the organization's name
+# and licence number, never a workspace's content. A credit and a manual
+# subscription take a `reason` (3–500 characters) and are recorded twice, in
+# one transaction with the change: in the platform audit chain (with the
+# reason) and in the workspace's own trail as `platform.billing_<verb>`
+# (without it). Money is integer minor units throughout.
+
+plans:
+  get:
+    tags: [Billing]
+    operationId: listPlatformBillingPlans
+    summary: The plan catalogue
+    description: |
+      Every plan, what it lists at and unlocks, its daily AI allowance as the
+      tenant API applies it (the panel's plan default, else the catalogue's;
+      `null` inherits the deployment's), and how many workspaces are on it.
+    x-platform-permission: billing.read
+    responses:
+      "200":
+        description: The plans
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformBillingPlanList" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+subscriptions:
+  get:
+    tags: [Billing]
+    operationId: listPlatformSubscriptions
+    summary: Every workspace's subscription
+    description: |
+      The latest subscription of each workspace that has one (sandboxes
+      excluded), newest first, keyset-paged. `past_due=true` keeps the ones
+      whose subscription or licence is `past_due`.
+    x-platform-permission: billing.read
+    parameters:
+      - {
+          name: plan,
+          in: query,
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformPlan" },
+        }
+      - name: status
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/PlatformLicenseStatus" }
+      - { name: past_due, in: query, schema: { type: boolean } }
+      - { name: cursor, in: query, schema: { type: string, maxLength: 512 } }
+      - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+    responses:
+      "200":
+        description: One page
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformSubscriptionList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+invoices:
+  get:
+    tags: [Billing]
+    operationId: listPlatformInvoices
+    summary: Every issued statement
+    description: |
+      The frozen statements of every workspace (`invoices`), newest period
+      first, keyset-paged. The open period is not a statement and is not
+      listed — a workspace's own estimate is `GET /workspaces/{id}/invoices`.
+    x-platform-permission: billing.read
+    parameters:
+      - name: license_id
+        in: query
+        schema: { type: string, pattern: "^[1-9][0-9]{0,18}$" }
+      - { name: period, in: query, schema: { type: string, pattern: "^[0-9]{6}$" } }
+      - { name: status, in: query, schema: { type: string, enum: [paid, trial] } }
+      - { name: cursor, in: query, schema: { type: string, maxLength: 512 } }
+      - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+    responses:
+      "200":
+        description: One page
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformInvoiceList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+invoiceDownload:
+  get:
+    tags: [Billing]
+    operationId: downloadPlatformInvoice
+    summary: One statement as CSV
+    description: |
+      The same CSV the workspace downloads for that period — its lines,
+      credit lines included, and the total. (The PDF arrives with #383.)
+    x-platform-permission: billing.read
+    parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      "200":
+        description: The statement
+        content:
+          text/csv:
+            schema: { type: string }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+packages:
+  get:
+    tags: [Billing]
+    operationId: listPlatformBillingPackages
+    summary: The packages on sale, and this period's sales
+    description: |
+      The API-call packages and the AI resolution pack, each with how many
+      were bought in the open period and for how much.
+    x-platform-permission: billing.read
+    responses:
+      "200":
+        description: The packages
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformBillingPackages" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+revenue:
+  get:
+    tags: [Billing]
+    operationId: getPlatformRevenue
+    summary: Revenue by month
+    description: |
+      What the closed statements of the last `months` periods add up to, per
+      currency, oldest first — exact figures, not an estimate. The open period
+      is separate: the packages bought in it so far. And the credits granted
+      and not yet applied.
+    x-platform-permission: billing.read
+    parameters:
+      - name: months
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 36, default: 12 }
+    responses:
+      "200":
+        description: The months
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformRevenue" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+credits:
+  get:
+    tags: [Billing]
+    operationId: listPlatformCredits
+    summary: Credits granted
+    description: |
+      Every credit, newest first, keyset-paged — `open=true` keeps the ones no
+      statement has taken yet. A credit larger than the statement it landed on
+      shows as two rows: the applied part, and the rest (`remainder_of`).
+    x-platform-permission: billing.read
+    parameters:
+      - name: license_id
+        in: query
+        schema: { type: string, pattern: "^[1-9][0-9]{0,18}$" }
+      - { name: open, in: query, schema: { type: boolean } }
+      - { name: cursor, in: query, schema: { type: string, maxLength: 512 } }
+      - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+    responses:
+      "200":
+        description: One page
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformCreditList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+  post:
+    tags: [Billing]
+    operationId: grantPlatformCredit
+    summary: Grant a workspace a credit
+    description: |
+      Comes off the workspace's next statement as an `Account credit` line
+      (`invoice-close-sweep.ts`), never taking it below zero — what is left
+      waits for the one after. In the statements' currency (`USD`; any other
+      is 400 `currency_mismatch`).
+    x-platform-permission: billing.manage
+    x-platform-audit: billing.credit_granted
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformCreditRequest" }
+    responses:
+      "201":
+        description: The credit
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformCreditEnvelope" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+manualSubscription:
+  post:
+    tags: [Billing]
+    operationId: createPlatformManualSubscription
+    summary: Subscribe a workspace by hand
+    description: |
+      What a confirmed bank transfer or crypto payment earns (389.18 calls
+      this): the workspace's subscription on `plan`, `active` until
+      `period_end`, and its licence `active` with the trial ended. A suspended
+      or cancelled workspace is 409 `platform_workspace_state`
+      (`workspace_closed`); `period_end` must be in the future.
+    x-platform-permission: billing.manage
+    x-platform-audit: billing.manual_subscription_created
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformManualSubscriptionRequest" }
+    responses:
+      "200":
+        description: The workspace after the action
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformWorkspaceActionResult" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }

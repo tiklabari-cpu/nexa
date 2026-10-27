@@ -356,7 +356,7 @@ export async function readComposition(
 }
 
 /** A stored statement joined to its lines, as `listInvoices` reads it. */
-interface StoredInvoice {
+export interface StoredInvoice {
   period: string;
   number: string;
   periodStart: Date;
@@ -370,7 +370,7 @@ interface StoredInvoice {
   lineItems: { description: string; amountCents: number }[];
 }
 
-function serialiseStored(row: StoredInvoice): Invoice {
+export function serialiseStored(row: StoredInvoice): Invoice {
   return {
     number: row.number,
     period: row.period,

@@ -8,12 +8,16 @@
  *     licence override  ??  plan default  ??  deployment default
  *
  *   - **override** — `licenses.ai_daily_{llm,embedding}_tokens_cap`, set by
- *     the platform (psql today, the root panel's 389.12 later), never by the
- *     workspace: `licenses_ai_caps_platform_only` refuses the tenant API's role.
- *   - **plan** — the plan catalogue's `aiDailyTokens`
- *     (`billing/subscription-service.ts`). Both plans leave it unset today:
- *     self-serve gets the deployment's default, and Enterprise's allowance is a
- *     contract term, which is what the override is for.
+ *     the platform (the root panel's `PUT /usage/workspaces/{id}/ai-caps`,
+ *     tm 389.12), never by the workspace: `licenses_ai_caps_platform_only`
+ *     refuses the tenant API's role. Until `ai_daily_caps_expires_at`, when
+ *     there is one; past it the workspace reads as if none were set.
+ *   - **plan** — the root panel's plan defaults (`platform_settings` `ai.caps`,
+ *     `ai-plan-caps.ts`, read through `platform_ai_settings()`), else the plan
+ *     catalogue's `aiDailyTokens` (`billing/subscription-service.ts`). The
+ *     catalogue leaves both plans unset: self-serve gets the deployment's
+ *     default, and Enterprise's allowance is a contract term, which is what
+ *     the override is for.
  *   - **deployment** — the four `AI_DAILY_*` settings; once the root panel's AI
  *     settings land (389.17, `platform_ai_settings().caps`), whatever the server
  *     passes as `AiDailyBudgetOptions.deploymentCaps`.
@@ -39,7 +43,12 @@ import { AI_TEST_CAP_PERCENT, type AiLiveMeter, type AiUsageMeter } from '@siyah
 import type { PrismaClient } from '@prisma/client';
 import { readEntitlements } from '../../lib/entitlements.js';
 import { withTenant, type TenantContext } from '../../lib/tenant.js';
-import { aiDailyTokensForPlan, type PlanAiDailyTokens } from '../billing/subscription-service.js';
+import {
+  aiDailyTokensForPlan,
+  isPlanId,
+  type PlanAiDailyTokens,
+} from '../billing/subscription-service.js';
+import { planAiDailyTokens, readPlanAiCapsForTenant } from './ai-plan-caps.js';
 
 /** The deployment's defaults: the per-workspace allowance and the deployment's own cap, per live meter. */
 export interface AiDailyCaps {
@@ -86,29 +95,49 @@ export function storedCap(value: bigint | null | undefined): number | null {
   return value > BigInt(Number.MAX_SAFE_INTEGER) ? Number.MAX_SAFE_INTEGER : Number(value);
 }
 
+/** An override whose end has passed is no override (tm 389.12). */
+export function overrideInForce(expiresAt: Date | null | undefined, now: number): boolean {
+  return expiresAt === null || expiresAt === undefined || expiresAt.getTime() > now;
+}
+
 /**
  * The workspace's override and its plan's default, read in the workspace's
  * own transaction — the licence row by id (one organization may hold several
- * licences) and the plan the way the entitlement gate reads it.
+ * licences) and the plan the way the entitlement gate reads it. The root
+ * panel's plan defaults are read beside it, outside the transaction
+ * (`readPlanAiCapsForTenant`); unreadable, they are "not set", with a warning.
  */
 export function prismaCapInputs(
   db: PrismaClient,
+  options: { now?: () => number; onSettingsError?: (error: unknown) => void } = {},
 ): (tenant: TenantContext) => Promise<WorkspaceCapInputs> {
-  return (tenant) =>
-    withTenant(db, tenant, async (tx) => {
-      const license = await tx.license.findUnique({
-        where: { id: tenant.licenseId },
-        select: { aiDailyLlmTokensCap: true, aiDailyEmbeddingTokensCap: true },
-      });
-      const { plan } = await readEntitlements(tx, tenant);
-      return {
-        override: {
-          llm: storedCap(license?.aiDailyLlmTokensCap),
-          embedding: storedCap(license?.aiDailyEmbeddingTokensCap),
-        },
-        plan: aiDailyTokensForPlan(plan),
-      };
-    });
+  const now = options.now ?? Date.now;
+  return async (tenant) => {
+    const [own, defaults] = await Promise.all([
+      withTenant(db, tenant, async (tx) => {
+        const license = await tx.license.findUnique({
+          where: { id: tenant.licenseId },
+          select: {
+            aiDailyLlmTokensCap: true,
+            aiDailyEmbeddingTokensCap: true,
+            aiDailyCapsExpiresAt: true,
+          },
+        });
+        const { plan } = await readEntitlements(tx, tenant);
+        return { license, plan };
+      }),
+      readPlanAiCapsForTenant(db, options.onSettingsError),
+    ]);
+    const { license, plan } = own;
+    const inForce = overrideInForce(license?.aiDailyCapsExpiresAt, now());
+    return {
+      override: {
+        llm: inForce ? storedCap(license?.aiDailyLlmTokensCap) : null,
+        embedding: inForce ? storedCap(license?.aiDailyEmbeddingTokensCap) : null,
+      },
+      plan: planAiDailyTokens(defaults, isPlanId(plan) ? plan : null, aiDailyTokensForPlan(plan)),
+    };
+  };
 }
 
 export interface AiCapResolverOptions {

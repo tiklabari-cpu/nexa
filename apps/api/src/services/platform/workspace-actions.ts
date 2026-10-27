@@ -82,7 +82,7 @@ export interface ActionOutcome {
   payload: Record<string, unknown>;
 }
 
-interface LockedLicense {
+export interface LockedLicense {
   id: bigint;
   organization_id: string;
   status: string;
@@ -94,7 +94,7 @@ interface LockedLicense {
 }
 
 /** The licence, locked for this transaction — or 404, like every unknown id here. */
-async function lockLicense(tx: Tx, licenseId: bigint): Promise<LockedLicense> {
+export async function lockLicense(tx: Tx, licenseId: bigint): Promise<LockedLicense> {
   const [row] = await tx.$queryRaw<LockedLicense[]>`
     SELECT id, organization_id, status, trial_ends_at, suspended_at, suspended_from_status,
            purge_scheduled_at, sandbox_of_license_id
@@ -114,7 +114,7 @@ const changed = (payload: Record<string, unknown>): ActionOutcome => ({
 
 const CLOSED = new Set(['suspended', 'canceled']);
 
-function refuseClosed(license: LockedLicense): void {
+export function refuseClosed(license: LockedLicense): void {
   if (CLOSED.has(license.status)) {
     throw workspaceStateError(
       'workspace_closed',

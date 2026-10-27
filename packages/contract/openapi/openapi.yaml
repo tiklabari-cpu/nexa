@@ -266,6 +266,8 @@ paths:
     $ref: "./paths/customer-chat.yaml#/events"
   /customer/chat/typing:
     $ref: "./paths/customer-chat.yaml#/typing"
+  /customer/chat/request-human:
+    $ref: "./paths/customer-chat.yaml#/requestHuman"
   /customer/chat/close:
     $ref: "./paths/customer-chat.yaml#/close"
   /customer/chat/form-response:
@@ -1860,6 +1862,23 @@ components:
           description: |
             How many questions one message of a procedure may ask (AI-07),
             applied by the procedure itself. Null: the default, 2.
+        welcome_message:
+          type: string
+          nullable: true
+          maxLength: 500
+          description: |
+            The agent's opening words, said before its first reply on a
+            connection (AI-29 · A-11). The disclosure "{name}, {brand}'s AI
+            assistant" goes first whatever this says — added when the text
+            does not carry it — and cannot be removed (G16). Null: the
+            disclosure alone.
+        human_button_label:
+          type: string
+          nullable: true
+          maxLength: 40
+          description: |
+            The widget's "Talk to an agent" button in the workspace's words
+            (AI-29-S1). The button itself cannot be hidden. Null: the widget's.
         active: { type: boolean }
         skills_count: { type: integer }
 
@@ -2351,6 +2370,13 @@ components:
           description: Every reason the AI handed over for, most severe first.
           items: { type: string }
         primary_reason: { type: string }
+        requested_via:
+          type: string
+          nullable: true
+          enum: [button, null]
+          description: |
+            `button`: the player pressed "Talk to an agent" (AI-29). Null: the
+            AI's own decision, or what the player wrote.
         risk_flags:
           type: array
           items: { type: string }
@@ -12792,6 +12818,45 @@ components:
           type: array
           description: Customer-visible events only. Internal notes never appear.
           items: { $ref: "#/components/schemas/Event" }
+        owner:
+          type: string
+          nullable: true
+          enum: [ai, human, queue, null]
+          description: |
+            Who has the open connection (AI-29): `human` a person is assigned,
+            `queue` it waits for one, `ai` the AI answers it. The widget shows
+            "Talk to an agent" while it is `ai`; the workspace cannot hide it.
+            Null with no open connection.
+        human_available:
+          type: boolean
+          description: |
+            Whether anyone in the workspace is accepting chats now — what a
+            press of the button would be told (AI-29-S2).
+        human_button_label:
+          type: string
+          nullable: true
+          maxLength: 40
+          description: |
+            The words on the button: the workspace's own, else the default in
+            the language the visitor opened the conversation in. Null with no
+            open connection.
+
+    CustomerHumanRequest:
+      type: object
+      required: [owner, human_available, requested]
+      properties:
+        owner:
+          type: string
+          enum: [ai, human, queue]
+          description: Who has the connection now.
+        human_available:
+          type: boolean
+          description: Whether anyone at the hand-over's team is accepting chats; false is after hours.
+        requested:
+          type: boolean
+          description: |
+            True when this request handed the connection over; false when a
+            person or the queue had it already (or another press was doing it).
 
     TrackSaleRequest:
       type: object

@@ -50,6 +50,7 @@ export const pt: Record<string, string> = {
   privacy: 'Privacidade',
   'typing.named': '{name} está digitando…',
   'typing.generic': 'Digitando…',
+  'human.connecting': 'Conectando…',
   'rating.menuLabel': 'Mais opções',
   'rating.menuItem': 'Avaliar esta conversa',
   'rating.group': 'Avaliar esta conversa',

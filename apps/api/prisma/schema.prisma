@@ -2503,6 +2503,9 @@ model AiHandoff {
   targetGroupId         BigInt?   @map("target_group_id")
   /// `GUARDRAIL_PRIORITIES`.
   priority              String
+  /// `HUMAN_REQUEST_VIAS` (tm 308 · AI-29): `button` when the player pressed
+  /// "Talk to an agent"; null otherwise. CHECK in the migration.
+  requestedVia          String?   @map("requested_via")
   cardText              String    @map("card_text")
   configVersionId       String?   @map("config_version_id") @db.Uuid
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)

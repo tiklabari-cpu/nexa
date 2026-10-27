@@ -10,7 +10,7 @@
  * hand-over writes appears without a reload.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AiHandoffCardView } from '@siyahtus/types';
@@ -229,6 +229,38 @@ describe('the card, short and in full (AI-10)', () => {
     expect(screen.getByRole('button', { name: 'Kopyala' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Yeterli' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Yetersiz' })).toBeInTheDocument();
+  });
+});
+
+describe('a hand-over the player asked for with the button (tm 308 · AI-29)', () => {
+  it('says the player pressed “Talk to an agent”, in English and in Turkish', () => {
+    const pressed = {
+      ...depositCard(),
+      primary_reason: 'player_request' as const,
+      requested_via: 'button' as const,
+    };
+    mount(<AiHandoffCard card={pressed} chatId={CHAT} canJudge />);
+    const card = screen.getByRole('article', { name: 'AI hand-over card' });
+    expect(within(card).getByText('The player pressed “Talk to an agent”')).toBeInTheDocument();
+    cleanup();
+
+    renderWithLocale(
+      <QueryClientProvider client={client()}>
+        <AiHandoffCard card={pressed} chatId={CHAT} canJudge />
+      </QueryClientProvider>,
+      'tr',
+    );
+    expect(screen.getByText('Oyuncu “Temsilciyle görüş” butonuna bastı')).toBeInTheDocument();
+  });
+
+  it('names the reason as before when the player wrote it', () => {
+    const written = {
+      ...depositCard(),
+      primary_reason: 'player_request' as const,
+      requested_via: null,
+    };
+    mount(<AiHandoffCard card={written} chatId={CHAT} canJudge />);
+    expect(screen.getByText('The player asks for a person')).toBeInTheDocument();
   });
 });
 

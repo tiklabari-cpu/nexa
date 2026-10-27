@@ -1031,7 +1031,10 @@ describe('module parity matrix — what is still owed', () => {
       // the web console as a member from the root panel, and the red banner's
       // "End session". The root panel hands the code to a browser tab; the app
       // is never signed in as anybody by an operator. Nothing here re-scopes.
-      contractEndpoints: 304,
+      // 304 -> 305 with `/customer/chat/request-human` (tm 308) — the widget's
+      // "Talk to an agent" while the AI answers a visitor (AI-29). A visitor's
+      // surface; the app is an agent's, and nothing here re-scopes.
+      contractEndpoints: 305,
       scopeBoundaries: 1,
     });
   });

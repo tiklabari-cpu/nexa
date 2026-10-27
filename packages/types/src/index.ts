@@ -58,6 +58,7 @@ export * from './knowledge-file.js';
 export * from './knowledge-store.js';
 export * from './knowledge-tables.js';
 export * from './persona.js';
+export * from './ai-disclosure.js';
 export * from './rich-text.js';
 export * from './message-edit.js';
 export * from './ticket-bulk.js';

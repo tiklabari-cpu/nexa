@@ -235,6 +235,51 @@ typing:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+requestHuman:
+  post:
+    tags: [Customer]
+    operationId: requestCustomerHuman
+    summary: Ask for a person instead of the AI ("Talk to an agent")
+    description: |
+      The widget's always-visible button while the AI answers the connection
+      (AI-29 · G16). The AI hands the connection over at once — no clarifying
+      question, the press is the request — with reason `player_request`, to
+      the team its routes give (AI-12), and says nothing more (AI-11). The
+      player is told a person is coming, or, when nobody at the target is
+      accepting chats, the after-hours text; the conversation waits in the
+      queue either way and is never dropped.
+
+      Idempotent: a connection a person or the queue has already is answered
+      with its owner and `requested: false`, and two presses at once hand it
+      over once. Limited per visitor (GV-01): 429 with `Retry-After`.
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              reason:
+                type: string
+                enum: [button]
+                description: How the player asked; the button is the only way today.
+    responses:
+      "200":
+        description: The connection's owner after the request
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CustomerHumanRequest" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: There is no open conversation to hand over
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 close:
   post:
     tags: [Customer]

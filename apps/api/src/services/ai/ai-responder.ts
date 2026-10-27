@@ -91,6 +91,10 @@ import {
   AI_BOT_ID,
   AI_CAP_REACHED_SYSTEM_EVENT,
   AI_CHALLENGE_UNVERIFIED_SYSTEM_EVENT,
+  aiDisclosureSentence,
+  aiOpening,
+  readAiWelcome,
+  withAiOpening,
   DEFAULT_DAILY_MEMORY,
   parseEventId,
   readNoAnswerSettings,
@@ -221,6 +225,13 @@ export interface AiResponderOptions {
    * absent; null writes no card (a test's choice).
    */
   readonly handoffCard?: HandoffCardWriter | null;
+  /**
+   * The AI's disclosure (tm 308 · AI-29 · G16): its first reply on a
+   * connection opens with "{name}, {brand}'s AI assistant" and the agent's
+   * opening words. On unless a test about something else turns it off — the
+   * sentence changes every first reply's text.
+   */
+  readonly disclosure?: boolean;
 }
 
 /**
@@ -241,6 +252,7 @@ export class AiResponder {
   readonly #historyBudget: HistoryBudget;
   readonly #riskFlags: RiskFlagAnnouncer | null;
   readonly #handoffs: HandoffService;
+  readonly #disclosure: boolean;
 
   constructor(
     private readonly chats: ChatService,
@@ -252,6 +264,7 @@ export class AiResponder {
     this.#batchWindowMs = options.batchWindowMs ?? 0;
     this.#historyBudget = options.historyBudget ?? DEFAULT_HISTORY_BUDGET;
     this.#riskFlags = options.riskFlags ?? null;
+    this.#disclosure = options.disclosure ?? true;
     const card =
       options.handoffCard === undefined
         ? new HandoffCardService(chats, publisher)
@@ -584,6 +597,8 @@ export class AiResponder {
         const aim = await this.#aim(turn, ref, result, loaded, answeredText);
         result = aim.result;
         aimed = aim.aimed;
+        // The AI says what it is before it says anything else (AI-29).
+        result = await this.#disclose(turn, ref, result, loaded, answeredText);
 
         try {
           // The last draft goes out whatever the visitor wrote meanwhile.
@@ -1033,6 +1048,68 @@ export class AiResponder {
       result: reply === result.reply ? result : { ...result, reply },
       aimed: { target, afterHours: !accepting },
     };
+  }
+
+  /**
+   * The AI's first reply on the connection, opened with the disclosure and
+   * the agent's opening words (tm 308 · AI-29 §1 · G16): "{name}, {brand}'s AI
+   * assistant" in the reply's language — the brand the member came in
+   * through, else the workspace (the default brand is the workspace's own,
+   * and sign-up names it "Default") — then `persona.welcome`, put after the
+   * sentence when it does not carry it: the workspace cannot remove it. Read
+   * live, like the agent's name in the widget's header; after the guardrails,
+   * which check what the model wrote, not what the workspace did. A reply on
+   * a connection the AI has spoken in already is left as it is.
+   */
+  async #disclose(
+    turn: VisitorTurn,
+    ref: ConnectionRef,
+    result: TurnResult,
+    loaded: TurnRead,
+    message: string | null,
+  ): Promise<TurnResult> {
+    const { reply } = result;
+    if (!this.#disclosure || reply === null) return result;
+    const read = await turn.withTenant(async (tx) => {
+      const [spoken] = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM events
+         WHERE thread_id = ${ref.threadId} AND chat_id = ${ref.chatId}
+           AND author_type = 'bot' AND author_id = ${AI_BOT_ID} AND type = 'message'
+         LIMIT 1`;
+      if (spoken) return null;
+      const agent = await tx.aiAgent.findFirst({
+        where: { kind: 'ai_agent' },
+        orderBy: { createdAt: 'asc' },
+        select: { name: true, persona: true },
+      });
+      const brand = loaded.brandId
+        ? await tx.brand.findFirst({
+            where: { id: loaded.brandId, isDefault: false },
+            select: { name: true },
+          })
+        : null;
+      const organization = brand
+        ? null
+        : await tx.organization.findUnique({
+            where: { id: turn.tenant.organizationId },
+            select: { name: true },
+          });
+      return { agent, brand: brand?.name ?? organization?.name ?? null };
+    });
+    if (!read?.agent || !read.brand) return result;
+    const { skills } = loaded.config.pkg;
+    const persona =
+      skills.find((skill) => skill.id === result.decisions.skillId)?.persona ??
+      skills[0]?.persona ??
+      readPersona(null);
+    const language = languageVerdict(message ?? '', persona, result.decisions.understood?.language);
+    const sentence = aiDisclosureSentence({
+      name: read.agent.name,
+      brand: read.brand,
+      language: language.unsupported ? 'en' : language.answerIn,
+    });
+    const opening = aiOpening(sentence, readAiWelcome(read.agent.persona));
+    return { ...result, reply: withAiOpening(reply, opening) };
   }
 
   /**

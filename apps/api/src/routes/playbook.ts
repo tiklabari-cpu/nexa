@@ -15,7 +15,11 @@ import {
   AI_ASSIGNMENT_MODES,
   AI_STALL_TIMEOUT_SECONDS_MAX,
   AI_STALL_TIMEOUT_SECONDS_MIN,
+  AI_WELCOME_MESSAGE_MAX,
   ANSWER_LENGTHS,
+  HUMAN_BUTTON_LABEL_MAX,
+  readAiWelcome,
+  readHumanButtonLabel,
   BATCH_WINDOW_SECONDS_MAX,
   DAILY_MEMORY_RECALLS,
   DEFAULT_AI_ASSIGNMENT_MODE,
@@ -603,6 +607,9 @@ const updateAgentBody = z
       .max(MAX_QUESTIONS_PER_MESSAGE_MAX)
       .nullable()
       .optional(),
+    // The opening words and the button's wording (tm 308 · AI-29); null or blank clears.
+    welcome_message: z.string().max(AI_WELCOME_MESSAGE_MAX).nullable().optional(),
+    human_button_label: z.string().max(HUMAN_BUTTON_LABEL_MAX).nullable().optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -1033,7 +1040,9 @@ export default async function playbookRoutes(
           body.clarify_thresholds !== undefined ||
           body.address_form !== undefined ||
           body.emoji !== undefined ||
-          body.max_questions_per_message !== undefined
+          body.max_questions_per_message !== undefined ||
+          body.welcome_message !== undefined ||
+          body.human_button_label !== undefined
         ) {
           const current =
             existing.persona &&
@@ -1065,6 +1074,16 @@ export default async function playbookRoutes(
           for (const [key, value] of style) {
             if (value === null) delete next[key];
             else if (value !== undefined) next[key] = value;
+          }
+          const words: Array<[string, string | null | undefined]> = [
+            ['welcome', body.welcome_message],
+            ['humanButtonLabel', body.human_button_label],
+          ];
+          for (const [key, value] of words) {
+            if (value === undefined) continue;
+            const text = value?.trim() ?? '';
+            if (text === '') delete next[key];
+            else next[key] = text;
           }
           persona = next as Prisma.InputJsonValue;
         }
@@ -2865,6 +2884,8 @@ function serialiseAgent(agent: {
     address_form: style.addressForm,
     emoji: style.emoji,
     max_questions_per_message: style.maxQuestionsPerMessage,
+    welcome_message: readAiWelcome(persona),
+    human_button_label: readHumanButtonLabel(persona),
     active: agent.active,
     skills_count: agent._count.skills,
   };

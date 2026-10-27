@@ -92,9 +92,7 @@ export function AiHandoffCardLine({
       <p className="flex flex-wrap items-center justify-center gap-2 text-2xs text-content-tertiary">
         <span>
           {card
-            ? t('inbox.handoffCard.line', {
-                reason: t(`playbook.handoff.reason.${card.primary_reason}`),
-              })
+            ? t('inbox.handoffCard.line', { reason: reasonText(t, card) })
             : t('inbox.handoffCard.lineGeneric')}
           {' · '}
           {formatTime(event.created_at)}
@@ -166,7 +164,7 @@ export function AiHandoffCard({
       </p>
 
       <Line label={t('inbox.handoffCard.reason')}>
-        {t(`playbook.handoff.reason.${card.primary_reason}`)}
+        {reasonText(t, card)}
         {otherReasons.length > 0 && (
           <span className="text-content-tertiary">
             {' '}
@@ -213,6 +211,13 @@ export function AiHandoffCard({
       <Feedback card={card} chatId={chatId} canJudge={canJudge} />
     </article>
   );
+}
+
+/** The primary reason in words — the button's own when the player pressed it (tm 308 · AI-29). */
+function reasonText(t: (key: string) => string, card: AiHandoffCardView): string {
+  return card.requested_via === 'button'
+    ? t('inbox.handoffCard.viaButton')
+    : t(`playbook.handoff.reason.${card.primary_reason}`);
 }
 
 function CardDetails({ id, card }: { id: string; card: AiHandoffCardView }): ReactElement {

@@ -612,6 +612,7 @@ export const inbox: Messages = {
   'inbox.handoffCard.section': 'AI devri',
   'inbox.handoffCard.ariaLabel': 'AI devir kartı',
   'inbox.handoffCard.reason': 'Devir nedeni',
+  'inbox.handoffCard.viaButton': 'Oyuncu “Temsilciyle görüş” butonuna bastı',
   'inbox.handoffCard.moreReasons.one': '(+{count} neden daha)',
   'inbox.handoffCard.moreReasons.other': '(+{count} neden daha)',
   'inbox.handoffCard.player': 'Oyuncu',

@@ -12,7 +12,11 @@ import { useMutation } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import {
   ADDRESS_FORMS,
+  AI_WELCOME_MESSAGE_MAX,
+  aiDisclosureSentence,
+  aiOpening,
   ANSWER_LENGTHS,
+  HUMAN_BUTTON_LABEL_MAX,
   BATCH_WINDOW_SECONDS_MAX,
   DAILY_MEMORY_RECALLS,
   DEFAULT_CLARIFY_THRESHOLDS,
@@ -34,7 +38,7 @@ import { Card } from '../../components/Page.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
-import { useTranslate } from '../../lib/i18n.js';
+import { useLocale, useTranslate } from '../../lib/i18n.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import type { AiAgent } from './types.js';
 
@@ -109,6 +113,7 @@ export function ProfileForm({
   onSaved: () => void;
 }): ReactElement {
   const t = useTranslate();
+  const { locale } = useLocale();
   const api = useApiClient();
 
   // `languages` (a multi-select) is not a single string, so it sits outside
@@ -130,6 +135,8 @@ export function ProfileForm({
       address_form?: AddressForm | null;
       emoji?: EmojiUse | null;
       max_questions_per_message?: number | null;
+      welcome_message?: string | null;
+      human_button_label?: string | null;
     }) => api.patch<AiAgent>(`/ai-agents/${agent.id}`, body),
     onSuccess: onSaved,
   });
@@ -154,6 +161,9 @@ export function ProfileForm({
     emoji: agent.emoji ?? '',
     maxQuestions:
       agent.max_questions_per_message == null ? '' : String(agent.max_questions_per_message),
+    // The opening words and the button's wording (tm 308 · AI-29); '' is unset.
+    welcome: agent.welcome_message ?? '',
+    humanButton: agent.human_button_label ?? '',
   };
 
   const form = useForm({
@@ -207,6 +217,12 @@ export function ProfileForm({
               max_questions_per_message:
                 values.maxQuestions === '' ? null : Number(values.maxQuestions),
             }
+          : {}),
+        ...(values.welcome !== initialValues.welcome
+          ? { welcome_message: values.welcome.trim() || null }
+          : {}),
+        ...(values.humanButton !== initialValues.humanButton
+          ? { human_button_label: values.humanButton.trim() || null }
           : {}),
       });
     },
@@ -494,6 +510,64 @@ export function ProfileForm({
               </div>
             </div>
             <p className="text-2xs text-content-tertiary">{t('playbook.profile.styleHint')}</p>
+          </fieldset>
+
+          {/* The AI's disclosure (tm 308 · AI-29 · G16): locked, shown with the
+              workspace's own opening words after it, and the button's wording. */}
+          <fieldset className="flex flex-col gap-2" disabled={!canEdit}>
+            <legend className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+              {t('playbook.profile.opening')}
+            </legend>
+            <div
+              data-testid="ai-opening-preview"
+              className="flex flex-col gap-1 rounded-md border border-border bg-surface-2 px-2 py-1.5"
+            >
+              <span className="text-2xs font-medium text-content-secondary">
+                {t('playbook.profile.openingLocked')}
+              </span>
+              <p className="whitespace-pre-wrap break-words text-sm text-content">
+                {aiOpening(
+                  aiDisclosureSentence({
+                    name: form.values.name.trim() || agent.name,
+                    brand: t('playbook.profile.openingBrand'),
+                    language: locale === 'tr' ? 'tr' : 'en',
+                  }),
+                  form.values.welcome,
+                )}
+              </p>
+            </div>
+            <p className="text-2xs text-content-tertiary">{t('playbook.profile.openingHint')}</p>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="persona-welcome" className="text-2xs text-content-secondary">
+                {t('playbook.profile.welcome')}
+              </label>
+              <textarea
+                id="persona-welcome"
+                rows={2}
+                maxLength={AI_WELCOME_MESSAGE_MAX}
+                value={form.values.welcome}
+                onChange={(event) => form.setValue('welcome', event.target.value)}
+                placeholder={t('playbook.profile.welcomePlaceholder')}
+                className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary disabled:opacity-60"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="persona-human-button" className="text-2xs text-content-secondary">
+                {t('playbook.profile.humanButton')}
+              </label>
+              <input
+                id="persona-human-button"
+                maxLength={HUMAN_BUTTON_LABEL_MAX}
+                value={form.values.humanButton}
+                onChange={(event) => form.setValue('humanButton', event.target.value)}
+                placeholder={t('playbook.profile.humanButtonDefault')}
+                aria-describedby="persona-human-button-hint"
+                className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary disabled:opacity-60"
+              />
+              <p id="persona-human-button-hint" className="text-2xs text-content-tertiary">
+                {t('playbook.profile.humanButtonHint')}
+              </p>
+            </div>
           </fieldset>
 
           {canEdit && (

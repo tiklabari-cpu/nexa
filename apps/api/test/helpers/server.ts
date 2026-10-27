@@ -36,6 +36,9 @@ export async function startTestServer(
   const app = await buildServer({
     env: testEnv(overrides),
     aiJobDiscovery: 'in_process',
+    // The AI's disclosure (tm 308) changes every first reply's text: off for
+    // the suites about something else; `ai-request-human` turns it on.
+    aiDisclosure: false,
     ...build,
   });
   await app.ready();

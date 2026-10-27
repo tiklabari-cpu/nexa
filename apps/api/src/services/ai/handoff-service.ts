@@ -43,7 +43,7 @@ import {
   type GuardrailPriority,
   type HandoffReason,
 } from '@siyahtus/types';
-import type { IdentityTrust } from '@siyahtus/types';
+import type { HumanRequestVia, IdentityTrust } from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { ApiError } from '../../lib/api-error.js';
 import type { BotPrincipal } from '../auth/principal.js';
@@ -87,6 +87,8 @@ export interface HandoffCardContext {
   readonly trust: IdentityTrust | null;
   /** What the player wrote that the hand-over answered. */
   readonly turnText: string | null;
+  /** `button`: the player pressed "Talk to an agent" (tm 308 · AI-29). */
+  readonly requestedVia?: HumanRequestVia | null;
 }
 
 /** A card written in the hand-over's transaction, for its announcement after commit. */
@@ -406,7 +408,11 @@ export class HandoffService {
     // §2.3): urgent waits at the front of its team's queue.
     const options = {
       alongside,
-      properties: handoffEventProperties(plan),
+      properties: {
+        ...handoffEventProperties(plan),
+        // The button (tm 308 · AI-29), for the reports beside the card.
+        ...(input.card?.requestedVia ? { requested_via: input.card.requestedVia } : {}),
+      },
       priority: plan.priority,
       priorityReason: plan.primaryReason,
     };

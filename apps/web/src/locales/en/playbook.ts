@@ -570,6 +570,17 @@ export const playbook: Messages = {
   'playbook.profile.maxQuestionsDefault': 'Default (2)',
   'playbook.profile.styleHint':
     'The form of address and emoji are asked of the model and flagged in the run log when a reply ignores them; the question limit is enforced by the procedure itself.',
+  'playbook.profile.opening': 'Opening message and agent button',
+  'playbook.profile.openingLocked': 'Always first — cannot be removed',
+  'playbook.profile.openingBrand': 'Brand',
+  'playbook.profile.openingHint':
+    'The AI’s first reply in a conversation opens with this sentence, then your message. “Brand” is the brand the player came through, or the workspace name. If your message leaves the sentence out, it is added in front.',
+  'playbook.profile.welcome': 'Opening message',
+  'playbook.profile.welcomePlaceholder': 'How can I help you today?',
+  'playbook.profile.humanButton': 'Text of the “Talk to an agent” button',
+  'playbook.profile.humanButtonDefault': 'Talk to an agent',
+  'playbook.profile.humanButtonHint':
+    'The widget shows the button for as long as the AI is answering; it cannot be hidden, only reworded.',
   'playbook.profile.save': 'Save profile',
   'playbook.profile.saving': 'Saving…',
   'playbook.profile.previewTitle': 'Preview',

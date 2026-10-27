@@ -51,6 +51,7 @@ export const fr: Record<string, string> = {
   privacy: 'Confidentialité',
   'typing.named': "{name} est en train d'écrire…",
   'typing.generic': "En train d'écrire…",
+  'human.connecting': 'Connexion…',
   'rating.menuLabel': "Plus d'options",
   'rating.menuItem': 'Évaluer ce chat',
   'rating.group': 'Évaluer ce chat',

@@ -209,6 +209,12 @@ export interface BuildServerOptions {
    */
   accessInfoHttp?: SafeHttp;
   /**
+   * The AI's disclosure on its first reply (tm 308 · AI-29). On; the
+   * integration helper turns it off for the suites about something else,
+   * since it changes every first reply's text.
+   */
+  aiDisclosure?: boolean;
+  /**
    * How the AI job worker finds jobs it was not woken for (tm 289.5,
    * `plugins/ai-jobs.ts`). Omitted, `shared`: the poll and the doorbell, so
    * any process answers any visitor message. The test fixture passes
@@ -245,6 +251,7 @@ export async function buildServer({
   appsHttp,
   appsEndpoints,
   accessInfoHttp,
+  aiDisclosure = true,
   aiJobDiscovery,
   geo: injectedGeo,
   captchaFetch,
@@ -623,6 +630,7 @@ export async function buildServer({
         llm: meteredLlm,
         knowledge,
         ...(accessInfoHttp ? { accessInfoHttp } : {}),
+        aiDisclosure,
       });
       await api.register(customerDirectoryRoutes);
       await api.register(memberRecognitionRoutes);

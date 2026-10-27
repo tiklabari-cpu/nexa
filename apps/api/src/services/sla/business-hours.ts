@@ -238,6 +238,22 @@ function weekAlignedMinute(at: Date): number {
   return Math.floor(at.getTime() / MS_PER_MINUTE) + EPOCH_WEEK_OFFSET_MINUTES;
 }
 
+/**
+ * The first open minute at or after `at`, within the coming week (tm 308 ·
+ * AI-29-S2: when the team is back); null for a calendar that is never open.
+ */
+export function nextOpenAt(week: BusinessWeek, at: Date): Date | null {
+  if (week.openMinutesPerWeek === 0) return null;
+  const start = weekAlignedMinute(at);
+  for (let step = 0; step <= MINUTES_PER_WEEK; step += 1) {
+    const minute = start + step;
+    if (openBeforeMinute(week, minute + 1) > openBeforeMinute(week, minute)) {
+      return new Date((minute - EPOCH_WEEK_OFFSET_MINUTES) * MS_PER_MINUTE);
+    }
+  }
+  return null;
+}
+
 /** Open minutes strictly before an absolute (Monday-aligned) minute index. */
 function openBeforeMinute(week: BusinessWeek, minute: number): number {
   const wholeWeeks = Math.floor(minute / MINUTES_PER_WEEK);

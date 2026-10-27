@@ -46,6 +46,7 @@ import platformDashboardRoutes from './routes/platform/dashboard.js';
 import platformHealthRoutes from './routes/platform/health.js';
 import platformMetaRoutes from './routes/platform/meta.js';
 import platformSettingsRoutes from './routes/platform/settings.js';
+import platformAiCatalogsRoutes from './routes/platform/ai-catalogs.js';
 import platformAiSettingsRoutes from './routes/platform/ai-settings.js';
 import { PlatformAiOperations } from './services/platform/ai-operations.js';
 import platformOperationsRoutes from './routes/platform/operations.js';
@@ -241,6 +242,7 @@ export async function buildPlatformServer({
       await api.register(platformAccountsRoutes, { env, mailer, ...(now ? { now } : {}) });
       await api.register(platformSettingsRoutes, { ...(now ? { now } : {}) });
       await api.register(platformAiSettingsRoutes, { env, platform, operations: aiOperations });
+      await api.register(platformAiCatalogsRoutes, { ...(now ? { now } : {}) });
       await api.register(platformOperationsRoutes, { env, ...(now ? { now } : {}) });
       await api.register(platformSecurityRoutes, { env, ...(now ? { now } : {}) });
     },

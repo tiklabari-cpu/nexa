@@ -316,9 +316,11 @@ aiSummary:
     operationId: getPlatformWorkspaceAiSummary
     summary: The workspace's AI at a glance — counts only
     description: |
-      How many AI agents it has and how many are switched on. 389.19 adds the
-      configuration history, guardrail and QA counts; never a prompt, an
-      instruction or a reply.
+      How many AI agents it has and how many are switched on, how many
+      guidance rules, the configuration changes and guardrail triggers of the
+      last 30 days (the latter by rule), the QA queue's counts and the latest
+      compliance-pack run. A section whose table has not shipped answers
+      `status: not_installed`. Never a prompt, an instruction or a reply.
     x-platform-permission: workspaces.read
     parameters:
       - $ref: "../openapi.yaml#/components/parameters/LicenseId"

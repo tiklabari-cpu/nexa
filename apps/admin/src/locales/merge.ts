@@ -23,6 +23,7 @@ export type Messages = Readonly<Record<string, string>>;
 export const NAMESPACES = [
   'accounts',
   'admins',
+  'ai',
   'auth',
   'common',
   'dashboard',
@@ -40,6 +41,7 @@ export type Namespace = (typeof NAMESPACES)[number];
 export const NAMESPACE_PREFIXES: Record<Namespace, readonly string[]> = {
   accounts: ['accounts.'],
   admins: ['admins.'],
+  ai: ['ai.'],
   auth: ['auth.'],
   common: ['common.', 'ui.'],
   dashboard: ['dashboard.'],

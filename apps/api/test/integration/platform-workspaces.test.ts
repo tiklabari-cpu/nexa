@@ -504,9 +504,12 @@ describe('the platform workspace surface (tm 389.9)', () => {
         ended_at: null,
       });
 
-      expect(await ok(get(`${A}/ai-summary`))).toEqual({ ai_agents: { total: 1, active: 1 } });
-      expect(await ok(get(`/workspaces/${fx.b.licenseId}/ai-summary`))).toEqual({
-        ai_agents: { total: 1, active: 0 },
+      // The counts of one workspace's agents; the rest of the summary has its own suite
+      // (`platform-ai-catalogs.test.ts`).
+      expect((await ok(get(`${A}/ai-summary`))).ai_agents).toEqual({ total: 1, active: 1 });
+      expect((await ok(get(`/workspaces/${fx.b.licenseId}/ai-summary`))).ai_agents).toEqual({
+        total: 1,
+        active: 0,
       });
     });
 

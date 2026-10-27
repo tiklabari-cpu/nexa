@@ -948,9 +948,11 @@ export interface paths {
     };
     /**
      * The workspace's AI at a glance — counts only
-     * @description How many AI agents it has and how many are switched on. 389.19 adds the
-     *     configuration history, guardrail and QA counts; never a prompt, an
-     *     instruction or a reply.
+     * @description How many AI agents it has and how many are switched on, how many
+     *     guidance rules, the configuration changes and guardrail triggers of the
+     *     last 30 days (the latter by rule), the QA queue's counts and the latest
+     *     compliance-pack run. A section whose table has not shipped answers
+     *     `status: not_installed`. Never a prompt, an instruction or a reply.
      */
     get: operations['getPlatformWorkspaceAiSummary'];
     put?: never;
@@ -2014,6 +2016,174 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/ai-catalogs/guardrails': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The locked G1–G19 rules and their catalogue version
+     * @description `PLATFORM_GUARDRAILS_VERSION` and, per rule, what it is and what it does:
+     *     title and prompt line in both languages, category, action, target team,
+     *     priority, the flag it raises, whether it needs a risk flag first, which
+     *     workspace text it reads, and how many lexicon patterns it holds on each
+     *     side per language (the patterns themselves stay in code).
+     */
+    get: operations['getPlatformGuardrailCatalog'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-catalogs/crisis-text-drafts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The crisis-text drafts, per country
+     * @description The texts the platform suggests for the responsible-gaming hand-over
+     *     (AI-08-S1), `platform_settings.ai.crisis_text_drafts`. A workspace is
+     *     offered the one for its country as "use the platform's draft"; it edits
+     *     and approves it itself, nothing is published for it. `version` is 0 and
+     *     `drafts` empty while nothing has been saved.
+     */
+    get: operations['getPlatformCrisisTextDrafts'];
+    /**
+     * Replace the crisis-text drafts
+     * @description The whole map is replaced: a country or language left out is removed. Each
+     *     text is plain text of 1–1000 characters (no HTML, no control characters)
+     *     under an upper-case ISO 3166-1 country code and the language `en` or
+     *     `tr`; at most 60 countries. A body equal to what is stored changes
+     *     nothing and records nothing. The audit entry names the countries added,
+     *     changed and removed — never a text.
+     */
+    put: operations['updatePlatformCrisisTextDrafts'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-catalogs/templates': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The iGaming template pack — version and keys
+     * @description The pack (`igaming_core`) with its package version, and each template's
+     *     key, name, version, whether it is locked, its scenario count and how many
+     *     things a workspace must fill in. The procedure text stays in code.
+     */
+    get: operations['getPlatformTemplateCatalog'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-catalogs/templates/installs': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Per workspace, how many template copies are installed and live
+     * @description One row per workspace that holds at least one installed template copy,
+     *     most copies first (then licence number). `installed` counts the copies,
+     *     `active` the ones switched on (published for the AI to use), `outdated`
+     *     those behind the pack's current version of that template. Counts only —
+     *     no copy's text. Keyset paging on the (installed, licence) pair.
+     */
+    get: operations['listPlatformTemplateInstalls'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-catalogs/compliance-pack': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The locked compliance scenario pack — version and scenario keys
+     * @description `AI_COMPLIANCE_PACK_VERSION`, its size and the scenario keys
+     *     (`compliance:G3:tr`) with the rule and language each one plays. The
+     *     scenarios' turns stay in code.
+     */
+    get: operations['getPlatformCompliancePack'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-catalogs/qa-rubric': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The rubric the AI judge scores by
+     * @description The criteria in the judge's order, which of them apply only to a
+     *     conversation handed over, and the 1–5 scale. The QA queue (tm 319) has
+     *     not shipped: its review settings are not here.
+     */
+    get: operations['getPlatformQaRubric'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-catalogs/tools': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The tool (integration) catalogue
+     * @description `status: not_installed` until the tool slot ships (tm 321); then its
+     *     catalogue version and keys.
+     */
+    get: operations['getPlatformToolCatalog'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/operations/scheduler': {
     parameters: {
       query?: never;
@@ -2564,6 +2734,7 @@ export interface components {
       | 'ai_settings.updated'
       | 'ai_settings.connection_tested'
       | 'ai_settings.reembed_started'
+      | 'ai_settings.crisis_drafts_updated'
       | 'impersonation.started'
       | 'impersonation.ended'
       | 'security.blocklist_added'
@@ -3233,11 +3404,175 @@ export interface components {
       data: components['schemas']['PlatformImpersonation'][];
       next_cursor: string | null;
     };
+    /**
+     * @description The workspace's AI at a glance - counts and states, never a rule's
+     *     text, a conversation or a scenario. A section whose table has not
+     *     shipped is `status: not_installed`, not a zero.
+     */
     PlatformWorkspaceAiSummary: {
       ai_agents: {
         total: number;
         active: number;
       };
+      guidance_rules: {
+        status: components['schemas']['PlatformAiCatalogStatus'];
+        total: number;
+        active: number;
+      };
+      /** @description Changes to the AI configuration in the last 30 days (tm 315). */
+      config_changes: {
+        status: components['schemas']['PlatformAiCatalogStatus'];
+        last_30_days: number;
+      };
+      /**
+       * @description Guardrail triggers in the last 30 days, by rule: `G1`-`G19` for the
+       *     platform's, `workspace_rule` and `forbidden_phrase` for the
+       *     workspace's own.
+       */
+      guardrail_hits: {
+        status: components['schemas']['PlatformAiCatalogStatus'];
+        last_30_days: number;
+        by_rule: {
+          [key: string]: number;
+        };
+      };
+      /** @description The QA queue's counts (tm 319). */
+      qa: {
+        status: components['schemas']['PlatformAiCatalogStatus'];
+        reviewed_30_days: number;
+        awaiting_review: number;
+      };
+      /** @description The workspace's latest run that played the compliance pack. */
+      compliance_pack: {
+        status: components['schemas']['PlatformAiCatalogStatus'];
+        last_run: null | {
+          version: string;
+          run_status: string;
+          passed: number | null;
+          failed: number | null;
+          /** Format: date-time */
+          finished_at: string | null;
+        };
+      };
+    };
+    /**
+     * @description `not_installed` - the table or catalogue behind it has not shipped yet
+     *     (`AI_CATALOG_STATUSES`, @siyahtus/types).
+     * @enum {string}
+     */
+    PlatformAiCatalogStatus: 'available' | 'not_installed';
+    PlatformGuardrailLang: {
+      tr: string;
+      en: string;
+    };
+    /** @description Lexicon patterns per language (0 where the rule has none on that side). */
+    PlatformGuardrailPatternCounts: {
+      tr: number;
+      en: number;
+    };
+    PlatformGuardrailCatalogItem: {
+      id: string;
+      title: components['schemas']['PlatformGuardrailLang'];
+      prompt: components['schemas']['PlatformGuardrailLang'];
+      category: string;
+      action: string;
+      target: string | null;
+      priority: string;
+      handoff_reason: string | null;
+      risk_flag: string | null;
+      /** @enum {string} */
+      applies_when: 'always' | 'risk_flagged';
+      tenant_text: string | null;
+      lexicon_alone: boolean;
+      stages: ('input' | 'output')[];
+      input_patterns: components['schemas']['PlatformGuardrailPatternCounts'];
+      output_patterns: components['schemas']['PlatformGuardrailPatternCounts'];
+    };
+    PlatformGuardrailCatalog: {
+      /** @description PLATFORM_GUARDRAILS_VERSION */
+      version: string;
+      count: number;
+      items: components['schemas']['PlatformGuardrailCatalogItem'][];
+    };
+    /**
+     * @description Country (upper-case ISO 3166-1 alpha-2) to its texts, per language;
+     *     a language may be missing.
+     */
+    PlatformCrisisTextMap: {
+      [key: string]: {
+        en?: string;
+        tr?: string;
+      };
+    };
+    PlatformCrisisTextDrafts: {
+      drafts: components['schemas']['PlatformCrisisTextMap'];
+      version: number;
+      /** Format: date-time */
+      updated_at: string | null;
+      max_length: number;
+    };
+    PlatformCrisisTextDraftsRequest: {
+      reason: string;
+      drafts: components['schemas']['PlatformCrisisTextMap'];
+    };
+    PlatformTemplateCatalogItem: {
+      key: string;
+      name: string;
+      version: number;
+      locked: boolean;
+      scenario_count: number;
+      tenant_must_fill_count: number;
+    };
+    PlatformTemplateCatalog: {
+      pack: {
+        key: string;
+        /** @description The templates package version. */
+        version: string;
+        industry: string;
+        lang: string;
+        template_count: number;
+      };
+      items: components['schemas']['PlatformTemplateCatalogItem'][];
+    };
+    PlatformTemplateInstall: {
+      license_id: string;
+      workspace_name: string;
+      installed: number;
+      active: number;
+      outdated: number;
+    };
+    PlatformTemplateInstallList: {
+      data: components['schemas']['PlatformTemplateInstall'][];
+      next_cursor: string | null;
+    };
+    PlatformCompliancePack: {
+      /** @description AI_COMPLIANCE_PACK_VERSION */
+      version: string;
+      size: number;
+      items: {
+        key: string;
+        guardrail: string;
+        language: string;
+      }[];
+    };
+    PlatformQaRubric: {
+      status: components['schemas']['PlatformAiCatalogStatus'];
+      version: string | null;
+      scale: {
+        min: number;
+        max: number;
+      };
+      items: {
+        key: string;
+        handoff_only: boolean;
+      }[];
+    };
+    PlatformToolCatalog: {
+      status: components['schemas']['PlatformAiCatalogStatus'];
+      version: string | null;
+      items: {
+        key: string;
+      }[];
     };
     PlatformAccountSummary: {
       /** Format: uuid */
@@ -6653,6 +6988,191 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       409: components['responses']['Conflict'];
+    };
+  };
+  getPlatformGuardrailCatalog: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The catalogue */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformGuardrailCatalog'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformCrisisTextDrafts: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The stored drafts */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformCrisisTextDrafts'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  updatePlatformCrisisTextDrafts: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformCrisisTextDraftsRequest'];
+      };
+    };
+    responses: {
+      /** @description The stored drafts after the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformCrisisTextDrafts'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformTemplateCatalog: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The catalogue */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformTemplateCatalog'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  listPlatformTemplateInstalls: {
+    parameters: {
+      query?: {
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformTemplateInstallList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformCompliancePack: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The catalogue */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformCompliancePack'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformQaRubric: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The rubric */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformQaRubric'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformToolCatalog: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The catalogue */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformToolCatalog'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
     };
   };
   getPlatformOperationsScheduler: {

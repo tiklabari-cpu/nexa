@@ -196,8 +196,26 @@ export const workspaces: Messages = {
 
   'workspaces.ai.total': 'Yapay zekâ ajanları',
   'workspaces.ai.active': 'Açık olanlar',
-  'workspaces.ai.later':
-    'Yalnız sayılar. Yapılandırma geçmişi, korkuluk ve kalite rakamları yapay zekâ kataloglarıyla gelir.',
+  'workspaces.ai.intro':
+    'Yalnız sayılar ve durumlar: hiçbir talimat, görüşme ya da senaryo gösterilmez. Aksi belirtilmedikçe son 30 gün.',
+  'workspaces.ai.notInstalled': 'Henüz yok',
+  'workspaces.ai.guidanceTotal': 'Davranış kuralları',
+  'workspaces.ai.guidanceActive': 'Açık davranış kuralları',
+  'workspaces.ai.configChanges': 'Yapılandırma değişiklikleri',
+  'workspaces.ai.hits': 'Uyum koruması tetiklenmeleri',
+  'workspaces.ai.hitsByRule.heading': 'Kurala göre tetiklenmeler',
+  'workspaces.ai.hitsByRule.caption': 'Kurala göre uyum koruması tetiklenmeleri, son 30 gün',
+  'workspaces.ai.hitsByRule.rule': 'Kural',
+  'workspaces.ai.hitsByRule.count': 'Tetiklenme',
+  'workspaces.ai.hitsByRule.workspace_rule': 'Çalışma alanının kendi kuralları',
+  'workspaces.ai.hitsByRule.forbidden_phrase': 'Yasaklı ifadeler',
+  'workspaces.ai.hitsByRule.none': 'Hiçbir koruma tetiklenmedi.',
+  'workspaces.ai.qaReviewed': 'Kalite incelemeleri',
+  'workspaces.ai.qaAwaiting': 'İnceleme bekleyen',
+  'workspaces.ai.compliance': 'Son uyum paketi koşusu',
+  'workspaces.ai.compliance.none': 'Henüz hiçbir koşu uyum paketini oynamadı.',
+  'workspaces.ai.compliance.line': 'Paket {version}: {passed} geçti, {failed} kaldı ({status}).',
+  'workspaces.ai.compliance.unknown': '—',
 
   // Eylemler (tm 389.10).
   'workspaces.actions.menu': 'Eylemler',

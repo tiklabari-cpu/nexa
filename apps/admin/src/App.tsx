@@ -12,6 +12,7 @@ import { InvitePage } from './features/auth/InvitePage.js';
 import { OperationsPage } from './features/operations/OperationsPage.js';
 import { RecoveryCodesPage } from './features/auth/RecoveryCodesPage.js';
 import { SignInPage } from './features/auth/SignInPage.js';
+import { AiPage } from './features/ai/AiPage.js';
 import { PlaceholderPage } from './features/placeholder/PlaceholderPage.js';
 import { SecurityPage } from './features/security/SecurityPage.js';
 import { SettingsPage } from './features/settings/SettingsPage.js';
@@ -98,6 +99,8 @@ function SectionPage({ item }: { item: NavItem }): ReactElement {
       return <SecurityPage />;
     case 'support':
       return <SupportPage />;
+    case 'ai':
+      return <AiPage />;
     default:
       return <PlaceholderPage item={item} />;
   }

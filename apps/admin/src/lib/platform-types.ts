@@ -95,3 +95,14 @@ export type PlatformCounted = Schemas['PlatformCounted'];
 export type PlatformAlertKind = Schemas['PlatformAlertKind'];
 export type PlatformAlertPrefs = Schemas['PlatformAlertPrefs'];
 export type PlatformAlertPrefsUpdate = Schemas['PlatformAlertPrefsUpdate'];
+
+export type PlatformGuardrailCatalog = Schemas['PlatformGuardrailCatalog'];
+export type PlatformGuardrailCatalogItem = Schemas['PlatformGuardrailCatalogItem'];
+export type PlatformCrisisTextDrafts = Schemas['PlatformCrisisTextDrafts'];
+export type PlatformCrisisTextDraftsRequest = Schemas['PlatformCrisisTextDraftsRequest'];
+export type PlatformTemplateCatalog = Schemas['PlatformTemplateCatalog'];
+export type PlatformTemplateInstall = Schemas['PlatformTemplateInstall'];
+export type PlatformTemplateInstallList = Schemas['PlatformTemplateInstallList'];
+export type PlatformCompliancePack = Schemas['PlatformCompliancePack'];
+export type PlatformQaRubric = Schemas['PlatformQaRubric'];
+export type PlatformToolCatalog = Schemas['PlatformToolCatalog'];

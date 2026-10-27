@@ -49,6 +49,12 @@ tags:
       Every workspace and everything about it except its content (tm 389.9):
       organization, licence, members, brands, usage, subscription, invoices,
       sandbox, operator notes, impersonation history, AI counts.
+  - name: AI catalogues
+    description: |
+      What the platform ships for the AI and how workspaces use it (tm 389.19):
+      the G1-G19 rules, the crisis-text drafts, the iGaming template pack and
+      its installs, the compliance scenario pack, the QA rubric, the tool
+      catalogue. Keys, versions and counts - never a workspace's content.
   - name: Accounts
     description: |
       The people behind the memberships (tm 389.11): search, detail, a new
@@ -262,6 +268,20 @@ paths:
     $ref: "./paths/settings.yaml#/aiTestConnection"
   /settings/ai/reembed:
     $ref: "./paths/settings.yaml#/aiReembed"
+  /ai-catalogs/guardrails:
+    $ref: "./paths/ai-catalogs.yaml#/guardrails"
+  /ai-catalogs/crisis-text-drafts:
+    $ref: "./paths/ai-catalogs.yaml#/crisisTextDrafts"
+  /ai-catalogs/templates:
+    $ref: "./paths/ai-catalogs.yaml#/templates"
+  /ai-catalogs/templates/installs:
+    $ref: "./paths/ai-catalogs.yaml#/templateInstalls"
+  /ai-catalogs/compliance-pack:
+    $ref: "./paths/ai-catalogs.yaml#/compliancePack"
+  /ai-catalogs/qa-rubric:
+    $ref: "./paths/ai-catalogs.yaml#/qaRubric"
+  /ai-catalogs/tools:
+    $ref: "./paths/ai-catalogs.yaml#/tools"
   /operations/scheduler:
     $ref: "./paths/operations.yaml#/scheduler"
   /operations/scheduler/{name}/run:
@@ -750,6 +770,7 @@ components:
         - ai_settings.updated
         - ai_settings.connection_tested
         - ai_settings.reembed_started
+        - ai_settings.crisis_drafts_updated
         - impersonation.started
         - impersonation.ended
         - security.blocklist_added
@@ -1707,7 +1728,11 @@ components:
 
     PlatformWorkspaceAiSummary:
       type: object
-      required: [ai_agents]
+      description: |
+        The workspace's AI at a glance - counts and states, never a rule's
+        text, a conversation or a scenario. A section whose table has not
+        shipped is `status: not_installed`, not a zero.
+      required: [ai_agents, guidance_rules, config_changes, guardrail_hits, qa, compliance_pack]
       properties:
         ai_agents:
           type: object
@@ -1715,6 +1740,254 @@ components:
           properties:
             total: { type: integer }
             active: { type: integer }
+        guidance_rules:
+          type: object
+          required: [status, total, active]
+          properties:
+            status: { $ref: "#/components/schemas/PlatformAiCatalogStatus" }
+            total: { type: integer }
+            active: { type: integer }
+        config_changes:
+          type: object
+          description: Changes to the AI configuration in the last 30 days (tm 315).
+          required: [status, last_30_days]
+          properties:
+            status: { $ref: "#/components/schemas/PlatformAiCatalogStatus" }
+            last_30_days: { type: integer }
+        guardrail_hits:
+          type: object
+          description: |
+            Guardrail triggers in the last 30 days, by rule: `G1`-`G19` for the
+            platform's, `workspace_rule` and `forbidden_phrase` for the
+            workspace's own.
+          required: [status, last_30_days, by_rule]
+          properties:
+            status: { $ref: "#/components/schemas/PlatformAiCatalogStatus" }
+            last_30_days: { type: integer }
+            by_rule:
+              type: object
+              additionalProperties: { type: integer }
+        qa:
+          type: object
+          description: The QA queue's counts (tm 319).
+          required: [status, reviewed_30_days, awaiting_review]
+          properties:
+            status: { $ref: "#/components/schemas/PlatformAiCatalogStatus" }
+            reviewed_30_days: { type: integer }
+            awaiting_review: { type: integer }
+        compliance_pack:
+          type: object
+          description: The workspace's latest run that played the compliance pack.
+          required: [status, last_run]
+          properties:
+            status: { $ref: "#/components/schemas/PlatformAiCatalogStatus" }
+            last_run:
+              oneOf:
+                - type: "null"
+                - type: object
+                  required: [version, run_status, passed, failed, finished_at]
+                  properties:
+                    version: { type: string }
+                    run_status: { type: string }
+                    passed: { type: ["integer", "null"] }
+                    failed: { type: ["integer", "null"] }
+                    finished_at: { type: ["string", "null"], format: date-time }
+
+    PlatformAiCatalogStatus:
+      type: string
+      description: |
+        `not_installed` - the table or catalogue behind it has not shipped yet
+        (`AI_CATALOG_STATUSES`, @siyahtus/types).
+      enum: [available, not_installed]
+
+    PlatformGuardrailLang:
+      type: object
+      required: [tr, en]
+      properties:
+        tr: { type: string }
+        en: { type: string }
+
+    PlatformGuardrailPatternCounts:
+      type: object
+      description: Lexicon patterns per language (0 where the rule has none on that side).
+      required: [tr, en]
+      properties:
+        tr: { type: integer }
+        en: { type: integer }
+
+    PlatformGuardrailCatalogItem:
+      type: object
+      required:
+        - id
+        - title
+        - prompt
+        - category
+        - action
+        - target
+        - priority
+        - handoff_reason
+        - risk_flag
+        - applies_when
+        - tenant_text
+        - lexicon_alone
+        - stages
+        - input_patterns
+        - output_patterns
+      properties:
+        id: { type: string, pattern: "^G[0-9]{1,2}$" }
+        title: { $ref: "#/components/schemas/PlatformGuardrailLang" }
+        prompt: { $ref: "#/components/schemas/PlatformGuardrailLang" }
+        category: { type: string }
+        action: { type: string }
+        target: { type: ["string", "null"] }
+        priority: { type: string }
+        handoff_reason: { type: ["string", "null"] }
+        risk_flag: { type: ["string", "null"] }
+        applies_when: { type: string, enum: [always, risk_flagged] }
+        tenant_text: { type: ["string", "null"] }
+        lexicon_alone: { type: boolean }
+        stages:
+          type: array
+          items: { type: string, enum: [input, output] }
+        input_patterns: { $ref: "#/components/schemas/PlatformGuardrailPatternCounts" }
+        output_patterns: { $ref: "#/components/schemas/PlatformGuardrailPatternCounts" }
+
+    PlatformGuardrailCatalog:
+      type: object
+      required: [version, count, items]
+      properties:
+        version: { type: string, description: PLATFORM_GUARDRAILS_VERSION }
+        count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformGuardrailCatalogItem" }
+
+    PlatformCrisisTextMap:
+      type: object
+      description: |
+        Country (upper-case ISO 3166-1 alpha-2) to its texts, per language;
+        a language may be missing.
+      additionalProperties:
+        type: object
+        properties:
+          en: { type: string, minLength: 1, maxLength: 1000 }
+          tr: { type: string, minLength: 1, maxLength: 1000 }
+        additionalProperties: false
+
+    PlatformCrisisTextDrafts:
+      type: object
+      required: [drafts, version, updated_at, max_length]
+      properties:
+        drafts: { $ref: "#/components/schemas/PlatformCrisisTextMap" }
+        version: { type: integer, minimum: 0 }
+        updated_at: { type: ["string", "null"], format: date-time }
+        max_length: { type: integer }
+
+    PlatformCrisisTextDraftsRequest:
+      type: object
+      required: [reason, drafts]
+      additionalProperties: false
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500 }
+        drafts: { $ref: "#/components/schemas/PlatformCrisisTextMap" }
+
+    PlatformTemplateCatalogItem:
+      type: object
+      required: [key, name, version, locked, scenario_count, tenant_must_fill_count]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        version: { type: integer }
+        locked: { type: boolean }
+        scenario_count: { type: integer }
+        tenant_must_fill_count: { type: integer }
+
+    PlatformTemplateCatalog:
+      type: object
+      required: [pack, items]
+      properties:
+        pack:
+          type: object
+          required: [key, version, industry, lang, template_count]
+          properties:
+            key: { type: string }
+            version: { type: string, description: The templates package version. }
+            industry: { type: string }
+            lang: { type: string }
+            template_count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformTemplateCatalogItem" }
+
+    PlatformTemplateInstall:
+      type: object
+      required: [license_id, workspace_name, installed, active, outdated]
+      properties:
+        license_id: { type: string }
+        workspace_name: { type: string }
+        installed: { type: integer }
+        active: { type: integer }
+        outdated: { type: integer }
+
+    PlatformTemplateInstallList:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformTemplateInstall" }
+        next_cursor: { type: ["string", "null"] }
+
+    PlatformCompliancePack:
+      type: object
+      required: [version, size, items]
+      properties:
+        version: { type: string, description: AI_COMPLIANCE_PACK_VERSION }
+        size: { type: integer }
+        items:
+          type: array
+          items:
+            type: object
+            required: [key, guardrail, language]
+            properties:
+              key: { type: string }
+              guardrail: { type: string }
+              language: { type: string }
+
+    PlatformQaRubric:
+      type: object
+      required: [status, version, scale, items]
+      properties:
+        status: { $ref: "#/components/schemas/PlatformAiCatalogStatus" }
+        version: { type: ["string", "null"] }
+        scale:
+          type: object
+          required: [min, max]
+          properties:
+            min: { type: integer }
+            max: { type: integer }
+        items:
+          type: array
+          items:
+            type: object
+            required: [key, handoff_only]
+            properties:
+              key: { type: string }
+              handoff_only: { type: boolean }
+
+    PlatformToolCatalog:
+      type: object
+      required: [status, version, items]
+      properties:
+        status: { $ref: "#/components/schemas/PlatformAiCatalogStatus" }
+        version: { type: ["string", "null"] }
+        items:
+          type: array
+          items:
+            type: object
+            required: [key]
+            properties:
+              key: { type: string }
 
     PlatformAccountSummary:
       type: object

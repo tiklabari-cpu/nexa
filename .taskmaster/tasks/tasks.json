@@ -14026,7 +14026,7 @@
           "319"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-28T21:31:18.068Z",
+        "updatedAt": "2026-10-28T23:10:14.532Z",
         "subtasks": [
           {
             "id": 1,
@@ -14046,13 +14046,13 @@
             "description": "Kesinleştirme (72 saat tekrar temas) + rollup + tanımlar (types) + rapor uçları + MCP",
             "details": "Üst görev 320 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Fixture oranları; ADR-09 regresyonu.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "320.1"
             ],
             "parentId": "320",
             "priority": "medium",
-            "updatedAt": "2026-10-28T21:31:18.068Z"
+            "updatedAt": "2026-10-28T23:10:14.532Z"
           },
           {
             "id": 3,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-28T21:31:18.069Z",
+      "lastModified": "2026-10-28T23:10:14.533Z",
       "taskCount": 390,
       "completedCount": 336,
       "tags": [

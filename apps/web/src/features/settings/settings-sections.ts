@@ -504,6 +504,18 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     file: 'AiUsage',
     keywords: ['tokens', 'quota', 'limit', 'cost', 'llm', 'ai budget', 'kota', 'yapay zeka'],
   },
+  // The AI quality control queue's settings and rubric (AI-24 · tm 319.3) —
+  // read with the AI's scopes (`routes/qa.ts` `READ`), changed by an
+  // administrator. Beside AI usage: both govern what the AI does, neither is a
+  // PRD 08.x section of its own.
+  {
+    slug: 'ai-quality',
+    group: 'usage',
+    labelKey: 'settings.nav.section.aiQuality',
+    scope: ['agents-bot--all:ro', 'agents-bot--all:rw'],
+    file: 'AiQuality',
+    keywords: ['qa', 'quality', 'rubric', 'calibration', 'sample', 'kalite', 'rubrik', 'örneklem'],
+  },
 
   // 08.10 — Billing: the existing page, gated as the rail gates it.
   {

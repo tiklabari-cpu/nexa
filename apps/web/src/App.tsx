@@ -31,6 +31,8 @@ import { ArchivePage } from './features/archive/ArchivePage.js';
 import { InboxPage } from './features/inbox/InboxPage.js';
 import { HomePage } from './features/home/HomePage.js';
 import { ReportsPage } from './features/reports/ReportsPage.js';
+import { AiQualityPage } from './features/reports/qa/AiQualityPage.js';
+import { QaReviewPage } from './features/reports/qa/QaReview.js';
 import { SHARED_REPORT_PATH } from './features/reports/ShareControl.js';
 import { SharedReportPage } from './features/reports/SharedReportPage.js';
 import { TeamPage } from './features/team/TeamPage.js';
@@ -161,6 +163,9 @@ function SignedInRoutes({ onboarding }: { onboarding: boolean }): ReactElement {
         <Route path="team/ai-agents" element={<TeamAiAgentsPage />} />
         <Route path="team/teams" element={<TeamsPage />} />
         <Route path="reports" element={<ReportsPage />} />
+        {/* Raporlar › AI Kalite (AI-24 · tm 319.3): the QA queue, one review. */}
+        <Route path="reports/ai-quality" element={<AiQualityPage />} />
+        <Route path="reports/ai-quality/:reviewId" element={<QaReviewPage />} />
         {/* The pilot sells nothing (tm 257.2): its Billing address leads to the inbox. */}
         <Route
           path="billing"

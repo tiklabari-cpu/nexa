@@ -27,6 +27,8 @@ import { actionClass } from './headerAction.js';
 import { TransferDialog } from './TransferDialog.js';
 import type { TransferNotice } from './transfer.js';
 import { useNarrow } from './useNarrow.js';
+import { SendToQaModal } from './SendToQaModal.js';
+import { roleAtLeast } from '../team/RoleMenu.js';
 import type { ChatDetail } from './types.js';
 
 /** Below this header width the actions drop their words (the longest Turkish row needs ~690). */
@@ -96,6 +98,11 @@ export function ThreadHeader({
           compact={narrow}
           onTransferred={onTransferred}
         />
+      )}
+      {/* A closed conversation the AI took part in goes to the QA queue by hand
+          (AI-24 · tm 319.3) — in the slot Transfer leaves once the chat closed. */}
+      {chat && !active && threadId && (
+        <SendToQaButton chatId={chatId} threadId={threadId} compact={narrow} />
       )}
       <CopyLinkButton chatId={chatId} compact={narrow} />
       <CreateTicketButton
@@ -264,5 +271,40 @@ function CopyLinkButton({ chatId, compact }: { chatId: string; compact: boolean 
     >
       {compact ? <span aria-hidden="true">{copied ? '✓' : '⧉'}</span> : label}
     </button>
+  );
+}
+
+/**
+ * "QA'ya gönder" (AI-24 · tm 319.3): the newest connection to the QA queue,
+ * with a note. A Team Lead and up — the `ai.qa.review` matrix row's floor;
+ * the route decides the rest (closed, the AI took part, the lead's team).
+ */
+function SendToQaButton({
+  chatId,
+  threadId,
+  compact,
+}: {
+  chatId: string;
+  threadId: string;
+  compact: boolean;
+}): ReactElement | null {
+  const t = useTranslate();
+  const role = useAuth((s) => s.agent?.role ?? null);
+  const [open, setOpen] = useState(false);
+  if (!roleAtLeast(role, 'team_lead')) return null;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={t('inbox.qa.button')}
+        title={t('inbox.qa.button')}
+        className={actionClass(compact)}
+      >
+        <span aria-hidden="true">✓</span>
+        {!compact && t('inbox.qa.button')}
+      </button>
+      {open && <SendToQaModal chatId={chatId} threadId={threadId} onClose={() => setOpen(false)} />}
+    </>
   );
 }

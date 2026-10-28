@@ -94,8 +94,15 @@ describe('isNavVisible for a Team Lead (AI-23 · tm 318.2)', () => {
     expect(isNavVisible(playbook, DEFAULT_AGENT_SCOPES, false, 'visitor')).toBe(false);
   });
 
+  it('opens Reports to a Team Lead and above — the AI quality queue (AI-24 · tm 319.3)', () => {
+    const reports = NAV_DESTINATIONS.find((dest) => dest.to === '/app/reports')!;
+    expect(isNavVisible(reports, DEFAULT_AGENT_SCOPES, false, 'agent')).toBe(false);
+    expect(isNavVisible(reports, DEFAULT_AGENT_SCOPES, false, 'team_lead')).toBe(true);
+  });
+
   it('opens no other destination by role', () => {
-    for (const dest of NAV_DESTINATIONS.filter((d) => d.to !== '/app/playbook')) {
+    const byRole = new Set(['/app/playbook', '/app/reports']);
+    for (const dest of NAV_DESTINATIONS.filter((d) => !byRole.has(d.to))) {
       expect(isNavVisible(dest, [], false, 'team_lead'), dest.to).toBe(false);
     }
   });

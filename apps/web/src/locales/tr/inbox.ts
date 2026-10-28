@@ -763,4 +763,16 @@ export const inbox: Messages = {
   'inbox.suggest.offerDone': 'Teşekkürler — cevabın incelemecilerin kuyruğunda.',
   'inbox.handoffCard.feedback.unneeded': 'Gereksiz devretti',
   'inbox.handoffCard.feedback.unneededDone': 'İncelemecilere gönderildi.',
+
+  // "QA'ya gönder" (AI-24 · tm 319.3).
+  'inbox.qa.button': 'QA’ya gönder',
+  'inbox.qa.title': 'AI kalite kuyruğuna gönder',
+  'inbox.qa.description':
+    'Bu konuşmanın en yeni bağlantısı, rubriğe göre incelenmek üzere QA kuyruğuna gider.',
+  'inbox.qa.note': 'İnceleyici için not (isteğe bağlı)',
+  'inbox.qa.send': 'QA’ya gönder',
+  'inbox.qa.cancel': 'Vazgeç',
+  'inbox.qa.done': 'Gönderildi. İnceleme AI kalite kuyruğunda.',
+  'inbox.qa.openReview': 'İncelemeyi aç',
+  'inbox.qa.close': 'Kapat',
 };

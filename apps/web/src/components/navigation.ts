@@ -145,6 +145,8 @@ export const MODULES: NavDestination[] = [
     keywords: ['analytics', 'metrics', 'kpi'],
     // `GET /reports/overview` (routes/reports.ts).
     scope: ['reports_read'],
+    // A Team Lead reaches the AI quality queue here (AI-24 · tm 319.3).
+    orRole: 'team_lead',
   },
 ];
 

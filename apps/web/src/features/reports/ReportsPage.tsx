@@ -14,7 +14,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState, type ReactElement } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import {
   Card,
   CardSkeleton,
@@ -27,7 +27,7 @@ import {
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { Banner, Dropdown, bannerDismissKey } from '../../components/ui/index.js';
-import { useApiClient } from '../../lib/auth-store.js';
+import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { errorMessageKey, type ApiClient } from '../../lib/api-client.js';
 import {
   formatCount,
@@ -51,6 +51,8 @@ import {
 } from './report-views.js';
 import { SurveyPopover } from './SurveyPopover.js';
 import { ShareControl } from './ShareControl.js';
+import { QA_PATH } from './qa/qa.js';
+import { roleAtLeast } from '../team/RoleMenu.js';
 
 interface Period {
   range: { from: string; to: string };
@@ -520,6 +522,17 @@ function reportQuery(range: { from: string; to: string }, baseline: ReportBaseli
 }
 
 export function ReportsPage(): ReactElement {
+  const scopes = useAuth((s) => s.agent?.scopes);
+  const role = useAuth((s) => s.agent?.role ?? null);
+  // A Team Lead reviews AI quality without the reports scope (AI-24 · tm 319.3):
+  // the page they are given is the QA queue, not one whose every read is refused.
+  if (scopes !== undefined && !scopes.includes('reports_read') && roleAtLeast(role, 'team_lead')) {
+    return <Navigate to={QA_PATH} replace />;
+  }
+  return <ReportsPageBody reviewsQa={roleAtLeast(role, 'team_lead')} />;
+}
+
+function ReportsPageBody({ reviewsQa }: { reviewsQa: boolean }): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
   const { data: groupsData } = useReportGroups(api);
@@ -704,6 +717,18 @@ export function ReportsPage(): ReactElement {
               </div>
             );
           })}
+
+          {/* Raporlar › AI Kalite (AI-24 · tm 319.3) is a page of its own — a
+              queue and a calibration round, not a report over the range — so
+              it is a link under the tabs rather than one of them. */}
+          {reviewsQa && (
+            <Link
+              to={QA_PATH}
+              className="rounded-md px-2.5 py-1.5 text-sm font-medium text-content-secondary transition-colors hover:bg-inset hover:text-content"
+            >
+              {t('reports.qa.page.title')}
+            </Link>
+          )}
 
           {/* PRD FR-MOD-07.1 lists Export as the ninth sidebar item, so it
               moved out of the header actions row and down here. Deliberately a

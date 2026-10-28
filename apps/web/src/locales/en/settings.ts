@@ -103,6 +103,7 @@ export const settings: Messages = {
   'settings.nav.section.compliance': 'Data region and compliance',
   'settings.nav.section.dataRetention': 'Data retention',
   'settings.nav.section.aiUsage': 'AI usage',
+  'settings.nav.section.aiQuality': 'AI quality',
   'settings.nav.section.aiAgent': 'AI Agent',
   'settings.nav.section.auditLog': 'Audit log',
   'settings.nav.section.siem': 'SIEM export',
@@ -1516,4 +1517,46 @@ export const settings: Messages = {
     'The Owner always holds every permission — whoever changes the matrix cannot lock themselves out of it.',
   'permissions.lock.owner_only': 'Owner only: this permission stays with the Owner.',
   'permissions.lock.below_floor': 'Platform safety: this role cannot be given this permission.',
+
+  // Settings › AI quality (AI-24 · tm 319.3): sampling, pre-score, conflict check, rubric.
+  'settings.aiQuality.title': 'AI quality',
+  'settings.aiQuality.description':
+    'How the QA queue fills each night and what a review scores. Team Leads and administrators review it under Reports › AI quality.',
+  'settings.aiQuality.loadError': 'The AI quality settings could not be loaded.',
+  'settings.aiQuality.samplingTitle': 'Sampling',
+  'settings.aiQuality.samplePercent': 'Random sample (%)',
+  'settings.aiQuality.samplePercentHint':
+    'Share of the AI’s closed conversations queued each day, {min}–{max} %. Risk flags, guardrail checks, mandatory hand-overs and the other mandatory categories are always queued.',
+  'settings.aiQuality.samplePercentError': 'A whole number from {min} to {max}.',
+  'settings.aiQuality.prescore': 'Let the model pre-score queued conversations',
+  'settings.aiQuality.prescoreHint':
+    'A suggestion beside each criterion, from the masked text. It never confirms anything; the reviewer decides.',
+  'settings.aiQuality.conflictCheck': 'A reviewer may not review a conversation they took part in',
+  'settings.aiQuality.conflictCheckHint':
+    'Someone who wrote in the conversation or accepted its hand-over cannot claim its review.',
+  'settings.aiQuality.rubric.title': 'Rubric',
+  'settings.aiQuality.rubric.loadError': 'The rubric could not be loaded.',
+  'settings.aiQuality.rubric.version': 'Version {version} · {at}',
+  'settings.aiQuality.rubric.hint':
+    'Saving writes a new version; reviews already queued keep theirs. The locked criteria are the platform’s: they stay critical, only their weight is yours.',
+  'settings.aiQuality.rubric.criterion': 'Criterion',
+  'settings.aiQuality.rubric.type': 'Type',
+  'settings.aiQuality.rubric.weight': 'Weight',
+  'settings.aiQuality.rubric.critical': 'Critical',
+  'settings.aiQuality.rubric.actions': 'Actions',
+  'settings.aiQuality.rubric.locked': 'Locked',
+  'settings.aiQuality.rubric.labelFor': 'Name of criterion {n}',
+  'settings.aiQuality.rubric.typeFor': 'Type of “{criterion}”',
+  'settings.aiQuality.rubric.weightFor': 'Weight of “{criterion}”',
+  'settings.aiQuality.rubric.criticalFor': '“{criterion}” is critical',
+  'settings.aiQuality.rubric.removeFor': 'Remove “{criterion}”',
+  'settings.aiQuality.rubric.passFail': 'Pass / fail',
+  'settings.aiQuality.rubric.oneToFive': '1–5',
+  'settings.aiQuality.rubric.remove': 'Remove',
+  'settings.aiQuality.rubric.add': 'Add criterion',
+  'settings.aiQuality.rubric.discard': 'Discard',
+  'settings.aiQuality.rubric.save': 'Save as new version',
+  'settings.aiQuality.rubric.saved': 'New rubric version saved.',
+  'settings.aiQuality.rubric.invalid':
+    'Every criterion needs a name (up to 80 characters), each name once, and a weight from 1 to 10.',
 };

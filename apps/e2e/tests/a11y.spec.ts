@@ -665,6 +665,30 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         });
       });
 
+      // Raporlar › AI Kalite (AI-24 · tm 319.3): the queue with its figures, and a
+      // review address — the seed queues nothing, so it is the "could not be
+      // loaded" state here; `ai-quality.spec.ts` scans a review being scored.
+      test('ai quality has no serious or critical violations', async ({ agentPage }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/reports/ai-quality');
+        await scanPanel(agentPage, 'AI quality', theme, testInfo, async () => {
+          await expect(
+            agentPage.getByRole('heading', { name: 'AI quality', level: 1 }),
+          ).toBeVisible();
+          await expect(agentPage.getByRole('tab', { name: 'Queue' })).toBeVisible();
+        });
+      });
+
+      test('ai quality review has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/reports/ai-quality/00000000-0000-4000-8000-000000000000');
+        await scanPanel(agentPage, 'AI quality review', theme, testInfo, async () => {
+          await expect(agentPage.getByText('This review could not be loaded.')).toBeVisible();
+        });
+      });
+
       test('team has no serious or critical violations', async ({ agentPage }, testInfo) => {
         await pinTheme(agentPage, theme);
         await agentPage.goto('/app/team');
@@ -1592,6 +1616,8 @@ test.describe('WCAG 2.1 AA (axe)', () => {
       '/app/team/ai-agents',
       '/app/team/teams',
       '/app/reports',
+      '/app/reports/ai-quality',
+      '/app/reports/ai-quality/:reviewId',
       '/app/billing',
       '/app/playbook',
       '/app/settings',

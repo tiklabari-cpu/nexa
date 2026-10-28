@@ -78,3 +78,5 @@
 #### K07.4 — 07.4 · AI Agent raporu (resolution/deflection)
 
 - ✅ **Müşteriye görünen metinlerden iç kodlar temizlendi (UX bulgusu O7, damga değişmedi — §D207):** Raporlar (Resolution, Chats, AI Agent, Reviews, Insights, E-ticaret, Breakdown, Staffing, Sales boş durumu), Ekip (kural botları, ekip üyeleri, Copilot ×2) ve Billing API paketi açıklamalarındaki `(FR-MOD-…)`, `(PRD §…)`, `(ADR-…)` parantezleri en + tr'de silindi — `apps/web/src/locales/{en,tr}/{reports,team,billing}.ts` · nöbetçi `apps/web/src/locales/locale-copy.test.ts` (bütün panel locale DEĞERLERİNDE 0 eşleşme; eski kodda en/tr 14'er değer kırmızıydı) + `apps/widget/src/locales/locales.test.ts` (8 katalog) + tarayıcıda `apps/e2e/tests/copy-internal-refs.spec.ts` (2; eski locale ile kırmızı) · tm 259.14
+
+- ℹ tm 293.4 · `resolutions` ADR-09a yüklemi; devredilen thread yalnız `transfers`'ta, `transfer_rate` paydası çift saymaz (2026-11-01'den kapananlar) — bkz. K10.1.4 · §D262

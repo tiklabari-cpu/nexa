@@ -86,3 +86,4 @@ export * from './ai-suggestions.js';
 export * from './qa.js';
 export * from './qa-review.js';
 export * from './ai-outcomes.js';
+export * from './ai-metrics.js';

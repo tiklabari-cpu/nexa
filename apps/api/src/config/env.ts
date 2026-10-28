@@ -1288,6 +1288,18 @@ export const envSchema = z.object({
    */
   SCHEDULE_QA_CONSISTENCY_MS: z.coerce.number().int().positive().default(21_600_000),
   /**
+   * The AI outcome finalize job (tm 320.2 · AI-25-S3): the rows whose
+   * connection ended 72 hours ago are settled — the member's repeat contact,
+   * `assumed_resolved` or `false_resolved`. Hourly: a row waits at most an
+   * hour past its 72.
+   */
+  SCHEDULE_AI_OUTCOMES_FINALIZE_MS: z.coerce.number().int().positive().default(3_600_000),
+  /**
+   * The AI metrics rollup (tm 320.2 · AI-25): the days with a changed
+   * outcome row rebuilt in `ai_metrics_daily`. Hourly.
+   */
+  SCHEDULE_AI_METRICS_ROLLUP_MS: z.coerce.number().int().positive().default(3_600_000),
+  /**
    * Lets the retention job actually run its scheduled pass (M-SCHED-b ·
    * `services/scheduler/types.ts`'s `JobDefinition.enabled`). Off by default:
    * this is the one sweep that hard-deletes data, and there is no operator

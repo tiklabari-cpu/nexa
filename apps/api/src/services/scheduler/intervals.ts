@@ -55,6 +55,8 @@ export const SCHEDULER_JOB_NAMES = [
   'qa_sampling',
   'qa_prescore',
   'qa_consistency',
+  'ai_outcomes_finalize',
+  'ai_metrics_rollup',
 ] as const;
 
 export type SchedulerJobName = (typeof SCHEDULER_JOB_NAMES)[number];
@@ -87,6 +89,8 @@ export type SchedulerIntervalEnv = Pick<
   | 'SCHEDULE_QA_SAMPLING_MS'
   | 'SCHEDULE_QA_PRESCORE_MS'
   | 'SCHEDULE_QA_CONSISTENCY_MS'
+  | 'SCHEDULE_AI_OUTCOMES_FINALIZE_MS'
+  | 'SCHEDULE_AI_METRICS_ROLLUP_MS'
 >;
 
 /**
@@ -118,6 +122,8 @@ export function jobIntervals(env: SchedulerIntervalEnv): Record<SchedulerJobName
     qa_sampling: env.SCHEDULE_QA_SAMPLING_MS,
     qa_prescore: env.SCHEDULE_QA_PRESCORE_MS,
     qa_consistency: env.SCHEDULE_QA_CONSISTENCY_MS,
+    ai_outcomes_finalize: env.SCHEDULE_AI_OUTCOMES_FINALIZE_MS,
+    ai_metrics_rollup: env.SCHEDULE_AI_METRICS_ROLLUP_MS,
   };
 }
 

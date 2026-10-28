@@ -9,6 +9,10 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
   ACCESS_REVIEW_SECTIONS,
+  AI_METRICS_BREAKDOWN_DIMENSIONS,
+  AI_METRICS_CONVERSATION_LISTS,
+  AI_METRICS_CONVERSATIONS_LIMIT_DEFAULT,
+  AI_METRICS_CONVERSATIONS_LIMIT_MAX,
   AI_PACKAGE_MAX_PACKS,
   API_PACKAGE_CATALOG,
   hasAnyScope,
@@ -87,6 +91,14 @@ import {
   SHARE_LINK_MAX_DAYS,
 } from '../services/reports/report-share.js';
 import { reviewInsights } from '../services/reports/review-insights.js';
+import {
+  aiMetricsReachOf,
+  decodeAiMetricsCursor,
+  listAiMetricConversations,
+  readAiQuality,
+  readAiQualityBreakdown,
+  type AiMetricsFilter,
+} from '../services/reports/ai-metrics.js';
 import { isAgent, scopesOf } from '../services/auth/principal.js';
 import { presenceCoverage, type PresenceEvent } from '../services/staffing/presence-coverage.js';
 import { rosterCoverage, type RosterPlan } from '../services/staffing/roster-coverage.js';
@@ -261,6 +273,49 @@ const shareLinkBody = z
 const sharedReportQuery = z.object({ token: z.string().trim().min(16).max(512) });
 
 const shareLinkIdSchema = z.string().uuid();
+
+/**
+ * The AI quality metrics' filters (tm 320.2 · AI-25 "filtreler"): a team, a
+ * brand, a topic, an AI version, a language. Unknown keys pass — the window
+ * and `baseline` ride on the same query string.
+ */
+const aiMetricsFilterQuery = z.object({
+  team_id: z
+    .string()
+    .regex(/^\d{1,18}$/)
+    .optional(),
+  brand_id: z.string().uuid().optional(),
+  intent: z.string().trim().min(1).max(200).optional(),
+  config_version_id: z.string().uuid().optional(),
+  language: z.string().trim().min(2).max(16).optional(),
+});
+
+const aiMetricsBreakdownQuery = aiMetricsFilterQuery.extend({
+  by: z.enum(AI_METRICS_BREAKDOWN_DIMENSIONS),
+});
+
+const aiMetricsConversationsQuery = aiMetricsFilterQuery.extend({
+  metric: z.enum(AI_METRICS_CONVERSATION_LISTS),
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(AI_METRICS_CONVERSATIONS_LIMIT_MAX)
+    .default(AI_METRICS_CONVERSATIONS_LIMIT_DEFAULT),
+  cursor: z.string().min(1).max(200).optional(),
+});
+
+function aiMetricsFilterOf(
+  query: z.infer<typeof aiMetricsFilterQuery>,
+): Omit<AiMetricsFilter, 'teamIds'> {
+  return {
+    ...(query.team_id !== undefined ? { teamId: BigInt(query.team_id) } : {}),
+    ...(query.brand_id !== undefined ? { brandId: query.brand_id } : {}),
+    ...(query.intent !== undefined ? { intent: query.intent } : {}),
+    ...(query.config_version_id !== undefined ? { configVersionId: query.config_version_id } : {}),
+    ...(query.language !== undefined ? { language: query.language } : {}),
+  };
+}
 
 /**
  * The access review takes no date range — it is a snapshot of *now*, not a
@@ -786,6 +841,9 @@ export async function buildAiAgentReport(
       skill_runs: skillRuns,
       tokens,
       avg_automated_duration_seconds: roundOrNull(totals.avg_automated_duration_seconds),
+      // AI-25 (tm 320.2): the quality metrics, beside — never instead of —
+      // the billed figure above (AI-25-S1).
+      quality: await readAiQuality(tx, licenseId, from, to),
     },
     from,
     to,
@@ -1546,6 +1604,57 @@ export default async function reportRoutes(
     const body = await request.withTenantRead((tx) =>
       buildAiAgentReport(tx, tenant.licenseId, from, to, baseline),
     );
+    return reply.send(body);
+  });
+
+  // The AI quality metrics beside the AI Agent report (tm 320.2 · AI-25): the
+  // breakdown by topic, reason, version, language, brand or team, and the
+  // connections behind a figure. Not scope-gated: the reach is the person's
+  // (`aiMetricsReachOf`) — `reports_read` reads every team, a Team Lead the
+  // teams they lead (RL-02).
+  app.get('/reports/ai-agent/breakdown', async (request, reply) => {
+    const { from, to } = resolveReportQuery(request.query);
+    const query = parse(aiMetricsBreakdownQuery, request.query);
+    const tenant = request.tenant();
+    const principal = request.requirePrincipal();
+    const body = await request.withTenantRead(async (tx) => {
+      const filter = {
+        ...aiMetricsFilterOf(query),
+        teamIds: await aiMetricsReachOf(tx, principal),
+      };
+      return {
+        range: { from: from.toISOString(), to: to.toISOString() },
+        by: query.by,
+        total: await readAiQuality(tx, tenant.licenseId, from, to, filter),
+        rows: await readAiQualityBreakdown(tx, from, to, filter, query.by),
+      };
+    });
+    return reply.send(body);
+  });
+
+  app.get('/reports/ai-agent/conversations', async (request, reply) => {
+    const { from, to } = resolveReportQuery(request.query);
+    const query = parse(aiMetricsConversationsQuery, request.query);
+    const cursor = query.cursor === undefined ? null : decodeAiMetricsCursor(query.cursor);
+    if (query.cursor !== undefined && cursor === null) {
+      throw ApiError.validation('cursor: not a cursor this list returned.');
+    }
+    const principal = request.requirePrincipal();
+    const body = await request.withTenantRead(async (tx) => {
+      const filter = {
+        ...aiMetricsFilterOf(query),
+        teamIds: await aiMetricsReachOf(tx, principal),
+      };
+      const page = await listAiMetricConversations(tx, from, to, filter, query.metric, {
+        limit: query.limit,
+        cursor,
+      });
+      return {
+        range: { from: from.toISOString(), to: to.toISOString() },
+        metric: query.metric,
+        ...page,
+      };
+    });
     return reply.send(body);
   });
 

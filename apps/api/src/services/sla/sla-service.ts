@@ -141,7 +141,7 @@ export async function readClock(
  */
 export async function readBusinessWeek(
   tx: TenantClient,
-  tenant: TenantContext,
+  tenant: Pick<TenantContext, 'licenseId'>,
   at: Date,
 ): Promise<BusinessWeek | null> {
   const rows = await tx.workSchedule.findMany({

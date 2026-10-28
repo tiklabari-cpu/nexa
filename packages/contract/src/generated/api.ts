@@ -10078,6 +10078,57 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/reports/ai-agent/breakdown': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * AI quality metrics by topic, reason, version, language, brand or team
+     * @description The AI quality metrics (AI-25 · tm 320.2) for the window, grouped by
+     *     `by`: per topic (`intent`), hand-over reason, AI version (side by side —
+     *     `v12` beside `v13`), language, brand or team, the largest 100 groups
+     *     first. `total` is the whole window's `quality` block under the same
+     *     filters. Read from `ai_conversation_outcomes`, never the billed figure.
+     *
+     *     The reach is the caller's: `reports_read` reads every team; a Team Lead
+     *     (no `reports_read`) the teams they lead, through the QA reviewer's
+     *     `ai.qa.review` permission; anyone else gets a 403.
+     */
+    get: operations['getReportsAiAgentBreakdown'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/ai-agent/conversations': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The connections behind an AI quality figure
+     * @description The connections (panel "Chat ID" = `thread_id`, in their day's "Thread
+     *     ID" = `chat_id`) a figure of the `quality` block counts — the same
+     *     predicate as the count — newest end first, keyset-paged by
+     *     `next_cursor`. The reach and the filters are the breakdown's.
+     */
+    get: operations['getReportsAiAgentConversations'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/reports/reviews': {
     parameters: {
       query?: never;
@@ -20797,6 +20848,192 @@ export interface components {
       };
       /** @description Average open-to-close time of automated chats. Null when none. */
       avg_automated_duration_seconds?: number | null;
+      /**
+       * @description The AI quality metrics (AI-25 · tm 320.2), beside — never instead of —
+       *     the billed `resolutions` above (AI-25-S1, ADR-09a unchanged).
+       */
+      quality: components['schemas']['AiQuality'];
+    };
+    /**
+     * @description The additive counts the AI quality rates are built from (AI-25 · tm
+     *     320.2 · `@siyahtus/types` `AiMetricCounts`, which defines each). The
+     *     daily rollup keeps the same counts per day. `conversations` is N: the
+     *     ended connections where the AI wrote at least one turn; `ended` is
+     *     every ended one (the card, the mandatory hand-over and the CSAT read
+     *     those).
+     */
+    AiMetricCounts: {
+      ended: number;
+      conversations: number;
+      confirmed: number;
+      assumed: number;
+      false_resolved: number;
+      unsettled: number;
+      handed_off: number;
+      abandoned: number;
+      declined: number;
+      false_in_settled: number;
+      contained: number;
+      card_sufficient: number;
+      card_insufficient: number;
+      reasked: number;
+      reask_judged: number;
+      mandatory_triggered: number;
+      mandatory_compliant: number;
+      mandatory_violations: number;
+      mandatory_due: number;
+      guardrail_confirmed: number;
+      guardrail_suspected: number;
+      bsat_good: number;
+      bsat_bad: number;
+      csat_good: number;
+      csat_bad: number;
+      clarification_turns: number;
+      clarification_rows: number;
+      repeat_any: number;
+      repeat_same_intent: number;
+      repeat_unmeasured: number;
+    };
+    /**
+     * @description The AI quality rates (AI-25 "Kodlama mantığı"; the words and tooltips
+     *     are `AI_METRIC_DEFINITIONS` in `@siyahtus/types`). Each share is 0–1,
+     *     four places, and null over nothing — an empty window is unknown, not
+     *     0%. `low_sample` is true below 20 conversations.
+     */
+    AiQualityRates: {
+      /** @description N. */
+      conversations: number;
+      low_sample: boolean;
+      /** @description The player's Yes, over N. */
+      confirmed_resolution: number | null;
+      /** @description Settled `assumed_resolved`, over N. */
+      assumed_resolution: number | null;
+      /** @description Assumed-resolution candidates whose 72 hours have not passed yet. */
+      unsettled: number;
+      /**
+       * @description Of the confirmed and assumed resolutions, the share that came back
+       *     about the same topic within 72 hours or that QA found unsolved.
+       */
+      false_resolution: number | null;
+      /** @description No person wrote, over N. Not a measure of success on its own. */
+      containment: number | null;
+      handoff_rate: number | null;
+      /** @description Sufficient cards over judged cards. */
+      handoff_quality: number | null;
+      reask_rate: number | null;
+      /**
+       * @description Mandatory hand-overs made in time over those due (the rule fired,
+       *     or QA said it should have). The target is 1.
+       */
+      mandatory_handoff_compliance: number | null;
+      /** @description Confirmed by QA. */
+      guardrail_violation: number | null;
+      /** @description Flagged by the automatic checks. */
+      guardrail_suspected: number | null;
+      /** @description Good over rated, only where the AI was alone. */
+      bsat: number | null;
+      csat_after_handoff: number | null;
+      /** @description Average turns asking for required details, where all were collected. */
+      clarification_efficiency: number | null;
+      /** @description Rows with no member to follow. */
+      repeat_unmeasured: number;
+      counts: components['schemas']['AiMetricCounts'];
+    };
+    AiWaitSummary: {
+      count: number;
+      median_seconds: number | null;
+      p90_seconds: number | null;
+    };
+    /**
+     * @description The AI quality block (AI-25 · tm 320.2): the rates and their counts,
+     *     what the AI claimed beside what the player answered (K9), the
+     *     hand-over reasons, the wait for a person after a hand-over (inside and
+     *     outside business hours, null with no work schedule saved), consistency
+     *     and the mandatory hand-over violations by id (newest 50).
+     */
+    AiQuality: components['schemas']['AiQualityRates'] & {
+      claims: {
+        ai_claimed_resolved: number;
+        player_confirmed: number;
+        player_denied: number;
+        claimed_unanswered: number;
+      };
+      handoff_reasons: {
+        /** @description `HANDOFF_REASONS`. */
+        reason: string;
+        count: number;
+      }[];
+      handoff_wait: {
+        all: components['schemas']['AiWaitSummary'];
+        in_hours: components['schemas']['AiWaitSummary'] | null;
+        out_of_hours: components['schemas']['AiWaitSummary'] | null;
+      };
+      /** @description Same-topic pairs the AI ended the same way, over all pairs. */
+      consistency: number | null;
+      mandatory_violations: {
+        thread_id: string;
+        chat_id: string;
+        /** Format: date-time */
+        ended_at: string;
+        handoff_mandatory_rule: string | null;
+      }[];
+    };
+    AiQualityBreakdown: {
+      range: {
+        /** Format: date-time */
+        from: string;
+        /** Format: date-time */
+        to: string;
+      };
+      /** @enum {string} */
+      by: 'intent' | 'reason' | 'version' | 'language' | 'brand' | 'team';
+      total: components['schemas']['AiQuality'];
+      rows: {
+        /** @description The group's value; null for "none" (no topic, no hand-over). */
+        key: string | null;
+        /** @description A version's number (`v12`), a brand's or a team's name; the key otherwise. */
+        label: string | null;
+        quality: components['schemas']['AiQualityRates'];
+      }[];
+    };
+    AiMetricConversations: {
+      range: {
+        /** Format: date-time */
+        from: string;
+        /** Format: date-time */
+        to: string;
+      };
+      metric: string;
+      next_cursor: string | null;
+      conversations: {
+        /** Format: uuid */
+        id: string;
+        /** @description The connection (panel "Chat ID"). */
+        thread_id: string;
+        /** @description The day container (panel "Thread ID"). */
+        chat_id: string;
+        /** Format: date-time */
+        started_at: string;
+        /** Format: date-time */
+        ended_at: string;
+        outcome: string | null;
+        intent: string | null;
+        language: string | null;
+        config_version_id: string | null;
+        team_id: string | null;
+        brand_id: string | null;
+        ai_turns: number;
+        ai_claimed_resolved: boolean;
+        resolution_confirmation: string | null;
+        handoff_reason: string | null;
+        handoff_mandatory_rule: string | null;
+        mandatory_handoff_violation: boolean;
+        repeat_same_intent_72h: boolean | null;
+        repeat_any_72h: boolean | null;
+        qa_result: string | null;
+        /** Format: date-time */
+        finalized_at: string | null;
+      }[];
     };
     /**
      * @description The Reviews / Ratings report (FR-MOD-07.8): CSAT read back from the
@@ -22299,6 +22536,16 @@ export interface components {
      *     `baseline=industry` fails loudly rather than appearing supported.
      */
     BenchmarkBaseline: 'previous_period' | 'previous_year';
+    /** @description Only this team's connections (AI-25 filters). */
+    AiMetricsTeam: string;
+    /** @description Only the connections that came in through this brand. */
+    AiMetricsBrand: string;
+    /** @description Only the connections about this topic (the procedure's key). */
+    AiMetricsIntent: string;
+    /** @description Only the connections this AI configuration version answered. */
+    AiMetricsVersion: string;
+    /** @description Only the connections in this language. */
+    AiMetricsLanguage: string;
     /**
      * @description Start of the reporting window. Defaults to 30 days before `to`.
      *
@@ -37416,6 +37663,130 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ReportsAiAgent'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getReportsAiAgentBreakdown: {
+    parameters: {
+      query: {
+        /**
+         * @description Start of the reporting window. Defaults to 30 days before `to`.
+         *
+         *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
+         *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
+         *     a read replica or a column-store analytics warehouse, neither of which
+         *     this deployment has, so the window a single query may scan is bounded
+         *     instead. 366 rather than 365 so a twelve-month window that spans a leap
+         *     day is not the one that fails. The limit applies to the group endpoints
+         *     and to `/reports/export` alike — both run the same aggregation, so
+         *     capping only the download would leave the identical scan one query
+         *     string away.
+         */
+        from?: components['parameters']['ReportRangeFrom'];
+        /**
+         * @description End of the reporting window. Defaults to now. The 366-day span limit
+         *     described on `from` is measured across this pair.
+         */
+        to?: components['parameters']['ReportRangeTo'];
+        by: 'intent' | 'reason' | 'version' | 'language' | 'brand' | 'team';
+        /** @description Only this team's connections (AI-25 filters). */
+        team_id?: components['parameters']['AiMetricsTeam'];
+        /** @description Only the connections that came in through this brand. */
+        brand_id?: components['parameters']['AiMetricsBrand'];
+        /** @description Only the connections about this topic (the procedure's key). */
+        intent?: components['parameters']['AiMetricsIntent'];
+        /** @description Only the connections this AI configuration version answered. */
+        config_version_id?: components['parameters']['AiMetricsVersion'];
+        /** @description Only the connections in this language. */
+        language?: components['parameters']['AiMetricsLanguage'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The breakdown for the requested window */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiQualityBreakdown'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getReportsAiAgentConversations: {
+    parameters: {
+      query: {
+        /**
+         * @description Start of the reporting window. Defaults to 30 days before `to`.
+         *
+         *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
+         *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
+         *     a read replica or a column-store analytics warehouse, neither of which
+         *     this deployment has, so the window a single query may scan is bounded
+         *     instead. 366 rather than 365 so a twelve-month window that spans a leap
+         *     day is not the one that fails. The limit applies to the group endpoints
+         *     and to `/reports/export` alike — both run the same aggregation, so
+         *     capping only the download would leave the identical scan one query
+         *     string away.
+         */
+        from?: components['parameters']['ReportRangeFrom'];
+        /**
+         * @description End of the reporting window. Defaults to now. The 366-day span limit
+         *     described on `from` is measured across this pair.
+         */
+        to?: components['parameters']['ReportRangeTo'];
+        metric:
+          | 'confirmed_resolved'
+          | 'assumed_resolved'
+          | 'unsettled'
+          | 'false_resolution'
+          | 'handed_off'
+          | 'abandoned'
+          | 'declined'
+          | 'mandatory_handoff_violation'
+          | 'guardrail_violation'
+          | 'guardrail_suspected'
+          | 'repeat_unmeasured';
+        limit?: number;
+        /** @description The previous page's `next_cursor`. */
+        cursor?: string;
+        /** @description Only this team's connections (AI-25 filters). */
+        team_id?: components['parameters']['AiMetricsTeam'];
+        /** @description Only the connections that came in through this brand. */
+        brand_id?: components['parameters']['AiMetricsBrand'];
+        /** @description Only the connections about this topic (the procedure's key). */
+        intent?: components['parameters']['AiMetricsIntent'];
+        /** @description Only the connections this AI configuration version answered. */
+        config_version_id?: components['parameters']['AiMetricsVersion'];
+        /** @description Only the connections in this language. */
+        language?: components['parameters']['AiMetricsLanguage'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page of connections */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiMetricConversations'];
         };
       };
       400: components['responses']['BadRequest'];

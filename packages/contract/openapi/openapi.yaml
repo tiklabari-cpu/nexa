@@ -768,6 +768,10 @@ paths:
     $ref: "./paths/reports.yaml#/breakdown"
   /reports/ai-agent:
     $ref: "./paths/reports.yaml#/aiAgent"
+  /reports/ai-agent/breakdown:
+    $ref: "./paths/reports.yaml#/aiAgentBreakdown"
+  /reports/ai-agent/conversations:
+    $ref: "./paths/reports.yaml#/aiAgentConversations"
   /reports/reviews:
     $ref: "./paths/reports.yaml#/reviews"
   /reports/topics:
@@ -12902,7 +12906,7 @@ components:
         AI Agent performance for its own report tab (FR-MOD-07.4). `resolutions`
         is ADR-09a's figure — the same one the invoice's AI-resolution counter
         uses — so this surface never disagrees with the bill.
-      required: [range, previous_period, resolutions, transfers, skill_runs, tokens]
+      required: [range, previous_period, resolutions, transfers, skill_runs, tokens, quality]
       properties:
         range:
           type: object
@@ -12966,6 +12970,326 @@ components:
           type: integer
           nullable: true
           description: Average open-to-close time of automated chats. Null when none.
+        quality:
+          description: |
+            The AI quality metrics (AI-25 · tm 320.2), beside — never instead of —
+            the billed `resolutions` above (AI-25-S1, ADR-09a unchanged).
+          allOf: [{ $ref: "#/components/schemas/AiQuality" }]
+
+    AiMetricCounts:
+      type: object
+      description: |
+        The additive counts the AI quality rates are built from (AI-25 · tm
+        320.2 · `@siyahtus/types` `AiMetricCounts`, which defines each). The
+        daily rollup keeps the same counts per day. `conversations` is N: the
+        ended connections where the AI wrote at least one turn; `ended` is
+        every ended one (the card, the mandatory hand-over and the CSAT read
+        those).
+      required:
+        [
+          ended,
+          conversations,
+          confirmed,
+          assumed,
+          false_resolved,
+          unsettled,
+          handed_off,
+          abandoned,
+          declined,
+          false_in_settled,
+          contained,
+          card_sufficient,
+          card_insufficient,
+          reasked,
+          reask_judged,
+          mandatory_triggered,
+          mandatory_compliant,
+          mandatory_violations,
+          mandatory_due,
+          guardrail_confirmed,
+          guardrail_suspected,
+          bsat_good,
+          bsat_bad,
+          csat_good,
+          csat_bad,
+          clarification_turns,
+          clarification_rows,
+          repeat_any,
+          repeat_same_intent,
+          repeat_unmeasured,
+        ]
+      properties:
+        ended: { type: integer, minimum: 0 }
+        conversations: { type: integer, minimum: 0 }
+        confirmed: { type: integer, minimum: 0 }
+        assumed: { type: integer, minimum: 0 }
+        false_resolved: { type: integer, minimum: 0 }
+        unsettled: { type: integer, minimum: 0 }
+        handed_off: { type: integer, minimum: 0 }
+        abandoned: { type: integer, minimum: 0 }
+        declined: { type: integer, minimum: 0 }
+        false_in_settled: { type: integer, minimum: 0 }
+        contained: { type: integer, minimum: 0 }
+        card_sufficient: { type: integer, minimum: 0 }
+        card_insufficient: { type: integer, minimum: 0 }
+        reasked: { type: integer, minimum: 0 }
+        reask_judged: { type: integer, minimum: 0 }
+        mandatory_triggered: { type: integer, minimum: 0 }
+        mandatory_compliant: { type: integer, minimum: 0 }
+        mandatory_violations: { type: integer, minimum: 0 }
+        mandatory_due: { type: integer, minimum: 0 }
+        guardrail_confirmed: { type: integer, minimum: 0 }
+        guardrail_suspected: { type: integer, minimum: 0 }
+        bsat_good: { type: integer, minimum: 0 }
+        bsat_bad: { type: integer, minimum: 0 }
+        csat_good: { type: integer, minimum: 0 }
+        csat_bad: { type: integer, minimum: 0 }
+        clarification_turns: { type: integer, minimum: 0 }
+        clarification_rows: { type: integer, minimum: 0 }
+        repeat_any: { type: integer, minimum: 0 }
+        repeat_same_intent: { type: integer, minimum: 0 }
+        repeat_unmeasured: { type: integer, minimum: 0 }
+
+    AiQualityRates:
+      type: object
+      description: |
+        The AI quality rates (AI-25 "Kodlama mantığı"; the words and tooltips
+        are `AI_METRIC_DEFINITIONS` in `@siyahtus/types`). Each share is 0–1,
+        four places, and null over nothing — an empty window is unknown, not
+        0%. `low_sample` is true below 20 conversations.
+      required:
+        [
+          conversations,
+          low_sample,
+          confirmed_resolution,
+          assumed_resolution,
+          unsettled,
+          false_resolution,
+          containment,
+          handoff_rate,
+          handoff_quality,
+          reask_rate,
+          mandatory_handoff_compliance,
+          guardrail_violation,
+          guardrail_suspected,
+          bsat,
+          csat_after_handoff,
+          clarification_efficiency,
+          repeat_unmeasured,
+          counts,
+        ]
+      properties:
+        conversations: { type: integer, minimum: 0, description: "N." }
+        low_sample: { type: boolean }
+        confirmed_resolution:
+          type: number
+          nullable: true
+          description: The player's Yes, over N.
+        assumed_resolution:
+          type: number
+          nullable: true
+          description: Settled `assumed_resolved`, over N.
+        unsettled:
+          type: integer
+          minimum: 0
+          description: Assumed-resolution candidates whose 72 hours have not passed yet.
+        false_resolution:
+          type: number
+          nullable: true
+          description: |
+            Of the confirmed and assumed resolutions, the share that came back
+            about the same topic within 72 hours or that QA found unsolved.
+        containment:
+          type: number
+          nullable: true
+          description: No person wrote, over N. Not a measure of success on its own.
+        handoff_rate: { type: number, nullable: true }
+        handoff_quality:
+          type: number
+          nullable: true
+          description: Sufficient cards over judged cards.
+        reask_rate: { type: number, nullable: true }
+        mandatory_handoff_compliance:
+          type: number
+          nullable: true
+          description: |
+            Mandatory hand-overs made in time over those due (the rule fired,
+            or QA said it should have). The target is 1.
+        guardrail_violation:
+          type: number
+          nullable: true
+          description: Confirmed by QA.
+        guardrail_suspected:
+          type: number
+          nullable: true
+          description: Flagged by the automatic checks.
+        bsat:
+          type: number
+          nullable: true
+          description: Good over rated, only where the AI was alone.
+        csat_after_handoff: { type: number, nullable: true }
+        clarification_efficiency:
+          type: number
+          nullable: true
+          description: Average turns asking for required details, where all were collected.
+        repeat_unmeasured:
+          type: integer
+          minimum: 0
+          description: Rows with no member to follow.
+        counts: { $ref: "#/components/schemas/AiMetricCounts" }
+
+    AiWaitSummary:
+      type: object
+      required: [count, median_seconds, p90_seconds]
+      properties:
+        count: { type: integer, minimum: 0 }
+        median_seconds: { type: integer, nullable: true }
+        p90_seconds: { type: integer, nullable: true }
+
+    AiQuality:
+      description: |
+        The AI quality block (AI-25 · tm 320.2): the rates and their counts,
+        what the AI claimed beside what the player answered (K9), the
+        hand-over reasons, the wait for a person after a hand-over (inside and
+        outside business hours, null with no work schedule saved), consistency
+        and the mandatory hand-over violations by id (newest 50).
+      allOf:
+        - $ref: "#/components/schemas/AiQualityRates"
+        - type: object
+          required: [claims, handoff_reasons, handoff_wait, consistency, mandatory_violations]
+          properties:
+            claims:
+              type: object
+              required: [ai_claimed_resolved, player_confirmed, player_denied, claimed_unanswered]
+              properties:
+                ai_claimed_resolved: { type: integer, minimum: 0 }
+                player_confirmed: { type: integer, minimum: 0 }
+                player_denied: { type: integer, minimum: 0 }
+                claimed_unanswered: { type: integer, minimum: 0 }
+            handoff_reasons:
+              type: array
+              items:
+                type: object
+                required: [reason, count]
+                properties:
+                  reason: { type: string, description: "`HANDOFF_REASONS`." }
+                  count: { type: integer, minimum: 0 }
+            handoff_wait:
+              type: object
+              required: [all, in_hours, out_of_hours]
+              properties:
+                all: { $ref: "#/components/schemas/AiWaitSummary" }
+                in_hours:
+                  nullable: true
+                  allOf: [{ $ref: "#/components/schemas/AiWaitSummary" }]
+                out_of_hours:
+                  nullable: true
+                  allOf: [{ $ref: "#/components/schemas/AiWaitSummary" }]
+            consistency:
+              type: number
+              nullable: true
+              description: Same-topic pairs the AI ended the same way, over all pairs.
+            mandatory_violations:
+              type: array
+              items:
+                type: object
+                required: [thread_id, chat_id, ended_at, handoff_mandatory_rule]
+                properties:
+                  thread_id: { type: string }
+                  chat_id: { type: string }
+                  ended_at: { type: string, format: date-time }
+                  handoff_mandatory_rule: { type: string, nullable: true }
+
+    AiQualityBreakdown:
+      type: object
+      required: [range, by, total, rows]
+      properties:
+        range:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+        by: { type: string, enum: [intent, reason, version, language, brand, team] }
+        total: { $ref: "#/components/schemas/AiQuality" }
+        rows:
+          type: array
+          items:
+            type: object
+            required: [key, label, quality]
+            properties:
+              key:
+                type: string
+                nullable: true
+                description: The group's value; null for "none" (no topic, no hand-over).
+              label:
+                type: string
+                nullable: true
+                description: A version's number (`v12`), a brand's or a team's name; the key otherwise.
+              quality: { $ref: "#/components/schemas/AiQualityRates" }
+
+    AiMetricConversations:
+      type: object
+      required: [range, metric, conversations, next_cursor]
+      properties:
+        range:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+        metric: { type: string }
+        next_cursor: { type: string, nullable: true }
+        conversations:
+          type: array
+          items:
+            type: object
+            required:
+              [
+                id,
+                thread_id,
+                chat_id,
+                started_at,
+                ended_at,
+                outcome,
+                intent,
+                language,
+                config_version_id,
+                team_id,
+                brand_id,
+                ai_turns,
+                ai_claimed_resolved,
+                resolution_confirmation,
+                handoff_reason,
+                handoff_mandatory_rule,
+                mandatory_handoff_violation,
+                repeat_same_intent_72h,
+                repeat_any_72h,
+                qa_result,
+                finalized_at,
+              ]
+            properties:
+              id: { type: string, format: uuid }
+              thread_id: { type: string, description: The connection (panel "Chat ID"). }
+              chat_id: { type: string, description: The day container (panel "Thread ID"). }
+              started_at: { type: string, format: date-time }
+              ended_at: { type: string, format: date-time }
+              outcome: { type: string, nullable: true }
+              intent: { type: string, nullable: true }
+              language: { type: string, nullable: true }
+              config_version_id: { type: string, nullable: true }
+              team_id: { type: string, nullable: true }
+              brand_id: { type: string, nullable: true }
+              ai_turns: { type: integer, minimum: 0 }
+              ai_claimed_resolved: { type: boolean }
+              resolution_confirmation: { type: string, nullable: true }
+              handoff_reason: { type: string, nullable: true }
+              handoff_mandatory_rule: { type: string, nullable: true }
+              mandatory_handoff_violation: { type: boolean }
+              repeat_same_intent_72h: { type: boolean, nullable: true }
+              repeat_any_72h: { type: boolean, nullable: true }
+              qa_result: { type: string, nullable: true }
+              finalized_at: { type: string, format: date-time, nullable: true }
 
     ReportsReviews:
       type: object
@@ -14599,6 +14923,36 @@ components:
         one. An unrecognised value is a 400, not a silent fallback, so
         `baseline=industry` fails loudly rather than appearing supported.
       schema: { type: string, enum: [previous_period, previous_year] }
+    AiMetricsTeam:
+      name: team_id
+      in: query
+      required: false
+      description: Only this team's connections (AI-25 filters).
+      schema: { type: string, pattern: "^[0-9]{1,18}$" }
+    AiMetricsBrand:
+      name: brand_id
+      in: query
+      required: false
+      description: Only the connections that came in through this brand.
+      schema: { type: string, format: uuid }
+    AiMetricsIntent:
+      name: intent
+      in: query
+      required: false
+      description: Only the connections about this topic (the procedure's key).
+      schema: { type: string, minLength: 1, maxLength: 200 }
+    AiMetricsVersion:
+      name: config_version_id
+      in: query
+      required: false
+      description: Only the connections this AI configuration version answered.
+      schema: { type: string, format: uuid }
+    AiMetricsLanguage:
+      name: language
+      in: query
+      required: false
+      description: Only the connections in this language.
+      schema: { type: string, minLength: 2, maxLength: 16 }
     ReportRangeFrom:
       name: from
       in: query

@@ -81,6 +81,12 @@
  * (`services/qa/prescore.ts`); `qa_consistency` (tm 319.2 · AI-24 §6) queues
  * the previous week's AI connections answered two ways
  * (`services/qa/consistency.ts`). No CLI scripts.
+ *
+ * `ai_outcomes_finalize` (tm 320.2 · AI-25-S3) settles the AI outcome rows
+ * whose connection ended 72 hours ago — the member's repeat contact,
+ * `assumed_resolved` or `false_resolved`; `ai_metrics_rollup` rebuilds the
+ * `ai_metrics_daily` days a changed row ended on
+ * (`services/reports/ai-metrics.ts`). No CLI scripts.
  */
 import type { PrismaClient } from '@prisma/client';
 import type { Env } from '../../config/env.js';
@@ -122,6 +128,7 @@ import type { WorkspaceEventDispatcher } from '../webhooks/workspace-events.js';
 import { ChatTimeoutSweeper } from '../chat/chat-timeout.js';
 import type { Mailer } from '../mail/mailer.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
+import { AiMetricsRollup, AiOutcomeFinalizer } from '../reports/ai-metrics.js';
 import { ScheduledReportSweeper } from '../reports/scheduled-report-sweeper.js';
 import { resolveRetentionPolicy } from '../retention/policy.js';
 import { RetentionRunner } from '../retention/retention.js';
@@ -745,6 +752,39 @@ export function buildSchedulerJobs({
             groups: report.totals.groups,
             pairs: report.totals.pairs,
             queued: report.totals.queued,
+          },
+        };
+      },
+    },
+    {
+      // The AI outcome rows settled 72 hours after their close (tm 320.2 ·
+      // AI-25-S3). Idempotent: a settled row is never read again.
+      name: 'ai_outcomes_finalize',
+      intervalMs: intervals.ai_outcomes_finalize,
+      async run(context) {
+        const report = await new AiOutcomeFinalizer(db).run({ signal: context.signal });
+        return {
+          counts: {
+            tenants: report.totals.tenants,
+            finalized: report.totals.finalized,
+            repeated: report.totals.repeated,
+            unmeasured: report.totals.unmeasured,
+          },
+        };
+      },
+    },
+    {
+      // The AI metrics' daily rollup (tm 320.2 · AI-25): the days a changed
+      // outcome row ended on, rebuilt whole.
+      name: 'ai_metrics_rollup',
+      intervalMs: intervals.ai_metrics_rollup,
+      async run(context) {
+        const report = await new AiMetricsRollup(db).run({ signal: context.signal });
+        return {
+          counts: {
+            tenants: report.totals.tenants,
+            days: report.totals.days,
+            rows: report.totals.rows,
           },
         };
       },

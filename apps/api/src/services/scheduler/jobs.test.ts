@@ -66,6 +66,8 @@ describe('buildSchedulerJobs', () => {
       'qa_sampling',
       'qa_prescore',
       'qa_consistency',
+      'ai_outcomes_finalize',
+      'ai_metrics_rollup',
     ]);
     // A name declared but never registered is a job somebody forgot to wire,
     // and `/health` would simply not mention it.
@@ -94,6 +96,8 @@ describe('buildSchedulerJobs', () => {
       SCHEDULE_QA_SAMPLING_MS: '20000',
       SCHEDULE_QA_PRESCORE_MS: '21000',
       SCHEDULE_QA_CONSISTENCY_MS: '23000',
+      SCHEDULE_AI_OUTCOMES_FINALIZE_MS: '24000',
+      SCHEDULE_AI_METRICS_ROLLUP_MS: '25000',
     });
     const jobs = buildSchedulerJobs({ db, env, mailer: new NullMailer() });
     const intervalOf = (name: string): number | undefined =>
@@ -119,6 +123,8 @@ describe('buildSchedulerJobs', () => {
     expect(intervalOf('qa_sampling')).toBe(20_000);
     expect(intervalOf('qa_prescore')).toBe(21_000);
     expect(intervalOf('qa_consistency')).toBe(23_000);
+    expect(intervalOf('ai_outcomes_finalize')).toBe(24_000);
+    expect(intervalOf('ai_metrics_rollup')).toBe(25_000);
   });
 
   it('registers retention and the unverified sign-up sweep disabled unless their switches are set — no other job is gated', () => {
@@ -251,6 +257,14 @@ describe('buildSchedulerJobs', () => {
       );
       const outcome = await job?.run(context());
       expect(outcome?.counts).toEqual({ tenants: 0, groups: 0, pairs: 0, queued: 0 });
+    });
+
+    it('ai_outcomes_finalize and ai_metrics_rollup find no workspace and settle nothing (tm 320.2)', async () => {
+      const jobs = buildSchedulerJobs({ db, env: testEnv(), mailer: new NullMailer() });
+      const finalize = await jobs.find((j) => j.name === 'ai_outcomes_finalize')?.run(context());
+      expect(finalize?.counts).toEqual({ tenants: 0, finalized: 0, repeated: 0, unmeasured: 0 });
+      const rollup = await jobs.find((j) => j.name === 'ai_metrics_rollup')?.run(context());
+      expect(rollup?.counts).toEqual({ tenants: 0, days: 0, rows: 0 });
     });
 
     it('ai_sandbox_sessions finds nothing expired and deletes nothing (tm 314.2)', async () => {

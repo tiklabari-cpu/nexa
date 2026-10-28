@@ -415,7 +415,8 @@ describe('the compliance pack joins every pre-publish run (tm 314.4 · AI-19-S1)
       queuePrePublishRun(tx, {
         licenseId: fx.a.licenseId,
         aiAgentId,
-        draftRevision: null,
+        // The gate reads the draft's revision now (tm 316.2): untouched, 0.
+        draftRevision: 0,
         startedBy: fx.a.ownerAccountId,
       }),
     );
@@ -467,6 +468,7 @@ describe('the compliance pack joins every pre-publish run (tm 314.4 · AI-19-S1)
         licenseId: fx.a.licenseId,
         aiAgentId,
         configTarget: 'draft',
+        draftRevision: 0,
         trigger: 'pre_publish',
         status: 'completed',
         scenarioCount: 14,
@@ -492,6 +494,7 @@ describe('the compliance pack joins every pre-publish run (tm 314.4 · AI-19-S1)
         licenseId: fx.a.licenseId,
         aiAgentId,
         configTarget: 'draft',
+        draftRevision: 0,
         trigger: 'pre_publish',
         status: 'queued',
         scenarioCount: 14,

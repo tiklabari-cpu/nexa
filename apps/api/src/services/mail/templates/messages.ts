@@ -1545,6 +1545,10 @@ const CAPABILITY_LABELS: Record<CapabilityKey, { en: string; tr: string }> = {
   },
   'ai.manage': { en: 'Configure the AI Agent', tr: "AI Agent'ı yapılandırma" },
   'ai.guardrails.edit': { en: 'Edit AI compliance rules', tr: 'AI uyum kurallarını düzenleme' },
+  'ai.config.publish': {
+    en: 'Approve and publish AI settings',
+    tr: 'AI ayarlarını onaylama ve yayımlama',
+  },
   'reports.view': { en: 'View reports', tr: 'Raporları görme' },
   'reports.schedule': { en: 'Schedule report emails', tr: 'Rapor e-postalarını zamanlama' },
   'team.invite': { en: 'Invite teammates', tr: 'Ekip arkadaşı davet etme' },

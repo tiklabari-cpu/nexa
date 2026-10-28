@@ -23,6 +23,17 @@ export const ERROR_TYPES = [
   // workspace (a partial unique index); the screen answers "open the agent you
   // have", which a generic `validation` cannot say. Kept narrow like `brand_exists`.
   'ai_agent_exists',
+  // SiyahTuş additions — AI configuration versions (AI-20 · tm 316.2 ·
+  // ADR-14b §2.5, §2.10). A save or a submission naming a draft revision
+  // (`If-Match`) someone else's save has moved past — `details.current_revision`
+  // says where the draft is now, and the screen answers "reload, someone else
+  // edited this". And a version step the version's or the draft's state
+  // refuses — the compliance pack not passed for this revision, nothing to
+  // submit, a version no longer open, a base published over, a rollback target
+  // that cannot be one (`details.reason`). Both 409 and kept narrow: each
+  // screen answers them differently from a generic `validation`.
+  'ai_config_revision_conflict',
+  'ai_config_version_state',
   // SiyahTuş addition — compliance guardrails (AI-08 · tm 301.2). A customer-
   // facing AI agent switched on before the Founder approved its crisis text
   // (AI-08-S1): the request was fine and allowed, the agent's setup is what
@@ -228,6 +239,8 @@ export type ErrorType = (typeof ERROR_TYPES)[number];
 export const ERROR_STATUS: Record<ErrorType, number> = {
   account_exists: 409,
   ai_agent_exists: 409,
+  ai_config_revision_conflict: 409,
+  ai_config_version_state: 409,
   ai_guardrail_setup_incomplete: 409,
   ai_mode_transition_refused: 409,
   ai_return_blocked: 409,

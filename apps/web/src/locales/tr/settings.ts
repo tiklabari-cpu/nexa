@@ -1482,6 +1482,7 @@ export const settings: Messages = {
     'Oyuncunun e-postayla gönderdiği hassas belgeleri açma (kimlik, pasaport, KYC)',
   'permissions.capability.ai.manage': 'AI Agent’ı yapılandırma',
   'permissions.capability.ai.guardrails.edit': 'AI uyum kurallarını düzenleme',
+  'permissions.capability.ai.config.publish': 'AI ayarlarını onaylama ve yayımlama',
   'permissions.capability.reports.view': 'Raporları görme',
   'permissions.capability.reports.schedule': 'Rapor e-postalarını zamanlama',
   'permissions.capability.team.invite': 'Ekip arkadaşı davet etme',

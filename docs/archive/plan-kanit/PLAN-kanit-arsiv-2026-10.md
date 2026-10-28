@@ -61,3 +61,5 @@
 #### K06.2.1 — 06.2.1 · Skill editör üst barı (Run log + active toggle)
 
 - ✅ "New skill" artik kayit olusturmaz, bos bir editor acar; skill ilk "Create skill"de tek `POST /skills` ile olusur (UX bulgusu O12, §D211) — `SkillEditor.tsx` (`isNew`: run log / acik-kapali / Delete yok, Cancel var) · `PlaybookPage.tsx` · test `PlaybookPage.newSkill.test.tsx` (5) · e2e `playbook.spec.ts` (istek yok → tek POST) · `a11y.spec.ts` · tm 259.23
+
+- ℹ tm 290 · ADR-14b eki (AI-20 tasarım notu, K21): düzenleme tabloları taslak, canlı AI yalnız yayınlanmış değişmez paketi okur; tm 316'dan sonra üst bardaki açık/kapalı anahtarının anlamı "şu an cevap veriyor"dan "bu sürümde etkin"e döner (geçiş açıklaması tm 316) — damga `✅` kaldı, kod değişmedi · PLAN.md §0 (ADR-14b) · `docs/adr/ai-config-versioning.md` · test yok (yalnız doküman) · §D252

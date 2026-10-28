@@ -78,7 +78,7 @@ import {
   activeScenarioIds,
   compliancePackGate,
   queuePrePublishRun,
-  type CompliancePackGate,
+  serialiseGate,
 } from '../services/ai/simulation/compliance-pack.js';
 import { comparedRunOf, orderResults, regressions } from '../services/ai/simulation/regression.js';
 import { readSimulationSetting } from '../services/ai/simulation/runner.js';
@@ -317,19 +317,6 @@ function serialiseResult(row: AiTestRunResult, regression: AiTestRegression | nu
   };
 }
 
-function serialiseGate(gate: CompliancePackGate) {
-  return {
-    state: gate.state,
-    open: gate.open,
-    run_id: gate.runId,
-    run_pack_version: gate.runPackVersion,
-    passed: gate.passed,
-    failed: gate.failed,
-    failing: gate.failing,
-    workspace_failed: gate.workspaceFailed,
-  };
-}
-
 /** The pack as the Test tab lists it: locked, its expectations as written. */
 function serialisePackScenario(scenario: (typeof AI_COMPLIANCE_SCENARIOS)[number]) {
   return {
@@ -357,12 +344,17 @@ function serialiseSession(row: AiSandboxSession) {
 }
 
 /** The customer-facing AI agent named, or 404 — a Copilot record is no scenario's. */
-async function requireAgent(tx: TenantClient, aiAgentId: string): Promise<void> {
+/** The customer-facing agent, and its draft revision now (tm 316.2). */
+async function requireAgent(
+  tx: TenantClient,
+  aiAgentId: string,
+): Promise<{ draftRevision: number }> {
   const agent = await tx.aiAgent.findFirst({
     where: { id: aiAgentId, kind: 'ai_agent' },
-    select: { id: true },
+    select: { id: true, draftRevision: true },
   });
   if (!agent) throw ApiError.notFound('AI agent not found.');
+  return { draftRevision: Number(agent.draftRevision) };
 }
 
 async function requireBrand(tx: TenantClient, brandId: unknown): Promise<void> {
@@ -616,13 +608,15 @@ export default async function aiTestingRoutes(app: FastifyInstance): Promise<voi
         }
       }
       const row = await request.withTenant(async (tx) => {
-        await requireAgent(tx, body.ai_agent_id);
+        const agent = await requireAgent(tx, body.ai_agent_id);
         checkTarget(body.target, body.config_version_id);
         if (body.trigger === 'pre_publish') {
+          // Recorded against the revision it plays: submitting a later one
+          // needs a run of its own (tm 316.2).
           return queuePrePublishRun(tx, {
             licenseId: request.tenant().licenseId,
             aiAgentId: body.ai_agent_id,
-            draftRevision: null,
+            draftRevision: agent.draftRevision,
             startedBy: account,
           });
         }
@@ -730,8 +724,12 @@ export default async function aiTestingRoutes(app: FastifyInstance): Promise<voi
   app.get('/ai/compliance-pack', { config: { scopes: READ } }, async (request, reply) => {
     const query = parse(compliancePackQuery, request.query);
     const gate = await request.withTenant(async (tx) => {
-      await requireAgent(tx, query.ai_agent_id);
-      return compliancePackGate(tx, { aiAgentId: query.ai_agent_id });
+      // The draft as it stands now: a run of an earlier revision opens nothing.
+      const agent = await requireAgent(tx, query.ai_agent_id);
+      return compliancePackGate(tx, {
+        aiAgentId: query.ai_agent_id,
+        draftRevision: agent.draftRevision,
+      });
     });
     return reply.send({
       pack_version: AI_COMPLIANCE_PACK_VERSION,

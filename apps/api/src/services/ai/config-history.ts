@@ -47,6 +47,13 @@ export interface ConfigChangeAuthor {
   audit: AuditContext;
   role: string | null;
   jobId?: string;
+  /**
+   * The draft revision the save was made against — the request's `If-Match`
+   * (tm 316.2 · ADR-14b §2.5 step 2). A save that would move a revision other
+   * than this one is `409 ai_config_revision_conflict`; absent, the save moves
+   * the revision whatever it is (last write wins, as before versioning).
+   */
+  expectedRevision?: bigint | null;
 }
 
 /** A system job's author: `actor_type = 'system'`, the job's name as the actor. */

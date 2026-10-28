@@ -1050,7 +1050,12 @@ describe('module parity matrix — what is still owed', () => {
       // history and its CSV (AI-21), read by Playbook › Geçmiş. The AI is
       // configured in the web console; the app has no Playbook screen, and
       // nothing here re-scopes.
-      contractEndpoints: 315,
+      // 315 -> 324 with `/ai/config/draft/diff`, `/ai/config/versions`
+      // (+ `/{versionId}`, `/approve`, `/reject`, `/rollback`,
+      // `/diff/{toVersionId}`), `/ai/pause` and `/ai/resume`
+      // (tm 316.2) — the AI configuration's review line (AI-20). Web console
+      // only, like the rest of the Playbook; nothing here re-scopes.
+      contractEndpoints: 324,
       scopeBoundaries: 1,
     });
   });

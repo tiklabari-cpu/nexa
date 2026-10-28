@@ -5749,6 +5749,216 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/ai/config/draft/diff': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The draft as a submission would take it
+     * @description The draft compiled and judged, told against the published version, and
+     *     the compliance gate of its revision. `submittable` is what "Onaya gönder"
+     *     needs: no problem, the pack passed for this revision, something changed.
+     *     The response's `ETag` is the draft revision.
+     */
+    get: operations['getAiConfigDraft'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/config/versions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** An agent's versions, newest first */
+    get: operations['listAiConfigVersions'];
+    put?: never;
+    /**
+     * Submit the draft for review
+     * @description Compiles the draft into a version `in_review`. An open version of the
+     *     agent is rejected (`review_note: superseded_by_submit`). Refused with
+     *     `400 validation` (`details.problems`) when the draft does not compile,
+     *     `409 ai_config_revision_conflict` when `If-Match` names another revision,
+     *     and `409 ai_config_version_state` when the compliance pack has not passed
+     *     for this revision (`compliance_pack`) or nothing changed (`no_changes`).
+     */
+    post: operations['submitAiConfigVersion'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/config/versions/{versionId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        versionId: components['parameters']['AiConfigVersionId'];
+      };
+      cookie?: never;
+    };
+    /** One version */
+    get: operations['getAiConfigVersion'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/config/versions/{versionId}/approve': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        versionId: components['parameters']['AiConfigVersionId'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Approve a version — publish now or at `publish_at`
+     * @description `403 not_allowed` for one's own submission (`details.reason:
+     *     own_submission`) and, unless the caller is the Founder, for a version
+     *     that touches compliance (`owner_required`). With `publish_at` the version
+     *     is `approved` and waits for its time; without, it is published at once.
+     *     Publishing reads the compliance run again and needs the version's base
+     *     to still be the published one: when another version went out in between
+     *     and both change the same thing, the version is rejected and the answer is
+     *     `409 ai_config_version_state` (`stale_base`).
+     */
+    post: operations['approveAiConfigVersion'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/config/versions/{versionId}/reject': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        versionId: components['parameters']['AiConfigVersionId'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Reject an open version
+     * @description An `in_review` version, or an `approved` one still waiting for its time.
+     */
+    post: operations['rejectAiConfigVersion'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/config/versions/{versionId}/rollback': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        versionId: components['parameters']['AiConfigVersionId'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Publish a new version copying this one's package
+     * @description History is not rewritten — the new version names this one in
+     *     `rollback_of` — and the draft is not touched. Knowledge chunks whose
+     *     range has closed are copied as a new generation. `409
+     *     ai_config_version_state` for the version in production
+     *     (`rollback_current`), one never published (`rollback_unpublished`), the
+     *     first version recorded before versioning (`rollback_baseline`), and one
+     *     whose chunks have been cleaned up (`knowledge_purged`).
+     */
+    post: operations['rollbackAiConfigVersion'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/config/versions/{versionId}/diff/{toVersionId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        versionId: components['parameters']['AiConfigVersionId'];
+        toVersionId: string;
+      };
+      cookie?: never;
+    };
+    /** One version told against another of the same agent */
+    get: operations['diffAiConfigVersions'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/pause': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Stop the AI agent's answers
+     * @description `active` false, read on the next turn — pausing is never versioned and
+     *     waits for no review. Recorded as `paused` in the change history. Asking
+     *     for the state the agent is already in changes nothing.
+     */
+    post: operations['pauseAiAgent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/resume': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Let the AI agent answer again
+     * @description `active` true. Refused with `409 ai_guardrail_setup_incomplete` until the
+     *     Founder has approved the crisis text (AI-08-S1), as switching it on is.
+     */
+    post: operations['resumeAiAgent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/copilot/knowledge': {
     parameters: {
       query?: never;
@@ -14573,6 +14783,163 @@ export interface components {
        */
       visibility: 'all' | 'own';
     };
+    /**
+     * @description Submitted and awaiting review; approved and waiting for `scheduled_at`;
+     *     the one the AI answers from; replaced by a later publication; rejected
+     *     (by a reviewer, by a newer submission — `superseded_by_submit` — or
+     *     because another version was published over its base — `stale_base`).
+     * @enum {string}
+     */
+    AiConfigVersionStatus: 'in_review' | 'approved' | 'published' | 'superseded' | 'rejected';
+    /** @description One problem that stops a draft from being submitted, or a warning that does not. */
+    AiConfigFinding: {
+      code: string;
+      /** @enum {string|null} */
+      section: 'agent' | 'skills' | 'guidance' | 'guardrails' | 'handoff' | 'knowledge' | null;
+      /** @description The item, as the difference names it (a skill's id, `rule:<id>`, …). */
+      key: string | null;
+      message: string;
+      details?: {
+        [key: string]: unknown;
+      };
+    };
+    AiConfigSectionDiff: {
+      /** @enum {string} */
+      section: 'agent' | 'skills' | 'guidance' | 'guardrails' | 'handoff' | 'knowledge';
+      added: number;
+      removed: number;
+      changed: number;
+      /** @description Ordered by key; the counts are always whole. */
+      items: {
+        key: string;
+        /** @enum {string} */
+        kind: 'added' | 'removed' | 'changed';
+      }[];
+    };
+    AiConfigDiffSummary: {
+      /**
+       * Format: uuid
+       * @description The version compared against; null — nothing was published.
+       */
+      base_version_id: string | null;
+      /** @description The base was the first version recorded before versioning; every item reads as added. */
+      from_baseline: boolean;
+      /** @description Items added, removed or changed, all sections together ("Taslak 7 değişiklik"). */
+      changes: number;
+      sections: components['schemas']['AiConfigSectionDiff'][];
+      /** @description Only the Founder approves such a version. */
+      touches_compliance: boolean;
+      compliance: ('guardrails' | 'locked_procedure')[];
+    };
+    AiConfigVersion: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      ai_agent_id: string;
+      number: number;
+      minor: number;
+      /** @description The name on screen — v12, or v12.1 for a minor version. */
+      label: string;
+      /** @description The workspace's publication order; null until published. */
+      seq: number | null;
+      status: components['schemas']['AiConfigVersionStatus'];
+      /** @description 0 — the first version recorded before versioning, which holds no package. */
+      package_format: number;
+      snapshot_hash: string;
+      /** @description The draft revision it was compiled from. */
+      draft_revision: number;
+      /** Format: uuid */
+      base_version_id: string | null;
+      /**
+       * Format: uuid
+       * @description The version a rollback copied.
+       */
+      rollback_of: string | null;
+      /**
+       * Format: uuid
+       * @description The pre-publish run whose compliance pack passed for its revision.
+       */
+      test_run_id: string | null;
+      touches_compliance: boolean;
+      diff_summary: components['schemas']['AiConfigDiffSummary'] | null;
+      /** @description Sources in its knowledge manifest. */
+      knowledge_sources: number;
+      /** Format: uuid */
+      submitted_by: string | null;
+      /** Format: date-time */
+      submitted_at: string | null;
+      /**
+       * Format: uuid
+       * @description The reviewer; null when the system rejected it.
+       */
+      reviewed_by: string | null;
+      /** Format: date-time */
+      reviewed_at: string | null;
+      /** @description The reviewer's (or a rollback's) note, or `superseded_by_submit` / `stale_base`. */
+      review_note: string | null;
+      /** Format: uuid */
+      published_by: string | null;
+      /** Format: date-time */
+      published_at: string | null;
+      /** Format: date-time */
+      scheduled_at: string | null;
+      /** Format: date-time */
+      created_at: string;
+    };
+    AiConfigVersionList: {
+      versions: components['schemas']['AiConfigVersion'][];
+      next_cursor: string | null;
+    };
+    AiConfigDraft: {
+      /** Format: uuid */
+      ai_agent_id: string;
+      draft_revision: number;
+      /** @description False — the agent is paused. */
+      active: boolean;
+      published: components['schemas']['AiConfigVersion'] | null;
+      /** @description The version awaiting review or its time, if there is one. */
+      open: components['schemas']['AiConfigVersion'] | null;
+      /** @description The draft compiles and holds. */
+      ok: boolean;
+      problems: components['schemas']['AiConfigFinding'][];
+      warnings: components['schemas']['AiConfigFinding'][];
+      /** @description Against the published version; null when the draft does not compile. */
+      diff: components['schemas']['AiConfigDiffSummary'] | null;
+      compliance_gate: components['schemas']['AiComplianceGate'];
+      submittable: boolean;
+    };
+    AiConfigSubmitRequest: {
+      /** Format: uuid */
+      ai_agent_id: string;
+      note?: string;
+    };
+    AiConfigSubmission: {
+      version: components['schemas']['AiConfigVersion'];
+      warnings: components['schemas']['AiConfigFinding'][];
+      /** @description The open version the submission rejected, if there was one. */
+      replaced_version_ids: string[];
+    };
+    AiConfigApproveRequest: {
+      /**
+       * Format: date-time
+       * @description Publish then — in the future, at most 30 days ahead; absent, now.
+       */
+      publish_at?: string;
+      note?: string;
+    };
+    AiConfigNoteRequest: {
+      note?: string;
+    };
+    AiPauseRequest: {
+      /** Format: uuid */
+      ai_agent_id: string;
+      note?: string;
+    };
+    AiPauseState: {
+      /** Format: uuid */
+      ai_agent_id: string;
+      active: boolean;
+    };
     AiUnresolvedSettings: {
       spike_threshold: number;
       default_threshold: number;
@@ -20691,6 +21058,8 @@ export interface components {
      */
     ErrorType:
       | 'ai_agent_exists'
+      | 'ai_config_revision_conflict'
+      | 'ai_config_version_state'
       | 'ai_guardrail_setup_incomplete'
       | 'ai_mode_transition_refused'
       | 'ai_return_blocked'
@@ -21074,6 +21443,15 @@ export interface components {
     };
   };
   parameters: {
+    /** @description The customer-facing AI agent. */
+    AiConfigAgentId: string;
+    AiConfigVersionId: string;
+    /**
+     * @description The draft revision the caller loaded (`"12"`), as the `ETag` of
+     *     `GET /ai/config/draft/diff` gave it. A draft moved past it is
+     *     `409 ai_config_revision_conflict`; absent or `*`, no condition.
+     */
+    AiConfigIfMatch: string;
     AiConfigChangeEntityType: components['schemas']['AiConfigEntityType'];
     AiConfigChangeEntityId: string;
     AiConfigChangeAction: components['schemas']['AiConfigChangeAction'];
@@ -29734,6 +30112,312 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getAiConfigDraft: {
+    parameters: {
+      query: {
+        /** @description The customer-facing AI agent. */
+        ai_agent_id: components['parameters']['AiConfigAgentId'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The draft */
+      200: {
+        headers: {
+          /** @description The draft revision, quoted — what `If-Match` sends back. */
+          ETag?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiConfigDraft'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listAiConfigVersions: {
+    parameters: {
+      query: {
+        /** @description The customer-facing AI agent. */
+        ai_agent_id: components['parameters']['AiConfigAgentId'];
+        limit?: number;
+        cursor?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page of versions */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiConfigVersionList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  submitAiConfigVersion: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description The draft revision the caller loaded (`"12"`), as the `ETag` of
+         *     `GET /ai/config/draft/diff` gave it. A draft moved past it is
+         *     `409 ai_config_revision_conflict`; absent or `*`, no condition.
+         */
+        'If-Match'?: components['parameters']['AiConfigIfMatch'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AiConfigSubmitRequest'];
+      };
+    };
+    responses: {
+      /** @description The version submitted */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiConfigSubmission'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getAiConfigVersion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        versionId: components['parameters']['AiConfigVersionId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The version */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiConfigVersion'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  approveAiConfigVersion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        versionId: components['parameters']['AiConfigVersionId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['AiConfigApproveRequest'];
+      };
+    };
+    responses: {
+      /** @description The version, `published` or `approved` */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiConfigVersion'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  rejectAiConfigVersion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        versionId: components['parameters']['AiConfigVersionId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['AiConfigNoteRequest'];
+      };
+    };
+    responses: {
+      /** @description The version, `rejected` */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiConfigVersion'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  rollbackAiConfigVersion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        versionId: components['parameters']['AiConfigVersionId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['AiConfigNoteRequest'];
+      };
+    };
+    responses: {
+      /** @description The new version, `published` */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiConfigVersion'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  diffAiConfigVersions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        versionId: components['parameters']['AiConfigVersionId'];
+        toVersionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The difference, `versionId` → `toVersionId` */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiConfigDiffSummary'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  pauseAiAgent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AiPauseRequest'];
+      };
+    };
+    responses: {
+      /** @description The agent's switch */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiPauseState'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  resumeAiAgent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AiPauseRequest'];
+      };
+    };
+    responses: {
+      /** @description The agent's switch */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiPauseState'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
       429: components['responses']['TooManyRequests'];
     };
   };

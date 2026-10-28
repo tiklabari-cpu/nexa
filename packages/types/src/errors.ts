@@ -40,6 +40,13 @@ export const ERROR_TYPES = [
   // already decided (`already_reviewed`). 409 and narrow: the panel opens the
   // existing suggestion instead of showing an error.
   'ai_suggestion_state',
+  // SiyahTuş addition — the AI quality control queue (AI-24 · tm 319.2). A
+  // review someone else holds (`details.reason` `claimed`), one not ready to
+  // claim (`pending_prescore`), one already completed (`completed`), one the
+  // caller does not hold (`not_claimed`), a month that has its calibration
+  // round (`calibration_exists`) or a closed round (`calibration_closed`). 409
+  // and narrow: the queue reloads the review instead of showing an error.
+  'qa_review_state',
   // SiyahTuş addition — compliance guardrails (AI-08 · tm 301.2). A customer-
   // facing AI agent switched on before the Founder approved its crisis text
   // (AI-08-S1): the request was fine and allowed, the agent's setup is what
@@ -248,6 +255,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   ai_config_revision_conflict: 409,
   ai_config_version_state: 409,
   ai_suggestion_state: 409,
+  qa_review_state: 409,
   ai_guardrail_setup_incomplete: 409,
   ai_mode_transition_refused: 409,
   ai_return_blocked: 409,

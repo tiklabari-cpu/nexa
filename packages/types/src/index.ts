@@ -84,3 +84,4 @@ export * from './ai-config-history.js';
 export * from './ai-config-versions.js';
 export * from './ai-suggestions.js';
 export * from './qa.js';
+export * from './qa-review.js';

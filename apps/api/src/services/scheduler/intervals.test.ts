@@ -53,6 +53,8 @@ describe('the job list', () => {
       'knowledge_chunk_gc',
       'ai_suggestion_drafts',
       'qa_sampling',
+      'qa_prescore',
+      'qa_consistency',
     ]);
   });
 
@@ -84,6 +86,8 @@ describe('intervals', () => {
       knowledge_chunk_gc: 3_600_000,
       ai_suggestion_drafts: 60_000,
       qa_sampling: 900_000,
+      qa_prescore: 60_000,
+      qa_consistency: 21_600_000,
     });
   });
 

@@ -366,6 +366,8 @@ enabled flag, and last run's time/status.
 | `knowledge_chunk_gc`   | 1 h              | Deletes knowledge chunks no AI configuration version answers from (tm 316.6)       |
 | `ai_suggestion_drafts` | 1 min            | Drafts agents' AI suggestions into knowledge and looks for them in it (tm 318.1)   |
 | `qa_sampling`          | 15 min           | Samples a workspace's previous day into the QA queue at its 02:00 (tm 319.1)       |
+| `qa_prescore`          | 1 min            | Pre-scores the queued QA reviews with the model, evidence checked (tm 319.2)       |
+| `qa_consistency`       | 6 h              | Queues last week's AI connections answered two ways, as pairs (tm 319.2)           |
 
 Override an interval with `SCHEDULE_<JOB>_MS`, and spread instances from one deploy so
 they don't all tick together with `SCHEDULE_JITTER_PCT` (default 10%) — see

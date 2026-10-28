@@ -393,6 +393,7 @@ export const IMPERSONATION_ALLOWED_WRITES: readonly RegExp[] = [
   /^\/ai-templates\//,
   /^\/ai-access-info$/,
   /^\/ai\//,
+  /^\/qa\//,
   /^\/risk-flags(\/.*)?$/,
   /^\/notifications\/devices(\/[^/]+)?$/,
   /^\/onboarding\//,

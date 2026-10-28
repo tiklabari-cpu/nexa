@@ -1059,7 +1059,12 @@ describe('module parity matrix — what is still owed', () => {
       // and `/{suggestionId}/to-scenario` (tm 318.1) — the AI coaching queue
       // (AI-23), marked from the web inbox and reviewed in the Playbook; the
       // app has neither, and nothing here re-scopes.
-      contractEndpoints: 327,
+      // 327 -> 337 with `/qa/reviews` (+ `/{reviewId}`, `/claim`),
+      // `/qa/settings`, `/qa/rubric`, `/qa/calibrations` (+ `/{calibrationId}`,
+      // `/scores`, `/close`) and `/qa/summary` (tm 319.2) — the AI quality
+      // control queue (AI-24), reviewed in the web console's reports; the app
+      // has no QA screen, and nothing here re-scopes.
+      contractEndpoints: 337,
       scopeBoundaries: 1,
     });
   });

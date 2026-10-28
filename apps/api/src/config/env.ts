@@ -1275,6 +1275,19 @@ export const envSchema = z.object({
    */
   SCHEDULE_QA_SAMPLING_MS: z.coerce.number().int().positive().default(900_000),
   /**
+   * The QA pre-score (tm 319.2 · AI-24 §3): the reviews waiting for the
+   * model's pre-score read by it — or released without one. Every minute: a
+   * review is in the queue soon after it was sampled or sent by hand.
+   */
+  SCHEDULE_QA_PRESCORE_MS: z.coerce.number().int().positive().default(60_000),
+  /**
+   * The QA consistency job (tm 319.2 · AI-24 §6): the previous week's AI
+   * connections grouped by procedure and collected details, a group answered
+   * two ways queued as a pair. Every 6 hours: the week is the same all week
+   * and a pair queued again changes nothing.
+   */
+  SCHEDULE_QA_CONSISTENCY_MS: z.coerce.number().int().positive().default(21_600_000),
+  /**
    * Lets the retention job actually run its scheduled pass (M-SCHED-b ·
    * `services/scheduler/types.ts`'s `JobDefinition.enabled`). Off by default:
    * this is the one sweep that hard-deletes data, and there is no operator

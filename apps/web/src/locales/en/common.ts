@@ -23,6 +23,8 @@ export const common: Messages = {
   'common.errors.ai_config_version_state':
     'This AI settings version cannot take that step in its current state.',
   'common.errors.ai_suggestion_state': 'This suggestion was already made or already decided.',
+  'common.errors.qa_review_state':
+    'This review is held by someone else, not ready yet, or already completed.',
   'common.errors.ai_guardrail_setup_incomplete':
     'The AI agent cannot go live until its crisis text is written and approved by the owner.',
   'common.errors.ai_mode_transition_refused': 'The AI is not answering this conversation.',

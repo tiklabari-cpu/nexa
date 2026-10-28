@@ -306,6 +306,19 @@ export const CAPABILITIES = [
     floorRole: 'team_lead',
     defaults: { owner: 'on', admin: 'on', team_lead: 'on', agent: 'off' },
   },
+  {
+    // Reviewing the AI quality control queue (AI-24 · tm 319.2): checked by
+    // the QA routes. A Team Lead claims and scores their led teams' reviews and
+    // scores the monthly calibration round, an administrator and the Founder
+    // every one. The floor keeps it off an Ekip Üyesi (AI-24 "Ekip Üyesi: yok").
+    key: 'ai.qa.review',
+    group: 'ai',
+    labelKey: 'permissions.capability.ai.qa.review',
+    values: ['off', 'on'],
+    scopes: {},
+    floorRole: 'team_lead',
+    defaults: { owner: 'on', admin: 'on', team_lead: 'on', agent: 'off' },
+  },
   // Raporlar
   {
     // A level row with no `team` level yet: a team-bounded report needs the

@@ -1,0 +1,424 @@
+# The AI quality control (QA) queue (tm 319 · SiyahTuş analysis AI-24).
+#
+# Every day the sampler (tm 319.1) queues the AI connections that closed the
+# previous conversation day: a deterministic random share and every
+# connection in a mandatory category. The weekly consistency job adds pairs
+# the AI answered two ways, a Team Lead adds one by hand from the inbox. The
+# `qa_prescore` job has the model pre-score each one — kept only when every
+# message it cites is the conversation's own — and a reviewer claims it,
+# confirms each critical criterion one by one and completes it. A completed
+# critical failure opens an AI-23 suggestion (`source: qa_finding`) and an
+# AI-19 scenario draft; a missed mandatory hand-over mails the
+# administrators.
+#
+# Served by `apps/api/src/routes/qa.ts`. Who: the `ai.qa.review` matrix row
+# (Team Lead and up by default) — a Team Lead their led teams' reviews (the
+# connection's team when it was queued), an administrator and the Founder
+# all; anything else is not there (404). The settings and the rubric are read
+# with the AI's scopes and changed by an administrator. A responsible-gaming
+# conversation's text is the Responsible Gaming team's and the
+# administrators': anyone else gets the excerpt with its texts emptied
+# (`excerpt_restricted`). The component schemas are in `openapi.yaml`
+# (`Qa*`); `@siyahtus/types` `qa.ts` / `qa-review.ts` hold the same lists and
+# bounds. In the panel the `chat_id` below is the day container ("Thread ID")
+# and `thread_id` the connection ("Chat ID") — K1=A.
+
+reviews:
+  get:
+    tags: [Reports]
+    operationId: listQaReviews
+    summary: The QA queue, within the caller's reach
+    description: |
+      Most pressing first (`priority`, then `due_at`). `status=open` (the
+      default) is everything without a verdict; `mine=true` what the caller
+      holds. `open_count` counts the caller's open reviews.
+    parameters:
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [pending_prescore, ready, in_review, completed, open, all]
+          default: open
+      - name: reason
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/QaReason" }
+      - name: team_id
+        in: query
+        schema: { type: integer, minimum: 1 }
+      - name: mine
+        in: query
+        schema: { type: boolean }
+      - name: limit
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      - name: offset
+        in: query
+        schema: { type: integer, minimum: 0, default: 0 }
+    responses:
+      "200":
+        description: The reviews
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QaReviewList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Reports]
+    operationId: createQaReview
+    summary: Send a conversation to the QA queue by hand ("QA'ya gönder")
+    description: |
+      The conversation must be one the caller may see (else 404), closed and
+      one the AI took part in (else `validation`), and — for a Team Lead — of
+      a team they lead (else 403). Already queued, `manual` joins its reasons;
+      already reviewed, `qa_review_state` (`completed`). `note` is kept,
+      masked, as the review's comment until the reviewer writes one.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/QaReviewCreateRequest" }
+    responses:
+      "201":
+        description: Queued
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QaReviewDetail" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+review:
+  parameters:
+    - name: reviewId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Reports]
+    operationId: getQaReview
+    summary: One review — its rubric, pre-score, masked excerpt and decision trail
+    responses:
+      "200":
+        description: The review
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QaReviewDetail" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  put:
+    tags: [Reports]
+    operationId: updateQaReview
+    summary: Save, release or complete a review the caller holds
+    description: |
+      Only the reviewer who claimed it (else `qa_review_state`, `not_claimed`
+      or `completed`). `scores` replace the given criteria's values; a value
+      the criterion cannot hold is `validation`. `save` keeps it in review,
+      `release` puts it back in the queue. `complete` needs a value for every
+      criterion, `confirmed: true` on every critical one — the pre-score
+      never confirms anything — and `final`; a failed critical criterion
+      cannot be a `pass` (`validation`, `details.problems`). A critical
+      failure opens an AI-23 suggestion and an AI-19 scenario draft
+      (`follow_ups`) and, when `handoff_timing` failed, mails the
+      administrators.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/QaReviewUpdateRequest" }
+    responses:
+      "200":
+        description: The review as saved
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QaReviewDetail" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+reviewClaim:
+  parameters:
+    - name: reviewId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Reports]
+    operationId: claimQaReview
+    summary: Claim a ready review
+    description: |
+      `ready` → `in_review`, held by the caller; claiming one's own again
+      answers it unchanged. Someone else's is `qa_review_state` (`claimed`),
+      one waiting for its pre-score `pending_prescore`, a completed one
+      `completed`. With the conflict check on, a reviewer who wrote in the
+      conversation or accepted its hand-over is refused (403,
+      `details.reason: conflict_of_interest`).
+    responses:
+      "200":
+        description: Claimed
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QaReviewDetail" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+settings:
+  get:
+    tags: [Reports]
+    operationId: getQaSettings
+    summary: The workspace's QA settings
+    responses:
+      "200":
+        description: The settings (the defaults when never saved)
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QaSettings" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  put:
+    tags: [Reports]
+    operationId: updateQaSettings
+    summary: Change the sample rate, the pre-score or the conflict check
+    description: An administrator's. Fields left out keep their value.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/QaSettingsUpdateRequest" }
+    responses:
+      "200":
+        description: The settings as saved
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QaSettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+rubric:
+  get:
+    tags: [Reports]
+    operationId: getQaRubric
+    summary: The active rubric (version 1 is the platform's)
+    responses:
+      "200":
+        description: The rubric
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QaRubric" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  put:
+    tags: [Reports]
+    operationId: updateQaRubric
+    summary: Save a new rubric version
+    description: |
+      An administrator's. The platform's critical criteria (`guardrails`,
+      `handoff_timing`) stay as they are; a workspace's own criterion is never
+      locked (`validation`). The new version becomes the active one; reviews
+      already queued keep the version they were queued with.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [criteria]
+            properties:
+              criteria:
+                type: array
+                minItems: 1
+                maxItems: 20
+                items: { $ref: "../openapi.yaml#/components/schemas/QaRubricCriterion" }
+    responses:
+      "200":
+        description: The new version
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QaRubric" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+calibrations:
+  get:
+    tags: [Reports]
+    operationId: listQaCalibrations
+    summary: The calibration rounds, newest month first
+    responses:
+      "200":
+        description: The rounds
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [calibrations]
+              properties:
+                calibrations:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/QaCalibration" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    tags: [Reports]
+    operationId: createQaCalibration
+    summary: Open the month's calibration round
+    description: |
+      An administrator's. Up to 20 reviews completed in the last 60 days, the
+      same for every reviewer; one round a month (`qa_review_state`,
+      `calibration_exists`). No completed review to hand out is `validation`.
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              period:
+                {
+                  type: string,
+                  pattern: '^\d{4}-\d{2}$',
+                  description: The month,
+                  YYYY-MM; the workspace's current one by default.,
+                }
+    responses:
+      "201":
+        description: Opened
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QaCalibration" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+calibration:
+  parameters:
+    - name: calibrationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  get:
+    tags: [Reports]
+    operationId: getQaCalibration
+    summary: One round — its conversations, the caller's scores and its report
+    description: |
+      The report (agreement per criterion, each reviewer's deviation) is an
+      administrator's while the round is open and everyone's once closed.
+    responses:
+      "200":
+        description: The round
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QaCalibrationDetail" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+calibrationScores:
+  parameters:
+    - name: calibrationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  post:
+    tags: [Reports]
+    operationId: scoreQaCalibration
+    summary: Score one of the round's conversations
+    description: |
+      Every criterion, the critical ones confirmed, and `final` — the review's
+      rule (`validation`). Scoring again replaces the caller's. A closed round
+      is `qa_review_state` (`calibration_closed`).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/QaCalibrationScoreRequest" }
+    responses:
+      "200":
+        description: The round with the caller's scores
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QaCalibrationDetail" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+calibrationClose:
+  parameters:
+    - name: calibrationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  post:
+    tags: [Reports]
+    operationId: closeQaCalibration
+    summary: Close a round — its report becomes everyone's
+    description: An administrator's. Closing a closed round answers it unchanged.
+    responses:
+      "200":
+        description: The closed round
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QaCalibrationDetail" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+summary:
+  get:
+    tags: [Reports]
+    operationId: getQaSummary
+    summary: The queue's figures for a period (AI-25's QA reads)
+    description: |
+      Within the caller's reach. Open and overdue now; of the reviews
+      completed in the period (`reviewed_at`, the last 30 days by default, at
+      most 366): passed, failed, failed critically, per reason and per failed
+      criterion, mandatory hand-overs checked and missed, guardrail breaches
+      confirmed, and false resolutions (a connection the AI settled that the
+      review failed).
+    parameters:
+      - name: from
+        in: query
+        schema: { type: string, format: date-time }
+      - name: to
+        in: query
+        schema: { type: string, format: date-time }
+    responses:
+      "200":
+        description: The figures
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QaSummary" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

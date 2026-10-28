@@ -1488,6 +1488,7 @@ export const settings: Messages = {
   'permissions.capability.ai.config.publish': 'Approve and publish AI settings',
   'permissions.capability.ai.suggest': 'Suggest corrections to the AI',
   'permissions.capability.ai.suggestions.review': 'Review AI suggestions',
+  'permissions.capability.ai.qa.review': 'Review AI quality',
   'permissions.capability.reports.view': 'View reports',
   'permissions.capability.reports.schedule': 'Schedule report emails',
   'permissions.capability.team.invite': 'Invite teammates',

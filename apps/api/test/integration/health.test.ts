@@ -113,6 +113,8 @@ describe('GET /health — scheduler (admin caller)', () => {
         'knowledge_chunk_gc',
         'ai_suggestion_drafts',
         'qa_sampling',
+        'qa_prescore',
+        'qa_consistency',
       ]);
       // Registered but never ticked — `SCHEDULER_ENABLED` defaults to off
       // under `NODE_ENV=test` (env.ts), same as every other suite's server.
@@ -152,6 +154,8 @@ describe('GET /health — scheduler (admin caller)', () => {
         'knowledge_chunk_gc',
         'ai_suggestion_drafts',
         'qa_sampling',
+        'qa_prescore',
+        'qa_consistency',
       ]) {
         expect(byName[name]).toMatchObject({ enabled: true, last_status: null });
       }

@@ -13967,7 +13967,7 @@
           "314"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-28T15:23:46.365Z",
+        "updatedAt": "2026-10-28T15:24:51.721Z",
         "subtasks": [
           {
             "id": 1,
@@ -13987,13 +13987,13 @@
             "description": "Ön puan (kanıt doğrulamalı) + inceleme/claim + kritik hata eylemleri + tutarlılık + kalibrasyon",
             "details": "Üst görev 319 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Entegrasyon.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "319.1"
             ],
             "parentId": "319",
             "priority": "medium",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-28T15:24:51.721Z"
           },
           {
             "id": 3,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-28T15:23:46.365Z",
+      "lastModified": "2026-10-28T15:24:51.722Z",
       "taskCount": 390,
       "completedCount": 335,
       "tags": [

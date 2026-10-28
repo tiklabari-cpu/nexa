@@ -15,6 +15,8 @@ export const common: Messages = {
     'Siz açtıktan sonra bu AI ayarlarını başka biri kaydetti — sayfayı yenileyip değişikliğinizi yeniden yapın.',
   'common.errors.ai_config_version_state': 'Bu AI ayar sürümü şu anki durumunda bu adımı alamaz.',
   'common.errors.ai_suggestion_state': 'Bu öneri zaten yapılmış ya da karara bağlanmış.',
+  'common.errors.qa_review_state':
+    'Bu inceleme başka birinde, henüz hazır değil ya da zaten tamamlanmış.',
   'common.errors.ai_guardrail_setup_incomplete':
     'Kriz metni yazılıp çalışma alanı sahibi tarafından onaylanmadan AI ajanı yayına alınamaz.',
   'common.errors.ai_mode_transition_refused': 'Bu sohbeti AI yanıtlamıyor.',

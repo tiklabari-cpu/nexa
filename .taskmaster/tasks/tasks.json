@@ -13763,7 +13763,7 @@
           "315"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-28T02:03:44.819Z",
+        "updatedAt": "2026-10-28T02:56:41.189Z",
         "subtasks": [
           {
             "id": 1,
@@ -13771,11 +13771,11 @@
             "description": "ai_config_versions + ai_agents.published_version_id/draft_revision + knowledge_chunks görünürlük kolonları ve indeks + geri dolum v1",
             "details": "Üst görev 316 ayrıntılarındaki ilgili bölüm. HIGH NOTU (XHIGH→HIGH, sahip kararı 2026-10-22 · §D332): şema alanları üst görevin PRİSMA bölümünde tam yazılı; üst görevin XHIGH gerekçesi (If-Match, yayın transaction'ı, önbellek geçersizleştirme, yetki) 316.2 ve 316.3'te uygulanır, onlar XHIGH kalır. Geri dolumun mevcut her ajanı v1 yayınlanmış sürüme bağladığı testle kanıtlanır.",
             "testStrategy": "db:check-drift; derleyici birim.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "316",
             "priority": "medium",
-            "updatedAt": "2026-10-28T02:03:44.819Z"
+            "updatedAt": "2026-10-28T02:56:41.189Z"
           },
           {
             "id": 2,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-28T02:03:44.820Z",
+      "lastModified": "2026-10-28T02:56:41.189Z",
       "taskCount": 390,
       "completedCount": 333,
       "tags": [

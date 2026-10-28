@@ -13923,7 +13923,7 @@
           "317"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-28T10:57:48.722Z",
+        "updatedAt": "2026-10-28T12:23:51.516Z",
         "subtasks": [
           {
             "id": 1,
@@ -13931,11 +13931,11 @@
             "description": "ai_suggestions + uçlar + taslak işi (genelleme + maskeleme) + yinelenen tespiti + RTM",
             "details": "Üst görev 318 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Entegrasyon.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "318",
             "priority": "medium",
-            "updatedAt": "2026-10-28T10:57:48.722Z"
+            "updatedAt": "2026-10-28T12:23:51.516Z"
           },
           {
             "id": 2,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-28T10:57:48.722Z",
+      "lastModified": "2026-10-28T12:23:51.516Z",
       "taskCount": 390,
       "completedCount": 334,
       "tags": [

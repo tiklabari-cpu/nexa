@@ -242,6 +242,7 @@ model License {
   aiUnresolvedClusters   AiUnresolvedCluster[]
   aiUnresolvedSettings   AiUnresolvedSettings?
   aiConfigChanges        AiConfigChange[]
+  aiConfigVersions       AiConfigVersion[]
   mailDailyUsage         MailDailyUsage[]
   apiPackagePurchases    ApiPackagePurchase[]
   aiPackagePurchases     AiPackagePurchase[]
@@ -2106,8 +2107,17 @@ model AiAgent {
   instruction String?
   active      Boolean  @default(false)
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// The published configuration version the AI answers from (tm 316 ·
+  /// ADR-14b §2.3): a `published` version of this agent, by trigger. Null on
+  /// Copilot, which is not versioned, and on an agent nothing was published for.
+  publishedVersionId String?  @unique @map("published_version_id") @db.Uuid
+  /// Bumped by every behaviour-changing write to the agent's editing tables
+  /// (ADR-14b §2.5 step 2); `If-Match` holds a save to the revision it read.
+  draftRevision      BigInt   @default(0) @map("draft_revision")
 
   license          License           @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  publishedVersion AiConfigVersion?  @relation("AiAgentPublishedVersion", fields: [publishedVersionId], references: [id], onDelete: NoAction)
+  versions         AiConfigVersion[] @relation("AiAgentVersions")
   skills           Skill[]
   knowledgeSources KnowledgeSource[]
   handoffSettings   AiHandoffSettings?
@@ -3069,6 +3079,12 @@ model KnowledgeSource {
   /// read a column rather than counting `knowledge_pages`. For a PDF/Word
   /// document (tm 313 · AI-18), its page count once read.
   pageCount          Int       @default(0) @map("page_count")
+  /// Taken out of the draft (tm 316 · ADR-14b §2.8): a removed source stays,
+  /// with its chunks, until no kept version refers to them. Null = in the draft.
+  retiredAt          DateTime? @map("retired_at") @db.Timestamptz(6)
+  /// The generation the source's current chunks are (ADR-14b §2.8): a
+  /// re-index writes a new one beside the old instead of deleting it.
+  chunkGeneration    Int       @default(1) @map("chunk_generation")
   /// The uploaded PDF/Word original (tm 313 · AI-18-S2): its object-store key
   /// (`<licence>-k-<uuid>.pdf|.docx`, which `GET /uploads/{key}` never
   /// serves), its type as read from the bytes, its length and its sha256
@@ -3130,6 +3146,14 @@ model KnowledgeChunk {
   pageTo         Int?                         @map("page_to")
   /// The document heading the chunk sits under, when it had one.
   heading        String?
+  /// The source's `chunkGeneration` the chunk was written in (ADR-14b §2.8).
+  generation     Int                          @default(1)
+  /// The published versions that see the chunk, as `ai_config_versions.seq`:
+  /// from `visibleFromVersion` (null — no published version yet) until
+  /// `hiddenFromVersion` (null — still visible). Each is written once and a
+  /// closed range is never reopened, by trigger (20261115090000).
+  visibleFromVersion BigInt?                  @map("visible_from_version")
+  hiddenFromVersion  BigInt?                  @map("hidden_from_version")
   createdAt      DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
 
   source KnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
@@ -3138,6 +3162,7 @@ model KnowledgeChunk {
   @@index([sourceId, position])
   @@index([licenseId])
   @@index([pageId])
+  @@index([licenseId, visibleFromVersion, hiddenFromVersion], map: "knowledge_chunks_visibility_idx")
   @@map("knowledge_chunks")
 }
 
@@ -4961,9 +4986,10 @@ model AiTestRun {
   /// Claims so far (`ai_test_runs_claim`); past the last, the run fails.
   attempts              Int       @default(0)
 
-  license License           @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-  aiAgent AiAgent           @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
-  results AiTestRunResult[]
+  license        License           @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  aiAgent        AiAgent           @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
+  results        AiTestRunResult[]
+  configVersions AiConfigVersion[]
 
   /// The run history of an agent, newest first; the regression's "previous run".
   /// Partial indexes Prisma cannot say (20261022090000): one open run per agent
@@ -5172,6 +5198,71 @@ model AiConfigChange {
   @@index([licenseId, at(sort: Desc), id(sort: Desc)])
   @@index([licenseId, entityType, entityId, at(sort: Desc)])
   @@map("ai_config_changes")
+}
+
+/// A version of a customer-facing agent's AI configuration (tm 316 · AI-20 ·
+/// ADR-14b `docs/adr/ai-config-versioning.md` §2.3): the editing tables
+/// compiled into one immutable package, submitted, reviewed and published.
+/// The AI answers from the published one (`ai_agents.published_version_id`).
+///
+/// `number.minor` is the name on screen ("v12", "v12.1"); `seq` is the
+/// licence's publication order, given at publication, and what a chunk's
+/// visibility range holds. `package_format` 0 is the baseline the migration
+/// wrote for every agent that existed (`AI_CONFIG_PACKAGE_FORMAT_BASELINE`):
+/// the tables as they stood, not yet compiled — sealed once with its package.
+///
+/// By trigger and CHECK (20261115090000_ai_config_versions): the agent is the
+/// licence's own and customer-facing; a published row's package, manifest,
+/// hash and `seq` never change; status moves forward only; at most one open
+/// (`in_review` | `approved`) and one `published` version per agent (partial
+/// unique indexes Prisma cannot say). `siyahtus_app` cannot delete a version.
+model AiConfigVersion {
+  id                String    @id @default(uuid()) @db.Uuid
+  licenseId         BigInt    @map("license_id")
+  aiAgentId         String    @map("ai_agent_id") @db.Uuid
+  number            Int
+  minor             Int       @default(0)
+  seq               BigInt?
+  status            String
+  snapshot          Json
+  /// sha256 of the snapshot's canonical JSON, hex.
+  snapshotHash      String    @map("snapshot_hash") @db.Char(64)
+  packageFormat     Int       @map("package_format")
+  /// `[{ source_id, generation, audiences, ai_agent_ids, brand_ids, language, type, valid_until }]`.
+  knowledgeManifest Json      @default("[]") @map("knowledge_manifest")
+  diffSummary       Json?     @map("diff_summary")
+  /// The published version the package was diffed against.
+  baseVersionId     String?   @map("base_version_id") @db.Uuid
+  /// The agent's `draft_revision` the package was compiled from.
+  draftRevision     BigInt    @map("draft_revision")
+  /// The AI-19 run whose compliance pack passed for this revision.
+  testRunId         String?   @map("test_run_id") @db.Uuid
+  touchesCompliance Boolean   @default(false) @map("touches_compliance")
+  /// Soft references to `accounts.id`, like `owner_id`; null is the system.
+  submittedBy       String?   @map("submitted_by") @db.Uuid
+  submittedAt       DateTime? @map("submitted_at") @db.Timestamptz(6)
+  reviewedBy        String?   @map("reviewed_by") @db.Uuid
+  reviewedAt        DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  reviewNote        String?   @map("review_note")
+  publishedBy       String?   @map("published_by") @db.Uuid
+  publishedAt       DateTime? @map("published_at") @db.Timestamptz(6)
+  scheduledAt       DateTime? @map("scheduled_at") @db.Timestamptz(6)
+  /// The version a rollback copied the package of.
+  rollbackOf        String?   @map("rollback_of") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license        License           @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  aiAgent        AiAgent           @relation("AiAgentVersions", fields: [aiAgentId], references: [id], onDelete: Cascade)
+  publishedFor   AiAgent?          @relation("AiAgentPublishedVersion")
+  baseVersion    AiConfigVersion?  @relation("AiConfigVersionBase", fields: [baseVersionId], references: [id], onDelete: NoAction)
+  basedOn        AiConfigVersion[] @relation("AiConfigVersionBase")
+  rollbackSource AiConfigVersion?  @relation("AiConfigVersionRollback", fields: [rollbackOf], references: [id], onDelete: NoAction)
+  rollbacks      AiConfigVersion[] @relation("AiConfigVersionRollback")
+  testRun        AiTestRun?        @relation(fields: [testRunId], references: [id], onDelete: SetNull)
+
+  @@unique([licenseId, aiAgentId, number, minor])
+  @@unique([licenseId, seq])
+  @@map("ai_config_versions")
 }
 
 // ---------------------------------------------------------------------------

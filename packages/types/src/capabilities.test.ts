@@ -155,6 +155,7 @@ describe('floors and locks', () => {
       'team.members.manage',
       'team.groups.manage',
       'settings.security',
+      'ai.config.publish',
     ]) {
       expect(ROLE_RANK[def(key).floorRole], key).toBeGreaterThanOrEqual(ROLE_RANK.admin);
     }

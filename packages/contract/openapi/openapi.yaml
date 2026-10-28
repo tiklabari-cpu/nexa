@@ -500,6 +500,24 @@ paths:
     $ref: "./paths/ai-changes.yaml#/changesExport"
   /ai/changes/{changeId}:
     $ref: "./paths/ai-changes.yaml#/change"
+  /ai/config/draft/diff:
+    $ref: "./paths/ai-config.yaml#/draftDiff"
+  /ai/config/versions:
+    $ref: "./paths/ai-config.yaml#/versions"
+  /ai/config/versions/{versionId}:
+    $ref: "./paths/ai-config.yaml#/version"
+  /ai/config/versions/{versionId}/approve:
+    $ref: "./paths/ai-config.yaml#/versionApprove"
+  /ai/config/versions/{versionId}/reject:
+    $ref: "./paths/ai-config.yaml#/versionReject"
+  /ai/config/versions/{versionId}/rollback:
+    $ref: "./paths/ai-config.yaml#/versionRollback"
+  /ai/config/versions/{versionId}/diff/{toVersionId}:
+    $ref: "./paths/ai-config.yaml#/versionDiff"
+  /ai/pause:
+    $ref: "./paths/ai-config.yaml#/pause"
+  /ai/resume:
+    $ref: "./paths/ai-config.yaml#/resume"
 
   /copilot/knowledge:
     $ref: "./paths/copilot.yaml#/knowledge"
@@ -5504,6 +5522,269 @@ components:
           type: string
           enum: [all, own]
           description: "`own`: a Team Lead's view — their changes and the publish history."
+
+    AiConfigVersionStatus:
+      type: string
+      enum: [in_review, approved, published, superseded, rejected]
+      description: |
+        Submitted and awaiting review; approved and waiting for `scheduled_at`;
+        the one the AI answers from; replaced by a later publication; rejected
+        (by a reviewer, by a newer submission — `superseded_by_submit` — or
+        because another version was published over its base — `stale_base`).
+
+    AiConfigFinding:
+      type: object
+      required: [code, section, key, message]
+      description: One problem that stops a draft from being submitted, or a warning that does not.
+      properties:
+        code: { type: string }
+        section:
+          type: string
+          nullable: true
+          enum: [agent, skills, guidance, guardrails, handoff, knowledge, null]
+        key:
+          type: string
+          nullable: true
+          description: The item, as the difference names it (a skill's id, `rule:<id>`, …).
+        message: { type: string }
+        details:
+          type: object
+          additionalProperties: true
+
+    AiConfigSectionDiff:
+      type: object
+      required: [section, added, removed, changed, items]
+      properties:
+        section: { type: string, enum: [agent, skills, guidance, guardrails, handoff, knowledge] }
+        added: { type: integer, minimum: 0 }
+        removed: { type: integer, minimum: 0 }
+        changed: { type: integer, minimum: 0 }
+        items:
+          type: array
+          maxItems: 200
+          description: Ordered by key; the counts are always whole.
+          items:
+            type: object
+            required: [key, kind]
+            properties:
+              key: { type: string }
+              kind: { type: string, enum: [added, removed, changed] }
+
+    AiConfigDiffSummary:
+      type: object
+      required: [base_version_id, from_baseline, changes, sections, touches_compliance, compliance]
+      properties:
+        base_version_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The version compared against; null — nothing was published.
+        from_baseline:
+          type: boolean
+          description: The base was the first version recorded before versioning; every item reads as added.
+        changes:
+          type: integer
+          minimum: 0
+          description: Items added, removed or changed, all sections together ("Taslak 7 değişiklik").
+        sections:
+          type: array
+          items: { $ref: "#/components/schemas/AiConfigSectionDiff" }
+        touches_compliance:
+          type: boolean
+          description: Only the Founder approves such a version.
+        compliance:
+          type: array
+          items: { type: string, enum: [guardrails, locked_procedure] }
+
+    AiConfigVersion:
+      type: object
+      required:
+        [
+          id,
+          ai_agent_id,
+          number,
+          minor,
+          label,
+          seq,
+          status,
+          package_format,
+          snapshot_hash,
+          draft_revision,
+          base_version_id,
+          rollback_of,
+          test_run_id,
+          touches_compliance,
+          diff_summary,
+          knowledge_sources,
+          submitted_by,
+          submitted_at,
+          reviewed_by,
+          reviewed_at,
+          review_note,
+          published_by,
+          published_at,
+          scheduled_at,
+          created_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        ai_agent_id: { type: string, format: uuid }
+        number: { type: integer, minimum: 1 }
+        minor: { type: integer, minimum: 0 }
+        label:
+          type: string
+          description: The name on screen — v12, or v12.1 for a minor version.
+        seq:
+          type: integer
+          nullable: true
+          description: The workspace's publication order; null until published.
+        status: { $ref: "#/components/schemas/AiConfigVersionStatus" }
+        package_format:
+          type: integer
+          minimum: 0
+          description: 0 — the first version recorded before versioning, which holds no package.
+        snapshot_hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+        draft_revision:
+          type: integer
+          minimum: 0
+          description: The draft revision it was compiled from.
+        base_version_id: { type: string, format: uuid, nullable: true }
+        rollback_of:
+          type: string
+          format: uuid
+          nullable: true
+          description: The version a rollback copied.
+        test_run_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The pre-publish run whose compliance pack passed for its revision.
+        touches_compliance: { type: boolean }
+        diff_summary:
+          allOf: [{ $ref: "#/components/schemas/AiConfigDiffSummary" }]
+          nullable: true
+        knowledge_sources:
+          type: integer
+          minimum: 0
+          description: Sources in its knowledge manifest.
+        submitted_by: { type: string, format: uuid, nullable: true }
+        submitted_at: { type: string, format: date-time, nullable: true }
+        reviewed_by:
+          type: string
+          format: uuid
+          nullable: true
+          description: The reviewer; null when the system rejected it.
+        reviewed_at: { type: string, format: date-time, nullable: true }
+        review_note:
+          type: string
+          nullable: true
+          description: The reviewer's (or a rollback's) note, or `superseded_by_submit` / `stale_base`.
+        published_by: { type: string, format: uuid, nullable: true }
+        published_at: { type: string, format: date-time, nullable: true }
+        scheduled_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    AiConfigVersionList:
+      type: object
+      required: [versions, next_cursor]
+      properties:
+        versions:
+          type: array
+          items: { $ref: "#/components/schemas/AiConfigVersion" }
+        next_cursor: { type: string, nullable: true }
+
+    AiConfigDraft:
+      type: object
+      required:
+        [
+          ai_agent_id,
+          draft_revision,
+          active,
+          published,
+          open,
+          ok,
+          problems,
+          warnings,
+          diff,
+          compliance_gate,
+          submittable,
+        ]
+      properties:
+        ai_agent_id: { type: string, format: uuid }
+        draft_revision: { type: integer, minimum: 0 }
+        active: { type: boolean, description: False — the agent is paused. }
+        published:
+          allOf: [{ $ref: "#/components/schemas/AiConfigVersion" }]
+          nullable: true
+        open:
+          allOf: [{ $ref: "#/components/schemas/AiConfigVersion" }]
+          nullable: true
+          description: The version awaiting review or its time, if there is one.
+        ok: { type: boolean, description: The draft compiles and holds. }
+        problems:
+          type: array
+          items: { $ref: "#/components/schemas/AiConfigFinding" }
+        warnings:
+          type: array
+          items: { $ref: "#/components/schemas/AiConfigFinding" }
+        diff:
+          allOf: [{ $ref: "#/components/schemas/AiConfigDiffSummary" }]
+          nullable: true
+          description: Against the published version; null when the draft does not compile.
+        compliance_gate: { $ref: "#/components/schemas/AiComplianceGate" }
+        submittable: { type: boolean }
+
+    AiConfigSubmitRequest:
+      type: object
+      additionalProperties: false
+      required: [ai_agent_id]
+      properties:
+        ai_agent_id: { type: string, format: uuid }
+        note: { type: string, maxLength: 2000 }
+
+    AiConfigSubmission:
+      type: object
+      required: [version, warnings, replaced_version_ids]
+      properties:
+        version: { $ref: "#/components/schemas/AiConfigVersion" }
+        warnings:
+          type: array
+          items: { $ref: "#/components/schemas/AiConfigFinding" }
+        replaced_version_ids:
+          type: array
+          items: { type: string, format: uuid }
+          description: The open version the submission rejected, if there was one.
+
+    AiConfigApproveRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        publish_at:
+          type: string
+          format: date-time
+          description: Publish then — in the future, at most 30 days ahead; absent, now.
+        note: { type: string, maxLength: 2000 }
+
+    AiConfigNoteRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        note: { type: string, maxLength: 2000 }
+
+    AiPauseRequest:
+      type: object
+      additionalProperties: false
+      required: [ai_agent_id]
+      properties:
+        ai_agent_id: { type: string, format: uuid }
+        note: { type: string, maxLength: 2000 }
+
+    AiPauseState:
+      type: object
+      required: [ai_agent_id, active]
+      properties:
+        ai_agent_id: { type: string, format: uuid }
+        active: { type: boolean }
 
     AiUnresolvedSettings:
       type: object
@@ -13403,6 +13684,8 @@ components:
       description: Machine-readable error category (v2-03 §1.8).
       enum:
         - ai_agent_exists
+        - ai_config_revision_conflict
+        - ai_config_version_state
         - ai_guardrail_setup_incomplete
         - ai_mode_transition_refused
         - ai_return_blocked
@@ -13588,6 +13871,26 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
 
   parameters:
+    AiConfigAgentId:
+      name: ai_agent_id
+      in: query
+      required: true
+      description: The customer-facing AI agent.
+      schema: { type: string, format: uuid }
+    AiConfigVersionId:
+      name: versionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AiConfigIfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: |
+        The draft revision the caller loaded (`"12"`), as the `ETag` of
+        `GET /ai/config/draft/diff` gave it. A draft moved past it is
+        `409 ai_config_revision_conflict`; absent or `*`, no condition.
+      schema: { type: string, maxLength: 24 }
     AiConfigChangeEntityType:
       name: entity_type
       in: query

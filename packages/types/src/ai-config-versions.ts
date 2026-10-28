@@ -113,6 +113,12 @@ export interface AiConfigFinding<Code extends string = AiConfigProblemCode | AiC
 export interface AiConfigKnowledgeManifestEntry {
   source_id: string;
   generation: number;
+  /**
+   * The generation's chunks when the package was compiled (tm 316.2): a
+   * rollback that finds fewer of them has lost some to the clean-up and is
+   * refused (ADR-14b §2.10 (7)).
+   */
+  chunk_count: number;
   type: string;
   audiences: string[];
   ai_agent_ids: string[];
@@ -152,3 +158,55 @@ export interface AiConfigDiffSummary {
   touches_compliance: boolean;
   compliance: AiConfigComplianceReason[];
 }
+
+// ---------------------------------------------------------------------------
+// The review line (tm 316.2 · ADR-14b §2.10, §2.11).
+// ---------------------------------------------------------------------------
+
+/**
+ * Why a version step was refused — `409 ai_config_version_state`,
+ * `details.reason`:
+ *
+ *   - `compliance_pack` — the draft revision's latest pre-publish run has not
+ *     passed the whole compliance pack (AI-19-S1), or the version's run no
+ *     longer counts (another pack version);
+ *   - `no_changes` — the draft compiles to the published package;
+ *   - `not_open` — the version is not awaiting review;
+ *   - `stale_base` — another version was published over the one it was
+ *     based on, and the two touch the same thing: it was rejected, submit again;
+ *   - `rollback_current` — the version is the one in production;
+ *   - `rollback_unpublished` — the version never was in production;
+ *   - `rollback_baseline` — the migration's v1 holds no package to copy;
+ *   - `knowledge_purged` — chunks the version answered from are gone.
+ */
+export const AI_CONFIG_VERSION_STATE_REASONS = [
+  'compliance_pack',
+  'no_changes',
+  'not_open',
+  'stale_base',
+  'rollback_current',
+  'rollback_unpublished',
+  'rollback_baseline',
+  'knowledge_purged',
+] as const;
+export type AiConfigVersionStateReason = (typeof AI_CONFIG_VERSION_STATE_REASONS)[number];
+
+/**
+ * The `review_note` the system writes on a version it rejects itself: a new
+ * submission replaced it (one open version per agent), or it was based on a
+ * version published over before it could go out.
+ */
+export const AI_CONFIG_SYSTEM_REVIEW_NOTES = ['superseded_by_submit', 'stale_base'] as const;
+export type AiConfigSystemReviewNote = (typeof AI_CONFIG_SYSTEM_REVIEW_NOTES)[number];
+
+/** A reviewer's, submitter's or pauser's note — the table's CHECK on `review_note`. */
+export const AI_CONFIG_NOTE_MAX = 2000;
+
+/** How far ahead an approval may schedule its publication (AI-20-S4). */
+export const AI_CONFIG_SCHEDULE_MAX_DAYS = 30;
+
+/** At most this many versions a list page holds. */
+export const AI_CONFIG_VERSIONS_PAGE_MAX = 100;
+
+/** The permission matrix row the approve and reject routes check (`capabilities.ts`). */
+export const AI_CONFIG_PUBLISH_CAPABILITY = 'ai.config.publish' as const;

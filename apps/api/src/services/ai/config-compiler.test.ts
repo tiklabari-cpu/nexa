@@ -49,6 +49,7 @@ function source(id: string, generation = 1): AiConfigKnowledgeManifestEntry {
   return {
     source_id: id,
     generation,
+    chunk_count: 1,
     type: 'article',
     audiences: ['ai_agent', 'copilot'],
     ai_agent_ids: [],

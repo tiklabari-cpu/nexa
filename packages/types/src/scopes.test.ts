@@ -174,6 +174,10 @@ describe('error taxonomy', () => {
     'knowledge_job_in_progress',
     // PDF/Word knowledge (AI-18 · tm 313.1): the same file added twice.
     'knowledge_source_exists',
+    // AI configuration versions (AI-20 · tm 316.2): a draft revision moved on
+    // by someone else's save, and a version step its state refuses.
+    'ai_config_revision_conflict',
+    'ai_config_version_state',
     // Widget abuse protection (GV-01 · tm 339.2): a token or a conversation
     // opening that must first pass a human check.
     'challenge_required',

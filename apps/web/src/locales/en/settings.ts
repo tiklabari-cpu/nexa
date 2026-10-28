@@ -1484,6 +1484,7 @@ export const settings: Messages = {
     'Open sensitive documents a player e-mailed (ID, passport, KYC)',
   'permissions.capability.ai.manage': 'Configure the AI Agent',
   'permissions.capability.ai.guardrails.edit': 'Edit AI compliance rules',
+  'permissions.capability.ai.config.publish': 'Approve and publish AI settings',
   'permissions.capability.reports.view': 'View reports',
   'permissions.capability.reports.schedule': 'Schedule report emails',
   'permissions.capability.team.invite': 'Invite teammates',

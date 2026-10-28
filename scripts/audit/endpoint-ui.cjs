@@ -383,6 +383,27 @@ const TRACKED = [
       '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
       'the timeline viewer (tm 334) reads it too.',
   },
+  // The AI configuration's review line (tm 316.2 · AI-20): the API comes first,
+  // the Playbook's version bar, version list, difference view and the "Taslak"
+  // strip that call it are VER-WEB (tm 316.4).
+  ...[
+    'GET /ai/config/draft/diff',
+    'GET /ai/config/versions',
+    'POST /ai/config/versions',
+    'GET /ai/config/versions/{versionId}',
+    'POST /ai/config/versions/{versionId}/approve',
+    'POST /ai/config/versions/{versionId}/reject',
+    'POST /ai/config/versions/{versionId}/rollback',
+    'GET /ai/config/versions/{versionId}/diff/{toVersionId}',
+    'POST /ai/pause',
+    'POST /ai/resume',
+  ].map((op) => ({
+    op,
+    owner: 'tm 316.4',
+    reason:
+      'the AI configuration review line (AI-20) — submit, approve, reject, roll back, pause; ' +
+      "the Playbook's VersionBar / Versions / DiffView (VER-WEB, tm 316.4) call it.",
+  })),
 ];
 
 /** The platform contract's operations with no client, and why (tm 389.3). */

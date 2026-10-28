@@ -147,6 +147,19 @@ export async function compileDraft(
     },
   });
 
+  // Each source's chunks of the generation the manifest names — what a
+  // rollback to this version must still find (ADR-14b §2.10 (7)).
+  const chunkCounts = new Map<string, number>();
+  if (sources.length > 0) {
+    const counted = await tx.$queryRaw<Array<{ source_id: string; chunks: bigint }>>`
+      SELECT c.source_id::text AS source_id, count(*)::bigint AS chunks
+        FROM knowledge_chunks c
+        JOIN knowledge_sources s ON s.id = c.source_id AND c.generation = s.chunk_generation
+       WHERE c.source_id = ANY(${sources.map((source) => source.id)}::uuid[])
+       GROUP BY c.source_id`;
+    for (const row of counted) chunkCounts.set(row.source_id, Number(row.chunks));
+  }
+
   const snapshot = normalised<AiConfigPackage>({
     package_format: AI_CONFIG_PACKAGE_FORMAT,
     guardrail_catalog_version: turn.guardrails?.catalogVersion ?? PLATFORM_GUARDRAILS_VERSION,
@@ -161,6 +174,7 @@ export async function compileDraft(
     .map((source): AiConfigKnowledgeManifestEntry => ({
       source_id: source.id,
       generation: source.chunkGeneration,
+      chunk_count: chunkCounts.get(source.id) ?? 0,
       type: source.type,
       audiences: [...source.audiences].sort(),
       ai_agent_ids: [...source.aiAgentIds].sort(),

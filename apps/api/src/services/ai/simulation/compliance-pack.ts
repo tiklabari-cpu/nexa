@@ -70,7 +70,7 @@ export async function activeScenarioIds(
 export interface PrePublishRunInput {
   readonly licenseId: bigint;
   readonly aiAgentId: string;
-  /** The draft revision it tests (tm 316); null until drafts have one. */
+  /** The draft revision it tests (tm 316.2); null — a run recorded before revisions. */
   readonly draftRevision: number | null;
   /** The account that asked; null — the system. */
   readonly startedBy: string | null;
@@ -193,9 +193,10 @@ export function gateOf(run: GatedRun | null, failing: readonly string[]): Compli
 }
 
 /**
- * The gate for an agent's draft: its latest pre-publish run — of the given
- * draft revision when tm 316 names one; until drafts have revisions, the
- * latest of the draft's.
+ * The gate for an agent's draft: its latest pre-publish run of the given draft
+ * revision (tm 316.2) — a run of an earlier revision tested another draft, and
+ * submitting this one needs its own. Without a revision, the latest of the
+ * draft's (the root panel's overview).
  */
 export async function compliancePackGate(
   tx: TenantClient,
@@ -234,4 +235,18 @@ export async function compliancePackGate(
     run,
     failing.map((row) => row.scenarioKey),
   );
+}
+
+/** The gate as the API sends it (`AiComplianceGate`). */
+export function serialiseGate(gate: CompliancePackGate) {
+  return {
+    state: gate.state,
+    open: gate.open,
+    run_id: gate.runId,
+    run_pack_version: gate.runPackVersion,
+    passed: gate.passed,
+    failed: gate.failed,
+    failing: gate.failing,
+    workspace_failed: gate.workspaceFailed,
+  };
 }

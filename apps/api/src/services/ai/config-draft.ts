@@ -26,6 +26,13 @@
  * knowledge source, whose own change is recorded on the article or the row)
  * and a write that is part of a save already recorded (the positions a
  * delete closes up, a template's example marking).
+ *
+ * §2.5 step 2 (tm 316.2 · AI-20): a recorded change that alters what a
+ * customer-facing agent would answer — not a meta field, not the pause
+ * switch — moves the agents' `draft_revision` it reaches, once per save, and
+ * only from the author's `If-Match` revision when it names one
+ * (`draft-revision.ts`). A KB article's mirror moves it too: the article is
+ * not an editing table, yet its text is the AI's knowledge.
  */
 import type { Prisma } from '@prisma/client';
 import {
@@ -42,11 +49,13 @@ import { knowledgeTableDelegate, type KnowledgeTableRecords } from '../knowledge
 import {
   type ConfigChangeAuthor,
   type ConfigTable,
+  diffConfig,
   recordChange,
   skillEntityType,
   snapshotConfigRow,
   snapshotConfigRows,
 } from './config-history.js';
+import { EVERY_DRAFT, changesDraft, draftReachOf, moveDraftRevision } from './draft-revision.js';
 
 /** Which history entity a row of `table` is. */
 function entityTypeOf(table: ConfigTable, row: Record<string, unknown>): AiConfigEntityType {
@@ -122,6 +131,18 @@ async function track<T>(
   const action =
     options.actionOf?.(before, after) ??
     (before === null ? 'created' : after === null ? 'deleted' : 'updated');
+  // The draft moves before the change is recorded: the agent's row is then
+  // always locked before the audit chain's head, the order a submission or a
+  // publication takes them in, so two of them never wait on each other.
+  const diff = diffConfig(before, after);
+  const recorded = diff.length > 0 || action !== 'updated' || Boolean(options.note);
+  if (recorded && changesDraft(table, diff)) {
+    await moveDraftRevision(
+      tx,
+      draftReachOf(table, [before, after]),
+      author.expectedRevision ?? null,
+    );
+  }
   await recordChange(tx, author, {
     entityType: entityTypeOf(table, row),
     entityId: text(row['id']) ?? id,
@@ -168,6 +189,7 @@ export async function updateAiAgentDraft<I extends Prisma.AiAgentInclude>(
   id: string,
   data: AiAgentUpdate,
   include: I,
+  note: string | null = null,
 ) {
   return track(
     tx,
@@ -175,7 +197,7 @@ export async function updateAiAgentDraft<I extends Prisma.AiAgentInclude>(
     'ai_agents',
     id,
     () => tx.aiAgent.update({ where: { id }, data, include }),
-    { actionOf: pauseAction },
+    { actionOf: pauseAction, note },
   );
 }
 
@@ -491,6 +513,10 @@ export async function reorderHandoffRulesDraft(
   const before = [...rows.values()]
     .sort((a, b) => Number(a['position']) - Number(b['position']))
     .map((row) => String(row['id']));
+  // As in `track`: the draft before the record.
+  if (before.join(',') !== orderedIds.join(',')) {
+    await moveDraftRevision(tx, { all: false, ids: [agentId] }, author.expectedRevision ?? null);
+  }
   await recordChange(tx, author, {
     entityType: 'handoff_rule',
     entityId: agentId,
@@ -747,7 +773,12 @@ export async function deleteKnowledgeSourceDraft(
 ): Promise<number> {
   const remove = async () =>
     (await tx.knowledgeSource.deleteMany({ where: { ...within, id } })).count;
-  if (author === null) return remove();
+  if (author === null) {
+    // A mirror going: the AI's knowledge changed with it (tm 316.2).
+    const removed = await remove();
+    if (removed > 0) await moveDraftRevision(tx, EVERY_DRAFT, null);
+    return removed;
+  }
   const inScope = await tx.knowledgeSource.count({ where: { ...within, id } });
   if (inScope === 0) return 0;
   return track(tx, author, 'knowledge_sources', id, remove, { deleted: true });
@@ -780,6 +811,8 @@ export async function createKbArticleSourceDraft(
   pending: string | null = null,
 ) {
   const scope: KnowledgeAudienceScope = { audiences: fields.audiences, aiAgentIds: [] };
+  // The article's publish changes what the AI knows: the draft moves (tm 316.2).
+  if (fields.audiences.includes('ai_agent')) await moveDraftRevision(tx, EVERY_DRAFT, null);
   return tx.knowledgeSource.create({
     data: {
       licenseId: article.licenseId,
@@ -825,6 +858,7 @@ export async function updateKbArticleSourceDraft(
       updatedAt: new Date(),
     },
   });
+  if (count > 0) await moveDraftRevision(tx, EVERY_DRAFT, null);
   return count;
 }
 

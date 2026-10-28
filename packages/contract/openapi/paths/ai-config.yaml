@@ -1,0 +1,292 @@
+# The AI configuration's review line (tm 316.2 · SiyahTuş analysis AI-20 ·
+# ADR-14b `docs/adr/ai-config-versioning.md` §2.10, §2.11).
+#
+# The editing tables are the draft; the AI answers from a published, immutable
+# package — one version. A draft is submitted ("Onaya gönder") once the
+# compliance pack has passed for its revision, approved by someone other than
+# its submitter (the Founder when it touches compliance), and published at once
+# or at `publish_at`. A rollback publishes a new version copying an earlier
+# one's package; pausing stops the AI's answers without a version.
+#
+# The draft's revision is its `ETag`. Every save of an AI editing table, and a
+# submission, may send it back in `If-Match`; one made against a revision
+# someone else's save moved is `409 ai_config_revision_conflict`
+# (`details.current_revision`).
+#
+# Served by `apps/api/src/routes/ai-config.ts`. Reading: the AI configuration
+# scope. Submitting: a Team Lead up who may edit the draft. Approving and
+# rejecting: the permission matrix's `ai.config.publish` (Founder and
+# Administrator by default), never one's own submission. Rollback, pause and
+# resume: an Administrator up (AI-20-S3).
+
+draftDiff:
+  get:
+    tags: [Playbook]
+    operationId: getAiConfigDraft
+    summary: The draft as a submission would take it
+    description: |
+      The draft compiled and judged, told against the published version, and
+      the compliance gate of its revision. `submittable` is what "Onaya gönder"
+      needs: no problem, the pack passed for this revision, something changed.
+      The response's `ETag` is the draft revision.
+    parameters:
+      - { $ref: "../openapi.yaml#/components/parameters/AiConfigAgentId" }
+    responses:
+      "200":
+        description: The draft
+        headers:
+          ETag:
+            description: The draft revision, quoted — what `If-Match` sends back.
+            schema: { type: string }
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiConfigDraft" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+versions:
+  get:
+    tags: [Playbook]
+    operationId: listAiConfigVersions
+    summary: An agent's versions, newest first
+    parameters:
+      - { $ref: "../openapi.yaml#/components/parameters/AiConfigAgentId" }
+      - name: limit
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      - name: cursor
+        in: query
+        schema: { type: string, maxLength: 64 }
+    responses:
+      "200":
+        description: A page of versions
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiConfigVersionList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Playbook]
+    operationId: submitAiConfigVersion
+    summary: Submit the draft for review
+    description: |
+      Compiles the draft into a version `in_review`. An open version of the
+      agent is rejected (`review_note: superseded_by_submit`). Refused with
+      `400 validation` (`details.problems`) when the draft does not compile,
+      `409 ai_config_revision_conflict` when `If-Match` names another revision,
+      and `409 ai_config_version_state` when the compliance pack has not passed
+      for this revision (`compliance_pack`) or nothing changed (`no_changes`).
+    parameters:
+      - { $ref: "../openapi.yaml#/components/parameters/AiConfigIfMatch" }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiConfigSubmitRequest" }
+    responses:
+      "201":
+        description: The version submitted
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiConfigSubmission" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+version:
+  parameters:
+    - { $ref: "../openapi.yaml#/components/parameters/AiConfigVersionId" }
+
+  get:
+    tags: [Playbook]
+    operationId: getAiConfigVersion
+    summary: One version
+    responses:
+      "200":
+        description: The version
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiConfigVersion" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+versionApprove:
+  parameters:
+    - { $ref: "../openapi.yaml#/components/parameters/AiConfigVersionId" }
+
+  post:
+    tags: [Playbook]
+    operationId: approveAiConfigVersion
+    summary: Approve a version — publish now or at `publish_at`
+    description: |
+      `403 not_allowed` for one's own submission (`details.reason:
+      own_submission`) and, unless the caller is the Founder, for a version
+      that touches compliance (`owner_required`). With `publish_at` the version
+      is `approved` and waits for its time; without, it is published at once.
+      Publishing reads the compliance run again and needs the version's base
+      to still be the published one: when another version went out in between
+      and both change the same thing, the version is rejected and the answer is
+      `409 ai_config_version_state` (`stale_base`).
+    requestBody:
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiConfigApproveRequest" }
+    responses:
+      "200":
+        description: The version, `published` or `approved`
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiConfigVersion" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+versionReject:
+  parameters:
+    - { $ref: "../openapi.yaml#/components/parameters/AiConfigVersionId" }
+
+  post:
+    tags: [Playbook]
+    operationId: rejectAiConfigVersion
+    summary: Reject an open version
+    description: An `in_review` version, or an `approved` one still waiting for its time.
+    requestBody:
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiConfigNoteRequest" }
+    responses:
+      "200":
+        description: The version, `rejected`
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiConfigVersion" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+versionRollback:
+  parameters:
+    - { $ref: "../openapi.yaml#/components/parameters/AiConfigVersionId" }
+
+  post:
+    tags: [Playbook]
+    operationId: rollbackAiConfigVersion
+    summary: Publish a new version copying this one's package
+    description: |
+      History is not rewritten — the new version names this one in
+      `rollback_of` — and the draft is not touched. Knowledge chunks whose
+      range has closed are copied as a new generation. `409
+      ai_config_version_state` for the version in production
+      (`rollback_current`), one never published (`rollback_unpublished`), the
+      first version recorded before versioning (`rollback_baseline`), and one
+      whose chunks have been cleaned up (`knowledge_purged`).
+    requestBody:
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiConfigNoteRequest" }
+    responses:
+      "201":
+        description: The new version, `published`
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiConfigVersion" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+versionDiff:
+  parameters:
+    - { $ref: "../openapi.yaml#/components/parameters/AiConfigVersionId" }
+    - name: toVersionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Playbook]
+    operationId: diffAiConfigVersions
+    summary: One version told against another of the same agent
+    responses:
+      "200":
+        description: The difference, `versionId` → `toVersionId`
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiConfigDiffSummary" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+pause:
+  post:
+    tags: [Playbook]
+    operationId: pauseAiAgent
+    summary: Stop the AI agent's answers
+    description: |
+      `active` false, read on the next turn — pausing is never versioned and
+      waits for no review. Recorded as `paused` in the change history. Asking
+      for the state the agent is already in changes nothing.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiPauseRequest" }
+    responses:
+      "200":
+        description: The agent's switch
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiPauseState" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+resume:
+  post:
+    tags: [Playbook]
+    operationId: resumeAiAgent
+    summary: Let the AI agent answer again
+    description: |
+      `active` true. Refused with `409 ai_guardrail_setup_incomplete` until the
+      Founder has approved the crisis text (AI-08-S1), as switching it on is.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiPauseRequest" }
+    responses:
+      "200":
+        description: The agent's switch
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiPauseState" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

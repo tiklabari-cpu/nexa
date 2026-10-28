@@ -264,6 +264,21 @@ export const CAPABILITIES = [
     ownerOnly: true,
     defaults: { owner: 'on', admin: 'off', team_lead: 'off', agent: 'off' },
   },
+  {
+    // Approving (or rejecting) a submitted AI configuration version, which
+    // publishes it (AI-20 · ADR-14b §2.11, tm 316.2): checked by the version
+    // routes. Never one's own submission (four eyes); a version that touches
+    // compliance is the Founder's alone whatever this row says. The floor is
+    // the routes' own `minimumRole: 'admin'` — an Ekip Lideri prepares and
+    // submits, never publishes.
+    key: 'ai.config.publish',
+    group: 'ai',
+    labelKey: 'permissions.capability.ai.config.publish',
+    values: ['off', 'on'],
+    scopes: {},
+    floorRole: 'admin',
+    defaults: { owner: 'on', admin: 'on', team_lead: 'off', agent: 'off' },
+  },
   // Raporlar
   {
     // A level row with no `team` level yet: a team-bounded report needs the

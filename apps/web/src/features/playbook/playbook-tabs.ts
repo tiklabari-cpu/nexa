@@ -19,6 +19,7 @@ export const PLAYBOOK_VIEWS = [
   'test',
   'performance',
   'unresolved',
+  'versions',
   'history',
 ] as const;
 
@@ -44,6 +45,8 @@ export const PLAYBOOK_TABS: readonly PlaybookTab[] = [
   { id: 'test', labelKey: 'playbook.tabs.test', needsConfigScope: true },
   { id: 'performance', labelKey: 'playbook.tabs.performance' },
   { id: 'unresolved', labelKey: 'playbook.tabs.unresolved', needsConfigScope: true },
+  // The published versions and the review line (tm 316.4 · AI-20).
+  { id: 'versions', labelKey: 'playbook.tabs.versions', needsConfigScope: true },
   { id: 'history', labelKey: 'playbook.tabs.history', needsConfigScope: true },
 ];
 

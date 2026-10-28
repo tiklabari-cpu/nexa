@@ -33,6 +33,7 @@ import { savePrefs } from '../features/notifications/notifications.js';
 import { clearAllDrafts } from '../features/inbox/composerDrafts.js';
 import { useFontStore } from './font.js';
 import { resetPresenceNotices } from './presence-notice.js';
+import { resetAiConfigNotice } from './ai-config-notice.js';
 
 export interface Membership {
   license_id: string;
@@ -896,6 +897,7 @@ export const useAuth = create<AuthState>((set, get) => {
     set({ accessToken: null, agent: null, status: 'signed-out', reconnect: null, sessionEnded });
     // A notice about this session's status is nobody else's business.
     resetPresenceNotices();
+    resetAiConfigNotice();
     // Whoever was waiting out an outage hears the session is over.
     settleWaiters(null);
   }

@@ -556,6 +556,7 @@ export function SkillEditor({
               <button
                 type="button"
                 disabled={toggleActive.isPending}
+                title={t('playbook.skills.switchHint')}
                 onClick={() => toggleActive.mutate({ id: skill.id, active: !skill.active })}
                 className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
               >

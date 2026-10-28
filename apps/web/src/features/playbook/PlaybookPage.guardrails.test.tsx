@@ -135,7 +135,7 @@ describe('Playbook guardrails tab (AI-08)', () => {
   });
 
   it('answers a switch-on the API refuses for want of a crisis text, and takes the owner to the tab', async () => {
-    api.patch.mockRejectedValue(
+    api.post.mockRejectedValue(
       new ApiClientError({
         type: 'ai_guardrail_setup_incomplete',
         status: 409,
@@ -148,6 +148,8 @@ describe('Playbook guardrails tab (AI-08)', () => {
     renderPage();
 
     await user.click(await screen.findByRole('button', { name: 'Resume' }));
+    // Through the review line's own switch (AI-20 · tm 316.4), not a PATCH of the agent.
+    expect(api.post).toHaveBeenCalledWith('/ai/resume', { ai_agent_id: 'agent-1' });
 
     expect(
       await screen.findByText(
@@ -167,7 +169,7 @@ describe('Playbook guardrails tab (AI-08)', () => {
   });
 
   it('shows no jump button for any other refusal', async () => {
-    api.patch.mockRejectedValue(
+    api.post.mockRejectedValue(
       new ApiClientError({ type: 'not_allowed', status: 403, message: 'raw', requestId: 'r-1' }),
     );
     const user = userEvent.setup();

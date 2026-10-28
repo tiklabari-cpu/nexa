@@ -30,6 +30,7 @@ import { RtmClient, type PushHandler } from '../../lib/realtime.js';
 import { noteTrafficVisitorUpdated } from '../../lib/traffic-live.js';
 import { setRealtimeStatus } from '../../lib/realtime-status.js';
 import { noteSelfStatusChange, noteUnansweredAlert } from '../../lib/presence-notice.js';
+import { noteAiConfigPublished, readAiConfigPublished } from '../../lib/ai-config-notice.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { optimisticCacheUpdate } from '../../lib/optimistic.js';
 import { usePagedQuery, type PagedQueryResult, type PagedResponse } from '../../lib/paged-query.js';
@@ -1175,6 +1176,9 @@ export function useRealtime(onPush?: PushHandler): void {
         // answered is waiting at the front of the queue.
         'chat_inactivity_changed',
         'chat_unanswered_alert',
+        // A version of the AI configuration went live (AI-20 · tm 316.4): the
+        // Inbox band, and the Playbook's version bar if it is open.
+        'ai_config_published',
         'incoming_typing_indicator',
         'incoming_sneak_peek',
         'agent_conflict_warning',
@@ -1604,6 +1608,17 @@ export function applyPush(
       patchChatInPlace(queryClient, chatId, (chat) =>
         chat.thread_id === threadId ? { ...chat, inactive } : chat,
       );
+      return;
+    }
+
+    case 'ai_config_published': {
+      // Every agent of the workspace hears it (ADR-14b §2.10 (3)): the band
+      // says which version answers new connections; the Playbook's version bar
+      // and list read the change at once rather than on their next refetch.
+      const published = readAiConfigPublished(payload);
+      if (!published) return;
+      noteAiConfigPublished(published);
+      void queryClient.invalidateQueries({ queryKey: ['playbook', 'ai-config'] });
       return;
     }
 

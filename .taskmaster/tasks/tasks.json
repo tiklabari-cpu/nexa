@@ -13763,7 +13763,7 @@
           "315"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-28T03:52:30.981Z",
+        "updatedAt": "2026-10-28T05:41:17.903Z",
         "subtasks": [
           {
             "id": 1,
@@ -13783,14 +13783,14 @@
             "description": "Gönder/onayla/reddet/geri al/duraklat uçları, dört göz, Kurucu kuralı, uyum kapısı, If-Match",
             "details": "Üst görev 316 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "403/409 yolları.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "316.1",
               "316.5"
             ],
             "parentId": "316",
             "priority": "medium",
-            "updatedAt": "2026-10-28T03:52:30.981Z"
+            "updatedAt": "2026-10-28T05:41:17.903Z"
           },
           {
             "id": 3,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-28T03:52:30.982Z",
+      "lastModified": "2026-10-28T05:41:17.903Z",
       "taskCount": 390,
       "completedCount": 333,
       "tags": [

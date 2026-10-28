@@ -91,14 +91,17 @@ const KEY_COLUMN: Partial<Record<ConfigTable, string>> = {
 /**
  * Columns that are not configuration: the tenant, the row's own clock, and
  * what run time or indexing writes (a run counter, the indexing status, a
- * crawl's bookkeeping, the access information's fetched value). A change of
- * these alone is no change.
+ * crawl's bookkeeping, the access information's fetched value, versioning's
+ * own counters and pointer — tm 316). A change of these alone is no change.
  */
 const VOLATILE_COLUMNS: ReadonlySet<string> = new Set([
   'license_id',
   'created_at',
   'updated_at',
   'runs_count',
+  'draft_revision',
+  'published_version_id',
+  'chunk_generation',
   'status',
   'last_refresh_error',
   'next_refresh_at',

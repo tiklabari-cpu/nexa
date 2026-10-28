@@ -13763,7 +13763,7 @@
           "315"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-28T07:13:05.958Z",
+        "updatedAt": "2026-10-28T09:23:05.016Z",
         "subtasks": [
           {
             "id": 1,
@@ -13812,13 +13812,13 @@
             "description": "VersionBar, Versions, DiffView, Taslak şeridi, RTM bandı",
             "details": "Üst görev 316 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Web birim + e2e.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "316.3"
             ],
             "parentId": "316",
             "priority": "medium",
-            "updatedAt": "2026-10-28T07:13:05.958Z"
+            "updatedAt": "2026-10-28T09:23:05.016Z"
           },
           {
             "id": 5,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-28T07:13:05.958Z",
+      "lastModified": "2026-10-28T09:23:05.017Z",
       "taskCount": 390,
       "completedCount": 333,
       "tags": [

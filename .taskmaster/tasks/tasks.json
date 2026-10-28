@@ -13756,14 +13756,14 @@
         "description": "Gece aceleyle yapılan bir değişiklik binlerce oyuncuya anında gidiyor (PATCH /skills canlıyı değiştiriyor). Dört göz hatalara ve içeriden kötüye kullanıma karşı korur; denetimde \"bu yanıt hangi kural setiyle verildi?\" cevabı sürüm numarası. Tasarım #290'da sabitlendi. Kaynak: AI-20.",
         "details": "KAYNAK: SiyahTus-Analiz 03-eklenebilecekler.md / 04-gerekceler-ve-sorular.md (Karar kaydı K1–K27 ve \"Kararların maddelere etkisi\" madde içi varsayılanların önüne geçer) / 05-uygulama-rehberi.md — maddeler: AI-20. Eşleme: SiyahTus-Analiz/07-gorev-plani.md.\nTERİM EŞLEMESİ (K1=A): ekranda \"Thread ID\" = nexa Chat (kod/DB/API alanı chat_id, günlük kapsayıcı); ekranda \"Chat ID\" = nexa Thread (kod alanı thread_id, tek bağlantı). Kod adları değişmez; çeviri yalnız sunum katmanında.\nSIRA (contract-first): OpenAPI (packages/contract) → pnpm contract:generate (@siyahtus/types) → Prisma migration (genişlet → taşı → daralt; CONCURRENTLY kendi dosyasında tek ifade) → API servis + birim test → RTM → web/widget/mobil → entegrasyon/E2E.\nPROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → close); CONVENTIONS.md §1 (DoD), §2 (git), §3 (HANDOFF), §5, §6.3 (migration), §7 (test başlığında gereksinim etiketi); CLAUDE.md sınırları (production/DNS/TLS/gerçek secret/kart/ödeme YOK; dış servisler mock).\nNOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.\nDALGA: Dalga 3c — AI yönetişimi ve ölçüm.\n\nXHIGH GEREKÇESİ (eski etiket MAX, 2026-10-14 gözden geçirme): eşzamanlılık (If-Match, yayın transaction'ı, önbellek geçersizleştirme) + yetki.\nPRİSMA: ai_config_versions (id, license_id, ai_agent_id, number, minor, status in_review|approved|published|superseded|rejected, snapshot, knowledge_manifest, diff_summary, draft_revision, test_run_id, touches_compliance, submitted_by/at, reviewed_by/at, review_note, published_by/at, scheduled_at?, rollback_of?); ai_agents.published_version_id, draft_revision; knowledge_chunks.visible_from_version, hidden_from_version + indeks; geri dolum: mevcut durum v1, parçalar visible_from 1.\nTASARIM (#290 · ADR-14b · docs/adr/ai-config-versioning.md — 05'e EK ayrıntılar, uy): ai_config_versions'a `seq` (lisans geneli yayın sırası, yayında atanır, unique(license_id, seq); görünürlük kolonları number değil seq tutar), `base_version_id` (yayında taban kontrolü, stale_base), `snapshot_hash`, `package_format`; ajan başına en çok bir açık (in_review|approved) sürüm; knowledge_sources.retired_at + chunk_generation, knowledge_chunks.generation; KnowledgeService.index silmez, nesil artırır; yayın manifestteki (source_id, generation) parçalarına visible_from=seq, düşenlere hidden_from=seq yazar, aralık yeniden açılmaz; geri alma parçaları yeni nesil olarak kopyalar ve taslağa dokunmaz; hata tipi 409 `ai_config_revision_conflict`; `ai.procedures.publish` yerine `ai.config.publish` (§2.3, §2.8, §2.10, §2.11).\nAPI routes/ai-config.ts: GET /ai/config/draft/diff; POST /ai/config/versions (onaya gönder); POST …/{id}/approve {publish_at?}, /reject, /rollback; POST /ai/pause, /ai/resume; GET /ai/config/versions, …/{a}/diff/{b}. Servisler config-compiler.ts (taslak → paket + doğrulama), config-cache.ts (sürüme göre önbellek, realtime-bus ile geçersizleştirme).\nZAMANLAYICI: ai_scheduled_publish (dakikada, kilitli); knowledge_chunk_gc (5 sürüm + 30 günden eski gizli parçalar).\nRTM: ai_config_published; Inbox bandı.\nAKIŞ: yazmalar taslağa, draft_revision++ (If-Match; eski revizyon 409); gönderme: derleyici doğrular (adımlar, AI-07 çelişki, devir hedefleri), fark, touches_compliance (guardrail, risk politikası, kilitli kategoriler), bu draft_revision için son AI-19 koşusunda uyum paketi %100, durum in_review + onaycılara bildirim; onay: onaycı ≠ gönderen (sunucu), touches_compliance → onaycı Kurucu; publish_at yoksa hemen; yayın tek transaction (published, öncekisi superseded, işaretçi, parça görünürlüğü, AI-21 + audit ai.config_published), commit sonrası önbellek + RTM.\nÇALIŞMA ANI: yeni bağlantı açılınca sürüm sabitlenir; her tur config_version_id; arama visible_from ≤ v < hidden_from; simülasyon taslakta yayımlanmamış parçaları da görür.\nGERİ ALMA (S3): seçilen sürümün paketinden yeni sürüm (tarih yeniden yazılmaz); temizlenmiş parça gerekiyorsa engellenir; tek Yönetici yapabilir. DURAKLATMA: AiAgent.active=false + kayıt.\nHIZLI YOL (S1/S2): Yöneticinin serbest makale/SSS düzeltmesi küçük sürüm (v12.1) otomatik onay + AI-21; ödeme/bonus/KYC tabloları ve uyum kuralları onaya tabi.\nZAMANLI YAYIN (S4): yayın anında onay ve uyum koşusu yeniden kontrol.\nYETENEKLER: ai.config.edit/submit/publish/publish_compliance/rollback, ai.pause (RL-02 gelene kadar: EL taslak hazırlar = admin altı rol yoksa admin; dört göz admin↔owner).\nWEB: VersionBar.tsx (\"Yayında v12 · Taslak 7 değişiklik\"), Versions.tsx, DiffView.tsx, \"Taslak\" şeridi, önizlemede taslak/yayındaki seçimi; useSkillActiveToggle anlamı \"bu sürümde etkin\" (geçiş açıklaması).\nNOT: HNSW + görünürlük süzgeci isabet ölçümü (measure:knowledge-retrieval).\n\nKABUL KRİTERLERİ:\n- Taslakta prosedür değişince canlı widget eski davranışla; oyuncu gibi konuş (taslak) yeni davranış.\n- Ekip Lideri yayınlayamaz; Yönetici kendi gönderisini onaylayamaz; guardrail değişikliği Kurucu olmadan yayımlanamaz.\n- Uyum senaryosu kalırsa \"Onaya gönder\" nedeniyle kapalı.\n- v11'e geri alınca v12'de silinen parça yeniden aranabilir.\n- Her AI yanıtı kaydında config_version_id.\n- Zamanlı yayın en geç 1 dk sonra; onay geri çekildiyse yapılmaz.\n- İki kişi aynı taslağı düzenlerse ikinci kayıt 409.\n\nKULLANILAN VARSAYIMLAR:\n- K21 tasarımı #290.\n- AI-20-S1..S4 varsayılanları.",
         "testStrategy": "Dört göz 403, Kurucu kuralı, uyum kapısı, geri alma, zamanlı yayın, If-Match 409, önbellek geçersizleştirme; `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "290",
           "314",
           "315"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-28T09:24:17.040Z",
+        "updatedAt": "2026-10-28T10:56:41.547Z",
         "subtasks": [
           {
             "id": 1,
@@ -13840,13 +13840,13 @@
             "description": "Zamanlı işler: ai_scheduled_publish (dakikada, kilitli) + knowledge_chunk_gc (5 sürüm + 30 günden eski gizli parçalar)",
             "details": "Üst görev ZAMANLAYICI maddesi; yayın yolu 316.2/316.3'teki tek transaction'ı çağırır. Ayrıntı ve kabul maddeleri: üst görev #316 details (tek kaynak).",
             "testStrategy": "Entegrasyon (zamanı gelen onaylı sürüm yayınlanır, kilit çift yayını önler, gc sınırları); `pnpm test:gate`.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "316.3"
             ],
             "parentId": "316",
             "priority": "medium",
-            "updatedAt": "2026-10-28T09:24:17.040Z"
+            "updatedAt": "2026-10-28T10:56:41.547Z"
           }
         ]
       },
@@ -16146,9 +16146,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-28T09:24:17.041Z",
+      "lastModified": "2026-10-28T10:56:41.548Z",
       "taskCount": 390,
-      "completedCount": 333,
+      "completedCount": 334,
       "tags": [
         "master"
       ]

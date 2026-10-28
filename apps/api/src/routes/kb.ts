@@ -31,6 +31,7 @@ import { z } from 'zod';
 import { KNOWLEDGE_AUDIENCES, normalizeKnowledgeAudiences } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { normalizeKbSlug } from '../lib/kb-slug.js';
+import { releaseKbArticleSource } from '../services/ai/config-draft.js';
 import { KbArticleKnowledge } from '../services/ai/kb-article-knowledge.js';
 import type { KnowledgeService } from '../services/ai/knowledge-service.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
@@ -408,6 +409,9 @@ export default async function kbRoutes(
     async (request, reply) => {
       const id = parse(uuid, request.params.articleId);
       const { count } = await request.withTenant(async (tx) => {
+        // Its knowledge source leaves the draft first: a published AI version may
+        // still answer from it (tm 316.3), which the foreign key would not wait for.
+        await releaseKbArticleSource(tx, id);
         const result = await tx.kbArticle.deleteMany({ where: { id } });
         if (result.count > 0) {
           await writeAuditEntry(tx, request.auditContext(), {

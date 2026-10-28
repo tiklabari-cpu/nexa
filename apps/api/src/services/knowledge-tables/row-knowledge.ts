@@ -209,7 +209,7 @@ function readSource(
   rowId: string,
 ): Promise<SourceRow | null> {
   return tx.knowledgeSource.findFirst({
-    where: { sourceTable: KNOWLEDGE_TABLE_SQL_NAMES[table], sourceRowId: rowId },
+    where: { sourceTable: KNOWLEDGE_TABLE_SQL_NAMES[table], sourceRowId: rowId, retiredAt: null },
     select: SOURCE_SELECT,
   });
 }
@@ -512,7 +512,7 @@ export class KnowledgeTableRowKnowledgeSweeper {
 /** The rows of one workspace whose source is not what they say, oldest change first; then the orphans. */
 async function dueRows(tx: TenantClient): Promise<DueRow[]> {
   const sources = await tx.knowledgeSource.findMany({
-    where: { type: KNOWLEDGE_TABLE_SOURCE_TYPE },
+    where: { type: KNOWLEDGE_TABLE_SOURCE_TYPE, retiredAt: null },
     select: { ...SOURCE_SELECT, sourceTable: true, sourceRowId: true },
   });
   const bySql = new Map<string, SourceRow>();

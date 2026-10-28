@@ -1785,6 +1785,7 @@ export default async function playbookRoutes(
         // sources the AI agent answers players from — what this list has
         // always meant to the apps already installed; `all` is the whole store.
         where: {
+          retiredAt: null,
           // A structured-table row's source is the row's (tm 310.2): it is
           // listed, edited and reviewed as the row, under /knowledge-tables.
           type: { not: KNOWLEDGE_TABLE_SOURCE_TYPE },
@@ -2493,7 +2494,7 @@ export default async function playbookRoutes(
       const existing = await request.withTenant(async (tx) => {
         // Anywhere in the one store (tm 309.2): the list shows every audience.
         const found = await tx.knowledgeSource.findFirst({
-          where: { id },
+          where: { id, retiredAt: null },
           select: {
             id: true,
             type: true,
@@ -2689,7 +2690,7 @@ export default async function playbookRoutes(
         tx.knowledgeSource.findFirst({
           // Anywhere in the one store (tm 309.2), a KB article's source too:
           // its text is the article's as last mirrored, embedded again.
-          where: { id },
+          where: { id, retiredAt: null },
           select: {
             id: true,
             type: true,
@@ -2842,7 +2843,10 @@ export default async function playbookRoutes(
         request.query ?? {},
       );
       const pages = await request.withTenant(async (tx) => {
-        const source = await tx.knowledgeSource.findFirst({ where: { id }, select: { id: true } });
+        const source = await tx.knowledgeSource.findFirst({
+          where: { id, retiredAt: null },
+          select: { id: true },
+        });
         if (!source) throw ApiError.notFound('Knowledge source not found.');
         return tx.knowledgePage.findMany({
           where: { sourceId: id, ...(query.status === undefined ? {} : { status: query.status }) },
@@ -2883,7 +2887,7 @@ export default async function playbookRoutes(
       const id = parse(uuid, request.params.sourceId);
       const source = await request.withTenant((tx) =>
         tx.knowledgeSource.findFirst({
-          where: { id },
+          where: { id, retiredAt: null },
           select: { name: true, fileKey: true, fileMime: true, fileSize: true },
         }),
       );
@@ -2909,7 +2913,10 @@ export default async function playbookRoutes(
     async (request, reply) => {
       const id = parse(uuid, request.params.sourceId);
       const existing = await request.withTenant((tx) =>
-        tx.knowledgeSource.findFirst({ where: { id }, select: { type: true, sourceUrl: true } }),
+        tx.knowledgeSource.findFirst({
+          where: { id, retiredAt: null },
+          select: { type: true, sourceUrl: true },
+        }),
       );
       if (!existing) throw ApiError.notFound('Knowledge source not found.');
       if (existing.type !== 'website') {
@@ -2991,7 +2998,7 @@ export default async function playbookRoutes(
       const id = parse(uuid, request.params.sourceId);
       const reviewed = await request.withTenant(async (tx) => {
         const existing = await tx.knowledgeSource.findFirst({
-          where: { id },
+          where: { id, retiredAt: null },
           select: { id: true, sourceTable: true, sourceRowId: true },
         });
         if (existing) refuseTableRowOwned(existing);
@@ -3023,7 +3030,11 @@ export default async function playbookRoutes(
         // AI is switched off (AI-14-S2); deleted here it would come back with
         // the article's next save.
         const mirror = await tx.knowledgeSource.findFirst({
-          where: { id, OR: [{ kbArticleId: { not: null } }, { sourceTable: { not: null } }] },
+          where: {
+            id,
+            retiredAt: null,
+            OR: [{ kbArticleId: { not: null } }, { sourceTable: { not: null } }],
+          },
           select: { kbArticleId: true, sourceTable: true, sourceRowId: true },
         });
         if (mirror?.kbArticleId) refuseKbArticleOwned(mirror.kbArticleId);
@@ -3444,6 +3455,7 @@ async function agentReadiness(
   // One after another: the three reads share the request's transaction.
   const source = await tx.knowledgeSource.findFirst({
     where: {
+      retiredAt: null,
       type: { not: KNOWLEDGE_TABLE_SOURCE_TYPE },
       audiences: { has: 'ai_agent' },
       OR: [{ aiAgentIds: { isEmpty: true } }, { aiAgentIds: { has: agent.id } }],

@@ -505,7 +505,8 @@ export class KnowledgeCrawler {
           },
         });
         const source = await tx.knowledgeSource.findFirst({
-          where: { id: claim.sourceId },
+          // A retired source (tm 316.3) is crawled no more: its job finds nothing.
+          where: { id: claim.sourceId, retiredAt: null },
           select: {
             type: true,
             sourceUrl: true,
@@ -517,7 +518,7 @@ export class KnowledgeCrawler {
         });
         // The workspace's other website sources' pages (AI-17-S2: 2,000 together).
         const others = await tx.knowledgeSource.aggregate({
-          where: { type: 'website', id: { not: claim.sourceId } },
+          where: { type: 'website', id: { not: claim.sourceId }, retiredAt: null },
           _sum: { pageCount: true },
         });
         const residency = await readInferenceResidency(tx, context);

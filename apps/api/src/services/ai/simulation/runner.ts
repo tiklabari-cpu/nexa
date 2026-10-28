@@ -71,7 +71,8 @@ import {
 } from '../conversation/context-loader.js';
 import { ConversationEngine } from '../conversation/conversation-engine.js';
 import { KnowledgeTableFacts } from '../conversation/facts.js';
-import { readAndCompile, type AiConfigRead } from '../conversation/turn-config.js';
+import { publishedConfig } from '../config-source.js';
+import type { AiConfigRead } from '../conversation/turn-config.js';
 import {
   emptyTurnState,
   handoffOf,
@@ -224,7 +225,7 @@ export async function readSimulationSetting(
   tenant: TenantContext,
   input: { aiAgentId: string; target: 'draft' | 'published' },
 ): Promise<SimulationSetting> {
-  const config = await readAndCompile.forSimulation(tx, input);
+  const config = await publishedConfig.forSimulation(tx, input);
   const { timezone } = await readDayBoundary(tx);
   const handoff = await tx.aiHandoffSettings.findUnique({
     where: { aiAgentId: input.aiAgentId },
@@ -543,6 +544,8 @@ export class ScenarioRunner {
       brandId: input.brandId,
       configVersionId: setting.config.versionId,
       config: setting.config.pkg,
+      // The published package's knowledge when it plays one (tm 316.3); the draft view else.
+      ...(setting.config.knowledge ? { knowledgeVersion: setting.config.knowledge } : {}),
       toolStubs: input.toolStubs,
       timeZone: setting.timeZone,
       aiMode: 'ai',

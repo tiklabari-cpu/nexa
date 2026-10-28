@@ -41,6 +41,7 @@ import type {
 } from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../../lib/tenant.js';
 import type { AiDailyCapError } from '../ai-daily-budget.js';
+import type { KnowledgeVersionView } from '../knowledge-service.js';
 import type { EmbeddingFailureKind } from '../provider/embedding-error.js';
 import type { LlmFailureKind } from '../provider/llm-error.js';
 import type { LlmMessage } from '../provider/llm-provider.js';
@@ -310,9 +311,15 @@ export interface TurnContext {
    * works under (`tenant.brandId`), else not known.
    */
   readonly brandId?: string | null;
-  /** The configuration version the turn runs on — null before versioning (tm 316). */
+  /** The configuration version the turn runs on — null on the editing tables (tm 316.3). */
   readonly configVersionId: string | null;
   readonly config: TurnConfig;
+  /**
+   * The knowledge of the version the turn runs on (`AiConfigRead.knowledge`,
+   * ADR-14b §2.8 (4)): the knowledge search reads what that version published.
+   * Absent: the draft view — a turn on the editing tables, a preview.
+   */
+  readonly knowledgeVersion?: KnowledgeVersionView;
   /**
    * What a tool step would have returned, by tool key (AI-28). The slot is
    * passive in F1: no step calls a tool yet.

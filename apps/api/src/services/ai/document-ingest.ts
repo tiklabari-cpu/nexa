@@ -153,7 +153,7 @@ export class DocumentIngest {
         });
         if (!job) return null;
         const source = await tx.knowledgeSource.findFirst({
-          where: { id: claim.sourceId },
+          where: { id: claim.sourceId, retiredAt: null },
           select: { fileKey: true, fileMime: true },
         });
         return { source, residency: await readInferenceResidency(tx, context) };

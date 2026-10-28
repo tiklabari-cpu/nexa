@@ -55,6 +55,8 @@ describe('the job list', () => {
       'qa_sampling',
       'qa_prescore',
       'qa_consistency',
+      'ai_outcomes_finalize',
+      'ai_metrics_rollup',
     ]);
   });
 
@@ -88,6 +90,8 @@ describe('intervals', () => {
       qa_sampling: 900_000,
       qa_prescore: 60_000,
       qa_consistency: 21_600_000,
+      ai_outcomes_finalize: 3_600_000,
+      ai_metrics_rollup: 3_600_000,
     });
   });
 

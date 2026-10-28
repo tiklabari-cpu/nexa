@@ -368,6 +368,8 @@ enabled flag, and last run's time/status.
 | `qa_sampling`          | 15 min           | Samples a workspace's previous day into the QA queue at its 02:00 (tm 319.1)       |
 | `qa_prescore`          | 1 min            | Pre-scores the queued QA reviews with the model, evidence checked (tm 319.2)       |
 | `qa_consistency`       | 6 h              | Queues last week's AI connections answered two ways, as pairs (tm 319.2)           |
+| `ai_outcomes_finalize` | 1 h              | Settles AI outcome rows 72 h after the close: repeat contact (tm 320.2)            |
+| `ai_metrics_rollup`    | 1 h              | Rebuilds the AI metrics' daily rollup from changed outcome rows (tm 320.2)         |
 
 Override an interval with `SCHEDULE_<JOB>_MS`, and spread instances from one deploy so
 they don't all tick together with `SCHEDULE_JITTER_PCT` (default 10%) — see

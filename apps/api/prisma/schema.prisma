@@ -251,6 +251,7 @@ model License {
   qaCalibrationScores    QaCalibrationScore[]
   qaSamplingRuns         QaSamplingRun[]
   aiConversationOutcomes AiConversationOutcome[]
+  aiMetricsDaily         AiMetricsDaily[]
   mailDailyUsage         MailDailyUsage[]
   apiPackagePurchases    ApiPackagePurchase[]
   aiPackagePurchases     AiPackagePurchase[]
@@ -5839,4 +5840,55 @@ model AiConversationOutcome {
   @@index([chatId])
   @@index([threadId])
   @@map("ai_conversation_outcomes")
+}
+
+/// The AI quality metrics' daily rollup (tm 320.2 · AI-25): the additive
+/// `AiMetricCounts` per workspace day and per brand, team, topic, version and
+/// language, rebuilt whole by `ai_metrics_rollup` (`services/reports/ai-metrics.ts`).
+model AiMetricsDaily {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  licenseId           BigInt   @map("license_id")
+  /// The workspace's conversation day the connections ended on (ID-04).
+  day                 DateTime @db.Date
+  brandId             String?  @map("brand_id") @db.Uuid
+  teamId              BigInt?  @map("team_id")
+  intent              String?
+  configVersionId     String?  @map("config_version_id") @db.Uuid
+  language            String?
+  ended               Int      @default(0)
+  conversations       Int      @default(0)
+  confirmed           Int      @default(0)
+  assumed             Int      @default(0)
+  falseResolved       Int      @default(0) @map("false_resolved")
+  unsettled           Int      @default(0)
+  handedOff           Int      @default(0) @map("handed_off")
+  abandoned           Int      @default(0)
+  declined            Int      @default(0)
+  falseInSettled      Int      @default(0) @map("false_in_settled")
+  contained           Int      @default(0)
+  cardSufficient      Int      @default(0) @map("card_sufficient")
+  cardInsufficient    Int      @default(0) @map("card_insufficient")
+  reasked             Int      @default(0)
+  reaskJudged         Int      @default(0) @map("reask_judged")
+  mandatoryTriggered  Int      @default(0) @map("mandatory_triggered")
+  mandatoryCompliant  Int      @default(0) @map("mandatory_compliant")
+  mandatoryViolations Int      @default(0) @map("mandatory_violations")
+  mandatoryDue        Int      @default(0) @map("mandatory_due")
+  guardrailConfirmed  Int      @default(0) @map("guardrail_confirmed")
+  guardrailSuspected  Int      @default(0) @map("guardrail_suspected")
+  bsatGood            Int      @default(0) @map("bsat_good")
+  bsatBad             Int      @default(0) @map("bsat_bad")
+  csatGood            Int      @default(0) @map("csat_good")
+  csatBad             Int      @default(0) @map("csat_bad")
+  clarificationTurns  Int      @default(0) @map("clarification_turns")
+  clarificationRows   Int      @default(0) @map("clarification_rows")
+  repeatAny           Int      @default(0) @map("repeat_any")
+  repeatSameIntent    Int      @default(0) @map("repeat_same_intent")
+  repeatUnmeasured    Int      @default(0) @map("repeat_unmeasured")
+  computedAt          DateTime @default(now()) @map("computed_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, day])
+  @@map("ai_metrics_daily")
 }

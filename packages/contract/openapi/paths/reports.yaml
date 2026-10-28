@@ -93,6 +93,99 @@ aiAgent:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+aiAgentBreakdown:
+  get:
+    tags: [Reports]
+    operationId: getReportsAiAgentBreakdown
+    summary: AI quality metrics by topic, reason, version, language, brand or team
+    description: |
+      The AI quality metrics (AI-25 · tm 320.2) for the window, grouped by
+      `by`: per topic (`intent`), hand-over reason, AI version (side by side —
+      `v12` beside `v13`), language, brand or team, the largest 100 groups
+      first. `total` is the whole window's `quality` block under the same
+      filters. Read from `ai_conversation_outcomes`, never the billed figure.
+
+      The reach is the caller's: `reports_read` reads every team; a Team Lead
+      (no `reports_read`) the teams they lead, through the QA reviewer's
+      `ai.qa.review` permission; anyone else gets a 403.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
+      - name: by
+        in: query
+        required: true
+        schema: { type: string, enum: [intent, reason, version, language, brand, team] }
+      - $ref: "../openapi.yaml#/components/parameters/AiMetricsTeam"
+      - $ref: "../openapi.yaml#/components/parameters/AiMetricsBrand"
+      - $ref: "../openapi.yaml#/components/parameters/AiMetricsIntent"
+      - $ref: "../openapi.yaml#/components/parameters/AiMetricsVersion"
+      - $ref: "../openapi.yaml#/components/parameters/AiMetricsLanguage"
+    responses:
+      "200":
+        description: The breakdown for the requested window
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiQualityBreakdown" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+aiAgentConversations:
+  get:
+    tags: [Reports]
+    operationId: getReportsAiAgentConversations
+    summary: The connections behind an AI quality figure
+    description: |
+      The connections (panel "Chat ID" = `thread_id`, in their day's "Thread
+      ID" = `chat_id`) a figure of the `quality` block counts — the same
+      predicate as the count — newest end first, keyset-paged by
+      `next_cursor`. The reach and the filters are the breakdown's.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
+      - name: metric
+        in: query
+        required: true
+        schema:
+          type: string
+          enum:
+            - confirmed_resolved
+            - assumed_resolved
+            - unsettled
+            - false_resolution
+            - handed_off
+            - abandoned
+            - declined
+            - mandatory_handoff_violation
+            - guardrail_violation
+            - guardrail_suspected
+            - repeat_unmeasured
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      - name: cursor
+        in: query
+        required: false
+        description: The previous page's `next_cursor`.
+        schema: { type: string, maxLength: 200 }
+      - $ref: "../openapi.yaml#/components/parameters/AiMetricsTeam"
+      - $ref: "../openapi.yaml#/components/parameters/AiMetricsBrand"
+      - $ref: "../openapi.yaml#/components/parameters/AiMetricsIntent"
+      - $ref: "../openapi.yaml#/components/parameters/AiMetricsVersion"
+      - $ref: "../openapi.yaml#/components/parameters/AiMetricsLanguage"
+    responses:
+      "200":
+        description: One page of connections
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiMetricConversations" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 reviews:
   get:
     tags: [Reports]

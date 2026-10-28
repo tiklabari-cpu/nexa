@@ -310,6 +310,16 @@ const BRAND_LABEL_TABLES: ReadonlyArray<{
       });
     },
   },
+  {
+    // The AI metrics' daily rollup (tm 320.2 · AI-25): the same label as the
+    // outcome rows it counts, which the reports filter by.
+    table: 'ai_metrics_daily',
+    reason: 'the AI reports filter by it; the row is the workspace’s',
+    plant: (db, at) =>
+      db.aiMetricsDaily.create({
+        data: { licenseId: at.licenseId, day: new Date('2026-10-01'), brandId: at.brandId },
+      }),
+  },
 ];
 
 // === Brand lists (tm 309.2) =================================================

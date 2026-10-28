@@ -1067,7 +1067,11 @@ describe('module parity matrix — what is still owed', () => {
       // 337 -> 338 with `/customer/chat/resolution` (tm 320.1) — the widget's
       // "is it solved?" Yes / No (AI-25-S2). A visitor's surface, like
       // "Talk to an agent"; the app is an agent's, and nothing here re-scopes.
-      contractEndpoints: 338,
+      // 338 -> 340 with `/reports/ai-agent/breakdown` and
+      // `/reports/ai-agent/conversations` (tm 320.2) — the AI quality metrics
+      // (AI-25), read in the web console's reports; the app has no reports
+      // screen, and nothing here re-scopes.
+      contractEndpoints: 340,
       scopeBoundaries: 1,
     });
   });

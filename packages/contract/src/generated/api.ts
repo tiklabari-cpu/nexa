@@ -5683,6 +5683,105 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/ai/suggestions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The suggestion queue, as the caller may see it
+     * @description Newest first. A reviewer gets every suggestion they may review — a Team
+     *     Lead those of the teams they lead, an administrator all — and their own;
+     *     anyone else their own only. `mine=true` narrows to the caller's own.
+     *     `open_count` counts the caller's reviewable open suggestions (the badge).
+     */
+    get: operations['listAiSuggestions'];
+    put?: never;
+    /**
+     * Mark the AI's message, or offer an answer to its knowledge
+     * @description The conversation must be one the caller may see (else 404). `wrong_answer`,
+     *     `should_have_handed_off` and `tone` name one of the AI's own messages;
+     *     `promote_agent_answer` names an agent's message (else `validation`). The
+     *     same message, kind and author twice is `ai_suggestion_state`
+     *     (`details.reason: duplicate`, `details.suggestion_id`); at most 50 a day
+     *     per person (`too_many_requests`). `promote_agent_answer` and
+     *     `missing_info` are `drafting` until the job writes their proposal; the
+     *     rest are `new`. The reviewers get `ai_suggestion_created`.
+     */
+    post: operations['createAiSuggestion'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/suggestions/{suggestionId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        suggestionId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * One suggestion with its excerpt
+     * @description 404 when the caller may neither review it nor wrote it.
+     */
+    get: operations['getAiSuggestion'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Edit, accept, reject or merge a suggestion
+     * @description A reviewer's (`ai.suggestions.review`, within their teams; else 404).
+     *     `edit` replaces the proposal (`in_review`). `accept` writes the proposal
+     *     — the body's when it gives one — into the AI-20 draft: a `faq` knowledge
+     *     source (or the `faq` source `source_id` names, corrected), a behaviour
+     *     rule (or the rule `source_id` names), an example sentence or a note on
+     *     when the procedure `source_id` names applies; `resulting_change_id` is
+     *     the AI-21 change it wrote. Nothing goes live until a publication.
+     *     `reject` needs `review_note` (else `validation`). `merge` joins it to
+     *     another suggestion (`duplicate_of`) or an unresolved-questions cluster
+     *     (`cluster_id`). A decided suggestion is `ai_suggestion_state`
+     *     (`details.reason: already_reviewed`). The author gets
+     *     `ai_suggestion_reviewed`.
+     */
+    patch: operations['reviewAiSuggestion'];
+    trace?: never;
+  };
+  '/ai/suggestions/{suggestionId}/to-scenario': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        suggestionId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Keep the suggestion's conversation as a test scenario (AI-19)
+     * @description The excerpt's player messages become a scripted scenario of the
+     *     suggestion's AI agent (`origin: from_chat`, `origin_ref`: the
+     *     suggestion), expecting a hand-over for `should_have_handed_off` and a
+     *     resolution otherwise; a person edits the expectations before trusting
+     *     them. Needs the reviewer's reach on the suggestion and the scope that
+     *     writes scenarios (`agents-bot--all:rw`). An excerpt with no player
+     *     message is `validation`.
+     */
+    post: operations['createAiSuggestionScenario'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/ai/changes': {
     parameters: {
       query?: never;
@@ -14688,6 +14787,136 @@ export interface components {
       examples_count: number;
     };
     /**
+     * @description What the suggestion says (`@siyahtus/types` `SUGGESTION_KINDS`).
+     * @enum {string}
+     */
+    AiSuggestionKind:
+      | 'wrong_answer'
+      | 'missing_info'
+      | 'should_have_handed_off'
+      | 'should_not_have_handed_off'
+      | 'tone'
+      | 'promote_agent_answer'
+      | 'other';
+    /**
+     * @description What accepting writes into the AI-20 draft. `source_id` names the
+     *     `faq` knowledge source or behaviour rule it corrects, or the
+     *     procedure it adds an example or a note to; null writes a new snippet
+     *     or rule.
+     */
+    AiSuggestionProposedChange: {
+      /** @enum {string} */
+      target: 'knowledge_snippet' | 'guidance_rule' | 'procedure_example' | 'procedure_note';
+      title: string;
+      body: string;
+      /** Format: uuid */
+      source_id: string | null;
+    };
+    AiSuggestionExcerptMessage: {
+      event_id: string;
+      /** @enum {string} */
+      author_type: 'customer' | 'agent' | 'bot';
+      /** @description The model's message */
+      is_ai: boolean;
+      /** @description Masked when the suggestion was made (AI-26). */
+      text: string;
+      /** Format: date-time */
+      created_at: string;
+      /** @description The message the suggestion is about. */
+      marked: boolean;
+    };
+    AiSuggestionSimilarSource: {
+      /** Format: uuid */
+      chunk_id: string;
+      /** Format: uuid */
+      source_id: string;
+      source_name: string;
+    };
+    AiSuggestion: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      ai_agent_id: string;
+      kind: components['schemas']['AiSuggestionKind'];
+      /** @enum {string} */
+      source: 'agent_flag' | 'qa_finding' | 'unresolved_cluster';
+      /** @enum {string} */
+      status: 'new' | 'drafting' | 'in_review' | 'accepted' | 'rejected' | 'merged';
+      /** @description The day container (panel "Thread ID"). */
+      chat_id: string | null;
+      /** @description The connection (panel "Chat ID"). */
+      thread_id: string | null;
+      event_ids: string[];
+      /** @description The last messages up to the marked one, masked when made. */
+      excerpt: components['schemas']['AiSuggestionExcerptMessage'][];
+      note: string | null;
+      /** @description The conversation's team when the suggestion was made. */
+      team_id: number | null;
+      proposed_change: components['schemas']['AiSuggestionProposedChange'] | null;
+      /** @description What the drafting job took out of the agent's words, by kind. */
+      removed_specifics: (
+        'name' | 'username' | 'email' | 'phone' | 'amount' | 'date' | 'time' | 'reference'
+      )[];
+      /** @enum {string|null} */
+      drafted_by: 'llm' | 'lexical' | null;
+      /** Format: uuid */
+      duplicate_of: string | null;
+      /** Format: uuid */
+      cluster_id: string | null;
+      /** @description The knowledge base has a passage at τ or above — "the information is there; why did the AI not find it?" */
+      already_known: boolean;
+      similar_sources: components['schemas']['AiSuggestionSimilarSource'][];
+      /** Format: uuid */
+      reviewer_id: string | null;
+      /** Format: date-time */
+      reviewed_at: string | null;
+      review_note: string | null;
+      /**
+       * Format: uuid
+       * @description The AI-21 change accepting it wrote.
+       */
+      resulting_change_id: string | null;
+      /** Format: uuid */
+      created_by: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    AiSuggestionList: {
+      suggestions: components['schemas']['AiSuggestion'][];
+      total: number;
+      /** @description The open suggestions the caller may review — the badge. */
+      open_count: number;
+    };
+    AiSuggestionCreateRequest: {
+      chat_id: string;
+      thread_id: string;
+      /** @description The message the suggestion is about. */
+      event_id?: string;
+      kind: components['schemas']['AiSuggestionKind'];
+      note?: string;
+      /**
+       * Format: uuid
+       * @description The workspace's AI agent when absent.
+       */
+      ai_agent_id?: string;
+      proposed_change?: components['schemas']['AiSuggestionProposedChange'];
+    };
+    AiSuggestionReviewRequest: {
+      /** @enum {string} */
+      action: 'edit' | 'accept' | 'reject' | 'merge';
+      proposed_change?: components['schemas']['AiSuggestionProposedChange'];
+      review_note?: string;
+      /** Format: uuid */
+      duplicate_of?: string;
+      /** Format: uuid */
+      cluster_id?: string;
+    };
+    AiSuggestionToScenarioRequest: {
+      name?: string;
+    };
+    /**
      * @description What changed (`@siyahtus/types` `AI_CONFIG_ENTITY_TYPES`); `config_version` is versioning's (tm 316).
      * @enum {string}
      */
@@ -21063,6 +21292,7 @@ export interface components {
       | 'ai_guardrail_setup_incomplete'
       | 'ai_mode_transition_refused'
       | 'ai_return_blocked'
+      | 'ai_suggestion_state'
       | 'ai_test_run_in_progress'
       | 'authentication'
       | 'authorization'
@@ -30018,6 +30248,159 @@ export interface operations {
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listAiSuggestions: {
+    parameters: {
+      query?: {
+        status?:
+          'new' | 'drafting' | 'in_review' | 'accepted' | 'rejected' | 'merged' | 'open' | 'all';
+        kind?: components['schemas']['AiSuggestionKind'];
+        ai_agent_id?: string;
+        team_id?: number;
+        mine?: boolean;
+        limit?: number;
+        offset?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The suggestions */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiSuggestionList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createAiSuggestion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AiSuggestionCreateRequest'];
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiSuggestion'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getAiSuggestion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        suggestionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The suggestion */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiSuggestion'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  reviewAiSuggestion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        suggestionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AiSuggestionReviewRequest'];
+      };
+    };
+    responses: {
+      /** @description The suggestion, reviewed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiSuggestion'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      429: components['responses']['TooManyRequests'];
+      503: components['responses']['EmbeddingUnavailable'];
+    };
+  };
+  createAiSuggestionScenario: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        suggestionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['AiSuggestionToScenarioRequest'];
+      };
+    };
+    responses: {
+      /** @description Saved */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiTestScenario'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

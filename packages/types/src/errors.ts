@@ -34,6 +34,12 @@ export const ERROR_TYPES = [
   // screen answers them differently from a generic `validation`.
   'ai_config_revision_conflict',
   'ai_config_version_state',
+  // SiyahTuş addition — the AI coaching queue (AI-23 · tm 318.1). A second
+  // suggestion on the same message, kind and author (`details.reason`
+  // `duplicate`, `details.suggestion_id` names the first), or a review of one
+  // already decided (`already_reviewed`). 409 and narrow: the panel opens the
+  // existing suggestion instead of showing an error.
+  'ai_suggestion_state',
   // SiyahTuş addition — compliance guardrails (AI-08 · tm 301.2). A customer-
   // facing AI agent switched on before the Founder approved its crisis text
   // (AI-08-S1): the request was fine and allowed, the agent's setup is what
@@ -241,6 +247,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   ai_agent_exists: 409,
   ai_config_revision_conflict: 409,
   ai_config_version_state: 409,
+  ai_suggestion_state: 409,
   ai_guardrail_setup_incomplete: 409,
   ai_mode_transition_refused: 409,
   ai_return_blocked: 409,

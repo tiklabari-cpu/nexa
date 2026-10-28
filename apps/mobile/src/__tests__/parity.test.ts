@@ -1055,7 +1055,11 @@ describe('module parity matrix — what is still owed', () => {
       // `/diff/{toVersionId}`), `/ai/pause` and `/ai/resume`
       // (tm 316.2) — the AI configuration's review line (AI-20). Web console
       // only, like the rest of the Playbook; nothing here re-scopes.
-      contractEndpoints: 324,
+      // 324 -> 327 with `/ai/suggestions`, `/ai/suggestions/{suggestionId}`
+      // and `/{suggestionId}/to-scenario` (tm 318.1) — the AI coaching queue
+      // (AI-23), marked from the web inbox and reviewed in the Playbook; the
+      // app has neither, and nothing here re-scopes.
+      contractEndpoints: 327,
       scopeBoundaries: 1,
     });
   });

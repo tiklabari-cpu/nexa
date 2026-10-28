@@ -178,6 +178,9 @@ describe('error taxonomy', () => {
     // by someone else's save, and a version step its state refuses.
     'ai_config_revision_conflict',
     'ai_config_version_state',
+    // The AI coaching queue (AI-23 · tm 318.1): a second suggestion on the
+    // same message, and a review of one already decided.
+    'ai_suggestion_state',
     // Widget abuse protection (GV-01 · tm 339.2): a token or a conversation
     // opening that must first pass a human check.
     'challenge_required',

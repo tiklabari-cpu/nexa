@@ -1334,6 +1334,7 @@ export const settings: Messages = {
   'settings.aiUsage.surface.simulation': 'Simulations',
   'settings.aiUsage.surface.qa': 'Conversation review',
   'settings.aiUsage.surface.cluster': 'Unanswered-question grouping',
+  'settings.aiUsage.surface.coaching': 'Drafting agent suggestions',
   'settings.aiUsage.alertsHeading': 'Alerts today',
   'settings.aiUsage.alertsNote':
     'You are warned once at 80% and once at 100% of each meter, per day. The owner always receives them.',
@@ -1485,6 +1486,8 @@ export const settings: Messages = {
   'permissions.capability.ai.manage': 'Configure the AI Agent',
   'permissions.capability.ai.guardrails.edit': 'Edit AI compliance rules',
   'permissions.capability.ai.config.publish': 'Approve and publish AI settings',
+  'permissions.capability.ai.suggest': 'Suggest corrections to the AI',
+  'permissions.capability.ai.suggestions.review': 'Review AI suggestions',
   'permissions.capability.reports.view': 'View reports',
   'permissions.capability.reports.schedule': 'Schedule report emails',
   'permissions.capability.team.invite': 'Invite teammates',

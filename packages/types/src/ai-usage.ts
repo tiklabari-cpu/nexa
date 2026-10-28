@@ -33,6 +33,8 @@ export type AiLiveMeter = (typeof AI_LIVE_METERS)[number];
  *   - `simulation`      — the test lab (AI-19); counted on the `_test` meters.
  *   - `qa`              — automatic conversation review (AI-24).
  *   - `cluster`         — grouping unanswered questions (AI-22).
+ *   - `coaching`        — drafting an agent's suggestion into knowledge and
+ *                         looking for it in the knowledge base (AI-23).
  */
 export const AI_USAGE_SURFACES = [
   'ai_agent',
@@ -41,6 +43,7 @@ export const AI_USAGE_SURFACES = [
   'simulation',
   'qa',
   'cluster',
+  'coaching',
 ] as const;
 export type AiUsageSurface = (typeof AI_USAGE_SURFACES)[number];
 

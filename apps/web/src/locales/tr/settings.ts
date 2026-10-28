@@ -1386,6 +1386,7 @@ export const settings: Messages = {
   'settings.aiUsage.surface.simulation': 'Simülasyonlar',
   'settings.aiUsage.surface.qa': 'Görüşme incelemesi',
   'settings.aiUsage.surface.cluster': 'Cevapsız soruları gruplama',
+  'settings.aiUsage.surface.coaching': 'Ajan önerilerini taslağa çevirme',
   'settings.aiUsage.alertsHeading': 'Bugünkü uyarılar',
   'settings.aiUsage.alertsNote':
     'Her sayaç için günde bir kez %80’de, bir kez %100’de uyarılırsınız. Uyarıları her zaman sahip alır.',
@@ -1483,6 +1484,8 @@ export const settings: Messages = {
   'permissions.capability.ai.manage': 'AI Agent’ı yapılandırma',
   'permissions.capability.ai.guardrails.edit': 'AI uyum kurallarını düzenleme',
   'permissions.capability.ai.config.publish': 'AI ayarlarını onaylama ve yayımlama',
+  'permissions.capability.ai.suggest': "AI'a düzeltme önerme",
+  'permissions.capability.ai.suggestions.review': 'AI önerilerini inceleme',
   'permissions.capability.reports.view': 'Raporları görme',
   'permissions.capability.reports.schedule': 'Rapor e-postalarını zamanlama',
   'permissions.capability.team.invite': 'Ekip arkadaşı davet etme',

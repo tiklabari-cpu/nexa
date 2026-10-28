@@ -1260,6 +1260,13 @@ export const envSchema = z.object({
    */
   SCHEDULE_KNOWLEDGE_CHUNK_GC_MS: z.coerce.number().int().positive().default(3_600_000),
   /**
+   * The AI suggestion drafts (tm 318.1 · AI-23 §2–§3, AI-23-S2): an offered
+   * answer generalised into knowledge, looked for in the knowledge base, and
+   * the clusters agents kept answering opened as suggestions. Every minute —
+   * the reviewer opens the queue soon after the agent offered it.
+   */
+  SCHEDULE_AI_SUGGESTION_DRAFTS_MS: z.coerce.number().int().positive().default(60_000),
+  /**
    * Lets the retention job actually run its scheduled pass (M-SCHED-b ·
    * `services/scheduler/types.ts`'s `JobDefinition.enabled`). Off by default:
    * this is the one sweep that hard-deletes data, and there is no operator

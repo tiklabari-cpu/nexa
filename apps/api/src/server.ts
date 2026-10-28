@@ -99,6 +99,7 @@ import uploadRoutes from './routes/uploads.js';
 import playbookRoutes from './routes/playbook.js';
 import aiTestingRoutes from './routes/ai-testing.js';
 import aiUnresolvedRoutes from './routes/ai-unresolved.js';
+import aiSuggestionRoutes from './routes/ai-suggestions.js';
 import aiChangesRoutes from './routes/ai-changes.js';
 import aiConfigRoutes from './routes/ai-config.js';
 import aiGuidanceRoutes from './routes/ai-guidance.js';
@@ -701,6 +702,7 @@ export async function buildServer({
       await api.register(aiTemplateRoutes);
       await api.register(aiTestingRoutes);
       await api.register(aiUnresolvedRoutes, { knowledge });
+      await api.register(aiSuggestionRoutes, { knowledge });
       await api.register(aiChangesRoutes);
       await api.register(aiConfigRoutes);
       await api.register(aiGuardrailRoutes);

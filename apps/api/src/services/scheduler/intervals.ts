@@ -49,6 +49,7 @@ export const SCHEDULER_JOB_NAMES = [
   'chat_inactivity',
   'ai_scheduled_publish',
   'knowledge_chunk_gc',
+  'ai_suggestion_drafts',
 ] as const;
 
 export type SchedulerJobName = (typeof SCHEDULER_JOB_NAMES)[number];
@@ -77,6 +78,7 @@ export type SchedulerIntervalEnv = Pick<
   | 'SCHEDULE_CHAT_INACTIVITY_MS'
   | 'SCHEDULE_AI_SCHEDULED_PUBLISH_MS'
   | 'SCHEDULE_KNOWLEDGE_CHUNK_GC_MS'
+  | 'SCHEDULE_AI_SUGGESTION_DRAFTS_MS'
 >;
 
 /**
@@ -104,6 +106,7 @@ export function jobIntervals(env: SchedulerIntervalEnv): Record<SchedulerJobName
     chat_inactivity: env.SCHEDULE_CHAT_INACTIVITY_MS,
     ai_scheduled_publish: env.SCHEDULE_AI_SCHEDULED_PUBLISH_MS,
     knowledge_chunk_gc: env.SCHEDULE_KNOWLEDGE_CHUNK_GC_MS,
+    ai_suggestion_drafts: env.SCHEDULE_AI_SUGGESTION_DRAFTS_MS,
   };
 }
 

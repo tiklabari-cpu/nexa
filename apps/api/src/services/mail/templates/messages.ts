@@ -1525,6 +1525,79 @@ export function knowledgeStaleMail(
 }
 
 /**
+ * A scheduled AI configuration publication the system refused at its time
+ * (tm 316.6 · AI-20-S4): the approval, the compliance pack or the base no
+ * longer held, so the version was rejected instead of going live. Sent to the
+ * person who submitted it and the one who approved it.
+ */
+export function aiConfigScheduleRefusedMail(
+  ctx: MailContext,
+  input: {
+    workspaceName: string;
+    agentName: string;
+    /** The version as the panel names it ("v12"). */
+    label: string;
+    reason: 'approval_lapsed' | 'compliance_pack' | 'stale_base';
+    versionsUrl: string | null;
+  },
+): RenderedEmail {
+  const t = tr(ctx.locale);
+  const why = {
+    approval_lapsed: t
+      ? 'Onaylayan kişi bu sürümü artık yayınlayamıyor (çalışma alanından ayrıldı, askıya alındı ya da yetkisi değişti).'
+      : 'The person who approved it can no longer publish it (they left the workspace, were suspended or lost the right).',
+    compliance_pack: t
+      ? 'Sürümün geçtiği uyum paketi artık güncel değil.'
+      : 'The compliance pack it passed is no longer current.',
+    stale_base: t
+      ? 'Gönderildikten sonra aynı ayarları değiştiren başka bir sürüm yayınlandı.'
+      : 'Another version changing the same settings went live after it was submitted.',
+  }[input.reason];
+  const blocks: EmailBlock[] = [
+    {
+      type: 'paragraph',
+      text: t
+        ? `${input.agentName} için ${input.label} zamanı geldiğinde yayınlanmadı ve reddedildi. Yapay zekâ yayındaki sürümle cevap vermeye devam ediyor.`
+        : `${input.label} of ${input.agentName} was not published at its time and has been rejected. The AI keeps answering with the version that is live.`,
+    },
+    { type: 'paragraph', text: why },
+    {
+      type: 'paragraph',
+      text: t ? 'Taslağı yeniden onaya gönderin.' : 'Send the draft for review again.',
+    },
+  ];
+  if (input.versionsUrl) {
+    blocks.push({
+      type: 'button',
+      label: t ? 'Sürümleri aç' : 'Open the versions',
+      url: input.versionsUrl,
+      fallback: fallback(ctx),
+    });
+  }
+  return renderEmail({
+    locale: ctx.locale,
+    homeUrl: ctx.appUrl ?? '',
+    eyebrow: input.workspaceName,
+    subject: t
+      ? `SiyahTuş: ${input.agentName} ${input.label} yayınlanmadı`
+      : `SiyahTuş: ${input.agentName} ${input.label} was not published`,
+    preheader: t
+      ? 'Zamanlanmış yayın yapılmadı; yayındaki sürüm değişmedi.'
+      : 'The scheduled publication did not happen; the live version is unchanged.',
+    icon: ICON.alarm,
+    tone: 'alert',
+    heading: t ? 'Zamanlanmış yayın yapılmadı' : 'Scheduled publication refused',
+    blocks,
+    footer: [
+      t
+        ? 'Bu e-postayı, bu sürümü gönderdiğiniz ya da onayladığınız için aldınız.'
+        : 'You received this email because you submitted or approved this version.',
+      signature(ctx),
+    ],
+  });
+}
+
+/**
  * The permission matrix's names, for the mail that says what moved (tm 325.2).
  * Keyed by the catalogue's own type, so a capability added to `CAPABILITIES`
  * does not compile until its mail says what it is.

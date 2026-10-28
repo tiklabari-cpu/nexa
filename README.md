@@ -349,19 +349,21 @@ default: on outside tests). A Redis lock (`SET NX`, one key per job) keeps two r
 instances from double-running the same pass; `GET /health` reports each job's interval,
 enabled flag, and last run's time/status.
 
-| Job                  | Default interval | What it does                                                                     |
-| -------------------- | ---------------- | -------------------------------------------------------------------------------- |
-| `chat_timeout`       | 60 s             | Closes idle chats (FR-MOD-08.7.3)                                                |
-| `sla`                | 60 s             | Marks first-response SLA breaches (11.5-d)                                       |
-| `siem`               | 5 min            | Exports the SIEM audit sink (NFR-C6 · C6-d)                                      |
-| `scheduled_reports`  | 60 s             | Delivers due scheduled reports (07.9)                                            |
-| `retention`          | 1 h              | Hard-deletes data past its retention window (NFR-C8)                             |
-| `webhook_redelivery` | 60 s             | Retries failed outbound webhooks (08.8.4 · NFR-S7)                               |
-| `knowledge_refresh`  | 1 h              | Re-crawls a `website` knowledge source past its freshness window (FR-MOD-06.3.3) |
-| `invoice_close`      | 1 h              | Freezes a closed billing period into a statement (FR-MOD-10.3)                   |
-| `unverified_signups` | 1 h              | Deletes an expired sign-up nobody verified, with its empty workspace (tm 257.19) |
-| `ai_stall`           | 15 s             | Sends a person to an AI-first conversation the AI left unanswered (tm 293.6)     |
-| `chat_inactivity`    | 20 s             | Passes on a chat its agent left unanswered; frees a quiet one's slot (tm 340.2)  |
+| Job                    | Default interval | What it does                                                                       |
+| ---------------------- | ---------------- | ---------------------------------------------------------------------------------- |
+| `chat_timeout`         | 60 s             | Closes idle chats (FR-MOD-08.7.3)                                                  |
+| `sla`                  | 60 s             | Marks first-response SLA breaches (11.5-d)                                         |
+| `siem`                 | 5 min            | Exports the SIEM audit sink (NFR-C6 · C6-d)                                        |
+| `scheduled_reports`    | 60 s             | Delivers due scheduled reports (07.9)                                              |
+| `retention`            | 1 h              | Hard-deletes data past its retention window (NFR-C8)                               |
+| `webhook_redelivery`   | 60 s             | Retries failed outbound webhooks (08.8.4 · NFR-S7)                                 |
+| `knowledge_refresh`    | 1 h              | Re-crawls a `website` knowledge source past its freshness window (FR-MOD-06.3.3)   |
+| `invoice_close`        | 1 h              | Freezes a closed billing period into a statement (FR-MOD-10.3)                     |
+| `unverified_signups`   | 1 h              | Deletes an expired sign-up nobody verified, with its empty workspace (tm 257.19)   |
+| `ai_stall`             | 15 s             | Sends a person to an AI-first conversation the AI left unanswered (tm 293.6)       |
+| `chat_inactivity`      | 20 s             | Passes on a chat its agent left unanswered; frees a quiet one's slot (tm 340.2)    |
+| `ai_scheduled_publish` | 30 s             | Publishes an AI configuration version approved for a time that has come (tm 316.6) |
+| `knowledge_chunk_gc`   | 1 h              | Deletes knowledge chunks no AI configuration version answers from (tm 316.6)       |
 
 Override an interval with `SCHEDULE_<JOB>_MS`, and spread instances from one deploy so
 they don't all tick together with `SCHEDULE_JITTER_PCT` (default 10%) — see

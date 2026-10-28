@@ -56,16 +56,25 @@
  * watchdog's publisher-wired chat service: the agent it hands a connection to,
  * the one it stops routing to and the lead of a team nobody could take it in
  * all hear now. No CLI script, for the watchdog's reason.
+ *
+ * `ai_scheduled_publish` (tm 316.6 · AI-20-S4) publishes an AI configuration
+ * version approved with a `publish_at` that has come
+ * (`services/ai/config-schedule.ts`) — given the publisher for the
+ * `ai_config_published` push and the mailer for a refusal. `knowledge_chunk_gc`
+ * (tm 316.6 · ADR-14b §2.8 (7)) deletes the knowledge chunks no version answers
+ * from any more (`services/ai/knowledge-chunk-gc.ts`). Neither has a CLI script.
  */
 import type { PrismaClient } from '@prisma/client';
 import type { Env } from '../../config/env.js';
 import { AiDailyBudget, aiDailyCaps } from '../ai/ai-daily-budget.js';
+import { ScheduledAiConfigPublisher } from '../ai/config-schedule.js';
 import {
   resolveEmbeddingInferenceProvider,
   resolveInferenceProvider,
   type InferenceProvider,
 } from '../ai/inference.js';
 import { KbArticleKnowledgeSweeper } from '../ai/kb-article-knowledge.js';
+import { KnowledgeChunkCollector } from '../ai/knowledge-chunk-gc.js';
 import { KnowledgeDocumentObjectSweeper } from '../ai/knowledge-document-sweep.js';
 import { KnowledgeRefreshSweeper } from '../ai/knowledge-refresh-sweep.js';
 import { KnowledgeService } from '../ai/knowledge-service.js';
@@ -564,6 +573,61 @@ export function buildSchedulerJobs({
             queued: report.totals.queued,
             marked_inactive: report.totals.markedInactive,
             cleared_inactive: report.totals.clearedInactive,
+          },
+        };
+      },
+    },
+    {
+      // An approved AI configuration version whose time has come, published
+      // (tm 316.6 · AI-20-S4). Not gated: a workspace with nothing scheduled
+      // reads one empty row set.
+      name: 'ai_scheduled_publish',
+      intervalMs: intervals.ai_scheduled_publish,
+      async run(context) {
+        const report = await new ScheduledAiConfigPublisher(db, {
+          auditChainSecret: env.AUDIT_CHAIN_SECRET,
+          publisher: publisher ?? null,
+          mailer,
+          appUrl: env.WEB_APP_URL,
+          logger: context.logger,
+        }).run({ signal: context.signal });
+        if (report.totals.published + report.totals.refused > 0) {
+          context.logger.info(
+            {
+              event: 'ai.config_scheduled_publish',
+              published: report.totals.published,
+              refused: report.totals.refused,
+            },
+            'scheduled ai configuration versions published',
+          );
+        }
+        return {
+          counts: {
+            tenants: report.totals.tenants,
+            due: report.totals.due,
+            published: report.totals.published,
+            refused: report.totals.refused,
+            skipped: report.totals.skipped,
+            failed: report.totals.failed,
+            mailed: report.totals.mailed,
+          },
+        };
+      },
+    },
+    {
+      // The knowledge chunks no AI configuration version answers from any
+      // more (tm 316.6 · ADR-14b §2.8 (7)).
+      name: 'knowledge_chunk_gc',
+      intervalMs: intervals.knowledge_chunk_gc,
+      async run(context) {
+        const report = await new KnowledgeChunkCollector(db).run({ signal: context.signal });
+        return {
+          counts: {
+            tenants: report.totals.tenants,
+            unpublished: report.totals.unpublished,
+            hidden: report.totals.hidden,
+            sources: report.totals.sources,
+            busy: report.totals.busy,
           },
         };
       },

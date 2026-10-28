@@ -2499,6 +2499,10 @@ export const playbook: Messages = {
   'playbook.versions.rollbackCopy': 'copy of an earlier version',
   'playbook.versions.note.superseded_by_submit': 'replaced by a newer submission',
   'playbook.versions.note.stale_base': 'another version went live first; send the draft again',
+  'playbook.versions.note.approval_lapsed':
+    'not published at its time: the approver can no longer publish it; send it for review again',
+  'playbook.versions.note.compliance_pack':
+    'not published at its time: the compliance pack changed; run the test again and resubmit',
   'playbook.versions.person.system': 'the system',
   'playbook.versions.person.unknown': 'a former member',
   'playbook.versions.showChanges.one': 'See {count} change',

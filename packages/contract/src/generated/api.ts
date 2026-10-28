@@ -14875,7 +14875,7 @@ export interface components {
       reviewed_by: string | null;
       /** Format: date-time */
       reviewed_at: string | null;
-      /** @description The reviewer's (or a rollback's) note, or `superseded_by_submit` / `stale_base`. */
+      /** @description The reviewer's (or a rollback's) note, or the system's - `superseded_by_submit`, `stale_base`, or a scheduled publication's `approval_lapsed` / `compliance_pack`. */
       review_note: string | null;
       /** Format: uuid */
       published_by: string | null;

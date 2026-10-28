@@ -11,6 +11,9 @@ export const common: Messages = {
   'common.actions.dismiss': 'Kapat',
   'common.errors.account_exists': 'Bu e-posta adresine ait bir hesap zaten var.',
   'common.errors.ai_agent_exists': 'Bu çalışma alanının zaten bir AI ajanı var.',
+  'common.errors.ai_config_revision_conflict':
+    'Siz açtıktan sonra bu AI ayarlarını başka biri kaydetti — sayfayı yenileyip değişikliğinizi yeniden yapın.',
+  'common.errors.ai_config_version_state': 'Bu AI ayar sürümü şu anki durumunda bu adımı alamaz.',
   'common.errors.ai_guardrail_setup_incomplete':
     'Kriz metni yazılıp çalışma alanı sahibi tarafından onaylanmadan AI ajanı yayına alınamaz.',
   'common.errors.ai_mode_transition_refused': 'Bu sohbeti AI yanıtlamıyor.',

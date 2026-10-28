@@ -2495,6 +2495,10 @@ export const playbook: Messages = {
   'playbook.versions.rollbackCopy': 'önceki bir sürümün kopyası',
   'playbook.versions.note.superseded_by_submit': 'daha yeni bir gönderim yerini aldı',
   'playbook.versions.note.stale_base': 'önce başka bir sürüm yayınlandı; taslağı yeniden gönderin',
+  'playbook.versions.note.approval_lapsed':
+    'zamanında yayınlanmadı: onaylayan kişi artık yayınlayamıyor; yeniden onaya gönderin',
+  'playbook.versions.note.compliance_pack':
+    'zamanında yayınlanmadı: uyum paketi değişti; testi yeniden çalıştırıp yeniden gönderin',
   'playbook.versions.person.system': 'sistem',
   'playbook.versions.person.unknown': 'eski bir üye',
   'playbook.versions.showChanges.one': '{count} değişikliği gör',

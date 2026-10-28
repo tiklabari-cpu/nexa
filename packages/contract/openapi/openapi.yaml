@@ -5678,7 +5678,7 @@ components:
         review_note:
           type: string
           nullable: true
-          description: The reviewer's (or a rollback's) note, or `superseded_by_submit` / `stale_base`.
+          description: The reviewer's (or a rollback's) note, or the system's - `superseded_by_submit`, `stale_base`, or a scheduled publication's `approval_lapsed` / `compliance_pack`.
         published_by: { type: string, format: uuid, nullable: true }
         published_at: { type: string, format: date-time, nullable: true }
         scheduled_at: { type: string, format: date-time, nullable: true }

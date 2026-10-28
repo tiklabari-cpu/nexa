@@ -194,9 +194,17 @@ export type AiConfigVersionStateReason = (typeof AI_CONFIG_VERSION_STATE_REASONS
 /**
  * The `review_note` the system writes on a version it rejects itself: a new
  * submission replaced it (one open version per agent), or it was based on a
- * version published over before it could go out.
+ * version published over before it could go out. A scheduled publication
+ * (tm 316.6 · AI-20-S4) also refuses one whose approval no longer holds — the
+ * approver left, was suspended or lost the right to publish it — or whose
+ * compliance pack is no longer current.
  */
-export const AI_CONFIG_SYSTEM_REVIEW_NOTES = ['superseded_by_submit', 'stale_base'] as const;
+export const AI_CONFIG_SYSTEM_REVIEW_NOTES = [
+  'superseded_by_submit',
+  'stale_base',
+  'approval_lapsed',
+  'compliance_pack',
+] as const;
 export type AiConfigSystemReviewNote = (typeof AI_CONFIG_SYSTEM_REVIEW_NOTES)[number];
 
 /** A reviewer's, submitter's or pauser's note — the table's CHECK on `review_note`. */

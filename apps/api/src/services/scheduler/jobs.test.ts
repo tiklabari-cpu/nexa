@@ -60,6 +60,8 @@ describe('buildSchedulerJobs', () => {
       'ai_unresolved_cluster',
       'ai_unresolved_merge',
       'chat_inactivity',
+      'ai_scheduled_publish',
+      'knowledge_chunk_gc',
     ]);
     // A name declared but never registered is a job somebody forgot to wire,
     // and `/health` would simply not mention it.
@@ -82,6 +84,8 @@ describe('buildSchedulerJobs', () => {
       SCHEDULE_AI_UNRESOLVED_CLUSTER_MS: '14000',
       SCHEDULE_AI_UNRESOLVED_MERGE_MS: '15000',
       SCHEDULE_CHAT_INACTIVITY_MS: '16000',
+      SCHEDULE_AI_SCHEDULED_PUBLISH_MS: '17000',
+      SCHEDULE_KNOWLEDGE_CHUNK_GC_MS: '18000',
     });
     const jobs = buildSchedulerJobs({ db, env, mailer: new NullMailer() });
     const intervalOf = (name: string): number | undefined =>
@@ -101,6 +105,8 @@ describe('buildSchedulerJobs', () => {
     expect(intervalOf('ai_unresolved_cluster')).toBe(14_000);
     expect(intervalOf('ai_unresolved_merge')).toBe(15_000);
     expect(intervalOf('chat_inactivity')).toBe(16_000);
+    expect(intervalOf('ai_scheduled_publish')).toBe(17_000);
+    expect(intervalOf('knowledge_chunk_gc')).toBe(18_000);
   });
 
   it('registers retention and the unverified sign-up sweep disabled unless their switches are set — no other job is gated', () => {
@@ -163,6 +169,36 @@ describe('buildSchedulerJobs', () => {
         queued: 0,
         marked_inactive: 0,
         cleared_inactive: 0,
+      });
+    });
+
+    it('ai_scheduled_publish finds nothing due and publishes nothing (tm 316.6)', async () => {
+      const job = buildSchedulerJobs({ db, env: testEnv(), mailer: new NullMailer() }).find(
+        (j) => j.name === 'ai_scheduled_publish',
+      );
+      const outcome = await job?.run(context());
+      expect(outcome?.counts).toEqual({
+        tenants: 0,
+        due: 0,
+        published: 0,
+        refused: 0,
+        skipped: 0,
+        failed: 0,
+        mailed: 0,
+      });
+    });
+
+    it('knowledge_chunk_gc finds no workspace and deletes nothing (tm 316.6)', async () => {
+      const job = buildSchedulerJobs({ db, env: testEnv(), mailer: new NullMailer() }).find(
+        (j) => j.name === 'knowledge_chunk_gc',
+      );
+      const outcome = await job?.run(context());
+      expect(outcome?.counts).toEqual({
+        tenants: 0,
+        unpublished: 0,
+        hidden: 0,
+        sources: 0,
+        busy: 0,
       });
     });
 

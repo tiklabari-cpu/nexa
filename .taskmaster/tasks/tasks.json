@@ -13763,7 +13763,7 @@
           "315"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-28T09:23:05.016Z",
+        "updatedAt": "2026-10-28T09:24:17.040Z",
         "subtasks": [
           {
             "id": 1,
@@ -13840,13 +13840,13 @@
             "description": "Zamanlı işler: ai_scheduled_publish (dakikada, kilitli) + knowledge_chunk_gc (5 sürüm + 30 günden eski gizli parçalar)",
             "details": "Üst görev ZAMANLAYICI maddesi; yayın yolu 316.2/316.3'teki tek transaction'ı çağırır. Ayrıntı ve kabul maddeleri: üst görev #316 details (tek kaynak).",
             "testStrategy": "Entegrasyon (zamanı gelen onaylı sürüm yayınlanır, kilit çift yayını önler, gc sınırları); `pnpm test:gate`.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "316.3"
             ],
             "parentId": "316",
             "priority": "medium",
-            "updatedAt": "2026-10-16T07:00:34.672Z"
+            "updatedAt": "2026-10-28T09:24:17.040Z"
           }
         ]
       },
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-28T09:23:05.017Z",
+      "lastModified": "2026-10-28T09:24:17.041Z",
       "taskCount": 390,
       "completedCount": 333,
       "tags": [

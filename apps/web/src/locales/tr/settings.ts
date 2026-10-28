@@ -90,6 +90,7 @@ export const settings: Messages = {
   'settings.nav.section.compliance': 'Veri bölgesi ve uyumluluk',
   'settings.nav.section.dataRetention': 'Veri saklama',
   'settings.nav.section.aiUsage': 'Yapay zekâ kullanımı',
+  'settings.nav.section.aiQuality': 'AI kalite',
   'settings.nav.section.aiAgent': 'AI Ajanı',
   'settings.nav.section.auditLog': 'Denetim günlüğü',
   'settings.nav.section.siem': 'SIEM dışa aktarımı',
@@ -1514,4 +1515,46 @@ export const settings: Messages = {
     'Kurucu her izni her zaman tutar — matrisi değiştiren kişi kendi erişimini kapatamaz.',
   'permissions.lock.owner_only': 'Yalnız Kurucu: bu izin Kurucu’da kalır.',
   'permissions.lock.below_floor': 'Platform güvenliği: bu role bu izin verilemez.',
+
+  // Ayarlar › AI kalite (AI-24 · tm 319.3): örneklem, ön puan, çıkar çatışması, rubrik.
+  'settings.aiQuality.title': 'AI kalite',
+  'settings.aiQuality.description':
+    'QA kuyruğunun her gece nasıl dolduğu ve bir incelemenin neyi puanladığı. Ekip Liderleri ve yöneticiler Raporlar › AI kalite altında inceler.',
+  'settings.aiQuality.loadError': 'AI kalite ayarları yüklenemedi.',
+  'settings.aiQuality.samplingTitle': 'Örneklem',
+  'settings.aiQuality.samplePercent': 'Rastgele örneklem (%)',
+  'settings.aiQuality.samplePercentHint':
+    'AI’ın kapanan konuşmalarından her gün kuyruğa düşen pay, %{min}–{max}. Risk bayrakları, uyum koruması işaretleri, zorunlu devirler ve diğer zorunlu kategoriler her zaman kuyruğa girer.',
+  'settings.aiQuality.samplePercentError': '{min} ile {max} arasında bir tam sayı.',
+  'settings.aiQuality.prescore': 'Kuyruktaki konuşmaları model ön puanlasın',
+  'settings.aiQuality.prescoreHint':
+    'Maskeli metinden, her kriterin yanında bir öneri. Hiçbir şeyi onaylamaz; kararı inceleyici verir.',
+  'settings.aiQuality.conflictCheck': 'İnceleyici, yer aldığı konuşmayı inceleyemez',
+  'settings.aiQuality.conflictCheckHint':
+    'Konuşmaya yazan ya da devrini kabul eden kişi o incelemeyi üstlenemez.',
+  'settings.aiQuality.rubric.title': 'Rubrik',
+  'settings.aiQuality.rubric.loadError': 'Rubrik yüklenemedi.',
+  'settings.aiQuality.rubric.version': 'Sürüm {version} · {at}',
+  'settings.aiQuality.rubric.hint':
+    'Kaydetmek yeni bir sürüm yazar; kuyruktaki incelemeler kendi sürümlerinde kalır. Kilitli kriterler platformundur: kritik kalırlar, yalnız ağırlıkları sizindir.',
+  'settings.aiQuality.rubric.criterion': 'Kriter',
+  'settings.aiQuality.rubric.type': 'Tür',
+  'settings.aiQuality.rubric.weight': 'Ağırlık',
+  'settings.aiQuality.rubric.critical': 'Kritik',
+  'settings.aiQuality.rubric.actions': 'İşlemler',
+  'settings.aiQuality.rubric.locked': 'Kilitli',
+  'settings.aiQuality.rubric.labelFor': '{n}. kriterin adı',
+  'settings.aiQuality.rubric.typeFor': '“{criterion}” türü',
+  'settings.aiQuality.rubric.weightFor': '“{criterion}” ağırlığı',
+  'settings.aiQuality.rubric.criticalFor': '“{criterion}” kritik',
+  'settings.aiQuality.rubric.removeFor': '“{criterion}” kriterini kaldır',
+  'settings.aiQuality.rubric.passFail': 'Geçti / kaldı',
+  'settings.aiQuality.rubric.oneToFive': '1–5',
+  'settings.aiQuality.rubric.remove': 'Kaldır',
+  'settings.aiQuality.rubric.add': 'Kriter ekle',
+  'settings.aiQuality.rubric.discard': 'Vazgeç',
+  'settings.aiQuality.rubric.save': 'Yeni sürüm olarak kaydet',
+  'settings.aiQuality.rubric.saved': 'Yeni rubrik sürümü kaydedildi.',
+  'settings.aiQuality.rubric.invalid':
+    'Her kriterin bir adı (en çok 80 karakter) olmalı, her ad bir kez geçmeli, ağırlık 1 ile 10 arasında olmalı.',
 };

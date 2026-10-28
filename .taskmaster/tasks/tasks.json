@@ -13967,7 +13967,7 @@
           "314"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-28T16:59:03.104Z",
+        "updatedAt": "2026-10-28T17:00:12.420Z",
         "subtasks": [
           {
             "id": 1,
@@ -14001,13 +14001,13 @@
             "description": "QaQueue, QaReview (3 bölme), QaCalibration, AiQuality ayarı, Inbox \"QA'ya gönder\"",
             "details": "Üst görev 319 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Web birim + e2e.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "319.2"
             ],
             "parentId": "319",
             "priority": "medium",
-            "updatedAt": "2026-10-14T16:10:56.526Z"
+            "updatedAt": "2026-10-28T17:00:12.420Z"
           }
         ]
       },
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-28T16:59:03.105Z",
+      "lastModified": "2026-10-28T17:00:12.420Z",
       "taskCount": 390,
       "completedCount": 335,
       "tags": [

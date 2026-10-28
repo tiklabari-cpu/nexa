@@ -123,8 +123,8 @@ describe('Settings navigation catalogue (FR-MOD-08.1)', () => {
     // AI usage (tm 283.4) made 33; Member recognition (tm 287.5) made 34;
     // Sensitive data (tm 300.2) made 35; Risk flags (tm 302.3) made 36.
     // Roles and permissions + My permissions (tm 325.4) made 38.
-    // Abuse protection (tm 339.3) made 39.
-    expect(SECTION_FILES).toHaveLength(39);
+    // Abuse protection (tm 339.3) made 39; AI quality (tm 319.3) made 40.
+    expect(SECTION_FILES).toHaveLength(40);
 
     const groups = new Set(SETTINGS_GROUPS.map((g) => g.key));
     for (const s of SETTINGS_SECTIONS) expect(groups.has(s.group), s.slug).toBe(true);

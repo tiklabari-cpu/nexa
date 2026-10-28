@@ -785,4 +785,16 @@ export const inbox: Messages = {
   'inbox.suggest.offerDone': "Thank you — your answer is in the reviewers' queue.",
   'inbox.handoffCard.feedback.unneeded': 'Handed over needlessly',
   'inbox.handoffCard.feedback.unneededDone': 'Sent to the reviewers.',
+
+  // "QA'ya gönder" (AI-24 · tm 319.3).
+  'inbox.qa.button': 'Send to QA',
+  'inbox.qa.title': 'Send to the AI quality queue',
+  'inbox.qa.description':
+    'The newest connection of this conversation goes to the QA queue for a review against the rubric.',
+  'inbox.qa.note': 'Note for the reviewer (optional)',
+  'inbox.qa.send': 'Send to QA',
+  'inbox.qa.cancel': 'Cancel',
+  'inbox.qa.done': 'Sent. The review is in the AI quality queue.',
+  'inbox.qa.openReview': 'Open the review',
+  'inbox.qa.close': 'Close',
 };

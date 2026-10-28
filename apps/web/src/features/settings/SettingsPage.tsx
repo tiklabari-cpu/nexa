@@ -24,6 +24,7 @@ import { Page } from '../../components/Page.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { useDeployment } from '../../lib/deployment.js';
 import { liveDataApps } from '../../lib/live-apps.js';
+import { roleAtLeast } from '../team/RoleMenu.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { Brands } from './Brands.js';
 import { CompanyDetails } from './CompanyDetails.js';
@@ -38,6 +39,7 @@ import { SsoConnection } from './SsoConnection.js';
 import { PermissionsMatrix } from './PermissionsMatrix.js';
 import { MyPermissions } from './MyPermissions.js';
 import { Compliance } from './Compliance.js';
+import { AiQuality } from './AiQuality.js';
 import { AiUsage } from './AiUsage.js';
 import { RiskFlagSettings } from './RiskFlagSettings.js';
 import { DataRetention } from './DataRetention.js';
@@ -97,6 +99,8 @@ interface SectionPermissions {
   canManageCompany: boolean;
   /** The workspace's default panel font is the owner's alone (owner, 2026-10-13). */
   isOwner: boolean;
+  /** The AI quality settings and rubric: the AI's write scope and an administrator (`routes/qa.ts`). */
+  canManageAiQuality: boolean;
 }
 
 function permissionsFrom(scopes: readonly string[], role: string | undefined): SectionPermissions {
@@ -111,6 +115,7 @@ function permissionsFrom(scopes: readonly string[], role: string | undefined): S
     // `CompanyDetails.tsx` for why there is no read-only viewer of this section.
     canManageCompany: scopes.includes('organization--my:rw'),
     isOwner: role === 'owner',
+    canManageAiQuality: scopes.includes('agents-bot--all:rw') && roleAtLeast(role ?? null, 'admin'),
   };
 }
 
@@ -161,6 +166,7 @@ export const SECTION_ELEMENTS: Record<string, (p: SectionPermissions) => ReactEl
   siem: (p) => <SiemExport canEdit={p.canManageAccess} />,
   'risk-flags': (p) => <RiskFlagSettings canEdit={p.canManageAccess} />,
   'ai-usage': (p) => <AiUsage isOwner={p.isOwner} />,
+  'ai-quality': (p) => <AiQuality canEdit={p.canManageAiQuality} />,
 };
 
 /** `/app/settings/*` — the navigation beside whichever section is open. */

@@ -274,6 +274,9 @@ describe('buildSchedulerJobs', () => {
         table_rows_stale: 0,
         table_rows_stale_announced: 0,
         table_rows_stale_mailed: 0,
+        document_originals_checked: 0,
+        document_originals_removed: 0,
+        document_originals_failed: 0,
       });
     });
 

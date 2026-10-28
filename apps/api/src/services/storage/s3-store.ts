@@ -55,9 +55,14 @@
  * instead (`config/env.ts`).
  */
 import { createHash, createHmac } from 'node:crypto';
-import type { ObjectStore, StoredFile, StoredFileInfo } from './object-store.js';
+import type {
+  ObjectStore,
+  StoredFile,
+  StoredFileInfo,
+  StoredKnowledgeObject,
+} from './object-store.js';
 import { StorageUnavailableError } from './storage-error.js';
-import { storedObjectPath } from './upload-url.js';
+import { licenseOfKnowledgeKey, storedObjectPath } from './upload-url.js';
 
 /** Everything the `s3` provider needs. Assembled once, in `parseEnv`. */
 export interface S3StoreOptions {
@@ -207,13 +212,52 @@ export class S3Store implements ObjectStore {
     await drain(response);
   }
 
+  /**
+   * `ListObjectsV2` over `<licence>/knowledge/`, every page (tm 313.3). Only
+   * keys of the knowledge shape that belong to `licenseId` are returned — a
+   * stray object under the prefix is not ours to delete. The XML is read with
+   * patterns, not parsed: the elements wanted are flat, and an entry missing
+   * one is skipped, never guessed.
+   */
+  async listKnowledge(licenseId: bigint): Promise<StoredKnowledgeObject[]> {
+    const prefix = `${licenseId}/knowledge/`;
+    const found: StoredKnowledgeObject[] = [];
+    let token: string | null = null;
+    do {
+      const query = canonicalQuery({
+        'list-type': '2',
+        prefix,
+        ...(token === null ? {} : { 'continuation-token': token }),
+      });
+      const response = await this.#send('GET', null, { query });
+      if (response.status !== 200) throw await unavailable('LIST', prefix, response);
+      const xml = await response.text();
+      for (const entry of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)) {
+        const key = /<Key>([^<]*)<\/Key>/.exec(entry[1]!)?.[1];
+        const modified = /<LastModified>([^<]*)<\/LastModified>/.exec(entry[1]!)?.[1];
+        if (key === undefined || modified === undefined || !key.startsWith(prefix)) continue;
+        const name = key.slice(prefix.length);
+        const lastModified = new Date(modified);
+        if (licenseOfKnowledgeKey(name) !== licenseId || Number.isNaN(lastModified.getTime())) {
+          continue;
+        }
+        found.push({ key: name, lastModified });
+      }
+      const next = /<NextContinuationToken>([^<]*)<\/NextContinuationToken>/.exec(xml)?.[1];
+      token = /<IsTruncated>true<\/IsTruncated>/.test(xml) && next ? decodeXml(next) : null;
+    } while (token !== null);
+    return found;
+  }
+
   /** One signed request. Transport failures become `StorageUnavailableError`. */
   async #send(
     method: 'GET' | 'PUT' | 'HEAD' | 'DELETE',
-    key: string,
-    payload: { body?: Buffer; contentType?: string; payloadHash?: string },
+    key: string | null,
+    payload: { body?: Buffer; contentType?: string; payloadHash?: string; query?: string },
   ): Promise<Response> {
-    const { url, canonicalPath } = this.#locate(key);
+    // A `null` key is the bucket itself — the listing.
+    const { url, canonicalPath } = key === null ? this.#locateBucket() : this.#locate(key);
+    if (payload.query) url.search = payload.query;
     const headers: Record<string, string> = {
       host: url.host,
       'x-amz-content-sha256': payload.payloadHash ?? EMPTY_BODY_SHA256,
@@ -225,9 +269,8 @@ export class S3Store implements ObjectStore {
       {
         method,
         path: canonicalPath,
-        // Nothing this provider sends carries a query string; the signature
-        // still commits to its emptiness.
-        query: '',
+        // Only a listing carries one; the signature commits to it either way.
+        query: payload.query ?? '',
         headers,
         payloadHash: headers['x-amz-content-sha256']!,
       },
@@ -257,10 +300,21 @@ export class S3Store implements ObjectStore {
     } catch (error) {
       // DNS, refused connection, TLS, timeout. None of them is an answer.
       throw new StorageUnavailableError(
-        `${method} ${this.#options.bucket}/${key} could not reach ${url.origin}`,
+        `${method} ${this.#options.bucket}/${key ?? ''} could not reach ${url.origin}`,
         { cause: error },
       );
     }
+  }
+
+  /** The bucket's own address, for listing: the bucket root, path- or host-style. */
+  #locateBucket(): { url: URL; canonicalPath: string } {
+    const { endpoint, bucket, forcePathStyle } = this.#options;
+    const canonicalPath = forcePathStyle ? `/${uriEncodePath(bucket)}/` : '/';
+    const base = new URL(endpoint);
+    const url = new URL(base);
+    url.pathname = canonicalPath;
+    if (!forcePathStyle) url.host = `${bucket}.${base.host}`;
+    return { url, canonicalPath };
   }
 
   /**
@@ -456,6 +510,30 @@ async function errorCodeOf(response: Response): Promise<string | null> {
 /** A remote-supplied string is never spliced into a log line unexamined. */
 function sanitiseCode(value: string): string | null {
   return /^[A-Za-z0-9_.-]{1,64}$/.test(value) ? value : null;
+}
+
+/** `ListObjectsV2` escapes the characters XML reserves in the elements it returns. */
+function decodeXml(text: string): string {
+  return text
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+/** The canonical query string SigV4 signs: names sorted, names and values percent-encoded. */
+function canonicalQuery(parameters: Record<string, string>): string {
+  const encode = (text: string): string =>
+    encodeURIComponent(text).replace(
+      /[!*'()]/g,
+      (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+    );
+  return Object.entries(parameters)
+    .map(([name, value]) => [encode(name), encode(value)] as const)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([name, value]) => `${name}=${value}`)
+    .join('&');
 }
 
 /** Undici holds a connection open until the body is consumed or cancelled. */

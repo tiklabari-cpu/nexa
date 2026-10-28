@@ -47,6 +47,7 @@ function memoryStore(failPut = false) {
     delete: async (key) => {
       objects.delete(key);
     },
+    listKnowledge: async () => [],
   };
   return { store, objects };
 }

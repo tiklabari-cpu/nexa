@@ -27,7 +27,7 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { authorizationHeader, deriveSigningKey, S3Store, type S3StoreOptions } from './s3-store.js';
 import { StorageUnavailableError } from './storage-error.js';
-import { buildKey, buildMailKey } from './upload-url.js';
+import { buildKey, buildKnowledgeKey, buildMailKey } from './upload-url.js';
 
 /** `licenseOfKey` only accepts keys `buildKey` could have produced. */
 const KEY = buildKey(7n, 'text/plain');
@@ -232,6 +232,59 @@ describe('S3Store round trip', () => {
 
     expect(await store.stat(KEY)).toEqual({ contentType: 'text/plain', sizeBytes: 12 });
     expect(bucket!.requests.at(-1)!.method).toBe('HEAD');
+  });
+
+  it('lists a licence’s knowledge documents across pages, skipping keys that are not its own (tm 313.3)', async () => {
+    const store = await startStore();
+    const mine = buildKnowledgeKey(7n, 'application/pdf');
+    const other = buildKnowledgeKey(8n, 'application/pdf');
+    const page = (keys: string[], next: string | null) =>
+      `<ListBucketResult><IsTruncated>${next ? 'true' : 'false'}</IsTruncated>${keys
+        .map(
+          (key) =>
+            `<Contents><Key>${key}</Key><LastModified>2026-10-01T10:00:00.000Z</LastModified></Contents>`,
+        )
+        .join(
+          '',
+        )}${next ? `<NextContinuationToken>${next}</NextContinuationToken>` : ''}</ListBucketResult>`;
+    const second = buildKnowledgeKey(
+      7n,
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    let served = 0;
+    bucket!.respond = (_request, response) => {
+      served += 1;
+      response.writeHead(200, { 'content-type': 'application/xml' });
+      response.end(
+        served === 1
+          ? page(
+              ['7/knowledge/' + mine, '7/knowledge/' + other, '7/knowledge/stray.txt'],
+              'tok&amp;1',
+            )
+          : page(['7/knowledge/' + second], null),
+      );
+    };
+
+    const listed = await store.listKnowledge(7n);
+
+    expect(listed.map((object) => object.key)).toEqual([mine, second]);
+    expect(listed[0]!.lastModified.toISOString()).toBe('2026-10-01T10:00:00.000Z');
+    expect(bucket!.requests).toHaveLength(2);
+    // Signed, sorted, percent-encoded; the token comes back decoded and encoded again.
+    expect(bucket!.requests[0]!.url).toBe('/siyahtus-uploads/?list-type=2&prefix=7%2Fknowledge%2F');
+    expect(bucket!.requests[1]!.url).toBe(
+      '/siyahtus-uploads/?continuation-token=tok%261&list-type=2&prefix=7%2Fknowledge%2F',
+    );
+    expect(bucket!.requests[0]!.authorization).toMatch(/^AWS4-HMAC-SHA256 Credential=/);
+  });
+
+  it('throws when the listing is refused, not an empty list (tm 313.3)', async () => {
+    const store = await startStore();
+    bucket!.respond = (_request, response) => {
+      response.writeHead(403, { 'content-type': 'application/xml' });
+      response.end('<Error><Code>AccessDenied</Code></Error>');
+    };
+    await expect(store.listKnowledge(7n)).rejects.toBeInstanceOf(StorageUnavailableError);
   });
 
   it('lays objects out under the licence in the key, path style', async () => {

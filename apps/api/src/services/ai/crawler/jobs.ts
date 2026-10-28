@@ -126,7 +126,7 @@ export type JobEnd =
   | { status: 'done'; error?: string }
   | { status: 'failed'; error: string }
   | { status: 'waiting_budget'; availableAt: Date }
-  | { status: 'queued' };
+  | { status: 'queued'; availableAt?: Date };
 
 /** End the claim, fenced. False: the claim had already lost the job. */
 export async function endJobClaim(
@@ -146,7 +146,11 @@ export async function endJobClaim(
         }
       : end.status === 'waiting_budget'
         ? { status: end.status, leaseUntil: null, availableAt: end.availableAt, attempts: 0 }
-        : { status: end.status, leaseUntil: null };
+        : {
+            status: end.status,
+            leaseUntil: null,
+            ...(end.availableAt ? { availableAt: end.availableAt } : {}),
+          };
   const { count } = await tx.knowledgeJob.updateMany({ where: jobFence(claim), data });
   return count > 0;
 }

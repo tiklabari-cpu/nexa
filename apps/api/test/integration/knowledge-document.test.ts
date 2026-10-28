@@ -9,9 +9,8 @@
  * "the route will not hand it back" is also what a stored-but-unreadable file
  * looks like.
  *
- * The document itself is read by the worker of tm 313.2–313.3; until it
- * exists a `document` job ends `unsupported_kind`, which one test pins so the
- * interim state is a known one, not a source stuck `processing`.
+ * The document itself is read by the `document` job (tm 313.3); that half is
+ * `knowledge-document-ingest.test.ts`.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync } from 'node:fs';
@@ -277,21 +276,6 @@ describe('knowledge documents — upload and source (FR-MOD-06.3.2)', () => {
       file_mime: KNOWLEDGE_DOCUMENT_DOCX,
       status: 'processing',
     });
-  });
-
-  it('until the document worker exists, ends the job unsupported_kind and writes nothing to the knowledge base', async () => {
-    const { uploadId } = await upload('a', pdf(['Bonus']));
-    const created = (await createSource('a', { upload_id: uploadId, name: 'Bonus' })).json();
-
-    server.app.knowledgeJobs.wake();
-    await server.app.knowledgeJobs.idle();
-
-    const job = await owner.knowledgeJob.findUniqueOrThrow({ where: { id: created.job_id } });
-    expect(job).toMatchObject({ status: 'failed', error: 'unsupported_kind' });
-    const source = await owner.knowledgeSource.findUniqueOrThrow({ where: { id: created.id } });
-    // Failed, and none of a website's crawl bookkeeping written onto it.
-    expect(source).toMatchObject({ status: 'failed', lastCrawledAt: null, lastRefreshError: null });
-    expect(await owner.knowledgeChunk.count({ where: { sourceId: created.id } })).toBe(0);
   });
 
   it('answers 409 knowledge_source_exists for the same file twice in a workspace, and not across workspaces', async () => {

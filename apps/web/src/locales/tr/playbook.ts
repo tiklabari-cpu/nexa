@@ -245,12 +245,40 @@ export const playbook: Messages = {
   'playbook.knowledge.formContentRequiredError': 'İçeriği girin.',
   'playbook.knowledge.formFile': 'Dosya',
   'playbook.knowledge.formFileHelp':
-    'Metin, Markdown veya CSV; en fazla {size} MiB. Kaydedildiğinde ayrıştırılıp dizinlenir; bir başlık yazmazsanız dosya adı başlık olur.',
+    'PDF veya Word (.docx) en fazla {docSize} MiB; metin, Markdown veya CSV en fazla {size} MiB. Bir dosyayı buraya bırakın ya da seçin; kaydedildiğinde okunup dizinlenir, bir başlık yazmazsanız dosya adı başlık olur.',
   'playbook.knowledge.formFileChosen': 'Yüklemeye hazır: {name}',
-  'playbook.knowledge.rejectInvalidType': 'Bir .txt, .md veya .csv dosyası seçin.',
+  'playbook.knowledge.rejectInvalidType': 'Bir .pdf, .docx, .txt, .md veya .csv dosyası seçin.',
   'playbook.knowledge.rejectEmptyFile': 'Bu dosya boş.',
   'playbook.knowledge.rejectTooLarge': 'Bu dosya {size} MiB sınırının üzerinde.',
   'playbook.knowledge.rejectUnreadable': 'O dosya okunamadı.',
+  'playbook.knowledge.document.dropHint': 'Bir PDF ya da Word dosyasını buraya bırakın',
+  'playbook.knowledge.document.uploading': '{name} yükleniyor…',
+  'playbook.knowledge.document.reading':
+    'Yüklendi. {name} arka planda okunuyor — hazır olunca liste kendiliğinden güncellenir.',
+  'playbook.knowledge.document.uploadingShort': 'Yükleniyor…',
+  'playbook.knowledge.document.processing': 'Belge okunuyor…',
+  'playbook.knowledge.statusProcessing': 'Okunuyor…',
+  'playbook.knowledge.document.pageCount.one': '{count} sayfa',
+  'playbook.knowledge.document.pageCount.other': '{count} sayfa',
+  'playbook.knowledge.document.download': 'Orijinali indir',
+  'playbook.knowledge.document.downloadAria': '{name} belgesinin orijinalini indir',
+  'playbook.knowledge.document.reprocess': 'Yeniden işle',
+  'playbook.knowledge.document.error.unsupported_type':
+    'Bu dosya türü desteklenmiyor. Yalnızca PDF ve Word (.docx) belgeleri eklenebilir.',
+  'playbook.knowledge.document.error.file_too_large': 'Dosya 20 MiB sınırını aşıyor.',
+  'playbook.knowledge.document.error.virus_detected': 'Dosyada zararlı yazılım bulundu; eklenmedi.',
+  'playbook.knowledge.document.error.encrypted':
+    'Belge parolayla korunuyor. Parolasız bir kopyasını yükleyin.',
+  'playbook.knowledge.document.error.no_text_layer':
+    'Metin bulunamadı, taranmış bir belge olabilir. Metin katmanı olan bir kopyasını yükleyin.',
+  'playbook.knowledge.document.error.too_many_pages':
+    'Belge 300 sayfa sınırını aşıyor. Bölümlere ayırıp yükleyin.',
+  'playbook.knowledge.document.error.too_many_characters':
+    'Belge 1.000.000 karakter sınırını aşıyor. Bölümlere ayırıp yükleyin.',
+  'playbook.knowledge.document.error.parse_timeout':
+    'Belge 30 saniye içinde okunamadı. Daha küçük bir kopyasını deneyin.',
+  'playbook.knowledge.document.error.parse_failed':
+    'Belge okunamadı; dosya bozuk olabilir. Yeniden işlemeyi deneyin.',
   'playbook.knowledge.crawling': 'Taranıyor…',
   'playbook.knowledge.indexing': 'Dizinleniyor…',
   'playbook.knowledge.addSource': 'Kaynak ekle',

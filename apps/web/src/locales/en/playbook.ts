@@ -249,12 +249,41 @@ export const playbook: Messages = {
   'playbook.knowledge.formContentRequiredError': 'Enter the content.',
   'playbook.knowledge.formFile': 'File',
   'playbook.knowledge.formFileHelp':
-    'Text, Markdown or CSV, up to {size} MiB. Parsed and indexed on save; the file name becomes the title unless you type one.',
+    'PDF or Word (.docx) up to {docSize} MiB, or text, Markdown or CSV up to {size} MiB. Drop a file here or choose one; it is read and indexed on save, and the file name becomes the title unless you type one.',
   'playbook.knowledge.formFileChosen': 'Ready to upload: {name}',
-  'playbook.knowledge.rejectInvalidType': 'Choose a .txt, .md or .csv file.',
+  'playbook.knowledge.rejectInvalidType': 'Choose a .pdf, .docx, .txt, .md or .csv file.',
   'playbook.knowledge.rejectEmptyFile': 'This file is empty.',
   'playbook.knowledge.rejectTooLarge': 'This file is over the {size} MiB limit.',
   'playbook.knowledge.rejectUnreadable': 'Could not read that file.',
+  'playbook.knowledge.document.dropHint': 'Drop a PDF or Word file here',
+  'playbook.knowledge.document.uploading': 'Uploading {name}…',
+  'playbook.knowledge.document.reading':
+    'Uploaded. Reading {name} in the background — the list updates when it is ready.',
+  'playbook.knowledge.document.uploadingShort': 'Uploading…',
+  'playbook.knowledge.document.processing': 'Reading the document…',
+  'playbook.knowledge.statusProcessing': 'Reading…',
+  'playbook.knowledge.document.pageCount.one': '{count} page',
+  'playbook.knowledge.document.pageCount.other': '{count} pages',
+  'playbook.knowledge.document.download': 'Download original',
+  'playbook.knowledge.document.downloadAria': 'Download the original of {name}',
+  'playbook.knowledge.document.reprocess': 'Reprocess',
+  'playbook.knowledge.document.error.unsupported_type':
+    'This file type is not supported. Only PDF and Word (.docx) documents can be added.',
+  'playbook.knowledge.document.error.file_too_large': 'The file is over the 20 MiB limit.',
+  'playbook.knowledge.document.error.virus_detected':
+    'The file contains malware and was not added.',
+  'playbook.knowledge.document.error.encrypted':
+    'The document is password-protected. Upload a copy without the password.',
+  'playbook.knowledge.document.error.no_text_layer':
+    'No text found — the document may be only page images. Upload a copy that has a text layer.',
+  'playbook.knowledge.document.error.too_many_pages':
+    'The document is over the 300-page limit. Split it and upload the parts.',
+  'playbook.knowledge.document.error.too_many_characters':
+    'The document is over the 1,000,000-character limit. Split it and upload the parts.',
+  'playbook.knowledge.document.error.parse_timeout':
+    'The document could not be read within 30 seconds. Try a smaller copy.',
+  'playbook.knowledge.document.error.parse_failed':
+    'The document could not be read; the file may be damaged. Try reprocessing it.',
   'playbook.knowledge.crawling': 'Crawling…',
   'playbook.knowledge.indexing': 'Indexing…',
   'playbook.knowledge.addSource': 'Add source',

@@ -13,6 +13,10 @@
  * source — the one that queued it may have gone; `in_process` (every test
  * server) crawls only what its own requests woke it for.
  *
+ * A `document` job (tm 313.3 · AI-18) reads a PDF or Word original from the
+ * object store `STORAGE_PROVIDER` names, in a worker process of its own
+ * (`services/ai/document-ingest.ts`).
+ *
  * Registered after `database`, so that its drain on close runs while the pool
  * is still open; a job cut off is handed back to the queue with its frontier.
  */
@@ -22,8 +26,10 @@ import type { Env } from '../config/env.js';
 import type { CrawlFetcher } from '../services/ai/crawler/fetcher.js';
 import { KNOWLEDGE_JOB_POLL_MS, KnowledgeJobWorker } from '../services/ai/crawler/job-runner.js';
 import { createCrawlFetcher } from '../services/ai/crawler/provider.js';
+import type { DocumentIngestOptions } from '../services/ai/document-ingest.js';
 import type { InferenceProvider } from '../services/ai/inference.js';
 import type { KnowledgeService } from '../services/ai/knowledge-service.js';
+import { createObjectStore } from '../services/storage/object-store.js';
 import type { AiJobDiscovery } from './ai-jobs.js';
 
 declare module 'fastify' {
@@ -42,6 +48,8 @@ export interface KnowledgeJobsPluginOptions {
   /** Who fetches pages; omitted, `CRAWLER_PROVIDER`'s. */
   fetcher?: CrawlFetcher;
   discovery?: AiJobDiscovery;
+  /** The document reader; omitted, the isolated worker process (a test passes a canned one). */
+  parseDocument?: DocumentIngestOptions['parse'];
 }
 
 async function knowledgeJobsPlugin(
@@ -54,6 +62,11 @@ async function knowledgeJobsPlugin(
     logger: log,
     fetcher: options.fetcher ?? createCrawlFetcher(options.env.CRAWLER_PROVIDER),
     knowledge: options.knowledge,
+    documents: {
+      store: createObjectStore(options.env.STORAGE_PROVIDER, options.env.storage),
+      knowledge: options.knowledge,
+      ...(options.parseDocument ? { parse: options.parseDocument } : {}),
+    },
     embeddingInference: options.embeddingInference,
     pollMs: (options.discovery ?? 'shared') === 'shared' ? KNOWLEDGE_JOB_POLL_MS : null,
   });

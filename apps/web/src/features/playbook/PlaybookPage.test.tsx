@@ -200,10 +200,12 @@ describe('Playbook knowledge — File source (FR-MOD-06.3.2)', () => {
 
     await user.upload(
       await screen.findByLabelText('File'),
-      new File(['%PDF-1.4'], 'manual.pdf', { type: 'application/pdf' }),
+      new File(['PNG'], 'photo.png', { type: 'image/png' }),
     );
 
-    expect(await screen.findByText(/Choose a \.txt, \.md or \.csv file/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Choose a \.pdf, \.docx, \.txt, \.md or \.csv file/),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add source' })).toBeDisabled();
     expect(api.post).not.toHaveBeenCalled();
   });

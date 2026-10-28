@@ -2982,6 +2982,7 @@ export default async function playbookRoutes(
     { config: { scopes: WRITE } },
     async (request, reply) => {
       const id = parse(uuid, request.params.sourceId);
+      let originalKey: string | null = null;
       const deleted = await request.withTenant(async (tx) => {
         // A KB article's source goes when the article is unpublished or its
         // AI is switched off (AI-14-S2); deleted here it would come back with
@@ -2993,6 +2994,11 @@ export default async function playbookRoutes(
         if (mirror?.kbArticleId) refuseKbArticleOwned(mirror.kbArticleId);
         // A table row's source goes with its row (tm 310.2).
         if (mirror) refuseTableRowOwned(mirror);
+        // A PDF or Word document's original is removed after the delete
+        // commits (tm 313.3); its key is read here, while the row exists.
+        originalKey =
+          (await tx.knowledgeSource.findFirst({ where: { id }, select: { fileKey: true } }))
+            ?.fileKey ?? null;
         // Chunks cascade with the source; leaving them would keep answering
         // from text the admin believes they deleted.
         const count = await deleteKnowledgeSourceDraft(tx, id, {
@@ -3011,6 +3017,14 @@ export default async function playbookRoutes(
         return count;
       });
       if (deleted === 0) throw ApiError.notFound('Knowledge source not found.');
+      // After the commit: a store that does not answer must not undo a delete
+      // the admin already has. The object it leaves is the orphan sweep's
+      // (`knowledge-document-sweep.ts`), never a source's.
+      if (originalKey !== null) {
+        await documents.delete(originalKey).catch((error: unknown) => {
+          request.log.warn({ err: error }, 'knowledge document original could not be removed');
+        });
+      }
       return reply.status(204).send();
     },
   );

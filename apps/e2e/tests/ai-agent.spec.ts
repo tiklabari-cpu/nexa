@@ -174,13 +174,68 @@ The **flugelbrace${run}** warranty covers cracked welds for ten years.
     await agentPage.getByLabel('Type', { exact: true }).selectOption('file');
 
     await agentPage.setInputFiles('#source-file', {
-      name: 'manual.pdf',
-      mimeType: 'application/pdf',
-      buffer: Buffer.from('%PDF-1.4 not a knowledge source', 'utf8'),
+      name: 'photo.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from('not a knowledge source', 'utf8'),
     });
 
-    await expect(agentPage.getByText(/Choose a \.txt, \.md or \.csv file/)).toBeVisible();
+    await expect(
+      agentPage.getByText(/Choose a \.pdf, \.docx, \.txt, \.md or \.csv file/),
+    ).toBeVisible();
     await expect(agentPage.getByRole('button', { name: 'Add source' })).toBeDisabled();
+  });
+
+  /**
+   * A PDF through the Files tab (AI-18 · FR-MOD-06.3.2): uploaded in two
+   * stages, read by the isolated worker in a job of its own, and the row
+   * reports its pages once it is — with the original to download.
+   */
+  test('adds a PDF that is read in the background and reports its pages (FR-MOD-06.3.2)', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/playbook?view=skills');
+    await agentPage
+      .getByRole('tablist', { name: 'AI Agent' })
+      .getByRole('tab', { name: 'Knowledge' })
+      .click();
+    await agentPage.getByLabel('Type', { exact: true }).selectOption('file');
+
+    const run = Date.now();
+    const text = `Zephyr warranty ${run}: the warranty covers cracked welds for ten years from delivery.`;
+    const stream = `BT /F1 12 Tf 72 720 Td (${text}) Tj ET`;
+    const objects = [
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [4 0 R] /Count 1 >>',
+      '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>',
+      `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    ];
+    let body = '%PDF-1.4\n';
+    const offsets = objects.map((object, index) => {
+      const offset = body.length;
+      body += `${index + 1} 0 obj\n${object}\nendobj\n`;
+      return offset;
+    });
+    const xref = body.length;
+    body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+    for (const offset of offsets) body += `${String(offset).padStart(10, '0')} 00000 n \n`;
+    body += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+
+    const title = `Zephyr manual ${run}`;
+    await agentPage.getByLabel('Title').fill(title);
+    await agentPage.setInputFiles('#source-file', {
+      name: `zephyr-manual-${run}.pdf`,
+      mimeType: 'application/pdf',
+      buffer: Buffer.from(body, 'latin1'),
+    });
+    await agentPage.getByRole('button', { name: 'Add source' }).click();
+
+    await agentPage.getByRole('tab', { name: /Files/ }).click();
+    const row = agentPage.getByRole('listitem').filter({ hasText: title });
+    await expect(row).toBeVisible();
+    // The list looks again every few seconds while the document is read.
+    await expect(row.getByText('1 page')).toBeVisible({ timeout: 45_000 });
+    await expect(row.getByRole('button', { name: /Download the original/ })).toBeVisible();
   });
 
   /**

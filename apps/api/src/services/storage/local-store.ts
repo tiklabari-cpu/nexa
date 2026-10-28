@@ -9,11 +9,16 @@
  * file would hand out the filesystem, and "the caller cannot reach it" is an
  * argument that stops being true the first time someone adds a caller.
  */
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
-import type { ObjectStore, StoredFile, StoredFileInfo } from './object-store.js';
+import type {
+  ObjectStore,
+  StoredFile,
+  StoredFileInfo,
+  StoredKnowledgeObject,
+} from './object-store.js';
 import { StorageUnavailableError } from './storage-error.js';
-import { storedObjectPath } from './upload-url.js';
+import { licenseOfKnowledgeKey, storedObjectPath } from './upload-url.js';
 
 /**
  * Re-exported where it has always been imported from. It is declared next to
@@ -138,6 +143,40 @@ export class LocalStore implements ObjectStore {
     } catch (error) {
       throw new StorageUnavailableError(`DELETE ${key} could not remove ${path}`, { cause: error });
     }
+  }
+
+  /**
+   * The licence's knowledge documents: what is in its `knowledge/` directory
+   * under a name of the knowledge-key shape (the `.type` sidecars and anything
+   * a person left there are not objects). A licence that never stored one has
+   * no directory — an empty list, not a fault.
+   */
+  async listKnowledge(licenseId: bigint): Promise<StoredKnowledgeObject[]> {
+    const directory = resolve(join(this.#root, String(licenseId), 'knowledge'));
+    let names: string[];
+    try {
+      names = await readdir(directory);
+    } catch (error) {
+      if (isMissing(error)) return [];
+      throw new StorageUnavailableError(`LIST ${licenseId}/knowledge could not read ${directory}`, {
+        cause: error,
+      });
+    }
+    const found: StoredKnowledgeObject[] = [];
+    for (const name of names) {
+      if (licenseOfKnowledgeKey(name) !== licenseId) continue;
+      try {
+        const info = await stat(join(directory, name));
+        if (info.isFile()) found.push({ key: name, lastModified: info.mtime });
+      } catch (error) {
+        // Deleted between the listing and the stat: gone is not listed.
+        if (isMissing(error)) continue;
+        throw new StorageUnavailableError(`LIST ${licenseId}/knowledge could not stat ${name}`, {
+          cause: error,
+        });
+      }
+    }
+    return found;
   }
 
   #pathFor(key: string): string {

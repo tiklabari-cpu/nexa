@@ -901,6 +901,7 @@ describe('inbound email body and files (tm 357)', () => {
           exists: (key) => local.exists(key),
           stat: (key) => local.stat(key),
           delete: () => Promise.reject(new StorageUnavailableError('bucket down')),
+          listKnowledge: (license) => local.listKnowledge(license),
         },
       });
 

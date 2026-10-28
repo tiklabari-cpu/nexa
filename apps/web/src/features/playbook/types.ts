@@ -369,6 +369,9 @@ export interface KnowledgeSource {
   last_crawled_at?: string | null;
   /** Pages the last crawl left in the store (`ok` + `unchanged`). */
   page_count?: number;
+  /** A PDF or Word document's type (tm 313 · AI-18); null on every source that keeps no original. */
+  file_mime?: string | null;
+  file_size?: number | null;
   /** The source's crawl under way, followed at `GET /knowledge-jobs/{id}`; null when none. */
   job_id?: string | null;
   /**

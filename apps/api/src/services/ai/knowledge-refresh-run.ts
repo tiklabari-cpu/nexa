@@ -28,10 +28,12 @@ import { PrismaClient } from '@prisma/client';
 import { parseEnv } from '../../config/env.js';
 import { resolveEmbeddingInferenceProvider } from './inference.js';
 import { KbArticleKnowledgeSweeper } from './kb-article-knowledge.js';
+import { KnowledgeDocumentObjectSweeper } from './knowledge-document-sweep.js';
 import { KnowledgeRefreshSweeper } from './knowledge-refresh-sweep.js';
 import { KnowledgeService } from './knowledge-service.js';
 import { createMeteredEmbeddings } from './metered-embeddings.js';
 import { KnowledgeTableRowKnowledgeSweeper } from '../knowledge-tables/row-knowledge.js';
+import { createObjectStore } from '../storage/object-store.js';
 
 async function main(): Promise<void> {
   const env = parseEnv();
@@ -57,15 +59,21 @@ async function main(): Promise<void> {
       knowledge,
       embeddingInference,
     }).run();
+    // And the PDF and Word originals no source holds (tm 313.3).
+    const originals = await new KnowledgeDocumentObjectSweeper(
+      db,
+      createObjectStore(env.STORAGE_PROVIDER, env.storage),
+    ).run();
     process.stdout.write(
-      `${JSON.stringify({ ...report, kbArticles: articles, tableRows: rows }, null, 2)}\n`,
+      `${JSON.stringify({ ...report, kbArticles: articles, tableRows: rows, documentOriginals: originals }, null, 2)}\n`,
     );
     process.stderr.write(
       `knowledge-refresh: queued ${report.totals.queued} crawl(s), refused ${report.totals.failed} ` +
         `of ${report.totals.checked} due source(s) across ${report.totals.tenants} tenant(s); ` +
         `KB articles synced ${articles.totals.synced}, deferred ${articles.totals.deferred} ` +
         `of ${articles.totals.checked}; table rows synced ${rows.totals.synced}, ` +
-        `deferred ${rows.totals.deferred} of ${rows.totals.checked}\n`,
+        `deferred ${rows.totals.deferred} of ${rows.totals.checked}; document originals removed ` +
+        `${originals.totals.removed} of ${originals.totals.checked}\n`,
     );
   } finally {
     await db.$disconnect();

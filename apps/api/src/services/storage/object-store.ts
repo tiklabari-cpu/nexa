@@ -48,7 +48,7 @@ export interface StoredFileInfo {
 }
 
 /**
- * The five operations, and the one rule they share.
+ * The six operations, and the one rule they share.
  *
  * **A `null` or a `false` from here is a statement, not a shrug.** It means the
  * store looked and the object is not there — ENOENT on disk, `404` from a
@@ -92,6 +92,20 @@ export interface ObjectStore {
    * that did not happen.
    */
   delete(key: string): Promise<void>;
+  /**
+   * Every knowledge document `licenseId` has stored (tm 313.3) — what the
+   * sweep that removes the ones no source holds walks. The workspace's own
+   * prefix only; a store that cannot be asked throws, like the others.
+   */
+  listKnowledge(licenseId: bigint): Promise<StoredKnowledgeObject[]>;
+}
+
+/** One knowledge document the store holds, as {@link ObjectStore.listKnowledge} reports it. */
+export interface StoredKnowledgeObject {
+  /** The key as the rest of the system names it (`<licence>-k-<uuid>.pdf|.docx`). */
+  key: string;
+  /** When it was stored — an upload nobody turned into a source is old enough to remove after a day. */
+  lastModified: Date;
 }
 
 /** The object stores this deployment can select between (`STORAGE_PROVIDER`). */

@@ -66,6 +66,7 @@ import {
   type InferenceProvider,
 } from '../ai/inference.js';
 import { KbArticleKnowledgeSweeper } from '../ai/kb-article-knowledge.js';
+import { KnowledgeDocumentObjectSweeper } from '../ai/knowledge-document-sweep.js';
 import { KnowledgeRefreshSweeper } from '../ai/knowledge-refresh-sweep.js';
 import { KnowledgeService } from '../ai/knowledge-service.js';
 import { createMeteredEmbeddings } from '../ai/metered-embeddings.js';
@@ -348,7 +349,9 @@ export function buildSchedulerJobs({
       // (tm 309.2 · AI-14-S2 — `kb-article-knowledge.ts`), then the structured
       // table rows whose source is not (tm 310.2 · AI-13 — `row-knowledge.ts`), and
       // last the table rows past their review date, announced once to the
-      // owner and admins (tm 310.5 · AI-13-S2 — `stale-sweep.ts`).
+      // owner and admins (tm 310.5 · AI-13-S2 — `stale-sweep.ts`), and
+      // finally the PDF and Word originals no source holds any more (tm 313.3 ·
+      // AI-18 — `knowledge-document-sweep.ts`).
       name: 'knowledge_refresh',
       intervalMs: intervals.knowledge_refresh,
       async run() {
@@ -363,6 +366,10 @@ export function buildSchedulerJobs({
           embeddingInference,
         }).run();
         const stale = await new KnowledgeTableStaleSweeper(db, mailer, env.WEB_APP_URL).run();
+        const originals = await new KnowledgeDocumentObjectSweeper(
+          db,
+          createObjectStore(env.STORAGE_PROVIDER, env.storage),
+        ).run();
         return {
           counts: {
             tenants: report.totals.tenants,
@@ -378,6 +385,9 @@ export function buildSchedulerJobs({
             table_rows_stale: stale.totals.stale,
             table_rows_stale_announced: stale.totals.announced,
             table_rows_stale_mailed: stale.totals.mailed,
+            document_originals_checked: originals.totals.checked,
+            document_originals_removed: originals.totals.removed,
+            document_originals_failed: originals.totals.failed,
           },
         };
       },

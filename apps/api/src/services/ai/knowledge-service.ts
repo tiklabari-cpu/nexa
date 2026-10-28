@@ -53,6 +53,9 @@ import {
 import { EmbeddingProviderError } from './provider/embedding-error.js';
 import type { EmbeddingProvider, EmbeddingUsage } from './provider/embedding-provider.js';
 
+/** Chunks of a document embedded per provider call (tm 313.3) — a 1M-character document is thousands. */
+export const DOCUMENT_EMBED_BATCH = 64;
+
 /**
  * A source's text, chunked and embedded — everything {@link KnowledgeService.index}
  * writes, produced before its transaction opens.
@@ -60,7 +63,15 @@ import type { EmbeddingProvider, EmbeddingUsage } from './provider/embedding-pro
 export interface PreparedChunks {
   /** The space every vector below is in. */
   space: string;
-  chunks: Array<{ text: string; vector: string; tokenCount: number }>;
+  chunks: Array<{
+    text: string;
+    vector: string;
+    tokenCount: number;
+    /** A PDF/Word document's chunk: the pages it was cut from and its heading (tm 313.3). */
+    pageFrom?: number;
+    pageTo?: number;
+    heading?: string | null;
+  }>;
   /** What the provider billed for them (tm 257.20) — 0 when nothing was asked. */
   usage: EmbeddingUsage;
 }
@@ -346,6 +357,55 @@ export class KnowledgeService {
   }
 
   /**
+   * Reserve what embedding `pieces` will cost, once, for a document's chunks
+   * (tm 313.3): {@link prepareDocument} draws on the hold a batch at a time,
+   * so a document the day's allowance cannot take is refused (`AiDailyCapError`)
+   * before any of it is embedded, not half-way. Settle the hold when done.
+   */
+  holdFor(tenant: TenantContext, pieces: readonly string[]): Promise<EmbeddingHold> {
+    return this.#embeddings.hold(tenant, embeddingEstimate(pieces));
+  }
+
+  /**
+   * Embed chunks somebody else cut — a document's, with the pages and heading
+   * of each ({@link chunkDocument}) — {@link DOCUMENT_EMBED_BATCH} at a time,
+   * against `payer` (a {@link holdFor} hold). The provider call; never inside
+   * a transaction. Rejects like {@link prepare}, before anything is written.
+   */
+  async prepareDocument(
+    pieces: ReadonlyArray<{
+      text: string;
+      pageFrom: number;
+      pageTo: number;
+      heading: string | null;
+    }>,
+    payer: EmbeddingPayer,
+  ): Promise<PreparedChunks> {
+    const chunks: PreparedChunks['chunks'] = [];
+    let inputTokens = 0;
+    for (let at = 0; at < pieces.length; at += DOCUMENT_EMBED_BATCH) {
+      const batch = pieces.slice(at, at + DOCUMENT_EMBED_BATCH);
+      const { vectors, usage } = await this.#embeddings.embed(
+        batch.map((piece) => piece.text),
+        payer,
+        KNOWLEDGE_INDEX,
+      );
+      inputTokens += usage.inputTokens;
+      for (const [position, piece] of batch.entries()) {
+        chunks.push({
+          text: piece.text,
+          vector: toVectorLiteral(vectors[position]!),
+          tokenCount: piece.text.split(/\s+/).length,
+          pageFrom: piece.pageFrom,
+          pageTo: piece.pageTo,
+          heading: piece.heading,
+        });
+      }
+    }
+    return { space: this.space, chunks, usage: { inputTokens } };
+  }
+
+  /**
    * Replace a source's chunks with prepared ones, inside the caller's
    * transaction.
    *
@@ -367,9 +427,12 @@ export class KnowledgeService {
       // bound, not interpolated.
       await tx.$executeRaw`
         INSERT INTO knowledge_chunks (id, source_id, license_id, chunk_text, embedding,
-                                      embedding_space, token_count, position)
+                                      embedding_space, token_count, position,
+                                      page_from, page_to, heading)
         VALUES (gen_random_uuid(), ${sourceId}::uuid, ${tenant.licenseId}, ${piece.text},
-                ${piece.vector}::vector, ${prepared.space}, ${piece.tokenCount}, ${position})
+                ${piece.vector}::vector, ${prepared.space}, ${piece.tokenCount}, ${position},
+                ${piece.pageFrom ?? null}::int, ${piece.pageTo ?? null}::int,
+                ${piece.heading ?? null})
       `;
     }
 

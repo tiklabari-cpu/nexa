@@ -120,6 +120,13 @@ const BY_ID_READ =
 /** Operations with no client, and why that is the design rather than a gap. */
 const HEADLESS = [
   {
+    op: 'GET /knowledge-files/{key}',
+    reason:
+      "where the signed link of a document source's original points (tm 313.1 · AI-18-S2): the " +
+      'browser follows the url GET /knowledge-sources/{sourceId}/file returns (tm 313.3), so the ' +
+      'client never spells this path.',
+  },
+  {
     op: 'PATCH /ai-guardrails/platform/{ruleKey}',
     reason:
       "the lock on the platform's guardrails (tm 301.2 · AI-08 §9): it always answers 403 " +
@@ -375,27 +382,6 @@ const TRACKED = [
       "where the AI stands on a connection (tm 296.4 · AI-03 §13) — the inbox's right pane " +
       '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
       'the timeline viewer (tm 334) reads it too.',
-  },
-  {
-    op: 'POST /knowledge-sources/document',
-    owner: 'tm 313.3',
-    reason:
-      'a PDF or Word document as a knowledge source (tm 313.1 · AI-18) — the Files tab ' +
-      'upload that takes the knowledge_document grant, drawn by DOC-INGEST-WEB (tm 313.3).',
-  },
-  {
-    op: 'GET /knowledge-sources/{sourceId}/file',
-    owner: 'tm 313.3',
-    reason:
-      "the signed link to a document source's original (tm 313.1 · AI-18-S2) — the Files " +
-      'tab\'s "Orijinali indir", drawn by DOC-INGEST-WEB (tm 313.3).',
-  },
-  {
-    op: 'GET /knowledge-files/{key}',
-    owner: 'tm 313.3',
-    reason:
-      'where that signed link points (tm 313.1): the browser follows the url ' +
-      'GET /knowledge-sources/{sourceId}/file returns, so the client never spells the path.',
   },
 ];
 

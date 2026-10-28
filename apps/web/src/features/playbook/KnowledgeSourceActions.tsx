@@ -25,6 +25,7 @@ import { Modal } from '../../components/ui/index.js';
 import { ErrorNotice } from '../../components/Page.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
+import { isDocumentSource } from './KnowledgeDocumentInfo.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import { formatDate } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
@@ -116,7 +117,9 @@ export function KnowledgeSourceActions({
                 reindex.mutate();
               }}
             >
-              {t('playbook.knowledge.reindex')}
+              {isDocumentSource(source)
+                ? t('playbook.knowledge.document.reprocess')
+                : t('playbook.knowledge.reindex')}
             </button>
             <button
               type="button"

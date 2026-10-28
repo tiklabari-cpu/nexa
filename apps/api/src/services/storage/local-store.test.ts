@@ -11,13 +11,13 @@
  * `attachment.ts` renders `false` to the caller as "that is not a file this
  * workspace uploaded".
  */
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { LocalStore } from './local-store.js';
 import { StorageUnavailableError } from './storage-error.js';
-import { buildKey, buildMailKey } from './upload-url.js';
+import { buildKey, buildKnowledgeKey, buildMailKey } from './upload-url.js';
 
 const KEY = buildKey(7n, 'text/plain');
 
@@ -69,6 +69,37 @@ describe('LocalStore', () => {
     expect(await store.exists(mailKey)).toBe(false);
     expect(await store.get(mailKey)).toBeNull();
     await expect(store.delete(mailKey)).resolves.toBeUndefined();
+  });
+
+  it('lists a licence’s knowledge documents by their own keys, with their age (tm 313.3)', async () => {
+    const store = new LocalStore(dir);
+    const first = buildKnowledgeKey(7n, 'application/pdf');
+    const second = buildKnowledgeKey(7n, 'application/pdf');
+    const elsewhere = buildKnowledgeKey(8n, 'application/pdf');
+    await store.put(first, Buffer.from('%PDF-1.4'), 'application/pdf');
+    await store.put(second, Buffer.from('%PDF-1.4'), 'application/pdf');
+    await store.put(elsewhere, Buffer.from('%PDF-1.4'), 'application/pdf');
+    // An ordinary upload of the same licence is not a knowledge document, nor is a stray file.
+    await store.put(KEY, Buffer.from('hello'), 'text/plain');
+    await writeFile(join(dir, '7', 'knowledge', 'notes.txt'), 'left by a person');
+    const old = new Date('2026-01-02T03:04:05Z');
+    await utimes(join(dir, '7', 'knowledge', first), old, old);
+
+    const listed = await store.listKnowledge(7n);
+
+    expect(listed.map((object) => object.key).sort()).toEqual([first, second].sort());
+    expect(listed.find((object) => object.key === first)!.lastModified).toEqual(old);
+  });
+
+  it('lists nothing for a licence that never stored one, and throws when the directory cannot be read', async () => {
+    const store = new LocalStore(dir);
+    expect(await store.listKnowledge(9n)).toEqual([]);
+
+    // A file where the directory should be: ENOTDIR is an absence, EACCES-like faults are not
+    // reproducible portably, so the unreadable case is a path that is a file under a directory.
+    await mkdir(join(dir, '7'), { recursive: true });
+    await writeFile(join(dir, '7', 'knowledge'), 'not a directory');
+    expect(await store.listKnowledge(7n)).toEqual([]);
   });
 
   it('refuses to delete a key that is not one of ours', async () => {

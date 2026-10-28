@@ -14618,7 +14618,13 @@ export interface components {
        *     (`kb_article_id`) is the exception, for the article has already
        *     changed: its new text that could not be indexed yet leaves it
        *     `indexing` with no chunks, and this says why, until the hourly
-       *     sweep indexes it (tm 309.2).
+       *     sweep indexes it (tm 309.2). A PDF or Word document's source
+       *     (`file_mime`) says why its `document` job could not read it
+       *     (tm 313.3): one of `encrypted`, `no_text_layer`, `too_many_pages`,
+       *     `too_many_characters`, `parse_timeout`, `parse_failed`,
+       *     `unsupported_type`, `file_too_large`, or the residency sentence a
+       *     crawl refused for the same reason gets; a source that already had
+       *     chunks keeps them (`partial`).
        */
       last_refresh_error?: string | null;
       /**

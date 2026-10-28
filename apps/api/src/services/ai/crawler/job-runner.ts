@@ -39,7 +39,10 @@
  *   6. **The end.** The source is `ready` (every page it keeps answers),
  *      `partial` (some failed) or `failed` (none answers), with its
  *      `page_count`, `last_crawled_at` and next refresh.
- *   7. **Shutdown.** {@link KnowledgeJobWorker.stop}: no new claims; the jobs
+ *   7. **A document** (`document` jobs, tm 313.3 · AI-18) is not crawled: the
+ *      claim goes to `document-ingest.ts`, which reads the source's PDF or
+ *      Word original in an isolated worker and writes its chunks.
+ *   8. **Shutdown.** {@link KnowledgeJobWorker.stop}: no new claims; the jobs
  *      in flight stop after their page within {@link KNOWLEDGE_JOB_DRAIN_MS}
  *      and are handed back `queued` with their frontier.
  */
@@ -53,6 +56,8 @@ import {
 import { type TenantClient, type TenantContext, withTenant } from '../../../lib/tenant.js';
 import { AiDailyCapError, nextUtcMidnight } from '../ai-daily-budget.js';
 import { inferenceAllowed, readInferenceResidency, type InferenceProvider } from '../inference.js';
+import { DocumentIngest, settleFailedDocument } from '../document-ingest.js';
+import type { DocumentIngestOptions } from '../document-ingest.js';
 import { computeNextRefreshAt } from '../knowledge-refresh.js';
 import type { KnowledgeService, PreparedChunks } from '../knowledge-service.js';
 import { EmbeddingProviderError } from '../provider/embedding-error.js';
@@ -113,6 +118,11 @@ export interface KnowledgeJobWorkerOptions {
   knowledge: Pick<KnowledgeService, 'prepare'>;
   /** Where the embedding provider runs, as the NFR-C4 gate reads it. */
   embeddingInference: () => InferenceProvider;
+  /**
+   * Where PDF and Word originals are and how they are read (tm 313.3). Left
+   * out, a `document` job ends `unsupported_kind` — a server without a store.
+   */
+  documents?: Pick<DocumentIngestOptions, 'store' | 'knowledge' | 'parse'>;
   /** How often to look unasked; null — only when woken (a test server's). */
   pollMs?: number | null;
   leaseMs?: number;
@@ -171,6 +181,7 @@ export class KnowledgeJobWorker {
       fetcher: options.fetcher,
       knowledge: options.knowledge,
       embeddingInference: options.embeddingInference,
+      documents: options.documents,
       robots: options.robots ?? new RobotsCache(options.fetcher),
       leaseMs: this.#leaseMs,
       now: options.now ?? (() => new Date()),
@@ -336,7 +347,12 @@ async function endWith(db: PrismaClient, claim: KnowledgeJobClaim, end: JobEnd):
   await withTenant(db, claim.context, async (tx) => {
     const ended = await endJobClaim(tx, claim, end);
     if (ended && (end.status === 'done' || end.status === 'failed')) {
-      await settleCrawledSource(tx, claim.sourceId, new Date());
+      // A document's source is not a website's: no pages, no crawl dates.
+      if (claim.kind === 'document') {
+        await settleFailedDocument(tx, claim.sourceId, 'parse_failed', new Date());
+      } else {
+        await settleCrawledSource(tx, claim.sourceId, new Date());
+      }
     }
   });
 }
@@ -345,6 +361,7 @@ interface CrawlerOptions {
   db: PrismaClient;
   fetcher: CrawlFetcher;
   knowledge: Pick<KnowledgeService, 'prepare'>;
+  documents: KnowledgeJobWorkerOptions['documents'];
   embeddingInference: () => InferenceProvider;
   robots: RobotsCache;
   leaseMs: number;
@@ -423,6 +440,7 @@ export class KnowledgeCrawler {
   readonly #db: PrismaClient;
   readonly #fetcher: CrawlFetcher;
   readonly #knowledge: Pick<KnowledgeService, 'prepare'>;
+  readonly #documents: DocumentIngest | null;
   readonly #embeddingInference: () => InferenceProvider;
   readonly #robots: RobotsCache;
   readonly #leaseMs: number;
@@ -432,6 +450,14 @@ export class KnowledgeCrawler {
     this.#db = options.db;
     this.#fetcher = options.fetcher;
     this.#knowledge = options.knowledge;
+    this.#documents = options.documents
+      ? new DocumentIngest({
+          db: options.db,
+          ...options.documents,
+          embeddingInference: options.embeddingInference,
+          now: options.now,
+        })
+      : null;
     this.#embeddingInference = options.embeddingInference;
     this.#robots = options.robots;
     this.#leaseMs = options.leaseMs;
@@ -443,6 +469,21 @@ export class KnowledgeCrawler {
     run: { stopping: { value: boolean }; signal: AbortSignal; log: KnowledgeJobLogger },
   ): Promise<void> {
     const context = claim.context;
+    if (claim.kind === 'document') {
+      // A PDF or Word document (tm 313 · AI-18): read by the document worker
+      // and written as page-numbered chunks, never through the website
+      // crawl's pages, counters and dates (`document-ingest.ts`).
+      if (this.#documents) {
+        await this.#documents.run(claim, run);
+      } else {
+        await withTenant(this.#db, context, async (tx) => {
+          if (await endJobClaim(tx, claim, { status: 'failed', error: 'unsupported_kind' })) {
+            await settleFailedDocument(tx, claim.sourceId, 'parse_failed', this.#now());
+          }
+        });
+      }
+      return;
+    }
     const read = await withTenant(
       this.#db,
       context,
@@ -511,22 +552,6 @@ export class KnowledgeCrawler {
       },
     };
 
-    if (claim.kind === 'document') {
-      // A PDF or Word document (tm 313 · AI-18) is read by the document
-      // worker, which arrives with its job branch (tm 313.2–313.3). Until
-      // then the job ends `unsupported_kind` and its source `failed` — not
-      // through `settleCrawledSource`, whose page counts and crawl dates are
-      // a website's.
-      await withTenant(this.#db, claim.context, async (tx) => {
-        if (await endJobClaim(tx, claim, { status: 'failed', error: 'unsupported_kind' })) {
-          await tx.knowledgeSource.updateMany({
-            where: { id: claim.sourceId, status: 'processing' },
-            data: { status: 'failed' },
-          });
-        }
-      });
-      return;
-    }
     const source = read.source;
     if (!source || source.type !== 'website' || !source.sourceUrl) {
       await endWith(this.#db, claim, { status: 'failed', error: 'not_website' });

@@ -12,7 +12,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState, type ChangeEvent, type ReactElement } from 'react';
 import { useInRouterContext, useSearchParams } from 'react-router-dom';
-import { KNOWLEDGE_FILE_MAX_BYTES } from '@siyahtus/types';
+import { KNOWLEDGE_DOCUMENT_LIMITS, KNOWLEDGE_FILE_MAX_BYTES } from '@siyahtus/types';
 import { Card, ErrorNotice, Page, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { LoadError } from '../../components/LoadError.js';
@@ -73,6 +73,14 @@ import {
   type KnowledgeFileAccepted,
   type KnowledgeFileRejectionReason,
 } from './knowledge-file-upload.js';
+import {
+  documentRequestErrorKey,
+  isKnowledgeDocument,
+  precheckKnowledgeDocument,
+  uploadKnowledgeDocument,
+  withDocumentAccept,
+} from './knowledge-document-upload.js';
+import { KnowledgeDocumentInfo, isDocumentSource } from './KnowledgeDocumentInfo.js';
 import { RecommendedSkills } from './RecommendedSkills.js';
 import { KbArticleList } from './KbArticleList.js';
 import { TablesPanel } from './tables/TablesPanel.js';
@@ -161,6 +169,8 @@ function knowledgeStatusDot(
 ): { tone: 'success' | 'warning' | 'info'; label: string } {
   if (source.status === 'crawling')
     return { tone: 'info', label: t('playbook.knowledge.statusCrawling') };
+  if (source.status === 'processing')
+    return { tone: 'info', label: t('playbook.knowledge.statusProcessing') };
   if (source.status === 'partial') {
     return { tone: 'warning', label: t('playbook.knowledge.statusPartial') };
   }
@@ -1076,6 +1086,11 @@ function KnowledgePanel({
   const [subtab, setSubtab] = useState<KnowledgeTab>('all');
   const [upload, setUpload] = useState<KnowledgeFileAccepted | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  // A PDF or Word document (tm 313.3 · AI-18) is not read here: the file is kept
+  // as it is, sent in two stages, and read by a job afterwards.
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [documentStage, setDocumentStage] = useState<'uploading' | 'reading' | null>(null);
+  const [dragging, setDragging] = useState(false);
   // Who the next source is for and who keeps it (tm 309.3 · AI-14). Defaults to
   // what the server picks anyway, so a form left alone sends the body it always sent.
   const [scope, setScope] = useState(() => scopeValueOf());
@@ -1094,10 +1109,13 @@ function KnowledgePanel({
   const sources = useQuery({
     queryKey: ['playbook', 'knowledge-store'],
     queryFn: () => api.get<{ items: KnowledgeSource[] }>('/knowledge-sources?audience=all'),
-    // A website is crawled after it is added (tm 312.3 · AI-17): the list
-    // looks again every few seconds while a crawl is under way.
+    // A website is crawled after it is added (tm 312.3 · AI-17), a document
+    // is read (tm 313.3 · AI-18): the list looks again every few seconds
+    // while either is under way.
     refetchInterval: (query) =>
-      query.state.data?.items.some((source) => source.status === 'crawling')
+      query.state.data?.items.some(
+        (source) => source.status === 'crawling' || source.status === 'processing',
+      )
         ? CRAWL_POLL_MS
         : false,
   });
@@ -1139,6 +1157,24 @@ function KnowledgePanel({
     onSuccess: invalidate,
   });
 
+  // Stage one (the signed PUT) then stage two (the source, `processing`); the
+  // job that reads it runs after the second answers.
+  const uploadDocument = useMutation({
+    mutationFn: async (body: { name: string; file: File }) => {
+      setDocumentStage('uploading');
+      const uploadId = await uploadKnowledgeDocument(api, body.file);
+      return api.post<KnowledgeSource>('/knowledge-sources/document', {
+        ai_agent_id: aiAgentId,
+        upload_id: uploadId,
+        filename: body.file.name,
+        ...(body.name === '' ? {} : { name: body.name }),
+        ...scopeCreateBody(scope),
+      });
+    },
+    onSuccess: invalidate,
+    onSettled: () => setDocumentStage(null),
+  });
+
   const form = useForm({
     initial: { name: '', sourceUrl: '', content: '' },
     validators: {
@@ -1155,7 +1191,12 @@ function KnowledgePanel({
     onSubmit: async (values, { setSubmitError, reset }) => {
       setNotice(null);
       try {
-        if (isFile) {
+        if (isFile && documentFile) {
+          const uploaded = documentFile;
+          await uploadDocument.mutateAsync({ name: values.name.trim(), file: uploaded });
+          clearUpload();
+          setNotice(t('playbook.knowledge.document.reading', { name: uploaded.name }));
+        } else if (isFile) {
           // Unreachable from the UI (Add source stays disabled until a file is
           // read), but the mutation must not be callable without one.
           if (!upload) return;
@@ -1188,7 +1229,8 @@ function KnowledgePanel({
         setScope(scopeValueOf());
         setCrawl(defaultCrawlValue());
       } catch (error) {
-        setSubmitError(t(errorMessageKey(error)));
+        const documentKey = documentFile ? documentRequestErrorKey(error) : null;
+        setSubmitError(t(documentKey ?? errorMessageKey(error)));
       }
     },
   });
@@ -1196,14 +1238,36 @@ function KnowledgePanel({
   function clearUpload(): void {
     setUpload(null);
     setUploadError(null);
+    setDocumentFile(null);
   }
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>): Promise<void> {
     const file = event.target.files?.[0];
     // Reset so picking the same file again still fires onChange.
     event.target.value = '';
+    if (file) await chooseFile(file);
+    else clearUpload();
+  }
+
+  /** A file chosen or dropped: a document is kept for the two-stage upload, a text file is read here. */
+  async function chooseFile(file: File): Promise<void> {
     clearUpload();
-    if (!file) return;
+    setNotice(null);
+    if (isKnowledgeDocument(file)) {
+      const rejection = precheckKnowledgeDocument(file);
+      if (rejection) {
+        setUploadError(
+          t(
+            rejection === 'empty_file'
+              ? 'playbook.knowledge.rejectEmptyFile'
+              : 'playbook.knowledge.document.error.file_too_large',
+          ),
+        );
+        return;
+      }
+      setDocumentFile(file);
+      return;
+    }
 
     const result = await readKnowledgeFile(file);
     if (!result.ok) {
@@ -1317,7 +1381,22 @@ function KnowledgePanel({
                  above uses one: the help text and the "ready to upload" line
                  would otherwise fold into the input's accessible name, and the
                  control would stop being findable by the word "File" alone. */
-              <div className="flex flex-col gap-1">
+              <div
+                className={`flex flex-col gap-1 rounded-md border border-dashed p-2 ${
+                  dragging ? 'border-brand-500 bg-subtle' : 'border-border'
+                }`}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setDragging(false);
+                  const dropped = event.dataTransfer.files[0];
+                  if (dropped) void chooseFile(dropped);
+                }}
+              >
                 <label
                   htmlFor="source-file"
                   className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
@@ -1327,7 +1406,7 @@ function KnowledgePanel({
                 <input
                   id="source-file"
                   type="file"
-                  accept={KNOWLEDGE_FILE_ACCEPT}
+                  accept={withDocumentAccept(KNOWLEDGE_FILE_ACCEPT)}
                   onChange={(event) => void handleFileChange(event)}
                   aria-invalid={uploadError ? true : undefined}
                   aria-describedby={uploadError ? 'source-file-error' : 'source-file-help'}
@@ -1336,11 +1415,22 @@ function KnowledgePanel({
                 <span id="source-file-help" className="text-2xs text-content-tertiary">
                   {t('playbook.knowledge.formFileHelp', {
                     size: Math.round(KNOWLEDGE_FILE_MAX_BYTES / (1024 * 1024)),
+                    docSize: Math.round(KNOWLEDGE_DOCUMENT_LIMITS.maxBytes / (1024 * 1024)),
                   })}
                 </span>
-                {upload && (
+                <span className="text-2xs text-content-tertiary">
+                  {t('playbook.knowledge.document.dropHint')}
+                </span>
+                {(upload || documentFile) && (
                   <span role="status" className="text-2xs text-content-secondary">
-                    {t('playbook.knowledge.formFileChosen', { name: upload.filename })}
+                    {t('playbook.knowledge.formFileChosen', {
+                      name: upload?.filename ?? documentFile?.name ?? '',
+                    })}
+                  </span>
+                )}
+                {documentStage === 'uploading' && documentFile && (
+                  <span role="status" className="text-2xs text-content-secondary">
+                    {t('playbook.knowledge.document.uploading', { name: documentFile.name })}
                   </span>
                 )}
                 <FieldError id="source-file-error" message={uploadError} />
@@ -1393,7 +1483,7 @@ function KnowledgePanel({
                 type="submit"
                 disabled={
                   !form.canSubmit ||
-                  (isFile && !upload) ||
+                  (isFile && !upload && !documentFile) ||
                   (isWebsite && !crawlIsValid(crawl)) ||
                   !scopeIsValid(scope, true)
                 }
@@ -1402,7 +1492,9 @@ function KnowledgePanel({
                 {form.isSubmitting
                   ? isWebsite
                     ? t('playbook.knowledge.crawling')
-                    : t('playbook.knowledge.indexing')
+                    : documentFile
+                      ? t('playbook.knowledge.document.uploadingShort')
+                      : t('playbook.knowledge.indexing')
                   : t('playbook.knowledge.addSource')}
               </button>
               {form.submitError && (
@@ -1499,10 +1591,14 @@ function KnowledgePanel({
                     {source.source_url ? ` · ${source.source_url}` : ''}
                   </p>
                   <KnowledgeRowMeta source={source} brandNames={brandNames} now={now} />
-                  {source.last_refresh_error && (
-                    <p className="truncate text-2xs text-danger">
-                      {t('playbook.knowledge.refreshFailedRow')}
-                    </p>
+                  {isDocumentSource(source) ? (
+                    <KnowledgeDocumentInfo source={source} />
+                  ) : (
+                    source.last_refresh_error && (
+                      <p className="truncate text-2xs text-danger">
+                        {t('playbook.knowledge.refreshFailedRow')}
+                      </p>
+                    )
                   )}
                 </div>
                 <StatusDot {...knowledgeStatusDot(source, t)} />

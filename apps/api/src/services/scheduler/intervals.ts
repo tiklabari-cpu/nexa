@@ -30,7 +30,9 @@ import type { Env } from '../../config/env.js';
  * the fourteenth passes on a connection its agent left unanswered and marks a
  * quiet one inactive (tm 340.2); the fifteenth publishes the AI configuration
  * versions approved for a time that has come, and the sixteenth deletes the
- * knowledge chunks no version answers from any more (tm 316.6).
+ * knowledge chunks no version answers from any more (tm 316.6); the
+ * seventeenth drafts the suggestions agents made to the AI (tm 318.1), and the
+ * eighteenth puts the previous day's AI connections in the QA queue (tm 319.1).
  */
 export const SCHEDULER_JOB_NAMES = [
   'chat_timeout',
@@ -50,6 +52,7 @@ export const SCHEDULER_JOB_NAMES = [
   'ai_scheduled_publish',
   'knowledge_chunk_gc',
   'ai_suggestion_drafts',
+  'qa_sampling',
 ] as const;
 
 export type SchedulerJobName = (typeof SCHEDULER_JOB_NAMES)[number];
@@ -79,6 +82,7 @@ export type SchedulerIntervalEnv = Pick<
   | 'SCHEDULE_AI_SCHEDULED_PUBLISH_MS'
   | 'SCHEDULE_KNOWLEDGE_CHUNK_GC_MS'
   | 'SCHEDULE_AI_SUGGESTION_DRAFTS_MS'
+  | 'SCHEDULE_QA_SAMPLING_MS'
 >;
 
 /**
@@ -107,6 +111,7 @@ export function jobIntervals(env: SchedulerIntervalEnv): Record<SchedulerJobName
     ai_scheduled_publish: env.SCHEDULE_AI_SCHEDULED_PUBLISH_MS,
     knowledge_chunk_gc: env.SCHEDULE_KNOWLEDGE_CHUNK_GC_MS,
     ai_suggestion_drafts: env.SCHEDULE_AI_SUGGESTION_DRAFTS_MS,
+    qa_sampling: env.SCHEDULE_QA_SAMPLING_MS,
   };
 }
 

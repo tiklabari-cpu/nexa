@@ -1267,6 +1267,14 @@ export const envSchema = z.object({
    */
   SCHEDULE_AI_SUGGESTION_DRAFTS_MS: z.coerce.number().int().positive().default(60_000),
   /**
+   * The QA sampler (tm 319.1 · AI-24 §2): each workspace's previous
+   * conversation day put in the QA queue at 02:00 on its own clock — the
+   * deterministic random share and every mandatory category. Every 15 minutes:
+   * the pass is what notices a workspace's 02:00 has come, and a day already
+   * sampled is one indexed read.
+   */
+  SCHEDULE_QA_SAMPLING_MS: z.coerce.number().int().positive().default(900_000),
+  /**
    * Lets the retention job actually run its scheduled pass (M-SCHED-b ·
    * `services/scheduler/types.ts`'s `JobDefinition.enabled`). Off by default:
    * this is the one sweep that hard-deletes data, and there is no operator

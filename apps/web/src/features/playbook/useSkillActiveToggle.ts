@@ -14,6 +14,11 @@
  * request leaves untouched — so a rejected toggle falls back to the old state
  * on its own, with the error shown next to it. Making the editor's copy
  * optimistic would be exactly the divergence this file exists to prevent.
+ *
+ * Since the AI configuration is versioned (tm 316 · ADR-14b §2.1) the switch
+ * means "on in this version": it writes the draft like every other edit, and the
+ * live AI follows it once a version holding it is approved. Both places say so
+ * (`playbook.skills.switchHint`, and the Skills tab's one-time note).
  */
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import { useApiClient } from '../../lib/auth-store.js';

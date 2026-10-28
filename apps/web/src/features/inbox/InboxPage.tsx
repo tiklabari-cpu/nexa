@@ -32,6 +32,7 @@ import type { TranscriptFocus } from './dayConnections.js';
 import { TypingIndicator } from './TypingIndicator.js';
 import { ConflictBanner } from './ConflictBanner.js';
 import { TakeTourBanner } from './TakeTourBanner.js';
+import { AiConfigPublishedBand } from './AiConfigPublishedBand.js';
 import {
   useChat,
   useChatList,
@@ -519,6 +520,7 @@ export function InboxPage(): ReactElement {
       {/* Take tour (FR-MOD-01.4, 02.2.3): above both the ticket grid and the
           chat panes, since it is a whole-module offer, not a chat-view one. */}
       <TakeTourBanner />
+      <AiConfigPublishedBand />
       <div className="flex min-h-0 min-w-0 flex-1">
         {/* Views */}
         <nav

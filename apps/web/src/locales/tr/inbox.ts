@@ -734,4 +734,11 @@ export const inbox: Messages = {
     'Sorumlu Oyun ekibi ve yöneticiler için bayrakla birlikte saklanır; SiyahTuş dışına gönderilmez.',
   'inbox.risk.clear.confirm': 'Bayrağı kaldır',
   'inbox.risk.clear.pending': 'Kaldırılıyor…',
+  // AI configuration versions (tm 316.4 · AI-20).
+  'inbox.aiConfig.published': 'AI yapılandırması {label} yayında',
+  'inbox.aiConfig.rolledBack': 'AI yapılandırması geri alındı: {label} yayında',
+  'inbox.aiConfig.text':
+    'Bundan sonra açılan konuşmalar bu sürümle cevaplanır; açık olanlar başladıkları sürümde kalır.',
+  'inbox.aiConfig.open': 'Sürümleri gör',
+  'inbox.aiConfig.dismiss': 'Kapat',
 };

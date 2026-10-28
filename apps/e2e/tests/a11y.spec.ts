@@ -1045,6 +1045,30 @@ test.describe('WCAG 2.1 AA (axe)', () => {
       });
 
       /**
+       * The AI configuration's versions (tm 316.4 · AI-20): the version bar
+       * with its difference open — the change kinds are coloured text, and a
+       * closed "Send for review" explains itself in small print — and the
+       * Versions tab's list. The seeded agent was never published, so its
+       * draft always holds changes to open.
+       */
+      test('the AI configuration versions have no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/playbook?view=skills');
+        await scanPanel(agentPage, 'AI configuration versions', theme, testInfo, async () => {
+          await agentPage
+            .getByRole('tablist', { name: 'AI Agent' })
+            .getByRole('tab', { name: 'Versions' })
+            .click();
+          await expect(agentPage.getByTestId('ai-versions')).toBeVisible();
+          const bar = agentPage.getByTestId('ai-version-bar');
+          await bar.getByRole('button', { name: 'See changes' }).click();
+          await expect(bar.getByTestId('ai-config-diff')).toBeVisible();
+        });
+      });
+
+      /**
        * The knowledge source row's `…` menu and its edit dialog
        * (FR-MOD-06.3.3).
        *

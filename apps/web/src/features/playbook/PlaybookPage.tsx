@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState, type ChangeEvent, type ReactElement } fro
 import { useInRouterContext, useSearchParams } from 'react-router-dom';
 import { KNOWLEDGE_DOCUMENT_LIMITS, KNOWLEDGE_FILE_MAX_BYTES } from '@siyahtus/types';
 import { Card, ErrorNotice, Page, Section } from '../../components/Page.js';
+import { Banner } from '../../components/ui/index.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { LoadError } from '../../components/LoadError.js';
 import { VirtualList } from '../../components/VirtualList.js';
@@ -35,6 +36,8 @@ import { CreateAiAgentCard } from './CreateAiAgentCard.js';
 import { SetupSteps } from './SetupSteps.js';
 import { WelcomeMessageCard } from './WelcomeMessageCard.js';
 import { History } from './History.js';
+import { Versions } from './Versions.js';
+import { DraftStrip, VersionBar } from './VersionBar.js';
 import { PLAYBOOK_TABS, resolveView, type PlaybookView } from './playbook-tabs.js';
 import { GuardrailsPage } from './GuardrailsPage.js';
 import { HandoffSettings } from './HandoffSettings.js';
@@ -157,6 +160,19 @@ const OWNER_LABEL_KEYS: Record<string, string> = {
  * tab writes it back); rendered bare, as most tests do, it reads the address once.
  */
 /** How often the knowledge list looks again while a website is being crawled. */
+/**
+ * The tabs that edit the draft (tm 316.4 · AI-20): each says so on its "Taslak"
+ * strip — what is saved there reaches the live AI only with an approved version.
+ */
+const DRAFT_VIEWS: ReadonlySet<PlaybookView> = new Set<PlaybookView>([
+  'general',
+  'behaviour',
+  'guardrails',
+  'skills',
+  'knowledge',
+  'tables',
+]);
+
 const CRAWL_POLL_MS = 3_000;
 
 /**
@@ -293,8 +309,12 @@ function PlaybookPageBody({
   const toggleSkill = useSkillActiveToggle();
 
   const toggleAgent = useMutation({
+    // Pausing is never versioned and waits for no review (ADR-14b §2.10 (6)):
+    // the review line's own switch, read on the next turn.
     mutationFn: ({ id, active }: { id: string; active: boolean }) =>
-      api.patch<AiAgent>(`/ai-agents/${id}`, { active }),
+      api.post<{ ai_agent_id: string; active: boolean }>(active ? '/ai/resume' : '/ai/pause', {
+        ai_agent_id: id,
+      }),
     onSuccess: invalidate,
   });
 
@@ -413,6 +433,13 @@ function PlaybookPageBody({
     queryKey: ['playbook', 'knowledge'],
     queryFn: () => api.get<{ items: KnowledgeSource[] }>('/knowledge-sources'),
   });
+  // The version difference names items by id; the page already knows most names.
+  const configNames = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const skill of items) map.set(skill.id, skill.name);
+    for (const source of knowledge.data?.items ?? []) map.set(source.id, source.name);
+    return map;
+  }, [items, knowledge.data]);
   const readiness = evaluateReadiness(knowledge.data?.items ?? [], items);
   const blockActivation = aiAgent !== null && !aiAgent.active && !readiness.ready;
 
@@ -504,6 +531,17 @@ function PlaybookPageBody({
             </Card>
           )}
 
+          {aiAgent && canSeeTests && (
+            <VersionBar
+              key={`version-bar-${aiAgent.id}`}
+              agentId={aiAgent.id}
+              canSubmit={canEdit}
+              names={configNames}
+              onOpenTests={() => setView('test')}
+              onOpenVersions={() => setView('versions')}
+            />
+          )}
+
           <div
             role="tablist"
             aria-label={t('playbook.page.tabsLabel')}
@@ -533,6 +571,8 @@ function PlaybookPageBody({
           </div>
 
           <div role="tabpanel" id="ai-tabpanel" aria-labelledby={`ai-tab-${view}`}>
+            {aiAgent && canSeeTests && DRAFT_VIEWS.has(view) && <DraftStrip agentId={aiAgent.id} />}
+
             {view === 'performance' && (
               <AiPerformance agentActive={aiAgent?.active ?? false} canRead={canViewReports} />
             )}
@@ -632,6 +672,16 @@ function PlaybookPageBody({
                         : null
                     }
                   />
+                )}
+
+                {canEdit && (
+                  <Banner
+                    id="playbook-skill-switch-versioned"
+                    dismissible
+                    title={t('playbook.skills.versionedSwitch.title')}
+                  >
+                    {t('playbook.skills.versionedSwitch.text')}
+                  </Banner>
                 )}
 
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,360px)_1fr]">
@@ -893,6 +943,7 @@ function PlaybookPageBody({
                                     <button
                                       type="button"
                                       disabled={toggleSkill.isPending}
+                                      title={t('playbook.skills.switchHint')}
                                       onClick={() =>
                                         toggleSkill.mutate({ id: skill.id, active: !skill.active })
                                       }
@@ -985,6 +1036,24 @@ function PlaybookPageBody({
                 <KbArticleList canEdit={canEdit} />
               </div>
             )}
+
+            {view === 'versions' &&
+              canSeeTests &&
+              (aiAgent ? (
+                <Versions
+                  key={`versions-${aiAgent.id}`}
+                  agentId={aiAgent.id}
+                  canReview={canEdit}
+                  names={configNames}
+                />
+              ) : (
+                <Card>
+                  <EmptyState
+                    title={t('playbook.profile.noAgentTitle')}
+                    description={t('playbook.profile.noAgentDescription')}
+                  />
+                </Card>
+              ))}
 
             {view === 'history' && canSeeTests && <History />}
 

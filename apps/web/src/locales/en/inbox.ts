@@ -756,4 +756,11 @@ export const inbox: Messages = {
     'Kept with the flag for the Responsible Gaming team and managers; never sent outside SiyahTuş.',
   'inbox.risk.clear.confirm': 'Clear flag',
   'inbox.risk.clear.pending': 'Clearing…',
+  // AI configuration versions (tm 316.4 · AI-20).
+  'inbox.aiConfig.published': 'AI configuration {label} is live',
+  'inbox.aiConfig.rolledBack': 'AI configuration rolled back: {label} is live',
+  'inbox.aiConfig.text':
+    'Conversations opened from now on are answered by this version; an open one keeps the version it started with.',
+  'inbox.aiConfig.open': 'See versions',
+  'inbox.aiConfig.dismiss': 'Dismiss',
 };

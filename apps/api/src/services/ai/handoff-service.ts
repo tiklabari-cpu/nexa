@@ -50,6 +50,7 @@ import type { BotPrincipal } from '../auth/principal.js';
 import { aiMayAnswer, readAiMode } from '../chat/ai-mode.js';
 import type { ChatService, SerialisedEvent } from '../chat/chat-service.js';
 import type { VisitorTurn } from '../chat/visitor-turn.js';
+import { outcomeMemberKey, recordOutcomeHandoff } from '../reports/ai-outcomes.js';
 import { resolveQueue } from '../routing/queues.js';
 import { TicketService } from '../tickets/ticket-service.js';
 import {
@@ -399,6 +400,18 @@ export class HandoffService {
           context: input.card ?? { result: null, trust: null, turnText: null },
         });
       }
+      // The connection's AI outcome (tm 320.1 · AI-25): handed over, why, and
+      // whether a compliance rule forced it — with the hand-over or not at all.
+      await recordOutcomeHandoff(
+        tx,
+        { licenseId: turn.tenant.licenseId, chatId: ref.chatId, threadId: ref.threadId },
+        {
+          at: new Date(),
+          reasons: plan.reasonCodes,
+          primaryReason: plan.primaryReason,
+          memberKey: outcomeMemberKey(turn.customerId, turn.identityTrust),
+        },
+      );
       if (input.afterHours) {
         const summary = (written as WrittenHandoffCard | null)?.summary ?? null;
         await this.#afterHoursTicket(tx, turn.tenant, ref.chatId, summary ?? plan.primaryReason);

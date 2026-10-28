@@ -12,10 +12,11 @@
  */
 import { isMailLocale } from '../services/mail/templates/layout.js';
 import { visitorMessageMail } from '../services/mail/templates/messages.js';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import {
+  AI_OUTCOME_CONFIRMATIONS,
   isIdentityTrust,
   readHumanButtonLabel,
   humanButtonText,
@@ -49,6 +50,7 @@ import { fireCampaignsAtVisitor } from '../services/campaigns/campaign-trigger.j
 import { createGoalConversionRecorder } from '../services/goals/goal-triggers.js';
 import { AiResponder } from '../services/ai/ai-responder.js';
 import { HumanRequestService } from '../services/ai/human-request.js';
+import { ratingSubjectOf, recordOutcomeRating } from '../services/reports/ai-outcomes.js';
 import type { AiJobRun } from '../services/ai/ai-job-worker.js';
 import {
   AI_JOB_MAX_UNFINISHED_PER_CHAT,
@@ -182,6 +184,8 @@ const leaveTicketSchema = z
   .strict();
 
 const requestHumanSchema = z.object({ reason: z.literal('button').optional() }).strict();
+/** "Is it solved?" answered with the widget's buttons (tm 320.1 · AI-25-S2). */
+const resolutionAnswerSchema = z.object({ answer: z.enum(AI_OUTCOME_CONFIRMATIONS) }).strict();
 
 /** Presses of "Talk to an agent" one visitor may make in an hour (GV-01). */
 const HUMAN_REQUESTS_PER_HOUR = 10;
@@ -392,6 +396,55 @@ export default async function customerRoutes(
   );
   const ruleBots = new RuleBotResponder(chats);
   const humanRequests = new HumanRequestService(app.db, app.redis, chats, publisher);
+
+  /**
+   * A press of the widget's buttons (GV-01): "Talk to an agent" and the
+   * "is it solved?" answer share one per-visitor budget — each one that lands
+   * may move a conversation. A budget that cannot be read lets the press through.
+   */
+  async function consumePressBudget(
+    request: FastifyRequest,
+    principal: { organizationId: string; customerId: string },
+  ): Promise<void> {
+    let allowed = true;
+    try {
+      const decision = await app.rateLimiter.consume(
+        `rl:human-request:${principal.organizationId}:${principal.customerId}`,
+        HUMAN_REQUESTS_PER_HOUR,
+        3_600_000,
+      );
+      allowed = decision.allowed;
+      if (!allowed) {
+        throw ApiError.tooManyRequests(
+          Math.max(1, Math.ceil(decision.resetMs / 1000)),
+          'Too many requests for an agent — try again later.',
+        );
+      }
+    } catch (error) {
+      if (!allowed) throw error;
+      request.log.error({ err: error }, 'human request budget unavailable — allowing the press');
+    }
+  }
+
+  /** The visitor's open connection, or 409 `chat_inactive`. */
+  async function openConnection(
+    request: FastifyRequest,
+    customerId: string,
+    verb: string,
+  ): Promise<{ id: string; chatId: string }> {
+    const thread = await request.withTenant((tx) =>
+      tx.thread.findFirst({
+        where: { active: true, chat: { customerId, active: true } },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, chatId: true },
+      }),
+    );
+    if (!thread) {
+      throw new ApiError('chat_inactive', `There is no open conversation to ${verb}.`);
+    }
+    bindChatLogContext(request, { chatId: thread.chatId, threadId: thread.id });
+    return thread;
+  }
   const store = createObjectStore(env.STORAGE_PROVIDER, env.storage);
 
   /**
@@ -810,37 +863,8 @@ export default async function customerRoutes(
       const principal = request.requirePrincipal();
       if (principal.kind !== 'customer') throw ApiError.notFound('Resource not found.');
       parse(requestHumanSchema, request.body ?? {});
-
-      let allowed = true;
-      try {
-        const decision = await app.rateLimiter.consume(
-          `rl:human-request:${principal.organizationId}:${principal.customerId}`,
-          HUMAN_REQUESTS_PER_HOUR,
-          3_600_000,
-        );
-        allowed = decision.allowed;
-        if (!allowed) {
-          throw ApiError.tooManyRequests(
-            Math.max(1, Math.ceil(decision.resetMs / 1000)),
-            'Too many requests for an agent — try again later.',
-          );
-        }
-      } catch (error) {
-        if (!allowed) throw error;
-        request.log.error({ err: error }, 'human request budget unavailable — allowing the press');
-      }
-
-      const thread = await request.withTenant((tx) =>
-        tx.thread.findFirst({
-          where: { active: true, chat: { customerId: principal.customerId, active: true } },
-          orderBy: { createdAt: 'desc' },
-          select: { id: true, chatId: true },
-        }),
-      );
-      if (!thread) {
-        throw new ApiError('chat_inactive', 'There is no open conversation to hand over.');
-      }
-      bindChatLogContext(request, { chatId: thread.chatId, threadId: thread.id });
+      await consumePressBudget(request, principal);
+      const thread = await openConnection(request, principal.customerId, 'hand over');
 
       const outcome = await humanRequests.request({
         tenant: request.tenant(),
@@ -852,6 +876,39 @@ export default async function customerRoutes(
         owner: outcome.owner,
         human_available: outcome.humanAvailable,
         requested: outcome.requested,
+      });
+    },
+  );
+
+  /**
+   * "Is it solved?" answered with the widget's Yes / No buttons (tm 320.1 ·
+   * AI-25-S2, K9) — see `HumanRequestService.answerResolution`: the answer
+   * goes on the connection's AI outcome; yes is thanked, no hands over with
+   * `player_said_unresolved`. The same per-visitor budget as "Talk to an
+   * agent": a "No" moves a conversation the same way.
+   */
+  app.post(
+    '/customer/chat/resolution',
+    { config: { principals: ['customer'] } },
+    async (request, reply) => {
+      const principal = request.requirePrincipal();
+      if (principal.kind !== 'customer') throw ApiError.notFound('Resource not found.');
+      const body = parse(resolutionAnswerSchema, request.body ?? {});
+      await consumePressBudget(request, principal);
+      const thread = await openConnection(request, principal.customerId, 'answer on');
+
+      const outcome = await humanRequests.answerResolution({
+        tenant: request.tenant(),
+        customerId: principal.customerId,
+        ref: { chatId: thread.chatId, threadId: thread.id },
+        log: request.log,
+        answer: body.answer,
+      });
+      return reply.send({
+        answer: outcome.answer,
+        recorded: outcome.recorded,
+        owner: outcome.owner,
+        human_available: outcome.humanAvailable,
       });
     },
   );
@@ -1480,18 +1537,25 @@ export default async function customerRoutes(
         });
         if (!chat) throw ApiError.notFound('No conversation to rate.');
 
-        return tx.rating.create({
+        const threadId = chat.threads[0]?.id ?? null;
+        // Whom it judges (tm 320.1 · AI-25-S2): the AI until a person wrote
+        // to the player on the connection — BSAT and CSAT apart.
+        const subject = threadId ? await ratingSubjectOf(tx, threadId) : null;
+        const created = await tx.rating.create({
           data: {
             chatId: chat.id,
             licenseId: tenant.licenseId,
-            threadId: chat.threads[0]?.id ?? null,
+            threadId,
             value: body.value,
+            subject,
             // A rating comment is visitor free text written to the database —
             // masked at the source like every other write path (FR-MOD-08.9.5 · AI-26).
             ...(body.comment ? { comment: maskForWrite(body.comment, 'customer').text } : {}),
           },
           select: { id: true, value: true, chatId: true },
         });
+        if (threadId && subject) await recordOutcomeRating(tx, threadId, subject, body.value);
+        return created;
       });
 
       return reply.status(201).send({

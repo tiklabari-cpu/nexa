@@ -52,6 +52,7 @@ import {
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
+import { recordOutcomeFlag } from '../reports/ai-outcomes.js';
 import { suppressSendsForRaisedFlag } from './promo-suppression.js';
 
 /** One flag to raise on a conversation. */
@@ -133,6 +134,9 @@ export async function raiseRiskFlag(
   // The campaigns queued for the player stop here, with the flag (EN-01): a
   // send written before the flag must not reach them on the next poll.
   await suppressSendsForRaisedFlag(tx, flag, flag.raisedAt);
+  // The connection's AI outcome carries it (tm 320.1 · AI-25 `flags`); a row
+  // opened later reads the connection's flags itself.
+  if (threadId) await recordOutcomeFlag(tx, threadId, flag.type);
   return { flag, created: true };
 }
 

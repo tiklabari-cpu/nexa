@@ -32,6 +32,9 @@ import { Prisma } from '@prisma/client';
 import {
   customerChatOwner,
   readPersona,
+  RESOLUTION_PHRASES,
+  RESOLUTION_PROMPT_PROPERTY,
+  type AiOutcomeConfirmation,
   type CustomerChatOwner,
   type PersonaLanguage,
 } from '@siyahtus/types';
@@ -42,6 +45,7 @@ import type { ChatService } from '../chat/chat-service.js';
 import { readDayBoundary } from '../chat/day-boundary.js';
 import type { TurnLogger, VisitorTurn } from '../chat/visitor-turn.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
+import { recordOutcomeTurn } from '../reports/ai-outcomes.js';
 import { nextOpenAt } from '../sla/business-hours.js';
 import { readBusinessWeek } from '../sla/sla-service.js';
 import {
@@ -75,6 +79,25 @@ export interface HumanRequestOutcome {
   /** This press handed the connection over. */
   readonly requested: boolean;
 }
+
+/** Who pressed, on which connection. */
+export interface HumanRequestInput {
+  readonly tenant: TenantContext;
+  readonly customerId: string;
+  readonly ref: ConnectionRef;
+  readonly log: TurnLogger;
+}
+
+/** What a press of "Yes" or "No" under "is it solved?" left (tm 320.1). */
+export interface ResolutionAnswerOutcome {
+  readonly answer: AiOutcomeConfirmation;
+  /** False when the AI no longer had the connection, or nothing asked. */
+  readonly recorded: boolean;
+  readonly owner: CustomerChatOwner;
+  readonly humanAvailable: boolean;
+}
+
+type TenantRunner = <T>(fn: (tx: TenantClient) => Promise<T>) => Promise<T>;
 
 /** S2's sentence, when the workspace wrote no after-hours text of its own. */
 const BACK_AT: Readonly<Record<'tr' | 'en', (time: string) => string>> = {
@@ -152,15 +175,81 @@ export class HumanRequestService {
     };
   }
 
-  async request(input: {
-    tenant: TenantContext;
-    customerId: string;
-    ref: ConnectionRef;
-    log: TurnLogger;
-  }): Promise<HumanRequestOutcome> {
+  async request(input: HumanRequestInput): Promise<HumanRequestOutcome> {
+    const outcome = await this.#claimed(input, async (_read, inTenant) => {
+      const available = await this.#handOver(input, inTenant, 'player_request');
+      return { recorded: true, available };
+    });
+    return {
+      owner: outcome.owner,
+      humanAvailable: outcome.humanAvailable,
+      requested: outcome.recorded,
+    };
+  }
+
+  /**
+   * "Is it solved?" answered with the widget's buttons (tm 320.1 · AI-25-S2,
+   * K9): only under the AI's newest message that asked it or said so
+   * ({@link RESOLUTION_PROMPT_PROPERTY}), while the AI has the connection —
+   * the same claim as a press of "Talk to an agent", so two presses answer
+   * once. The answer goes on the connection's AI outcome
+   * (`resolution_confirmation`); then `yes` is thanked in the persona's
+   * language — the newest message, so the buttons go — and `no` hands the
+   * connection to a person at once with reason `player_said_unresolved`,
+   * the way a press of "Talk to an agent" does.
+   */
+  async answerResolution(
+    input: HumanRequestInput & { answer: AiOutcomeConfirmation },
+  ): Promise<ResolutionAnswerOutcome> {
+    const { tenant, ref, answer } = input;
+    const outcome = await this.#claimed(input, async (read, inTenant) => {
+      if (read.prompt === null) return null;
+      await inTenant((tx) =>
+        recordOutcomeTurn(
+          tx,
+          { licenseId: tenant.licenseId, ...ref },
+          {
+            at: new Date(),
+            memberKey: null,
+            aiAgentId: null,
+            configVersionId: null,
+            language: null,
+            intent: null,
+            procedureId: null,
+            aiTurns: 0,
+            playerTurns: 0,
+            clarificationTurns: 0,
+            requiredSlots: null,
+            claimedResolved: read.prompt === 'resolved',
+            confirmation: answer,
+            guardrailHits: [],
+          },
+        ),
+      );
+      if (answer === 'yes') {
+        await this.#thank(input, inTenant);
+        return { recorded: true, available: read.available, stays: true };
+      }
+      const available = await this.#handOver(input, inTenant, 'player_said_unresolved');
+      return { recorded: true, available };
+    });
+    return { answer, ...outcome };
+  }
+
+  /**
+   * A press's one way through: the claim, the owner as it stands, and — when
+   * the AI has the open connection — `act`. An `act` that returns null did
+   * nothing; `stays`: the AI keeps the connection after it.
+   */
+  async #claimed(
+    input: HumanRequestInput,
+    act: (
+      read: { available: boolean; prompt: 'asked' | 'resolved' | null },
+      inTenant: TenantRunner,
+    ) => Promise<{ recorded: boolean; available: boolean; stays?: boolean } | null>,
+  ): Promise<{ owner: CustomerChatOwner; humanAvailable: boolean; recorded: boolean }> {
     const { tenant, ref, log } = input;
-    const inTenant = <T>(fn: (tx: TenantClient) => Promise<T>): Promise<T> =>
-      withTenant(this.db, tenant, fn);
+    const inTenant: TenantRunner = (fn) => withTenant(this.db, tenant, fn);
     const claim = `siyahtus:human-request:${tenant.licenseId}:${ref.threadId}`;
     const claimed = await this.redis.set(claim, '1', 'PX', CLAIM_MS, 'NX');
     try {
@@ -168,19 +257,27 @@ export class HumanRequestService {
         const owned = await HumanRequestService.ownerOf(tx, ref);
         const mode = await readAiMode(tx, ref);
         const available = await anyoneAccepting(tx, tenant.licenseId);
-        return { owned, mode, available };
+        const prompt = await pendingResolutionPrompt(tx, ref);
+        return { owned, mode, available, prompt };
       });
-      if (!read.owned?.active)
-        return { owner: 'queue', humanAvailable: read.available, requested: false };
-      if (claimed !== 'OK' || read.owned.owner !== 'ai' || !aiMayAnswer(read.mode)) {
-        return { owner: read.owned.owner, humanAvailable: read.available, requested: false };
+      if (!read.owned?.active) {
+        return { owner: 'queue', humanAvailable: read.available, recorded: false };
       }
-      const available = await this.#handOver(input, inTenant);
+      if (claimed !== 'OK' || read.owned.owner !== 'ai' || !aiMayAnswer(read.mode)) {
+        return { owner: read.owned.owner, humanAvailable: read.available, recorded: false };
+      }
+      const done = await act(read, inTenant);
+      if (!done) {
+        return { owner: read.owned.owner, humanAvailable: read.available, recorded: false };
+      }
+      if (done.stays) {
+        return { owner: 'ai', humanAvailable: done.available, recorded: done.recorded };
+      }
       const after = await inTenant((tx) => HumanRequestService.ownerOf(tx, ref));
       return {
         owner: after?.owner === 'ai' ? 'queue' : (after?.owner ?? 'queue'),
-        humanAvailable: available,
-        requested: true,
+        humanAvailable: done.available,
+        recorded: done.recorded,
       };
     } catch (error) {
       log.error({ err: error }, 'the player asked for a person and the hand-over failed');
@@ -190,12 +287,8 @@ export class HumanRequestService {
     }
   }
 
-  async #handOver(
-    input: { tenant: TenantContext; customerId: string; ref: ConnectionRef; log: TurnLogger },
-    inTenant: <T>(fn: (tx: TenantClient) => Promise<T>) => Promise<T>,
-  ): Promise<boolean> {
-    const { tenant, ref, log } = input;
-    const now = new Date();
+  /** What the AI's words are chosen by: the published configuration and the player's newest message. */
+  async #context(ref: ConnectionRef, tenant: TenantContext, now: Date, inTenant: TenantRunner) {
     const read = await inTenant(async (tx) => {
       const conversation = await loadConversation(tx, ref);
       const config = await publishedConfig.forTurn(tx, {
@@ -212,16 +305,42 @@ export class HumanRequestService {
       const week = await readBusinessWeek(tx, tenant, now);
       return { config, text: last?.text ?? '', timezone, week };
     });
-    const handoff = read.config.pkg.handoff ?? DEFAULT_HANDOFF_CONFIG;
     const persona = read.config.pkg.skills[0]?.persona ?? readPersona(null);
     const language = languageVerdict(read.text, persona, null);
     const answerIn = language.unsupported ? 'en' : language.answerIn;
+    return { ...read, answerIn };
+  }
+
+  /** The player said yes: the AI's thanks, as the `resolve` step says it (`RESOLUTION_PHRASES`). */
+  async #thank(input: HumanRequestInput, inTenant: TenantRunner): Promise<void> {
+    const { tenant, ref } = input;
+    const read = await this.#context(ref, tenant, new Date(), inTenant);
+    await this.chats.sendEvent(tenant, botPrincipal(tenant), ref.chatId, {
+      type: 'message',
+      text: RESOLUTION_PHRASES[read.answerIn ?? 'tr'].thanks,
+      recipients: 'all',
+      properties: { resolution_answer: 'yes' },
+    });
+    input.log.info({ resolution_answer: 'yes' }, 'the player confirmed the ai solved it');
+  }
+
+  async #handOver(
+    input: HumanRequestInput,
+    inTenant: TenantRunner,
+    reason: 'player_request' | 'player_said_unresolved',
+  ): Promise<boolean> {
+    const { tenant, ref, log } = input;
+    const now = new Date();
+    const read = await this.#context(ref, tenant, now, inTenant);
+    const handoff = read.config.pkg.handoff ?? DEFAULT_HANDOFF_CONFIG;
+    const { answerIn } = read;
+    const pressed = reason === 'player_request';
 
     const effect: TurnHandoff = {
       kind: 'handoff',
       team: null,
-      reason: 'player_request',
-      reasons: ['player_request'],
+      reason,
+      reasons: [reason],
       priority: 'normal',
     };
     const { target, available } = await inTenant(async (tx) => {
@@ -234,7 +353,7 @@ export class HumanRequestService {
       return { target, available: await targetAccepting(tx, tenant.licenseId, target) };
     });
 
-    const words = handoffWords(handoff, 'player_request', answerIn) as string;
+    const words = handoffWords(handoff, reason, answerIn) as string;
     const back = read.week ? nextOpenAt(read.week, now) : null;
     // Open by the schedule but nobody accepting: no "back at" to promise.
     const backAt =
@@ -264,20 +383,51 @@ export class HumanRequestService {
       type: 'message',
       text,
       recipients: 'all',
-      properties: { requested_via: 'button' },
+      properties: pressed ? { requested_via: 'button' } : { resolution_answer: 'no' },
     });
     const aimedAt = aimedHandoff(effect, target);
     await this.#handoffs.execute(turn, ref, aimedAt, {
       plan: planHandoff(aimedAt, false),
       failed: false,
-      card: { result: null, trust: null, turnText: null, requestedVia: 'button' },
+      card: {
+        result: null,
+        trust: null,
+        turnText: null,
+        ...(pressed ? { requestedVia: 'button' as const } : {}),
+      },
       target,
       afterHours: !available,
     });
     log.info(
-      { handoff_reason: 'player_request', requested_via: 'button', after_hours: !available },
-      'the player asked for a person',
+      {
+        handoff_reason: reason,
+        ...(pressed ? { requested_via: 'button' } : { resolution_answer: 'no' }),
+        after_hours: !available,
+      },
+      pressed ? 'the player asked for a person' : 'the player said the ai did not solve it',
     );
     return available;
   }
+}
+
+/**
+ * The prompt the buttons answer: the connection's newest message, when it is
+ * the AI's and carries {@link RESOLUTION_PROMPT_PROPERTY}. Anything written
+ * after it — the player's words, the thanks, a hand-over — takes the buttons
+ * away.
+ */
+export async function pendingResolutionPrompt(
+  tx: TenantClient,
+  ref: ConnectionRef,
+): Promise<'asked' | 'resolved' | null> {
+  const [newest] = await tx.$queryRaw<Array<{ author_type: string; prompt: string | null }>>(
+    Prisma.sql`
+      SELECT author_type, properties ->> ${RESOLUTION_PROMPT_PROPERTY} AS prompt FROM events
+       WHERE thread_id = ${ref.threadId} AND chat_id = ${ref.chatId}
+         AND recipients = 'all' AND type = 'message'
+       ORDER BY event_sequence DESC
+       LIMIT 1`,
+  );
+  if (!newest || newest.author_type !== 'bot') return null;
+  return newest.prompt === 'asked' || newest.prompt === 'resolved' ? newest.prompt : null;
 }

@@ -5,7 +5,9 @@
  *     connection's (`thread_id`);
  *   - `POST /ai-handoffs/{handoffId}/feedback` — an agent marks a card
  *     sufficient or not (AI-10-S2, optional). One verdict per card: the next
- *     click overwrites it, no row is added.
+ *     click overwrites it, no row is added. The verdict, the fields the agent
+ *     names as missing and whether they asked the player again are the
+ *     connection's hand-over quality too (tm 320.1 · AI-25).
  *
  * Agents only, behind the conversation's visibility like its transcript
  * (`resolveVisibility`): a conversation the caller may not see reads as absent
@@ -15,6 +17,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
+  AI_HANDOFF_CARD_MISSING_ITEM_MAX,
+  AI_HANDOFF_CARD_MISSING_MAX,
   AI_HANDOFF_FEEDBACK_REASON_MAX,
   AI_HANDOFF_FEEDBACK_VALUES,
   isShortId,
@@ -25,6 +29,7 @@ import type { Principal } from '../services/auth/principal.js';
 import { canSeeChat, resolveVisibility } from '../services/chat/access.js';
 import { serialiseAiHandoff } from '../services/chat/ai-handoff-view.js';
 import { seesPlayerContact } from '../services/customers/player-contact.js';
+import { recordHandoffCardFeedback } from '../services/reports/ai-outcomes.js';
 
 const CHAT_READ = ['chats--all:ro', 'chats--access:ro'];
 const CHAT_WRITE = ['chats--all:rw', 'chats--access:rw'];
@@ -38,6 +43,12 @@ const feedbackBody = z
   .object({
     value: z.enum(AI_HANDOFF_FEEDBACK_VALUES),
     reason: z.string().trim().min(1).max(AI_HANDOFF_FEEDBACK_REASON_MAX).optional(),
+    // The band's chips and "had to ask again" (tm 320.1 · AI-25 hand-over quality).
+    missing: z
+      .array(z.string().trim().min(1).max(AI_HANDOFF_CARD_MISSING_ITEM_MAX))
+      .max(AI_HANDOFF_CARD_MISSING_MAX)
+      .optional(),
+    reasked: z.boolean().optional(),
   })
   .strict();
 
@@ -103,7 +114,7 @@ export async function aiHandoffRoutes(app: FastifyInstance): Promise<void> {
       const row = await request.withTenant(async (tx) => {
         const card = await tx.aiHandoff.findUnique({
           where: { id: handoffId },
-          select: { chatId: true },
+          select: { chatId: true, threadId: true },
         });
         if (!card) throw ApiError.notFound('Hand-over card not found.');
         // The archive included: whoever sees the conversation may judge its card.
@@ -111,7 +122,7 @@ export async function aiHandoffRoutes(app: FastifyInstance): Promise<void> {
           throw ApiError.notFound('Hand-over card not found.');
         });
         // One verdict per card, the last click's (AI-10 §7): no row is added.
-        return tx.aiHandoff.update({
+        const updated = await tx.aiHandoff.update({
           where: { id: handoffId },
           data: {
             feedback: body.value,
@@ -120,6 +131,13 @@ export async function aiHandoffRoutes(app: FastifyInstance): Promise<void> {
             feedbackAt: new Date(),
           },
         });
+        // The connection's hand-over quality (tm 320.1 · AI-25), the same click's.
+        await recordHandoffCardFeedback(tx, card.threadId, {
+          value: body.value,
+          missing: body.missing ?? [],
+          reasked: body.reasked ?? null,
+        });
+        return updated;
       });
       return reply.send(serialiseAiHandoff(row, seesPlayerContact(principal)));
     },

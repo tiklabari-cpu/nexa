@@ -94,6 +94,7 @@ import {
 } from '../routing/routing-service.js';
 import { enterQueue, leaveQueue } from '../routing/queue-entries.js';
 import { loadDailyDigests, settleDailyDigest, type DailyDigest } from './ai-digest.js';
+import { recordFirstHumanReply, settleOutcomeAtClose } from '../reports/ai-outcomes.js';
 import { recordAbandonment } from './ai-unresolved.js';
 import { serialiseAiHandoff } from './ai-handoff-view.js';
 import { seesPlayerContact } from '../customers/player-contact.js';
@@ -1675,6 +1676,8 @@ export class ChatService {
           where: { threadId: thread.id, acceptedAt: null },
           data: { acceptedBy: actorOf(principal), acceptedAt: new Date(event.created_at) },
         });
+        // The connection's AI outcome (tm 320.1 · AI-25): when a person first wrote.
+        await recordFirstHumanReply(tx, thread.id, new Date(event.created_at));
       }
 
       // First agent reply drives the first-response-time report; recorded here
@@ -2604,6 +2607,9 @@ export class ChatService {
     // How the connection ended for the AI, for the day's later connections
     // (tm 294 · AI-02): handed over, left mid-question, or answered.
     await settleDailyDigest(tx, thread.id, closedAt);
+    // And for the AI's metrics (tm 320.1 · AI-25): ended, and settled — an
+    // unsettled one with no hand-over and no answer waits as `assumed_pending`.
+    await settleOutcomeAtClose(tx, thread.id, closedAt);
 
     // Both clocks stop here (FR-MOD-11.5 · 11.5-d). Resolution is obvious; the
     // first-response one is the case that would otherwise never be judged from a

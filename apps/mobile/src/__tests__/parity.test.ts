@@ -1064,7 +1064,10 @@ describe('module parity matrix — what is still owed', () => {
       // `/scores`, `/close`) and `/qa/summary` (tm 319.2) — the AI quality
       // control queue (AI-24), reviewed in the web console's reports; the app
       // has no QA screen, and nothing here re-scopes.
-      contractEndpoints: 337,
+      // 337 -> 338 with `/customer/chat/resolution` (tm 320.1) — the widget's
+      // "is it solved?" Yes / No (AI-25-S2). A visitor's surface, like
+      // "Talk to an agent"; the app is an agent's, and nothing here re-scopes.
+      contractEndpoints: 338,
       scopeBoundaries: 1,
     });
   });

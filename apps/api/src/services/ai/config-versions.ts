@@ -29,8 +29,10 @@
  *     live switch, never versioned).
  *
  * Every step takes the agent's row `FOR UPDATE` first, so two steps on one
- * agent queue rather than interleave. What happens after the commit — the
- * run time's cache and the RTM push — is tm 316.3's.
+ * agent queue rather than interleave. After the commit the caller announces
+ * a publication (`announceAiConfigPublished`, tm 316.3); the run time reads
+ * the new pointer on its next turn (`config-source.ts`). Before a submission
+ * the migration's baseline v1 is sealed (`config-baseline.ts`).
  */
 import type { AiConfigVersion, Prisma } from '@prisma/client';
 import {
@@ -50,8 +52,10 @@ import {
   compileDraft,
   diffAiConfig,
   type AiConfigWarning,
+  type CompiledAiConfig,
   type StoredAiConfig,
 } from './config-compiler.js';
+import { sealBaselines } from './config-baseline.js';
 import { updateAiAgentDraft } from './config-draft.js';
 import { recordChange, type ConfigChangeAuthor } from './config-history.js';
 import { revisionConflict } from './draft-revision.js';
@@ -133,6 +137,17 @@ export function storedOf(row: AiConfigVersion): StoredAiConfig {
     snapshot: row.snapshot,
     knowledgeManifest: row.knowledgeManifest,
   };
+}
+
+/**
+ * What a draft is told against: the published version — or, while it is the
+ * migration's unsealed v1, the tables as they are, which is what it stands for
+ * until the draft first changes (`config-baseline.ts`): nothing to submit.
+ */
+function baseOf(published: AiConfigVersion, draft: CompiledAiConfig): StoredAiConfig {
+  if (published.packageFormat !== AI_CONFIG_PACKAGE_FORMAT_BASELINE) return storedOf(published);
+  const { packageFormat, snapshot, knowledgeManifest } = draft;
+  return { versionId: published.id, packageFormat, snapshot, knowledgeManifest };
 }
 
 function manifestOf(
@@ -245,7 +260,7 @@ export async function readDraftState(tx: TenantClient, aiAgentId: string): Promi
   const revision = compilation.draftRevision ?? agent.draftRevision;
   const gate = await compliancePackGate(tx, { aiAgentId, draftRevision: Number(revision) });
   const diff = compilation.ok
-    ? diffAiConfig(published ? storedOf(published) : null, compilation.compiled)
+    ? diffAiConfig(published ? baseOf(published, compilation.compiled) : null, compilation.compiled)
     : null;
   return {
     agent: { id: agent.id, draftRevision: revision, active: agent.active },
@@ -285,6 +300,8 @@ export async function submitVersion(
   if (expected !== null && expected !== agent.draftRevision) {
     throw revisionConflict(agent.id, agent.draftRevision, expected);
   }
+  // The migration's v1 is the tables until now: told against, it is them (tm 316.3).
+  await sealBaselines(tx);
 
   const compilation = await compileDraft(tx, agent.id);
   if (!compilation.ok) {

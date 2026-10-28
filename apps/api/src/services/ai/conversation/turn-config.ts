@@ -5,12 +5,13 @@
  * {@link TurnConfig}, and the one door it comes through is
  * {@link AiConfigSource} — `forTurn` for a conversation, `forDraft` for the
  * editor's preview, `forSimulation` for a test run and the sandbox (tm 314.2
- * · AI-19). Until tm 316 pins a published package to every
- * conversation the implementation is "read and compile"
- * ({@link readAndCompile}): the live tables, read the moment the turn starts,
- * with no version (`versionId` and `seq` null). When versions exist only the
- * implementation changes; a new AI feature that reads a configuration table in
- * the turn directly goes around the seam (ADR-14b §2.6).
+ * · AI-19). Two implementations: "read and compile" here
+ * ({@link readAndCompile}) — the editing tables, read the moment the turn
+ * starts, with no version (`versionId` and `seq` null) — which is the draft,
+ * and since tm 316.3 the published package (`config-source.ts`
+ * `publishedConfig`), which falls back to this one only until an agent has a
+ * package to read. A new AI feature that reads a configuration table in the
+ * turn directly goes around the seam (ADR-14b §2.6).
  *
  * The tenant is the transaction's: row level security decides the workspace,
  * so the seam takes no tenant beside it.
@@ -36,6 +37,7 @@ import {
   type SkillProcedureFields,
 } from '@siyahtus/types';
 import type { TenantClient } from '../../../lib/tenant.js';
+import type { KnowledgeVersionView } from '../knowledge-service.js';
 import type {
   ForbiddenPhraseConfig,
   GuardrailConfig,
@@ -54,11 +56,22 @@ import type { TurnConfig } from './turn.js';
 
 /** A configuration as the seam returns it (ADR-14b §2.6). */
 export interface AiConfigRead {
-  /** The published version it is; null before versioning (tm 316) and for a draft. */
+  /**
+   * The published version it is (tm 316.3, `config-source.ts`); null for a
+   * draft and for an agent that has never published.
+   */
   readonly versionId: string | null;
   readonly pkg: TurnConfig;
-  /** The version's number on its agent's line; null with `versionId`. */
+  /** The version's publication order in the workspace; null with `versionId`. */
   readonly seq: number | null;
+  /** The version's number ("v12" → 12) — `ai_decision_logs.procedure_version`; absent with `versionId`. */
+  readonly number?: number | null;
+  /**
+   * The knowledge a turn on it searches: the chunks the version published
+   * (ADR-14b §2.8 (4)). Absent: the draft view — the editing tables' current
+   * chunks, which is what a configuration read from the tables answers from.
+   */
+  readonly knowledge?: KnowledgeVersionView;
 }
 
 /** What the editor previews: a one-message step list, or a procedure's fields. */

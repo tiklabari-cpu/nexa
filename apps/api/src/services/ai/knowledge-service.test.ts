@@ -329,13 +329,21 @@ describe('KnowledgeService — embedding before the transaction (FR-MOD-06.3.2)'
     const knowledge = new KnowledgeService({ embeddings: fake });
     const prepared = await knowledge.prepare(SOURCE);
 
-    const inserts: Array<{ sql: string; values: unknown[] }> = [];
+    const statements: Array<{ sql: string; values: unknown[] }> = [];
+    const updates: unknown[] = [];
     const tx = {
-      knowledgeChunk: { deleteMany: async () => ({ count: 0 }) },
-      knowledgeSource: { update: async () => ({}) },
+      knowledgeSource: {
+        update: async (args: unknown) => {
+          updates.push(args);
+          return {};
+        },
+      },
+      // No baseline to seal, no open version naming the source; its next generation is 2.
+      $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) =>
+        Prisma.sql(strings, ...values).sql.includes('GREATEST') ? [{ generation: 2 }] : [],
       $executeRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
         const statement = Prisma.sql(strings, ...values);
-        inserts.push({ sql: statement.sql, values: statement.values });
+        statements.push({ sql: statement.sql, values: statement.values });
         return 1;
       },
     } as unknown as TenantClient;
@@ -343,11 +351,18 @@ describe('KnowledgeService — embedding before the transaction (FR-MOD-06.3.2)'
     const written = await knowledge.index(tx, TENANT, 'source-1', prepared);
 
     expect(written).toBe(3);
+    const inserts = statements.filter((statement) => statement.sql.includes('INSERT'));
     expect(inserts).toHaveLength(3);
     for (const insert of inserts) {
       expect(insert.sql).toContain('embedding_space');
       expect(insert.values).toContain(FAKE_EMBEDDING_SPACE);
+      // A new generation, never the rows a published version may answer from (tm 316.3).
+      expect(insert.values.at(-1)).toBe(2);
     }
+    expect(statements.some((statement) => statement.sql.includes('DELETE'))).toBe(true);
+    expect(updates).toEqual([
+      expect.objectContaining({ data: expect.objectContaining({ chunkGeneration: 2 }) }),
+    ]);
     // The provider was not called again: the transaction only writes.
     expect(fake.calls).toHaveLength(1);
   });

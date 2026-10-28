@@ -186,6 +186,9 @@ export const RTM_PUSH_ACTIONS = [
   // A cluster of unresolved questions surged or came back after its fix (tm
   // 317.2 · AI-22-S2, `AiUnresolvedAlertPush`): to the Team Leads and up.
   'ai_unresolved_alert',
+  // A version of the AI configuration went live (tm 316.3 · AI-20,
+  // `AiConfigPublishedPush`): to every agent — the Inbox band.
+  'ai_config_published',
   // A reply, an internal note or the player's message landed on a ticket (tm
   // 356.2 · HD-01, `TicketMessageCreatedPush`): to its assignee, its followers
   // and its team.

@@ -96,37 +96,33 @@ export type DraftCompilation =
       readonly warnings: AiConfigWarning[];
     };
 
+/** A knowledge source the manifest names, as the compiler read it. */
+interface ManifestSource {
+  id: string;
+  name: string;
+  status: string;
+}
+
 /**
- * An agent's draft compiled and judged. Reads under the transaction's tenant;
- * the revision it returns is the one the package was read at, so a caller that
- * must refuse a draft edited meanwhile locks the agent row first.
+ * An agent's draft compiled, not judged — null when there is no such
+ * customer-facing agent. What {@link compileDraft} judges, and what the
+ * migration's baseline v1 is sealed with (`config-baseline.ts`): that one
+ * records what was answering, whether or not it would pass a submission today.
  */
-export async function compileDraft(
+export async function compilePackage(
   tx: TenantClient,
   aiAgentId: string,
-  options: { maxBytes?: number } = {},
-): Promise<DraftCompilation> {
+): Promise<{
+  compiled: CompiledAiConfig;
+  draftRevision: bigint;
+  sources: ManifestSource[];
+} | null> {
   const agent = await tx.aiAgent.findFirst({
     where: { id: aiAgentId, kind: 'ai_agent' },
     select: { id: true, tone: true, languages: true, persona: true, draftRevision: true },
   });
-  if (!agent) {
-    return {
-      ok: false,
-      problems: [
-        finding(
-          'agent_not_found',
-          null,
-          null,
-          'There is no customer-facing AI agent with this id.',
-        ),
-      ],
-      draftRevision: null,
-      warnings: [],
-    };
-  }
+  if (!agent) return null;
   const { pkg: turn } = await readAndCompile.forSimulation(tx, { aiAgentId, target: 'draft' });
-  const teams = await tx.group.findMany({ select: { id: true, name: true } });
   const sources = await tx.knowledgeSource.findMany({
     where: {
       retiredAt: null,
@@ -185,24 +181,64 @@ export async function compileDraft(
     .sort((a, b) => compareKeys(a.source_id, b.source_id));
 
   const text = canonicalJson(snapshot);
-  const bytes = Buffer.byteLength(text, 'utf8');
-  const problems = validatePackage(snapshot.turn, {
+  return {
+    compiled: {
+      snapshot,
+      snapshotHash: createHash('sha256').update(text, 'utf8').digest('hex'),
+      packageFormat: AI_CONFIG_PACKAGE_FORMAT,
+      knowledgeManifest,
+      bytes: Buffer.byteLength(text, 'utf8'),
+    },
+    draftRevision: agent.draftRevision,
+    sources: sources.map(({ id, name, status }) => ({ id, name, status })),
+  };
+}
+
+/**
+ * An agent's draft compiled and judged. Reads under the transaction's tenant;
+ * the revision it returns is the one the package was read at, so a caller that
+ * must refuse a draft edited meanwhile locks the agent row first.
+ */
+export async function compileDraft(
+  tx: TenantClient,
+  aiAgentId: string,
+  options: { maxBytes?: number } = {},
+): Promise<DraftCompilation> {
+  const read = await compilePackage(tx, aiAgentId);
+  if (!read) {
+    return {
+      ok: false,
+      problems: [
+        finding(
+          'agent_not_found',
+          null,
+          null,
+          'There is no customer-facing AI agent with this id.',
+        ),
+      ],
+      draftRevision: null,
+      warnings: [],
+    };
+  }
+  const { compiled, draftRevision, sources } = read;
+  const teams = await tx.group.findMany({ select: { id: true, name: true } });
+  const problems = validatePackage(compiled.snapshot.turn, {
     teams: teams.map((team) => ({ id: Number(team.id), name: team.name })),
   });
   const maxBytes = options.maxBytes ?? AI_CONFIG_PACKAGE_MAX_BYTES;
-  if (bytes > maxBytes) {
+  if (compiled.bytes > maxBytes) {
     problems.push(
       finding(
         'package_too_large',
         null,
         null,
-        `The configuration compiles to ${bytes} bytes; the most a version holds is ${maxBytes}.`,
-        { bytes, max_bytes: maxBytes },
+        `The configuration compiles to ${compiled.bytes} bytes; the most a version holds is ${maxBytes}.`,
+        { bytes: compiled.bytes, max_bytes: maxBytes },
       ),
     );
   }
   const warnings = [
-    ...packageWarnings(snapshot.turn),
+    ...packageWarnings(compiled.snapshot.turn),
     ...sources
       .filter((source) => source.status !== 'ready')
       .sort((a, b) => compareKeys(a.id, b.id))
@@ -217,21 +253,8 @@ export async function compileDraft(
       ),
   ];
 
-  if (problems.length > 0) {
-    return { ok: false, problems, draftRevision: agent.draftRevision, warnings };
-  }
-  return {
-    ok: true,
-    compiled: {
-      snapshot,
-      snapshotHash: createHash('sha256').update(text, 'utf8').digest('hex'),
-      packageFormat: AI_CONFIG_PACKAGE_FORMAT,
-      knowledgeManifest,
-      bytes,
-    },
-    draftRevision: agent.draftRevision,
-    warnings,
-  };
+  if (problems.length > 0) return { ok: false, problems, draftRevision, warnings };
+  return { ok: true, compiled, draftRevision, warnings };
 }
 
 /** What the package is judged against: the workspace's teams. */

@@ -36,13 +36,30 @@
  * the AI agent's search has to say which brand the conversation is in, because
  * the default that would let one brand's source reach another brand's player
  * is no brand at all.
+ *
+ * **A source's chunks come in generations, and a search reads one view of
+ * them** (tm 316.3 · ADR-14b §2.8). Indexing never deletes what a published
+ * version may still answer from: {@link KnowledgeService.index} writes a new
+ * generation and makes it the source's current one, and drops only the older
+ * generations no version ever published or is waiting to publish — so a
+ * workspace that has not published behaves as it always did. A search reads the
+ * *draft view* — every source not retired, its current generation — unless it
+ * is given a published version's (`KnowledgeSearchOptions.version`): then the
+ * chunks visible at that version's `seq`, of the sources its manifest scoped
+ * as they were when it was compiled.
  */
 import { Prisma } from '@prisma/client';
 import { chunk, toVectorLiteral } from '@siyahtus/ai-mock';
-import type { KnowledgeReader } from '@siyahtus/types';
+import {
+  AI_CONFIG_OPEN_VERSION_STATUSES,
+  knowledgeSourceServes,
+  type AiConfigKnowledgeManifestEntry,
+  type KnowledgeReader,
+} from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import type { AiAttribution } from './ai-daily-budget.js';
+import { sealBaselines } from './config-baseline.js';
 import {
   embeddingEstimate,
   KNOWLEDGE_INDEX,
@@ -191,11 +208,49 @@ export interface KnowledgeSearch {
   chunks: RetrievedChunk[];
 }
 
+/**
+ * A published version's knowledge (ADR-14b §2.8 (4)): the chunks visible at
+ * `seq` — `visible_from_version <= seq < hidden_from_version` — of the sources
+ * the version's manifest names, each scoped as the manifest recorded it.
+ */
+export interface KnowledgeVersionView {
+  readonly seq: number;
+  readonly sources: readonly AiConfigKnowledgeManifestEntry[];
+}
+
 export interface KnowledgeSearchOptions {
   /** Who draws on the store — what the search may return (`@siyahtus/types` `KnowledgeReader`). */
   reader: KnowledgeReader;
   /** How many passages; 3 unless said. */
   limit?: number;
+  /** A published version's knowledge; absent: the draft view. */
+  version?: KnowledgeVersionView;
+}
+
+/**
+ * The manifest's sources `reader` may use at `now` — the knowledge filter
+ * (`knowledgeSourceServes`) over the scope the version recorded, not the
+ * source's scope today.
+ */
+export function versionSources(
+  version: KnowledgeVersionView,
+  reader: KnowledgeReader,
+  now: Date,
+): string[] {
+  return version.sources
+    .filter((entry) =>
+      knowledgeSourceServes(
+        {
+          audiences: entry.audiences,
+          aiAgentIds: entry.ai_agent_ids,
+          brandIds: entry.brand_ids,
+          validUntil: entry.valid_until === null ? null : new Date(entry.valid_until),
+        },
+        reader,
+        now,
+      ),
+    )
+    .map((entry) => entry.source_id);
 }
 
 /**
@@ -407,7 +462,9 @@ export class KnowledgeService {
 
   /**
    * Replace a source's chunks with prepared ones, inside the caller's
-   * transaction.
+   * transaction: a new generation, now the source's current one (ADR-14b
+   * §2.8 (1)), and the older generations no version published or is waiting to
+   * publish dropped — the ones a version did publish stay for it.
    *
    * Replaces every chunk rather than diffing: sources are edited rarely and
    * wholesale, and a partial update leaves orphaned chunks that keep answering
@@ -420,7 +477,7 @@ export class KnowledgeService {
     sourceId: string,
     prepared: PreparedChunks,
   ): Promise<number> {
-    await tx.knowledgeChunk.deleteMany({ where: { sourceId } });
+    const generation = await nextGeneration(tx, sourceId);
 
     for (const [position, piece] of prepared.chunks.entries()) {
       // Raw SQL because Prisma has no vector type; the parameters are still
@@ -428,17 +485,22 @@ export class KnowledgeService {
       await tx.$executeRaw`
         INSERT INTO knowledge_chunks (id, source_id, license_id, chunk_text, embedding,
                                       embedding_space, token_count, position,
-                                      page_from, page_to, heading)
+                                      page_from, page_to, heading, generation)
         VALUES (gen_random_uuid(), ${sourceId}::uuid, ${tenant.licenseId}, ${piece.text},
                 ${piece.vector}::vector, ${prepared.space}, ${piece.tokenCount}, ${position},
                 ${piece.pageFrom ?? null}::int, ${piece.pageTo ?? null}::int,
-                ${piece.heading ?? null})
+                ${piece.heading ?? null}, ${generation})
       `;
     }
+    await dropUnpublished(tx, sourceId, generation);
 
     await tx.knowledgeSource.update({
       where: { id: sourceId },
-      data: { status: prepared.chunks.length > 0 ? 'ready' : 'empty', updatedAt: new Date() },
+      data: {
+        status: prepared.chunks.length > 0 ? 'ready' : 'empty',
+        chunkGeneration: generation,
+        updatedAt: new Date(),
+      },
     });
 
     return prepared.chunks.length;
@@ -450,14 +512,16 @@ export class KnowledgeService {
    * text that changed and could not be embedded now — a KB article saved while
    * the provider was away (tm 309.2, `kb-article-knowledge.ts`) — so retrieval
    * never answers from what the source no longer says. With {@link index} the
-   * only writer of chunks: tm 316 turns the delete in both into a new
-   * generation (ADR-14b §2.8).
+   * only writer of chunks: the source moves to a new, empty generation (ADR-14b
+   * §2.8), so the draft answers nothing from it while a published version
+   * still answers from the generation it published.
    */
   async unindex(tx: TenantClient, sourceId: string): Promise<void> {
-    await tx.knowledgeChunk.deleteMany({ where: { sourceId } });
+    const generation = await nextGeneration(tx, sourceId);
+    await dropUnpublished(tx, sourceId, generation);
     await tx.knowledgeSource.update({
       where: { id: sourceId },
-      data: { status: 'indexing', updatedAt: new Date() },
+      data: { status: 'indexing', chunkGeneration: generation, updatedAt: new Date() },
     });
   }
 
@@ -551,10 +615,27 @@ export class KnowledgeService {
     if (query.vector === null) return { strategy: 'exact', chunksInScope: 0, chunks: [] };
     const vector = query.vector;
     const limit = options.limit ?? 3;
-    const scope = Prisma.sql`c.license_id = ${tenant.licenseId}
+    let scope: Prisma.Sql;
+    if (options.version) {
+      // The version's knowledge: what it published, scoped as it was then.
+      // Ids and order as scalar subqueries, like the reader's (`readerScope`).
+      const sources = versionSources(options.version, options.reader, new Date());
+      if (sources.length === 0) return { strategy: 'exact', chunksInScope: 0, chunks: [] };
+      const seq = BigInt(options.version.seq);
+      scope = Prisma.sql`c.license_id = ${tenant.licenseId}
+        AND c.embedding_space = ${query.space}
+        AND c.source_id = ANY ((SELECT ${sources}::uuid[])::uuid[])
+        AND c.visible_from_version <= (SELECT ${seq}::bigint)
+        AND (c.hidden_from_version IS NULL OR c.hidden_from_version > (SELECT ${seq}::bigint))`;
+    } else {
+      // The draft view: every source not retired, its current generation.
+      scope = Prisma.sql`c.license_id = ${tenant.licenseId}
         AND c.embedding_space = ${query.space}
         AND s.status = 'ready'
+        AND s.retired_at IS NULL
+        AND c.generation = s.chunk_generation
         ${readerScope(options.reader)}`;
+    }
 
     const chunksInScope = await this.#countInScope(tx, scope);
     if (chunksInScope <= this.#exactSearchCeiling) {
@@ -682,6 +763,45 @@ export class KnowledgeService {
     // `relaxed_order` returns rows only roughly by distance.
     return toRetrievedChunks([...rows].sort(byDistance), limit, this.#threshold);
   }
+}
+
+/**
+ * The source's next chunk generation — past its current one and every one its
+ * chunks carry (a rollback's copies, `config-versions.ts`) — with the source's
+ * row locked, so two writers of one source take two generations. The
+ * migration's baseline is sealed first: its chunks are the tables' until now.
+ */
+async function nextGeneration(tx: TenantClient, sourceId: string): Promise<number> {
+  await sealBaselines(tx);
+  const rows = await tx.$queryRaw<Array<{ generation: number }>>`
+    SELECT GREATEST(s.chunk_generation,
+                    COALESCE((SELECT max(c.generation) FROM knowledge_chunks c
+                               WHERE c.source_id = s.id), 0)) + 1 AS generation
+      FROM knowledge_sources s
+     WHERE s.id = ${sourceId}::uuid
+       FOR UPDATE OF s`;
+  return rows[0]?.generation ?? 1;
+}
+
+/**
+ * Drop a source's chunks no version answers from or will: never published
+ * (`visible_from_version` null), not the generation `keep`, and not one an open
+ * version (`in_review`, `approved`) names — that one publishes it. What a
+ * version published stays until the clean-up (ADR-14b §2.8 (7)).
+ */
+async function dropUnpublished(tx: TenantClient, sourceId: string, keep: number): Promise<void> {
+  const named = await tx.$queryRaw<Array<{ generation: number }>>`
+    SELECT DISTINCT (e.entry->>'generation')::int AS generation
+      FROM ai_config_versions v,
+           jsonb_array_elements(v.knowledge_manifest) AS e(entry)
+     WHERE v.status = ANY (${[...AI_CONFIG_OPEN_VERSION_STATUSES]}::text[])
+       AND e.entry->>'source_id' = ${sourceId}`;
+  const kept = [keep, ...named.map((row) => row.generation)];
+  await tx.$executeRaw`
+    DELETE FROM knowledge_chunks
+     WHERE source_id = ${sourceId}::uuid
+       AND visible_from_version IS NULL
+       AND generation <> ALL (${kept}::int[])`;
 }
 
 /** Ascending, NaN last — the order exact search's ORDER BY gives. */

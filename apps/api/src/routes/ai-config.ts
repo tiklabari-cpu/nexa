@@ -25,8 +25,11 @@
  * editing tables) may name it in `If-Match`, and one made against a revision
  * someone else moved is `409 ai_config_revision_conflict`.
  *
- * Everything here runs in the request's transaction; the run time's cache and
- * the RTM push after a publication are tm 316.3's.
+ * Everything here runs in the request's transaction. A publication — an
+ * approval without `publish_at`, a rollback — is announced after it commits
+ * (`ai_config_published`, tm 316.3); the run time needs no announcement: it
+ * reads the agent's pointer on every turn and keeps packages by version
+ * (`config-cache.ts`).
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -39,6 +42,7 @@ import {
 } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { configAuthorOf } from '../lib/config-author.js';
+import { announceAiConfigPublished } from '../services/ai/config-cache.js';
 import { diffAiConfig } from '../services/ai/config-compiler.js';
 import {
   approveVersion,
@@ -54,6 +58,7 @@ import {
   type Reviewer,
 } from '../services/ai/config-versions.js';
 import { serialiseGate } from '../services/ai/simulation/compliance-pack.js';
+import { RealtimePublisher } from '../services/realtime/publisher.js';
 
 const READ = ['agents-bot--all:ro', 'agents-bot--all:rw'];
 const WRITE = ['agents-bot--all:rw'];
@@ -145,6 +150,8 @@ function decodeCursor(value: string | undefined): { number: number; minor: numbe
 }
 
 export default async function aiConfigRoutes(app: FastifyInstance): Promise<void> {
+  const publisher = new RealtimePublisher(app.redis, app.log);
+
   app.get('/ai/config/draft/diff', { config: { scopes: READ } }, async (request, reply) => {
     const { ai_agent_id } = parse(agentQuery, request.query);
     const state = await request.withTenant((tx) => readDraftState(tx, ai_agent_id));
@@ -286,6 +293,9 @@ export default async function aiConfigRoutes(app: FastifyInstance): Promise<void
           now,
         }),
       );
+      if (outcome.kind === 'published') {
+        await announceAiConfigPublished(publisher, request.tenant(), outcome.version);
+      }
       return sendOutcome(reply, outcome);
     },
   );
@@ -325,6 +335,7 @@ export default async function aiConfigRoutes(app: FastifyInstance): Promise<void
           now: new Date(),
         }),
       );
+      await announceAiConfigPublished(publisher, request.tenant(), row);
       return reply.code(201).send(serialiseVersion(row));
     },
   );

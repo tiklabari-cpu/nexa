@@ -148,7 +148,8 @@ import {
   type TurnResult,
   type TurnState,
 } from './conversation/turn.js';
-import { readAndCompile, type AiConfigRead } from './conversation/turn-config.js';
+import { publishedConfig } from './config-source.js';
+import type { AiConfigRead } from './conversation/turn-config.js';
 import {
   afterHoursWords,
   DEFAULT_HANDOFF_CONFIG,
@@ -468,6 +469,11 @@ export class AiResponder {
 
     const startedAt = performance.now();
     let read: AiConversationState | null = null;
+    /**
+     * The configuration the turn ran on (ADR-14b §2.7): its version goes on
+     * every record of the turn and is pinned to the conversation by the commit.
+     */
+    let ranOn: AiConfigRead | null = null;
     let result: TurnResult | null = null;
     /** What the visitor wrote that the turn answered — the card's question (AI-10). */
     let answeredText: string | null = null;
@@ -524,6 +530,7 @@ export class AiResponder {
           return null;
         }
         read = loaded.conversation;
+        ranOn = loaded.config;
         gathered = loaded.context?.freshMessages || 1;
         sensitiveShared = loaded.context?.sensitiveShared ?? false;
         const history = historyOf(loaded.context);
@@ -545,8 +552,9 @@ export class AiResponder {
             mode: 'live',
             chatId,
             brandId: loaded.brandId,
-            configVersionId: read?.configVersionId ?? loaded.config.versionId,
+            configVersionId: loaded.config.versionId,
             config: loaded.config.pkg,
+            ...(loaded.config.knowledge ? { knowledgeVersion: loaded.config.knowledge } : {}),
             toolStubs: {},
             timeZone: loaded.timeZone,
             aiMode: loaded.aiMode,
@@ -603,7 +611,7 @@ export class AiResponder {
         try {
           // The last draft goes out whatever the visitor wrote meanwhile.
           const recheck = drafts < DRAFTS_PER_TURN ? loaded.through : null;
-          replyEventId = await this.#commit(turn, ref, read, result, recheck);
+          replyEventId = await this.#commit(turn, ref, read, result, recheck, ranOn.versionId);
           break;
         } catch (error) {
           if (!(error instanceof VisitorWroteAgainError)) throw error;
@@ -623,7 +631,7 @@ export class AiResponder {
               decision: 'expired',
               handoffReason: null,
               latencyMs: performance.now() - startedAt,
-              configVersionId: read?.configVersionId ?? null,
+              ...versionOf(ranOn),
               details: { ...draft.details, reason: 'visitor_wrote_again' },
             });
           }
@@ -738,7 +746,7 @@ export class AiResponder {
             decision: 'expired',
             handoffReason: null,
             latencyMs: performance.now() - startedAt,
-            configVersionId: read?.configVersionId ?? null,
+            ...versionOf(ranOn),
             details: { ...draft.details, reason: 'human_took_over' },
           });
         }
@@ -788,8 +796,8 @@ export class AiResponder {
           id: turnId,
           replyEventId,
           latencyMs: performance.now() - startedAt,
-          // The configuration the turn ran on (ADR-14b §2.7) — null until tm 316.
-          configVersionId: read?.configVersionId ?? null,
+          // The configuration the turn ran on (ADR-14b §2.7 (2), (4)).
+          ...versionOf(ranOn),
           ...(applyFailed ? { errorType: decided.errorType ?? 'apply_failed' } : {}),
           ...(sensitiveShared
             ? { riskFlags: [...(decided.riskFlags ?? []), SENSITIVE_SHARED_RISK_FLAG] }
@@ -864,6 +872,10 @@ export class AiResponder {
    * and throws {@link VisitorWroteAgainError} if there is one: that rolls the
    * reply back too (AI-01 §7). A turn with nothing to send has nothing to
    * recheck; the newer message's own job answers it.
+   *
+   * `pin` is the configuration version the turn ran on: a conversation opened
+   * here is pinned to it, and one that was opened before it had a version to
+   * pin takes it now — once (ADR-14b §2.7 (1), (3)).
    */
   async #commit(
     turn: VisitorTurn,
@@ -871,9 +883,13 @@ export class AiResponder {
     read: AiConversationState | null,
     result: TurnResult,
     recheck: number | null,
+    pin: string | null,
   ): Promise<string | null> {
     const { tenant, chatId } = turn;
-    const patch = turnStatePatch(read ? toTurnState(read) : emptyTurnState(), result.nextState);
+    const patch = {
+      ...turnStatePatch(read ? toTurnState(read) : emptyTurnState(), result.nextState),
+      ...(read && read.configVersionId === null && pin !== null ? { configVersionId: pin } : {}),
+    };
     const run = skillRunRecord(result.decisions);
 
     // Set by the attempt that commits: whether this turn made the connection
@@ -886,7 +902,7 @@ export class AiResponder {
       // the reply's append already holds — so a person who wrote first wins.
       joined = await claimAiTurn(tx, ref);
       const current = read ?? {
-        id: (await openConversation(tx, ref, { configVersionId: null })).id,
+        id: (await openConversation(tx, ref, { configVersionId: pin })).id,
         version: 0,
       };
       if (Object.keys(patch).length > 0) await saveConversation(tx, current, patch);
@@ -986,7 +1002,7 @@ export class AiResponder {
       const aiMode = await readAiMode(tx, ref);
       if (!aiMayAnswer(aiMode)) return null;
       const conversation = await loadConversation(tx, ref);
-      const config = await readAndCompile.forTurn(tx, {
+      const config = await publishedConfig.forTurn(tx, {
         aiAgentId: null,
         pinnedVersionId: conversation?.configVersionId ?? null,
       });
@@ -1232,7 +1248,7 @@ export class AiResponder {
     const conversation = await loadConversation(tx, ref);
     const state = conversation ? toTurnState(conversation) : emptyTurnState();
     if (trigger !== null && trigger <= state.lastProcessedEventSeq) return 'answered';
-    const config = await readAndCompile.forTurn(tx, {
+    const config = await publishedConfig.forTurn(tx, {
       aiAgentId: null,
       pinnedVersionId: conversation?.configVersionId ?? null,
     });
@@ -1305,6 +1321,21 @@ export class AiResponder {
       brandId,
     };
   }
+}
+
+/**
+ * The record fields of the version a turn ran on (ADR-14b §2.7 (2), (4)):
+ * its id, and its number as `procedure_version` — both null on the editing
+ * tables.
+ */
+function versionOf(config: AiConfigRead | null): {
+  configVersionId: string | null;
+  procedureVersion: number | null;
+} {
+  return {
+    configVersionId: config?.versionId ?? null,
+    procedureVersion: config?.versionId ? (config.number ?? null) : null,
+  };
 }
 
 /** What a turn reads before it runs (`AiResponder.#read`). */

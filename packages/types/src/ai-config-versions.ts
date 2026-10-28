@@ -210,3 +210,23 @@ export const AI_CONFIG_VERSIONS_PAGE_MAX = 100;
 
 /** The permission matrix row the approve and reject routes check (`capabilities.ts`). */
 export const AI_CONFIG_PUBLISH_CAPABILITY = 'ai.config.publish' as const;
+
+/**
+ * `ai_config_published` (RTM, tm 316.3 · ADR-14b §2.10 (3)): a version of
+ * the customer-facing agent's configuration went live — an approval, a
+ * rollback, or a scheduled publication whose time came. Sent after the commit,
+ * to every agent of the workspace (the Inbox band, tm 316.4). Connections
+ * opened from now on answer from it; an open one keeps the version it was
+ * pinned to when it opened (§2.7).
+ */
+export interface AiConfigPublishedPush {
+  ai_agent_id: string;
+  version_id: string;
+  /** "v12", "v12.1". */
+  label: string;
+  /** The workspace's publication order (`ai_config_versions.seq`). */
+  seq: number;
+  published_at: string;
+  /** The version a rollback copied; null for a publication of a submitted draft. */
+  rollback_of: string | null;
+}

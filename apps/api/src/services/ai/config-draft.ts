@@ -36,16 +36,19 @@
  */
 import type { Prisma } from '@prisma/client';
 import {
+  AI_CONFIG_OPEN_VERSION_STATUSES,
   KNOWLEDGE_TABLE_SAMPLE_SOURCE,
   KNOWLEDGE_TABLE_SOURCE_TYPE,
   KNOWLEDGE_TABLE_SQL_NAMES,
   type AiConfigChangeAction,
   type AiConfigEntityType,
+  type AiConfigVersionStatus,
   type KnowledgeAudience,
   type KnowledgeTable,
 } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 import { knowledgeTableDelegate, type KnowledgeTableRecords } from '../knowledge-tables/rows.js';
+import { sealBaselines } from './config-baseline.js';
 import {
   type ConfigChangeAuthor,
   type ConfigTable,
@@ -121,6 +124,8 @@ async function track<T>(
   write: () => Promise<T>,
   options: TrackOptions<T> = {},
 ): Promise<T> {
+  // The migration's v1 is the tables until they first change (tm 316.3).
+  await sealBaselines(tx);
   const before = key === null ? null : await snapshotConfigRow(tx, table, key, { lock: true });
   const result = await write();
   const id = key ?? options.idOf?.(result);
@@ -498,6 +503,7 @@ export async function reorderHandoffRulesDraft(
   orderedIds: readonly string[],
   updatedBy: string | null,
 ): Promise<void> {
+  await sealBaselines(tx);
   const rows = author ? await snapshotConfigRows(tx, 'ai_handoff_rules', orderedIds) : null;
   const updatedAt = new Date();
   for (const [index, id] of orderedIds.entries()) {
@@ -759,11 +765,66 @@ export async function reviewKnowledgeSourceDraft(
   );
 }
 
+/** The versions whose manifests keep a source: every one but a rejected one. */
+const KEPT_VERSION_STATUSES = [
+  ...AI_CONFIG_OPEN_VERSION_STATUSES,
+  'published',
+  'superseded',
+] as const satisfies readonly AiConfigVersionStatus[];
+
 /**
- * How many rows went — 0 when the source is not this workspace's, or not
- * `within` when that is given (the Copilot view removes only the sources for
- * agents only). The chunks go with it. `author` null: a mirror's source (a KB
- * article's, a table row's) going with what it mirrors — recorded there.
+ * Take sources out of the draft (tm 316.3 · ADR-14b §2.8 (1)). One a version
+ * answers from, can be rolled back to or is waiting to publish — named in the
+ * manifest of any version but a rejected one — is retired (`retired_at`): the draft and
+ * every editor stop seeing it, and its row and chunks stay for that version
+ * until the clean-up (tm 316.6). It lets go of what addresses it — its KB
+ * article, its file, its refresh schedule — so the article, the file and its
+ * hash are free for a new source. Any other source goes with its chunks, as
+ * before versioning. Returns how many left the draft.
+ */
+export async function removeKnowledgeSources(
+  tx: TenantClient,
+  where: Prisma.KnowledgeSourceWhereInput,
+): Promise<number> {
+  const sources = await tx.knowledgeSource.findMany({
+    where: { ...where, retiredAt: null },
+    select: { id: true },
+  });
+  if (sources.length === 0) return 0;
+  const ids = sources.map((source) => source.id);
+  const referenced = await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT DISTINCT e.entry->>'source_id' AS id
+      FROM ai_config_versions v,
+           jsonb_array_elements(v.knowledge_manifest) AS e(entry)
+     WHERE v.status = ANY (${[...KEPT_VERSION_STATUSES]}::text[])
+       AND e.entry->>'source_id' = ANY (${ids}::text[])`;
+  const retire = referenced.map((row) => row.id);
+  const drop = ids.filter((id) => !retire.includes(id));
+  if (drop.length > 0) await tx.knowledgeSource.deleteMany({ where: { id: { in: drop } } });
+  if (retire.length > 0) {
+    const at = new Date();
+    await tx.knowledgeSource.updateMany({
+      where: { id: { in: retire } },
+      data: {
+        retiredAt: at,
+        kbArticleId: null,
+        fileKey: null,
+        fileSha256: null,
+        nextRefreshAt: null,
+        updatedAt: at,
+      },
+    });
+  }
+  return ids.length;
+}
+
+/**
+ * How many sources left the draft — 0 when the source is not this
+ * workspace's, has gone or was retired, or is not `within` when that is given
+ * (the Copilot view removes only the sources for agents only). See
+ * {@link removeKnowledgeSources} for what leaving means. `author` null: a
+ * mirror's source (a KB article's, a table row's) going with what it mirrors —
+ * recorded there.
  */
 export async function deleteKnowledgeSourceDraft(
   tx: TenantClient,
@@ -771,17 +832,31 @@ export async function deleteKnowledgeSourceDraft(
   id: string,
   within: Prisma.KnowledgeSourceWhereInput = {},
 ): Promise<number> {
-  const remove = async () =>
-    (await tx.knowledgeSource.deleteMany({ where: { ...within, id } })).count;
+  const remove = () => removeKnowledgeSources(tx, { ...within, id });
   if (author === null) {
+    await sealBaselines(tx);
     // A mirror going: the AI's knowledge changed with it (tm 316.2).
     const removed = await remove();
     if (removed > 0) await moveDraftRevision(tx, EVERY_DRAFT, null);
     return removed;
   }
-  const inScope = await tx.knowledgeSource.count({ where: { ...within, id } });
+  const inScope = await tx.knowledgeSource.count({ where: { ...within, id, retiredAt: null } });
   if (inScope === 0) return 0;
   return track(tx, author, 'knowledge_sources', id, remove, { deleted: true });
+}
+
+/**
+ * A KB article is going (`DELETE /kb-articles/:id`): its source leaves the
+ * draft first, as an unpublished article's does — the article's foreign key
+ * would otherwise take a source a version still answers from with it.
+ */
+export async function releaseKbArticleSource(tx: TenantClient, articleId: string): Promise<number> {
+  const source = await tx.knowledgeSource.findFirst({
+    where: { kbArticleId: articleId, retiredAt: null },
+    select: { id: true },
+  });
+  if (!source) return 0;
+  return deleteKnowledgeSourceDraft(tx, null, source.id, { kbArticleId: articleId });
 }
 
 /**
@@ -810,6 +885,7 @@ export async function createKbArticleSourceDraft(
   fields: KbArticleSourceFields,
   pending: string | null = null,
 ) {
+  await sealBaselines(tx);
   const scope: KnowledgeAudienceScope = { audiences: fields.audiences, aiAgentIds: [] };
   // The article's publish changes what the AI knows: the draft moves (tm 316.2).
   if (fields.audiences.includes('ai_agent')) await moveDraftRevision(tx, EVERY_DRAFT, null);
@@ -844,6 +920,7 @@ export async function updateKbArticleSourceDraft(
   fields: KbArticleSourceFields,
   pending: string | null = null,
 ): Promise<number> {
+  await sealBaselines(tx);
   const scope: KnowledgeAudienceScope = { audiences: fields.audiences, aiAgentIds: [] };
   const { count } = await tx.knowledgeSource.updateMany({
     where: { id: source.id },
@@ -1012,8 +1089,9 @@ export async function deleteKnowledgeTableRowDraft(
     async () => (await knowledgeTableDelegate(tx, table).deleteMany({ where: { id } })).count,
     { deleted: true },
   );
-  await tx.knowledgeSource.deleteMany({
-    where: { sourceTable: KNOWLEDGE_TABLE_SQL_NAMES[table], sourceRowId: id },
+  await removeKnowledgeSources(tx, {
+    sourceTable: KNOWLEDGE_TABLE_SQL_NAMES[table],
+    sourceRowId: id,
   });
   return count;
 }
@@ -1056,6 +1134,7 @@ export async function createTableRowSourceDraft(
   fields: TableRowSourceFields,
   pending: string | null = null,
 ) {
+  await sealBaselines(tx);
   return tx.knowledgeSource.create({
     data: {
       licenseId: row.licenseId,
@@ -1084,6 +1163,7 @@ export async function updateTableRowSourceDraft(
   fields: TableRowSourceFields,
   pending: string | null = null,
 ): Promise<number> {
+  await sealBaselines(tx);
   const { count } = await tx.knowledgeSource.updateMany({
     where: { id: source.id },
     data: {

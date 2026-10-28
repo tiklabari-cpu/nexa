@@ -197,7 +197,7 @@ export class CopilotService {
    */
   async listSources(tx: TenantClient): Promise<CopilotSourceView[]> {
     const sources = await tx.knowledgeSource.findMany({
-      where: AGENTS_ONLY,
+      where: { ...AGENTS_ONLY, retiredAt: null },
       orderBy: { updatedAt: 'desc' },
       include: { _count: { select: { chunks: true } } },
     });

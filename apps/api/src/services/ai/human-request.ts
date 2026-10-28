@@ -52,7 +52,7 @@ import {
 } from './conversation/handoff/triggers.js';
 import { languageVerdict } from './conversation/policy.js';
 import { loadConversation, type ConnectionRef } from './conversation/state-store.js';
-import { readAndCompile } from './conversation/turn-config.js';
+import { publishedConfig } from './config-source.js';
 import { HandoffCardService } from './handoff-card.js';
 import {
   aimedHandoff,
@@ -198,7 +198,7 @@ export class HumanRequestService {
     const now = new Date();
     const read = await inTenant(async (tx) => {
       const conversation = await loadConversation(tx, ref);
-      const config = await readAndCompile.forTurn(tx, {
+      const config = await publishedConfig.forTurn(tx, {
         aiAgentId: null,
         pinnedVersionId: conversation?.configVersionId ?? null,
       });

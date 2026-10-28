@@ -3011,6 +3011,8 @@ export class ConversationEngine {
         // Never below the two this always fetched, so an unset persona issues the
         // identical query; a `long` answer is the only thing that widens it.
         limit: Math.max(ANSWER_RETRIEVAL_LIMIT, passages),
+        // What the version the turn runs on published (tm 316.3); the draft view without one.
+        ...(ctx.knowledgeVersion ? { version: ctx.knowledgeVersion } : {}),
       }),
     );
 

@@ -82,3 +82,21 @@ describe('isNavVisible in the public pilot (tm 257.2)', () => {
     }
   });
 });
+
+describe('isNavVisible for a Team Lead (AI-23 · tm 318.2)', () => {
+  const playbook = NAV_DESTINATIONS.find((dest) => dest.to === '/app/playbook')!;
+
+  it('opens Playbook to a Team Lead and above — the suggestion queue — though they hold no AI scope', () => {
+    expect(isNavVisible(playbook, DEFAULT_AGENT_SCOPES, false, 'agent')).toBe(false);
+    expect(isNavVisible(playbook, DEFAULT_AGENT_SCOPES, false, 'team_lead')).toBe(true);
+    expect(isNavVisible(playbook, DEFAULT_AGENT_SCOPES, false, 'admin')).toBe(true);
+    // A role the build does not know opens nothing.
+    expect(isNavVisible(playbook, DEFAULT_AGENT_SCOPES, false, 'visitor')).toBe(false);
+  });
+
+  it('opens no other destination by role', () => {
+    for (const dest of NAV_DESTINATIONS.filter((d) => d.to !== '/app/playbook')) {
+      expect(isNavVisible(dest, [], false, 'team_lead'), dest.to).toBe(false);
+    }
+  });
+});

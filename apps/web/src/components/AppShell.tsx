@@ -35,6 +35,7 @@ import { useNotice } from '../lib/notice.js';
 import { PresenceAvatars } from './PresenceAvatars.js';
 import { PresenceNotices } from './PresenceNotices.js';
 import { FOOTER, MODULES, isNavVisible, type NavDestination } from './navigation.js';
+import { useSuggestionBadge } from '../features/playbook/useSuggestionBadge.js';
 import { Dropdown } from './ui/index.js';
 
 /** Matches the toggle's `aria-controls` to the rail it expands/collapses. */
@@ -342,7 +343,7 @@ function IconRail(): ReactElement {
 
       <NavPinToggle pinned={pinned} onToggle={() => setPinned(!pinned)} />
 
-      {MODULES.filter((item) => isNavVisible(item, scopes, pilotMode)).map((item) => (
+      {MODULES.filter((item) => isNavVisible(item, scopes, pilotMode, role)).map((item) => (
         <RailButton
           key={item.to}
           item={badges[item.to] ? { ...item, badge: badges[item.to] } : item}
@@ -405,6 +406,9 @@ function useNavBadges(): Partial<Record<string, { count: number; ariaLabel: stri
     refetchInterval: 30_000,
   });
   const invitations = usePendingInvitations();
+  // The suggestions a Team Lead or administrator has not decided (AI-23 · tm 318.2).
+  const role = useAuth((s) => s.agent?.role ?? null);
+  const suggestions = useSuggestionBadge(roleAtLeast(role, 'team_lead'));
 
   const badges: Partial<Record<string, { count: number; ariaLabel: string }>> = {};
 
@@ -421,6 +425,13 @@ function useNavBadges(): Partial<Record<string, { count: number; ariaLabel: stri
     badges['/app/team'] = {
       count: teamCount,
       ariaLabel: t('shell.nav.badge.team', { count: teamCount }),
+    };
+  }
+
+  if (suggestions > 0) {
+    badges['/app/playbook'] = {
+      count: suggestions,
+      ariaLabel: t('shell.nav.badge.suggestions', { count: suggestions }),
     };
   }
 

@@ -1,4 +1,4 @@
-import { hasAnyScope } from '@siyahtus/types';
+import { AGENT_ROLES, hasAnyScope, roleAtLeast, type AgentRole } from '@siyahtus/types';
 
 /**
  * The one list of navigable modules.
@@ -35,6 +35,12 @@ export interface NavDestination {
    */
   scope?: readonly string[];
   /**
+   * Also offered to this role and above, whatever scopes they hold — a door the
+   * role is let into by a capability rather than a scope (Playbook for a Team
+   * Lead: the suggestion queue, AI-23 · tm 318.2).
+   */
+  orRole?: AgentRole;
+  /**
    * Not offered in the public pilot (`pilot_mode` from `GET /deployment`,
    * tm 257.2) — a surface the pilot does not sell. Hidden from the rail and the
    * palette alike; the API refuses what is behind it on its own.
@@ -54,12 +60,20 @@ export interface NavDestination {
  * Whether `dest` should be offered to a caller holding `scopes`, on a
  * deployment that is (`pilotMode`) or is not the public pilot.
  */
+function isAgentRole(value: string): value is AgentRole {
+  return (AGENT_ROLES as readonly string[]).includes(value);
+}
+
 export function isNavVisible(
   dest: NavDestination,
   scopes: readonly string[],
   pilotMode = false,
+  role: string | null = null,
 ): boolean {
   if (pilotMode && dest.pilotHidden) return false;
+  if (dest.orRole && role !== null && isAgentRole(role) && roleAtLeast(role, dest.orRole)) {
+    return true;
+  }
   return hasAnyScope(scopes, dest.scope ?? []);
 }
 
@@ -121,6 +135,8 @@ export const MODULES: NavDestination[] = [
     // admins configure the automation, ordinary agents work alongside it
     // (`role-scopes.ts` `ADMIN_SCOPES` comment).
     scope: ['agents-bot--all:ro', 'agents-bot--all:rw'],
+    // A Team Lead reaches the suggestion queue here (AI-23 · tm 318.2).
+    orRole: 'team_lead',
   },
   {
     to: '/app/reports',

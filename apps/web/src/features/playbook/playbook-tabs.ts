@@ -21,6 +21,7 @@ export const PLAYBOOK_VIEWS = [
   'unresolved',
   'versions',
   'history',
+  'suggestions',
 ] as const;
 
 export type PlaybookView = (typeof PLAYBOOK_VIEWS)[number];
@@ -48,6 +49,9 @@ export const PLAYBOOK_TABS: readonly PlaybookTab[] = [
   // The published versions and the review line (tm 316.4 · AI-20).
   { id: 'versions', labelKey: 'playbook.tabs.versions', needsConfigScope: true },
   { id: 'history', labelKey: 'playbook.tabs.history', needsConfigScope: true },
+  // The coaching queue (tm 318.2 · AI-23): not behind the configuration scope —
+  // a Team Lead reviews their team's suggestions without reading the rest.
+  { id: 'suggestions', labelKey: 'playbook.tabs.suggestions' },
 ];
 
 /** Links written before the rename: `profile` was today's `general`. */

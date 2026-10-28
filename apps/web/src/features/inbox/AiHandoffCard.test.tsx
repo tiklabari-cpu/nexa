@@ -352,6 +352,25 @@ describe('the verdict (AI-10-S2)', () => {
     expect(await screen.findByRole('alert')).toBeInTheDocument();
   });
 
+  it('opens a suggestion — and only that verdict does — when the AI handed over for nothing (AI-23)', async () => {
+    api.post.mockResolvedValue({ id: 's-1' });
+    mount(<AiHandoffCard card={depositCard()} chatId={CHAT} canJudge />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Handed over needlessly' }));
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith('/ai/suggestions', {
+        chat_id: depositCard().chat_id,
+        thread_id: depositCard().thread_id,
+        kind: 'should_not_have_handed_off',
+      }),
+    );
+    expect(await screen.findByText('Sent to the reviewers.')).toBeInTheDocument();
+    // One click, one suggestion: the button is spent until the panel is read again.
+    expect(screen.getByRole('button', { name: 'Handed over needlessly' })).toBeDisabled();
+    // Enough / not enough stays the card's own feedback and opens nothing.
+    expect(api.post).toHaveBeenCalledTimes(1);
+  });
+
   it('offers no buttons to a reader who may not write — only the verdict already given', () => {
     const { rerender, queryClient } = mount(
       <AiHandoffCard card={depositCard()} chatId={CHAT} canJudge={false} />,

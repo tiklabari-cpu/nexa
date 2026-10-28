@@ -40,6 +40,7 @@ import { useFailedSendStore } from './failedSends.js';
 import { retireDraft } from './composerDrafts.js';
 import { RISK_FLAGS_KEY } from '../risk/riskFlags.js';
 import { chatAiHandoffsKey } from './handoffCard.js';
+import { suggestionKeys, type AiSuggestionList } from '../playbook/ai-suggestions.js';
 import { TICKET_MESSAGES_KEY, withDelivery } from './ticketMessages.js';
 import { customerContextKey } from './useCustomerContext.js';
 import { withAiModeChange, type AiReturnInput, type ChatAiModeResult } from './aiMode.js';
@@ -1179,6 +1180,10 @@ export function useRealtime(onPush?: PushHandler): void {
         // A version of the AI configuration went live (AI-20 · tm 316.4): the
         // Inbox band, and the Playbook's version bar if it is open.
         'ai_config_published',
+        // The suggestion queue (AI-23 · tm 318.2): a reviewer's badge goes up
+        // within a second of a mark, and the author hears how theirs ended.
+        'ai_suggestion_created',
+        'ai_suggestion_reviewed',
         'incoming_typing_indicator',
         'incoming_sneak_peek',
         'agent_conflict_warning',
@@ -1619,6 +1624,25 @@ export function applyPush(
       if (!published) return;
       noteAiConfigPublished(published);
       void queryClient.invalidateQueries({ queryKey: ['playbook', 'ai-config'] });
+      return;
+    }
+
+    case 'ai_suggestion_created': {
+      // To the people who may review it, each with their own open count.
+      const openCount = payload['open_count'];
+      if (typeof openCount !== 'number' || !Number.isFinite(openCount)) return;
+      queryClient.setQueryData<AiSuggestionList>(suggestionKeys.badge, (list) =>
+        list
+          ? { ...list, open_count: openCount }
+          : { suggestions: [], total: 0, open_count: openCount },
+      );
+      void queryClient.invalidateQueries({ queryKey: ['ai-suggestions', 'list'] });
+      return;
+    }
+
+    case 'ai_suggestion_reviewed': {
+      // To the author: the queue they read and the badge both moved.
+      void queryClient.invalidateQueries({ queryKey: suggestionKeys.all });
       return;
     }
 

@@ -195,4 +195,6 @@ export const shell: Messages = {
   'palette.archive.placeholder': 'Search message text in the archive…',
   'palette.archive.leave': 'Leave archive search',
   'palette.archive.error': 'The archive search failed — try again.',
+  'shell.nav.badge.suggestions.one': '{count} suggestion to review',
+  'shell.nav.badge.suggestions.other': '{count} suggestions to review',
 };

@@ -43,7 +43,11 @@ import {
   playerParts,
 } from './handoffCard.js';
 import type { ChatEvent } from './types.js';
-import { useAiHandoffFeedback, useChatAiHandoffs } from './useAiHandoffs.js';
+import {
+  useAiHandoffFeedback,
+  useChatAiHandoffs,
+  useUnneededHandoffSuggestion,
+} from './useAiHandoffs.js';
 
 /** Who may give a verdict: whoever may write in the conversation (the route's gate). */
 export const JUDGE_SCOPES = ['chats--all:rw', 'chats--access:rw'];
@@ -358,6 +362,7 @@ function Feedback({
 }): ReactElement | null {
   const t = useTranslate();
   const judge = useAiHandoffFeedback(chatId);
+  const unneeded = useUnneededHandoffSuggestion();
   const [reason, setReason] = useState(card.feedback_reason ?? '');
   const reasonId = useId();
 
@@ -434,7 +439,24 @@ function Feedback({
           </div>
         </div>
       )}
+      {/* The one verdict that opens a suggestion (AI-23): the AI should have kept it. */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          disabled={unneeded.isPending || unneeded.isSuccess}
+          onClick={() => unneeded.mutate(card)}
+          className="rounded-sm border border-border px-2 py-0.5 text-2xs hover:bg-surface-2 disabled:opacity-50"
+        >
+          {t('inbox.handoffCard.feedback.unneeded')}
+        </button>
+        {unneeded.isSuccess && (
+          <span role="status" className="text-2xs text-content-tertiary">
+            {t('inbox.handoffCard.feedback.unneededDone')}
+          </span>
+        )}
+      </div>
       {judge.isError && <Banner tone="danger">{t(errorMessageKey(judge.error))}</Banner>}
+      {unneeded.isError && <Banner tone="danger">{t(errorMessageKey(unneeded.error))}</Banner>}
     </div>
   );
 }

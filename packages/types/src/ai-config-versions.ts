@@ -39,3 +39,116 @@ export const AI_CONFIG_PACKAGE_FORMAT_BASELINE = 0;
 export function aiConfigVersionLabel(version: { number: number; minor: number }): string {
   return version.minor === 0 ? `v${version.number}` : `v${version.number}.${version.minor}`;
 }
+
+// ---------------------------------------------------------------------------
+// The compiled package (tm 316.5 · ADR-14b §2.4, §2.10 (1)).
+// ---------------------------------------------------------------------------
+
+/** `package_format` of a package `config-compiler.ts` writes. */
+export const AI_CONFIG_PACKAGE_FORMAT = 1;
+
+/**
+ * The largest package, as canonical JSON in bytes (ADR-14b §2.4's proposal):
+ * a draft that compiles to more is refused (`package_too_large`).
+ */
+export const AI_CONFIG_PACKAGE_MAX_BYTES = 2 * 1024 * 1024;
+
+/** The parts of a package a difference is told in, in the order a screen lists them. */
+export const AI_CONFIG_SECTIONS = [
+  'agent',
+  'skills',
+  'guidance',
+  'guardrails',
+  'handoff',
+  'knowledge',
+] as const;
+export type AiConfigSection = (typeof AI_CONFIG_SECTIONS)[number];
+
+/**
+ * Why a difference needs the owner's approval (`touches_compliance`, AI-20
+ * coding logic 2): the workspace's guardrails (AI-08) or a locked procedure
+ * (AI-15 — self-exclusion, responsible gambling). The risk policy (AI-27)
+ * joins the list with its table.
+ */
+export const AI_CONFIG_COMPLIANCE_REASONS = ['guardrails', 'locked_procedure'] as const;
+export type AiConfigComplianceReason = (typeof AI_CONFIG_COMPLIANCE_REASONS)[number];
+
+/** What stops a draft from being submitted. */
+export const AI_CONFIG_PROBLEM_CODES = [
+  'agent_not_found',
+  'skill_steps_invalid',
+  'skill_procedure_invalid',
+  'guidance_locked_rule',
+  'guidance_conflict',
+  'handoff_target_unknown_team',
+  'package_too_large',
+] as const;
+export type AiConfigProblemCode = (typeof AI_CONFIG_PROBLEM_CODES)[number];
+
+/** What a submitter is told but not stopped by. */
+export const AI_CONFIG_WARNING_CODES = [
+  'guidance_duplicate',
+  'handoff_rule_procedure_inactive',
+  'knowledge_source_not_ready',
+] as const;
+export type AiConfigWarningCode = (typeof AI_CONFIG_WARNING_CODES)[number];
+
+/**
+ * One finding about a draft. `section` and `key` name the item as the
+ * difference does (a skill's id, `rule:<id>`, …); the rest is the code's.
+ */
+export interface AiConfigFinding<Code extends string = AiConfigProblemCode | AiConfigWarningCode> {
+  code: Code;
+  section: AiConfigSection | null;
+  key: string | null;
+  message: string;
+  details?: Record<string, string | number | null>;
+}
+
+/**
+ * One knowledge source as a version sees it (`ai_config_versions.knowledge_manifest`,
+ * ADR-14b §2.4): which generation of its chunks, and the scope the live
+ * search reads from here rather than from the source row.
+ */
+export interface AiConfigKnowledgeManifestEntry {
+  source_id: string;
+  generation: number;
+  type: string;
+  audiences: string[];
+  ai_agent_ids: string[];
+  brand_ids: string[];
+  language: string | null;
+  /** ISO 8601; null: no end. Judged against the turn's own clock. */
+  valid_until: string | null;
+}
+
+export type AiConfigDiffKind = 'added' | 'removed' | 'changed';
+
+/** At most this many items a section's difference names; the counts are always whole. */
+export const AI_CONFIG_DIFF_ITEMS_MAX = 200;
+
+export interface AiConfigSectionDiff {
+  section: AiConfigSection;
+  added: number;
+  removed: number;
+  changed: number;
+  /** Ordered by key; cut at {@link AI_CONFIG_DIFF_ITEMS_MAX}. */
+  items: Array<{ key: string; kind: AiConfigDiffKind }>;
+}
+
+/** `ai_config_versions.diff_summary`: a package against the published one it is based on. */
+export interface AiConfigDiffSummary {
+  /** The version compared against; null: the agent had none published. */
+  base_version_id: string | null;
+  /**
+   * The base was the migration's uncompiled v1 (`package_format` 0), so the
+   * package is told against nothing — every item reads as added.
+   */
+  from_baseline: boolean;
+  /** Items added, removed or changed, all sections together — "Taslak 7 değişiklik". */
+  changes: number;
+  /** Only the sections with a change, in {@link AI_CONFIG_SECTIONS} order. */
+  sections: AiConfigSectionDiff[];
+  touches_compliance: boolean;
+  compliance: AiConfigComplianceReason[];
+}

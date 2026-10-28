@@ -69,6 +69,12 @@
  * opens one from a cluster agents kept answering
  * (`services/ai/suggestion-drafting.ts`) — with the server's providers, metered
  * as `coaching`, and the publisher for the reviewers' badge. No CLI script.
+ *
+ * `qa_sampling` (tm 319.1 · AI-24 §2) puts each workspace's previous
+ * conversation day in the QA queue once its clock reaches 02:00 — the
+ * deterministic random share and every mandatory category
+ * (`services/qa/sampler.ts`). A day is sampled once (`qa_sampling_runs`), so
+ * a tick that finds nothing due reads one row per workspace. No CLI script.
  */
 import type { PrismaClient } from '@prisma/client';
 import type { Env } from '../../config/env.js';
@@ -100,6 +106,7 @@ import {
   UnverifiedSignupSweeper,
 } from '../auth/unverified-signup-sweep.js';
 import { InvoiceCloseSweeper } from '../billing/invoice-close-sweep.js';
+import { QaSampler } from '../qa/sampler.js';
 import { AiStallWatchdog } from '../chat/ai-stall.js';
 import { ChatInactivitySweeper } from '../chat/chat-inactivity.js';
 import { ChatService } from '../chat/chat-service.js';
@@ -665,6 +672,26 @@ export function buildSchedulerJobs({
             drafted: report.totals.drafted,
             llm: report.totals.llm,
             duplicates: report.totals.duplicates,
+          },
+        };
+      },
+    },
+    {
+      // The previous conversation day's AI connections into the QA queue, at
+      // 02:00 on each workspace's clock (tm 319.1 · AI-24 §2). Not gated: a
+      // workspace whose day was sampled reads one row.
+      name: 'qa_sampling',
+      intervalMs: intervals.qa_sampling,
+      async run(context) {
+        const report = await new QaSampler(db).run({ signal: context.signal });
+        return {
+          counts: {
+            tenants: report.totals.tenants,
+            days: report.totals.days,
+            eligible: report.totals.eligible,
+            random: report.totals.random,
+            mandatory: report.totals.mandatory,
+            queued: report.totals.queued,
           },
         };
       },

@@ -25,6 +25,7 @@ import {
   GUARDRAIL_IDS,
   PLATFORM_GUARDRAILS,
   PLATFORM_GUARDRAILS_VERSION,
+  PLATFORM_QA_RUBRIC,
   type PlatformRole,
 } from '@siyahtus/types';
 import { PLATFORM_PREFIX } from '../../src/platform-server.js';
@@ -643,6 +644,60 @@ describe('platform AI catalogues (tm 389.19)', () => {
         guidance_rules: { status: 'available', total: 0, active: 0 },
         guardrail_hits: { status: 'available', last_30_days: 0, by_rule: {} },
         compliance_pack: { status: 'available', last_run: null },
+      });
+    });
+
+    it('counts the QA queue’s open reviews and the ones completed in 30 days, per workspace (tm 319.1)', async () => {
+      const rubricOf = async (t: TenantFixture) =>
+        (
+          await owner.qaRubric.create({
+            data: {
+              id: crypto.randomUUID(),
+              licenseId: t.licenseId,
+              version: 1,
+              criteria: PLATFORM_QA_RUBRIC as never,
+              active: true,
+            },
+            select: { id: true },
+          })
+        ).id;
+      const review = async (
+        t: TenantFixture,
+        agentId: string,
+        rubricId: string,
+        status: 'pending_prescore' | 'ready' | 'in_review' | 'completed',
+        reviewedAt: Date | null = null,
+      ) => {
+        const { chatId, threadId } = await conversation(t);
+        await owner.qaReview.create({
+          data: {
+            id: crypto.randomUUID(),
+            licenseId: t.licenseId,
+            chatId,
+            threadId,
+            aiAgentId: agentId,
+            reasons: ['random'],
+            status,
+            dueAt: new Date(),
+            rubricId,
+            ...(status === 'completed' ? { final: 'pass', reviewedAt } : {}),
+          },
+        });
+      };
+      const [agentA, agentB] = [await agentOf(fx.a), await agentOf(fx.b)];
+      const [rubricA, rubricB] = [await rubricOf(fx.a), await rubricOf(fx.b)];
+      for (const status of ['pending_prescore', 'ready', 'in_review'] as const) {
+        await review(fx.a, agentA, rubricA, status);
+      }
+      await review(fx.a, agentA, rubricA, 'completed', new Date());
+      await review(fx.a, agentA, rubricA, 'completed', new Date(Date.now() - 31 * DAY));
+      for (let i = 0; i < 4; i += 1) await review(fx.b, agentB, rubricB, 'ready');
+
+      const summary = await ok(call('GET', `/workspaces/${fx.a.licenseId}/ai-summary`));
+      expect(summary['qa']).toEqual({
+        status: 'available',
+        reviewed_30_days: 1,
+        awaiting_review: 3,
       });
     });
 

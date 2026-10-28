@@ -244,6 +244,12 @@ model License {
   aiConfigChanges        AiConfigChange[]
   aiConfigVersions       AiConfigVersion[]
   aiSuggestions          AiSuggestion[]
+  qaSettings             QaSettings?
+  qaRubrics              QaRubric[]
+  qaReviews              QaReview[]
+  qaCalibrations         QaCalibration[]
+  qaCalibrationScores    QaCalibrationScore[]
+  qaSamplingRuns         QaSamplingRun[]
   mailDailyUsage         MailDailyUsage[]
   apiPackagePurchases    ApiPackagePurchase[]
   aiPackagePurchases     AiPackagePurchase[]
@@ -342,6 +348,10 @@ model Account {
   /// The AI suggestions this member made and reviewed (tm 318.1 · AI-23).
   aiSuggestionsMade     AiSuggestion[] @relation("AiSuggestionAuthor")
   aiSuggestionsReviewed AiSuggestion[] @relation("AiSuggestionReviewer")
+  /// The QA reviews this member claimed and completed, and their calibration scores (tm 319.1 · AI-24).
+  qaReviewsAssigned     QaReview[]     @relation("QaReviewAssignee")
+  qaReviewsCompleted    QaReview[]     @relation("QaReviewReviewer")
+  qaCalibrationScores   QaCalibrationScore[]
 
   @@map("accounts")
 }
@@ -1104,6 +1114,7 @@ model Chat {
   aiJobs           AiJob[]
   aiUnresolved     AiUnresolvedItem[]
   aiSuggestions    AiSuggestion[]
+  qaReviews        QaReview[]
 
   @@index([licenseId, createdAt(sort: Desc)])
   /// The inbox list's ordering index. Kept beside the `created_at` one rather
@@ -2137,6 +2148,7 @@ model AiAgent {
   unresolvedItems   AiUnresolvedItem[]
   unresolvedGroups  AiUnresolvedCluster[]
   suggestions       AiSuggestion[]
+  qaReviews         QaReview[]
 
   // One `kind = 'ai_agent'` row per licence (tm 390.1): the partial unique
   // index `ai_agents_one_per_license` lives in the migration — Prisma cannot
@@ -5582,4 +5594,167 @@ model AiSuggestion {
   @@index([createdBy, createdAt])
   @@index([chatId])
   @@map("ai_suggestions")
+}
+
+/// A workspace's QA settings (tm 319.1 · SiyahTuş analysis AI-24 · Ayarlar ›
+/// AI kalite): the day's random share in whole percent (`QA_SAMPLE_PERCENT_*`,
+/// 1–20 by CHECK), the model's pre-score (AI-24-S2) and the conflict-of-interest
+/// check (a reviewer never reviews a connection they took). One row per
+/// workspace; none reads as the defaults. `updated_by` has no foreign key.
+/// RLS and grants in `20261117090000_qa_queue`.
+model QaSettings {
+  licenseId       BigInt   @id @map("license_id")
+  samplePercent   Int      @default(5) @map("sample_percent") @db.SmallInt
+  prescoreEnabled Boolean  @default(true) @map("prescore_enabled")
+  conflictCheck   Boolean  @default(true) @map("conflict_check")
+  updatedBy       String?  @map("updated_by") @db.Uuid
+  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@map("qa_settings")
+}
+
+/// A version of a workspace's QA rubric (AI-24): `QaRubricCriterion[]`
+/// (`@siyahtus/types` `qa.ts`). Version 1 is the platform rubric; a change is
+/// a new version, never an edit. One active per workspace — the partial unique
+/// index `qa_rubrics_one_active_key` lives in the migration.
+model QaRubric {
+  id        String   @id @db.Uuid
+  licenseId BigInt   @map("license_id")
+  version   Int
+  criteria  Json
+  active    Boolean  @default(false)
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license      License         @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  reviews      QaReview[]
+  calibrations QaCalibration[]
+
+  @@unique([licenseId, version])
+  @@map("qa_rubrics")
+}
+
+/// One connection the AI took part in, queued for QA review (tm 319.1 · AI-24).
+/// `reasons` are `QA_REASONS`, `priority` the `QA_PRIORITY_RANK`, `status` a
+/// `QA_REVIEW_STATUSES`, `final` a `QA_FINALS` — CHECKs in the migration.
+/// `thread_id` has no foreign key: the masked excerpt and the scores outlive
+/// the conversation's retention. `team_id`, `brand_id` (a label, like
+/// `chats.brand_id`) and `config_version_id` are the connection's when queued.
+/// One review per connection (`@@unique([licenseId, threadId])`). The trigger
+/// that keeps every reference in the workspace lives in `20261117090000_qa_queue`.
+model QaReview {
+  id              String    @id @db.Uuid
+  licenseId       BigInt    @map("license_id")
+  /// The day container (panel "Thread ID").
+  chatId          String    @map("chat_id") @db.VarChar(12)
+  /// The connection (panel "Chat ID"); no foreign key — retention deletes it.
+  threadId        String    @map("thread_id") @db.VarChar(12)
+  aiAgentId       String    @map("ai_agent_id") @db.Uuid
+  configVersionId String?   @map("config_version_id") @db.Uuid
+  teamId          BigInt?   @map("team_id")
+  brandId         String?   @map("brand_id") @db.Uuid
+  reasons         String[]
+  priority        Int       @default(0) @db.SmallInt
+  status          String    @default("ready")
+  /// The conversation day the sampler took it from; null when added by hand.
+  sampleDay       DateTime? @map("sample_day") @db.Date
+  assignedTo      String?   @map("assigned_to") @db.Uuid
+  claimedAt       DateTime? @map("claimed_at") @db.Timestamptz(6)
+  dueAt           DateTime  @map("due_at") @db.Timestamptz(6)
+  rubricId        String    @map("rubric_id") @db.Uuid
+  prescore        Json?
+  scores          Json      @default("{}")
+  final           String?
+  criticalFail    Boolean   @default(false) @map("critical_fail")
+  /// `QaExcerptMessage[]`, masked when sampled (AI-26).
+  excerptMasked   Json      @default("[]") @map("excerpt_masked")
+  reviewerId      String?   @map("reviewer_id") @db.Uuid
+  reviewedAt      DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  comments        String?
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  license           License              @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  chat              Chat                 @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  aiAgent           AiAgent              @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
+  rubric            QaRubric             @relation(fields: [rubricId], references: [id], onDelete: Restrict)
+  assignee          Account?             @relation("QaReviewAssignee", fields: [assignedTo], references: [id], onDelete: SetNull)
+  reviewer          Account?             @relation("QaReviewReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  calibrationScores QaCalibrationScore[]
+
+  @@unique([licenseId, threadId])
+  @@index([licenseId, status, dueAt])
+  @@index([licenseId, teamId, status])
+  @@index([chatId])
+  @@index([rubricId])
+  @@map("qa_reviews")
+}
+
+/// A monthly calibration round (AI-24 §7): the same reviews (≤
+/// `QA_CALIBRATION_SIZE`) scored by every Team Lead. `period` is the month's
+/// first day; one round per workspace and month.
+model QaCalibration {
+  id        String    @id @db.Uuid
+  licenseId BigInt    @map("license_id")
+  period    DateTime  @db.Date
+  rubricId  String    @map("rubric_id") @db.Uuid
+  reviewIds String[]  @map("review_ids") @db.Uuid
+  /// One of `QA_CALIBRATION_STATUSES`.
+  status    String    @default("open")
+  createdBy String?   @map("created_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  closedAt  DateTime? @map("closed_at") @db.Timestamptz(6)
+
+  license License              @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  rubric  QaRubric             @relation(fields: [rubricId], references: [id], onDelete: Restrict)
+  scores  QaCalibrationScore[]
+
+  @@unique([licenseId, period])
+  @@index([rubricId])
+  @@map("qa_calibrations")
+}
+
+/// One Team Lead's score of one review in a calibration round.
+model QaCalibrationScore {
+  id            String   @id @db.Uuid
+  licenseId     BigInt   @map("license_id")
+  calibrationId String   @map("calibration_id") @db.Uuid
+  reviewId      String   @map("review_id") @db.Uuid
+  reviewerId    String   @map("reviewer_id") @db.Uuid
+  scores        Json
+  /// One of `QA_FINALS`.
+  final         String
+  criticalFail  Boolean  @default(false) @map("critical_fail")
+  submittedAt   DateTime @default(now()) @map("submitted_at") @db.Timestamptz(6)
+
+  license     License       @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  calibration QaCalibration @relation(fields: [calibrationId], references: [id], onDelete: Cascade)
+  review      QaReview      @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  reviewer    Account       @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@unique([calibrationId, reviewId, reviewerId])
+  @@index([reviewId])
+  @@index([reviewerId])
+  @@map("qa_calibration_scores")
+}
+
+/// One sampled conversation day of a workspace (tm 319.1 · AI-24): the
+/// sampler's idempotency mark — a day is sampled once — and the volumes the
+/// QA workload is watched by.
+model QaSamplingRun {
+  licenseId     BigInt   @map("license_id")
+  day           DateTime @db.Date
+  samplePercent Int      @map("sample_percent") @db.SmallInt
+  eligible      Int      @default(0)
+  random        Int      @default(0)
+  mandatory     Int      @default(0)
+  queued        Int      @default(0)
+  ranAt         DateTime @default(now()) @map("ran_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@id([licenseId, day])
+  @@map("qa_sampling_runs")
 }

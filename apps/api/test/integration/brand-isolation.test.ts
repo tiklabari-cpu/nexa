@@ -38,10 +38,11 @@
  * tm 310.1 adds four brand lists (the structured knowledge tables, read through
  * `readKnowledgeTableRows`) and one brand scope (`ai_access_info`, K13).
  */
+import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { embed, toVectorLiteral } from '@siyahtus/ai-mock';
-import { generateShortId } from '@siyahtus/types';
+import { PLATFORM_QA_RUBRIC, generateShortId } from '@siyahtus/types';
 import { withTenant } from '../../src/lib/tenant.js';
 import { KnowledgeService } from '../../src/services/ai/knowledge-service.js';
 import { readKnowledgeTableRows } from '../../src/services/knowledge-tables/rows.js';
@@ -232,6 +233,54 @@ const BRAND_LABEL_TABLES: ReadonlyArray<{
           threadId: thread.id,
           textMasked: 'Marka deneme sorusu nedir',
           reason: 'no_knowledge',
+        },
+      });
+    },
+  },
+  {
+    // The brand a QA review's connection came in through (tm 319.1 · AI-24):
+    // a report filters by it, while the queue is a Team Lead's teams', not a
+    // brand's — a lead of a multi-brand workspace reviews every brand's.
+    table: 'qa_reviews',
+    reason: 'the QA reports filter by it; the queue is scoped by team',
+    plant: async (db, at) => {
+      const agent = await db.aiAgent.create({
+        data: { licenseId: at.licenseId, name: 'Brand probe AI' },
+        select: { id: true },
+      });
+      const customer = await db.customer.create({
+        data: { organizationId: at.organizationId, name: 'Brand probe' },
+        select: { id: true },
+      });
+      const chat = await db.chat.create({
+        data: { id: generateShortId(), licenseId: at.licenseId, customerId: customer.id },
+        select: { id: true },
+      });
+      const thread = await db.thread.create({
+        data: { id: generateShortId(), chatId: chat.id, licenseId: at.licenseId },
+        select: { id: true },
+      });
+      const rubric = await db.qaRubric.create({
+        data: {
+          id: randomUUID(),
+          licenseId: at.licenseId,
+          version: 1,
+          criteria: PLATFORM_QA_RUBRIC as never,
+          active: true,
+        },
+        select: { id: true },
+      });
+      return db.qaReview.create({
+        data: {
+          id: randomUUID(),
+          licenseId: at.licenseId,
+          chatId: chat.id,
+          threadId: thread.id,
+          aiAgentId: agent.id,
+          brandId: at.brandId,
+          reasons: ['manual'],
+          dueAt: new Date(),
+          rubricId: rubric.id,
         },
       });
     },

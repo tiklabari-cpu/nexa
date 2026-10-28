@@ -15,8 +15,8 @@
  *     platform connection bypasses row level security, so the `WHERE
  *     license_id` is the only wall (`platform-ai-catalogs.test.ts` mutates it).
  *
- * A source that has not shipped yet — `qa_reviews` (tm 319), the tool
- * catalogue (tm 321); `ai_config_changes` was one until tm 315 — answers
+ * A source that has not shipped yet — the tool catalogue (tm 321);
+ * `ai_config_changes` was one until tm 315, `qa_reviews` until tm 319.1 — answers
  * `not_installed`, decided at read time from the database (`to_regclass`), so
  * it turns on by itself when its migration lands. If the table exists and its
  * columns are not the ones named in {@link OPTIONAL_SOURCES} the query fails
@@ -39,6 +39,7 @@ import {
   PLATFORM_CRISIS_TEXT_MAX,
   PLATFORM_GUARDRAILS,
   PLATFORM_GUARDRAILS_VERSION,
+  QA_OPEN_REVIEW_STATUSES,
   isCrisisTextDrafts,
   type AiCatalogStatus,
   type CrisisTextDrafts,
@@ -112,7 +113,9 @@ export const OPTIONAL_SOURCES = {
     licenseColumn: 'license_id',
     timeColumn: 'at',
   },
-  qaReviews: { table: 'qa_reviews', licenseColumn: 'license_id', timeColumn: 'created_at' },
+  // Shipped by tm 319.1 (20261117090000): a review counts as reviewed at its
+  // `reviewed_at`, which only a completed one has.
+  qaReviews: { table: 'qa_reviews', licenseColumn: 'license_id', timeColumn: 'reviewed_at' },
 } as const;
 
 export type OptionalSource = {
@@ -481,13 +484,14 @@ export class PlatformAiCatalogs {
     };
   }
 
-  /** Reviews waiting for a team lead; zero when the QA queue has not shipped. */
+  /** Reviews waiting for a verdict (`QA_OPEN_REVIEW_STATUSES`); zero when the QA queue has not shipped. */
   async #qaAwaiting(licenseId: bigint): Promise<number> {
     const source = OPTIONAL_SOURCES.qaReviews;
     if (!(await tableExists(this.#db, source.table))) return 0;
     const rows = await this.#db.$queryRaw<Array<{ n: number }>>(
       Prisma.sql`SELECT count(*)::int AS n FROM ${identifier(source.table)}
-        WHERE ${identifier(source.licenseColumn)} = ${licenseId} AND status = 'pending'`,
+        WHERE ${identifier(source.licenseColumn)} = ${licenseId}
+          AND status = ANY(${[...QA_OPEN_REVIEW_STATUSES]}::text[])`,
     );
     return rows[0]?.n ?? 0;
   }

@@ -63,6 +63,7 @@ describe('buildSchedulerJobs', () => {
       'ai_scheduled_publish',
       'knowledge_chunk_gc',
       'ai_suggestion_drafts',
+      'qa_sampling',
     ]);
     // A name declared but never registered is a job somebody forgot to wire,
     // and `/health` would simply not mention it.
@@ -88,6 +89,7 @@ describe('buildSchedulerJobs', () => {
       SCHEDULE_AI_SCHEDULED_PUBLISH_MS: '17000',
       SCHEDULE_KNOWLEDGE_CHUNK_GC_MS: '18000',
       SCHEDULE_AI_SUGGESTION_DRAFTS_MS: '19000',
+      SCHEDULE_QA_SAMPLING_MS: '20000',
     });
     const jobs = buildSchedulerJobs({ db, env, mailer: new NullMailer() });
     const intervalOf = (name: string): number | undefined =>
@@ -110,6 +112,7 @@ describe('buildSchedulerJobs', () => {
     expect(intervalOf('ai_scheduled_publish')).toBe(17_000);
     expect(intervalOf('knowledge_chunk_gc')).toBe(18_000);
     expect(intervalOf('ai_suggestion_drafts')).toBe(19_000);
+    expect(intervalOf('qa_sampling')).toBe(20_000);
   });
 
   it('registers retention and the unverified sign-up sweep disabled unless their switches are set — no other job is gated', () => {
@@ -211,6 +214,21 @@ describe('buildSchedulerJobs', () => {
       );
       const outcome = await job?.run(context());
       expect(outcome?.counts).toEqual({ tenants: 0, opened: 0, drafted: 0, llm: 0, duplicates: 0 });
+    });
+
+    it('qa_sampling finds no workspace and queues nothing (tm 319.1)', async () => {
+      const job = buildSchedulerJobs({ db, env: testEnv(), mailer: new NullMailer() }).find(
+        (j) => j.name === 'qa_sampling',
+      );
+      const outcome = await job?.run(context());
+      expect(outcome?.counts).toEqual({
+        tenants: 0,
+        days: 0,
+        eligible: 0,
+        random: 0,
+        mandatory: 0,
+        queued: 0,
+      });
     });
 
     it('ai_sandbox_sessions finds nothing expired and deletes nothing (tm 314.2)', async () => {

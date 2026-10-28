@@ -13967,7 +13967,7 @@
           "314"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-28T14:00:34.312Z",
+        "updatedAt": "2026-10-28T15:23:46.365Z",
         "subtasks": [
           {
             "id": 1,
@@ -13975,11 +13975,11 @@
             "description": "QA tabloları + rubrik/nedenler + sampler (deterministik + zorunlu kategoriler) + zamanlayıcı",
             "details": "Üst görev 319 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Örneklem testleri.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "319",
             "priority": "medium",
-            "updatedAt": "2026-10-28T14:00:34.312Z"
+            "updatedAt": "2026-10-28T15:23:46.365Z"
           },
           {
             "id": 2,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-28T14:00:34.313Z",
+      "lastModified": "2026-10-28T15:23:46.365Z",
       "taskCount": 390,
       "completedCount": 335,
       "tags": [

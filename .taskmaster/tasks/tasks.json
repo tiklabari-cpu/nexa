@@ -13763,7 +13763,7 @@
           "315"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-28T02:58:02.550Z",
+        "updatedAt": "2026-10-28T03:51:19.441Z",
         "subtasks": [
           {
             "id": 1,
@@ -13826,13 +13826,13 @@
             "description": "config-compiler.ts: taslak → derlenmiş paket + doğrulama (adımlar, AI-07 çelişki, devir hedefleri) + fark özeti + touches_compliance",
             "details": "Üst görev \"Servisler config-compiler.ts\" ve AKIŞ'taki gönderme doğrulaması; iş akışı uçları (316.2) bunu çağırır. Ayrıntı ve kabul maddeleri: üst görev #316 details (tek kaynak).",
             "testStrategy": "Birim (geçerli/geçersiz taslak, fark, uyum dokunuşu tespiti); `pnpm test:gate`.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "316.1"
             ],
             "parentId": "316",
             "priority": "medium",
-            "updatedAt": "2026-10-28T02:58:02.550Z"
+            "updatedAt": "2026-10-28T03:51:19.441Z"
           },
           {
             "id": 6,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-28T02:58:02.551Z",
+      "lastModified": "2026-10-28T03:51:19.442Z",
       "taskCount": 390,
       "completedCount": 333,
       "tags": [

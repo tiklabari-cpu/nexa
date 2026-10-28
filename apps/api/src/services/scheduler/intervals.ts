@@ -28,7 +28,9 @@ import type { Env } from '../../config/env.js';
  * the twelfth groups the questions the AI could not resolve and raises their
  * surge alarm, and the thirteenth merges the groups it split, nightly (tm 317.2);
  * the fourteenth passes on a connection its agent left unanswered and marks a
- * quiet one inactive (tm 340.2).
+ * quiet one inactive (tm 340.2); the fifteenth publishes the AI configuration
+ * versions approved for a time that has come, and the sixteenth deletes the
+ * knowledge chunks no version answers from any more (tm 316.6).
  */
 export const SCHEDULER_JOB_NAMES = [
   'chat_timeout',
@@ -45,6 +47,8 @@ export const SCHEDULER_JOB_NAMES = [
   'ai_unresolved_cluster',
   'ai_unresolved_merge',
   'chat_inactivity',
+  'ai_scheduled_publish',
+  'knowledge_chunk_gc',
 ] as const;
 
 export type SchedulerJobName = (typeof SCHEDULER_JOB_NAMES)[number];
@@ -71,6 +75,8 @@ export type SchedulerIntervalEnv = Pick<
   | 'SCHEDULE_AI_UNRESOLVED_CLUSTER_MS'
   | 'SCHEDULE_AI_UNRESOLVED_MERGE_MS'
   | 'SCHEDULE_CHAT_INACTIVITY_MS'
+  | 'SCHEDULE_AI_SCHEDULED_PUBLISH_MS'
+  | 'SCHEDULE_KNOWLEDGE_CHUNK_GC_MS'
 >;
 
 /**
@@ -96,6 +102,8 @@ export function jobIntervals(env: SchedulerIntervalEnv): Record<SchedulerJobName
     ai_unresolved_cluster: env.SCHEDULE_AI_UNRESOLVED_CLUSTER_MS,
     ai_unresolved_merge: env.SCHEDULE_AI_UNRESOLVED_MERGE_MS,
     chat_inactivity: env.SCHEDULE_CHAT_INACTIVITY_MS,
+    ai_scheduled_publish: env.SCHEDULE_AI_SCHEDULED_PUBLISH_MS,
+    knowledge_chunk_gc: env.SCHEDULE_KNOWLEDGE_CHUNK_GC_MS,
   };
 }
 

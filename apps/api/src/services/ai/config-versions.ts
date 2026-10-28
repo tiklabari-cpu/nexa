@@ -38,8 +38,14 @@ import type { AiConfigVersion, Prisma } from '@prisma/client';
 import {
   AI_COMPLIANCE_SCENARIO_KEY_PREFIX,
   AI_CONFIG_PACKAGE_FORMAT_BASELINE,
+  AI_CONFIG_PUBLISH_CAPABILITY,
+  AGENT_ROLES,
   aiConfigVersionLabel,
+  capabilitiesForRole,
+  capabilityAtLeast,
   guardrailSetupProblem,
+  ROLE_RANK,
+  type AgentRole,
   type AiConfigDiffSummary,
   type AiConfigKnowledgeManifestEntry,
   type AiConfigSystemReviewNote,
@@ -48,6 +54,7 @@ import {
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient } from '../../lib/tenant.js';
 import { canonicalJson } from '../audit/audit-chain.js';
+import { readPermissionMatrix } from '../auth/permission-matrix.js';
 import {
   compileDraft,
   diffAiConfig,
@@ -370,10 +377,16 @@ export interface Reviewer {
   role: string;
 }
 
+/** Why the system rejected a version it was about to publish. */
+export type PublishRefusal = Extract<
+  AiConfigSystemReviewNote,
+  'stale_base' | 'approval_lapsed' | 'compliance_pack'
+>;
+
 export type PublishOutcome =
   | { kind: 'published'; version: AiConfigVersion; superseded: string | null }
   | { kind: 'scheduled'; version: AiConfigVersion }
-  | { kind: 'rejected'; version: AiConfigVersion; reason: 'stale_base' };
+  | { kind: 'rejected'; version: AiConfigVersion; reason: PublishRefusal };
 
 /**
  * Approve an `in_review` version. The submitter never approves their own
@@ -459,18 +472,82 @@ export async function rejectVersion(
 
 /**
  * Publish an approved version whose time has come — the scheduled job's way
- * in (tm 316.6). Everything an immediate approval checks is checked again.
+ * in (tm 316.6 · AI-20-S4). Everything an immediate approval checks is checked
+ * again, now: the approval itself (the approver still a member, not
+ * suspended, an Administrator or above with the matrix's publish row — and
+ * the Founder for a compliance change), the compliance pack it passed, and the
+ * base. Nobody is waiting on a scheduled publication to read a 409, so one
+ * that no longer holds is rejected with the system's reason
+ * ({@link PublishOutcome} `rejected`) rather than left `approved` to fail
+ * again every minute. A version withdrawn or rejected meanwhile, or one not
+ * yet due, is `409 not_open`: there is nothing to publish.
  */
 export async function publishVersion(
   tx: TenantClient,
   author: ConfigChangeAuthor,
-  input: { versionId: string; publishedBy: string | null; now: Date },
+  input: { versionId: string; now: Date },
 ): Promise<PublishOutcome> {
   const { agent, version } = await lockVersion(tx, input.versionId);
   if (version.status !== 'approved') {
     throw versionState('not_open', 'This version is not approved.', { status: version.status });
   }
-  return publishLocked(tx, author, agent, version, input);
+  if (version.scheduledAt !== null && version.scheduledAt.getTime() > input.now.getTime()) {
+    throw versionState('not_open', 'This version is not due yet.', {
+      status: version.status,
+      scheduled_at: version.scheduledAt.toISOString(),
+    });
+  }
+  if (!(await approvalHolds(tx, agent, version))) {
+    return refuse(tx, author, version, 'approval_lapsed', input.now);
+  }
+  return publishLocked(tx, author, agent, version, {
+    publishedBy: version.reviewedBy,
+    now: input.now,
+    refuse: true,
+  });
+}
+
+/**
+ * Whether the approval of `version` would still be given today — by the same
+ * rules the approve route applies to a request (`routes/ai-config.ts`
+ * `minimumRole: 'admin'` and `reviewerOf`, and {@link approveVersion}).
+ */
+async function approvalHolds(
+  tx: TenantClient,
+  agent: LockedAgent,
+  version: AiConfigVersion,
+): Promise<boolean> {
+  if (version.reviewedBy === null) return false;
+  const membership = await tx.agentMembership.findFirst({
+    where: { licenseId: agent.licenseId, agentId: version.reviewedBy, suspended: false },
+    select: { role: true },
+  });
+  const role = membership?.role;
+  if (role === undefined || !(AGENT_ROLES as readonly string[]).includes(role)) return false;
+  if (ROLE_RANK[role as AgentRole] < ROLE_RANK.admin) return false;
+  if (version.touchesCompliance && role !== 'owner') return false;
+  const matrix = await readPermissionMatrix(tx, agent.licenseId);
+  const capabilities = capabilitiesForRole(role, matrix.overrides);
+  return capabilityAtLeast(
+    AI_CONFIG_PUBLISH_CAPABILITY,
+    capabilities[AI_CONFIG_PUBLISH_CAPABILITY],
+  );
+}
+
+/** The system rejects a version it was about to publish, saying why. */
+async function refuse(
+  tx: TenantClient,
+  author: ConfigChangeAuthor,
+  version: AiConfigVersion,
+  reason: PublishRefusal,
+  now: Date,
+): Promise<PublishOutcome> {
+  const rejected = await tx.aiConfigVersion.update({
+    where: { id: version.id },
+    data: { status: 'rejected', reviewNote: reason, reviewedAt: now },
+  });
+  await recordVersion(tx, author, 'rejected', rejected, version, reason);
+  return { kind: 'rejected', version: rejected, reason };
 }
 
 /** The run a version was submitted on, as the gate reads it now. */
@@ -508,11 +585,13 @@ async function publishLocked(
   author: ConfigChangeAuthor,
   agent: LockedAgent,
   version: AiConfigVersion,
-  input: { publishedBy: string | null; now: Date },
+  input: { publishedBy: string | null; now: Date; refuse?: boolean },
 ): Promise<PublishOutcome> {
   // The pack it passed may have moved on since (a deployment); the run may be gone.
   const gate = await gateOfRun(tx, version.testRunId);
   if (!gate.open) {
+    // A scheduled publication has nobody to answer: the version says why instead.
+    if (input.refuse) return refuse(tx, author, version, 'compliance_pack', input.now);
     throw versionState(
       'compliance_pack',
       'The compliance pack this version passed is no longer current. Run the pre-publish test again and resubmit.',
@@ -536,14 +615,7 @@ async function publishLocked(
       current ? storedOf(current) : null,
       storedOf(version),
     );
-    if (rebased === null) {
-      const rejected = await tx.aiConfigVersion.update({
-        where: { id: version.id },
-        data: { status: 'rejected', reviewNote: 'stale_base', reviewedAt: input.now },
-      });
-      await recordVersion(tx, author, 'rejected', rejected, version, 'stale_base');
-      return { kind: 'rejected', version: rejected, reason: 'stale_base' };
-    }
+    if (rebased === null) return refuse(tx, author, version, 'stale_base', input.now);
     manifest = rebased;
     baseVersionId = current?.id ?? null;
     diffSummary = diffAiConfig(current ? storedOf(current) : null, {

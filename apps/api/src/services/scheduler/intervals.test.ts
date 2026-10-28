@@ -49,6 +49,8 @@ describe('the job list', () => {
       'ai_unresolved_cluster',
       'ai_unresolved_merge',
       'chat_inactivity',
+      'ai_scheduled_publish',
+      'knowledge_chunk_gc',
     ]);
   });
 
@@ -60,7 +62,7 @@ describe('the job list', () => {
 });
 
 describe('intervals', () => {
-  it('defaults to a minute for the ones a person can feel, an hour for retention, knowledge refresh, the period close, the unverified sign-up and the sandbox-session sweeps, 15 s for the stalled-AI watchdog, 15 min for the unresolved questions’ clustering, a day for their merge and 20 s for the inactivity sweep', () => {
+  it('defaults to a minute for the ones a person can feel, an hour for retention, knowledge refresh, the period close, the unverified sign-up and the sandbox-session sweeps, 15 s for the stalled-AI watchdog, 15 min for the unresolved questions’ clustering, a day for their merge, 20 s for the inactivity sweep, 30 s for the scheduled AI configuration publication and an hour for the knowledge chunks’ clean-up', () => {
     expect(jobIntervals(parseEnv(BASE))).toEqual({
       chat_timeout: 60_000,
       sla: 60_000,
@@ -76,6 +78,8 @@ describe('intervals', () => {
       ai_unresolved_cluster: 900_000,
       ai_unresolved_merge: 86_400_000,
       chat_inactivity: 20_000,
+      ai_scheduled_publish: 30_000,
+      knowledge_chunk_gc: 3_600_000,
     });
   });
 

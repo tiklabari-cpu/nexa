@@ -1246,6 +1246,20 @@ export const envSchema = z.object({
    */
   SCHEDULE_CHAT_INACTIVITY_MS: z.coerce.number().int().positive().default(20_000),
   /**
+   * The scheduled AI configuration publication (tm 316.6 · AI-20-S4): an
+   * approved version whose `publish_at` has come goes live. Every 30 seconds:
+   * the promise is "at most a minute late", and the scheduler spreads each
+   * interval by `SCHEDULE_JITTER_PCT`, so a 60-second one could not keep it.
+   * A pass with nothing due reads one indexed row set per workspace.
+   */
+  SCHEDULE_AI_SCHEDULED_PUBLISH_MS: z.coerce.number().int().positive().default(30_000),
+  /**
+   * The knowledge chunks' clean-up (tm 316.6 · ADR-14b §2.8 (7)): generations
+   * no version published, and ranges closed more than five publications and
+   * thirty days ago. Hourly — what it frees is disk, not correctness.
+   */
+  SCHEDULE_KNOWLEDGE_CHUNK_GC_MS: z.coerce.number().int().positive().default(3_600_000),
+  /**
    * Lets the retention job actually run its scheduled pass (M-SCHED-b ·
    * `services/scheduler/types.ts`'s `JobDefinition.enabled`). Off by default:
    * this is the one sweep that hard-deletes data, and there is no operator

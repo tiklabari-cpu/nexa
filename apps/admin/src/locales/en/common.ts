@@ -11,6 +11,10 @@ export const common: Messages = {
   'common.actions.dismiss': 'Dismiss',
   'common.errors.account_exists': 'That email address already has an account.',
   'common.errors.ai_agent_exists': 'This workspace already has an AI agent.',
+  'common.errors.ai_config_revision_conflict':
+    'Someone else saved these AI settings after you opened them — reload and make your change again.',
+  'common.errors.ai_config_version_state':
+    'This AI settings version cannot take that step in its current state.',
   'common.errors.ai_guardrail_setup_incomplete':
     'The AI agent cannot go live until its crisis text is written and approved by the owner.',
   'common.errors.ai_mode_transition_refused': 'The AI is not answering this conversation.',

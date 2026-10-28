@@ -5782,6 +5782,257 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/qa/reviews': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The QA queue, within the caller's reach
+     * @description Most pressing first (`priority`, then `due_at`). `status=open` (the
+     *     default) is everything without a verdict; `mine=true` what the caller
+     *     holds. `open_count` counts the caller's open reviews.
+     */
+    get: operations['listQaReviews'];
+    put?: never;
+    /**
+     * Send a conversation to the QA queue by hand ("QA'ya gönder")
+     * @description The conversation must be one the caller may see (else 404), closed and
+     *     one the AI took part in (else `validation`), and — for a Team Lead — of
+     *     a team they lead (else 403). Already queued, `manual` joins its reasons;
+     *     already reviewed, `qa_review_state` (`completed`). `note` is kept,
+     *     masked, as the review's comment until the reviewer writes one.
+     */
+    post: operations['createQaReview'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/qa/reviews/{reviewId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        reviewId: string;
+      };
+      cookie?: never;
+    };
+    /** One review — its rubric, pre-score, masked excerpt and decision trail */
+    get: operations['getQaReview'];
+    /**
+     * Save, release or complete a review the caller holds
+     * @description Only the reviewer who claimed it (else `qa_review_state`, `not_claimed`
+     *     or `completed`). `scores` replace the given criteria's values; a value
+     *     the criterion cannot hold is `validation`. `save` keeps it in review,
+     *     `release` puts it back in the queue. `complete` needs a value for every
+     *     criterion, `confirmed: true` on every critical one — the pre-score
+     *     never confirms anything — and `final`; a failed critical criterion
+     *     cannot be a `pass` (`validation`, `details.problems`). A critical
+     *     failure opens an AI-23 suggestion and an AI-19 scenario draft
+     *     (`follow_ups`) and, when `handoff_timing` failed, mails the
+     *     administrators.
+     */
+    put: operations['updateQaReview'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/qa/reviews/{reviewId}/claim': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        reviewId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Claim a ready review
+     * @description `ready` → `in_review`, held by the caller; claiming one's own again
+     *     answers it unchanged. Someone else's is `qa_review_state` (`claimed`),
+     *     one waiting for its pre-score `pending_prescore`, a completed one
+     *     `completed`. With the conflict check on, a reviewer who wrote in the
+     *     conversation or accepted its hand-over is refused (403,
+     *     `details.reason: conflict_of_interest`).
+     */
+    post: operations['claimQaReview'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/qa/settings': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The workspace's QA settings */
+    get: operations['getQaSettings'];
+    /**
+     * Change the sample rate, the pre-score or the conflict check
+     * @description An administrator's. Fields left out keep their value.
+     */
+    put: operations['updateQaSettings'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/qa/rubric': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The active rubric (version 1 is the platform's) */
+    get: operations['getQaRubric'];
+    /**
+     * Save a new rubric version
+     * @description An administrator's. The platform's critical criteria (`guardrails`,
+     *     `handoff_timing`) stay as they are; a workspace's own criterion is never
+     *     locked (`validation`). The new version becomes the active one; reviews
+     *     already queued keep the version they were queued with.
+     */
+    put: operations['updateQaRubric'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/qa/calibrations': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The calibration rounds, newest month first */
+    get: operations['listQaCalibrations'];
+    put?: never;
+    /**
+     * Open the month's calibration round
+     * @description An administrator's. Up to 20 reviews completed in the last 60 days, the
+     *     same for every reviewer; one round a month (`qa_review_state`,
+     *     `calibration_exists`). No completed review to hand out is `validation`.
+     */
+    post: operations['createQaCalibration'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/qa/calibrations/{calibrationId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        calibrationId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * One round — its conversations, the caller's scores and its report
+     * @description The report (agreement per criterion, each reviewer's deviation) is an
+     *     administrator's while the round is open and everyone's once closed.
+     */
+    get: operations['getQaCalibration'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/qa/calibrations/{calibrationId}/scores': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        calibrationId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Score one of the round's conversations
+     * @description Every criterion, the critical ones confirmed, and `final` — the review's
+     *     rule (`validation`). Scoring again replaces the caller's. A closed round
+     *     is `qa_review_state` (`calibration_closed`).
+     */
+    post: operations['scoreQaCalibration'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/qa/calibrations/{calibrationId}/close': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        calibrationId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Close a round — its report becomes everyone's
+     * @description An administrator's. Closing a closed round answers it unchanged.
+     */
+    post: operations['closeQaCalibration'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/qa/summary': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The queue's figures for a period (AI-25's QA reads)
+     * @description Within the caller's reach. Open and overdue now; of the reviews
+     *     completed in the period (`reviewed_at`, the last 30 days by default, at
+     *     most 366): passed, failed, failed critically, per reason and per failed
+     *     criterion, mandatory hand-overs checked and missed, guardrail breaches
+     *     confirmed, and false resolutions (a connection the AI settled that the
+     *     review failed).
+     */
+    get: operations['getQaSummary'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/ai/changes': {
     parameters: {
       query?: never;
@@ -14889,6 +15140,279 @@ export interface components {
       /** @description The open suggestions the caller may review — the badge. */
       open_count: number;
     };
+    /**
+     * @description Why a connection is in the QA queue (`@siyahtus/types` `QA_REASONS`).
+     * @enum {string}
+     */
+    QaReason:
+      | 'random'
+      | 'risk_flag'
+      | 'low_bsat'
+      | 'repeat_72h'
+      | 'guardrail_scan'
+      | 'mandatory_handoff'
+      | 'handoff_insufficient'
+      | 'consistency'
+      | 'manual';
+    QaRubricCriterion: {
+      key: string;
+      label: string;
+      /** @enum {string} */
+      type: 'pass_fail' | 'score_1_5';
+      weight: number;
+      /** @description Failing it fails the review; each one is confirmed on its own. */
+      critical: boolean;
+      /** @description The platform's — a workspace may not remove, retype or soften it. */
+      locked: boolean;
+    };
+    QaRubric: {
+      /** Format: uuid */
+      id: string;
+      version: number;
+      criteria: components['schemas']['QaRubricCriterion'][];
+      /** Format: uuid */
+      created_by: string | null;
+      /** Format: date-time */
+      created_at: string;
+    };
+    /** @description pass / fail, or 1–5; null — does not apply (never for a critical criterion). */
+    QaScoreValue: (('pass' | 'fail') | number) | null;
+    QaCriterionScore: {
+      value: components['schemas']['QaScoreValue'];
+      /** @description The reviewer confirmed this critical criterion on its own (AI-24 §4). */
+      confirmed?: boolean;
+    };
+    QaExcerptMessage: {
+      event_id: string;
+      /** @enum {string} */
+      author_type: 'customer' | 'agent' | 'bot';
+      /** @description The model's message */
+      is_ai: boolean;
+      /** @description Masked when queued (AI-26); empty when the caller may not read a responsible-gaming conversation. */
+      text: string;
+      /** Format: date-time */
+      created_at: string;
+    };
+    /** @description The model's reading — a suggestion, never a verdict. */
+    QaPrescore: {
+      criteria: {
+        key: string;
+        value: components['schemas']['QaScoreValue'];
+        /** @description This connection's events only — any other dropped the whole pre-score. */
+        evidence_event_ids: string[];
+        rationale: string;
+      }[];
+      critical_candidates: string[];
+      /** @enum {string} */
+      overall: 'pass' | 'fail';
+      /** Format: date-time */
+      scored_at: string;
+    };
+    QaReview: {
+      /** Format: uuid */
+      id: string;
+      /** @description The day container (panel "Thread ID"). */
+      chat_id: string;
+      /** @description The connection (panel "Chat ID"). */
+      thread_id: string;
+      /** Format: uuid */
+      ai_agent_id: string;
+      /** Format: uuid */
+      config_version_id: string | null;
+      /** @description The connection's team when it was queued — whose Team Lead reviews it. */
+      team_id: number | null;
+      /** Format: uuid */
+      brand_id: string | null;
+      reasons: components['schemas']['QaReason'][];
+      /** @enum {string} */
+      priority: 'normal' | 'guardrail' | 'risk';
+      /** @enum {string} */
+      status: 'pending_prescore' | 'ready' | 'in_review' | 'completed';
+      /** Format: date */
+      sample_day: string | null;
+      /** Format: uuid */
+      assigned_to: string | null;
+      /** Format: date-time */
+      claimed_at: string | null;
+      /** Format: date-time */
+      due_at: string;
+      overdue: boolean;
+      /** Format: uuid */
+      rubric_id: string;
+      prescored: boolean;
+      /** @enum {string|null} */
+      final: 'pass' | 'fail' | null;
+      critical_fail: boolean;
+      /** Format: uuid */
+      reviewer_id: string | null;
+      /** Format: date-time */
+      reviewed_at: string | null;
+      comments: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    QaReviewDetail: components['schemas']['QaReview'] & {
+      rubric: {
+        /** Format: uuid */
+        id: string;
+        version: number | null;
+        criteria: components['schemas']['QaRubricCriterion'][];
+      };
+      prescore: components['schemas']['QaPrescore'] | null;
+      scores: {
+        [key: string]: components['schemas']['QaCriterionScore'];
+      };
+      excerpt: components['schemas']['QaExcerptMessage'][];
+      excerpt_restricted: boolean;
+      /** @description The connection's decision trail while it exists (ID-08) — ids and codes, no text. */
+      trace: {
+        decisions: {
+          [key: string]: unknown;
+        }[];
+        guardrail_hits: {
+          [key: string]: unknown;
+        }[];
+        handoffs: {
+          [key: string]: unknown;
+        }[];
+        risk_flags: {
+          [key: string]: unknown;
+        }[];
+      };
+      follow_ups: {
+        /** Format: uuid */
+        suggestion_id: string | null;
+        /** Format: uuid */
+        scenario_id: string | null;
+        /** @description On a completion — the AI missed a hand-over it had to make. */
+        mandatory_handoff_violation?: boolean;
+      };
+    };
+    QaReviewList: {
+      reviews: components['schemas']['QaReview'][];
+      total: number;
+      open_count: number;
+    };
+    QaReviewCreateRequest: {
+      chat_id: string;
+      thread_id: string;
+      note?: string;
+    };
+    QaReviewUpdateRequest: {
+      /** @enum {string} */
+      action: 'save' | 'complete' | 'release';
+      scores?: {
+        [key: string]: components['schemas']['QaCriterionScore'];
+      };
+      /** @enum {string} */
+      final?: 'pass' | 'fail';
+      comments?: string | null;
+    };
+    QaSettings: {
+      sample_percent: number;
+      sample_percent_min: number;
+      sample_percent_max: number;
+      prescore_enabled: boolean;
+      /** @description A reviewer who took the conversation over may not review it. */
+      conflict_check: boolean;
+    };
+    QaSettingsUpdateRequest: {
+      sample_percent?: number;
+      prescore_enabled?: boolean;
+      conflict_check?: boolean;
+    };
+    QaCalibration: {
+      /** Format: uuid */
+      id: string;
+      /** @description The month */
+      period: string;
+      /** Format: uuid */
+      rubric_id: string;
+      /** @enum {string} */
+      status: 'open' | 'closed';
+      reviews: number;
+      my_scored: number;
+      /** Format: uuid */
+      created_by: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      closed_at: string | null;
+    };
+    QaCalibrationReport: {
+      criteria: {
+        key: string;
+        label: string;
+        /** @description The share of values equal to their conversation's majority. */
+        agreement_percent: number | null;
+        scored: number;
+      }[];
+      reviewers: {
+        /** Format: uuid */
+        reviewer_id: string;
+        scored: number;
+        deviation_percent: number | null;
+        outlier: boolean;
+      }[];
+    };
+    QaCalibrationDetail: components['schemas']['QaCalibration'] & {
+      rubric: {
+        /** Format: uuid */
+        id: string;
+        version: number | null;
+        criteria: components['schemas']['QaRubricCriterion'][];
+      };
+      items: {
+        /** Format: uuid */
+        review_id: string;
+        chat_id: string;
+        thread_id: string;
+        reasons: components['schemas']['QaReason'][];
+        excerpt: components['schemas']['QaExcerptMessage'][];
+        excerpt_restricted: boolean;
+        my_scores: {
+          [key: string]: components['schemas']['QaCriterionScore'];
+        } | null;
+        /** @enum {string|null} */
+        my_final: 'pass' | 'fail' | null;
+      }[];
+      report: components['schemas']['QaCalibrationReport'] | null;
+    };
+    QaCalibrationScoreRequest: {
+      /** Format: uuid */
+      review_id: string;
+      scores: {
+        [key: string]: components['schemas']['QaCriterionScore'];
+      };
+      /** @enum {string} */
+      final: 'pass' | 'fail';
+    };
+    QaSummary: {
+      /** Format: date-time */
+      from: string;
+      /** Format: date-time */
+      to: string;
+      open: number;
+      overdue: number;
+      completed: number;
+      passed: number;
+      failed: number;
+      critical_failed: number;
+      by_reason: {
+        [key: string]: number;
+      };
+      criteria_failed: {
+        [key: string]: number;
+      };
+      mandatory_handoff: {
+        reviewed: number;
+        violations: number;
+      };
+      guardrail_violations_confirmed: number;
+      false_resolutions: number;
+    };
     AiSuggestionCreateRequest: {
       chat_id: string;
       thread_id: string;
@@ -21293,6 +21817,7 @@ export interface components {
       | 'ai_mode_transition_refused'
       | 'ai_return_blocked'
       | 'ai_suggestion_state'
+      | 'qa_review_state'
       | 'ai_test_run_in_progress'
       | 'authentication'
       | 'authorization'
@@ -30401,6 +30926,424 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listQaReviews: {
+    parameters: {
+      query?: {
+        status?: 'pending_prescore' | 'ready' | 'in_review' | 'completed' | 'open' | 'all';
+        reason?: components['schemas']['QaReason'];
+        team_id?: number;
+        mine?: boolean;
+        limit?: number;
+        offset?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The reviews */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['QaReviewList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createQaReview: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['QaReviewCreateRequest'];
+      };
+    };
+    responses: {
+      /** @description Queued */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['QaReviewDetail'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getQaReview: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        reviewId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The review */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['QaReviewDetail'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateQaReview: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        reviewId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['QaReviewUpdateRequest'];
+      };
+    };
+    responses: {
+      /** @description The review as saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['QaReviewDetail'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  claimQaReview: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        reviewId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Claimed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['QaReviewDetail'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getQaSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The settings (the defaults when never saved) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['QaSettings'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateQaSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['QaSettingsUpdateRequest'];
+      };
+    };
+    responses: {
+      /** @description The settings as saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['QaSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getQaRubric: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The rubric */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['QaRubric'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateQaRubric: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          criteria: components['schemas']['QaRubricCriterion'][];
+        };
+      };
+    };
+    responses: {
+      /** @description The new version */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['QaRubric'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listQaCalibrations: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The rounds */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            calibrations: components['schemas']['QaCalibration'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createQaCalibration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          /** @description The month */
+          period?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Opened */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['QaCalibration'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      409: components['responses']['Conflict'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getQaCalibration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        calibrationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The round */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['QaCalibrationDetail'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  scoreQaCalibration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        calibrationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['QaCalibrationScoreRequest'];
+      };
+    };
+    responses: {
+      /** @description The round with the caller's scores */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['QaCalibrationDetail'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  closeQaCalibration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        calibrationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The closed round */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['QaCalibrationDetail'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getQaSummary: {
+    parameters: {
+      query?: {
+        from?: string;
+        to?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The figures */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['QaSummary'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
     };
   };

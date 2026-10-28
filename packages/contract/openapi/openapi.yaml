@@ -500,6 +500,26 @@ paths:
     $ref: "./paths/ai-suggestions.yaml#/suggestion"
   /ai/suggestions/{suggestionId}/to-scenario:
     $ref: "./paths/ai-suggestions.yaml#/suggestionToScenario"
+  /qa/reviews:
+    $ref: "./paths/qa.yaml#/reviews"
+  /qa/reviews/{reviewId}:
+    $ref: "./paths/qa.yaml#/review"
+  /qa/reviews/{reviewId}/claim:
+    $ref: "./paths/qa.yaml#/reviewClaim"
+  /qa/settings:
+    $ref: "./paths/qa.yaml#/settings"
+  /qa/rubric:
+    $ref: "./paths/qa.yaml#/rubric"
+  /qa/calibrations:
+    $ref: "./paths/qa.yaml#/calibrations"
+  /qa/calibrations/{calibrationId}:
+    $ref: "./paths/qa.yaml#/calibration"
+  /qa/calibrations/{calibrationId}/scores:
+    $ref: "./paths/qa.yaml#/calibrationScores"
+  /qa/calibrations/{calibrationId}/close:
+    $ref: "./paths/qa.yaml#/calibrationClose"
+  /qa/summary:
+    $ref: "./paths/qa.yaml#/summary"
   /ai/changes:
     $ref: "./paths/ai-changes.yaml#/changes"
   /ai/changes/export:
@@ -5529,6 +5549,403 @@ components:
           type: integer
           minimum: 0
           description: The open suggestions the caller may review — the badge.
+
+    QaReason:
+      type: string
+      description: Why a connection is in the QA queue (`@siyahtus/types` `QA_REASONS`).
+      enum:
+        [
+          random,
+          risk_flag,
+          low_bsat,
+          repeat_72h,
+          guardrail_scan,
+          mandatory_handoff,
+          handoff_insufficient,
+          consistency,
+          manual,
+        ]
+
+    QaRubricCriterion:
+      type: object
+      additionalProperties: false
+      required: [key, label, type, weight, critical, locked]
+      properties:
+        key: { type: string, pattern: "^[a-z][a-z0-9_]{0,39}$" }
+        label: { type: string, minLength: 1, maxLength: 80 }
+        type: { type: string, enum: [pass_fail, score_1_5] }
+        weight: { type: integer, minimum: 1, maximum: 10 }
+        critical:
+          type: boolean
+          description: Failing it fails the review; each one is confirmed on its own.
+        locked:
+          type: boolean
+          description: The platform's — a workspace may not remove, retype or soften it.
+
+    QaRubric:
+      type: object
+      required: [id, version, criteria, created_by, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        criteria:
+          type: array
+          items: { $ref: "#/components/schemas/QaRubricCriterion" }
+        created_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    QaScoreValue:
+      description: pass / fail, or 1–5; null — does not apply (never for a critical criterion).
+      nullable: true
+      oneOf:
+        - { type: string, enum: [pass, fail] }
+        - { type: integer, minimum: 1, maximum: 5 }
+
+    QaCriterionScore:
+      type: object
+      additionalProperties: false
+      required: [value]
+      properties:
+        value: { $ref: "#/components/schemas/QaScoreValue" }
+        confirmed:
+          type: boolean
+          description: The reviewer confirmed this critical criterion on its own (AI-24 §4).
+
+    QaExcerptMessage:
+      type: object
+      required: [event_id, author_type, is_ai, text, created_at]
+      properties:
+        event_id: { type: string }
+        author_type: { type: string, enum: [customer, agent, bot] }
+        is_ai: { type: boolean, description: The model's message, not a rule bot's. }
+        text:
+          type: string
+          description: Masked when queued (AI-26); empty when the caller may not read a responsible-gaming conversation.
+        created_at: { type: string, format: date-time }
+
+    QaPrescore:
+      type: object
+      required: [criteria, critical_candidates, overall, scored_at]
+      description: The model's reading — a suggestion, never a verdict.
+      properties:
+        criteria:
+          type: array
+          items:
+            type: object
+            required: [key, value, evidence_event_ids, rationale]
+            properties:
+              key: { type: string }
+              value: { $ref: "#/components/schemas/QaScoreValue" }
+              evidence_event_ids:
+                type: array
+                items: { type: string }
+                description: This connection's events only — any other dropped the whole pre-score.
+              rationale: { type: string }
+        critical_candidates: { type: array, items: { type: string } }
+        overall: { type: string, enum: [pass, fail] }
+        scored_at: { type: string, format: date-time }
+
+    QaReview:
+      type: object
+      required:
+        - id
+        - chat_id
+        - thread_id
+        - ai_agent_id
+        - config_version_id
+        - team_id
+        - brand_id
+        - reasons
+        - priority
+        - status
+        - sample_day
+        - assigned_to
+        - claimed_at
+        - due_at
+        - overdue
+        - rubric_id
+        - prescored
+        - final
+        - critical_fail
+        - reviewer_id
+        - reviewed_at
+        - comments
+        - created_at
+        - updated_at
+      properties:
+        id: { type: string, format: uuid }
+        chat_id: { type: string, description: The day container (panel "Thread ID"). }
+        thread_id: { type: string, description: The connection (panel "Chat ID"). }
+        ai_agent_id: { type: string, format: uuid }
+        config_version_id: { type: string, format: uuid, nullable: true }
+        team_id:
+          type: integer
+          nullable: true
+          description: The connection's team when it was queued — whose Team Lead reviews it.
+        brand_id: { type: string, format: uuid, nullable: true }
+        reasons: { type: array, items: { $ref: "#/components/schemas/QaReason" } }
+        priority: { type: string, enum: [normal, guardrail, risk] }
+        status: { type: string, enum: [pending_prescore, ready, in_review, completed] }
+        sample_day: { type: string, format: date, nullable: true }
+        assigned_to: { type: string, format: uuid, nullable: true }
+        claimed_at: { type: string, format: date-time, nullable: true }
+        due_at: { type: string, format: date-time }
+        overdue: { type: boolean }
+        rubric_id: { type: string, format: uuid }
+        prescored: { type: boolean }
+        final: { type: string, enum: [pass, fail], nullable: true }
+        critical_fail: { type: boolean }
+        reviewer_id: { type: string, format: uuid, nullable: true }
+        reviewed_at: { type: string, format: date-time, nullable: true }
+        comments: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    QaReviewDetail:
+      allOf:
+        - { $ref: "#/components/schemas/QaReview" }
+        - type: object
+          required: [rubric, prescore, scores, excerpt, excerpt_restricted, trace, follow_ups]
+          properties:
+            rubric:
+              type: object
+              required: [id, version, criteria]
+              properties:
+                id: { type: string, format: uuid }
+                version: { type: integer, nullable: true }
+                criteria:
+                  type: array
+                  items: { $ref: "#/components/schemas/QaRubricCriterion" }
+            prescore:
+              allOf: [{ $ref: "#/components/schemas/QaPrescore" }]
+              nullable: true
+            scores:
+              type: object
+              additionalProperties: { $ref: "#/components/schemas/QaCriterionScore" }
+            excerpt:
+              type: array
+              items: { $ref: "#/components/schemas/QaExcerptMessage" }
+            excerpt_restricted: { type: boolean }
+            trace:
+              type: object
+              description: The connection's decision trail while it exists (ID-08) — ids and codes, no text.
+              required: [decisions, guardrail_hits, handoffs, risk_flags]
+              properties:
+                decisions:
+                  type: array
+                  items: { type: object, additionalProperties: true }
+                guardrail_hits:
+                  type: array
+                  items: { type: object, additionalProperties: true }
+                handoffs:
+                  type: array
+                  items: { type: object, additionalProperties: true }
+                risk_flags:
+                  type: array
+                  items: { type: object, additionalProperties: true }
+            follow_ups:
+              type: object
+              required: [suggestion_id, scenario_id]
+              properties:
+                suggestion_id: { type: string, format: uuid, nullable: true }
+                scenario_id: { type: string, format: uuid, nullable: true }
+                mandatory_handoff_violation:
+                  type: boolean
+                  description: On a completion — the AI missed a hand-over it had to make.
+
+    QaReviewList:
+      type: object
+      required: [reviews, total, open_count]
+      properties:
+        reviews:
+          type: array
+          items: { $ref: "#/components/schemas/QaReview" }
+        total: { type: integer, minimum: 0 }
+        open_count: { type: integer, minimum: 0 }
+
+    QaReviewCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [chat_id, thread_id]
+      properties:
+        chat_id: { type: string }
+        thread_id: { type: string }
+        note: { type: string, minLength: 1, maxLength: 1000 }
+
+    QaReviewUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties:
+        action: { type: string, enum: [save, complete, release] }
+        scores:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/QaCriterionScore" }
+        final: { type: string, enum: [pass, fail] }
+        comments: { type: string, maxLength: 4000, nullable: true }
+
+    QaSettings:
+      type: object
+      required:
+        [sample_percent, sample_percent_min, sample_percent_max, prescore_enabled, conflict_check]
+      properties:
+        sample_percent: { type: integer, minimum: 1, maximum: 20 }
+        sample_percent_min: { type: integer }
+        sample_percent_max: { type: integer }
+        prescore_enabled: { type: boolean }
+        conflict_check:
+          type: boolean
+          description: A reviewer who took the conversation over may not review it.
+
+    QaSettingsUpdateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        sample_percent: { type: integer, minimum: 1, maximum: 20 }
+        prescore_enabled: { type: boolean }
+        conflict_check: { type: boolean }
+
+    QaCalibration:
+      type: object
+      required:
+        [id, period, rubric_id, status, reviews, my_scored, created_by, created_at, closed_at]
+      properties:
+        id: { type: string, format: uuid }
+        period: { type: string, description: The month, YYYY-MM. }
+        rubric_id: { type: string, format: uuid }
+        status: { type: string, enum: [open, closed] }
+        reviews: { type: integer, minimum: 1, maximum: 20 }
+        my_scored: { type: integer, minimum: 0 }
+        created_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+        closed_at: { type: string, format: date-time, nullable: true }
+
+    QaCalibrationReport:
+      type: object
+      required: [criteria, reviewers]
+      properties:
+        criteria:
+          type: array
+          items:
+            type: object
+            required: [key, label, agreement_percent, scored]
+            properties:
+              key: { type: string }
+              label: { type: string }
+              agreement_percent:
+                type: number
+                nullable: true
+                description: The share of values equal to their conversation's majority.
+              scored: { type: integer, minimum: 0 }
+        reviewers:
+          type: array
+          items:
+            type: object
+            required: [reviewer_id, scored, deviation_percent, outlier]
+            properties:
+              reviewer_id: { type: string, format: uuid }
+              scored: { type: integer, minimum: 0 }
+              deviation_percent: { type: number, nullable: true }
+              outlier: { type: boolean }
+
+    QaCalibrationDetail:
+      allOf:
+        - { $ref: "#/components/schemas/QaCalibration" }
+        - type: object
+          required: [rubric, items, report]
+          properties:
+            rubric:
+              type: object
+              required: [id, version, criteria]
+              properties:
+                id: { type: string, format: uuid }
+                version: { type: integer, nullable: true }
+                criteria:
+                  type: array
+                  items: { $ref: "#/components/schemas/QaRubricCriterion" }
+            items:
+              type: array
+              items:
+                type: object
+                required:
+                  [
+                    review_id,
+                    chat_id,
+                    thread_id,
+                    reasons,
+                    excerpt,
+                    excerpt_restricted,
+                    my_scores,
+                    my_final,
+                  ]
+                properties:
+                  review_id: { type: string, format: uuid }
+                  chat_id: { type: string }
+                  thread_id: { type: string }
+                  reasons: { type: array, items: { $ref: "#/components/schemas/QaReason" } }
+                  excerpt:
+                    type: array
+                    items: { $ref: "#/components/schemas/QaExcerptMessage" }
+                  excerpt_restricted: { type: boolean }
+                  my_scores:
+                    type: object
+                    nullable: true
+                    additionalProperties: { $ref: "#/components/schemas/QaCriterionScore" }
+                  my_final: { type: string, enum: [pass, fail], nullable: true }
+            report:
+              allOf: [{ $ref: "#/components/schemas/QaCalibrationReport" }]
+              nullable: true
+
+    QaCalibrationScoreRequest:
+      type: object
+      additionalProperties: false
+      required: [review_id, scores, final]
+      properties:
+        review_id: { type: string, format: uuid }
+        scores:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/QaCriterionScore" }
+        final: { type: string, enum: [pass, fail] }
+
+    QaSummary:
+      type: object
+      required:
+        - from
+        - to
+        - open
+        - overdue
+        - completed
+        - passed
+        - failed
+        - critical_failed
+        - by_reason
+        - criteria_failed
+        - mandatory_handoff
+        - guardrail_violations_confirmed
+        - false_resolutions
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        open: { type: integer, minimum: 0 }
+        overdue: { type: integer, minimum: 0 }
+        completed: { type: integer, minimum: 0 }
+        passed: { type: integer, minimum: 0 }
+        failed: { type: integer, minimum: 0 }
+        critical_failed: { type: integer, minimum: 0 }
+        by_reason:
+          type: object
+          additionalProperties: { type: integer, minimum: 0 }
+        criteria_failed:
+          type: object
+          additionalProperties: { type: integer, minimum: 0 }
+        mandatory_handoff:
+          type: object
+          required: [reviewed, violations]
+          properties:
+            reviewed: { type: integer, minimum: 0 }
+            violations: { type: integer, minimum: 0 }
+        guardrail_violations_confirmed: { type: integer, minimum: 0 }
+        false_resolutions: { type: integer, minimum: 0 }
 
     AiSuggestionCreateRequest:
       type: object
@@ -13869,6 +14286,7 @@ components:
         - ai_mode_transition_refused
         - ai_return_blocked
         - ai_suggestion_state
+        - qa_review_state
         - ai_test_run_in_progress
         - authentication
         - authorization

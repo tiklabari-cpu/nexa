@@ -64,6 +64,8 @@ describe('buildSchedulerJobs', () => {
       'knowledge_chunk_gc',
       'ai_suggestion_drafts',
       'qa_sampling',
+      'qa_prescore',
+      'qa_consistency',
     ]);
     // A name declared but never registered is a job somebody forgot to wire,
     // and `/health` would simply not mention it.
@@ -90,6 +92,8 @@ describe('buildSchedulerJobs', () => {
       SCHEDULE_KNOWLEDGE_CHUNK_GC_MS: '18000',
       SCHEDULE_AI_SUGGESTION_DRAFTS_MS: '19000',
       SCHEDULE_QA_SAMPLING_MS: '20000',
+      SCHEDULE_QA_PRESCORE_MS: '21000',
+      SCHEDULE_QA_CONSISTENCY_MS: '23000',
     });
     const jobs = buildSchedulerJobs({ db, env, mailer: new NullMailer() });
     const intervalOf = (name: string): number | undefined =>
@@ -113,6 +117,8 @@ describe('buildSchedulerJobs', () => {
     expect(intervalOf('knowledge_chunk_gc')).toBe(18_000);
     expect(intervalOf('ai_suggestion_drafts')).toBe(19_000);
     expect(intervalOf('qa_sampling')).toBe(20_000);
+    expect(intervalOf('qa_prescore')).toBe(21_000);
+    expect(intervalOf('qa_consistency')).toBe(23_000);
   });
 
   it('registers retention and the unverified sign-up sweep disabled unless their switches are set — no other job is gated', () => {
@@ -229,6 +235,22 @@ describe('buildSchedulerJobs', () => {
         mandatory: 0,
         queued: 0,
       });
+    });
+
+    it('qa_prescore finds no workspace and scores nothing (tm 319.2)', async () => {
+      const job = buildSchedulerJobs({ db, env: testEnv(), mailer: new NullMailer() }).find(
+        (j) => j.name === 'qa_prescore',
+      );
+      const outcome = await job?.run(context());
+      expect(outcome?.counts).toEqual({ tenants: 0, scored: 0, dropped: 0, skipped: 0, failed: 0 });
+    });
+
+    it('qa_consistency finds no workspace and queues nothing (tm 319.2)', async () => {
+      const job = buildSchedulerJobs({ db, env: testEnv(), mailer: new NullMailer() }).find(
+        (j) => j.name === 'qa_consistency',
+      );
+      const outcome = await job?.run(context());
+      expect(outcome?.counts).toEqual({ tenants: 0, groups: 0, pairs: 0, queued: 0 });
     });
 
     it('ai_sandbox_sessions finds nothing expired and deletes nothing (tm 314.2)', async () => {

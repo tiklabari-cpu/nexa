@@ -181,6 +181,9 @@ describe('error taxonomy', () => {
     // The AI coaching queue (AI-23 · tm 318.1): a second suggestion on the
     // same message, and a review of one already decided.
     'ai_suggestion_state',
+    // The AI quality control queue (AI-24 · tm 319.2): a review held by
+    // someone else, not ready, completed, or a calibration round's state.
+    'qa_review_state',
     // Widget abuse protection (GV-01 · tm 339.2): a token or a conversation
     // opening that must first pass a human check.
     'challenge_required',

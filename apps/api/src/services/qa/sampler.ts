@@ -215,6 +215,20 @@ export function qaExcerptOf(rows: readonly QaExcerptRow[]): QaExcerptMessage[] {
   return excerpt;
 }
 
+/** A connection's masked excerpt ({@link qaExcerptOf}), read from its messages to all. */
+export async function readQaExcerpt(
+  tx: TenantClient,
+  threadId: string,
+): Promise<QaExcerptMessage[]> {
+  return qaExcerptOf(
+    await tx.$queryRaw<QaExcerptRow[]>`
+      SELECT id, author_type, author_id, text, created_at FROM events
+       WHERE thread_id = ${threadId} AND type = 'message' AND recipients = 'all'
+       ORDER BY event_sequence
+       LIMIT ${QA_EXCERPT_MESSAGES_MAX}`,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Settings and rubric
 // ---------------------------------------------------------------------------
@@ -319,7 +333,7 @@ interface CandidateRow {
 }
 
 /** The connection aliased `alias` had the AI in it — see the module header. */
-function aiTookPart(alias: string): Prisma.Sql {
+export function aiTookPart(alias: string): Prisma.Sql {
   const t = Prisma.raw(alias);
   return Prisma.sql`(
     EXISTS (SELECT 1 FROM ai_conversations a WHERE a.thread_id = ${t}.id)
@@ -486,13 +500,7 @@ export async function sampleQaDay(
     if (drawn) result.random += 1;
     if (reasons.some((reason) => reason !== 'random')) result.mandatory += 1;
     const priority = qaPriorityOf(reasons);
-    const excerpt = qaExcerptOf(
-      await tx.$queryRaw<QaExcerptRow[]>`
-        SELECT id, author_type, author_id, text, created_at FROM events
-         WHERE thread_id = ${row.thread_id} AND type = 'message' AND recipients = 'all'
-         ORDER BY event_sequence
-         LIMIT ${QA_EXCERPT_MESSAGES_MAX}`,
-    );
+    const excerpt = await readQaExcerpt(tx, row.thread_id);
     await tx.$executeRaw`
       INSERT INTO qa_reviews (
         id, license_id, chat_id, thread_id, ai_agent_id, config_version_id, team_id, brand_id,

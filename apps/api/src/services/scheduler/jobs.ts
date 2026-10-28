@@ -75,6 +75,12 @@
  * deterministic random share and every mandatory category
  * (`services/qa/sampler.ts`). A day is sampled once (`qa_sampling_runs`), so
  * a tick that finds nothing due reads one row per workspace. No CLI script.
+ *
+ * `qa_prescore` (tm 319.2 · AI-24 §3) has the model pre-score the queued QA
+ * reviews with the unresolved clusters' metered provider, as `qa`
+ * (`services/qa/prescore.ts`); `qa_consistency` (tm 319.2 · AI-24 §6) queues
+ * the previous week's AI connections answered two ways
+ * (`services/qa/consistency.ts`). No CLI scripts.
  */
 import type { PrismaClient } from '@prisma/client';
 import type { Env } from '../../config/env.js';
@@ -106,6 +112,8 @@ import {
   UnverifiedSignupSweeper,
 } from '../auth/unverified-signup-sweep.js';
 import { InvoiceCloseSweeper } from '../billing/invoice-close-sweep.js';
+import { QaConsistency } from '../qa/consistency.js';
+import { QaPrescorer } from '../qa/prescore.js';
 import { QaSampler } from '../qa/sampler.js';
 import { AiStallWatchdog } from '../chat/ai-stall.js';
 import { ChatInactivitySweeper } from '../chat/chat-inactivity.js';
@@ -691,6 +699,51 @@ export function buildSchedulerJobs({
             eligible: report.totals.eligible,
             random: report.totals.random,
             mandatory: report.totals.mandatory,
+            queued: report.totals.queued,
+          },
+        };
+      },
+    },
+    {
+      // The queued QA reviews' pre-score (tm 319.2 · AI-24 §3): the model's
+      // reading, kept only when its evidence is the conversation's own. Not
+      // gated: a workspace with nothing pending reads one empty row set.
+      name: 'qa_prescore',
+      intervalMs: intervals.qa_prescore,
+      async run(context) {
+        const report = await new QaPrescorer(db, {
+          llm: clusterLlm,
+          limits: {
+            maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
+            timeoutMs: env.LLM_TIMEOUT_MS,
+            maxPromptChars: env.LLM_MAX_PROMPT_CHARS,
+          },
+          inference: inference().llm,
+          logger: context.logger,
+        }).run({ signal: context.signal });
+        return {
+          counts: {
+            tenants: report.totals.tenants,
+            scored: report.totals.scored,
+            dropped: report.totals.dropped,
+            skipped: report.totals.skipped,
+            failed: report.totals.failed,
+          },
+        };
+      },
+    },
+    {
+      // The previous week's AI answers compared (tm 319.2 · AI-24 §6): a
+      // group answered two ways queued as a pair. Idempotent over a week.
+      name: 'qa_consistency',
+      intervalMs: intervals.qa_consistency,
+      async run(context) {
+        const report = await new QaConsistency(db).run({ signal: context.signal });
+        return {
+          counts: {
+            tenants: report.totals.tenants,
+            groups: report.totals.groups,
+            pairs: report.totals.pairs,
             queued: report.totals.queued,
           },
         };

@@ -1357,6 +1357,72 @@ export function riskFlagUrgentMail(
   });
 }
 
+/**
+ * A QA review found that the AI did not hand over when a compliance rule
+ * required it (tm 319.2 · AI-24 §4): sent to the workspace's administrators.
+ * Which conversation and which criteria — never what the player wrote.
+ */
+export function qaMandatoryHandoffViolationMail(
+  ctx: MailContext,
+  input: {
+    workspaceName: string;
+    /** The connection (panel "Chat ID"). */
+    threadId: string;
+    failed: readonly string[];
+    reviewedAt: Date;
+    timeZone: string;
+    reviewUrl: string | null;
+  },
+): RenderedEmail {
+  const t = tr(ctx.locale);
+  const blocks: EmailBlock[] = [
+    {
+      type: 'paragraph',
+      text: t
+        ? `${input.workspaceName} çalışma alanında bir kalite incelemesi, yapay zekânın zorunlu bir devri zamanında yapmadığını tespit etti. Bir öneri ve bir test senaryosu taslağı açıldı.`
+        : `A quality review in ${input.workspaceName} found that the AI did not hand over when a compliance rule required it. A suggestion and a test scenario draft were opened.`,
+    },
+    {
+      type: 'facts',
+      rows: [
+        ['Chat ID', input.threadId],
+        [t ? 'Kriterler' : 'Criteria', input.failed.join(', ')],
+        [
+          t ? 'İnceleme' : 'Reviewed',
+          `${formatDateTime(input.reviewedAt, ctx.locale, input.timeZone)} ${zoneLabel(input.timeZone)}`,
+        ],
+      ],
+    },
+  ];
+  if (input.reviewUrl) {
+    blocks.push({
+      type: 'button',
+      label: t ? 'İncelemeyi aç' : 'Open the review',
+      url: input.reviewUrl,
+      fallback: fallback(ctx),
+    });
+  }
+  return renderEmail({
+    locale: ctx.locale,
+    homeUrl: ctx.appUrl ?? '',
+    eyebrow: input.workspaceName,
+    subject: t
+      ? 'SiyahTuş: zorunlu devir ihlali — kalite incelemesi'
+      : 'SiyahTuş: mandatory hand-over missed — quality review',
+    preheader: t ? 'Yapay zekâ zorunlu bir devri kaçırdı.' : 'The AI missed a mandatory hand-over.',
+    icon: ICON.alarm,
+    tone: 'alert',
+    heading: t ? 'Zorunlu devir ihlali' : 'Mandatory hand-over missed',
+    blocks,
+    footer: [
+      t
+        ? 'Bu e-postayı, bu çalışma alanının yöneticisi olduğunuz için aldınız.'
+        : 'You received this email because you administer this workspace.',
+      signature(ctx),
+    ],
+  });
+}
+
 export function aiUsageAlertMail(
   ctx: MailContext,
   input: {
@@ -1624,6 +1690,7 @@ const CAPABILITY_LABELS: Record<CapabilityKey, { en: string; tr: string }> = {
   },
   'ai.suggest': { en: 'Suggest corrections to the AI', tr: "AI'a düzeltme önerme" },
   'ai.suggestions.review': { en: 'Review AI suggestions', tr: 'AI önerilerini inceleme' },
+  'ai.qa.review': { en: 'Review AI quality', tr: 'AI kalite incelemesi' },
   'reports.view': { en: 'View reports', tr: 'Raporları görme' },
   'reports.schedule': { en: 'Schedule report emails', tr: 'Rapor e-postalarını zamanlama' },
   'team.invite': { en: 'Invite teammates', tr: 'Ekip arkadaşı davet etme' },

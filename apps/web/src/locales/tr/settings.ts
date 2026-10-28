@@ -1486,6 +1486,7 @@ export const settings: Messages = {
   'permissions.capability.ai.config.publish': 'AI ayarlarını onaylama ve yayımlama',
   'permissions.capability.ai.suggest': "AI'a düzeltme önerme",
   'permissions.capability.ai.suggestions.review': 'AI önerilerini inceleme',
+  'permissions.capability.ai.qa.review': 'AI kalite incelemesi',
   'permissions.capability.reports.view': 'Raporları görme',
   'permissions.capability.reports.schedule': 'Rapor e-postalarını zamanlama',
   'permissions.capability.team.invite': 'Ekip arkadaşı davet etme',

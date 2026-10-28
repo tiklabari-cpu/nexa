@@ -33,6 +33,9 @@
  * is the scenario judge (tm 314.3): `mockScenarioJudge` reads the context
  * `buildScenarioJudgePrompt` wrote and scores from the hard checks that
  * failed — advice that never says more than they did.
+ * And so is the QA pre-score (tm 319.2): `mockQaPrescore` reads the context
+ * `buildQaPrescorePrompt` wrote and passes every criterion but the guardrails
+ * the decision trail says only warned, citing the AI's last message.
  * The invalid, refused and cut-off replies a real model can give are not
  * produced here; tests inject a provider that gives them (§6a.6).
  *
@@ -67,6 +70,11 @@ import {
   SIMULATED_PLAYER_RESPONSE_NAME,
 } from '../simulation/player-prompt.js';
 import { readUnderstandGrounding, UNDERSTAND_RESPONSE_NAME } from '../conversation/understand.js';
+import {
+  mockQaPrescore,
+  QA_PRESCORE_RESPONSE_NAME,
+  readQaPrescoreGrounding,
+} from '../../qa/prescore-prompt.js';
 import { exampleForSchema } from './json-schema.js';
 import type { LlmCompletion, LlmCompletionRequest, LlmProvider } from './llm-provider.js';
 
@@ -114,6 +122,16 @@ export class MockLlmProvider implements LlmProvider {
       }
       return {
         text: JSON.stringify(mockScenarioJudge(grounding)),
+        usage: { inputTokens: 0, outputTokens: 0 },
+      };
+    }
+    if (request.responseFormat?.name === QA_PRESCORE_RESPONSE_NAME) {
+      const grounding = readQaPrescoreGrounding(request.system);
+      if (!grounding) {
+        throw new Error('A QA pre-score request without the context buildQaPrescorePrompt writes.');
+      }
+      return {
+        text: JSON.stringify(mockQaPrescore(grounding)),
         usage: { inputTokens: 0, outputTokens: 0 },
       };
     }

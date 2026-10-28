@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
 import { defineConfig } from 'vitest/config';
+import { minifyWidgetCss } from './minify-css';
 
 /**
  * The widget ships as two independent artifacts, built in two passes because
@@ -28,6 +29,8 @@ export default defineConfig(({ mode }) => {
     ...(process.env['SIYAHTUS_VITE_CACHE_DIR']
       ? { cacheDir: process.env['SIYAHTUS_VITE_CACHE_DIR'] }
       : {}),
+    // The app pass ships the stylesheet without its comments and indentation (tm 320.1).
+    plugins: isLoader ? [] : [minifyWidgetCss()],
     build: isLoader
       ? {
           outDir: 'dist',

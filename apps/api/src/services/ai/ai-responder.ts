@@ -89,6 +89,7 @@ import { randomUUID } from 'node:crypto';
 import type { RiskFlag } from '@prisma/client';
 import {
   AI_BOT_ID,
+  RESOLUTION_PROMPT_PROPERTY,
   AI_CAP_REACHED_SYSTEM_EVENT,
   AI_CHALLENGE_UNVERIFIED_SYSTEM_EVENT,
   aiDisclosureSentence,
@@ -175,6 +176,8 @@ import {
 import { type AiDecisionInput, recordAiDecision, skillDecision } from './decision-log.js';
 import { HandoffCardService } from './handoff-card.js';
 import { recordGuardrailHits } from './guardrail-hits.js';
+import { outcomeTurnOf, resolutionPromptOf } from './outcome-turn.js';
+import { recordOutcomeTurn } from '../reports/ai-outcomes.js';
 import { AiJobReplyRefusedError, type VisitorTurn } from '../chat/visitor-turn.js';
 import { aiMayAnswer, AiModeChangedError, claimAiTurn, readAiMode } from '../chat/ai-mode.js';
 import { readDayBoundary } from '../chat/day-boundary.js';
@@ -827,6 +830,30 @@ export class AiResponder {
             log,
           );
         }
+        // The connection's AI outcome (tm 320.1 · AI-25): the turn's counts,
+        // topic, slots and resolution — after the reply, like the records
+        // above, and only for a turn that was applied. A row that cannot be
+        // written is one log line.
+        if (result && ranOn && !applyFailed) {
+          const outcome = outcomeTurnOf(result, {
+            at: new Date(),
+            customerId: turn.customerId,
+            trust: turn.identityTrust,
+            config: ranOn.pkg,
+            configVersionId: ranOn.versionId,
+            playerTurns: gathered,
+          });
+          try {
+            await turn.withTenant((tx) =>
+              recordOutcomeTurn(tx, { licenseId: tenant.licenseId, ...ref }, outcome),
+            );
+          } catch (error) {
+            log.error(
+              { err: error },
+              'ai outcome could not be recorded; the reply is not held back',
+            );
+          }
+        }
         // The message the AI could not resolve (tm 317.1 · AI-22), for the
         // report — written after the reply, so it never holds one back, and
         // only for a turn that was applied. A row that cannot be written is
@@ -891,6 +918,7 @@ export class AiResponder {
       ...(read && read.configVersionId === null && pin !== null ? { configVersionId: pin } : {}),
     };
     const run = skillRunRecord(result.decisions);
+    const prompt = resolutionPromptOf(result);
 
     // Set by the attempt that commits: whether this turn made the connection
     // the AI's (`claimAiTurn`), which the inbox hears once it has (tm 293.5).
@@ -954,7 +982,11 @@ export class AiResponder {
           type: 'message',
           text: result.reply,
           recipients: 'all',
-          properties: { ...turn.replyProperties },
+          properties: {
+            ...turn.replyProperties,
+            // The widget's "is it solved?" buttons (tm 320.1 · AI-25-S2).
+            ...(prompt ? { [RESOLUTION_PROMPT_PROPERTY]: prompt } : {}),
+          },
         },
         {
           // With the job's mark and fence (tm 289.5): a message is answered

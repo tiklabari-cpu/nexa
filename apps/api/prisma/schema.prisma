@@ -250,6 +250,7 @@ model License {
   qaCalibrations         QaCalibration[]
   qaCalibrationScores    QaCalibrationScore[]
   qaSamplingRuns         QaSamplingRun[]
+  aiConversationOutcomes AiConversationOutcome[]
   mailDailyUsage         MailDailyUsage[]
   apiPackagePurchases    ApiPackagePurchase[]
   aiPackagePurchases     AiPackagePurchase[]
@@ -1115,6 +1116,7 @@ model Chat {
   aiUnresolved     AiUnresolvedItem[]
   aiSuggestions    AiSuggestion[]
   qaReviews        QaReview[]
+  aiOutcomes       AiConversationOutcome[]
 
   @@index([licenseId, createdAt(sort: Desc)])
   /// The inbox list's ordering index. Kept beside the `created_at` one rather
@@ -1832,6 +1834,9 @@ model Rating {
   threadId  String?  @map("thread_id") @db.VarChar(12)
   value     String
   comment   String?
+  /// `RATING_SUBJECTS` (tm 320.1 · AI-25): `ai` when no person had written to
+  /// the player on the connection when it was given. Null on the rows before it.
+  subject   String?
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
@@ -5757,4 +5762,81 @@ model QaSamplingRun {
 
   @@id([licenseId, day])
   @@map("qa_sampling_runs")
+}
+
+/// What became of a connection the AI took part in (tm 320.1 · AI-25,
+/// `@siyahtus/types` `ai-outcomes.ts`): one row per connection, written as
+/// the conversation happens (`services/reports/ai-outcomes.ts`) and settled
+/// 72 hours after the close by the finalize job (tm 320.2). The CHECKs, the
+/// RLS and the grants live in 20261118090000_ai_conversation_outcomes.
+model AiConversationOutcome {
+  id                           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  licenseId                    BigInt    @map("license_id")
+  /// The day container (panel "Thread ID").
+  chatId                       String    @map("chat_id") @db.VarChar(12)
+  /// The connection (panel "Chat ID"); no foreign key — retention deletes it.
+  threadId                     String    @map("thread_id") @db.VarChar(12)
+  /// The member the repeat-contact search follows (ID-03, K4): the customer
+  /// when the visitor carried a signed member or session; null otherwise.
+  memberKey                    String?   @map("member_key")
+  /// The connection's brand, a label (`brand-isolation`), and its team; no relations.
+  brandId                      String?   @map("brand_id") @db.Uuid
+  teamId                       BigInt?   @map("team_id")
+  aiAgentId                    String?   @map("ai_agent_id") @db.Uuid
+  configVersionId              String?   @map("config_version_id") @db.Uuid
+  language                     String?
+  /// The topic (AI-05's last decision: the procedure's key) and the procedure.
+  intent                       String?
+  procedureId                  String?   @map("procedure_id") @db.Uuid
+  startedAt                    DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  endedAt                      DateTime? @map("ended_at") @db.Timestamptz(6)
+  aiTurns                      Int       @default(0) @map("ai_turns")
+  playerTurns                  Int       @default(0) @map("player_turns")
+  clarificationTurns           Int       @default(0) @map("clarification_turns")
+  requiredSlotsTotal           Int?      @map("required_slots_total")
+  requiredSlotsFilled          Int?      @map("required_slots_filled")
+  /// `AI_OUTCOMES`, or null while nothing has settled it.
+  outcome                      String?
+  aiClaimedResolved            Boolean   @default(false) @map("ai_claimed_resolved")
+  /// `AI_OUTCOME_CONFIRMATIONS`, or null.
+  resolutionConfirmation       String?   @map("resolution_confirmation")
+  confirmedAt                  DateTime? @map("confirmed_at") @db.Timestamptz(6)
+  handoffAt                    DateTime? @map("handoff_at") @db.Timestamptz(6)
+  /// `HANDOFF_REASONS`: the hand-over's primary reason.
+  handoffReason                String?   @map("handoff_reason")
+  /// `QA_MANDATORY_HANDOFF_REASONS`: the compliance rule that forced it, if one did.
+  handoffMandatoryRule         String?   @map("handoff_mandatory_rule")
+  firstHumanReplyAt            DateTime? @map("first_human_reply_at") @db.Timestamptz(6)
+  /// `AI_HANDOFF_FEEDBACK_VALUES`, or null.
+  handoffCardRating            String?   @map("handoff_card_rating")
+  handoffCardMissing           String[]  @default([]) @map("handoff_card_missing")
+  agentReasked                 Boolean?  @map("agent_reasked")
+  /// The player's rating of the AI alone (`good` | `bad`), and of the person after a hand-over.
+  bsat                         String?
+  csatAfterHandoff             String?   @map("csat_after_handoff")
+  /// `AiOutcomeGuardrailHit[]`: what the guardrails flagged on their own.
+  guardrailHits                Json      @default("[]") @map("guardrail_hits")
+  guardrailViolationsConfirmed Int       @default(0) @map("guardrail_violations_confirmed")
+  /// `RISK_FLAG_TYPES` raised on the connection (AI-27).
+  flags                        String[]  @default([])
+  mandatoryHandoffViolation    Boolean   @default(false) @map("mandatory_handoff_violation")
+  repeatSameIntent72h          Boolean?  @map("repeat_same_intent_72h")
+  repeatAny72h                 Boolean?  @map("repeat_any_72h")
+  /// The member's later row that made it a repeat; no relation.
+  repeatOfId                   String?   @map("repeat_of_id") @db.Uuid
+  /// `AI_OUTCOME_QA_RESULTS`, or null.
+  qaResult                     String?   @map("qa_result")
+  finalizedAt                  DateTime? @map("finalized_at") @db.Timestamptz(6)
+  createdAt                    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                    DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  chat    Chat    @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@unique([licenseId, threadId])
+  @@index([licenseId, endedAt])
+  @@index([licenseId, memberKey, startedAt])
+  @@index([chatId])
+  @@index([threadId])
+  @@map("ai_conversation_outcomes")
 }

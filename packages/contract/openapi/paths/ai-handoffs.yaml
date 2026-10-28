@@ -63,6 +63,11 @@ aiHandoffFeedback:
       click overwrites the first (who, when, the reason) and adds no row. Any
       agent who sees the conversation may mark it, the archive included. A card
       of a conversation the caller may not see is `404`.
+
+      The verdict is the connection's hand-over quality (AI-25): `missing`
+      names the card's fields the agent had to find out (the band's chips)
+      and `reasked` says they had to ask the player again; both go on the
+      connection's AI outcome, and like the verdict the last click's stand.
     requestBody:
       required: true
       content:
@@ -74,6 +79,11 @@ aiHandoffFeedback:
             properties:
               value: { type: string, enum: [sufficient, insufficient] }
               reason: { type: string, minLength: 1, maxLength: 500 }
+              missing:
+                type: array
+                maxItems: 20
+                items: { type: string, minLength: 1, maxLength: 64 }
+              reasked: { type: boolean }
     responses:
       "200":
         description: The card, with the verdict

@@ -77,6 +77,7 @@ import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
 import { chatVisibilityFilter, resolveVisibility } from '../chat/access.js';
 import { readDayBoundary } from '../chat/day-boundary.js';
+import { recordOutcomeQa } from '../reports/ai-outcomes.js';
 import {
   aiTookPart,
   ensureActiveQaRubric,
@@ -705,6 +706,9 @@ export async function updateQaReview(
       reviewedAt: now,
     },
   });
+  // The connection's AI outcome (tm 320.1 · AI-25): the verdict, a confirmed
+  // guardrail violation, a missed mandatory hand-over.
+  await recordOutcomeQa(tx, completed.threadId, { final: input.final!, failed });
   if (!criticalFail) return { row: completed, followUps: null };
   const criticalFailed = failed.filter((key) => rubric.some((c) => c.key === key && c.critical));
   return {

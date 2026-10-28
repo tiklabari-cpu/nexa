@@ -16,6 +16,7 @@ import {
   PRECHAT_FIELD_KEYS,
   prechatAsksAnything,
   readEditedAt,
+  RESOLUTION_PROMPT_PROPERTY,
   SENSITIVE_WARNING_SYSTEM_EVENT,
   type PrechatConfig,
   type PrechatFieldKey,
@@ -311,6 +312,11 @@ interface State {
   /** A press is on its way: the button says "Connecting you to an agent…" and waits. */
   humanRequesting: boolean;
   /**
+   * The AI message whose "is it solved?" the visitor answered (tm 320.1 ·
+   * AI-25-S2): its Yes / No stay away until something newer is written.
+   */
+  resolutionAnswered: string | null;
+  /**
    * The licence's file-sharing switch (FR-MOD-08.9.4), from the last token
    * mint. Starts `true` — the attach button's own default state, so nothing
    * changes before the first connect — and only ever narrows once the server
@@ -468,6 +474,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     owner: null,
     humanButtonLabel: null,
     humanRequesting: false,
+    resolutionAnswered: null,
     fileSharingEnabled: true,
   };
 
@@ -622,6 +629,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     }
     renderedCount = state.events.length;
     ui.transcript.scrollTop = ui.transcript.scrollHeight;
+    renderResolution();
   }
 
   /**
@@ -730,6 +738,48 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       state.closed || !state.chatId || !label || !(state.humanRequesting || state.owner === 'ai');
     ui.humanButton.disabled = state.humanRequesting;
     ui.humanButton.textContent = state.humanRequesting ? t('human.connecting') : (label ?? '');
+    renderResolution();
+  }
+
+  /**
+   * "Is it solved?" (tm 320.1 · AI-25-S2): Yes / No under the AI's newest
+   * message when it asked or said so (`resolution_prompt`), while the AI has
+   * the open connection. Anything written after it — the visitor's words, the
+   * AI's thanks, a hand-over — takes them away, and so does an answer given.
+   * Real `<button>`s in a named group, like the rating's.
+   */
+  function renderResolution(): void {
+    const newest = newestMessage(state.events);
+    const prompt =
+      newest?.author_type === 'bot' ? newest.properties?.[RESOLUTION_PROMPT_PROPERTY] : undefined;
+    ui.resolution.hidden =
+      state.closed ||
+      !state.chatId ||
+      state.owner !== 'ai' ||
+      (prompt !== 'asked' && prompt !== 'resolved') ||
+      newest?.id === state.resolutionAnswered;
+  }
+
+  /**
+   * The answer (`POST /customer/chat/resolution`): yes is thanked, no hands
+   * the connection to a person — both reach the transcript with the next
+   * poll or push. A failed press brings the buttons back.
+   */
+  async function answerResolution(answer: 'yes' | 'no'): Promise<void> {
+    const newest = newestMessage(state.events);
+    if (!newest || state.resolutionAnswered === newest.id) return;
+    state.resolutionAnswered = newest.id;
+    renderResolution();
+    try {
+      const result = await api.answerResolution(answer);
+      state.owner = result.owner;
+      state.error = null;
+    } catch {
+      state.resolutionAnswered = null;
+      state.error = t('error.connect');
+    }
+    renderHumanButton();
+    renderStatus();
   }
 
   /**
@@ -2409,6 +2459,12 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     ui.humanButton.addEventListener('click', () => {
       void requestHuman();
     });
+    ui.resolutionYes.addEventListener('click', () => {
+      void answerResolution('yes');
+    });
+    ui.resolutionNo.addEventListener('click', () => {
+      void answerResolution('no');
+    });
     ui.menuRate.addEventListener('click', () => {
       menuOpen = false;
       renderMenu();
@@ -2705,6 +2761,10 @@ interface Ui {
   typing: HTMLElement;
   /** "Talk to an agent" while the AI answers (tm 308 · AI-29). */
   humanButton: HTMLButtonElement;
+  /** "Is it solved?" Yes / No under the AI's prompt (tm 320.1 · AI-25-S2). */
+  resolution: HTMLElement;
+  resolutionYes: HTMLButtonElement;
+  resolutionNo: HTMLButtonElement;
   status: HTMLElement;
   /** "Connection lost, reconnecting…" under the header (tm 259.11); hidden while connected. */
   connection: HTMLElement;
@@ -2958,6 +3018,24 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   humanButton.type = 'button';
   humanButton.className = 'nx-human';
   humanButton.hidden = true;
+
+  // "Is it solved?" (tm 320.1 · AI-25-S2): the AI's own message asks it; the
+  // two answers sit right under the transcript, named as a group for a screen
+  // reader. Hidden until the AI's newest message carries the prompt.
+  const resolution = doc.createElement('div');
+  resolution.className = 'nx-resolution';
+  resolution.setAttribute('role', 'group');
+  resolution.setAttribute('aria-label', t('resolution.group'));
+  resolution.hidden = true;
+  const resolutionYes = doc.createElement('button');
+  resolutionYes.type = 'button';
+  resolutionYes.className = 'nx-resolution-yes';
+  resolutionYes.textContent = t('resolution.yes');
+  const resolutionNo = doc.createElement('button');
+  resolutionNo.type = 'button';
+  resolutionNo.className = 'nx-resolution-no';
+  resolutionNo.textContent = t('resolution.no');
+  resolution.append(resolutionYes, resolutionNo);
 
   const status = doc.createElement('p');
   status.className = 'nx-status';
@@ -3305,6 +3383,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     endConfirm,
     transcript,
     typing,
+    resolution,
     humanButton,
     status,
     // Form before rating: the workspace's own questions come first, so a
@@ -3384,6 +3463,9 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     prechatIntro,
     typing,
     humanButton,
+    resolution,
+    resolutionYes,
+    resolutionNo,
     status,
     connection,
     chip,
@@ -3564,6 +3646,15 @@ function renderFooter(doc: Document, ui: Ui, appearance: Appearance, t: WidgetTr
  * scripted menu is told something untrue. Only the AI Agent's own id counts; a
  * message an agent sent after improving it with the Copilot is `agent`.
  */
+/** The newest message on the connection, whoever wrote it — a system line is not one. */
+function newestMessage(events: readonly WidgetEvent[]): WidgetEvent | null {
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const event = events[i];
+    if (event?.type === 'message') return event;
+  }
+  return null;
+}
+
 function isAiMessage(event: WidgetEvent): boolean {
   return event.author_type === 'bot' && event.author_id === AI_BOT_ID;
 }
@@ -4657,6 +4748,14 @@ button { -webkit-tap-highlight-color: transparent; }
   font-size: 12px; font-weight: 500; color: var(--nx-muted);
 }
 .nx-human{width:auto;margin:4px 12px 0}
+.nx-resolution { flex: none; display: flex; gap: 8px; margin: 4px 16px 0; }
+.nx-resolution-yes, .nx-resolution-no {
+  flex: 1; min-height: 44px; padding: 0 10px; border-radius: 12px;
+  border: 1px solid var(--nx-field-border); background: var(--nx-field); color: var(--nx-text);
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: border-color .15s, background-color .15s;
+}
+.nx-resolution-yes:hover, .nx-resolution-no:hover { border-color: var(--nx-brand); }
 .nx-typing::before {
   content: ""; flex: none; width: 52px; height: 34px;
   border-radius: 16px; border-end-start-radius: 4px;

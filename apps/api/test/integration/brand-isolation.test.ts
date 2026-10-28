@@ -285,6 +285,31 @@ const BRAND_LABEL_TABLES: ReadonlyArray<{
       });
     },
   },
+  {
+    // The brand an AI outcome's connection came in through (tm 320.1 · AI-25):
+    // the AI reports filter by it (RL-02: a Team Lead sees their own teams'
+    // and brands'), while the row itself is the workspace's.
+    table: 'ai_conversation_outcomes',
+    reason: 'the AI reports filter by it; the row is the workspace’s',
+    plant: async (db, at) => {
+      const customer = await db.customer.create({
+        data: { organizationId: at.organizationId, name: 'Brand probe' },
+        select: { id: true },
+      });
+      const chat = await db.chat.create({
+        data: { id: generateShortId(), licenseId: at.licenseId, customerId: customer.id },
+        select: { id: true },
+      });
+      return db.aiConversationOutcome.create({
+        data: {
+          licenseId: at.licenseId,
+          chatId: chat.id,
+          threadId: generateShortId(),
+          brandId: at.brandId,
+        },
+      });
+    },
+  },
 ];
 
 // === Brand lists (tm 309.2) =================================================

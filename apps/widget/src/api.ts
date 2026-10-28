@@ -106,6 +106,15 @@ export interface WidgetState {
   human_button_label?: string | null;
 }
 
+/** The answer to "is it solved?" as the server kept it (tm 320.1 · AI-25-S2). */
+export interface ResolutionAnswerResult {
+  answer: 'yes' | 'no';
+  /** False when the AI no longer had the connection, or nothing asked. */
+  recorded: boolean;
+  owner: 'ai' | 'human' | 'queue';
+  human_available: boolean;
+}
+
 /** What a press of "Talk to an agent" left the connection with (tm 308). */
 export interface HumanRequestResult {
   owner: 'ai' | 'human' | 'queue';
@@ -536,6 +545,14 @@ export class WidgetApi {
   /** "Talk to an agent" (tm 308 · AI-29): the AI hands the connection to a person. */
   async requestHuman(): Promise<HumanRequestResult> {
     return this.#request('POST', '/customer/chat/request-human', { reason: 'button' });
+  }
+
+  /**
+   * "Is it solved?" answered with the buttons (tm 320.1 · AI-25-S2): yes is
+   * thanked, no hands the connection to a person.
+   */
+  async answerResolution(answer: 'yes' | 'no'): Promise<ResolutionAnswerResult> {
+    return this.#request('POST', '/customer/chat/resolution', { answer });
   }
 
   /**

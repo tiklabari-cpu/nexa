@@ -1744,6 +1744,11 @@ export interface paths {
      *     click overwrites the first (who, when, the reason) and adds no row. Any
      *     agent who sees the conversation may mark it, the archive included. A card
      *     of a conversation the caller may not see is `404`.
+     *
+     *     The verdict is the connection's hand-over quality (AI-25): `missing`
+     *     names the card's fields the agent had to find out (the band's chips)
+     *     and `reasked` says they had to ask the player again; both go on the
+     *     connection's AI outcome, and like the verdict the last click's stand.
      */
     post: operations['setAiHandoffFeedback'];
     delete?: never;
@@ -2036,6 +2041,40 @@ export interface paths {
      *     over once. Limited per visitor (GV-01): 429 with `Retry-After`.
      */
     post: operations['requestCustomerHuman'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/customer/chat/resolution': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Answer "Is it solved?" with the widget's Yes / No buttons
+     * @description The buttons under the AI's message that asks "is it solved?" or says it
+     *     is (AI-25-S2, event property `resolution_prompt`). The answer is kept
+     *     on the connection's AI outcome (`resolution_confirmation`, K9 — what
+     *     the player confirmed, apart from what the AI claimed).
+     *
+     *     `yes`: the AI thanks the player in its persona's language, and the
+     *     connection counts as confirmed resolved. `no`: the AI hands the
+     *     connection to a person at once with reason `player_said_unresolved`,
+     *     the way "Talk to an agent" does (`requestHuman`), and the player is told
+     *     a person is coming or the after-hours text.
+     *
+     *     Only while the AI answers the open connection: a connection a person or
+     *     the queue has already is answered with its owner and `recorded: false`.
+     *     Limited per visitor with "Talk to an agent" (GV-01): 429 with
+     *     `Retry-After`.
+     */
+    post: operations['answerCustomerResolution'];
     delete?: never;
     options?: never;
     head?: never;
@@ -24869,6 +24908,8 @@ export interface operations {
           /** @enum {string} */
           value: 'sufficient' | 'insufficient';
           reason?: string;
+          missing?: string[];
+          reasked?: boolean;
         };
       };
     };
@@ -25282,6 +25323,54 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       404: components['responses']['NotFound'];
       /** @description There is no open conversation to hand over */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  answerCustomerResolution: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @enum {string} */
+          answer: 'yes' | 'no';
+        };
+      };
+    };
+    responses: {
+      /** @description The answer as kept, and the connection's owner after it */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @enum {string} */
+            answer: 'yes' | 'no';
+            /** @description False when the AI no longer answered the connection. */
+            recorded: boolean;
+            /** @enum {string} */
+            owner: 'ai' | 'human' | 'queue';
+            human_available: boolean;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      /** @description There is no open conversation to answer on */
       409: {
         headers: {
           [name: string]: unknown;

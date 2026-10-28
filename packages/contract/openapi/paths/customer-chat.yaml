@@ -280,6 +280,62 @@ requestHuman:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+resolution:
+  post:
+    tags: [Customer]
+    operationId: answerCustomerResolution
+    summary: Answer "Is it solved?" with the widget's Yes / No buttons
+    description: |
+      The buttons under the AI's message that asks "is it solved?" or says it
+      is (AI-25-S2, event property `resolution_prompt`). The answer is kept
+      on the connection's AI outcome (`resolution_confirmation`, K9 — what
+      the player confirmed, apart from what the AI claimed).
+
+      `yes`: the AI thanks the player in its persona's language, and the
+      connection counts as confirmed resolved. `no`: the AI hands the
+      connection to a person at once with reason `player_said_unresolved`,
+      the way "Talk to an agent" does (`requestHuman`), and the player is told
+      a person is coming or the after-hours text.
+
+      Only while the AI answers the open connection: a connection a person or
+      the queue has already is answered with its owner and `recorded: false`.
+      Limited per visitor with "Talk to an agent" (GV-01): 429 with
+      `Retry-After`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [answer]
+            properties:
+              answer: { type: string, enum: [yes, "no"] }
+    responses:
+      "200":
+        description: The answer as kept, and the connection's owner after it
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answer, recorded, owner, human_available]
+              properties:
+                answer: { type: string, enum: [yes, "no"] }
+                recorded:
+                  type: boolean
+                  description: False when the AI no longer answered the connection.
+                owner: { type: string, enum: [ai, human, queue] }
+                human_available: { type: boolean }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: There is no open conversation to answer on
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 close:
   post:
     tags: [Customer]

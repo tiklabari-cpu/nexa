@@ -189,6 +189,11 @@ export const RTM_PUSH_ACTIONS = [
   // A version of the AI configuration went live (tm 316.3 · AI-20,
   // `AiConfigPublishedPush`): to every agent — the Inbox band.
   'ai_config_published',
+  // A suggestion reached the AI coaching queue (tm 318.1 · AI-23,
+  // `AiSuggestionCreatedPush`): to its reviewers, each with their open count;
+  // and how one ended (`AiSuggestionReviewedPush`): to its author.
+  'ai_suggestion_created',
+  'ai_suggestion_reviewed',
   // A reply, an internal note or the player's message landed on a ticket (tm
   // 356.2 · HD-01, `TicketMessageCreatedPush`): to its assignee, its followers
   // and its team.

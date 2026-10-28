@@ -1,0 +1,197 @@
+# The AI coaching and suggestion queue (tm 318 · SiyahTuş analysis AI-23).
+#
+# An agent who took a conversation over marks the AI's message ("wrong",
+# "should have handed over", "tone"…) or offers their own answer to the AI's
+# knowledge ("AI bilgisine öner"). The suggestion keeps the last six messages
+# up to the marked one, masked when it was made (AI-26), so it can be reviewed
+# after the conversation's retention ran out. An offered answer, and a "the AI
+# lacked this" mark, are drafted by the `ai_suggestion_drafts` job: the fast
+# model (or, without one, the lexical generaliser) writes a general piece of
+# knowledge without the player's name, username, amounts, dates and
+# reference numbers, masks it, and searches the knowledge base for it — a
+# passage at τ or above is `already_known` ("the information is there; why
+# did the AI not find it?").
+#
+# Served by `apps/api/src/routes/ai-suggestions.ts`. Who: making a suggestion
+# needs the `ai.suggest` matrix row (every member by default) and the
+# conversation's visibility (`chats--access`); reviewing needs
+# `ai.suggestions.review` — a Team Lead their led teams' suggestions (the
+# conversation's team when it was made, RL-03), an administrator and the
+# Founder all; a member without it sees their own. Accepting writes the change
+# into the AI-20 draft through the same door a save uses — it goes live only
+# with a publication (AI-23-S1). The component schemas are in `openapi.yaml`
+# (`AiSuggestion*`); `@siyahtus/types` `ai-suggestions.ts` holds the same
+# lists and bounds. In the panel the `chat_id` below is the day container
+# ("Thread ID") and `thread_id` the connection ("Chat ID") — K1=A.
+
+suggestions:
+  get:
+    tags: [Playbook]
+    operationId: listAiSuggestions
+    summary: The suggestion queue, as the caller may see it
+    description: |
+      Newest first. A reviewer gets every suggestion they may review — a Team
+      Lead those of the teams they lead, an administrator all — and their own;
+      anyone else their own only. `mine=true` narrows to the caller's own.
+      `open_count` counts the caller's reviewable open suggestions (the badge).
+    parameters:
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [new, drafting, in_review, accepted, rejected, merged, open, all]
+          default: open
+      - name: kind
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/AiSuggestionKind" }
+      - name: ai_agent_id
+        in: query
+        schema: { type: string, format: uuid }
+      - name: team_id
+        in: query
+        schema: { type: integer, minimum: 1 }
+      - name: mine
+        in: query
+        schema: { type: boolean }
+      - name: limit
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      - name: offset
+        in: query
+        schema: { type: integer, minimum: 0, default: 0 }
+    responses:
+      "200":
+        description: The suggestions
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiSuggestionList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Playbook]
+    operationId: createAiSuggestion
+    summary: Mark the AI's message, or offer an answer to its knowledge
+    description: |
+      The conversation must be one the caller may see (else 404). `wrong_answer`,
+      `should_have_handed_off` and `tone` name one of the AI's own messages;
+      `promote_agent_answer` names an agent's message (else `validation`). The
+      same message, kind and author twice is `ai_suggestion_state`
+      (`details.reason: duplicate`, `details.suggestion_id`); at most 50 a day
+      per person (`too_many_requests`). `promote_agent_answer` and
+      `missing_info` are `drafting` until the job writes their proposal; the
+      rest are `new`. The reviewers get `ai_suggestion_created`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiSuggestionCreateRequest" }
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiSuggestion" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+suggestion:
+  parameters:
+    - name: suggestionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Playbook]
+    operationId: getAiSuggestion
+    summary: One suggestion with its excerpt
+    description: |
+      404 when the caller may neither review it nor wrote it.
+    responses:
+      "200":
+        description: The suggestion
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiSuggestion" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  patch:
+    tags: [Playbook]
+    operationId: reviewAiSuggestion
+    summary: Edit, accept, reject or merge a suggestion
+    description: |
+      A reviewer's (`ai.suggestions.review`, within their teams; else 404).
+      `edit` replaces the proposal (`in_review`). `accept` writes the proposal
+      — the body's when it gives one — into the AI-20 draft: a `faq` knowledge
+      source (or the `faq` source `source_id` names, corrected), a behaviour
+      rule (or the rule `source_id` names), an example sentence or a note on
+      when the procedure `source_id` names applies; `resulting_change_id` is
+      the AI-21 change it wrote. Nothing goes live until a publication.
+      `reject` needs `review_note` (else `validation`). `merge` joins it to
+      another suggestion (`duplicate_of`) or an unresolved-questions cluster
+      (`cluster_id`). A decided suggestion is `ai_suggestion_state`
+      (`details.reason: already_reviewed`). The author gets
+      `ai_suggestion_reviewed`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiSuggestionReviewRequest" }
+    responses:
+      "200":
+        description: The suggestion, reviewed
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiSuggestion" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503": { $ref: "../openapi.yaml#/components/responses/EmbeddingUnavailable" }
+
+suggestionToScenario:
+  parameters:
+    - name: suggestionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Playbook]
+    operationId: createAiSuggestionScenario
+    summary: Keep the suggestion's conversation as a test scenario (AI-19)
+    description: |
+      The excerpt's player messages become a scripted scenario of the
+      suggestion's AI agent (`origin: from_chat`, `origin_ref`: the
+      suggestion), expecting a hand-over for `should_have_handed_off` and a
+      resolution otherwise; a person edits the expectations before trusting
+      them. Needs the reviewer's reach on the suggestion and the scope that
+      writes scenarios (`agents-bot--all:rw`). An excerpt with no player
+      message is `validation`.
+    requestBody:
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiSuggestionToScenarioRequest" }
+    responses:
+      "201":
+        description: Saved
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiTestScenario" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

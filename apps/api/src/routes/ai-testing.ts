@@ -254,7 +254,8 @@ function scenarioData(fields: Required<ScenarioFields>) {
   };
 }
 
-function serialiseScenario(row: AiTestScenario) {
+/** A scenario as the API sends it — also the AI-23 suggestion's `to-scenario` reply. */
+export function serialiseScenario(row: AiTestScenario) {
   return {
     id: row.id,
     ai_agent_id: row.aiAgentId,

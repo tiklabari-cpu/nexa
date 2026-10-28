@@ -63,11 +63,18 @@
  * `ai_config_published` push and the mailer for a refusal. `knowledge_chunk_gc`
  * (tm 316.6 · ADR-14b §2.8 (7)) deletes the knowledge chunks no version answers
  * from any more (`services/ai/knowledge-chunk-gc.ts`). Neither has a CLI script.
+ *
+ * `ai_suggestion_drafts` (tm 318.1 · AI-23) drafts the suggestions agents
+ * offered to the AI's knowledge, looks for each in the knowledge base and
+ * opens one from a cluster agents kept answering
+ * (`services/ai/suggestion-drafting.ts`) — with the server's providers, metered
+ * as `coaching`, and the publisher for the reviewers' badge. No CLI script.
  */
 import type { PrismaClient } from '@prisma/client';
 import type { Env } from '../../config/env.js';
 import { AiDailyBudget, aiDailyCaps } from '../ai/ai-daily-budget.js';
 import { ScheduledAiConfigPublisher } from '../ai/config-schedule.js';
+import { SuggestionDrafter } from '../ai/suggestion-drafting.js';
 import {
   resolveEmbeddingInferenceProvider,
   resolveInferenceProvider,
@@ -628,6 +635,36 @@ export function buildSchedulerJobs({
             hidden: report.totals.hidden,
             sources: report.totals.sources,
             busy: report.totals.busy,
+          },
+        };
+      },
+    },
+    {
+      // The AI suggestions' drafts (tm 318.1 · AI-23 §2–§3, AI-23-S2). Not
+      // gated: a workspace with nothing drafting reads one empty row set.
+      name: 'ai_suggestion_drafts',
+      intervalMs: intervals.ai_suggestion_drafts,
+      async run(context) {
+        const report = await new SuggestionDrafter(db, {
+          knowledge,
+          llm: clusterLlm,
+          llmLimits: {
+            maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
+            timeoutMs: env.LLM_TIMEOUT_MS,
+            maxPromptChars: env.LLM_MAX_PROMPT_CHARS,
+          },
+          llmInference: inference().llm,
+          embeddingInference: inference().embedding,
+          publisher: publisher ?? null,
+          logger: context.logger,
+        }).run({ signal: context.signal });
+        return {
+          counts: {
+            tenants: report.totals.tenants,
+            opened: report.totals.opened,
+            drafted: report.totals.drafted,
+            llm: report.totals.llm,
+            duplicates: report.totals.duplicates,
           },
         };
       },

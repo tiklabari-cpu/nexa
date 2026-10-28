@@ -364,6 +364,7 @@ enabled flag, and last run's time/status.
 | `chat_inactivity`      | 20 s             | Passes on a chat its agent left unanswered; frees a quiet one's slot (tm 340.2)    |
 | `ai_scheduled_publish` | 30 s             | Publishes an AI configuration version approved for a time that has come (tm 316.6) |
 | `knowledge_chunk_gc`   | 1 h              | Deletes knowledge chunks no AI configuration version answers from (tm 316.6)       |
+| `ai_suggestion_drafts` | 1 min            | Drafts agents' AI suggestions into knowledge and looks for them in it (tm 318.1)   |
 
 Override an interval with `SCHEDULE_<JOB>_MS`, and spread instances from one deploy so
 they don't all tick together with `SCHEDULE_JITTER_PCT` (default 10%) — see

@@ -119,6 +119,7 @@ const UNCONDITIONAL = [
   'chat_inactivity',
   'ai_scheduled_publish',
   'knowledge_chunk_gc',
+  'ai_suggestion_drafts',
 ];
 
 /**
@@ -423,6 +424,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
         SCHEDULE_CHAT_INACTIVITY_MS: TICK_MS,
         SCHEDULE_AI_SCHEDULED_PUBLISH_MS: TICK_MS,
         SCHEDULE_KNOWLEDGE_CHUNK_GC_MS: TICK_MS,
+        SCHEDULE_AI_SUGGESTION_DRAFTS_MS: TICK_MS,
         SIEM_DIR: siemDir,
         // The retention sweep prunes the mail spool by path, so even a pass
         // that is not supposed to happen is pointed at a temporary directory
@@ -570,6 +572,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
       'chat_inactivity',
       'ai_scheduled_publish',
       'knowledge_chunk_gc',
+      'ai_suggestion_drafts',
     ]);
 
     for (const name of UNCONDITIONAL) {
@@ -630,6 +633,7 @@ describe('two API instances sharing one Redis', () => {
       SCHEDULE_CHAT_INACTIVITY_MS: '1500',
       SCHEDULE_AI_SCHEDULED_PUBLISH_MS: '1500',
       SCHEDULE_KNOWLEDGE_CHUNK_GC_MS: '1500',
+      SCHEDULE_AI_SUGGESTION_DRAFTS_MS: '1500',
     };
     // Booted together so the gap between the two `scheduler.start()` calls is
     // as small as two concurrent boots allow — it has to be under the lock's
@@ -744,6 +748,7 @@ describe('retention deletes only once a deployment has said so', () => {
       SCHEDULE_CHAT_INACTIVITY_MS: NEVER_MS,
       SCHEDULE_AI_SCHEDULED_PUBLISH_MS: NEVER_MS,
       SCHEDULE_KNOWLEDGE_CHUNK_GC_MS: NEVER_MS,
+      SCHEDULE_AI_SUGGESTION_DRAFTS_MS: NEVER_MS,
       MAIL_DIR: mailDir,
     });
 
@@ -831,6 +836,7 @@ describe('the unverified sign-up sweep runs by itself once SIGNUP_EMAIL_VERIFICA
       SCHEDULE_CHAT_INACTIVITY_MS: NEVER_MS,
       SCHEDULE_AI_SCHEDULED_PUBLISH_MS: NEVER_MS,
       SCHEDULE_KNOWLEDGE_CHUNK_GC_MS: NEVER_MS,
+      SCHEDULE_AI_SUGGESTION_DRAFTS_MS: NEVER_MS,
     });
 
     await waitForAll({

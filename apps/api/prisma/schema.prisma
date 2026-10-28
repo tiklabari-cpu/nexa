@@ -243,6 +243,7 @@ model License {
   aiUnresolvedSettings   AiUnresolvedSettings?
   aiConfigChanges        AiConfigChange[]
   aiConfigVersions       AiConfigVersion[]
+  aiSuggestions          AiSuggestion[]
   mailDailyUsage         MailDailyUsage[]
   apiPackagePurchases    ApiPackagePurchase[]
   aiPackagePurchases     AiPackagePurchase[]
@@ -338,6 +339,9 @@ model Account {
   aiUsageAlertsTo    AiUsageAlertRecipient[]
   /// Platform operators who looked at a workspace as this member (tm 389.1).
   platformImpersonations PlatformImpersonationSession[]
+  /// The AI suggestions this member made and reviewed (tm 318.1 · AI-23).
+  aiSuggestionsMade     AiSuggestion[] @relation("AiSuggestionAuthor")
+  aiSuggestionsReviewed AiSuggestion[] @relation("AiSuggestionReviewer")
 
   @@map("accounts")
 }
@@ -1099,6 +1103,7 @@ model Chat {
   aiHandoffs       AiHandoff[]
   aiJobs           AiJob[]
   aiUnresolved     AiUnresolvedItem[]
+  aiSuggestions    AiSuggestion[]
 
   @@index([licenseId, createdAt(sort: Desc)])
   /// The inbox list's ordering index. Kept beside the `created_at` one rather
@@ -2131,6 +2136,7 @@ model AiAgent {
   sandboxSessions   AiSandboxSession[]
   unresolvedItems   AiUnresolvedItem[]
   unresolvedGroups  AiUnresolvedCluster[]
+  suggestions       AiSuggestion[]
 
   // One `kind = 'ai_agent'` row per licence (tm 390.1): the partial unique
   // index `ai_agents_one_per_license` lives in the migration — Prisma cannot
@@ -5141,6 +5147,8 @@ model AiUnresolvedCluster {
   license License            @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   aiAgent AiAgent            @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
   items   AiUnresolvedItem[]
+  /// The suggestions merged into it or opened from it (tm 318.1 · AI-23).
+  suggestions AiSuggestion[]
 
   @@index([licenseId, aiAgentId, embeddingSpace], map: "ai_unresolved_clusters_agent_space_idx")
   @@map("ai_unresolved_clusters")
@@ -5513,4 +5521,65 @@ model PlatformAlertPrefs {
   admin PlatformAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade)
 
   @@map("platform_alert_prefs")
+}
+
+/// The AI coaching and suggestion queue (tm 318.1 · SiyahTuş analysis AI-23 ·
+/// `@siyahtus/types` `ai-suggestions.ts`): an agent's mark on the AI's
+/// message, or an answer of their own offered to the AI's knowledge, with a
+/// masked copy of the last messages (`excerpt_masked`) that outlives the
+/// conversation's retention — `thread_id` has no foreign key for that reason.
+/// `team_id` is the conversation's team when it was made: what a Team Lead's
+/// review is bounded to. The CHECKs, the trigger that keeps every reference in
+/// the workspace, RLS and the one-per-mark partial unique index live in
+/// `20261116090000_ai_suggestions`.
+model AiSuggestion {
+  id                String    @id @db.Uuid
+  licenseId         BigInt    @map("license_id")
+  aiAgentId         String    @map("ai_agent_id") @db.Uuid
+  /// One of `SUGGESTION_KINDS`.
+  kind              String
+  /// One of `SUGGESTION_SOURCES`.
+  source            String    @default("agent_flag")
+  /// The day container (panel "Thread ID").
+  chatId            String?   @map("chat_id") @db.VarChar(12)
+  /// The connection (panel "Chat ID"); no foreign key — retention deletes it.
+  threadId          String?   @map("thread_id") @db.VarChar(12)
+  eventIds          String[]  @default([]) @map("event_ids")
+  /// `SuggestionExcerptMessage[]`, masked when made (AI-26).
+  excerptMasked     Json      @default("[]") @map("excerpt_masked")
+  note              String?
+  teamId            BigInt?   @map("team_id")
+  /// `SuggestionProposedChange`; null until drafted or written.
+  proposedChange    Json?     @map("proposed_change")
+  /// What the drafting job took out (`SUGGESTION_SPECIFIC_KINDS`).
+  removedSpecifics  String[]  @default([]) @map("removed_specifics")
+  /// `llm` or `lexical`; null when no job drafted it.
+  draftedBy         String?   @map("drafted_by")
+  duplicateOf       String?   @map("duplicate_of") @db.Uuid
+  clusterId         String?   @map("cluster_id") @db.Uuid
+  similarChunkIds   String[]  @default([]) @map("similar_chunk_ids") @db.Uuid
+  /// One of `SUGGESTION_STATUSES`.
+  status            String    @default("new")
+  reviewerId        String?   @map("reviewer_id") @db.Uuid
+  reviewedAt        DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  reviewNote        String?   @map("review_note")
+  /// The AI-21 change accepting it wrote; no foreign key — the history prunes itself.
+  resultingChangeId String?   @map("resulting_change_id") @db.Uuid
+  createdBy         String?   @map("created_by") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  license     License              @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  aiAgent     AiAgent              @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
+  chat        Chat?                @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  duplicate   AiSuggestion?        @relation("AiSuggestionDuplicate", fields: [duplicateOf], references: [id], onDelete: SetNull)
+  duplicates  AiSuggestion[]       @relation("AiSuggestionDuplicate")
+  cluster     AiUnresolvedCluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  reviewer    Account?             @relation("AiSuggestionReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  author      Account?             @relation("AiSuggestionAuthor", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([licenseId, status, teamId, createdAt], map: "ai_suggestions_license_status_team_created_idx")
+  @@index([createdBy, createdAt])
+  @@index([chatId])
+  @@map("ai_suggestions")
 }

@@ -279,6 +279,33 @@ export const CAPABILITIES = [
     floorRole: 'admin',
     defaults: { owner: 'on', admin: 'on', team_lead: 'off', agent: 'off' },
   },
+  {
+    // Marking the AI's message or offering one's own answer to its knowledge
+    // (AI-23 · tm 318.1): checked by `POST /ai/suggestions`, beside the chat
+    // visibility the conversation itself needs. Every member by default — the
+    // agent who talks to players is who hears first what changed.
+    key: 'ai.suggest',
+    group: 'ai',
+    labelKey: 'permissions.capability.ai.suggest',
+    values: ['off', 'on'],
+    scopes: {},
+    floorRole: 'agent',
+    defaults: { owner: 'on', admin: 'on', team_lead: 'on', agent: 'on' },
+  },
+  {
+    // Reviewing the suggestion queue (AI-23 §4 · tm 318.1): checked by the
+    // suggestion routes. A Team Lead sees and decides their led teams'
+    // suggestions, an administrator and the Founder every one. Accepting
+    // writes into the AI-20 draft, never live (AI-23-S1). The floor keeps it
+    // off an Ekip Üyesi: one would review their own team's marks.
+    key: 'ai.suggestions.review',
+    group: 'ai',
+    labelKey: 'permissions.capability.ai.suggestions.review',
+    values: ['off', 'on'],
+    scopes: {},
+    floorRole: 'team_lead',
+    defaults: { owner: 'on', admin: 'on', team_lead: 'on', agent: 'off' },
+  },
   // Raporlar
   {
     // A level row with no `team` level yet: a team-bounded report needs the

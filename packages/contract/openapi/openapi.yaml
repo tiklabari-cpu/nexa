@@ -494,6 +494,12 @@ paths:
     $ref: "./paths/ai-unresolved.yaml#/clusterAddExamples"
   /ai/unresolved/settings:
     $ref: "./paths/ai-unresolved.yaml#/settings"
+  /ai/suggestions:
+    $ref: "./paths/ai-suggestions.yaml#/suggestions"
+  /ai/suggestions/{suggestionId}:
+    $ref: "./paths/ai-suggestions.yaml#/suggestion"
+  /ai/suggestions/{suggestionId}/to-scenario:
+    $ref: "./paths/ai-suggestions.yaml#/suggestionToScenario"
   /ai/changes:
     $ref: "./paths/ai-changes.yaml#/changes"
   /ai/changes/export:
@@ -5383,6 +5389,179 @@ components:
           items: { type: string }
         skipped: { type: integer, minimum: 0, description: Sentences the procedure already had. }
         examples_count: { type: integer, minimum: 0 }
+
+    AiSuggestionKind:
+      type: string
+      description: What the suggestion says (`@siyahtus/types` `SUGGESTION_KINDS`).
+      enum:
+        [
+          wrong_answer,
+          missing_info,
+          should_have_handed_off,
+          should_not_have_handed_off,
+          tone,
+          promote_agent_answer,
+          other,
+        ]
+
+    AiSuggestionProposedChange:
+      type: object
+      additionalProperties: false
+      required: [target, title, body, source_id]
+      description: |
+        What accepting writes into the AI-20 draft. `source_id` names the
+        `faq` knowledge source or behaviour rule it corrects, or the
+        procedure it adds an example or a note to; null writes a new snippet
+        or rule.
+      properties:
+        target:
+          type: string
+          enum: [knowledge_snippet, guidance_rule, procedure_example, procedure_note]
+        title: { type: string, minLength: 1, maxLength: 200 }
+        body: { type: string, minLength: 1, maxLength: 4000 }
+        source_id: { type: string, format: uuid, nullable: true }
+
+    AiSuggestionExcerptMessage:
+      type: object
+      required: [event_id, author_type, is_ai, text, created_at, marked]
+      properties:
+        event_id: { type: string }
+        author_type: { type: string, enum: [customer, agent, bot] }
+        is_ai: { type: boolean, description: The model's message, not a rule bot's. }
+        text: { type: string, description: Masked when the suggestion was made (AI-26). }
+        created_at: { type: string, format: date-time }
+        marked: { type: boolean, description: The message the suggestion is about. }
+
+    AiSuggestionSimilarSource:
+      type: object
+      required: [chunk_id, source_id, source_name]
+      properties:
+        chunk_id: { type: string, format: uuid }
+        source_id: { type: string, format: uuid }
+        source_name: { type: string }
+
+    AiSuggestion:
+      type: object
+      required:
+        - id
+        - ai_agent_id
+        - kind
+        - source
+        - status
+        - chat_id
+        - thread_id
+        - event_ids
+        - excerpt
+        - note
+        - team_id
+        - proposed_change
+        - removed_specifics
+        - drafted_by
+        - duplicate_of
+        - cluster_id
+        - already_known
+        - similar_sources
+        - reviewer_id
+        - reviewed_at
+        - review_note
+        - resulting_change_id
+        - created_by
+        - created_at
+        - updated_at
+      properties:
+        id: { type: string, format: uuid }
+        ai_agent_id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/AiSuggestionKind" }
+        source: { type: string, enum: [agent_flag, qa_finding, unresolved_cluster] }
+        status: { type: string, enum: [new, drafting, in_review, accepted, rejected, merged] }
+        chat_id:
+          { type: string, nullable: true, description: The day container (panel "Thread ID"). }
+        thread_id: { type: string, nullable: true, description: The connection (panel "Chat ID"). }
+        event_ids: { type: array, items: { type: string } }
+        excerpt:
+          type: array
+          description: The last messages up to the marked one, masked when made.
+          items: { $ref: "#/components/schemas/AiSuggestionExcerptMessage" }
+        note: { type: string, nullable: true }
+        team_id:
+          type: integer
+          nullable: true
+          description: The conversation's team when the suggestion was made.
+        proposed_change:
+          allOf: [{ $ref: "#/components/schemas/AiSuggestionProposedChange" }]
+          nullable: true
+        removed_specifics:
+          type: array
+          description: What the drafting job took out of the agent's words, by kind.
+          items:
+            type: string
+            enum: [name, username, email, phone, amount, date, time, reference]
+        drafted_by: { type: string, nullable: true, enum: [llm, lexical, null] }
+        duplicate_of: { type: string, format: uuid, nullable: true }
+        cluster_id: { type: string, format: uuid, nullable: true }
+        already_known:
+          type: boolean
+          description: The knowledge base has a passage at τ or above — "the information is there; why did the AI not find it?"
+        similar_sources:
+          type: array
+          items: { $ref: "#/components/schemas/AiSuggestionSimilarSource" }
+        reviewer_id: { type: string, format: uuid, nullable: true }
+        reviewed_at: { type: string, format: date-time, nullable: true }
+        review_note: { type: string, nullable: true }
+        resulting_change_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The AI-21 change accepting it wrote.
+        created_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    AiSuggestionList:
+      type: object
+      required: [suggestions, total, open_count]
+      properties:
+        suggestions:
+          type: array
+          items: { $ref: "#/components/schemas/AiSuggestion" }
+        total: { type: integer, minimum: 0 }
+        open_count:
+          type: integer
+          minimum: 0
+          description: The open suggestions the caller may review — the badge.
+
+    AiSuggestionCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [chat_id, thread_id, kind]
+      properties:
+        chat_id: { type: string }
+        thread_id: { type: string }
+        event_id: { type: string, description: The message the suggestion is about. }
+        kind: { $ref: "#/components/schemas/AiSuggestionKind" }
+        note: { type: string, minLength: 1, maxLength: 1000 }
+        ai_agent_id:
+          type: string
+          format: uuid
+          description: The workspace's AI agent when absent.
+        proposed_change: { $ref: "#/components/schemas/AiSuggestionProposedChange" }
+
+    AiSuggestionReviewRequest:
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties:
+        action: { type: string, enum: [edit, accept, reject, merge] }
+        proposed_change: { $ref: "#/components/schemas/AiSuggestionProposedChange" }
+        review_note: { type: string, minLength: 1, maxLength: 1000 }
+        duplicate_of: { type: string, format: uuid }
+        cluster_id: { type: string, format: uuid }
+
+    AiSuggestionToScenarioRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
 
     AiConfigEntityType:
       type: string
@@ -13689,6 +13868,7 @@ components:
         - ai_guardrail_setup_incomplete
         - ai_mode_transition_refused
         - ai_return_blocked
+        - ai_suggestion_state
         - ai_test_run_in_progress
         - authentication
         - authorization

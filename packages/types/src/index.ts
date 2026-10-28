@@ -82,3 +82,4 @@ export * from './credential-scopes.js';
 export * from './platform.js';
 export * from './ai-config-history.js';
 export * from './ai-config-versions.js';
+export * from './ai-suggestions.js';

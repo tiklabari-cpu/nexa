@@ -1622,6 +1622,8 @@ const CAPABILITY_LABELS: Record<CapabilityKey, { en: string; tr: string }> = {
     en: 'Approve and publish AI settings',
     tr: 'AI ayarlarını onaylama ve yayımlama',
   },
+  'ai.suggest': { en: 'Suggest corrections to the AI', tr: "AI'a düzeltme önerme" },
+  'ai.suggestions.review': { en: 'Review AI suggestions', tr: 'AI önerilerini inceleme' },
   'reports.view': { en: 'View reports', tr: 'Raporları görme' },
   'reports.schedule': { en: 'Schedule report emails', tr: 'Rapor e-postalarını zamanlama' },
   'team.invite': { en: 'Invite teammates', tr: 'Ekip arkadaşı davet etme' },

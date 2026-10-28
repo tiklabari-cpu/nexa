@@ -14026,7 +14026,7 @@
           "319"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-28T18:55:48.899Z",
+        "updatedAt": "2026-10-28T20:20:37.195Z",
         "subtasks": [
           {
             "id": 1,
@@ -14034,11 +14034,11 @@
             "description": "ai_conversation_outcomes + ratings.subject + yazma noktaları + widget \"Çözüldü mü?\" butonları",
             "details": "Üst görev 320 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Yazma noktası entegrasyonları.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "320",
             "priority": "medium",
-            "updatedAt": "2026-10-28T18:55:48.899Z"
+            "updatedAt": "2026-10-28T20:20:37.195Z"
           },
           {
             "id": 2,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-28T18:55:48.900Z",
+      "lastModified": "2026-10-28T20:20:37.195Z",
       "taskCount": 390,
       "completedCount": 336,
       "tags": [

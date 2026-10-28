@@ -594,6 +594,21 @@ export const AUDIT_ACTIONS = [
   'platform.billing_swift_marked_paid',
   'platform.impersonation_started',
   'platform.impersonation_ended',
+  // The AI's configuration changed (tm 315 · AI-21). The values — what the AI
+  // was told before and after — are in `ai_config_changes`, kept five years;
+  // this entry names the entity, its id and the fields, and points at the
+  // change row (`target: ai_config_change:<id>`) so the trail links to it.
+  // The review states are versioning's (tm 316), `knowledge.crawled` a
+  // website refresh's (AI-17).
+  'ai.config_changed',
+  'ai.config_submitted',
+  'ai.config_approved',
+  'ai.config_rejected',
+  'ai.config_published',
+  'ai.config_rolled_back',
+  'ai.paused',
+  'ai.resumed',
+  'knowledge.crawled',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

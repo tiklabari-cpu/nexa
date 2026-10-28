@@ -137,7 +137,7 @@ export async function putAiAccessInfo(
     updatedBy: writer.accountId,
   };
   if (existing === null) {
-    return createAiAccessInfoDraft(tx, {
+    return createAiAccessInfoDraft(tx, writer.author, {
       licenseId: writer.licenseId,
       brandId,
       ...data,
@@ -146,7 +146,7 @@ export async function putAiAccessInfo(
   }
   const sameFetch = existing.sourceType === 'dynamic_url' && sourceType === 'dynamic_url';
   const keepsCache = sameFetch && existing.url === url;
-  return updateAiAccessInfoDraft(tx, existing.id, {
+  return updateAiAccessInfoDraft(tx, writer.author, existing.id, {
     ...data,
     ...(keepsCache ? {} : { lastValue: null, lastFetchedAt: null }),
   });

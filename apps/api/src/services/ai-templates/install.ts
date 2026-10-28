@@ -74,6 +74,7 @@ import {
   updateForbiddenPhraseDraft,
   updateHandoffRouteDraft,
 } from '../ai/config-draft.js';
+import type { ConfigChangeAuthor } from '../ai/config-history.js';
 import { importKnowledgeTableRows } from '../knowledge-tables/writer.js';
 import { createGroup } from '../team/group-service.js';
 
@@ -83,6 +84,8 @@ export interface TemplateInstaller {
   /** The person (`accounts.id`); null for a token that is no one's. */
   accountId: string | null;
   audit: AuditContext;
+  /** Who the change history names (tm 315 · AI-21): one row per entity the install writes. */
+  author: ConfigChangeAuthor;
 }
 
 /** The catalogue's template of this key, or null. */
@@ -291,7 +294,7 @@ export async function applyRouteMapping(
       });
       if (existing) {
         if (existing.groupId !== BigInt(groupId) || !existing.active) {
-          await updateHandoffRouteDraft(tx, existing.id, {
+          await updateHandoffRouteDraft(tx, installer.author, existing.id, {
             groupId: BigInt(groupId),
             active: true,
             updatedBy: installer.accountId,
@@ -305,7 +308,7 @@ export async function applyRouteMapping(
           limit: HANDOFF_ROUTES_MAX,
         });
       }
-      await createHandoffRouteDraft(tx, {
+      await createHandoffRouteDraft(tx, installer.author, {
         licenseId: installer.licenseId,
         brandId,
         matchType: 'topic',
@@ -416,7 +419,7 @@ async function installForbiddenPhrases(
       if (scope.skill_ids.includes(skillId)) continue;
       if (scope.skill_ids.length < GUIDANCE_SCOPE_IDS_MAX) {
         const next: GuidanceScope = { skill_ids: [...scope.skill_ids, skillId] };
-        await updateForbiddenPhraseDraft(tx, twin.id, {
+        await updateForbiddenPhraseDraft(tx, installer.author, twin.id, {
           scope: next as Prisma.InputJsonValue,
           updatedBy: installer.accountId,
         });
@@ -437,7 +440,7 @@ async function installForbiddenPhrases(
       );
     }
     const scoped: GuidanceScope = { skill_ids: [skillId] };
-    const row = await createForbiddenPhraseDraft(tx, {
+    const row = await createForbiddenPhraseDraft(tx, installer.author, {
       licenseId: installer.licenseId,
       aiAgentId,
       phrase: phrase.phrase,
@@ -473,7 +476,7 @@ async function writeCopy(
     throw ApiError.validation(problem.message, { ...procedureProblemDetails(problem) });
   }
   const split = splitSkillProcedure(result.procedure);
-  const skill = await createSkillDraft(tx, {
+  const skill = await createSkillDraft(tx, installer.author, {
     licenseId: installer.licenseId,
     aiAgentId,
     name: template.name,
@@ -656,7 +659,7 @@ export async function installPack(
       : [];
     const scope: GuidanceScope = skillIds.length > 0 ? { skill_ids: skillIds } : { all: true };
     rulesCreated.push(
-      await createGuidanceRuleDraft(tx, {
+      await createGuidanceRuleDraft(tx, installer.author, {
         licenseId: installer.licenseId,
         aiAgentId: input.aiAgentId,
         title: rule.title,
@@ -681,7 +684,7 @@ export async function installPack(
     if (rows.length === 0) continue;
     const { verdicts, created } = await importKnowledgeTableRows(
       tx,
-      { licenseId: installer.licenseId, accountId: installer.accountId },
+      { licenseId: installer.licenseId, accountId: installer.accountId, author: installer.author },
       table,
       rows.map((row, index) => ({
         line: index + 1,

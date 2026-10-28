@@ -34,6 +34,7 @@ import { ProfileForm } from './ProfileForm.js';
 import { CreateAiAgentCard } from './CreateAiAgentCard.js';
 import { SetupSteps } from './SetupSteps.js';
 import { WelcomeMessageCard } from './WelcomeMessageCard.js';
+import { History } from './History.js';
 import { PLAYBOOK_TABS, resolveView, type PlaybookView } from './playbook-tabs.js';
 import { GuardrailsPage } from './GuardrailsPage.js';
 import { HandoffSettings } from './HandoffSettings.js';
@@ -984,6 +985,8 @@ function PlaybookPageBody({
                 <KbArticleList canEdit={canEdit} />
               </div>
             )}
+
+            {view === 'history' && canSeeTests && <History />}
 
             {view === 'unresolved' &&
               canSeeTests &&

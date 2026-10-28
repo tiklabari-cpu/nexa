@@ -1,0 +1,100 @@
+# The AI configuration change history (tm 315 · SiyahTuş analysis AI-21).
+#
+# Every save of an AI editing table — the persona, a procedure or skill, a
+# behaviour rule, a guardrail, a hand-over rule or route, a knowledge source,
+# a structured table row, the access information — writes one change: the
+# entity before and after, the JSON-path difference, who and in which role
+# (ADR-14b `docs/adr/ai-config-versioning.md` §2.5 step 3). Texts are masked
+# (AI-26) and a text over 20 KB is kept as its sha256 and length. The rows are
+# append-only and kept five years (AI-21-S1), outside the audit log's prune;
+# there is no write here.
+#
+# Served by `apps/api/src/routes/ai-changes.ts`. Who reads (AI-21-S2): the
+# Founder and the Administrator everything (with the AI configuration scope);
+# a Team Lead their own changes and the publish history; a Team Member
+# nothing. The export is the Founder's and the Administrator's.
+
+changes:
+  get:
+    tags: [Playbook]
+    operationId: listAiConfigChanges
+    summary: The AI configuration change history
+    description: |
+      Newest first, by `next_cursor`. `visibility` says whether the list is
+      the whole workspace's (`all`) or the caller's own (`own`, a Team Lead).
+    parameters:
+      - { $ref: "../openapi.yaml#/components/parameters/AiConfigChangeEntityType" }
+      - { $ref: "../openapi.yaml#/components/parameters/AiConfigChangeEntityId" }
+      - { $ref: "../openapi.yaml#/components/parameters/AiConfigChangeAction" }
+      - { $ref: "../openapi.yaml#/components/parameters/AiConfigChangeActorId" }
+      - { $ref: "../openapi.yaml#/components/parameters/AiConfigChangeVersionId" }
+      - { $ref: "../openapi.yaml#/components/parameters/AiConfigChangeFrom" }
+      - { $ref: "../openapi.yaml#/components/parameters/AiConfigChangeTo" }
+      - name: limit
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      - name: cursor
+        in: query
+        schema: { type: string, maxLength: 512 }
+    responses:
+      "200":
+        description: A page of changes
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiConfigChangeList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+changesExport:
+  get:
+    tags: [Playbook]
+    operationId: exportAiConfigChanges
+    summary: Export the change history as CSV
+    description: |
+      One line per changed field — `at, actor, actor_role, entity_type,
+      entity_id, entity_name, action, field, before, after, version_id,
+      change_id` — newest change first, at most 10,000 changes. The same
+      filters as the list. Founder and Administrator only.
+    parameters:
+      - { $ref: "../openapi.yaml#/components/parameters/AiConfigChangeEntityType" }
+      - { $ref: "../openapi.yaml#/components/parameters/AiConfigChangeEntityId" }
+      - { $ref: "../openapi.yaml#/components/parameters/AiConfigChangeAction" }
+      - { $ref: "../openapi.yaml#/components/parameters/AiConfigChangeActorId" }
+      - { $ref: "../openapi.yaml#/components/parameters/AiConfigChangeVersionId" }
+      - { $ref: "../openapi.yaml#/components/parameters/AiConfigChangeFrom" }
+      - { $ref: "../openapi.yaml#/components/parameters/AiConfigChangeTo" }
+    responses:
+      "200":
+        description: The history as CSV
+        content:
+          text/csv:
+            schema: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+change:
+  parameters:
+    - name: changeId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Playbook]
+    operationId: getAiConfigChange
+    summary: One change, with the entity before and after
+    description: A Team Lead gets 404 for a change that is neither theirs nor the publish history.
+    responses:
+      "200":
+        description: The change
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiConfigChangeDetail" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

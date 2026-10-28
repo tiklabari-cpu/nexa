@@ -35,6 +35,7 @@ import {
   deleteGuidanceRuleDraft,
   updateGuidanceRuleDraft,
 } from '../services/ai/config-draft.js';
+import { configAuthorOf } from '../lib/config-author.js';
 import {
   checkGroups,
   GUIDANCE_CHECK_RESPONSE_NAME,
@@ -221,7 +222,7 @@ export default async function aiGuidanceRoutes(
           { reason: 'guidance_rules_limit', limit: GUIDANCE_RULES_PER_AGENT_MAX },
         );
       }
-      return createGuidanceRuleDraft(tx, {
+      return createGuidanceRuleDraft(tx, configAuthorOf(request), {
         licenseId: tenant.licenseId,
         aiAgentId: input.ai_agent_id,
         title: input.title,
@@ -255,7 +256,7 @@ export default async function aiGuidanceRoutes(
         });
         if (!existing) throw ApiError.notFound('Behaviour rule not found.');
         if (input.scope) await requireScopeTargets(tx, existing.aiAgentId, input.scope);
-        return updateGuidanceRuleDraft(tx, id, {
+        return updateGuidanceRuleDraft(tx, configAuthorOf(request), id, {
           ...(input.title !== undefined ? { title: input.title } : {}),
           ...(input.body !== undefined ? { body: input.body } : {}),
           ...(input.category !== undefined ? { category: input.category } : {}),
@@ -275,7 +276,9 @@ export default async function aiGuidanceRoutes(
     { config: { scopes: WRITE } },
     async (request, reply) => {
       const id = parse(uuid, request.params.ruleId);
-      const deleted = await request.withTenant((tx) => deleteGuidanceRuleDraft(tx, id));
+      const deleted = await request.withTenant((tx) =>
+        deleteGuidanceRuleDraft(tx, configAuthorOf(request), id),
+      );
       if (deleted === 0) throw ApiError.notFound('Behaviour rule not found.');
       return reply.code(204).send();
     },

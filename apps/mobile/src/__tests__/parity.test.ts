@@ -1045,7 +1045,12 @@ describe('module parity matrix — what is still owed', () => {
       // (tm 313.1) — a PDF or Word document as a knowledge source and the
       // signed link to its original (AI-18). Web console only, like the rest of
       // knowledge; nothing here re-scopes.
-      contractEndpoints: 312,
+      // 312 -> 315 with `/ai/changes`, `/ai/changes/export` and
+      // `/ai/changes/{changeId}` (tm 315) — the AI configuration change
+      // history and its CSV (AI-21), read by Playbook › Geçmiş. The AI is
+      // configured in the web console; the app has no Playbook screen, and
+      // nothing here re-scopes.
+      contractEndpoints: 315,
       scopeBoundaries: 1,
     });
   });

@@ -494,6 +494,12 @@ paths:
     $ref: "./paths/ai-unresolved.yaml#/clusterAddExamples"
   /ai/unresolved/settings:
     $ref: "./paths/ai-unresolved.yaml#/settings"
+  /ai/changes:
+    $ref: "./paths/ai-changes.yaml#/changes"
+  /ai/changes/export:
+    $ref: "./paths/ai-changes.yaml#/changesExport"
+  /ai/changes/{changeId}:
+    $ref: "./paths/ai-changes.yaml#/change"
 
   /copilot/knowledge:
     $ref: "./paths/copilot.yaml#/knowledge"
@@ -5359,6 +5365,145 @@ components:
           items: { type: string }
         skipped: { type: integer, minimum: 0, description: Sentences the procedure already had. }
         examples_count: { type: integer, minimum: 0 }
+
+    AiConfigEntityType:
+      type: string
+      description: What changed (`@siyahtus/types` `AI_CONFIG_ENTITY_TYPES`); `config_version` is versioning's (tm 316).
+      enum:
+        [
+          persona,
+          guidance_rule,
+          procedure,
+          skill,
+          knowledge_source,
+          knowledge_table_row,
+          handoff_rule,
+          handoff_route,
+          guardrail,
+          risk_policy,
+          access_info,
+          config_version,
+        ]
+
+    AiConfigChangeAction:
+      type: string
+      enum:
+        [
+          created,
+          updated,
+          deleted,
+          submitted,
+          approved,
+          rejected,
+          published,
+          rolled_back,
+          paused,
+          resumed,
+          crawled,
+        ]
+
+    AiConfigDiffEntry:
+      type: object
+      required: [path, kind]
+      description: |
+        One leaf of the difference, on the row's column names — `persona.welcome`,
+        `procedure.steps[2].target`. A value over 20 KB is `{omitted: too_large,
+        sha256, length}`.
+      properties:
+        path: { type: string }
+        kind: { type: string, enum: [added, removed, changed] }
+        before: { description: Absent for `added`. }
+        after: { description: Absent for `removed`. }
+
+    AiConfigChangeActor:
+      type: object
+      required: [id, type, role, name]
+      properties:
+        id:
+          type: string
+          nullable: true
+          description: An account id, or a system job's name when `type` is `system`.
+        type: { type: string, enum: [agent, bot, system, platform] }
+        role:
+          type: string
+          nullable: true
+          description: The member's role at the moment of the change.
+        name: { type: string, nullable: true }
+
+    AiConfigChange:
+      type: object
+      required:
+        [
+          id,
+          ai_agent_id,
+          entity_type,
+          entity_id,
+          entity_name,
+          action,
+          actor,
+          at,
+          version_id,
+          draft_revision,
+          note,
+          fields,
+          diff,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        ai_agent_id: { type: string, format: uuid, nullable: true }
+        entity_type: { $ref: "#/components/schemas/AiConfigEntityType" }
+        entity_id: { type: string, format: uuid }
+        entity_name:
+          type: string
+          nullable: true
+          description: The entity's name, title or label as it was.
+        action: { $ref: "#/components/schemas/AiConfigChangeAction" }
+        actor: { $ref: "#/components/schemas/AiConfigChangeActor" }
+        at: { type: string, format: date-time }
+        version_id: { type: string, format: uuid, nullable: true }
+        draft_revision: { type: integer, nullable: true }
+        note:
+          type: string
+          nullable: true
+          description: What the save was when it is not an edit (`reindex`, `reorder`).
+        fields:
+          type: array
+          items: { type: string }
+          description: The top-level fields the change touches.
+        diff:
+          type: array
+          items: { $ref: "#/components/schemas/AiConfigDiffEntry" }
+
+    AiConfigChangeDetail:
+      allOf:
+        - $ref: "#/components/schemas/AiConfigChange"
+        - type: object
+          required: [before, after, request_id]
+          properties:
+            before:
+              type: object
+              nullable: true
+              additionalProperties: true
+              description: The entity before (masked); null for a creation.
+            after:
+              type: object
+              nullable: true
+              additionalProperties: true
+              description: The entity after (masked); null for a deletion.
+            request_id: { type: string, nullable: true }
+
+    AiConfigChangeList:
+      type: object
+      required: [items, next_cursor, visibility]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AiConfigChange" }
+        next_cursor: { type: string, nullable: true }
+        visibility:
+          type: string
+          enum: [all, own]
+          description: "`own`: a Team Lead's view — their changes and the publish history."
 
     AiUnresolvedSettings:
       type: object
@@ -13443,6 +13588,35 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
 
   parameters:
+    AiConfigChangeEntityType:
+      name: entity_type
+      in: query
+      schema: { $ref: "#/components/schemas/AiConfigEntityType" }
+    AiConfigChangeEntityId:
+      name: entity_id
+      in: query
+      schema: { type: string, format: uuid }
+    AiConfigChangeAction:
+      name: action
+      in: query
+      schema: { $ref: "#/components/schemas/AiConfigChangeAction" }
+    AiConfigChangeActorId:
+      name: actor_id
+      in: query
+      description: An account id, or a system job's name.
+      schema: { type: string, maxLength: 200 }
+    AiConfigChangeVersionId:
+      name: version_id
+      in: query
+      schema: { type: string, format: uuid }
+    AiConfigChangeFrom:
+      name: from
+      in: query
+      schema: { type: string, format: date-time }
+    AiConfigChangeTo:
+      name: to
+      in: query
+      schema: { type: string, format: date-time }
     PageId:
       name: page_id
       in: query

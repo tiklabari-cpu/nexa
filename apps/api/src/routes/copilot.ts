@@ -11,6 +11,7 @@
  * draft assembled from the copilot base. Every assist records a run so Reports
  * counts the chat as "assisted".
  */
+import { configAuthorOf } from '../lib/config-author.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { hasAnyScope, isShortId } from '@siyahtus/types';
@@ -238,7 +239,7 @@ export default async function copilotRoutes(
       const prepared = await knowledge.prepare(content, tenant).catch(refuseUnembeddable);
 
       const source = await request.withTenant((tx) =>
-        copilot.createSource(tx, tenant, principal, {
+        copilot.createSource(tx, tenant, principal, configAuthorOf(request), {
           type: body.type,
           name: body.name,
           content,
@@ -256,7 +257,7 @@ export default async function copilotRoutes(
     async (request, reply) => {
       const id = parse(uuid, request.params.sourceId);
       const deleted = await request.withTenant(async (tx) => {
-        const count = await copilot.deleteSource(tx, id);
+        const count = await copilot.deleteSource(tx, configAuthorOf(request), id);
         // Only record a delete that actually happened — a 404 (nothing matched)
         // is not an event worth an entry.
         if (count > 0) {

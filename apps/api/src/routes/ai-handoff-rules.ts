@@ -36,6 +36,7 @@ import {
   reorderHandoffRulesDraft,
   updateHandoffRuleDraft,
 } from '../services/ai/config-draft.js';
+import { configAuthorOf } from '../lib/config-author.js';
 
 const READ = ['agents-bot--all:ro', 'agents-bot--all:rw'];
 const WRITE = ['agents-bot--all:rw'];
@@ -237,7 +238,7 @@ export default async function aiHandoffRulesRoutes(app: FastifyInstance): Promis
             { reason: 'handoff_rules_limit', limit: HANDOFF_RULES_PER_AGENT_MAX },
           );
         }
-        return createHandoffRuleDraft(tx, {
+        return createHandoffRuleDraft(tx, configAuthorOf(request), {
           licenseId: tenant.licenseId,
           aiAgentId,
           position: (held._max.position ?? 0) + 1,
@@ -278,7 +279,7 @@ export default async function aiHandoffRulesRoutes(app: FastifyInstance): Promis
             reason: 'handoff_rules_order_mismatch',
           });
         }
-        await reorderHandoffRulesDraft(tx, input.rule_ids, actor);
+        await reorderHandoffRulesDraft(tx, configAuthorOf(request), input.rule_ids, actor);
         return agentRules(tx, aiAgentId);
       });
       return reply.send(serialiseList(aiAgentId, rules));
@@ -304,7 +305,7 @@ export default async function aiHandoffRulesRoutes(app: FastifyInstance): Promis
         });
         if (!existing) throw ApiError.notFound('Hand-over rule not found.');
         await requireNamed(tx, aiAgentId, input.trigger, input.target);
-        return updateHandoffRuleDraft(tx, id, {
+        return updateHandoffRuleDraft(tx, configAuthorOf(request), id, {
           ...(input.title !== undefined ? { title: input.title } : {}),
           ...(input.trigger !== undefined
             ? { triggerType: input.trigger.type, triggerValue: input.trigger.value }
@@ -335,7 +336,7 @@ export default async function aiHandoffRulesRoutes(app: FastifyInstance): Promis
           where: { id, aiAgentId },
           select: { id: true },
         });
-        if (!existing || (await deleteHandoffRuleDraft(tx, id)) === 0) {
+        if (!existing || (await deleteHandoffRuleDraft(tx, configAuthorOf(request), id)) === 0) {
           throw ApiError.notFound('Hand-over rule not found.');
         }
         // The rules after it move up: positions stay 1…n.
@@ -343,6 +344,7 @@ export default async function aiHandoffRulesRoutes(app: FastifyInstance): Promis
         if (rest.some((rule, index) => rule.position !== index + 1)) {
           await reorderHandoffRulesDraft(
             tx,
+            configAuthorOf(request),
             rest.map((rule) => rule.id),
             actor,
           );

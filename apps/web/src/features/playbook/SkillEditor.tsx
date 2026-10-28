@@ -93,6 +93,7 @@ import {
   type StepType,
 } from './step-authoring.js';
 import { useSkillActiveToggle } from './useSkillActiveToggle.js';
+import { History } from './History.js';
 
 /**
  * Step wording, translated (NFR-I18N2).
@@ -215,6 +216,8 @@ function isProcedureRefusal(error: unknown): boolean {
 
 /** Ties the run-log disclosure button to the panel it expands (NFR-A11Y). */
 const RUN_LOG_ID = 'skill-run-log';
+/** The editor's history drawer (tm 315 · AI-21). */
+const HISTORY_ID = 'skill-history';
 
 export function SkillEditor({
   skill,
@@ -248,6 +251,8 @@ export function SkillEditor({
   const [announcement, setAnnouncement] = useState('');
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [runLogOpen, setRunLogOpen] = useState(false);
+  // The skill's own change history (tm 315 · AI-21), fetched when opened.
+  const [historyOpen, setHistoryOpen] = useState(false);
   // Which steps are expanded, by row id rather than index: a step keeps its
   // parameter form open across a reorder, which is the whole reason the id
   // exists. Several may be open at once — collapsing the step you just filled
@@ -528,6 +533,19 @@ export function SkillEditor({
             )}
 
             {!isNew && (
+              <button
+                type="button"
+                aria-expanded={historyOpen}
+                aria-controls={HISTORY_ID}
+                onClick={() => setHistoryOpen((open) => !open)}
+                className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+              >
+                {t('playbook.editor.history')}{' '}
+                <span aria-hidden="true">{historyOpen ? '▴' : '▾'}</span>
+              </button>
+            )}
+
+            {!isNew && (
               <StatusDot
                 tone={skill.active ? 'success' : 'neutral'}
                 label={skill.active ? t('playbook.skills.on') : t('playbook.skills.off')}
@@ -630,6 +648,11 @@ export function SkillEditor({
         </div>
 
         {runLogOpen && <RunLog query={runs} />}
+        {historyOpen && (
+          <div id={HISTORY_ID} className="border-b border-border p-4">
+            <History entityId={skill.id} compact />
+          </div>
+        )}
 
         <div className="flex flex-col gap-3 p-4">
           <label htmlFor="skill-name" className="flex flex-col gap-1">

@@ -21,6 +21,7 @@
  * (`services/knowledge-tables/access-info-writer.ts`); the turn answers from
  * it through `access-info.ts`.
  */
+import { configAuthorOf } from '../lib/config-author.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
@@ -135,6 +136,7 @@ export default async function knowledgeTableRoutes(
     return {
       licenseId: request.tenant().licenseId,
       accountId: principal.kind === 'agent' ? principal.accountId : null,
+      author: configAuthorOf(request),
     };
   }
 

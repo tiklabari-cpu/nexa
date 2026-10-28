@@ -260,7 +260,7 @@ export class KnowledgeTableRowKnowledge {
     if (read.fields === null) {
       if (read.source === null) return { result: 'unchanged' };
       return run(async (tx) => {
-        await deleteKnowledgeSourceDraft(tx, read.source!.id, {
+        await deleteKnowledgeSourceDraft(tx, null, read.source!.id, {
           sourceTable: KNOWLEDGE_TABLE_SQL_NAMES[table],
           sourceRowId: rowId,
         });

@@ -44,6 +44,7 @@ import {
 import { ApiError } from '../lib/api-error.js';
 import { maskSensitive } from '../lib/sensitive-mask.js';
 import { updateSkillDraft } from '../services/ai/config-draft.js';
+import { configAuthorOf } from '../lib/config-author.js';
 import { ProcedureExamples, storeProcedureExamples } from '../services/ai/procedure-examples.js';
 import type { KnowledgeService } from '../services/ai/knowledge-service.js';
 import { readUnresolvedSpikeThreshold } from '../services/ai/unresolved/cluster-job.js';
@@ -307,7 +308,7 @@ export default async function aiUnresolvedRoutes(
         // The rows describe the examples as they were; the new set is embedded
         // after this commits, and until then the skill is never narrowed away.
         await procedureExamples.clear(tx, skill.id);
-        const updated = await updateSkillDraft(tx, skill.id, {
+        const updated = await updateSkillDraft(tx, configAuthorOf(request), skill.id, {
           examples: [...skill.examples, ...added],
         });
         return { skill: updated, id: skill.id, added, skipped, count: updated.examples.length };

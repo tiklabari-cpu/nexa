@@ -5683,6 +5683,72 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/ai/changes': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The AI configuration change history
+     * @description Newest first, by `next_cursor`. `visibility` says whether the list is
+     *     the whole workspace's (`all`) or the caller's own (`own`, a Team Lead).
+     */
+    get: operations['listAiConfigChanges'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/changes/export': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Export the change history as CSV
+     * @description One line per changed field — `at, actor, actor_role, entity_type,
+     *     entity_id, entity_name, action, field, before, after, version_id,
+     *     change_id` — newest change first, at most 10,000 changes. The same
+     *     filters as the list. Founder and Administrator only.
+     */
+    get: operations['exportAiConfigChanges'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai/changes/{changeId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        changeId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * One change, with the entity before and after
+     * @description A Team Lead gets 404 for a change that is neither theirs nor the publish history.
+     */
+    get: operations['getAiConfigChange'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/copilot/knowledge': {
     parameters: {
       query?: never;
@@ -14411,6 +14477,102 @@ export interface components {
       skipped: number;
       examples_count: number;
     };
+    /**
+     * @description What changed (`@siyahtus/types` `AI_CONFIG_ENTITY_TYPES`); `config_version` is versioning's (tm 316).
+     * @enum {string}
+     */
+    AiConfigEntityType:
+      | 'persona'
+      | 'guidance_rule'
+      | 'procedure'
+      | 'skill'
+      | 'knowledge_source'
+      | 'knowledge_table_row'
+      | 'handoff_rule'
+      | 'handoff_route'
+      | 'guardrail'
+      | 'risk_policy'
+      | 'access_info'
+      | 'config_version';
+    /** @enum {string} */
+    AiConfigChangeAction:
+      | 'created'
+      | 'updated'
+      | 'deleted'
+      | 'submitted'
+      | 'approved'
+      | 'rejected'
+      | 'published'
+      | 'rolled_back'
+      | 'paused'
+      | 'resumed'
+      | 'crawled';
+    /**
+     * @description One leaf of the difference, on the row's column names — `persona.welcome`,
+     *     `procedure.steps[2].target`. A value over 20 KB is `{omitted: too_large,
+     *     sha256, length}`.
+     */
+    AiConfigDiffEntry: {
+      path: string;
+      /** @enum {string} */
+      kind: 'added' | 'removed' | 'changed';
+      /** @description Absent for `added`. */
+      before?: unknown;
+      /** @description Absent for `removed`. */
+      after?: unknown;
+    };
+    AiConfigChangeActor: {
+      /** @description An account id, or a system job's name when `type` is `system`. */
+      id: string | null;
+      /** @enum {string} */
+      type: 'agent' | 'bot' | 'system' | 'platform';
+      /** @description The member's role at the moment of the change. */
+      role: string | null;
+      name: string | null;
+    };
+    AiConfigChange: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      ai_agent_id: string | null;
+      entity_type: components['schemas']['AiConfigEntityType'];
+      /** Format: uuid */
+      entity_id: string;
+      /** @description The entity's name, title or label as it was. */
+      entity_name: string | null;
+      action: components['schemas']['AiConfigChangeAction'];
+      actor: components['schemas']['AiConfigChangeActor'];
+      /** Format: date-time */
+      at: string;
+      /** Format: uuid */
+      version_id: string | null;
+      draft_revision: number | null;
+      /** @description What the save was when it is not an edit (`reindex`, `reorder`). */
+      note: string | null;
+      /** @description The top-level fields the change touches. */
+      fields: string[];
+      diff: components['schemas']['AiConfigDiffEntry'][];
+    };
+    AiConfigChangeDetail: components['schemas']['AiConfigChange'] & {
+      /** @description The entity before (masked); null for a creation. */
+      before: {
+        [key: string]: unknown;
+      } | null;
+      /** @description The entity after (masked); null for a deletion. */
+      after: {
+        [key: string]: unknown;
+      } | null;
+      request_id: string | null;
+    };
+    AiConfigChangeList: {
+      items: components['schemas']['AiConfigChange'][];
+      next_cursor: string | null;
+      /**
+       * @description `own`: a Team Lead's view — their changes and the publish history.
+       * @enum {string}
+       */
+      visibility: 'all' | 'own';
+    };
     AiUnresolvedSettings: {
       spike_threshold: number;
       default_threshold: number;
@@ -20912,6 +21074,14 @@ export interface components {
     };
   };
   parameters: {
+    AiConfigChangeEntityType: components['schemas']['AiConfigEntityType'];
+    AiConfigChangeEntityId: string;
+    AiConfigChangeAction: components['schemas']['AiConfigChangeAction'];
+    /** @description An account id, or a system job's name. */
+    AiConfigChangeActorId: string;
+    AiConfigChangeVersionId: string;
+    AiConfigChangeFrom: string;
+    AiConfigChangeTo: string;
     /** @description Opaque keyset cursor from the previous page. */
     PageId: string;
     /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
@@ -29470,6 +29640,100 @@ export interface operations {
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listAiConfigChanges: {
+    parameters: {
+      query?: {
+        entity_type?: components['parameters']['AiConfigChangeEntityType'];
+        entity_id?: components['parameters']['AiConfigChangeEntityId'];
+        action?: components['parameters']['AiConfigChangeAction'];
+        /** @description An account id, or a system job's name. */
+        actor_id?: components['parameters']['AiConfigChangeActorId'];
+        version_id?: components['parameters']['AiConfigChangeVersionId'];
+        from?: components['parameters']['AiConfigChangeFrom'];
+        to?: components['parameters']['AiConfigChangeTo'];
+        limit?: number;
+        cursor?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page of changes */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiConfigChangeList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  exportAiConfigChanges: {
+    parameters: {
+      query?: {
+        entity_type?: components['parameters']['AiConfigChangeEntityType'];
+        entity_id?: components['parameters']['AiConfigChangeEntityId'];
+        action?: components['parameters']['AiConfigChangeAction'];
+        /** @description An account id, or a system job's name. */
+        actor_id?: components['parameters']['AiConfigChangeActorId'];
+        version_id?: components['parameters']['AiConfigChangeVersionId'];
+        from?: components['parameters']['AiConfigChangeFrom'];
+        to?: components['parameters']['AiConfigChangeTo'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The history as CSV */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/csv': string;
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getAiConfigChange: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        changeId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiConfigChangeDetail'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

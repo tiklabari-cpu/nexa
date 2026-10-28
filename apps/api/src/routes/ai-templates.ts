@@ -11,6 +11,7 @@
  * hand-over route asks `access_rules:rw` too, making a team `groups--all:rw` —
  * the scopes those writes have on their own screens.
  */
+import { configAuthorOf } from '../lib/config-author.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
@@ -90,6 +91,7 @@ function installerOf(request: FastifyRequest): TemplateInstaller {
     licenseId: request.tenant().licenseId,
     accountId: principal.kind === 'agent' ? principal.accountId : null,
     audit: request.auditContext(),
+    author: configAuthorOf(request),
   };
 }
 

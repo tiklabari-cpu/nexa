@@ -35,8 +35,8 @@ import {
 } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient } from '../../lib/tenant.js';
+import type { ConfigChangeAuthor } from '../ai/config-history.js';
 import {
-  confirmKnowledgeTableSampleRowDraft,
   createKnowledgeTableRowDraft,
   deleteKnowledgeTableRowDraft,
   reviewKnowledgeTableRowDraft,
@@ -61,6 +61,8 @@ export interface KnowledgeTableWriter {
   licenseId: bigint;
   /** The person (`accounts.id`); null for a token that is no one's. */
   accountId: string | null;
+  /** Who the change history names (tm 315 · AI-21). */
+  author: ConfigChangeAuthor;
 }
 
 /** What `details.reason` says when a row is refused for its fields. */
@@ -275,6 +277,7 @@ export async function createKnowledgeTableRow<T extends KnowledgeTable>(
   if (problems.length > 0) refuseKnowledgeTableRow(problems);
   return createKnowledgeTableRowDraft(
     tx,
+    writer.author,
     table,
     writer.licenseId,
     knowledgeTableDataOf(table, row),
@@ -340,6 +343,7 @@ export async function importKnowledgeTableRows<T extends KnowledgeTable>(
     if (!dryRun) {
       const record = await createKnowledgeTableRowDraft(
         tx,
+        writer.author,
         table,
         writer.licenseId,
         knowledgeTableDataOf(table, entry.row),
@@ -383,15 +387,16 @@ export async function updateKnowledgeTableRow<T extends KnowledgeTable>(
     references: await readKnowledgeTableReferences(tx, [merged]),
   });
   if (problems.length > 0) refuseKnowledgeTableRow(problems);
+  // An example row a person corrected is theirs now (AI-15-S1).
   await updateKnowledgeTableRowDraft(
     tx,
+    writer.author,
     table,
     id,
     knowledgeTableDataOf(table, change),
     writer.accountId,
+    { confirmSample: true },
   );
-  // An example row a person corrected is theirs now (AI-15-S1).
-  await confirmKnowledgeTableSampleRowDraft(tx, table, id);
   return findKnowledgeTableRecord(tx, table, id);
 }
 
@@ -402,9 +407,17 @@ export async function reviewKnowledgeTableRow<T extends KnowledgeTable>(
   table: T,
   id: string,
 ): Promise<KnowledgeTableRecords[T] | null> {
-  if ((await reviewKnowledgeTableRowDraft(tx, table, id, writer.accountId)) === 0) return null;
   // "Gözden geçirdim" on an example row confirms it (AI-15-S1).
-  await confirmKnowledgeTableSampleRowDraft(tx, table, id);
+  const reviewed = await reviewKnowledgeTableRowDraft(
+    tx,
+    writer.author,
+    table,
+    id,
+    writer.accountId,
+    new Date(),
+    { confirmSample: true },
+  );
+  if (reviewed === 0) return null;
   return findKnowledgeTableRecord(tx, table, id);
 }
 
@@ -416,5 +429,5 @@ export async function deleteKnowledgeTableRow(
   id: string,
 ): Promise<boolean> {
   await lockKnowledgeTable(tx, writer.licenseId, table);
-  return (await deleteKnowledgeTableRowDraft(tx, table, id)) > 0;
+  return (await deleteKnowledgeTableRowDraft(tx, writer.author, table, id)) > 0;
 }

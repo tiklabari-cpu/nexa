@@ -52,7 +52,7 @@
 import { readFile, readdir, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { type PrismaClient } from '@prisma/client';
-import { UNRESOLVED_TEXT_RETENTION_DAYS } from '@siyahtus/types';
+import { AI_CONFIG_HISTORY_DAYS, UNRESOLVED_TEXT_RETENTION_DAYS } from '@siyahtus/types';
 import { inHipaaScope } from '../../lib/hipaa.js';
 import { type TenantClient, type TenantContext, withTenant } from '../../lib/tenant.js';
 import { writeAuditEntry } from '../audit/audit-log.js';
@@ -101,6 +101,11 @@ export interface TenantPruneResult {
   sensitiveFiles: number;
   /** Audit-log entries pruned for this tenant (NFR-S12 30-day window). */
   auditEntries: number;
+  /**
+   * AI configuration changes past their own window (tm 315 · AI-21-S1,
+   * AI_CONFIG_HISTORY_DAYS) — never the audit log's 30 days.
+   */
+  aiConfigChanges: number;
   /** Whether this workspace is covered by a signed BAA (NFR-C4 · C4-e). */
   hipaaScope: boolean;
   /**
@@ -335,6 +340,16 @@ export class RetentionRunner {
       ? await withTenant(this.#db, context, (tx) => this.#countAudit(tx, cutoffs.audit))
       : await this.#pruneAudit(context.licenseId, cutoffs.audit);
 
+    // The AI configuration history (tm 315 · AI-21-S1) is append-only too and
+    // keeps its own, much longer window; the audit prune above never touches
+    // it. Same shape: a SECURITY DEFINER prune, a counted dry-run.
+    const historyCutoff = cutoffFor(AI_CONFIG_HISTORY_DAYS, now);
+    const aiConfigChanges = dryRun
+      ? await withTenant(this.#db, context, (tx) =>
+          tx.aiConfigChange.count({ where: { at: { lt: historyCutoff } } }),
+        )
+      : await this.#pruneConfigHistory(context.licenseId, historyCutoff);
+
     // Recording the deletion (who, when, how much) is itself part of the
     // compliance requirement — and it is metadata, not the deleted data, so it
     // is retained. A run that removed nothing writes no entry, matching the rest
@@ -343,7 +358,14 @@ export class RetentionRunner {
     // never inside the window it just applied.
     if (
       !dryRun &&
-      threads + visits + aiDecisions + unresolvedItems + sensitiveFiles + auditEntries > 0
+      threads +
+        visits +
+        aiDecisions +
+        unresolvedItems +
+        sensitiveFiles +
+        auditEntries +
+        aiConfigChanges >
+        0
     ) {
       await withTenant(this.#db, context, (tx) =>
         writeAuditEntry(
@@ -363,6 +385,7 @@ export class RetentionRunner {
               ai_unresolved: unresolvedItems,
               sensitive_files: sensitiveFiles,
               audit_entries: auditEntries,
+              ai_config_changes: aiConfigChanges,
               dry_run: false,
               // The windows that were actually applied, and why they were those
               // windows. Without this the trail cannot answer "was this deleted
@@ -394,6 +417,7 @@ export class RetentionRunner {
       unresolvedItems,
       sensitiveFiles,
       auditEntries,
+      aiConfigChanges,
       hipaaScope,
       policy,
     };
@@ -591,6 +615,13 @@ export class RetentionRunner {
   async #pruneAudit(licenseId: bigint, cutoff: Date): Promise<number> {
     const rows = await this.#db.$queryRaw<Array<{ n: bigint }>>`
       SELECT audit_prune_expired(${licenseId}, ${cutoff}) AS n`;
+    return Number(rows[0]?.n ?? 0n);
+  }
+
+  /** {@link #pruneAudit}'s twin for `ai_config_changes` (`ai_config_changes_prune_expired`). */
+  async #pruneConfigHistory(licenseId: bigint, cutoff: Date): Promise<number> {
+    const rows = await this.#db.$queryRaw<Array<{ n: bigint }>>`
+      SELECT ai_config_changes_prune_expired(${licenseId}, ${cutoff}) AS n`;
     return Number(rows[0]?.n ?? 0n);
   }
 

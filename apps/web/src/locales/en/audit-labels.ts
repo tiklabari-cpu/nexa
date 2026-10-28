@@ -129,6 +129,7 @@ export const auditLabels: Messages = {
   // Target kinds — the part of `kind:id` before the colon. The raw value stays
   // on a second line, so this only has to say what *sort* of thing it is.
   'audit.target.account': 'Account',
+  'audit.target.ai_config_change': 'AI setting change',
   'audit.target.ai_package_purchase': 'AI package purchase',
   'audit.target.api_package_purchase': 'API package purchase',
   'audit.target.app_installation': 'App installation',
@@ -215,4 +216,13 @@ export const auditLabels: Messages = {
   'audit.action.platform.billing_swift_marked_paid': 'Bank transfer marked paid by SiyahTuş',
   'audit.action.platform.impersonation_started': 'SiyahTuş support session started',
   'audit.action.platform.impersonation_ended': 'SiyahTuş support session ended',
+  'audit.action.ai.config_changed': 'AI setting changed',
+  'audit.action.ai.config_submitted': 'AI settings sent for review',
+  'audit.action.ai.config_approved': 'AI settings approved',
+  'audit.action.ai.config_rejected': 'AI settings rejected',
+  'audit.action.ai.config_published': 'AI settings published',
+  'audit.action.ai.config_rolled_back': 'AI settings rolled back',
+  'audit.action.ai.paused': 'AI agent paused',
+  'audit.action.ai.resumed': 'AI agent resumed',
+  'audit.action.knowledge.crawled': 'Website knowledge crawled',
 };

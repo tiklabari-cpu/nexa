@@ -19,6 +19,7 @@ export const PLAYBOOK_VIEWS = [
   'test',
   'performance',
   'unresolved',
+  'history',
 ] as const;
 
 export type PlaybookView = (typeof PLAYBOOK_VIEWS)[number];
@@ -43,6 +44,7 @@ export const PLAYBOOK_TABS: readonly PlaybookTab[] = [
   { id: 'test', labelKey: 'playbook.tabs.test', needsConfigScope: true },
   { id: 'performance', labelKey: 'playbook.tabs.performance' },
   { id: 'unresolved', labelKey: 'playbook.tabs.unresolved', needsConfigScope: true },
+  { id: 'history', labelKey: 'playbook.tabs.history', needsConfigScope: true },
 ];
 
 /** Links written before the rename: `profile` was today's `general`. */

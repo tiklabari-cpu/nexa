@@ -9,63 +9,271 @@
  * not in each route. So a route never calls `tx.skill.create`/`update`/`delete`
  * on an editing table itself; it calls this.
  *
- * This first form does §2.5 step 1 only: it stamps the row's `updated_at` —
- * for skills (tm 296.2), behaviour rules (tm 299.1) and the guardrail
- * settings, rules and forbidden phrases (tm 301.2), the hand-over rules
- * (tm 303.3), the hand-over routes (tm 307.1), the knowledge sources
- * (tm 309.1; a KB article's from tm 309.2), the structured knowledge tables'
- * rows with their sources (tm 310.2) and the access information (tm 310.4). A
- * route that writes `updated_at` itself, or opens a `status`/`version` column,
- * breaks the rule.
+ * §2.5 step 1: it stamps the row's `updated_at` — for skills (tm 296.2),
+ * behaviour rules (tm 299.1) and the guardrail settings, rules and forbidden
+ * phrases (tm 301.2), the hand-over rules (tm 303.3), the hand-over routes
+ * (tm 307.1), the knowledge sources (tm 309.1; a KB article's from tm 309.2),
+ * the structured knowledge tables' rows with their sources (tm 310.2), the
+ * access information (tm 310.4) and the agent's own persona row (tm 315).
+ * A route that writes `updated_at` itself, or opens a `status`/`version`
+ * column, breaks the rule.
+ *
+ * §2.5 step 3 (tm 315 · AI-21): every helper takes the change's author and
+ * records the save in `ai_config_changes` and the audit log, in the same
+ * transaction (`config-history.ts` `recordChange`) — the row before, read
+ * `FOR UPDATE`, and after. One save is one row. Two kinds of write are not
+ * recorded, each said where it is: a mirror (a KB article's or a table row's
+ * knowledge source, whose own change is recorded on the article or the row)
+ * and a write that is part of a save already recorded (the positions a
+ * delete closes up, a template's example marking).
  */
 import type { Prisma } from '@prisma/client';
 import {
   KNOWLEDGE_TABLE_SAMPLE_SOURCE,
   KNOWLEDGE_TABLE_SOURCE_TYPE,
   KNOWLEDGE_TABLE_SQL_NAMES,
+  type AiConfigChangeAction,
+  type AiConfigEntityType,
   type KnowledgeAudience,
   type KnowledgeTable,
 } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 import { knowledgeTableDelegate, type KnowledgeTableRecords } from '../knowledge-tables/rows.js';
+import {
+  type ConfigChangeAuthor,
+  type ConfigTable,
+  recordChange,
+  skillEntityType,
+  snapshotConfigRow,
+  snapshotConfigRows,
+} from './config-history.js';
+
+/** Which history entity a row of `table` is. */
+function entityTypeOf(table: ConfigTable, row: Record<string, unknown>): AiConfigEntityType {
+  switch (table) {
+    case 'ai_agents':
+      return 'persona';
+    case 'skills':
+      return skillEntityType(row);
+    case 'ai_guidance_rules':
+      return 'guidance_rule';
+    case 'ai_guardrail_settings':
+    case 'ai_guardrail_rules':
+    case 'ai_forbidden_phrases':
+      return 'guardrail';
+    case 'ai_handoff_settings':
+    case 'ai_handoff_rules':
+      return 'handoff_rule';
+    case 'handoff_routes':
+      return 'handoff_route';
+    case 'knowledge_sources':
+      return 'knowledge_source';
+    case 'ai_access_info':
+      return 'access_info';
+    default:
+      return 'knowledge_table_row';
+  }
+}
+
+function text(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+/** The agent a row reaches: its own id for the agent's row, else its `ai_agent_id`. */
+function agentOf(table: ConfigTable, row: Record<string, unknown>): string | null {
+  if (table === 'ai_agents') return text(row['id']);
+  return text(row['ai_agent_id']);
+}
+
+interface TrackOptions<T> {
+  /** The new row's id, for a creation (`key` null). */
+  idOf?: (result: T) => string;
+  /** The write removes the row: there is no "after". */
+  deleted?: boolean;
+  note?: string | null;
+  /** The action when it is not plain created/updated/deleted (pause, resume). */
+  actionOf?: (
+    before: Record<string, unknown> | null,
+    after: Record<string, unknown> | null,
+  ) => AiConfigChangeAction | null;
+}
+
+/**
+ * Run one write of `table` and record it: the row before (`key`, locked),
+ * the write, the row after. A write that reached no row of this workspace
+ * (before and after both missing) records nothing; neither does an update
+ * that changed no configuration (`recordChange`).
+ */
+async function track<T>(
+  tx: TenantClient,
+  author: ConfigChangeAuthor,
+  table: ConfigTable,
+  key: string | null,
+  write: () => Promise<T>,
+  options: TrackOptions<T> = {},
+): Promise<T> {
+  const before = key === null ? null : await snapshotConfigRow(tx, table, key, { lock: true });
+  const result = await write();
+  const id = key ?? options.idOf?.(result);
+  if (id === undefined) throw new Error(`a created ${table} row needs its id`);
+  const after = options.deleted ? null : await snapshotConfigRow(tx, table, id);
+  const row = after ?? before;
+  if (row === null) return result;
+  const action =
+    options.actionOf?.(before, after) ??
+    (before === null ? 'created' : after === null ? 'deleted' : 'updated');
+  await recordChange(tx, author, {
+    entityType: entityTypeOf(table, row),
+    entityId: text(row['id']) ?? id,
+    aiAgentId: agentOf(table, row),
+    action,
+    before,
+    after,
+    note: options.note ?? null,
+  });
+  return result;
+}
+
+const idOfRow = (row: { id: string }): string => row.id;
+
+// The agent's own row (tm 315): its persona, tone, languages, name and the
+// pause switch. `active` is read live and never versioned (ADR-14b §2.2), yet
+// switching it is a change like any other — recorded as `paused`/`resumed`.
+
+type AiAgentCreate = Prisma.AiAgentUncheckedCreateInput;
+type AiAgentUpdate = Prisma.AiAgentUncheckedUpdateInput;
+
+export async function createAiAgentDraft<I extends Prisma.AiAgentInclude>(
+  tx: TenantClient,
+  author: ConfigChangeAuthor,
+  data: AiAgentCreate,
+  include: I,
+) {
+  return track(tx, author, 'ai_agents', null, () => tx.aiAgent.create({ data, include }), {
+    idOf: idOfRow,
+  });
+}
+
+function pauseAction(
+  before: Record<string, unknown> | null,
+  after: Record<string, unknown> | null,
+): AiConfigChangeAction | null {
+  if (!before || !after || before['active'] === after['active']) return null;
+  return after['active'] === true ? 'resumed' : 'paused';
+}
+
+export async function updateAiAgentDraft<I extends Prisma.AiAgentInclude>(
+  tx: TenantClient,
+  author: ConfigChangeAuthor,
+  id: string,
+  data: AiAgentUpdate,
+  include: I,
+) {
+  return track(
+    tx,
+    author,
+    'ai_agents',
+    id,
+    () => tx.aiAgent.update({ where: { id }, data, include }),
+    { actionOf: pauseAction },
+  );
+}
 
 type SkillCreate = Omit<Prisma.SkillUncheckedCreateInput, 'updatedAt'>;
 type SkillUpdate = Omit<Prisma.SkillUncheckedUpdateInput, 'updatedAt'>;
 
-export async function createSkillDraft(tx: TenantClient, data: SkillCreate) {
-  return tx.skill.create({ data: { ...data, updatedAt: new Date() } });
+export async function createSkillDraft(
+  tx: TenantClient,
+  author: ConfigChangeAuthor,
+  data: SkillCreate,
+) {
+  return track(
+    tx,
+    author,
+    'skills',
+    null,
+    () => tx.skill.create({ data: { ...data, updatedAt: new Date() } }),
+    { idOf: idOfRow },
+  );
 }
 
-export async function updateSkillDraft(tx: TenantClient, id: string, data: SkillUpdate) {
-  return tx.skill.update({ where: { id }, data: { ...data, updatedAt: new Date() } });
+export async function updateSkillDraft(
+  tx: TenantClient,
+  author: ConfigChangeAuthor,
+  id: string,
+  data: SkillUpdate,
+  note: string | null = null,
+) {
+  return track(
+    tx,
+    author,
+    'skills',
+    id,
+    () => tx.skill.update({ where: { id }, data: { ...data, updatedAt: new Date() } }),
+    { note },
+  );
 }
 
-/** How many rows went — 0 when the skill is not this workspace's. */
-export async function deleteSkillDraft(tx: TenantClient, id: string): Promise<number> {
-  const { count } = await tx.skill.deleteMany({ where: { id } });
-  return count;
+/** How many rows went — 0 when the skill is not this workspace's. The history keeps it whole. */
+export async function deleteSkillDraft(
+  tx: TenantClient,
+  author: ConfigChangeAuthor,
+  id: string,
+): Promise<number> {
+  return track(
+    tx,
+    author,
+    'skills',
+    id,
+    async () => (await tx.skill.deleteMany({ where: { id } })).count,
+    { deleted: true },
+  );
 }
 
 type GuidanceRuleCreate = Omit<Prisma.AiGuidanceRuleUncheckedCreateInput, 'updatedAt'>;
 type GuidanceRuleUpdate = Omit<Prisma.AiGuidanceRuleUncheckedUpdateInput, 'updatedAt'>;
 
 /** A behaviour rule (tm 299.1 · AI-07) — the same one door as a skill. */
-export async function createGuidanceRuleDraft(tx: TenantClient, data: GuidanceRuleCreate) {
-  return tx.aiGuidanceRule.create({ data: { ...data, updatedAt: new Date() } });
+export async function createGuidanceRuleDraft(
+  tx: TenantClient,
+  author: ConfigChangeAuthor,
+  data: GuidanceRuleCreate,
+) {
+  return track(
+    tx,
+    author,
+    'ai_guidance_rules',
+    null,
+    () => tx.aiGuidanceRule.create({ data: { ...data, updatedAt: new Date() } }),
+    { idOf: idOfRow },
+  );
 }
 
 export async function updateGuidanceRuleDraft(
   tx: TenantClient,
+  author: ConfigChangeAuthor,
   id: string,
   data: GuidanceRuleUpdate,
 ) {
-  return tx.aiGuidanceRule.update({ where: { id }, data: { ...data, updatedAt: new Date() } });
+  return track(tx, author, 'ai_guidance_rules', id, () =>
+    tx.aiGuidanceRule.update({ where: { id }, data: { ...data, updatedAt: new Date() } }),
+  );
 }
 
 /** How many rows went — 0 when the rule is not this workspace's. */
-export async function deleteGuidanceRuleDraft(tx: TenantClient, id: string): Promise<number> {
-  const { count } = await tx.aiGuidanceRule.deleteMany({ where: { id } });
-  return count;
+export async function deleteGuidanceRuleDraft(
+  tx: TenantClient,
+  author: ConfigChangeAuthor,
+  id: string,
+): Promise<number> {
+  return track(
+    tx,
+    author,
+    'ai_guidance_rules',
+    id,
+    async () => (await tx.aiGuidanceRule.deleteMany({ where: { id } })).count,
+    { deleted: true },
+  );
 }
 
 // Compliance guardrails (tm 301.2 · AI-08). A change to any of these touches
@@ -77,57 +285,108 @@ type GuardrailSettingsUpdate = Omit<Prisma.AiGuardrailSettingsUncheckedUpdateInp
 /** An agent's guardrail settings — the row is made on its first write. */
 export async function upsertGuardrailSettingsDraft(
   tx: TenantClient,
+  author: ConfigChangeAuthor,
   create: GuardrailSettingsCreate,
   update: GuardrailSettingsUpdate,
 ) {
   const updatedAt = new Date();
-  return tx.aiGuardrailSettings.upsert({
-    where: { aiAgentId: create.aiAgentId },
-    create: { ...create, updatedAt },
-    update: { ...update, updatedAt },
-  });
+  return track(tx, author, 'ai_guardrail_settings', create.aiAgentId, () =>
+    tx.aiGuardrailSettings.upsert({
+      where: { aiAgentId: create.aiAgentId },
+      create: { ...create, updatedAt },
+      update: { ...update, updatedAt },
+    }),
+  );
 }
 
 type GuardrailRuleCreate = Omit<Prisma.AiGuardrailRuleUncheckedCreateInput, 'updatedAt'>;
 type GuardrailRuleUpdate = Omit<Prisma.AiGuardrailRuleUncheckedUpdateInput, 'updatedAt'>;
 
-export async function createGuardrailRuleDraft(tx: TenantClient, data: GuardrailRuleCreate) {
-  return tx.aiGuardrailRule.create({ data: { ...data, updatedAt: new Date() } });
+export async function createGuardrailRuleDraft(
+  tx: TenantClient,
+  author: ConfigChangeAuthor,
+  data: GuardrailRuleCreate,
+) {
+  return track(
+    tx,
+    author,
+    'ai_guardrail_rules',
+    null,
+    () => tx.aiGuardrailRule.create({ data: { ...data, updatedAt: new Date() } }),
+    { idOf: idOfRow },
+  );
 }
 
 export async function updateGuardrailRuleDraft(
   tx: TenantClient,
+  author: ConfigChangeAuthor,
   id: string,
   data: GuardrailRuleUpdate,
 ) {
-  return tx.aiGuardrailRule.update({ where: { id }, data: { ...data, updatedAt: new Date() } });
+  return track(tx, author, 'ai_guardrail_rules', id, () =>
+    tx.aiGuardrailRule.update({ where: { id }, data: { ...data, updatedAt: new Date() } }),
+  );
 }
 
 /** How many rows went — 0 when the rule is not this workspace's. */
-export async function deleteGuardrailRuleDraft(tx: TenantClient, id: string): Promise<number> {
-  const { count } = await tx.aiGuardrailRule.deleteMany({ where: { id } });
-  return count;
+export async function deleteGuardrailRuleDraft(
+  tx: TenantClient,
+  author: ConfigChangeAuthor,
+  id: string,
+): Promise<number> {
+  return track(
+    tx,
+    author,
+    'ai_guardrail_rules',
+    id,
+    async () => (await tx.aiGuardrailRule.deleteMany({ where: { id } })).count,
+    { deleted: true },
+  );
 }
 
 type ForbiddenPhraseCreate = Omit<Prisma.AiForbiddenPhraseUncheckedCreateInput, 'updatedAt'>;
 type ForbiddenPhraseUpdate = Omit<Prisma.AiForbiddenPhraseUncheckedUpdateInput, 'updatedAt'>;
 
-export async function createForbiddenPhraseDraft(tx: TenantClient, data: ForbiddenPhraseCreate) {
-  return tx.aiForbiddenPhrase.create({ data: { ...data, updatedAt: new Date() } });
+export async function createForbiddenPhraseDraft(
+  tx: TenantClient,
+  author: ConfigChangeAuthor,
+  data: ForbiddenPhraseCreate,
+) {
+  return track(
+    tx,
+    author,
+    'ai_forbidden_phrases',
+    null,
+    () => tx.aiForbiddenPhrase.create({ data: { ...data, updatedAt: new Date() } }),
+    { idOf: idOfRow },
+  );
 }
 
 export async function updateForbiddenPhraseDraft(
   tx: TenantClient,
+  author: ConfigChangeAuthor,
   id: string,
   data: ForbiddenPhraseUpdate,
 ) {
-  return tx.aiForbiddenPhrase.update({ where: { id }, data: { ...data, updatedAt: new Date() } });
+  return track(tx, author, 'ai_forbidden_phrases', id, () =>
+    tx.aiForbiddenPhrase.update({ where: { id }, data: { ...data, updatedAt: new Date() } }),
+  );
 }
 
 /** How many rows went — 0 when the phrase is not this workspace's. */
-export async function deleteForbiddenPhraseDraft(tx: TenantClient, id: string): Promise<number> {
-  const { count } = await tx.aiForbiddenPhrase.deleteMany({ where: { id } });
-  return count;
+export async function deleteForbiddenPhraseDraft(
+  tx: TenantClient,
+  author: ConfigChangeAuthor,
+  id: string,
+): Promise<number> {
+  return track(
+    tx,
+    author,
+    'ai_forbidden_phrases',
+    id,
+    async () => (await tx.aiForbiddenPhrase.deleteMany({ where: { id } })).count,
+    { deleted: true },
+  );
 }
 
 // Hand-over settings (tm 303.1 · AI-09). The row's `updated_at` is its write
@@ -142,16 +401,19 @@ type HandoffSettingsUpdate = Omit<Prisma.AiHandoffSettingsUncheckedUpdateInput, 
 /** An agent's hand-over settings — the row is made on its first write. */
 export async function upsertHandoffSettingsDraft<S extends Prisma.AiHandoffSettingsSelect>(
   tx: TenantClient,
+  author: ConfigChangeAuthor,
   create: HandoffSettingsCreate,
   update: HandoffSettingsUpdate,
   select: S,
 ) {
-  return tx.aiHandoffSettings.upsert({
-    where: { aiAgentId: create.aiAgentId },
-    create,
-    update,
-    select,
-  });
+  return track(tx, author, 'ai_handoff_settings', create.aiAgentId, () =>
+    tx.aiHandoffSettings.upsert({
+      where: { aiAgentId: create.aiAgentId },
+      create,
+      update,
+      select,
+    }),
+  );
 }
 
 // Hand-over rules (tm 303.3 · AI-09, K9). Their order is behaviour — the first
@@ -160,30 +422,61 @@ export async function upsertHandoffSettingsDraft<S extends Prisma.AiHandoffSetti
 type HandoffRuleCreate = Omit<Prisma.AiHandoffRuleUncheckedCreateInput, 'updatedAt'>;
 type HandoffRuleUpdate = Omit<Prisma.AiHandoffRuleUncheckedUpdateInput, 'updatedAt'>;
 
-export async function createHandoffRuleDraft(tx: TenantClient, data: HandoffRuleCreate) {
-  return tx.aiHandoffRule.create({ data: { ...data, updatedAt: new Date() } });
+export async function createHandoffRuleDraft(
+  tx: TenantClient,
+  author: ConfigChangeAuthor,
+  data: HandoffRuleCreate,
+) {
+  return track(
+    tx,
+    author,
+    'ai_handoff_rules',
+    null,
+    () => tx.aiHandoffRule.create({ data: { ...data, updatedAt: new Date() } }),
+    { idOf: idOfRow },
+  );
 }
 
 export async function updateHandoffRuleDraft(
   tx: TenantClient,
+  author: ConfigChangeAuthor,
   id: string,
   data: HandoffRuleUpdate,
 ) {
-  return tx.aiHandoffRule.update({ where: { id }, data: { ...data, updatedAt: new Date() } });
+  return track(tx, author, 'ai_handoff_rules', id, () =>
+    tx.aiHandoffRule.update({ where: { id }, data: { ...data, updatedAt: new Date() } }),
+  );
 }
 
 /** How many rows went — 0 when the rule is not this workspace's. */
-export async function deleteHandoffRuleDraft(tx: TenantClient, id: string): Promise<number> {
-  const { count } = await tx.aiHandoffRule.deleteMany({ where: { id } });
-  return count;
+export async function deleteHandoffRuleDraft(
+  tx: TenantClient,
+  author: ConfigChangeAuthor,
+  id: string,
+): Promise<number> {
+  return track(
+    tx,
+    author,
+    'ai_handoff_rules',
+    id,
+    async () => (await tx.aiHandoffRule.deleteMany({ where: { id } })).count,
+    { deleted: true },
+  );
 }
 
-/** Positions 1…n in the order given; the caller has checked the ids are the agent's, all of them. */
+/**
+ * Positions 1…n in the order given; the caller has checked the ids are the
+ * agent's, all of them. One change for the whole order, filed under the
+ * agent (`entity_id`): before and after are the rule ids in order. `author`
+ * null: the positions a delete closes up, part of a save already recorded.
+ */
 export async function reorderHandoffRulesDraft(
   tx: TenantClient,
+  author: ConfigChangeAuthor | null,
   orderedIds: readonly string[],
   updatedBy: string | null,
 ): Promise<void> {
+  const rows = author ? await snapshotConfigRows(tx, 'ai_handoff_rules', orderedIds) : null;
   const updatedAt = new Date();
   for (const [index, id] of orderedIds.entries()) {
     await tx.aiHandoffRule.update({
@@ -191,6 +484,22 @@ export async function reorderHandoffRulesDraft(
       data: { position: index + 1, updatedBy, updatedAt },
     });
   }
+  if (!author || !rows) return;
+  const first = rows.get(orderedIds[0] ?? '');
+  const agentId = first ? text(first['ai_agent_id']) : null;
+  if (agentId === null) return;
+  const before = [...rows.values()]
+    .sort((a, b) => Number(a['position']) - Number(b['position']))
+    .map((row) => String(row['id']));
+  await recordChange(tx, author, {
+    entityType: 'handoff_rule',
+    entityId: agentId,
+    aiAgentId: agentId,
+    action: 'updated',
+    before: { order: before },
+    after: { order: [...orderedIds] },
+    note: 'reorder',
+  });
 }
 
 // Hand-over routes (tm 307.1 · AI-12, shared with AU-01). Human routing reads
@@ -200,22 +509,46 @@ export async function reorderHandoffRulesDraft(
 type HandoffRouteCreate = Omit<Prisma.HandoffRouteUncheckedCreateInput, 'updatedAt'>;
 type HandoffRouteUpdate = Omit<Prisma.HandoffRouteUncheckedUpdateInput, 'updatedAt'>;
 
-export async function createHandoffRouteDraft(tx: TenantClient, data: HandoffRouteCreate) {
-  return tx.handoffRoute.create({ data: { ...data, updatedAt: new Date() } });
+export async function createHandoffRouteDraft(
+  tx: TenantClient,
+  author: ConfigChangeAuthor,
+  data: HandoffRouteCreate,
+) {
+  return track(
+    tx,
+    author,
+    'handoff_routes',
+    null,
+    () => tx.handoffRoute.create({ data: { ...data, updatedAt: new Date() } }),
+    { idOf: idOfRow },
+  );
 }
 
 export async function updateHandoffRouteDraft(
   tx: TenantClient,
+  author: ConfigChangeAuthor,
   id: string,
   data: HandoffRouteUpdate,
 ) {
-  return tx.handoffRoute.update({ where: { id }, data: { ...data, updatedAt: new Date() } });
+  return track(tx, author, 'handoff_routes', id, () =>
+    tx.handoffRoute.update({ where: { id }, data: { ...data, updatedAt: new Date() } }),
+  );
 }
 
 /** How many rows went — 0 when the route is not this workspace's. */
-export async function deleteHandoffRouteDraft(tx: TenantClient, id: string): Promise<number> {
-  const { count } = await tx.handoffRoute.deleteMany({ where: { id } });
-  return count;
+export async function deleteHandoffRouteDraft(
+  tx: TenantClient,
+  author: ConfigChangeAuthor,
+  id: string,
+): Promise<number> {
+  return track(
+    tx,
+    author,
+    'handoff_routes',
+    id,
+    async () => (await tx.handoffRoute.deleteMany({ where: { id } })).count,
+    { deleted: true },
+  );
 }
 
 // Knowledge sources (tm 309.1–309.2 · AI-14, `docs/adr/single-knowledge-store.md`):
@@ -270,7 +603,8 @@ export function knowledgeScopeOfFiling(agent: KnowledgeFiling): KnowledgeAudienc
 
 /**
  * The workspace's Copilot record — the oldest, made on first use (FR-MOD-12),
- * so filing a source for agents only never fails on setup order.
+ * so filing a source for agents only never fails on setup order. Setup, not a
+ * configuration change: not recorded.
  */
 export async function ensureCopilotAgentId(tx: TenantClient, licenseId: bigint): Promise<string> {
   const existing = await tx.aiAgent.findFirst({
@@ -315,33 +649,40 @@ export async function knowledgeFilingOf(
 /** A new source counts as reviewed the moment it is added (AI-14-S3). */
 export async function createKnowledgeSourceDraft(
   tx: TenantClient,
+  author: ConfigChangeAuthor,
   scope: KnowledgeAudienceScope,
   data: KnowledgeSourceCreate,
 ) {
   const at = new Date();
-  return tx.knowledgeSource.create({
-    data: {
-      ...data,
-      ...scope,
-      aiAgentId: await knowledgeFilingOf(tx, BigInt(data.licenseId), scope),
-      reviewedAt: at,
-      updatedAt: at,
-    },
-  });
+  const aiAgentId = await knowledgeFilingOf(tx, BigInt(data.licenseId), scope);
+  return track(
+    tx,
+    author,
+    'knowledge_sources',
+    null,
+    () =>
+      tx.knowledgeSource.create({
+        data: { ...data, ...scope, aiAgentId, reviewedAt: at, updatedAt: at },
+      }),
+    { idOf: idOfRow },
+  );
 }
 
 /**
  * How many rows changed — 0 when the source is not this workspace's or has
  * gone. `at` is the moment the caller counts from (a refresh schedule), so the
  * row's `updated_at` and what was computed from it agree. `rescope` moves who
- * the source is for by audience and AI agent, and its filing with it.
+ * the source is for by audience and AI agent, and its filing with it. `note`
+ * says what the save was when it is not an edit (`reindex`).
  */
 export async function updateKnowledgeSourceDraft(
   tx: TenantClient,
+  author: ConfigChangeAuthor,
   id: string,
   data: KnowledgeSourceUpdate,
   at: Date = new Date(),
   rescope?: { licenseId: bigint; scope: KnowledgeAudienceScope },
+  note: string | null = null,
 ): Promise<number> {
   const filed = rescope
     ? {
@@ -349,43 +690,67 @@ export async function updateKnowledgeSourceDraft(
         aiAgentId: await knowledgeFilingOf(tx, rescope.licenseId, rescope.scope),
       }
     : {};
-  const { count } = await tx.knowledgeSource.updateMany({
-    where: { id },
-    data: { ...data, ...filed, updatedAt: at },
-  });
-  return count;
+  return track(
+    tx,
+    author,
+    'knowledge_sources',
+    id,
+    async () =>
+      (
+        await tx.knowledgeSource.updateMany({
+          where: { id },
+          data: { ...data, ...filed, updatedAt: at },
+        })
+      ).count,
+    { note },
+  );
 }
 
 /**
  * A person confirmed the source still holds (AI-14-S3): its review moves to
  * `at`. A meta write (ADR-14b §2.2) — nothing the AI says changes — yet a
- * write, so `updated_at` moves with it. With the KB article sync's, the only
- * writers of `reviewed_at`.
+ * write, so `updated_at` moves with it and the history records it. With the
+ * KB article sync's, the only writers of `reviewed_at`.
  */
 export async function reviewKnowledgeSourceDraft(
   tx: TenantClient,
+  author: ConfigChangeAuthor,
   id: string,
   at: Date = new Date(),
 ): Promise<number> {
-  const { count } = await tx.knowledgeSource.updateMany({
-    where: { id },
-    data: { reviewedAt: at, updatedAt: at },
-  });
-  return count;
+  return track(
+    tx,
+    author,
+    'knowledge_sources',
+    id,
+    async () =>
+      (
+        await tx.knowledgeSource.updateMany({
+          where: { id },
+          data: { reviewedAt: at, updatedAt: at },
+        })
+      ).count,
+  );
 }
 
 /**
  * How many rows went — 0 when the source is not this workspace's, or not
  * `within` when that is given (the Copilot view removes only the sources for
- * agents only). The chunks go with it.
+ * agents only). The chunks go with it. `author` null: a mirror's source (a KB
+ * article's, a table row's) going with what it mirrors — recorded there.
  */
 export async function deleteKnowledgeSourceDraft(
   tx: TenantClient,
+  author: ConfigChangeAuthor | null,
   id: string,
   within: Prisma.KnowledgeSourceWhereInput = {},
 ): Promise<number> {
-  const { count } = await tx.knowledgeSource.deleteMany({ where: { ...within, id } });
-  return count;
+  const remove = async () =>
+    (await tx.knowledgeSource.deleteMany({ where: { ...within, id } })).count;
+  if (author === null) return remove();
+  const inScope = await tx.knowledgeSource.count({ where: { ...within, id } });
+  if (inScope === 0) return 0;
+  return track(tx, author, 'knowledge_sources', id, remove, { deleted: true });
 }
 
 /**
@@ -405,6 +770,8 @@ export interface KbArticleSourceFields {
  * brand, as the article is (the KB has no brand), and indexed by the caller in
  * the same transaction (`KnowledgeService.index`). `pending` says why its text
  * is not being indexed now (the sweep indexes it later); it stays `indexing`.
+ * A mirror of the article: the article's publish is its record
+ * (`kb.article_published`), so this writes no history row.
  */
 export async function createKbArticleSourceDraft(
   tx: TenantClient,
@@ -436,7 +803,7 @@ export async function createKbArticleSourceDraft(
  * audiences; its meta fields (owner, language, review interval) are the
  * store's and stay. `pending` as on create — the caller has taken the
  * source's chunks away first (`KnowledgeService.unindex`), so it answers
- * nothing the article no longer says.
+ * nothing the article no longer says. A mirror, as on create.
  */
 export async function updateKbArticleSourceDraft(
   tx: TenantClient,
@@ -468,7 +835,8 @@ export async function updateKbArticleSourceDraft(
 // is mirrored by one knowledge source (`type = 'table_row'`, AI-13 coding
 // logic 3) that `services/knowledge-tables/row-knowledge.ts` alone writes,
 // through the two source helpers at the end; a row's delete takes its source
-// in the same transaction.
+// in the same transaction. The history records the row; its mirror is not
+// recorded again.
 
 /** The row as written: the table's columns in Prisma's terms (`records.ts` `knowledgeTableDataOf`). */
 type KnowledgeTableRowData = Record<string, unknown>;
@@ -479,63 +847,88 @@ type KnowledgeTableRowData = Record<string, unknown>;
  */
 export async function createKnowledgeTableRowDraft<T extends KnowledgeTable>(
   tx: TenantClient,
+  author: ConfigChangeAuthor,
   table: T,
   licenseId: bigint,
   data: KnowledgeTableRowData,
   by: string | null,
 ): Promise<KnowledgeTableRecords[T]> {
   const at = new Date();
-  return (await knowledgeTableDelegate(tx, table).create({
-    data: {
-      ...data,
-      licenseId,
-      createdBy: by,
-      updatedBy: by,
-      reviewedAt: at,
-      updatedAt: at,
-    },
-  })) as KnowledgeTableRecords[T];
+  return track(
+    tx,
+    author,
+    KNOWLEDGE_TABLE_SQL_NAMES[table],
+    null,
+    async () =>
+      (await knowledgeTableDelegate(tx, table).create({
+        data: {
+          ...data,
+          licenseId,
+          createdBy: by,
+          updatedBy: by,
+          reviewedAt: at,
+          updatedAt: at,
+        },
+      })) as KnowledgeTableRecords[T],
+    { idOf: (row) => (row as { id: string }).id },
+  );
 }
 
 /**
  * How many rows changed — 0 when the row is not this workspace's. An edit is
- * not a review: `reviewed_at` stays.
+ * not a review: `reviewed_at` stays. `confirmSample` turns an example row
+ * into the workspace's own in the same save (AI-15-S1).
  */
 export async function updateKnowledgeTableRowDraft(
   tx: TenantClient,
+  author: ConfigChangeAuthor,
   table: KnowledgeTable,
   id: string,
   data: KnowledgeTableRowData,
   by: string | null,
+  options: { confirmSample?: boolean } = {},
 ): Promise<number> {
-  const { count } = await knowledgeTableDelegate(tx, table).updateMany({
-    where: { id },
-    data: { ...data, updatedBy: by, updatedAt: new Date() },
+  return track(tx, author, KNOWLEDGE_TABLE_SQL_NAMES[table], id, async () => {
+    const { count } = await knowledgeTableDelegate(tx, table).updateMany({
+      where: { id },
+      data: { ...data, updatedBy: by, updatedAt: new Date() },
+    });
+    if (options.confirmSample) await confirmKnowledgeTableSampleRowDraft(tx, table, id);
+    return count;
   });
-  return count;
 }
 
 /**
  * "Gözden geçirdim" (AI-13-S2): the row's review moves to `at`. A meta write
- * (§2.2) — nothing the AI says changes — yet a write, so `updated_at` moves.
+ * (§2.2) — nothing the AI says changes — yet a write, so `updated_at` moves
+ * and the history records it. `confirmSample` as on update.
  */
 export async function reviewKnowledgeTableRowDraft(
   tx: TenantClient,
+  author: ConfigChangeAuthor,
   table: KnowledgeTable,
   id: string,
   by: string | null,
   at: Date = new Date(),
+  options: { confirmSample?: boolean } = {},
 ): Promise<number> {
-  const { count } = await knowledgeTableDelegate(tx, table).updateMany({
-    where: { id },
-    data: { reviewedAt: at, updatedBy: by, updatedAt: at },
+  return track(tx, author, KNOWLEDGE_TABLE_SQL_NAMES[table], id, async () => {
+    const { count } = await knowledgeTableDelegate(tx, table).updateMany({
+      where: { id },
+      data: { reviewedAt: at, updatedBy: by, updatedAt: at },
+    });
+    if (count > 0 && options.confirmSample) {
+      await confirmKnowledgeTableSampleRowDraft(tx, table, id);
+    }
+    return count;
   });
-  return count;
 }
 
 /**
  * A template pack's rows become "örnek — doğrulayın" (`source = 'sample'`,
  * AI-15-S1): written by the tables' writer, then marked, in one transaction.
+ * Part of the install's save — each row's creation is its record — so this
+ * writes no history row of its own.
  */
 export async function markKnowledgeTableRowsSampleDraft(
   tx: TenantClient,
@@ -553,8 +946,9 @@ export async function markKnowledgeTableRowsSampleDraft(
 /**
  * A person edited or reviewed an example row: it is the workspace's own now
  * (`manual`) and the AI reads it. A row that is no example is left alone.
+ * Inside the edit's or review's own save (their `confirmSample`).
  */
-export async function confirmKnowledgeTableSampleRowDraft(
+async function confirmKnowledgeTableSampleRowDraft(
   tx: TenantClient,
   table: KnowledgeTable,
   id: string,
@@ -566,13 +960,24 @@ export async function confirmKnowledgeTableSampleRowDraft(
   return count;
 }
 
-/** How many rows went — 0 when the row is not this workspace's. Its knowledge source and chunks go with it. */
+/**
+ * How many rows went — 0 when the row is not this workspace's. Its knowledge
+ * source and chunks go with it; the history keeps the row whole.
+ */
 export async function deleteKnowledgeTableRowDraft(
   tx: TenantClient,
+  author: ConfigChangeAuthor,
   table: KnowledgeTable,
   id: string,
 ): Promise<number> {
-  const { count } = await knowledgeTableDelegate(tx, table).deleteMany({ where: { id } });
+  const count = await track(
+    tx,
+    author,
+    KNOWLEDGE_TABLE_SQL_NAMES[table],
+    id,
+    async () => (await knowledgeTableDelegate(tx, table).deleteMany({ where: { id } })).count,
+    { deleted: true },
+  );
   await tx.knowledgeSource.deleteMany({
     where: { sourceTable: KNOWLEDGE_TABLE_SQL_NAMES[table], sourceRowId: id },
   });
@@ -608,7 +1013,8 @@ export const TABLE_ROW_SOURCE_SCOPE: KnowledgeAudienceScope = {
 /**
  * The source a row becomes, indexed by the caller in the same transaction
  * (`KnowledgeService.index`). `pending` says why its text is not indexed now
- * (the sweep indexes it later); it stays `indexing`.
+ * (the sweep indexes it later); it stays `indexing`. A mirror of the row,
+ * whose own change is recorded: no history row.
  */
 export async function createTableRowSourceDraft(
   tx: TenantClient,
@@ -636,6 +1042,7 @@ export async function createTableRowSourceDraft(
  * The row changed: its source takes what the row says now. `pending` as on
  * create — the caller has taken the source's chunks away first
  * (`KnowledgeService.unindex`), so it answers nothing the row no longer says.
+ * A mirror, as on create.
  */
 export async function updateTableRowSourceDraft(
   tx: TenantClient,
@@ -664,14 +1071,28 @@ export async function updateTableRowSourceDraft(
 type AccessInfoCreate = Omit<Prisma.AiAccessInfoUncheckedCreateInput, 'updatedAt'>;
 type AccessInfoUpdate = Omit<Prisma.AiAccessInfoUncheckedUpdateInput, 'updatedAt'>;
 
-export async function createAiAccessInfoDraft(tx: TenantClient, data: AccessInfoCreate) {
-  return tx.aiAccessInfo.create({ data: { ...data, updatedAt: new Date() } });
+export async function createAiAccessInfoDraft(
+  tx: TenantClient,
+  author: ConfigChangeAuthor,
+  data: AccessInfoCreate,
+) {
+  return track(
+    tx,
+    author,
+    'ai_access_info',
+    null,
+    () => tx.aiAccessInfo.create({ data: { ...data, updatedAt: new Date() } }),
+    { idOf: idOfRow },
+  );
 }
 
 export async function updateAiAccessInfoDraft(
   tx: TenantClient,
+  author: ConfigChangeAuthor,
   id: string,
   data: AccessInfoUpdate,
 ) {
-  return tx.aiAccessInfo.update({ where: { id }, data: { ...data, updatedAt: new Date() } });
+  return track(tx, author, 'ai_access_info', id, () =>
+    tx.aiAccessInfo.update({ where: { id }, data: { ...data, updatedAt: new Date() } }),
+  );
 }

@@ -1060,6 +1060,7 @@ export function InboxPage(): ReactElement {
                       onLoadOlder={transcript.loadOlder}
                       failedSends={failedSends}
                       onRetry={(entry) => retrySend.mutate(entry.input)}
+                      canSuggest
                       {...(chat.data.active
                         ? {
                             onEdit: (eventId: string, text: string) =>

@@ -22,6 +22,9 @@ import {
 } from './dayConnections.js';
 import type { FailedSend } from './failedSends.js';
 import { AiHandoffCardLine } from './AiHandoffCard.js';
+import { SuggestModal } from './SuggestModal.js';
+import { Dropdown } from '../../components/ui/index.js';
+import { suggestionSubjectOf, type SuggestionSubject } from '../playbook/ai-suggestions.js';
 import { handoffCardIdOf } from './handoffCard.js';
 import { AttachmentView } from './Attachment.js';
 import { renderRichText } from './richText.js';
@@ -77,6 +80,7 @@ export function Transcript({
   failedSends = [],
   onRetry,
   onEdit,
+  canSuggest = false,
   connections = [],
   focus,
 }: {
@@ -114,10 +118,19 @@ export function Transcript({
    * which case no bubble shows the control.
    */
   onEdit?: (eventId: string, text: string) => Promise<unknown>;
+  /**
+   * Offer "Correct the AI" on the AI's messages and "Offer to the AI's
+   * knowledge" on an agent's (AI-23 · tm 318.2). Off where the surface has no
+   * place for it — the archive, a read-only view.
+   */
+  canSuggest?: boolean;
 }): ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
   const pinnedToBottom = useRef(true);
   const t = useTranslate();
+  // The modal sits beside the log, not in it: a live region would read the
+  // whole dialog out as if it were a new message.
+  const [suggestion, setSuggestion] = useState<PendingSuggestion | null>(null);
 
   const breaks = useMemo(
     () =>
@@ -262,56 +275,73 @@ export function Transcript({
   }
 
   return (
-    <div
-      ref={containerRef}
-      onScroll={handleScroll}
-      role="log"
-      aria-live="polite"
-      aria-label={t('inbox.transcript.ariaLabel')}
-      // The ring is drawn inside: the pane around the log clips an outer one.
-      tabIndex={overflowing ? 0 : undefined}
-      className="flex flex-1 flex-col gap-3 overflow-y-auto p-5 focus-visible:-outline-offset-2"
-    >
-      {isLoadingOlder && (
-        <div className="flex shrink-0 flex-col gap-3" data-testid="transcript-older-loading">
-          {/* Announced through the log's own live region rather than silently:
+    <>
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        role="log"
+        aria-live="polite"
+        aria-label={t('inbox.transcript.ariaLabel')}
+        // The ring is drawn inside: the pane around the log clips an outer one.
+        tabIndex={overflowing ? 0 : undefined}
+        className="flex flex-1 flex-col gap-3 overflow-y-auto p-5 focus-visible:-outline-offset-2"
+      >
+        {isLoadingOlder && (
+          <div className="flex shrink-0 flex-col gap-3" data-testid="transcript-older-loading">
+            {/* Announced through the log's own live region rather than silently:
             the reader asked for history by scrolling, and a blank pause is
             indistinguishable from having reached the start of the thread. */}
-          <span className="sr-only">{t('inbox.transcript.loadingOlder')}</span>
-          <div aria-hidden="true" className="h-10 w-2/3 animate-pulse rounded-lg bg-inset" />
-          <div
-            aria-hidden="true"
-            className="h-10 w-1/2 animate-pulse self-end rounded-lg bg-inset"
-          />
-        </div>
-      )}
-      {events.map((event, index) => {
-        const opens = breaks.get(index);
-        return (
-          <Fragment key={event.id}>
-            {opens !== undefined && (
-              <ConnectionSeparator
-                id={opens}
-                label={labels.get(opens)}
-                fallbackAt={event.created_at}
-                showDay={needsDayDivider(events[index - 1], event)}
-              />
-            )}
-            <Bubble
-              event={event}
-              highlighted={highlighted === event.id}
-              isMine={event.author_id === currentAgentId}
-              showDayDivider={opens === undefined && needsDayDivider(events[index - 1], event)}
-              {...(onEdit ? { onEdit } : {})}
+            <span className="sr-only">{t('inbox.transcript.loadingOlder')}</span>
+            <div aria-hidden="true" className="h-10 w-2/3 animate-pulse rounded-lg bg-inset" />
+            <div
+              aria-hidden="true"
+              className="h-10 w-1/2 animate-pulse self-end rounded-lg bg-inset"
             />
-          </Fragment>
-        );
-      })}
-      {failedSends.map((entry) => (
-        <FailedBubble key={entry.input.idempotencyKey} entry={entry} onRetry={onRetry} />
-      ))}
-    </div>
+          </div>
+        )}
+        {events.map((event, index) => {
+          const opens = breaks.get(index);
+          return (
+            <Fragment key={event.id}>
+              {opens !== undefined && (
+                <ConnectionSeparator
+                  id={opens}
+                  label={labels.get(opens)}
+                  fallbackAt={event.created_at}
+                  showDay={needsDayDivider(events[index - 1], event)}
+                />
+              )}
+              <Bubble
+                event={event}
+                highlighted={highlighted === event.id}
+                isMine={event.author_id === currentAgentId}
+                showDayDivider={opens === undefined && needsDayDivider(events[index - 1], event)}
+                {...(onEdit ? { onEdit } : {})}
+                {...(canSuggest ? { onSuggest: setSuggestion } : {})}
+              />
+            </Fragment>
+          );
+        })}
+        {failedSends.map((entry) => (
+          <FailedBubble key={entry.input.idempotencyKey} entry={entry} onRetry={onRetry} />
+        ))}
+      </div>
+      {suggestion && (
+        <SuggestModal
+          key={suggestion.event.id}
+          event={suggestion.event}
+          subject={suggestion.subject}
+          onClose={() => setSuggestion(null)}
+        />
+      )}
+    </>
   );
+}
+
+/** A message the agent chose to suggest about, and what kind of message it is. */
+interface PendingSuggestion {
+  event: ChatEvent;
+  subject: SuggestionSubject;
 }
 
 /**
@@ -437,6 +467,7 @@ function Bubble({
   isMine,
   showDayDivider,
   onEdit,
+  onSuggest,
 }: {
   event: ChatEvent;
   /** The message a search opened the conversation at (ID-06). */
@@ -444,6 +475,8 @@ function Bubble({
   isMine: boolean;
   showDayDivider: boolean;
   onEdit?: (eventId: string, text: string) => Promise<unknown>;
+  /** Open the suggestion modal for this message (AI-23 · tm 318.2); absent: not offered. */
+  onSuggest?: (suggestion: PendingSuggestion) => void;
 }): ReactElement {
   const isNote = event.recipients === 'agents';
   const isSystem = event.type === 'system_message' || event.author_type === 'system';
@@ -461,6 +494,10 @@ function Bubble({
   const [draft, setDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
+  // What the message can be suggested about: the AI's (a correction) or an
+  // agent's own (an answer for the AI's knowledge). A message still being
+  // sent has no id the server knows.
+  const suggestionSubject = onSuggest && !pending ? suggestionSubjectOf(event) : null;
 
   /**
    * Whether to offer the control at all (FR-MOD-02.3.7).
@@ -631,6 +668,31 @@ function Bubble({
               >
                 {t('inbox.transcript.edit')}
               </button>
+            )}
+            {suggestionSubject && (
+              <Dropdown
+                label={t('inbox.suggest.menuLabel')}
+                trigger={<span aria-hidden="true">⋯</span>}
+                triggerClassName="rounded-sm px-1 font-medium text-content-secondary transition-colors hover:bg-surface-2 hover:text-content"
+                panelClassName="bottom-full right-0 mb-1 min-w-44 p-1"
+              >
+                {({ close }) => (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      close();
+                      onSuggest?.({ event, subject: suggestionSubject });
+                    }}
+                    className="block w-full rounded-sm px-2.5 py-1.5 text-left text-xs text-content hover:bg-surface-2"
+                  >
+                    {t(
+                      suggestionSubject === 'ai_message'
+                        ? 'inbox.suggest.fixAi'
+                        : 'inbox.suggest.offerAnswer',
+                    )}
+                  </button>
+                )}
+              </Dropdown>
             )}
           </span>
         </div>

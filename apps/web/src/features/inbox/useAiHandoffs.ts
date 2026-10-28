@@ -50,3 +50,23 @@ export function useAiHandoffFeedback(chatId: string) {
     },
   });
 }
+
+/**
+ * "Handed over for nothing" (AI-23 · tm 318.2): the one hand-over verdict that
+ * opens a suggestion. "Enough / not enough" is the card's own feedback (AI-10);
+ * this says the AI should have kept the conversation, and the reviewers see the
+ * last messages with it. No message is named — the card is about the hand-over.
+ */
+export function useUnneededHandoffSuggestion() {
+  const api = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (card: Pick<AiHandoffCardView, 'chat_id' | 'thread_id'>) =>
+      api.post<unknown>('/ai/suggestions', {
+        chat_id: card.chat_id,
+        thread_id: card.thread_id,
+        kind: 'should_not_have_handed_off',
+      }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['ai-suggestions'] }),
+  });
+}

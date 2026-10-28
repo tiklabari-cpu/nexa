@@ -44,6 +44,9 @@ import { HandoffSettings } from './HandoffSettings.js';
 import { AiPerformance } from './AiPerformance.js';
 import { TestLab } from './TestLab.js';
 import { Unresolved } from './Unresolved.js';
+import { Suggestions } from './Suggestions.js';
+import { useSuggestionBadge } from './useSuggestionBadge.js';
+import { roleAtLeast } from '../team/RoleMenu.js';
 import { IGAMING_CATEGORY, galleryStartsOnIgaming } from './ai-templates.js';
 import { TemplateGallery } from './TemplateGallery.js';
 import { BulkImportForm } from './BulkImportForm.js';
@@ -197,7 +200,29 @@ function knowledgeStatusDot(
 }
 
 export function PlaybookPage(): ReactElement {
-  return useInRouterContext() ? <RoutedPlaybookPage /> : <PlaybookPageBody />;
+  const inRouter = useInRouterContext();
+  const scopes = useAuth((s) => s.agent?.scopes);
+  const role = useAuth((s) => s.agent?.role ?? null);
+  // A Team Lead reviews their team's suggestions but holds no scope on the AI's
+  // configuration (tm 318.2): the page they are given is the queue alone, not a
+  // surface whose every read would be refused.
+  const readsConfig =
+    scopes === undefined ||
+    scopes.includes('agents-bot--all:rw') ||
+    scopes.includes('agents-bot--all:ro');
+  const leadOnly = roleAtLeast(role, 'team_lead') && !roleAtLeast(role, 'admin');
+  if (!readsConfig && leadOnly) return <SuggestionsOnlyPage />;
+  return inRouter ? <RoutedPlaybookPage /> : <PlaybookPageBody />;
+}
+
+/** The Team Lead's view of Playbook: the suggestion queue, nothing else. */
+function SuggestionsOnlyPage(): ReactElement {
+  const t = useTranslate();
+  return (
+    <Page title={t('playbook.page.title')} description={t('playbook.suggestions.onlyDescription')}>
+      <Suggestions canReview />
+    </Page>
+  );
 }
 
 function RoutedPlaybookPage(): ReactElement {
@@ -237,6 +262,11 @@ function PlaybookPageBody({
   const canSeeTests = canEdit || scopes.includes('agents-bot--all:ro');
   // The unresolved questions (tm 317.3 · AI-22) read the same configuration scope.
   const viewTabs = PLAYBOOK_TABS.filter((tab) => !tab.needsConfigScope || canSeeTests);
+  // The suggestions a reviewer has not decided (AI-23 · tm 318.2): on the tab,
+  // so an administrator in the Playbook sees the queue grow.
+  const suggestionBadge = useSuggestionBadge();
+  const role = useAuth((s) => s.agent?.role ?? null);
+  const canReviewSuggestions = roleAtLeast(role, 'team_lead');
 
   // The AI Agent surface is one place with a tab per face (FR-MOD-06.1). General
   // is the landing tab (tm 390): with an agent it is the persona, without one the
@@ -565,6 +595,17 @@ function PlaybookPageBody({
                   }`}
                 >
                   {t(labelKey)}
+                  {tabId === 'suggestions' && suggestionBadge > 0 && (
+                    <span
+                      data-testid="ai-suggestions-badge"
+                      className="ml-1.5 rounded-full bg-brand-500 px-1.5 text-2xs font-semibold text-white"
+                    >
+                      <span aria-hidden="true">{suggestionBadge}</span>
+                      <span className="sr-only">
+                        {t('playbook.suggestions.badge', { count: suggestionBadge })}
+                      </span>
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -1074,6 +1115,10 @@ function PlaybookPageBody({
                   />
                 </Card>
               ))}
+
+            {view === 'suggestions' && (
+              <Suggestions skills={items} canReview={canReviewSuggestions} />
+            )}
 
             {view === 'test' &&
               canSeeTests &&

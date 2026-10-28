@@ -185,4 +185,6 @@ export const shell: Messages = {
   'palette.archive.leave': 'Arşiv aramasından çık',
   'palette.archive.error': 'Arşiv araması başarısız oldu — yeniden deneyin.',
   'palette.ai.error': 'Cevap alınamadı — yeniden deneyin.',
+  'shell.nav.badge.suggestions.one': 'İncelenecek {count} öneri',
+  'shell.nav.badge.suggestions.other': 'İncelenecek {count} öneri',
 };

@@ -383,35 +383,6 @@ const TRACKED = [
       '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
       'the timeline viewer (tm 334) reads it too.',
   },
-  // The AI coaching queue's API (tm 318.1 · AI-23); its screens are tm 318.2:
-  // the Inbox's "AI'ı düzelt" / "AI bilgisine öner" and Playbook › Öneriler.
-  {
-    op: 'POST /ai/suggestions',
-    owner: 'tm 318.2',
-    reason:
-      "an agent's mark on the AI's message or an answer offered to its knowledge — the " +
-      "transcript's message menu and its modal (tm 318.2).",
-  },
-  {
-    op: 'GET /ai/suggestions',
-    owner: 'tm 318.2',
-    reason: 'the suggestion queue and its badge — Playbook › Öneriler (tm 318.2).',
-  },
-  {
-    op: 'GET /ai/suggestions/{suggestionId}',
-    owner: 'tm 318.2',
-    reason: "one suggestion's excerpt and proposal — the queue's detail pane (tm 318.2).",
-  },
-  {
-    op: 'PATCH /ai/suggestions/{suggestionId}',
-    owner: 'tm 318.2',
-    reason: "edit, accept, reject or merge — the detail pane's buttons (tm 318.2).",
-  },
-  {
-    op: 'POST /ai/suggestions/{suggestionId}/to-scenario',
-    owner: 'tm 318.2',
-    reason: 'the suggestion as an AI-19 test scenario — the detail pane (tm 318.2).',
-  },
 ];
 
 /** The platform contract's operations with no client, and why (tm 389.3). */

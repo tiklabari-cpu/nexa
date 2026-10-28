@@ -13763,7 +13763,7 @@
           "315"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-28T05:42:51.903Z",
+        "updatedAt": "2026-10-28T07:09:40.671Z",
         "subtasks": [
           {
             "id": 1,
@@ -13798,13 +13798,13 @@
             "description": "Çalışma anı sürüm sabitleme + config-cache (sürüme göre) + realtime-bus geçersizleştirme + arama görünürlük süzgeci",
             "details": "Üst görev 316 ayrıntılarındaki ilgili bölüm.",
             "testStrategy": "Canlı/taslak ayrımı; zamanlı yayın.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "316.2"
             ],
             "parentId": "316",
             "priority": "medium",
-            "updatedAt": "2026-10-28T05:42:51.903Z"
+            "updatedAt": "2026-10-28T07:09:40.671Z"
           },
           {
             "id": 4,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-28T05:42:51.903Z",
+      "lastModified": "2026-10-28T07:09:40.671Z",
       "taskCount": 390,
       "completedCount": 333,
       "tags": [

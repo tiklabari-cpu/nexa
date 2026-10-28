@@ -241,6 +241,7 @@ model License {
   aiUnresolvedItems      AiUnresolvedItem[]
   aiUnresolvedClusters   AiUnresolvedCluster[]
   aiUnresolvedSettings   AiUnresolvedSettings?
+  aiConfigChanges        AiConfigChange[]
   mailDailyUsage         MailDailyUsage[]
   apiPackagePurchases    ApiPackagePurchase[]
   aiPackagePurchases     AiPackagePurchase[]
@@ -5132,6 +5133,45 @@ model AiUnresolvedSettings {
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 
   @@map("ai_unresolved_settings")
+}
+
+/// The AI configuration change history (tm 315 · AI-21): one row per save of
+/// an editing table (ADR-14b §2.5 step 3, `services/ai/config-history.ts`) —
+/// the row before and after, their JSON-path difference, who and in which
+/// role. Append-only: `siyahtus_app` holds SELECT and INSERT and nothing else
+/// (the `invoices` pattern), so the record of what the AI was told cannot be
+/// rewritten by whoever told it. Kept `aiConfigHistoryDays` (1825), outside
+/// the audit log's 30-day prune; the workspace's deletion takes it. The
+/// CHECKs, RLS, grants and the prune function live in the migration
+/// (20261114090000_ai_config_changes).
+model AiConfigChange {
+  id            String   @id @db.Uuid
+  licenseId     BigInt   @map("license_id")
+  /// The customer-facing agent the change reaches, when there is one.
+  aiAgentId     String?  @map("ai_agent_id") @db.Uuid
+  entityType    String   @map("entity_type")
+  entityId      String   @map("entity_id") @db.Uuid
+  action        String
+  /// An account, a bot, or a system job's name (`actor_type = 'system'`).
+  actorId       String?  @map("actor_id")
+  actorType     String   @map("actor_type")
+  /// The actor's role at the moment of the change; a later role change does not move it.
+  actorRole     String?  @map("actor_role")
+  at            DateTime @default(now()) @db.Timestamptz(6)
+  /// The configuration version (tm 316); null before versioning.
+  versionId     String?  @map("version_id") @db.Uuid
+  draftRevision BigInt?  @map("draft_revision")
+  before        Json?
+  after         Json?
+  diff          Json     @default("[]")
+  note          String?
+  requestId     String?  @map("request_id")
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, at(sort: Desc), id(sort: Desc)])
+  @@index([licenseId, entityType, entityId, at(sort: Desc)])
+  @@map("ai_config_changes")
 }
 
 // ---------------------------------------------------------------------------

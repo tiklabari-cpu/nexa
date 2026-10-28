@@ -70,6 +70,7 @@ import {
   updateGuardrailRuleDraft,
   upsertGuardrailSettingsDraft,
 } from '../services/ai/config-draft.js';
+import { configAuthorOf } from '../lib/config-author.js';
 import { guardrailRuleLoosening } from '../services/ai/guardrail-lock.js';
 import type { Principal } from '../services/auth/principal.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
@@ -560,6 +561,7 @@ export default async function aiGuardrailRoutes(app: FastifyInstance): Promise<v
       // the row an upsert would insert before it finds the conflict.
       const saved = await upsertGuardrailSettingsDraft(
         tx,
+        configAuthorOf(request),
         { aiAgentId: input.ai_agent_id, licenseId: tenant.licenseId, ...fields, crisisText },
         fields,
       );
@@ -601,7 +603,7 @@ export default async function aiGuardrailRoutes(app: FastifyInstance): Promise<v
           { reason: 'guardrail_rules_limit', limit: GUARDRAIL_RULES_PER_AGENT_MAX },
         );
       }
-      const rule = await createGuardrailRuleDraft(tx, {
+      const rule = await createGuardrailRuleDraft(tx, configAuthorOf(request), {
         licenseId: tenant.licenseId,
         aiAgentId: input.ai_agent_id,
         title: input.title,
@@ -648,7 +650,7 @@ export default async function aiGuardrailRoutes(app: FastifyInstance): Promise<v
         if (!existing) throw ApiError.notFound('Compliance rule not found.');
         if (input.scope) await requireScopeTargets(tx, existing.aiAgentId, input.scope);
         const { reason, ...fields } = input;
-        const rule = await updateGuardrailRuleDraft(tx, id, {
+        const rule = await updateGuardrailRuleDraft(tx, configAuthorOf(request), id, {
           ...(input.title !== undefined ? { title: input.title } : {}),
           ...(input.body !== undefined ? { body: input.body } : {}),
           ...(input.category !== undefined ? { category: input.category } : {}),
@@ -680,7 +682,7 @@ export default async function aiGuardrailRoutes(app: FastifyInstance): Promise<v
           select: { id: true, aiAgentId: true, active: true, action: true },
         });
         if (!existing) throw ApiError.notFound('Compliance rule not found.');
-        await deleteGuardrailRuleDraft(tx, id);
+        await deleteGuardrailRuleDraft(tx, configAuthorOf(request), id);
         await auditRuleChange(tx, request, existing, 'deleted', { reason });
       });
       return reply.code(204).send();
@@ -723,7 +725,7 @@ export default async function aiGuardrailRoutes(app: FastifyInstance): Promise<v
       }
       if (match === 'regex') await refuseRegexOverLimit(tx, input.ai_agent_id);
       await refuseDuplicatePhrase(tx, input.ai_agent_id, { phrase: input.phrase, match });
-      return createForbiddenPhraseDraft(tx, {
+      return createForbiddenPhraseDraft(tx, configAuthorOf(request), {
         licenseId: tenant.licenseId,
         aiAgentId: input.ai_agent_id,
         phrase: input.phrase,
@@ -765,7 +767,7 @@ export default async function aiGuardrailRoutes(app: FastifyInstance): Promise<v
           await refuseDuplicatePhrase(tx, existing.aiAgentId, { phrase, match }, id);
         }
         if (input.scope) await requireScopeTargets(tx, existing.aiAgentId, input.scope);
-        return updateForbiddenPhraseDraft(tx, id, {
+        return updateForbiddenPhraseDraft(tx, configAuthorOf(request), id, {
           ...(input.phrase !== undefined ? { phrase: input.phrase } : {}),
           ...(input.match !== undefined ? { match: input.match } : {}),
           ...(input.lang !== undefined ? { lang: input.lang } : {}),
@@ -784,7 +786,9 @@ export default async function aiGuardrailRoutes(app: FastifyInstance): Promise<v
     { config: founderWrite() },
     async (request, reply) => {
       const id = parse(uuid, request.params.phraseId);
-      const deleted = await request.withTenant((tx) => deleteForbiddenPhraseDraft(tx, id));
+      const deleted = await request.withTenant((tx) =>
+        deleteForbiddenPhraseDraft(tx, configAuthorOf(request), id),
+      );
       if (deleted === 0) throw ApiError.notFound('Forbidden phrase not found.');
       return reply.code(204).send();
     },

@@ -28,6 +28,7 @@ import {
 import { maskForWrite } from '../../lib/sensitive-mask.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
+import type { ConfigChangeAuthor } from './config-history.js';
 import type { Prisma } from '@prisma/client';
 import { AiDailyCapError } from './ai-daily-budget.js';
 import {
@@ -211,6 +212,7 @@ export class CopilotService {
     tx: TenantClient,
     tenant: TenantContext,
     principal: Principal,
+    author: ConfigChangeAuthor,
     input: {
       type: string;
       name: string;
@@ -223,6 +225,7 @@ export class CopilotService {
     // record: what this route has always kept away from players.
     const source = await createKnowledgeSourceDraft(
       tx,
+      author,
       { audiences: ['copilot'], aiAgentIds: [] },
       {
         licenseId: tenant.licenseId,
@@ -249,8 +252,12 @@ export class CopilotService {
    * this view's — an AI-agent (customer-facing) source, a KB article's — so
    * this route can never remove one, even given its id (ADR §2.7).
    */
-  async deleteSource(tx: TenantClient, sourceId: string): Promise<number> {
-    return deleteKnowledgeSourceDraft(tx, sourceId, AGENTS_ONLY);
+  async deleteSource(
+    tx: TenantClient,
+    author: ConfigChangeAuthor,
+    sourceId: string,
+  ): Promise<number> {
+    return deleteKnowledgeSourceDraft(tx, author, sourceId, AGENTS_ONLY);
   }
 
   // --- Assist (12.3) ---------------------------------------------------------

@@ -47,6 +47,7 @@ export const audit: Messages = {
     'Not chained — written before this workspace’s audit chain existed',
   'audit.detail.recordedDetail': 'Recorded detail',
   'audit.detail.noMetadata': 'This action records no further detail.',
+  'audit.detail.aiChange': 'Open the change in the AI history',
   'audit.detail.minimalNote':
     'Audit entries deliberately record field names, counts and roles — never values, secrets or message content. Some actions omit the source address on purpose.',
   'audit.detail.id.thread': 'day',
@@ -67,6 +68,7 @@ export const audit: Messages = {
   'audit.group.credentials': 'Credentials',
   'audit.group.data': 'Data',
   'audit.group.platform': 'SiyahTuş support',
+  'audit.group.ai': 'AI settings',
 
   // Access review export (AccessReviewExport.tsx)
   'audit.accessReview.title': 'Access review',

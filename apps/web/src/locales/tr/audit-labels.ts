@@ -120,6 +120,7 @@ export const auditLabels: Messages = {
   'audit.action.kb.settings_updated': 'Bilgi bankası ayarları güncellendi',
 
   'audit.target.account': 'Hesap',
+  'audit.target.ai_config_change': 'AI ayar değişikliği',
   'audit.target.ai_package_purchase': 'Yapay zekâ paketi satın alımı',
   'audit.target.api_package_purchase': 'API paketi satın alımı',
   'audit.target.app_installation': 'Uygulama kurulumu',
@@ -210,4 +211,13 @@ export const auditLabels: Messages = {
     'SiyahTuş banka havalesini ödendi olarak işaretledi',
   'audit.action.platform.impersonation_started': 'SiyahTuş destek oturumu başladı',
   'audit.action.platform.impersonation_ended': 'SiyahTuş destek oturumu bitti',
+  'audit.action.ai.config_changed': 'AI ayarı değişti',
+  'audit.action.ai.config_submitted': 'AI ayarları onaya gönderildi',
+  'audit.action.ai.config_approved': 'AI ayarları onaylandı',
+  'audit.action.ai.config_rejected': 'AI ayarları reddedildi',
+  'audit.action.ai.config_published': 'AI ayarları yayınlandı',
+  'audit.action.ai.config_rolled_back': 'AI ayarları geri alındı',
+  'audit.action.ai.paused': 'AI ajanı duraklatıldı',
+  'audit.action.ai.resumed': 'AI ajanı sürdürüldü',
+  'audit.action.knowledge.crawled': 'Web sitesi bilgisi tarandı',
 };

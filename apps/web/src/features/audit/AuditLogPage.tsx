@@ -59,7 +59,7 @@
  * React Query page can do.
  */
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Fragment } from 'react';
 import type { ChangeEvent, ReactElement } from 'react';
 import { CopyId } from '../../components/CopyId.js';
@@ -309,6 +309,22 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
   { labelKey: 'audit.group.data', actions: ['data.retention_pruned', 'data.deleted'] },
   // SiyahTuş staff acting from the root panel (tm 389.5) — one group, so a
   // workspace owner can answer "what did support do here?" with one filter.
+  // The AI's configuration (tm 315 · AI-21): the values are in the AI
+  // history, which the expanded row links to.
+  {
+    labelKey: 'audit.group.ai',
+    actions: [
+      'ai.config_changed',
+      'ai.config_submitted',
+      'ai.config_approved',
+      'ai.config_rejected',
+      'ai.config_published',
+      'ai.config_rolled_back',
+      'ai.paused',
+      'ai.resumed',
+      'knowledge.crawled',
+    ],
+  },
   {
     labelKey: 'audit.group.platform',
     actions: [
@@ -671,6 +687,9 @@ export function AuditLogPage(): ReactElement {
  * what a security event may keep was made at write time, and taking a second
  * bite here could only remove evidence somebody deliberately kept.
  */
+/** The target an AI setting's entry points at: its row in the AI history. */
+const AI_CHANGE_TARGET = 'ai_config_change:';
+
 function AuditEntryDetail({ entryId }: { entryId: string }): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
@@ -736,6 +755,17 @@ function AuditEntryDetail({ entryId }: { entryId: string }): ReactElement {
           </dl>
         )}
       </div>
+
+      {/* An AI setting's entry names fields only; the values are in the AI
+          history (tm 315 · AI-21), one link away. */}
+      {entry.target?.startsWith(AI_CHANGE_TARGET) && (
+        <Link
+          to={`/app/playbook?view=history&change=${encodeURIComponent(entry.target.slice(AI_CHANGE_TARGET.length))}`}
+          className="text-xs text-brand-600 hover:underline"
+        >
+          {t('audit.detail.aiChange')}
+        </Link>
+      )}
 
       {/* Said out loud so a reviewer who cannot find a field stops looking for
           it here: it was never written, rather than being withheld now. */}

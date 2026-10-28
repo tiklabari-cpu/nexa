@@ -15,8 +15,8 @@
  *     platform connection bypasses row level security, so the `WHERE
  *     license_id` is the only wall (`platform-ai-catalogs.test.ts` mutates it).
  *
- * A source that has not shipped yet — `ai_config_changes` (tm 315),
- * `qa_reviews` (tm 319), the tool catalogue (tm 321) — answers
+ * A source that has not shipped yet — `qa_reviews` (tm 319), the tool
+ * catalogue (tm 321); `ai_config_changes` was one until tm 315 — answers
  * `not_installed`, decided at read time from the database (`to_regclass`), so
  * it turns on by itself when its migration lands. If the table exists and its
  * columns are not the ones named in {@link OPTIONAL_SOURCES} the query fails
@@ -106,10 +106,11 @@ export interface TemplateInstallRow {
  * table of the same shape.
  */
 export const OPTIONAL_SOURCES = {
+  // Shipped by tm 315 (20261114090000): a change's moment is its `at`.
   configChanges: {
     table: 'ai_config_changes',
     licenseColumn: 'license_id',
-    timeColumn: 'created_at',
+    timeColumn: 'at',
   },
   qaReviews: { table: 'qa_reviews', licenseColumn: 'license_id', timeColumn: 'created_at' },
 } as const;

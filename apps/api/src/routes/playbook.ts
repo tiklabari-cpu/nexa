@@ -97,8 +97,10 @@ import { writeAuditEntry } from '../services/audit/audit-log.js';
 import {
   createKnowledgeSourceDraft,
   createSkillDraft,
+  createAiAgentDraft,
   deleteKnowledgeSourceDraft,
   deleteSkillDraft,
+  updateAiAgentDraft,
   knowledgeScopeOfFiling,
   reviewKnowledgeSourceDraft,
   updateKnowledgeSourceDraft,
@@ -107,6 +109,7 @@ import {
   type KnowledgeAudienceScope,
   type KnowledgeFiling,
 } from '../services/ai/config-draft.js';
+import { configAuthorOf } from '../lib/config-author.js';
 import { withStepTeamIds } from '../services/ai/step-teams.js';
 import {
   copyPlaceholders,
@@ -1087,8 +1090,10 @@ export default async function playbookRoutes(
       const tenant = request.tenant();
       try {
         const created = await request.withTenant(async (tx) => {
-          const agent = await tx.aiAgent.create({
-            data: {
+          const agent = await createAiAgentDraft(
+            tx,
+            configAuthorOf(request),
+            {
               licenseId: tenant.licenseId,
               kind: 'ai_agent',
               name: body.name,
@@ -1097,8 +1102,8 @@ export default async function playbookRoutes(
               ...(body.avatar_url !== undefined ? { avatarUrl: body.avatar_url } : {}),
               ...(body.languages !== undefined ? { languages: body.languages } : {}),
             },
-            include: { _count: { select: { skills: true } } },
-          });
+            { _count: { select: { skills: true } } },
+          );
           return { ...serialiseAgent(agent), readiness: await agentReadiness(tx, agent) };
         });
         return reply.status(201).send(created);
@@ -1225,9 +1230,11 @@ export default async function playbookRoutes(
           persona = next as Prisma.InputJsonValue;
         }
 
-        return tx.aiAgent.update({
-          where: { id },
-          data: {
+        return updateAiAgentDraft(
+          tx,
+          configAuthorOf(request),
+          id,
+          {
             ...(body.name !== undefined ? { name: body.name } : {}),
             ...(body.active !== undefined ? { active: body.active } : {}),
             ...(body.tone !== undefined ? { tone: body.tone } : {}),
@@ -1235,8 +1242,8 @@ export default async function playbookRoutes(
             ...(body.languages !== undefined ? { languages: body.languages } : {}),
             ...(persona !== undefined ? { persona } : {}),
           },
-          include: { _count: { select: { skills: true } } },
-        });
+          { _count: { select: { skills: true } } },
+        );
       });
 
       return reply.send(serialiseAgent(updated));
@@ -1339,6 +1346,7 @@ export default async function playbookRoutes(
         };
         return upsertHandoffSettingsDraft(
           tx,
+          configAuthorOf(request),
           { aiAgentId: id, licenseId: tenant.licenseId, ...fields },
           fields,
           HANDOFF_SETTINGS_SELECT,
@@ -1392,7 +1400,7 @@ export default async function playbookRoutes(
       if (body.is_fallback === true) await requireFallbackFree(tx, body.ai_agent_id ?? null, null);
 
       const createdBy = principal.kind === 'agent' ? principal.accountId : null;
-      const created = await createSkillDraft(tx, {
+      const created = await createSkillDraft(tx, configAuthorOf(request), {
         ...(definition as Pick<Prisma.SkillUncheckedCreateInput, 'mode' | 'whenToUse'>),
         licenseId: tenant.licenseId,
         name: body.name,
@@ -1537,7 +1545,7 @@ export default async function playbookRoutes(
               select: { id: true },
             })) === null);
 
-        const updated = await updateSkillDraft(tx, id, {
+        const updated = await updateSkillDraft(tx, configAuthorOf(request), id, {
           ...definition,
           ...(body.is_fallback !== undefined ? { isFallback: body.is_fallback } : {}),
           ...(body.name !== undefined ? { name: body.name } : {}),
@@ -1565,7 +1573,7 @@ export default async function playbookRoutes(
           select: { locked: true, templateKey: true },
         });
         if (existing && isLockedCopy(existing)) throw templateLocked('deleted');
-        const count = await deleteSkillDraft(tx, id);
+        const count = await deleteSkillDraft(tx, configAuthorOf(request), id);
         // Only record a delete that actually happened — a 404 (nothing matched)
         // is not an event worth an entry.
         if (count > 0) {
@@ -1853,18 +1861,23 @@ export default async function playbookRoutes(
         await requireSourceScope(tx, body);
 
         const addedBy = principal.kind === 'agent' ? principal.accountId : null;
-        const source = await createKnowledgeSourceDraft(tx, createScope(agent, body), {
-          licenseId: tenant.licenseId,
-          type: body.type,
-          name: body.name,
-          content,
-          sourceUrl,
-          status: prepared === null ? 'crawling' : 'indexing',
-          addedBy,
-          ...meta,
-          ...scoped,
-          ...(body.type === 'website' ? websiteCrawlSettings(body) : {}),
-        });
+        const source = await createKnowledgeSourceDraft(
+          tx,
+          configAuthorOf(request),
+          createScope(agent, body),
+          {
+            licenseId: tenant.licenseId,
+            type: body.type,
+            name: body.name,
+            content,
+            sourceUrl,
+            status: prepared === null ? 'crawling' : 'indexing',
+            addedBy,
+            ...meta,
+            ...scoped,
+            ...(body.type === 'website' ? websiteCrawlSettings(body) : {}),
+          },
+        );
         const names = await creatorNamesByIds(tx, [addedBy, source.ownerId]);
 
         // A website's crawl is queued in the same transaction as the source:
@@ -1974,19 +1987,24 @@ export default async function playbookRoutes(
         await requireSourceScope(tx, body);
 
         const addedBy = principal.kind === 'agent' ? principal.accountId : null;
-        const source = await createKnowledgeSourceDraft(tx, createScope(agent, body), {
-          licenseId: tenant.licenseId,
-          type: 'file',
-          name: title,
-          content: parsed.text,
-          // A file has no URL. Storing the filename here would put a name
-          // into a column every reader treats as a fetchable address.
-          sourceUrl: null,
-          status: 'indexing',
-          addedBy,
-          ...meta,
-          ...scoped,
-        });
+        const source = await createKnowledgeSourceDraft(
+          tx,
+          configAuthorOf(request),
+          createScope(agent, body),
+          {
+            licenseId: tenant.licenseId,
+            type: 'file',
+            name: title,
+            content: parsed.text,
+            // A file has no URL. Storing the filename here would put a name
+            // into a column every reader treats as a fetchable address.
+            sourceUrl: null,
+            status: 'indexing',
+            addedBy,
+            ...meta,
+            ...scoped,
+          },
+        );
 
         const chunks = await knowledge.index(tx, tenant, source.id, prepared);
 
@@ -2052,22 +2070,27 @@ export default async function playbookRoutes(
           if (existing) throw knowledgeSourceExists(existing.id);
 
           const addedBy = principal.kind === 'agent' ? principal.accountId : null;
-          const source = await createKnowledgeSourceDraft(tx, createScope(agent, body), {
-            licenseId: tenant.licenseId,
-            type: 'file',
-            name: title,
-            // A document's text is its chunks, written by its job.
-            content: null,
-            sourceUrl: null,
-            status: 'processing',
-            addedBy,
-            fileKey: document.key,
-            fileMime: document.mime,
-            fileSize: document.size,
-            fileSha256: document.sha256,
-            ...meta,
-            ...scoped,
-          });
+          const source = await createKnowledgeSourceDraft(
+            tx,
+            configAuthorOf(request),
+            createScope(agent, body),
+            {
+              licenseId: tenant.licenseId,
+              type: 'file',
+              name: title,
+              // A document's text is its chunks, written by its job.
+              content: null,
+              sourceUrl: null,
+              status: 'processing',
+              addedBy,
+              fileKey: document.key,
+              fileMime: document.mime,
+              fileSize: document.size,
+              fileSha256: document.sha256,
+              ...meta,
+              ...scoped,
+            },
+          );
           const job = await enqueueKnowledgeJob(tx, {
             context: tenant,
             sourceId: source.id,
@@ -2383,15 +2406,20 @@ export default async function playbookRoutes(
 
           try {
             const created = await request.withTenant(async (tx) => {
-              const source = await createKnowledgeSourceDraft(tx, knowledgeScopeOfFiling(filing), {
-                licenseId: tenant.licenseId,
-                type,
-                name,
-                content,
-                sourceUrl,
-                status: 'indexing',
-                addedBy,
-              });
+              const source = await createKnowledgeSourceDraft(
+                tx,
+                configAuthorOf(request),
+                knowledgeScopeOfFiling(filing),
+                {
+                  licenseId: tenant.licenseId,
+                  type,
+                  name,
+                  content,
+                  sourceUrl,
+                  status: 'indexing',
+                  addedBy,
+                },
+              );
 
               // Same transaction as the create, exactly as the single-source path:
               // a source that exists but is not searchable looks ready and answers
@@ -2551,6 +2579,7 @@ export default async function playbookRoutes(
         await requireSourceScope(tx, body);
         const count = await updateKnowledgeSourceDraft(
           tx,
+          configAuthorOf(request),
           id,
           {
             ...(body.name === undefined ? {} : { name: body.name }),
@@ -2702,6 +2731,7 @@ export default async function playbookRoutes(
         // whether it is still right, so `reviewed_at` stays where it was.
         const count = await updateKnowledgeSourceDraft(
           tx,
+          configAuthorOf(request),
           id,
           {
             content: text,
@@ -2709,6 +2739,8 @@ export default async function playbookRoutes(
             nextRefreshAt: computeNextRefreshAt(existing.refreshAfterDays, now),
           },
           now,
+          undefined,
+          'reindex',
         );
         if (count === 0) throw ApiError.notFound('Knowledge source not found.');
 
@@ -2963,7 +2995,10 @@ export default async function playbookRoutes(
           select: { id: true, sourceTable: true, sourceRowId: true },
         });
         if (existing) refuseTableRowOwned(existing);
-        if (!existing || (await reviewKnowledgeSourceDraft(tx, id)) === 0) {
+        if (
+          !existing ||
+          (await reviewKnowledgeSourceDraft(tx, configAuthorOf(request), id)) === 0
+        ) {
           throw ApiError.notFound('Knowledge source not found.');
         }
         const source = await tx.knowledgeSource.findFirstOrThrow({
@@ -3001,7 +3036,7 @@ export default async function playbookRoutes(
             ?.fileKey ?? null;
         // Chunks cascade with the source; leaving them would keep answering
         // from text the admin believes they deleted.
-        const count = await deleteKnowledgeSourceDraft(tx, id, {
+        const count = await deleteKnowledgeSourceDraft(tx, configAuthorOf(request), id, {
           kbArticleId: null,
           sourceTable: null,
         });

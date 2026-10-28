@@ -40,6 +40,7 @@ export const audit: Messages = {
     'Zincirlenmemiş — bu çalışma alanının denetim zinciri oluşmadan önce yazılmış',
   'audit.detail.recordedDetail': 'Kaydedilen ayrıntı',
   'audit.detail.noMetadata': 'Bu eylem başka ayrıntı kaydetmiyor.',
+  'audit.detail.aiChange': 'Değişikliği AI geçmişinde aç',
   'audit.detail.minimalNote':
     'Denetim kayıtları bilerek yalnız alan adlarını, sayıları ve rolleri tutar — değerleri, sırları veya mesaj içeriğini asla. Bazı eylemler kaynak adresi de bilerek yazmaz.',
   'audit.detail.id.thread': 'günlük',
@@ -60,6 +61,7 @@ export const audit: Messages = {
   'audit.group.credentials': 'Kimlik bilgileri',
   'audit.group.data': 'Veri',
   'audit.group.platform': 'SiyahTuş destek',
+  'audit.group.ai': 'AI ayarları',
 
   // Access review export (AccessReviewExport.tsx)
   'audit.accessReview.title': 'Erişim gözden geçirmesi',

@@ -26,6 +26,7 @@ import {
   deleteHandoffRouteDraft,
   updateHandoffRouteDraft,
 } from '../services/ai/config-draft.js';
+import { configAuthorOf } from '../lib/config-author.js';
 
 const READ = ['access_rules:ro', 'access_rules:rw'];
 const WRITE = ['access_rules:rw'];
@@ -182,7 +183,7 @@ export default async function handoffRoutesRoutes(app: FastifyInstance): Promise
               limit: HANDOFF_ROUTES_MAX,
             });
           }
-          return createHandoffRouteDraft(tx, {
+          return createHandoffRouteDraft(tx, configAuthorOf(request), {
             licenseId: tenant.licenseId,
             brandId,
             matchType: input.match_type,
@@ -230,7 +231,7 @@ export default async function handoffRoutesRoutes(app: FastifyInstance): Promise
             ? { expertiseId: input.required_expertise_id }
             : {}),
         });
-        return updateHandoffRouteDraft(tx, routeId, {
+        return updateHandoffRouteDraft(tx, configAuthorOf(request), routeId, {
           ...(input.group_id !== undefined ? { groupId: BigInt(input.group_id) } : {}),
           ...(input.required_expertise_id !== undefined
             ? {
@@ -254,7 +255,9 @@ export default async function handoffRoutesRoutes(app: FastifyInstance): Promise
     { config: { scopes: WRITE, minimumRole: 'admin' } },
     async (request, reply) => {
       const routeId = parse(uuid, request.params.routeId);
-      const deleted = await request.withTenant((tx) => deleteHandoffRouteDraft(tx, routeId));
+      const deleted = await request.withTenant((tx) =>
+        deleteHandoffRouteDraft(tx, configAuthorOf(request), routeId),
+      );
       if (deleted === 0) throw ApiError.notFound('Hand-over route not found.');
       return reply.code(204).send();
     },

@@ -701,7 +701,7 @@ describe('platform AI catalogues (tm 389.19)', () => {
       expect(OPTIONAL_SOURCES.configChanges).toEqual({
         table: 'ai_config_changes',
         licenseColumn: 'license_id',
-        timeColumn: 'created_at',
+        timeColumn: 'at',
       });
       expect(OPTIONAL_SOURCES.qaReviews.table).toBe('qa_reviews');
     });

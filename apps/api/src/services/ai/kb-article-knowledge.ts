@@ -172,7 +172,7 @@ export class KbArticleKnowledge {
         if (wanted(await readArticle(tx, articleId)) !== null) {
           return { result: 'deferred', reason: 'superseded' } as const;
         }
-        await deleteKnowledgeSourceDraft(tx, read.source!.id, { kbArticleId: articleId });
+        await deleteKnowledgeSourceDraft(tx, null, read.source!.id, { kbArticleId: articleId });
         return { result: 'removed' } as const;
       });
     }

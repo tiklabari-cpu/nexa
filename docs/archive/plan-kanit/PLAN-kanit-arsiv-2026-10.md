@@ -40,6 +40,8 @@
 
 #### K06.1 — 06.1 · AI Agent sekmeleri (Performance/Profile/Skills/Knowledge) + readiness
 
+ ℹ tm 314.4 · AI-19 5/6 (simülasyon laboratuvarı #314; damga `✅` kaldı — Test sekmesi 314.5): kilitli uyum paketi (G1, G2, G3, G5, G7, G11, G16 × TR/EN = 14 senaryo, sürüm + parmak izi; çıktı kuralları herhangi bir sonla) + yayın öncesi koşu kancası (`trigger: pre_publish` → `queuePrePublishRun`, paket önce, `compliance_*` sayaçları; eski paket sürümlü koşu oynanmaz) + yayın kapısı (`compliancePackGate`, `GET /ai/compliance-pack`) · `packages/types/src/ai-compliance-scenarios.ts:117`, `apps/api/src/services/ai/simulation/compliance-pack.ts:85`, `:158`, `test-runs.ts:269`, `run-worker.ts:329`, `apps/api/src/routes/ai-testing.ts:603`, `:730` · `ai-compliance-scenarios.test.ts` (7), `compliance-pack.test.ts` (8), `ai-testing-compliance.test.ts` (8) · §D321
+
 - ℹ tm 314.3 · AI-19 4/6 (simülasyon laboratuvarı #314; damga `✅` kaldı — uyum paketi 314.4, Test sekmesi 314.5): hakem (fast model, AI-24 rubriği, yalnız öneri — durumu değiştirmez; hatada `null`) + regresyon farkı (son tamamlanmış yayın koşusuna karşı `newly_failing` en üstte, sonra sonuç/ekip değişenler; `compared_run_id`) + test kotası (hakem `llm_test`'te, reddedilirse koşu durur) · `apps/api/src/services/ai/simulation/judge.ts:76`, `judge-prompt.ts:246`, `regression.ts:41`, `run-worker.ts:270`, `apps/api/src/routes/ai-testing.ts:637` · `judge.test.ts` (17), `regression.test.ts` (17), `ai-testing-judge-regression.test.ts` (7), `ai-testing-schema.test.ts` (+kontrat), `ai-testing-api.test.ts` / `ai-testing-runner.test.ts` (hakem beklentisi) · §D320
 
 #### K06.3.2 — 06.3.2 · + New source (chunk+embedding)

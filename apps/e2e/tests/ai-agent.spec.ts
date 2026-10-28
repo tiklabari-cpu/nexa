@@ -73,6 +73,26 @@ test.describe('AI Agent (MOD-06)', () => {
     await agentPage.screenshot({ path: 'kanit/33-ai-agent-profile.png', fullPage: true });
   });
 
+  test('a saved tone is in the change history with what it was and what it became (AI-21)', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/playbook?view=general');
+    const tabs = agentPage.getByRole('tablist', { name: 'AI Agent' });
+    const marker = `calm-${Date.now()}`;
+    await agentPage.getByLabel('Tone').fill(marker);
+    const save = agentPage.getByRole('button', { name: 'Save profile' });
+    await save.click();
+    await expect(save).toBeDisabled();
+
+    await tabs.getByRole('tab', { name: 'History' }).click();
+    const history = agentPage.getByRole('region', { name: 'Change history' });
+    const row = history.getByTestId('ai-history-row').first();
+    await expect(row).toContainText('Changed Profile · Ada');
+    await expect(row).toContainText('fields: tone');
+    await row.getByRole('button', { name: 'Show the change' }).click();
+    await expect(row.getByTestId('change-diff')).toContainText(marker);
+  });
+
   test('adds a website knowledge source by crawling a URL (FR-MOD-06.3.2)', async ({
     agentPage,
   }) => {

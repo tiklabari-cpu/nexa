@@ -169,6 +169,8 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/playbook/TestLab.tsx',
   'src/features/playbook/Unresolved.tsx',
   'src/features/playbook/ClusterDetail.tsx',
+  'src/features/playbook/History.tsx',
+  'src/features/playbook/ChangeDiff.tsx',
   'src/features/playbook/ScenarioEditor.tsx',
   'src/features/playbook/RunResults.tsx',
   'src/features/playbook/SandboxChat.tsx',

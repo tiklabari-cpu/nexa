@@ -9,9 +9,32 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { CUSTOM_FIELD_ENTITIES, CUSTOM_FIELD_TYPES, FORM_PLACEMENTS } from '@siyahtus/types';
+import {
+  CUSTOM_FIELD_ENTITIES,
+  CUSTOM_FIELD_OPTIONS_MAX,
+  CUSTOM_FIELD_OPTION_LABEL_MAX,
+  CUSTOM_FIELD_TYPES,
+  FORM_PLACEMENTS,
+} from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
+
+/**
+ * A choice field's options (WG-04). Shape only — the rules that need the type
+ * (how many, distinct, only a topic routes) and the team lookup live in the
+ * service, so the create and edit paths cannot judge them differently.
+ */
+const optionsSchema = z
+  .array(
+    z
+      .object({
+        value: z.string().max(CUSTOM_FIELD_OPTION_LABEL_MAX),
+        label: z.string().max(CUSTOM_FIELD_OPTION_LABEL_MAX),
+        target_group_id: z.number().int().positive().nullable().optional(),
+      })
+      .strict(),
+  )
+  .max(CUSTOM_FIELD_OPTIONS_MAX);
 
 const listQuery = z.object({
   entity: z.enum(CUSTOM_FIELD_ENTITIES).optional(),
@@ -30,6 +53,7 @@ const createBody = z.object({
   form_placement: z.enum(FORM_PLACEMENTS).nullable().optional(),
   /** Render this contact field as a Contacts table column (FR-MOD-03.2.3). */
   show_in_table: z.boolean().optional(),
+  options: optionsSchema.nullable().optional(),
 });
 
 const updateBody = z
@@ -38,6 +62,9 @@ const updateBody = z
     required: z.boolean().optional(),
     form_placement: z.enum(FORM_PLACEMENTS).nullable().optional(),
     show_in_table: z.boolean().optional(),
+    options: optionsSchema.optional(),
+    /** Move the field within its form (WG-04); past the end means last. */
+    position: z.number().int().min(0).optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -84,6 +111,7 @@ export default async function customFieldRoutes(app: FastifyInstance): Promise<v
           ...(body.required !== undefined ? { required: body.required } : {}),
           ...(body.form_placement !== undefined ? { formPlacement: body.form_placement } : {}),
           ...(body.show_in_table !== undefined ? { showInTable: body.show_in_table } : {}),
+          ...(body.options !== undefined ? { options: body.options } : {}),
         }),
       );
       return reply.status(201).send(definition);
@@ -103,6 +131,8 @@ export default async function customFieldRoutes(app: FastifyInstance): Promise<v
           ...(body.required !== undefined ? { required: body.required } : {}),
           ...(body.form_placement !== undefined ? { formPlacement: body.form_placement } : {}),
           ...(body.show_in_table !== undefined ? { showInTable: body.show_in_table } : {}),
+          ...(body.options !== undefined ? { options: body.options } : {}),
+          ...(body.position !== undefined ? { position: body.position } : {}),
         }),
       );
       return reply.send(definition);

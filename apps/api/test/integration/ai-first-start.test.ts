@@ -606,4 +606,63 @@ describe('the AI answers first, and a person is routed at the hand-over (AI-11 �
       expect(await viewIds('ai')).not.toContain(chatId);
     });
   });
+
+  // --- The visitor's topic (WG-04 · tm 343) ----------------------------------
+
+  describe('a pre-chat topic with the AI answering first', () => {
+    /** A topic question whose one option routes to `team`. */
+    async function topicTo(team: bigint): Promise<string> {
+      const field = await owner.customFieldDefinition.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          entity: 'contact',
+          label: 'Konu',
+          type: 'topic',
+          formPlacement: 'pre_chat',
+          options: [{ value: 'withdrawal', label: 'Para çekme', target_group_id: Number(team) }],
+        },
+        select: { id: true },
+      });
+      return field.id;
+    }
+
+    async function sendWithTopic(fieldId: string, text: string) {
+      const response = await server.post(
+        '/customer/chat/events',
+        { text, custom_fields: { [fieldId]: 'withdrawal' } },
+        await visitor(),
+      );
+      expect(response.statusCode, response.body).toBe(201);
+      const sent = response.json() as { chat_id: string; event: { thread_id: string } };
+      return { chatId: sent.chat_id, threadId: sent.event.thread_id };
+    }
+
+    it('makes the first team decision: the AI answers in the topic’s team', async () => {
+      await skill();
+      await aiFirst();
+      const fieldId = await topicTo(logisticsId);
+
+      const { chatId, threadId } = await sendWithTopic(fieldId, 'Çekimim gelmedi');
+
+      expect(await botTexts(chatId)).toEqual([AI_ANSWER]);
+      expect(await thread(threadId)).toMatchObject({ assigneeId: null, groupId: logisticsId });
+    });
+
+    it('gives way to the team the AI’s own hand-off names (AI-12 first)', async () => {
+      await skill([
+        { type: 'detect_intent', intent: 'human', phrases: ['human'] },
+        { type: 'transfer_to_team', group: 'Logistics' },
+      ]);
+      await aiFirst();
+      const fieldId = await topicTo(supportId);
+
+      const { threadId } = await sendWithTopic(fieldId, 'I want a human please');
+
+      expect(await thread(threadId)).toMatchObject({
+        assigneeId: fx.a.ownerAccountId,
+        aiMode: 'human',
+        groupId: logisticsId,
+      });
+    });
+  });
 });

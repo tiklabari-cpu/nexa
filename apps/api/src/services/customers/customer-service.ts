@@ -32,7 +32,11 @@ import {
 } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
-import { readCustomFieldValues } from '../custom-fields/custom-field-service.js';
+import {
+  FIELD_ORDER,
+  definitionOptions,
+  readCustomFieldValues,
+} from '../custom-fields/custom-field-service.js';
 import { visitedPagesOf, visitorPageUrls } from '../campaigns/campaign-matching.js';
 import type { GeoLocation } from '../geo/geo-locator.js';
 import { maskPlayerContact } from './player-contact.js';
@@ -452,7 +456,7 @@ export class CustomerService {
 
     const definitions = await tx.customFieldDefinition.findMany({
       where: { licenseId: tenant.licenseId, entity: 'contact', showInTable: true },
-      orderBy: [{ createdAt: 'asc' }],
+      orderBy: FIELD_ORDER,
     });
     if (definitions.length === 0) return new Map(customerIds.map((id) => [id, []]));
 
@@ -486,6 +490,7 @@ export class CustomerService {
             value: stored?.get(definition.id) ?? null,
             form_placement: (definition.formPlacement as FormPlacement | null) ?? null,
             show_in_table: true,
+            options: definitionOptions(definition.options),
           })),
         ];
       }),

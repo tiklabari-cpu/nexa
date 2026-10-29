@@ -10943,7 +10943,19 @@ components:
         (FR-MOD-08.7.6) — an extra field the product does not ship with. The
         two properties that carry the requirement are `type` (how a value is
         validated) and `required` (whether it may be blank).
-      required: [id, entity, label, type, required, show_in_table, created_at, updated_at]
+      required:
+        [
+          id,
+          entity,
+          label,
+          type,
+          required,
+          show_in_table,
+          options,
+          position,
+          created_at,
+          updated_at,
+        ]
       properties:
         id: { type: string, format: uuid }
         entity:
@@ -10953,8 +10965,12 @@ components:
         label: { type: string }
         type:
           type: string
-          enum: [text, number, boolean, date]
-          description: How a value is validated. Immutable once set.
+          enum: [text, number, boolean, date, select, multiselect, topic]
+          description: |
+            How a value is validated. Immutable once set. `select`,
+            `multiselect` and `topic` pick from `options` (WG-04); a `topic`
+            is a pre-chat question whose choice may route the conversation to a
+            team, at most one per workspace.
         required:
           type: boolean
           description: When true, a value may not be left blank.
@@ -10980,6 +10996,18 @@ components:
             Contacts table (FR-MOD-03.2.3), rather than only in the
             Details/CRM panel. Only a `contact` field may set this; a
             `ticket` one is a 400. Defaults to false.
+        options:
+          type: array
+          nullable: true
+          maxItems: 50
+          items: { $ref: "#/components/schemas/CustomFieldOption" }
+          description: The choices of a choice type, in order; null for any other type.
+        position:
+          type: integer
+          minimum: 0
+          description: |
+            Order within its form (or among the entity's CRM-only fields), 0
+            first. Lists and the widget read fields in this order.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -10996,8 +11024,38 @@ components:
         label: { type: string }
         type:
           type: string
-          enum: [text, number, boolean, date]
+          enum: [text, number, boolean, date, select, multiselect, topic]
         required: { type: boolean }
+        options:
+          type: array
+          description: |
+            The choices of a choice type, in order (WG-04). Never carries a
+            topic's team: the visitor picks a topic, not a queue.
+          items:
+            type: object
+            required: [value, label]
+            properties:
+              value: { type: string }
+              label: { type: string }
+
+    CustomFieldOption:
+      type: object
+      description: |
+        One choice of a `select` / `multiselect` / `topic` field (WG-04).
+        `value` is stored and stays put when the label is reworded; a
+        multiselect answer is a JSON array of values.
+      required: [value, label]
+      properties:
+        value: { type: string, minLength: 1, maxLength: 80 }
+        label: { type: string, minLength: 1, maxLength: 80 }
+        target_group_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: |
+            A topic's routing: the team a conversation opened with this choice
+            goes to. Only on a `topic` field. A team deleted since is ignored
+            and the routing rules decide.
 
     CustomFieldValue:
       type: object
@@ -11012,7 +11070,12 @@ components:
         label: { type: string }
         type:
           type: string
-          enum: [text, number, boolean, date]
+          enum: [text, number, boolean, date, select, multiselect, topic]
+        options:
+          type: array
+          nullable: true
+          items: { $ref: "#/components/schemas/CustomFieldOption" }
+          description: The definition's choices, so a stored value can be shown by its label.
         required: { type: boolean }
         value:
           type: string

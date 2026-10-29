@@ -31,6 +31,7 @@ import { useTranslate } from '../../lib/i18n.js';
 import {
   CUSTOM_FIELD_ENTITIES,
   CUSTOM_FIELD_TYPES,
+  isChoiceFieldType,
   type CustomFieldDefinition,
   type CustomFieldEntity,
   type CustomFieldType,
@@ -157,7 +158,9 @@ export function CustomFieldsSettings({ canEdit }: { canEdit: boolean }): ReactEl
                   onChange={(event) => form.setValue('type', event.target.value)}
                   className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
                 >
-                  {CUSTOM_FIELD_TYPES.map((type) => (
+                  {/* List questions (WG-04) are authored under Chat forms, which has
+                      the options editor; here only the typed-in kinds. */}
+                  {CUSTOM_FIELD_TYPES.filter((type) => !isChoiceFieldType(type)).map((type) => (
                     <option key={type} value={type}>
                       {enumLabel(t, 'settings.fieldType', type)}
                     </option>

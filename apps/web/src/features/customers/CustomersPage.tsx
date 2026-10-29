@@ -12,6 +12,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { customFieldDisplayValue } from '@siyahtus/types';
 import { Card, ErrorNotice, Page } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
@@ -378,9 +379,12 @@ export function CustomersPage(): ReactElement {
                           key={column.definition_id}
                           className="px-4 py-2.5 text-content-secondary"
                         >
-                          {customer.table_custom_fields.find(
-                            (field) => field.definition_id === column.definition_id,
-                          )?.value ?? '—'}
+                          {customFieldDisplayValue(
+                            column,
+                            customer.table_custom_fields.find(
+                              (field) => field.definition_id === column.definition_id,
+                            )?.value ?? null,
+                          ) ?? '—'}
                         </td>
                       ))}
                     </tr>

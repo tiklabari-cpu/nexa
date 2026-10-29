@@ -186,6 +186,91 @@ describe('widget pre-chat form (FR-MOD-08.7.7)', () => {
     expect(sentMessage()).toBeUndefined();
   });
 
+  it('renders list questions in order as native controls and sends the choices (WG-04)', async () => {
+    preChatForm = [
+      {
+        definition_id: 't1',
+        label: 'Konu',
+        type: 'topic',
+        required: true,
+        options: [
+          { value: 'withdrawal', label: 'Para çekme' },
+          { value: 'deposit', label: 'Para yatırma' },
+        ],
+      },
+      {
+        definition_id: 'm1',
+        label: 'Oyunlar',
+        type: 'multiselect',
+        required: false,
+        options: [
+          { value: 'slots', label: 'Slot' },
+          { value: 'poker', label: 'Poker' },
+        ],
+      },
+      { definition_id: 'f1', label: 'Account id', type: 'text', required: false },
+    ];
+    const root = mountWidget('?organization_id=org-1');
+    openPreChat(root);
+    await waitFor(() => root.querySelector('[data-def-id="t1"]') !== null);
+
+    // In the order the token listed them.
+    expect(
+      [...root.querySelectorAll<HTMLElement>('.nx-prechat-fields [data-def-id]')].map(
+        (el) => el.dataset.defId,
+      ),
+    ).toEqual(['t1', 'm1', 'f1']);
+
+    // A drop-down, labelled, nothing chosen for the visitor, the labels shown.
+    const topic = root.querySelector<HTMLSelectElement>('select[data-def-id="t1"]')!;
+    expect(topic.required).toBe(true);
+    expect(topic.value).toBe('');
+    expect(root.querySelector(`label[for="${topic.id}"]`)?.textContent).toContain('Konu');
+    expect([...topic.options].map((o) => o.textContent)).toEqual([
+      '',
+      'Para çekme',
+      'Para yatırma',
+    ]);
+
+    // A group of checkboxes named by its legend.
+    const group = root.querySelector<HTMLFieldSetElement>('fieldset[data-def-id="m1"]')!;
+    expect(group.querySelector('legend')?.textContent).toBe('Oyunlar');
+    const boxes = group.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
+    expect(boxes).toHaveLength(2);
+
+    // The required topic blocks the form until chosen.
+    fillFixedFields(root, { message: 'çekim' });
+    submit(root.querySelector('.nx-prechat')!);
+    expect(sentMessage()).toBeUndefined();
+
+    topic.value = 'withdrawal';
+    boxes[1]!.checked = true;
+    submit(root.querySelector('.nx-prechat')!);
+    await waitFor(() => sentMessage() !== undefined);
+    expect(sentMessage()).toMatchObject({
+      custom_fields: { t1: 'withdrawal', m1: '["poker"]' },
+    });
+  });
+
+  it('blocks the form while a required multiselect has nothing ticked', async () => {
+    preChatForm = [
+      {
+        definition_id: 'm1',
+        label: 'Oyunlar',
+        type: 'multiselect',
+        required: true,
+        options: [{ value: 'slots', label: 'Slot' }],
+      },
+    ];
+    const root = mountWidget('?organization_id=org-1');
+    openPreChat(root);
+    await waitFor(() => root.querySelector('[data-def-id="m1"]') !== null);
+    fillFixedFields(root);
+    submit(root.querySelector('.nx-prechat')!);
+    expect(sentMessage()).toBeUndefined();
+    expect(document.activeElement).toBe(root.querySelector('fieldset[data-def-id="m1"] input'));
+  });
+
   it('leaves the fixed form untouched when no fields are configured', async () => {
     preChatForm = [];
     const root = mountWidget('?organization_id=org-1');

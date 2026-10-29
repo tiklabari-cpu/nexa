@@ -1240,6 +1240,19 @@ export default async function customerRoutes(
         );
       }
 
+      // The visitor's topic (WG-04): the team its option names is where a
+      // conversation this message opens goes — the first team decision, also
+      // when the AI answers first (`#routeVisitor` keeps it as the team the AI
+      // hands over to, unless its own hand-over names another, AI-12). Read
+      // after the answers are stored, so only a valid choice routes; a team
+      // deleted since is ignored by routing and its rules decide.
+      const topicGroupId =
+        opens && body.custom_fields
+          ? await request.withTenant((tx) =>
+              customFields.topicGroupFor(tx, tenant, body.custom_fields!),
+            )
+          : undefined;
+
       // The page the visitor wrote from, and — when this is the first page of a
       // new visit — where they came from before it. Recorded on a best-effort
       // basis: both feed the panels an agent reads for context, and losing that
@@ -1324,7 +1337,14 @@ export default async function customerRoutes(
           recipients: 'all',
           ...(body.idempotency_key ? { idempotencyKey: body.idempotency_key } : {}),
         },
-        ...(body.url ? { routing: { url: body.url } } : {}),
+        ...(body.url || topicGroupId !== undefined
+          ? {
+              routing: {
+                ...(body.url ? { url: body.url } : {}),
+                ...(topicGroupId !== undefined ? { requestedGroupId: topicGroupId } : {}),
+              },
+            }
+          : {}),
         // The brand of the site the widget runs on, as its token was minted
         // (WG-01): the chat this opens is that brand's (tm 309.1 · AI-14).
         ...(principal.brandId ? { brandId: principal.brandId } : {}),

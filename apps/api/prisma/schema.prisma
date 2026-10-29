@@ -1485,7 +1485,7 @@ model CustomFieldDefinition {
   /// 'ticket' or 'contact'.
   entity        String
   label         String
-  /// 'text' | 'number' | 'boolean' | 'date'.
+  /// 'text' | 'number' | 'boolean' | 'date' | 'select' | 'multiselect' | 'topic'.
   type          String
   required      Boolean  @default(false)
   /// Which of the widget's four forms also asks this field (FR-MOD-08.7.7), or
@@ -1500,6 +1500,15 @@ model CustomFieldDefinition {
   /// this to `entity = 'contact'` — the table has no row to hang a ticket field
   /// off. Defaults false: a newly defined field never widens the table on its own.
   showInTable   Boolean  @default(false) @map("show_in_table")
+  /// The choices of a 'select' / 'multiselect' / 'topic' field (WG-04):
+  /// `[{ value, label, target_group_id? }]`, 1–50 of them; null for any other
+  /// type. A CHECK in the migration ties presence to the type. A topic option's
+  /// `target_group_id` is a plain id, not a foreign key: a team deleted since is
+  /// ignored by routing rather than cascading into the form.
+  options       Json?
+  /// Order within its form (`form_placement`, or the entity's CRM-only fields
+  /// for null), 0 first; ties fall back to `created_at`.
+  position      Int      @default(0)
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 

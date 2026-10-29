@@ -8128,7 +8128,8 @@ export interface paths {
     };
     /**
      * List custom field definitions
-     * @description In authoring order — oldest first. Optionally filtered to one entity.
+     * @description In `position` order (oldest first among equals). Optionally filtered to
+     *     one entity.
      */
     get: operations['listCustomFields'];
     put?: never;
@@ -8165,10 +8166,11 @@ export interface paths {
     options?: never;
     head?: never;
     /**
-     * Rename a custom field or change whether it is required
+     * Edit a custom field — label, required, placement, options, order
      * @description Only the fields present in the body change. The `entity` and `type` are
      *     immutable — changing a field's type would leave stored values validated
-     *     against a rule that no longer holds.
+     *     against a rule that no longer holds. `position` moves the field within
+     *     its form (WG-04): the others of that form shift to make room.
      */
     patch: operations['updateCustomField'];
     trace?: never;
@@ -19562,10 +19564,13 @@ export interface components {
       entity: 'ticket' | 'contact';
       label: string;
       /**
-       * @description How a value is validated. Immutable once set.
+       * @description How a value is validated. Immutable once set. `select`,
+       *     `multiselect` and `topic` pick from `options` (WG-04); a `topic`
+       *     is a pre-chat question whose choice may route the conversation to a
+       *     team, at most one per workspace.
        * @enum {string}
        */
-      type: 'text' | 'number' | 'boolean' | 'date';
+      type: 'text' | 'number' | 'boolean' | 'date' | 'select' | 'multiselect' | 'topic';
       /** @description When true, a value may not be left blank. */
       required: boolean;
       /**
@@ -19589,6 +19594,13 @@ export interface components {
        *     `ticket` one is a 400. Defaults to false.
        */
       show_in_table: boolean;
+      /** @description The choices of a choice type, in order; null for any other type. */
+      options: components['schemas']['CustomFieldOption'][] | null;
+      /**
+       * @description Order within its form (or among the entity's CRM-only fields), 0
+       *     first. Lists and the widget read fields in this order.
+       */
+      position: number;
       /** Format: date-time */
       created_at: string;
       /** Format: date-time */
@@ -19605,8 +19617,32 @@ export interface components {
       definition_id: string;
       label: string;
       /** @enum {string} */
-      type: 'text' | 'number' | 'boolean' | 'date';
+      type: 'text' | 'number' | 'boolean' | 'date' | 'select' | 'multiselect' | 'topic';
       required: boolean;
+      /**
+       * @description The choices of a choice type, in order (WG-04). Never carries a
+       *     topic's team: the visitor picks a topic, not a queue.
+       */
+      options?: {
+        value: string;
+        label: string;
+      }[];
+    };
+    /**
+     * @description One choice of a `select` / `multiselect` / `topic` field (WG-04).
+     *     `value` is stored and stays put when the label is reworded; a
+     *     multiselect answer is a JSON array of values.
+     */
+    CustomFieldOption: {
+      value: string;
+      label: string;
+      /**
+       * Format: int64
+       * @description A topic's routing: the team a conversation opened with this choice
+       *     goes to. Only on a `topic` field. A team deleted since is ignored
+       *     and the routing rules decide.
+       */
+      target_group_id?: number | null;
     };
     /**
      * @description A custom field as it appears on one entity (FR-MOD-08.7.6): the
@@ -19619,7 +19655,9 @@ export interface components {
       definition_id: string;
       label: string;
       /** @enum {string} */
-      type: 'text' | 'number' | 'boolean' | 'date';
+      type: 'text' | 'number' | 'boolean' | 'date' | 'select' | 'multiselect' | 'topic';
+      /** @description The definition's choices, so a stored value can be shown by its label. */
+      options?: components['schemas']['CustomFieldOption'][] | null;
       required: boolean;
       /** @description The stored value in canonical form, or null when unset. */
       value: string | null;
@@ -35273,16 +35311,24 @@ export interface operations {
           entity: 'ticket' | 'contact';
           label: string;
           /** @enum {string} */
-          type: 'text' | 'number' | 'boolean' | 'date';
+          type: 'text' | 'number' | 'boolean' | 'date' | 'select' | 'multiselect' | 'topic';
           /** @description Whether a value may be left blank. Defaults to false. */
           required?: boolean;
           /**
-           * @description Also ask this field as a widget form (FR-MOD-08.7.7) — before
-           *     the conversation starts, or once it ends. Only a `contact`
-           *     field may carry a placement; a `ticket` one is a 400.
+           * @description Also ask this field as a widget form (FR-MOD-08.7.7). The
+           *     placement decides the entity (`ticket` on a ticket field,
+           *     the rest on a contact field); a mismatch is a 400. A `topic`
+           *     must be `pre_chat`.
            * @enum {string|null}
            */
-          form_placement?: 'pre_chat' | 'post_chat' | null;
+          form_placement?: 'pre_chat' | 'post_chat' | 'ticket' | 'prospect' | null;
+          /**
+           * @description Required (1–50) for `select`, `multiselect` and `topic`,
+           *     refused for any other type. Only a topic option may name a
+           *     `target_group_id`, and it must be one of the workspace's
+           *     teams. A second topic in the workspace is a 400.
+           */
+          options?: components['schemas']['CustomFieldOption'][];
           /**
            * @description Also render this field as a row-inline column on the
            *     Contacts table (FR-MOD-03.2.3). Only a `contact` field may
@@ -35349,9 +35395,17 @@ export interface operations {
           /**
            * @description Move the field between the widget forms, or null to stop
            *     asking it and keep it as a CRM-only field (FR-MOD-08.7.7).
+           *     It joins the end of its new form. A `topic` stays `pre_chat`.
            * @enum {string|null}
            */
-          form_placement?: 'pre_chat' | 'post_chat' | null;
+          form_placement?: 'pre_chat' | 'post_chat' | 'ticket' | 'prospect' | null;
+          /** @description Replace a choice field's options (same rules as on create). */
+          options?: components['schemas']['CustomFieldOption'][];
+          /**
+           * @description The field's new place in its form, 0 first; past the end
+           *     means last.
+           */
+          position?: number;
           /**
            * @description Show or hide this field as a Contacts table column
            *     (FR-MOD-03.2.3). Setting it true on a `ticket` field is a 400.

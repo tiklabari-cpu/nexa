@@ -17,10 +17,13 @@ import type { Prisma } from '@prisma/client';
 import {
   CUSTOM_FIELD_TYPES,
   checkCustomFieldValue,
+  customFieldOptionsProblem,
   formPlacementEntity,
+  isChoiceFieldType,
   isCustomFieldProblem,
   type CustomFieldDefinition,
   type CustomFieldEntity,
+  type CustomFieldOption,
   type CustomFieldType,
   type CustomFieldValue,
   type FormPlacement,
@@ -39,6 +42,8 @@ export interface DefinitionInput {
   formPlacement?: FormPlacement | null;
   /** Render this contact field as a row-inline Contacts table column (FR-MOD-03.2.3). */
   showInTable?: boolean;
+  /** The choices of a `select` / `multiselect` / `topic` field (WG-04). */
+  options?: CustomFieldOption[] | null;
 }
 
 export interface DefinitionPatch {
@@ -46,6 +51,9 @@ export interface DefinitionPatch {
   required?: boolean;
   formPlacement?: FormPlacement | null;
   showInTable?: boolean;
+  options?: CustomFieldOption[];
+  /** The field's new place in its form, 0 first; past the end means last. */
+  position?: number;
 }
 
 interface DefinitionRow {
@@ -56,8 +64,33 @@ interface DefinitionRow {
   required: boolean;
   formPlacement: string | null;
   showInTable: boolean;
+  options: Prisma.JsonValue;
+  position: number;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/**
+ * The order every list of fields is read in (WG-04): the admin's `position`,
+ * and among equals the order they were written in — which is all there was
+ * before positions existed.
+ */
+export const FIELD_ORDER = [
+  { position: 'asc' },
+  { createdAt: 'asc' },
+] satisfies Prisma.CustomFieldDefinitionOrderByWithRelationInput[];
+
+/** A stored `options` column as the API shape (null for a non-choice field). */
+export function definitionOptions(stored: Prisma.JsonValue): CustomFieldOption[] | null {
+  if (!Array.isArray(stored)) return null;
+  return stored.map((item) => {
+    const option = item as { value: string; label: string; target_group_id?: number | null };
+    return {
+      value: option.value,
+      label: option.label,
+      ...(option.target_group_id != null ? { target_group_id: option.target_group_id } : {}),
+    };
+  });
 }
 
 /** The column a value hangs off, per entity — one place decides the mapping. */
@@ -82,7 +115,7 @@ export async function readCustomFieldValues(
   const [definitions, values] = await Promise.all([
     tx.customFieldDefinition.findMany({
       where: { licenseId, entity },
-      orderBy: [{ createdAt: 'asc' }],
+      orderBy: FIELD_ORDER,
     }),
     tx.customFieldValue.findMany({
       where: { licenseId, [column]: entityId },
@@ -102,6 +135,7 @@ export async function readCustomFieldValues(
     // lets a reader (the Contacts table) pick out its columns from a full
     // custom-field list without a second lookup.
     show_in_table: definition.showInTable,
+    options: definitionOptions(definition.options),
   }));
 }
 
@@ -116,7 +150,7 @@ export class CustomFieldService {
   ): Promise<{ items: CustomFieldDefinition[]; total: number }> {
     const rows = await tx.customFieldDefinition.findMany({
       where: { licenseId: tenant.licenseId, ...(entity ? { entity } : {}) },
-      orderBy: [{ createdAt: 'asc' }],
+      orderBy: FIELD_ORDER,
     });
     const items = rows.map(toDefinitionDto);
     return { items, total: items.length };
@@ -148,7 +182,18 @@ export class CustomFieldService {
         'show_in_table: only a contact field can show in the Contacts table.',
       );
     }
+    const options = await checkOptions(tx, tenant, input.type, input.options);
+    if (input.type === 'topic') {
+      assertTopicPlacement(input.formPlacement ?? null);
+      const other = await tx.customFieldDefinition.findFirst({
+        where: { licenseId: tenant.licenseId, type: 'topic' },
+        select: { id: true },
+      });
+      if (other) throw ApiError.validation(TOPIC_TAKEN);
+    }
 
+    await lockFieldOrder(tx, tenant.licenseId);
+    const formPlacement = input.formPlacement ?? null;
     try {
       const created = await tx.customFieldDefinition.create({
         data: {
@@ -157,24 +202,38 @@ export class CustomFieldService {
           label,
           type: input.type,
           required: input.required ?? false,
-          formPlacement: input.formPlacement ?? null,
+          formPlacement,
           showInTable: input.showInTable ?? false,
+          ...(options ? { options: options as unknown as Prisma.InputJsonValue } : {}),
+          // A new question joins the end of its form.
+          position: await groupSize(tx, tenant.licenseId, input.entity, formPlacement),
         },
       });
       return toDefinitionDto(created);
     } catch (error) {
       if (isUniqueViolation(error)) {
-        throw ApiError.validation(`A ${input.entity} field named “${label}” already exists.`);
+        // The label index, or — two admins adding a topic at once — the
+        // one-topic index the pre-check above could not see yet.
+        throw ApiError.validation(
+          input.type === 'topic'
+            ? TOPIC_TAKEN
+            : `A ${input.entity} field named “${label}” already exists.`,
+        );
       }
       throw error;
     }
   }
 
   /**
-   * Rename a field or flip its required flag. The `entity` and `type` are
+   * Rename a field, flip its required flag, move it between forms, replace its
+   * options or move it within its form (WG-04). The `entity` and `type` are
    * deliberately immutable: changing a field's type would leave every stored
    * value validated against a rule that no longer holds, so a re-typed field is
    * a new field, not an edit.
+   *
+   * Options can be reworded or dropped; an answer stored under a dropped
+   * option stays as stored (shown by its value) rather than being erased —
+   * the visitor did give it.
    */
   async updateDefinition(
     tx: TenantClient,
@@ -186,8 +245,20 @@ export class CustomFieldService {
       where: { id, licenseId: tenant.licenseId },
     });
     if (!existing) throw ApiError.notFound('Custom field not found.');
+    const type = existing.type as CustomFieldType;
+    const entity = existing.entity as CustomFieldEntity;
 
     const data: Prisma.CustomFieldDefinitionUpdateInput = {};
+    if (patch.options !== undefined) {
+      if (!isChoiceFieldType(type)) {
+        throw ApiError.validation(`options: a ${type} field has no options.`);
+      }
+      const options = await checkOptions(tx, tenant, type, patch.options);
+      data.options = options as unknown as Prisma.InputJsonValue;
+    }
+    if (type === 'topic' && patch.formPlacement !== undefined) {
+      assertTopicPlacement(patch.formPlacement);
+    }
     if (patch.label !== undefined) {
       const label = patch.label.trim();
       if (!label) throw ApiError.validation('label: a custom field needs a label.');
@@ -212,9 +283,23 @@ export class CustomFieldService {
       data.showInTable = patch.showInTable;
     }
 
+    const from = (existing.formPlacement as FormPlacement | null) ?? null;
+    const to = patch.formPlacement !== undefined ? patch.formPlacement : from;
+    const reorders = to !== from || patch.position !== undefined;
+    if (reorders) await lockFieldOrder(tx, tenant.licenseId);
+
     try {
       const updated = await tx.customFieldDefinition.update({ where: { id }, data });
-      return toDefinitionDto(updated);
+      if (!reorders) return toDefinitionDto(updated);
+      // Moved to another form: the old one closes the gap, and the field
+      // joins the new one at the end unless a position says where.
+      if (to !== from) await placeInGroup(tx, tenant.licenseId, entity, from, null);
+      await placeInGroup(tx, tenant.licenseId, entity, to, {
+        id,
+        index: patch.position ?? Number.MAX_SAFE_INTEGER,
+      });
+      const placed = await tx.customFieldDefinition.findUniqueOrThrow({ where: { id } });
+      return toDefinitionDto(placed);
     } catch (error) {
       if (isUniqueViolation(error)) {
         throw ApiError.validation(`A ${existing.entity} field with that label already exists.`);
@@ -264,15 +349,44 @@ export class CustomFieldService {
         entity: formPlacementEntity(placement),
         formPlacement: placement,
       },
-      orderBy: [{ createdAt: 'asc' }],
-      select: { id: true, label: true, type: true, required: true },
+      orderBy: FIELD_ORDER,
+      select: { id: true, label: true, type: true, required: true, options: true },
     });
-    return rows.map((row) => ({
-      definition_id: row.id,
-      label: row.label,
-      type: row.type as CustomFieldType,
-      required: row.required,
-    }));
+    return rows.map((row) => {
+      const options = definitionOptions(row.options);
+      return {
+        definition_id: row.id,
+        label: row.label,
+        type: row.type as CustomFieldType,
+        required: row.required,
+        // The choice and its label only: a topic's team stays on the server,
+        // the visitor picks what they need, not which queue serves it.
+        ...(options ? { options: options.map(({ value, label }) => ({ value, label })) } : {}),
+      };
+    });
+  }
+
+  /**
+   * The team a topic answer routes a new conversation to (WG-04), or
+   * `undefined` when there is none to follow: no topic question, not
+   * answered, or an option without a team. The id is passed to routing as a
+   * request, not checked here — a team deleted since the option was saved is
+   * ignored there and the routing rules decide (`#selectGroup`), so a stale
+   * option never refuses the visitor's chat.
+   */
+  async topicGroupFor(
+    tx: TenantClient,
+    tenant: TenantContext,
+    answers: Record<string, string | null>,
+  ): Promise<bigint | undefined> {
+    const topic = await tx.customFieldDefinition.findFirst({
+      where: { licenseId: tenant.licenseId, type: 'topic', formPlacement: 'pre_chat' },
+      select: { id: true, options: true },
+    });
+    const answer = topic ? answers[topic.id]?.trim() : undefined;
+    if (!topic || !answer) return undefined;
+    const option = definitionOptions(topic.options)?.find((o) => o.value === answer);
+    return option?.target_group_id != null ? BigInt(option.target_group_id) : undefined;
   }
 
   /** The fields asked before the conversation starts. */
@@ -385,6 +499,8 @@ export class CustomFieldService {
           label: definition.label,
           type: definition.type as CustomFieldType,
           required: definition.required,
+          // A choice must be one of these (WG-04) — anything else is a 400.
+          options: definitionOptions(definition.options),
         },
         raw,
       );
@@ -438,6 +554,100 @@ function assertPlacementEntity(placement: FormPlacement, entity: CustomFieldEnti
   }
 }
 
+const TOPIC_TAKEN = 'type: a workspace has one topic question — edit the one it has.';
+
+/**
+ * A topic is a pre-chat question (WG-04): it is answered before the
+ * conversation exists, which is the moment routing decides who takes it. The
+ * migration's CHECK holds the same rule.
+ */
+function assertTopicPlacement(placement: FormPlacement | null): void {
+  if (placement !== 'pre_chat') {
+    throw ApiError.validation('form_placement: a topic is asked on the pre-chat form.');
+  }
+}
+
+/**
+ * A definition's options, trimmed and checked (`customFieldOptionsProblem`),
+ * with every topic option's team confirmed to be one of this workspace's —
+ * an id from another workspace, or invented, is a 400 rather than a routing
+ * that silently never happens. Null for a type that takes none.
+ */
+async function checkOptions(
+  tx: TenantClient,
+  tenant: TenantContext,
+  type: CustomFieldType,
+  raw: readonly CustomFieldOption[] | null | undefined,
+): Promise<CustomFieldOption[] | null> {
+  const options = raw?.map((option) => ({
+    value: option.value.trim(),
+    label: option.label.trim(),
+    ...(option.target_group_id != null ? { target_group_id: option.target_group_id } : {}),
+  }));
+  const problem = customFieldOptionsProblem(type, options);
+  if (problem) throw ApiError.validation(problem);
+  if (!options || !isChoiceFieldType(type)) return null;
+
+  const teamIds = [
+    ...new Set(options.flatMap((o) => (o.target_group_id ? [o.target_group_id] : []))),
+  ];
+  if (teamIds.length > 0) {
+    const found = await tx.group.count({
+      where: { licenseId: tenant.licenseId, id: { in: teamIds.map((teamId) => BigInt(teamId)) } },
+    });
+    if (found !== teamIds.length) throw ApiError.validation('options: unknown team.');
+  }
+  return options;
+}
+
+/**
+ * One writer of a workspace's field order at a time, to its commit: two admins
+ * dragging fields at once would otherwise both renumber from the same read.
+ */
+async function lockFieldOrder(tx: TenantClient, licenseId: bigint): Promise<void> {
+  await tx.$executeRaw`
+    SELECT pg_advisory_xact_lock(hashtext('siyahtus.custom-field-order'), hashtext(${String(licenseId)}))`;
+}
+
+/** How many fields one form (or the entity's CRM-only list) holds. */
+function groupSize(
+  tx: TenantClient,
+  licenseId: bigint,
+  entity: CustomFieldEntity,
+  placement: FormPlacement | null,
+): Promise<number> {
+  return tx.customFieldDefinition.count({
+    where: { licenseId, entity, formPlacement: placement },
+  });
+}
+
+/**
+ * Renumber one form 0…n-1 in its current order, with `move` (when given)
+ * taken out and put back at `index` — clamped, so past the end means last.
+ * Only rows whose number changes are written.
+ */
+async function placeInGroup(
+  tx: TenantClient,
+  licenseId: bigint,
+  entity: CustomFieldEntity,
+  placement: FormPlacement | null,
+  move: { id: string; index: number } | null,
+): Promise<void> {
+  const rows = await tx.customFieldDefinition.findMany({
+    where: { licenseId, entity, formPlacement: placement },
+    orderBy: FIELD_ORDER,
+    select: { id: true, position: true },
+  });
+  const order = rows.filter((row) => row.id !== move?.id);
+  const moved = move ? rows.find((row) => row.id === move.id) : undefined;
+  if (move && moved) order.splice(Math.min(Math.max(move.index, 0), order.length), 0, moved);
+  for (const [position, row] of order.entries()) {
+    if (row.position !== position) {
+      await tx.customFieldDefinition.update({ where: { id: row.id }, data: { position } });
+    }
+  }
+}
+
 function toDefinitionDto(row: DefinitionRow): CustomFieldDefinition {
   return {
     id: row.id,
@@ -447,6 +657,8 @@ function toDefinitionDto(row: DefinitionRow): CustomFieldDefinition {
     required: row.required,
     form_placement: (row.formPlacement as FormPlacement | null) ?? null,
     show_in_table: row.showInTable,
+    options: definitionOptions(row.options),
+    position: row.position,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };

@@ -50,6 +50,7 @@ export const auditLabels: Messages = {
   'audit.action.settings.chat_timeout_updated': 'Sohbet zaman aşımı veya gün sınırı güncellendi',
   'audit.action.settings.widget_updated': 'Sohbet widget’ı güncellendi',
   'audit.action.settings.prechat_updated': 'Sohbet öncesi form güncellendi',
+  'audit.action.settings.widget_phrases_updated': 'Widget metinleri güncellendi',
   'audit.action.settings.sales_tracker_updated': 'Satış takibi güncellendi',
   'audit.action.settings.appearance_updated': 'Panel yazı tipi varsayılanı değişti',
   'audit.action.settings.ai_usage_alerts_updated': 'Yapay zekâ kullanım uyarısı alıcıları değişti',

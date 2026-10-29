@@ -1086,7 +1086,13 @@ describe('module parity matrix — what is still owed', () => {
       // `POST …/transcript/email` (tm 338) — the transcript download, print view
       // and mail (AR-04) of the web console's Archive; the app has no archive
       // screen, and nothing here re-scopes.
-      contractEndpoints: 347,
+      // 347 -> 348 with `POST /customer/chat/email` (tm 342) — the widget's
+      // "leave your e-mail" card (WG-08), a visitor surface; counted late, at
+      // tm 344.
+      // 348 -> 349 with `/settings/widget/phrases` (tm 344) — a brand's own
+      // widget texts per language (WG-05), edited in the web console's widget
+      // settings; the app has no widget settings, and nothing here re-scopes.
+      contractEndpoints: 349,
       scopeBoundaries: 1,
     });
   });

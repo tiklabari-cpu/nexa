@@ -1656,4 +1656,39 @@ export const settings: Messages = {
   'settings.aiQuality.rubric.saved': 'New rubric version saved.',
   'settings.aiQuality.rubric.invalid':
     'Every criterion needs a name (up to 80 characters), each name once, and a weight from 1 to 10.',
+  // Widget texts per language (tm 344 · WG-05) — WidgetPhrases.tsx
+  'settings.widgetPhrases.title': 'Widget texts',
+  'settings.widgetPhrases.description':
+    "Say the widget's notices in your own words, per language. An empty field shows the widget's own text, shown greyed in the field. Changes reach each visitor the next time their widget connects.",
+  'settings.widgetPhrases.loadError': 'Could not load the widget texts.',
+  'settings.widgetPhrases.languageLabel': 'Language',
+  'settings.widgetPhrases.hint':
+    "Each language is saved on its own; a language you leave untouched keeps the widget's wording.",
+  'settings.widgetPhrases.reset': 'Reset to default',
+  'settings.widgetPhrases.limit': 'Plain text, one line, up to {max} characters.',
+  'settings.widgetPhrases.placeholders':
+    'Plain text, one line, up to {max} characters. May use: {list}.',
+  'settings.widgetPhrases.refused':
+    'This text could not be saved: {field}. Check it and try again.',
+  'settings.widgetPhrases.problem.unknown_key': 'This text cannot be changed.',
+  'settings.widgetPhrases.problem.empty': 'Write a text or reset to the default.',
+  'settings.widgetPhrases.problem.too_long': 'Too long — at most {max} characters.',
+  'settings.widgetPhrases.problem.markup': 'Plain text only — no HTML tags.',
+  'settings.widgetPhrases.problem.line_break': 'Keep it on one line.',
+  'settings.widgetPhrases.problem.unknown_placeholder':
+    'Only these can go in braces here: {list}. Remove any other {…}.',
+  'settings.widgetPhrases.key.title.default': 'Header title',
+  'settings.widgetPhrases.key.status.offline': 'Nobody available',
+  'settings.widgetPhrases.key.status.queue': 'Queue position',
+  'settings.widgetPhrases.key.status.queueWait': 'Queue position with estimated wait',
+  'settings.widgetPhrases.key.input.placeholder': 'Message box placeholder',
+  'settings.widgetPhrases.key.human.connecting': 'Connecting to an agent',
+  'settings.widgetPhrases.key.prechat.intro': 'Pre-chat form introduction',
+  'settings.widgetPhrases.key.prechat.submit': 'Pre-chat form button',
+  'settings.widgetPhrases.key.offline.label': 'Offline form title',
+  'settings.widgetPhrases.key.offline.intro': 'Offline form introduction',
+  'settings.widgetPhrases.key.offline.subject': 'Offline form question',
+  'settings.widgetPhrases.key.offline.submit': 'Offline form button',
+  'settings.widgetPhrases.key.offline.thanks': 'Offline form thank-you',
+  'settings.widgetPhrases.key.chat.end.closedMessage': 'Conversation ended',
 };

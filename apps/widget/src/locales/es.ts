@@ -7,6 +7,7 @@ export const es: Record<string, string> = {
   'panel.label': 'Chat de atención al cliente',
   'transcript.label': 'Conversación',
   'status.queue': 'Eres el número {n} en la cola',
+  'status.queueWait': 'Eres el número {n} en la cola · unos {minutes} min',
   'status.offline': 'Ahora mismo no hay nadie disponible — deja un mensaje y te responderemos.',
   'connection.lost': 'Se perdió la conexión. Reconectando…',
   'error.connect': 'El chat no está disponible en este momento. Inténtalo de nuevo en breve.',

@@ -685,6 +685,8 @@ paths:
     $ref: "./paths/settings.yaml#/chatTimeout"
   /settings/widget:
     $ref: "./paths/settings.yaml#/widgetSettings"
+  /settings/widget/phrases:
+    $ref: "./paths/settings.yaml#/widgetPhrases"
   /settings/prechat:
     $ref: "./paths/settings.yaml#/prechatSettings"
   /settings/sales-tracker:
@@ -9382,6 +9384,71 @@ components:
                 defaults; only a saved form is also enforced by the server on
                 `/customer/chat/events`.
 
+    WidgetPhraseMap:
+      type: object
+      description: |
+        A brand's own wording for widget texts in one language (WG-05), keyed
+        by `WIDGET_PHRASE_KEYS` (`@siyahtus/types`) — a closed list, each with
+        a length limit and the placeholders it may use (`{n}` the queue
+        position, `{minutes}` the estimated wait). Plain text: no HTML, no line
+        breaks. A key that is absent shows the widget's own text for that
+        language.
+      additionalProperties: { type: string, minLength: 1, maxLength: 300 }
+
+    WidgetPhrases:
+      type: object
+      required: [brand_id, locale, phrases, updated_at]
+      properties:
+        brand_id: { type: string, format: uuid }
+        locale:
+          type: string
+          enum: [en, tr, de, fr, es, it, pt, ar]
+        phrases: { $ref: "#/components/schemas/WidgetPhraseMap" }
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: The newest change to this language's texts; null when none is saved.
+
+    WidgetPhrasesUpdate:
+      type: object
+      required: [phrases]
+      description: |
+        Every custom text of the language, replacing what was saved: a key left
+        out goes back to the widget's own text ("reset to default").
+      properties:
+        phrases: { $ref: "#/components/schemas/WidgetPhraseMap" }
+
+    MintedWidgetPhrases:
+      type: object
+      description: |
+        The brand's custom widget texts for the one language the widget will
+        show (WG-05), chosen like the widget chooses: the snippet's language,
+        the brand's pinned language, the browser's languages, the fallback.
+        `phrases` is empty when that language has none. The widget uses them
+        only when it settled on the same `locale`.
+      required: [locale, phrases]
+      properties:
+        locale:
+          type: string
+          enum: [en, tr, de, fr, es, it, pt, ar]
+        phrases: { $ref: "#/components/schemas/WidgetPhraseMap" }
+
+    EstimatedWait:
+      type: object
+      nullable: true
+      description: |
+        Roughly how long the visitor will still wait in the queue (WG-05), as a
+        range of whole minutes: the median and 80th percentile of the waits
+        of the same team's queue over the last 7 days, times the queue position,
+        over the agents of the team accepting chats now. Null outside the
+        queue, with fewer than 20 finished waits to go on, or while nobody of
+        the team accepts chats — the widget then shows the position alone.
+      required: [min_minutes, max_minutes]
+      properties:
+        min_minutes: { type: integer, minimum: 1 }
+        max_minutes: { type: integer, minimum: 1 }
+
     WidgetAppearance:
       type: object
       description: |
@@ -14663,6 +14730,8 @@ components:
             id: { type: string }
             thread_id: { type: string, nullable: true }
             queue_position: { type: integer, nullable: true }
+            estimated_wait:
+              $ref: "#/components/schemas/EstimatedWait"
         campaign:
           type: object
           nullable: true

@@ -1656,4 +1656,38 @@ export const settings: Messages = {
   'settings.aiQuality.rubric.saved': 'Yeni rubrik sürümü kaydedildi.',
   'settings.aiQuality.rubric.invalid':
     'Her kriterin bir adı (en çok 80 karakter) olmalı, her ad bir kez geçmeli, ağırlık 1 ile 10 arasında olmalı.',
+  // Widget texts per language (tm 344 · WG-05) — WidgetPhrases.tsx
+  'settings.widgetPhrases.title': 'Widget metinleri',
+  'settings.widgetPhrases.description':
+    "Widget'ın bildirimlerini her dil için kendi sözlerinizle yazın. Boş alan, alanda soluk görünen widget metnini gösterir. Değişiklik, oyuncunun widget'ı bir sonraki bağlanışında görünür.",
+  'settings.widgetPhrases.loadError': 'Widget metinleri yüklenemedi.',
+  'settings.widgetPhrases.languageLabel': 'Dil',
+  'settings.widgetPhrases.hint':
+    "Her dil ayrı kaydedilir; dokunmadığınız dil widget'ın kendi metinleriyle kalır.",
+  'settings.widgetPhrases.reset': 'Varsayılana dön',
+  'settings.widgetPhrases.limit': 'Düz metin, tek satır, en çok {max} karakter.',
+  'settings.widgetPhrases.placeholders':
+    'Düz metin, tek satır, en çok {max} karakter. Kullanılabilir: {list}.',
+  'settings.widgetPhrases.refused': 'Bu metin kaydedilemedi: {field}. Kontrol edip tekrar deneyin.',
+  'settings.widgetPhrases.problem.unknown_key': 'Bu metin değiştirilemez.',
+  'settings.widgetPhrases.problem.empty': 'Bir metin yazın ya da varsayılana dönün.',
+  'settings.widgetPhrases.problem.too_long': 'Çok uzun — en çok {max} karakter.',
+  'settings.widgetPhrases.problem.markup': 'Yalnız düz metin — HTML etiketi olmaz.',
+  'settings.widgetPhrases.problem.line_break': 'Tek satırda tutun.',
+  'settings.widgetPhrases.problem.unknown_placeholder':
+    'Burada süslü parantez içinde yalnız şunlar olabilir: {list}. Diğer {…} ifadelerini kaldırın.',
+  'settings.widgetPhrases.key.title.default': 'Başlık',
+  'settings.widgetPhrases.key.status.offline': 'Kimse müsait değil',
+  'settings.widgetPhrases.key.status.queue': 'Kuyruk sırası',
+  'settings.widgetPhrases.key.status.queueWait': 'Kuyruk sırası ve tahmini bekleme',
+  'settings.widgetPhrases.key.input.placeholder': 'Mesaj kutusu yer tutucusu',
+  'settings.widgetPhrases.key.human.connecting': 'Temsilciye bağlanıyor',
+  'settings.widgetPhrases.key.prechat.intro': 'Sohbet öncesi form girişi',
+  'settings.widgetPhrases.key.prechat.submit': 'Sohbet öncesi form düğmesi',
+  'settings.widgetPhrases.key.offline.label': 'Çevrimdışı form başlığı',
+  'settings.widgetPhrases.key.offline.intro': 'Çevrimdışı form girişi',
+  'settings.widgetPhrases.key.offline.subject': 'Çevrimdışı form sorusu',
+  'settings.widgetPhrases.key.offline.submit': 'Çevrimdışı form düğmesi',
+  'settings.widgetPhrases.key.offline.thanks': 'Çevrimdışı form teşekkürü',
+  'settings.widgetPhrases.key.chat.end.closedMessage': 'Sohbet sona erdi',
 };

@@ -95,6 +95,20 @@ const BRAND_SCOPED_TABLES: ReadonlyArray<{
       db.widgetSettings.create({ data: { licenseId: at.licenseId, brandId: at.brandId } }),
   },
   {
+    // A brand's own widget wording (tm 344 · WG-05).
+    table: 'widget_phrases',
+    plant: (db, at) =>
+      db.widgetPhrase.create({
+        data: {
+          licenseId: at.licenseId,
+          brandId: at.brandId,
+          locale: 'tr',
+          key: 'status.offline',
+          text: 'Değerli üyemiz, şu an kapalıyız.',
+        },
+      }),
+  },
+  {
     table: 'security_settings',
     plant: (db, at) =>
       db.securitySettings.create({ data: { licenseId: at.licenseId, brandId: at.brandId } }),

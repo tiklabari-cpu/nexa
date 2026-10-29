@@ -223,6 +223,8 @@ interface State {
    */
   threadId: string | null;
   queuePosition: number | null;
+  /** Roughly how long the queue still is (WG-05); null shows the position alone. */
+  estimatedWait: { min_minutes: number; max_minutes: number } | null;
   events: WidgetEvent[];
   /** Who the visitor is talking to, shown in the header (FR-MOD-11.3). */
   agent: { name: string; avatarUrl: string | null } | null;
@@ -383,6 +385,8 @@ export function mount(doc: Document = document, win: Window = window): () => voi
   const browser = browserLanguages(win.navigator);
   let locale: WidgetLocale = pickWidgetLocale({ snippet: config.language, browser });
   let translate = createTranslator(locale);
+  /** The brand texts `translate` reads (WG-05), serialised to tell a change. */
+  let adoptedWording = '{}';
   const t: WidgetTranslate = (key, params) => translate(key, params);
   // Send held after a 429 (`pauseSending`); declared up here because
   // `renderClosed` reads it and runs long before the first send.
@@ -398,6 +402,8 @@ export function mount(doc: Document = document, win: Window = window): () => voi
   }
   applyDocumentLocale();
   const api = new WidgetApi(config.apiBaseUrl, config.organizationId, config.hostOrigin);
+  // So the mint can pick the custom texts of the language shown (WG-05).
+  api.localeHints = { ...(config.language ? { language: config.language } : {}), browser };
 
   // --- Human check (tm 339.3 · GV-01) ----------------------------------------
   // At most one at a time: a second request behind the same check waits on it.
@@ -457,6 +463,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     chatId: null,
     threadId: null,
     queuePosition: null,
+    estimatedWait: null,
     events: [],
     agent: null,
     agentTyping: false,
@@ -573,9 +580,16 @@ export function mount(doc: Document = document, win: Window = window): () => voi
    */
   function adoptMintedLanguage(panel: string, fallback: string): void {
     const next = pickWidgetLocale({ snippet: config.language, panel, fallback, browser });
-    if (next === locale) return;
+    // The brand's own texts (WG-05) count only for the language they were
+    // picked for — the mint chose it the same way, so a mismatch is an older
+    // server or client, and the catalog's wording is the safe side.
+    const minted = api.phrases;
+    const overrides = minted && minted.locale === next ? minted.phrases : {};
+    const wording = JSON.stringify(overrides);
+    if (next === locale && wording === adoptedWording) return;
     locale = next;
-    translate = createTranslator(next);
+    adoptedWording = wording;
+    translate = createTranslator(next, overrides);
     applyDocumentLocale();
     rebuildUi();
   }
@@ -708,7 +722,18 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       return;
     }
     if (state.queuePosition !== null && state.queuePosition > 0) {
-      ui.status.textContent = t('status.queue', { n: state.queuePosition });
+      // With an estimate, the line that says roughly how long (WG-05): a
+      // range, "about", never a promise; without one, the position alone.
+      const wait = state.estimatedWait;
+      ui.status.textContent = wait
+        ? t('status.queueWait', {
+            n: state.queuePosition,
+            minutes:
+              wait.min_minutes === wait.max_minutes
+                ? wait.min_minutes
+                : `${wait.min_minutes}–${wait.max_minutes}`,
+          })
+        : t('status.queue', { n: state.queuePosition });
       ui.status.dataset['tone'] = 'wait';
       return;
     }
@@ -1102,6 +1127,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       state.chatId = null;
       state.threadId = null;
       state.queuePosition = null;
+      state.estimatedWait = null;
       noteChatClosed(chatId, threadId);
       renderHeader();
       renderStatus();
@@ -1740,6 +1766,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       state.chatId = snapshot.chat?.id ?? null;
       state.threadId = snapshot.chat?.thread_id ?? null;
       state.queuePosition = snapshot.chat?.queue_position ?? null;
+      state.estimatedWait = snapshot.chat?.estimated_wait ?? null;
       state.events = snapshot.events;
       pendingBubbleIds = [];
       noteTranscriptCursor();
@@ -2049,6 +2076,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       state.chatId = snapshot.chat?.id ?? null;
       state.threadId = snapshot.chat?.thread_id ?? null;
       state.queuePosition = snapshot.chat?.queue_position ?? null;
+      state.estimatedWait = snapshot.chat?.estimated_wait ?? null;
 
       // The widget holds no socket (see `startPolling` below), so this poll is
       // the only signal that a conversation just ended — agent archive or the
@@ -2296,6 +2324,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     state.chatId = null;
     state.threadId = null;
     state.queuePosition = null;
+    state.estimatedWait = null;
     noteChatClosed(chatId, threadId);
     renderHeader();
     renderStatus();

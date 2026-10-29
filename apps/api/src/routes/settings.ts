@@ -39,6 +39,8 @@ import {
   WIDGET_POSITIONS,
   WIDGET_THEMES,
   WIDGET_UI_LOCALES,
+  checkWidgetPhrases,
+  type WidgetUiLocale,
 } from '@siyahtus/types';
 import {
   AI_TURNS_PER_CUSTOMER_DAY_DEFAULT,
@@ -74,6 +76,11 @@ import { inHipaaScope } from '../lib/hipaa.js';
 import { highRiskReason, reasonMetadata } from '../lib/high-risk-reason.js';
 import { resolveBrandId } from '../lib/brand.js';
 import { prechatFromRow, type BrandPrechat } from '../services/websites/prechat.js';
+import {
+  readWidgetPhrases,
+  replaceWidgetPhrases,
+  type BrandWidgetPhrases,
+} from '../services/websites/widget-phrases.js';
 import { formatAllowlistEntry, parseAllowlistEntry, wouldLockOut } from '../lib/ip-allowlist.js';
 import { hasEntitlement, poweredByFor, requireEntitlement } from '../lib/entitlements.js';
 import { normaliseTrustedDomain } from '../lib/origin.js';
@@ -706,6 +713,19 @@ const updatePrechatBody = z
       })
       .strict(),
   })
+  .strict();
+
+/** Which language's widget texts (WG-05) — one of the eight. */
+const widgetPhrasesQuery = z.object({
+  locale: z.enum(WIDGET_UI_LOCALES as unknown as [WidgetUiLocale, ...WidgetUiLocale[]]),
+});
+
+/**
+ * A language's whole set of custom widget texts. The shape only: which keys,
+ * how long and which placeholders is `checkWidgetPhrases`, the panel's own rule.
+ */
+const updateWidgetPhrasesBody = z
+  .object({ phrases: z.record(z.string(), z.string().max(2000)) })
   .strict();
 
 function welcomeField(max: number) {
@@ -3106,6 +3126,61 @@ export default async function settingsRoutes(
     },
   );
 
+  // --- Widget texts (tm 344 · WG-05) ------------------------------------------
+  // The brand's own wording for the widget's offline notice, queue line and the
+  // rest of `WIDGET_PHRASE_KEYS`, one language at a time. Read like the pre-chat
+  // form; written by an admin or the owner.
+
+  app.get(
+    '/settings/widget/phrases',
+    { config: { scopes: ['access_rules:ro', 'access_rules:rw'] } },
+    async (request, reply) => {
+      const { locale } = parse(widgetPhrasesQuery, request.query);
+      const { phrases, brandId } = await request.withTenant(async (tx) => {
+        const brandId = await resolveBrandId(tx, request.brandId);
+        return { phrases: await readWidgetPhrases(tx, brandId, locale), brandId };
+      });
+      return reply.send(serialiseWidgetPhrases(phrases, brandId, locale));
+    },
+  );
+
+  app.put(
+    '/settings/widget/phrases',
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const { locale } = parse(widgetPhrasesQuery, request.query);
+      const body = parse(updateWidgetPhrasesBody, request.body);
+      const checked = checkWidgetPhrases(body.phrases);
+      if (!checked.ok) {
+        throw ApiError.validation(`phrases.${checked.key}: ${checked.problem}`, {
+          key: checked.key,
+          problem: checked.problem,
+        });
+      }
+      const tenant = request.tenant();
+
+      const { phrases, brandId } = await request.withTenant(async (tx) => {
+        const brandId = await resolveBrandId(tx, request.brandId);
+        const { changed, reset } = await replaceWidgetPhrases(tx, {
+          licenseId: tenant.licenseId,
+          brandId,
+          locale,
+          phrases: checked.phrases,
+        });
+        // Configuration, not personal data: the trail names the keys, and the
+        // texts are on the screen it changed.
+        if (changed.length > 0 || reset.length > 0) {
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'settings.widget_phrases_updated',
+            metadata: { brand_id: brandId, locale, changed, reset },
+          });
+        }
+        return { phrases: await readWidgetPhrases(tx, brandId, locale), brandId };
+      });
+      return reply.send(serialiseWidgetPhrases(phrases, brandId, locale));
+    },
+  );
+
   // --- Sales tracker (FR-MOD-13.5) -------------------------------------------
 
   app.get(
@@ -3818,6 +3893,20 @@ function serialiseWidget(
     fallback_language: row?.fallbackLanguage ?? DEFAULT_WIDGET_APPEARANCE.fallback_language,
     availability_mode: row?.availabilityMode ?? DEFAULT_WIDGET_AVAILABILITY_MODE,
     updated_at: row ? row.updatedAt.toISOString() : null,
+  };
+}
+
+/** A brand's custom widget texts in one language, as `/settings/widget/phrases` answers. */
+function serialiseWidgetPhrases(
+  phrases: BrandWidgetPhrases,
+  brandId: string,
+  locale: WidgetUiLocale,
+) {
+  return {
+    brand_id: brandId,
+    locale,
+    phrases: phrases.phrases,
+    updated_at: phrases.updatedAt?.toISOString() ?? null,
   };
 }
 

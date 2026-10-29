@@ -13,6 +13,7 @@ import {
   memberTokenCookieName,
   normalizePrechatConfig,
   normalizeWidgetAppearance,
+  pickWidgetUiLocale,
   RTM_PATHS,
   type PrechatConfig,
   servesRegion,
@@ -20,6 +21,8 @@ import {
   type Region,
   type WidgetAppearance,
   type WidgetTokenAppearance,
+  type WidgetPhraseKey,
+  type WidgetUiLocale,
 } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
@@ -62,6 +65,7 @@ import {
 import { trialState } from '../services/billing/metering.js';
 import { markWebsiteConnected } from '../services/websites/website-service.js';
 import { readPrechat, resolveWidgetBrandId } from '../services/websites/prechat.js';
+import { readWidgetPhrases } from '../services/websites/widget-phrases.js';
 import {
   defaultScopesForRole,
   selfAccountId,
@@ -245,6 +249,15 @@ const customerTokenBody = z.object({
    * conversation within one organization.
    */
   host_origin: z.string().max(2048).optional(),
+  /**
+   * The language the snippet names and the browser's, most preferred first
+   * (WG-05): with the brand's own language setting they decide which
+   * language's custom texts the mint hands over — the choice the widget makes
+   * for what it shows (`pickWidgetUiLocale`). Hints only: a tag that is not a
+   * widget language falls through.
+   */
+  language: z.string().max(35).optional(),
+  browser_languages: z.array(z.string().max(35)).max(10).optional(),
 });
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
@@ -1951,6 +1964,13 @@ export default async function authRoutes(
       fileSharingEnabledFor(app.db, tenant, request),
       prechatFor(app.db, tenant, request, brandId),
     ]);
+    // After the appearance, whose language and fallback it needs (WG-05).
+    const widgetPhrases = await widgetPhrasesFor(app.db, tenant, request, brandId, {
+      snippet: body.language ?? null,
+      panel: widget.language,
+      fallback: widget.fallback_language,
+      browser: body.browser_languages ?? [],
+    });
 
     reply.header('Cache-Control', 'no-store');
     // The re-signed member token, on every 200: in a cookie the browser keeps
@@ -1987,6 +2007,7 @@ export default async function authRoutes(
       post_chat_form: forms.post_chat,
       ticket_form: forms.ticket,
       prospect_form: forms.prospect,
+      widget_phrases: widgetPhrases,
     });
   });
 
@@ -2138,6 +2159,32 @@ async function prechatFor(
   } catch (error) {
     request.log.warn({ err: error }, 'failed to read the pre-chat form');
     return normalizePrechatConfig(DEFAULT_PRECHAT_CONFIG);
+  }
+}
+
+/**
+ * The brand's custom widget texts for the language this widget will show
+ * (WG-05) — only that language's, so the mint stays small whatever the brand
+ * rewrote. Guarded like the reads around it: the fallback is none, which is
+ * the widget's own wording.
+ */
+async function widgetPhrasesFor(
+  db: PrismaClient,
+  tenant: TenantContext,
+  request: FastifyRequest,
+  brandId: string | undefined,
+  sources: Parameters<typeof pickWidgetUiLocale>[0],
+): Promise<{ locale: WidgetUiLocale; phrases: Partial<Record<WidgetPhraseKey, string>> }> {
+  const locale = pickWidgetUiLocale(sources);
+  if (!brandId) return { locale, phrases: {} };
+  try {
+    const { phrases } = await withTenant(db, tenant, (tx) =>
+      readWidgetPhrases(tx, brandId, locale),
+    );
+    return { locale, phrases };
+  } catch (error) {
+    request.log.warn({ err: error }, 'failed to read the widget texts');
+    return { locale, phrases: {} };
   }
 }
 

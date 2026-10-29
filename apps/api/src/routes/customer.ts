@@ -10,6 +10,12 @@
  * would work, but the agent API is what agents should use, and keeping the two
  * disjoint means the widget surface can be reasoned about on its own.
  */
+import {
+  cachedQueueWaitStats,
+  estimateQueueWait,
+  readQueueWaitStats,
+  type EstimatedWait,
+} from '../services/routing/queue-wait.js';
 import { isMailLocale } from '../services/mail/templates/layout.js';
 import { visitorMessageMail } from '../services/mail/templates/messages.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -874,6 +880,23 @@ export default async function customerRoutes(
           humansOnline,
         });
 
+    // Roughly how long the visitor still waits (WG-05) — only while queued for
+    // a team, from that team's recent waits; a failure is no estimate.
+    const latest = state.chat?.threads[0];
+    let estimatedWait: EstimatedWait | null = null;
+    if (latest?.queuePosition && latest.queueGroupId !== null) {
+      const licenseId = request.tenant().licenseId;
+      const groupId = latest.queueGroupId;
+      try {
+        const stats = await cachedQueueWaitStats(app.redis, licenseId, groupId, () =>
+          request.withTenant((tx) => readQueueWaitStats(tx, licenseId, groupId)),
+        );
+        estimatedWait = estimateQueueWait(stats, latest.queuePosition);
+      } catch (error) {
+        request.log.warn({ err: error }, 'queue wait estimate failed');
+      }
+    }
+
     return reply.send({
       // The widget shows "we're away" rather than pretending someone will
       // answer immediately.
@@ -891,6 +914,7 @@ export default async function customerRoutes(
             id: state.chat.id,
             thread_id: state.chat.threads[0]?.id ?? null,
             queue_position: state.chat.threads[0]?.queuePosition ?? null,
+            estimated_wait: estimatedWait,
           }
         : null,
       // The name and face the widget shows in its header, so the visitor knows

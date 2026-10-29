@@ -812,6 +812,109 @@ customerContext:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
 
+timeline:
+  get:
+    tags: [Chats]
+    operationId: getChatTimeline
+    summary: Everything that happened in a conversation, in one list
+    description: |
+      The conversation's timeline (ID-09): its messages and internal notes,
+      the AI's decisions (procedure, step, sources, hand-over reason) and
+      procedure runs, assignment and the queue, transfers, tags, the closing
+      and reopening lines, the rating, SLA misses, tickets opened from it and
+      the audit rows whose target is the chat — oldest first, ordered by
+      `(at, kind, id)`, 200 rows a page (`page_id`).
+
+      Who may open it is the permission matrix's `timeline.view`, inside
+      `chats.view` (ID-09-S1): `own` — a chat the person is assigned to or has
+      joined; `team` — one routed to a team of theirs; `all` — any chat they
+      may see. A chat outside that reach, or another workspace's, is `404`
+      (NFR-S5); a role at `none` is `403` `capability_required`. The audit rows
+      are only for a caller who may read the audit log (`audit`). The player's
+      email and username are blanked out of the text for a caller without
+      `customers.contact.view`.
+
+      Agents and bots only.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+      - name: thread_id
+        in: query
+        description: |
+          One connection of the day (Panelde: Chat ID) — any id
+          `Chat.connections` lists. Absent: the whole day (Panelde: Thread
+          ID). A thread of another chat is `404`.
+        schema: { type: string, minLength: 1, maxLength: 64 }
+      - name: kinds
+        in: query
+        description: Comma-separated kinds to keep; absent keeps every kind.
+        schema: { type: string, maxLength: 200 }
+      - $ref: "../openapi.yaml#/components/parameters/PageId"
+      - name: limit
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 500, default: 200 }
+    responses:
+      "200":
+        description: One page of the timeline
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TimelinePage" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+timelineExport:
+  post:
+    tags: [Chats]
+    operationId: exportChatTimeline
+    summary: Download a conversation's timeline
+    description: |
+      The timeline as a file (ID-09 §5), streamed, at most 20,000 rows:
+      `csv` (headers "Thread ID (chat_id)" and "Chat ID (thread_id)"),
+      `ndjson` (one `TimelineItem` a line) or `txt` (one line a row, a
+      separator between connections).
+
+      Masked by default (`mask_pii`): the player's email, username and name
+      and every email, phone and card pattern in the text are blanked.
+      Exporting is `timeline.export` (ID-09-S2, Yönetici and Kurucu by
+      default); `mask_pii: false` is `timeline.export_unmasked`, the
+      Founder's alone (ID-09-S3) — either missing is `403`
+      `capability_required`. The reach is the timeline's (`404` outside it).
+      Every export writes `chat.timeline_exported` to the audit log before
+      the first byte.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [format]
+            additionalProperties: false
+            properties:
+              format: { type: string, enum: [csv, ndjson, txt] }
+              thread_id:
+                type: string
+                minLength: 1
+                maxLength: 64
+                description: "One connection (Panelde: Chat ID); absent exports the whole day."
+              mask_pii: { type: boolean, default: true }
+    responses:
+      "200":
+        description: The file
+        content:
+          text/csv:
+            schema: { type: string }
+          application/x-ndjson:
+            schema: { type: string }
+          text/plain:
+            schema: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
 supervise:
   post:
     tags: [Chats]

@@ -1075,7 +1075,11 @@ describe('module parity matrix — what is still owed', () => {
       // "My profile" (RL-06): names and an in-app password change, in the web
       // console's settings. The app's Account card keeps the name read-only
       // (the task's "sonraki iş"), and nothing here re-scopes.
-      contractEndpoints: 342,
+      // 342 -> 344 with `GET /chats/{chatId}/timeline` and
+      // `POST /chats/{chatId}/timeline/export` (tm 334.1) — the conversation
+      // timeline (ID-09), a QA and complaint review screen of the web console
+      // (tm 334.2); the app has no timeline screen, and nothing here re-scopes.
+      contractEndpoints: 344,
       scopeBoundaries: 1,
     });
   });

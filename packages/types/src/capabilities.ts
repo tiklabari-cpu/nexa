@@ -26,8 +26,8 @@
  *
  * A capability whose surface does not exist yet is not listed here — a row
  * that changes nothing would tell the Founder something false. The feature
- * that builds the surface adds its row with its check (timeline export #334,
- * AI publish #316, team-scoped reports #368).
+ * that builds the surface adds its row with its check (AI publish #316,
+ * team-scoped reports #368; the timeline's three rows came with it, #334).
  *
  * Here rather than in `apps/api` for the reason `role-scopes.ts` is: the REST
  * edge and the RTM gateway have to reach the same answer for the same session
@@ -182,6 +182,23 @@ export const CAPABILITIES = [
     scopes: {},
     floorRole: 'team_lead',
     defaults: { owner: 'all', admin: 'all', team_lead: 'team', agent: 'none' },
+  },
+  {
+    // Checked (ID-09 · tm 334.1): opening a conversation's timeline — its
+    // messages, notes, the AI's decisions, assignment, transfer, tags, rating,
+    // SLA misses, tickets and audit rows in one list (`GET /chats/{id}/
+    // timeline`). `own` = a chat the person is assigned to or has joined;
+    // `team` = one routed to a team of theirs; `all` = any chat they may see.
+    // Bounded by `chats.view` either way. ID-09-S1: an Ekip Üyesi reads their
+    // own conversations' (the AI's decisions included), an Ekip Lideri their
+    // teams', a Yönetici and the Kurucu every one.
+    key: 'timeline.view',
+    group: 'chats',
+    labelKey: 'permissions.capability.timeline.view',
+    values: ['none', 'own', 'team', 'all'],
+    scopes: {},
+    floorRole: 'agent',
+    defaults: { owner: 'all', admin: 'all', team_lead: 'team', agent: 'own' },
   },
   {
     // `all` is also the ticket rules and the ticket email templates — they are
@@ -520,6 +537,32 @@ export const CAPABILITIES = [
     scopes: { on: ['audit_log--export:ro'] },
     floorRole: 'admin',
     defaults: { owner: 'on', admin: 'on', team_lead: 'off', agent: 'off' },
+  },
+  {
+    // Checked (ID-09-S2 · tm 334.1): downloading a conversation's timeline
+    // (`POST /chats/{id}/timeline/export`), masked — the player's email,
+    // username and the PII patterns in the text blanked. Workspace data
+    // leaving by file, so the floor is the Yönetici's; every export is in the
+    // audit log (`chat.timeline_exported`).
+    key: 'timeline.export',
+    group: 'logs',
+    labelKey: 'permissions.capability.timeline.export',
+    values: ['off', 'on'],
+    scopes: {},
+    floorRole: 'admin',
+    defaults: { owner: 'on', admin: 'on', team_lead: 'off', agent: 'off' },
+  },
+  {
+    // Checked, Founder only (ID-09-S3 · tm 334.1): the same download with
+    // nothing masked.
+    key: 'timeline.export_unmasked',
+    group: 'logs',
+    labelKey: 'permissions.capability.timeline.export_unmasked',
+    values: ['off', 'on'],
+    scopes: {},
+    floorRole: 'owner',
+    ownerOnly: true,
+    defaults: { owner: 'on', admin: 'off', team_lead: 'off', agent: 'off' },
   },
 ] as const satisfies readonly CapabilityDefinition[];
 

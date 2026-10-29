@@ -433,6 +433,13 @@ export const AUDIT_ACTIONS = [
   // thread and the event id — enough to say exactly which message changed and
   // when, and nothing about what it said.
   'chat.message_edited',
+  // A conversation's timeline downloaded (ID-09 · tm 334.1): the transcript,
+  // the notes, the AI's decisions and the player's details leave the panel in
+  // a file, so who took it, in which format and whether masked is recorded.
+  // Written before the first byte, so a download cut short is on the record
+  // as asked for. Metadata is the connection (when one was asked for), the
+  // format and `masked`; never a row.
+  'chat.timeline_exported',
   // Denying a visitor service (FR-MOD-08.9.2) — a moderation decision, not a
   // configuration change, so only the transition is recorded: repeating a ban
   // that already holds, or lifting one already lifted, leaves no second line.

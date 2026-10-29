@@ -241,6 +241,10 @@ paths:
     $ref: "./paths/chats.yaml#/aiConversation"
   /chats/{chatId}/customer-context:
     $ref: "./paths/chats.yaml#/customerContext"
+  /chats/{chatId}/timeline:
+    $ref: "./paths/chats.yaml#/timeline"
+  /chats/{chatId}/timeline/export:
+    $ref: "./paths/chats.yaml#/timelineExport"
   /chats/{chatId}/supervise:
     $ref: "./paths/chats.yaml#/supervise"
   /chats/{chatId}/tags:
@@ -2798,6 +2802,89 @@ components:
           type: string
           nullable: true
           maxLength: 200
+
+    TimelineItem:
+      type: object
+      required: [id, at, kind, actor, chat_id, thread_id, details]
+      description: |
+        One row of a conversation's timeline (ID-09). `chat_id` is the day
+        (Panelde: Thread ID), `thread_id` the connection (Panelde: Chat ID) —
+        null for a row about the day as a whole.
+      properties:
+        id:
+          type: string
+          description: The row's id in its own source (event, AI decision, audit entry, rating…).
+        at: { type: string, format: date-time }
+        kind:
+          type: string
+          enum:
+            [
+              message,
+              note,
+              ai_decision,
+              system,
+              assignment,
+              transfer,
+              tag,
+              rating,
+              sla_breach,
+              ticket,
+              audit,
+            ]
+          description: |
+            Rows of the same millisecond are listed in this order. `note` is an
+            internal note; `system` the transcript's system lines (closing,
+            reopening, the AI's mode); `ai_decision` a turn the AI recorded
+            (procedure, step, sources, hand-over reason) or a procedure run.
+        actor:
+          type: object
+          required: [type, id, name]
+          properties:
+            type: { type: string, enum: [agent, customer, bot, system, ai] }
+            id: { type: string, nullable: true }
+            name: { type: string, nullable: true }
+        chat_id: { type: string }
+        thread_id: { type: string, nullable: true }
+        event_id:
+          type: string
+          description: The transcript event the row is, or answers.
+        text: { type: string }
+        details:
+          type: object
+          additionalProperties: true
+          description: The row's source fields — ids and codes.
+
+    TimelinePage:
+      type: object
+      required: [chat_id, thread_id, items, audit, audit_retained_since, audit_expired]
+      properties:
+        chat_id: { type: string, description: The day (panel "Thread ID"). }
+        thread_id:
+          type: string
+          nullable: true
+          description: The connection asked for (panel "Chat ID"); null for the whole day.
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TimelineItem" }
+        next_page_id:
+          type: string
+          description: |
+            Present while rows remain. A page filtered by `kinds` may hold
+            fewer than `limit` rows before it.
+        audit:
+          type: string
+          enum: [included, not_permitted]
+          description: Whether the audit trail is among the rows — only for a caller who may read the audit log.
+        audit_retained_since:
+          type: string
+          format: date-time
+          description: How far back the audit trail is kept.
+        audit_expired:
+          type: boolean
+          description: |
+            The conversation began before `audit_retained_since`: its earlier
+            audit rows were removed by retention, and the panel says "kayıt
+            saklama süresi dolmuş" instead of showing nothing.
 
     CustomerContext:
       type: object

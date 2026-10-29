@@ -97,6 +97,7 @@ export const auditLabels: Messages = {
   'audit.action.chat.reopened': 'Chat reopened',
   'audit.action.chat.connection_opened': 'Chat connection opened',
   'audit.action.chat.message_edited': 'Chat message edited',
+  'audit.action.chat.timeline_exported': 'Chat timeline exported',
   'audit.action.customer.banned': 'Customer banned',
   'audit.action.customer.unbanned': 'Customer unbanned',
   'audit.action.customer.identity_linked': 'Customer records linked as the same person',

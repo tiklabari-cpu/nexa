@@ -46,7 +46,8 @@ const set = (role: string, capability: string, value: string): CapabilityOverrid
 describe('the capability catalogue', () => {
   // RL-02 kept the first version to 20–30 rows (it shipped 25, tm 325.1); the
   // features that came after add their rows as the catalogue says they must
-  // (RL-03's `chats.takeover` was the 31st, tm 326). The ceiling is what keeps
+  // (RL-03's `chats.takeover` was the 31st, tm 326; ID-09's three timeline rows
+  // the 32nd–34th, tm 334.1). The ceiling is what keeps
   // the screen readable — raise it as a decision, not to make a test pass.
   it('stays a matrix a Founder can read: 20–35 rows, unique keys, every group used', () => {
     expect(CATALOGUE.length).toBeGreaterThanOrEqual(20);
@@ -244,6 +245,26 @@ describe('the owner’s K7 defaults (tm 325.5)', () => {
     expect(capabilitiesForRole('agent', [set('agent', 'chats.takeover', 'all')])).toMatchObject({
       'chats.takeover': 'none',
     });
+  });
+
+  it('opens the timeline to each role as ID-09-S1/S2/S3 say, and the unmasked export to the Founder alone', () => {
+    // S1: own conversations, the lead's teams, everyone's for Yönetici and Kurucu.
+    expect(at('owner')['timeline.view']).toBe('all');
+    expect(at('admin')['timeline.view']).toBe('all');
+    expect(at('team_lead')['timeline.view']).toBe('team');
+    expect(at('agent')['timeline.view']).toBe('own');
+    // S2: exporting is Yönetici and Kurucu, and never below them.
+    expect(at('admin')['timeline.export']).toBe('on');
+    expect(at('team_lead')['timeline.export']).toBe('off');
+    expect(capabilityChangeProblem(set('team_lead', 'timeline.export', 'on'))).toBe('below_floor');
+    // S3: unmasked is the Founder's, in a row nobody can unlock.
+    expect(at('owner')['timeline.export_unmasked']).toBe('on');
+    expect(at('admin')['timeline.export_unmasked']).toBe('off');
+    expect(capabilityChangeProblem(set('admin', 'timeline.export_unmasked', 'on'))).toBe('locked');
+    // Checked rows: the role sets stay what they were.
+    for (const key of ['timeline.view', 'timeline.export', 'timeline.export_unmasked']) {
+      expect(def(key).scopes, key).toEqual({});
+    }
   });
 
   it('lets a Yönetici read billing and not change it, in a cell the Founder cannot unlock (FR-MOD-04.RBAC)', () => {

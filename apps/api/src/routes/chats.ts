@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream';
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
@@ -10,6 +11,10 @@ import {
   isShortId,
   MESSAGE_SEARCH_MAX_QUERY_BYTES,
   MESSAGE_SEARCH_PAGE_SIZE,
+  TIMELINE_EXPORT_FORMATS,
+  TIMELINE_EXPORT_MAX,
+  TIMELINE_PAGE_MAX,
+  TIMELINE_PAGE_SIZE,
 } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
@@ -26,6 +31,18 @@ import {
 import { hasChatScope } from '../services/chat/access.js';
 import { messageSearchWordsOrThrow, spendMessageSearch } from '../services/chat/event-search.js';
 import { readCustomerContext } from '../services/customers/customer-context.js';
+import {
+  TIMELINE_EXPORT_CONTENT_TYPES,
+  maskTimelineItem,
+  openTimeline,
+  parseTimelineKinds,
+  readTimelineRows,
+  timelineExportChunk,
+  timelineExportHead,
+} from '../services/chat/timeline.js';
+import { writeAuditEntry } from '../services/audit/audit-log.js';
+import { requireCapability } from '../services/auth/capability.js';
+import { cutoffFor } from '../services/retention/policy.js';
 import { conversationView } from '../services/ai/conversation/conversation-view.js';
 import { loadConversation } from '../services/ai/conversation/state-store.js';
 import { toTurnState } from '../services/ai/conversation/turn.js';
@@ -166,6 +183,21 @@ const eventsQuery = z.object({
 
 const aiConversationQuery = z.object({ thread_id: z.string().min(1).max(64).optional() });
 const customerContextQuery = z.object({ page_id: z.string().max(512).optional() });
+const timelineQuery = z.object({
+  thread_id: z.string().min(1).max(64).optional(),
+  kinds: z.string().max(200).optional(),
+  page_id: z.string().max(512).optional(),
+  limit: z.coerce.number().int().min(1).max(TIMELINE_PAGE_MAX).default(TIMELINE_PAGE_SIZE),
+});
+const timelineExportSchema = z
+  .object({
+    format: z.enum(TIMELINE_EXPORT_FORMATS),
+    thread_id: z.string().min(1).max(64).optional(),
+    mask_pii: z.boolean().default(true),
+  })
+  .strict();
+/** Rows read per page while an export streams. */
+const TIMELINE_EXPORT_PAGE = 1000;
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
@@ -491,6 +523,114 @@ export default async function chatRoutes(
         }),
       );
       return reply.send(context);
+    },
+  );
+
+  // --- GET /chats/:chatId/timeline -------------------------------------------
+  // Everything that happened in a day or one connection, in one list (tm 334.1
+  // · ID-09): messages, notes, the AI's decisions, assignment, transfer, tags,
+  // rating, SLA misses, tickets and the audit rows. `timeline.view` decides the
+  // reach inside the chat's visibility. Agents and bots only.
+
+  app.get<{ Params: { chatId: string } }>(
+    '/chats/:chatId/timeline',
+    {
+      config: {
+        scopes: ['chats--all:ro', 'chats--access:ro'],
+        principals: ['agent', 'bot'],
+      },
+    },
+    async (request, reply) => {
+      const chatId = parse(chatIdSchema, request.params.chatId);
+      const query = parse(timelineQuery, request.query);
+      const kinds = parseTimelineKinds(query.kinds);
+      const principal = request.requirePrincipal();
+      const { scope, page } = await request.withTenant(async (tx) => {
+        const scope = await openTimeline(tx, principal, chatId, query.thread_id);
+        const page = await readTimelineRows(tx, scope, {
+          limit: query.limit,
+          ...(query.page_id !== undefined ? { pageId: query.page_id } : {}),
+          ...(kinds !== undefined ? { kinds } : {}),
+        });
+        return { scope, page };
+      });
+      const retainedSince = cutoffFor(env.RETENTION_AUDIT_DAYS, new Date());
+      return reply.send({
+        chat_id: scope.chatId,
+        thread_id: scope.threadId,
+        items: page.items,
+        ...(page.nextPageId !== null ? { next_page_id: page.nextPageId } : {}),
+        audit: scope.auditIncluded ? 'included' : 'not_permitted',
+        audit_retained_since: retainedSince.toISOString(),
+        audit_expired: scope.chatCreatedAt.getTime() < retainedSince.getTime(),
+      });
+    },
+  );
+
+  // --- POST /chats/:chatId/timeline/export -----------------------------------
+  // The timeline as a file (tm 334.1 · ID-09 §5): streamed a page at a time,
+  // at most TIMELINE_EXPORT_MAX rows, masked unless the Founder asks otherwise
+  // (`timeline.export`, `timeline.export_unmasked`). The audit entry is written
+  // before the first byte, so a download that was refused or cut short is
+  // still on the record as asked for.
+
+  app.post<{ Params: { chatId: string } }>(
+    '/chats/:chatId/timeline/export',
+    {
+      config: {
+        scopes: ['chats--all:ro', 'chats--access:ro'],
+        principals: ['agent'],
+      },
+    },
+    async (request, reply) => {
+      const chatId = parse(chatIdSchema, request.params.chatId);
+      const body = parse(timelineExportSchema, request.body);
+      const principal = request.requirePrincipal();
+      // Before the chat is read: the refusal says nothing about whether it exists.
+      requireCapability(principal, 'timeline.export');
+      const masked = body.mask_pii;
+      if (!masked) requireCapability(principal, 'timeline.export_unmasked');
+
+      const scope = await request.withTenant(async (tx) => {
+        const scope = await openTimeline(tx, principal, chatId, body.thread_id);
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'chat.timeline_exported',
+          target: `chat:${scope.chatId}`,
+          metadata: {
+            ...(scope.threadId !== null ? { thread_id: scope.threadId } : {}),
+            format: body.format,
+            masked,
+          },
+        });
+        return scope;
+      });
+
+      const format = body.format;
+      async function* file(): AsyncGenerator<string> {
+        yield timelineExportHead(format, scope);
+        const previousThread: { value: string | null | undefined } = { value: undefined };
+        let written = 0;
+        let pageId: string | undefined;
+        do {
+          const limit = Math.min(TIMELINE_EXPORT_PAGE, TIMELINE_EXPORT_MAX - written);
+          const page = await request.withTenant((tx) =>
+            readTimelineRows(tx, scope, { limit, ...(pageId !== undefined ? { pageId } : {}) }),
+          );
+          const items = masked
+            ? page.items.map((item) => maskTimelineItem(item, scope))
+            : page.items;
+          if (items.length > 0) yield timelineExportChunk(format, items, previousThread);
+          written += items.length;
+          pageId = page.nextPageId ?? undefined;
+        } while (pageId !== undefined && written < TIMELINE_EXPORT_MAX);
+      }
+
+      const name = `siyahtus-timeline-${scope.chatId}${scope.threadId !== null ? `-${scope.threadId}` : ''}.${format}`;
+      return reply
+        .header('content-type', TIMELINE_EXPORT_CONTENT_TYPES[format])
+        .header('content-disposition', `attachment; filename="${name}"`)
+        .header('cache-control', 'no-store')
+        .send(Readable.from(file()));
     },
   );
 

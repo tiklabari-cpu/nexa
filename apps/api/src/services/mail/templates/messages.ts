@@ -1734,6 +1734,7 @@ export function aiConfigScheduleRefusedMail(
 const CAPABILITY_LABELS: Record<CapabilityKey, { en: string; tr: string }> = {
   'chats.view': { en: 'View chats', tr: 'Sohbetleri görme' },
   'chats.takeover': { en: 'Take over a chat', tr: 'Sohbeti devralma' },
+  'timeline.view': { en: "View a chat's timeline", tr: 'Sohbetin zaman çizelgesini görme' },
   'tickets.view': { en: 'View tickets', tr: 'Talepleri görme' },
   'customers.contact.view': {
     en: "See a player's email and username",
@@ -1772,6 +1773,14 @@ const CAPABILITY_LABELS: Record<CapabilityKey, { en: string; tr: string }> = {
   'billing.manage': { en: 'Manage billing', tr: 'Faturalamayı yönetme' },
   'logs.audit.view': { en: 'View the audit log', tr: 'Denetim kaydını görme' },
   'logs.audit.export': { en: 'Stream the audit log (SIEM)', tr: 'Denetim kaydını aktarma (SIEM)' },
+  'timeline.export': {
+    en: "Export a chat's timeline (masked)",
+    tr: 'Zaman çizelgesini dışa aktarma (maskeli)',
+  },
+  'timeline.export_unmasked': {
+    en: "Export a chat's timeline unmasked",
+    tr: 'Zaman çizelgesini maskesiz dışa aktarma',
+  },
 };
 
 const MATRIX_ROLE_LABELS: Record<MatrixRole, { en: string; tr: string }> = {

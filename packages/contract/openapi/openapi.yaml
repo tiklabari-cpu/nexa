@@ -245,6 +245,10 @@ paths:
     $ref: "./paths/chats.yaml#/timeline"
   /chats/{chatId}/timeline/export:
     $ref: "./paths/chats.yaml#/timelineExport"
+  /chats/{chatId}/threads/{threadId}/transcript:
+    $ref: "./paths/chats.yaml#/transcript"
+  /chats/{chatId}/threads/{threadId}/transcript/email:
+    $ref: "./paths/chats.yaml#/transcriptEmail"
   /chats/{chatId}/supervise:
     $ref: "./paths/chats.yaml#/supervise"
   /chats/{chatId}/tags:
@@ -9221,6 +9225,14 @@ components:
             (HD-03): an answer within this many days of its last activity
             reopens it, a later one — or one to a closed ticket — opens a new
             ticket that names it (`related_ticket_id`). 30 unless set.
+        transcript_allowed_domains:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 253, example: sirket.com }
+          description: >-
+            Domains a transcript may be mailed to besides the player's own
+            address (AR-04-S3), lower-case, without the `@`; an address
+            matches when its domain is exactly one of them. Empty unless set.
         updated_at: { type: string, format: date-time, nullable: true }
 
     WidgetSettings:
@@ -14799,6 +14811,7 @@ components:
         - not_allowed
         - not_found
         - pending_requests_limit_reached
+        - recipient_not_allowed
         - request_timeout
         - service_unavailable
         - takeover_conflict

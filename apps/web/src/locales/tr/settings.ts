@@ -280,6 +280,12 @@ export const settings: Messages = {
     'Gün {start} saatinde başlar: {before} saatindeki sohbet hâlâ önceki güne, {start} saatindeki sohbet yeni güne aittir.',
   'settings.dayBoundary.scopeNote':
     'Değişiklik yalnız bundan sonra başlayan bağlantılara uygulanır; bir güne bağlanmış sohbet o günde kalır. Raporlar ve yapay zekâ günlük kotası günleri UTC olarak saymaya devam eder.',
+  'settings.transcriptDomains.heading': 'Döküm alıcıları',
+  'settings.transcriptDomains.description':
+    'Sohbet dökümü oyuncunun kendi adresine ve bu alan adlarındaki adreslere e-postayla gönderilebilir. E-postayla yalnız oyuncu kopyası gider — iç notlar panelde kalır.',
+  'settings.transcriptDomains.label': 'İzin verilen alan adları (her satıra bir tane)',
+  'settings.transcriptDomains.invalid': 'Her satır sirket.com gibi bir alan adı olmalı.',
+  'settings.transcriptDomains.tooMany': 'En fazla {max} alan adı.',
 
   // Talep e-posta şablonları — TicketEmailTemplates.tsx
   'settings.ticketEmailTemplates.title': 'Talep e-posta şablonları',
@@ -1515,6 +1521,7 @@ export const settings: Messages = {
   'permissions.capability.chats.takeover': 'Sohbeti devralma',
   'permissions.capability.timeline.view': 'Sohbetin zaman çizelgesini görme',
   'permissions.capability.ratings.view': 'Oyuncu puanlarını ve yorumlarını görme',
+  'permissions.capability.transcripts.export': 'Sohbet dökümünü indirme, yazdırma ve gönderme',
   'permissions.capability.tickets.view': 'Talepleri görme',
   'permissions.capability.customers.contact.view': 'Oyuncunun e-postasını ve kullanıcı adını görme',
   'permissions.capability.customers.edit': 'Oyuncu kayıtlarını düzenleme',

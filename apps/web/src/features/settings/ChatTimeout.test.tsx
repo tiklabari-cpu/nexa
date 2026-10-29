@@ -309,6 +309,26 @@ describe('ChatTimeout day boundary (ID-04)', () => {
     expect(putBodies[0]).toEqual({ chat_timeout_seconds: null, day_boundary_hour: 23 });
   });
 
+  it('saves the transcript domains normalised, and refuses a line that is not a domain (AR-04-S3)', async () => {
+    renderChatTimeout();
+    const box = await screen.findByLabelText('Allowed domains (one per line)');
+    await userEvent.type(box, 'not a domain');
+    await userEvent.tab();
+    expect(
+      await screen.findByText('Each line must be a domain name, like sirket.com.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+    await userEvent.clear(box);
+    await userEvent.type(box, ' @Sirket.COM {Enter}sirket.com');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(putBodies).toHaveLength(1));
+    expect(putBodies[0]).toEqual({
+      chat_timeout_seconds: null,
+      transcript_allowed_domains: ['sirket.com'],
+    });
+  });
+
   it('typing in the search box alone does not make the form dirty', async () => {
     renderChatTimeout();
     await screen.findByLabelText('Time zone');

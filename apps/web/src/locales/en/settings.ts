@@ -289,6 +289,12 @@ export const settings: Messages = {
     'The day starts at {start}: a chat at {before} still belongs to the previous day, one at {start} to the new day.',
   'settings.dayBoundary.scopeNote':
     'A change applies to connections that start afterwards; a chat already filed under a day keeps it. Reports and the AI daily quota keep counting days in UTC.',
+  'settings.transcriptDomains.heading': 'Transcript recipients',
+  'settings.transcriptDomains.description':
+    "A transcript can be emailed to the player's own address, and to addresses at these domains. Only the player's copy is ever emailed — internal notes stay in the panel.",
+  'settings.transcriptDomains.label': 'Allowed domains (one per line)',
+  'settings.transcriptDomains.invalid': 'Each line must be a domain name, like sirket.com.',
+  'settings.transcriptDomains.tooMany': 'At most {max} domains.',
 
   // Ticket email templates — TicketEmailTemplates.tsx
   'settings.ticketEmailTemplates.title': 'Ticket email templates',
@@ -1516,6 +1522,7 @@ export const settings: Messages = {
   'permissions.capability.chats.takeover': 'Take over a chat',
   'permissions.capability.timeline.view': "View a chat's timeline",
   'permissions.capability.ratings.view': "See players' ratings and comments",
+  'permissions.capability.transcripts.export': "Download, print and mail a chat's transcript",
   'permissions.capability.tickets.view': 'View tickets',
   'permissions.capability.customers.contact.view': "See a player's email and username",
   'permissions.capability.customers.edit': 'Edit player records',

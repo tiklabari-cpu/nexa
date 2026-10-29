@@ -254,6 +254,9 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
       'chat.message_edited',
       // A timeline download (ID-09 · tm 334.1): the conversation leaving in a file.
       'chat.timeline_exported',
+      // A transcript downloaded, printed or mailed (AR-04 · tm 338).
+      'chat.transcript_exported',
+      'chat.transcript_emailed',
     ],
   },
   {

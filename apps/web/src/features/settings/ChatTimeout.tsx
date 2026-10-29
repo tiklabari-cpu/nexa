@@ -34,6 +34,10 @@
  * `localDayKey` the server files chats by — shows which day a chat started right
  * now would land on, the one thing a person editing this cannot otherwise see.
  *
+ * And where a transcript may be mailed besides the player's own address (AR-04-S3
+ * · tm 338, `transcript_allowed_domains`): one domain a line, checked with the
+ * same `normaliseTranscriptDomain` the server stores them with.
+ *
  * A save sends `chat_timeout_seconds` (the endpoint requires it) and every other
  * field only when it changed, like the company form's diff: a timeout-only save
  * should not read as a transfer or day-boundary change in the audit trail.
@@ -44,7 +48,9 @@ import {
   CHAT_INACTIVITY_ORDER_PROBLEMS,
   DEFAULT_DAY_BOUNDARY,
   INACTIVITY_WINDOW_MAX_SECONDS,
+  TRANSCRIPT_ALLOWED_DOMAINS_MAX,
   chatInactivityOrderProblem,
+  normaliseTranscriptDomain,
   isDayBoundaryHour,
   localDayKey,
   type ChatInactivityOrderProblem,
@@ -67,6 +73,8 @@ interface ChatTimeoutSettings {
   inactive_after_seconds?: number | null;
   /** Absent only from a server that predates tm 340.2: read as the column's default, on. */
   pause_unresponsive_agents?: boolean;
+  /** Absent only from a server that predates tm 338: read as none. */
+  transcript_allowed_domains?: string[];
   updated_at: string | null;
 }
 
@@ -77,13 +85,20 @@ interface ChatTimeoutBody {
   unanswered_transfer_seconds?: number | null;
   inactive_after_seconds?: number | null;
   pause_unresponsive_agents?: boolean;
+  transcript_allowed_domains?: string[];
 }
 
 type DurationUnit = 'minutes' | 'hours';
 /** The three windows, in the order a conversation goes quiet. */
 type Window = 'transfer' | 'inactive' | 'timeout';
 type FormValues = Record<
-  `${Window}Enabled` | `${Window}Amount` | `${Window}Unit` | 'pause' | 'timezone' | 'hour',
+  | `${Window}Enabled`
+  | `${Window}Amount`
+  | `${Window}Unit`
+  | 'pause'
+  | 'timezone'
+  | 'hour'
+  | 'domains',
   string
 >;
 
@@ -147,6 +162,26 @@ function serverOrderProblem(error: unknown): ChatInactivityOrderProblem | null {
   return (CHAT_INACTIVITY_ORDER_PROBLEMS as readonly unknown[]).includes(problem)
     ? (problem as ChatInactivityOrderProblem)
     : null;
+}
+
+/**
+ * The domains box as the server would store it — one a line, normalised,
+ * duplicates dropped — or the error key for the first line that is not one.
+ */
+function parseDomains(
+  value: string,
+): { domains: string[]; error: null } | { domains: null; error: string } {
+  const domains: string[] = [];
+  for (const line of value.split('\n')) {
+    if (line.trim() === '') continue;
+    const domain = normaliseTranscriptDomain(line);
+    if (domain === null) return { domains: null, error: 'settings.transcriptDomains.invalid' };
+    if (!domains.includes(domain)) domains.push(domain);
+  }
+  if (domains.length > TRANSCRIPT_ALLOWED_DOMAINS_MAX) {
+    return { domains: null, error: 'settings.transcriptDomains.tooMany' };
+  }
+  return { domains, error: null };
 }
 
 function hourLabel(hour: number): string {
@@ -242,6 +277,7 @@ function ChatTimeoutForm({
   const savedPause = config.pause_unresponsive_agents ?? true;
   const savedTimezone = config.day_boundary_timezone ?? DEFAULT_DAY_BOUNDARY.timezone;
   const savedHour = config.day_boundary_hour ?? DEFAULT_DAY_BOUNDARY.hour;
+  const savedDomains = config.transcript_allowed_domains ?? [];
   // The zone search narrows the list; it is not part of what is saved, so it
   // lives outside the form and never makes the form dirty.
   const [zoneSearch, setZoneSearch] = useState('');
@@ -262,9 +298,18 @@ function ChatTimeoutForm({
   initial.pause = String(savedPause);
   initial.timezone = savedTimezone;
   initial.hour = String(savedHour);
+  initial.domains = savedDomains.join('\n');
 
   const form = useForm<FormValues>({
     initial,
+    validators: {
+      domains: (value) => {
+        const parsed = parseDomains(value);
+        return parsed.error !== null
+          ? t(parsed.error, { max: TRANSCRIPT_ALLOWED_DOMAINS_MAX })
+          : null;
+      },
+    },
     // No validators here for the amounts: each one's valid range depends on its
     // unit and its switch, and their order on all three, which a single-field
     // `Validator` cannot see. `amountError` and `orderProblem` check the form.
@@ -276,6 +321,11 @@ function ChatTimeoutForm({
           setFieldError(`${window}Amount`, error);
           invalid = true;
         }
+      }
+      const parsed = parseDomains(values.domains);
+      if (parsed.error !== null) {
+        setFieldError('domains', t(parsed.error, { max: TRANSCRIPT_ALLOWED_DOMAINS_MAX }));
+        invalid = true;
       }
       if (invalid || orderProblem(values)) return;
 
@@ -292,6 +342,9 @@ function ChatTimeoutForm({
       }
       if (values.timezone !== savedTimezone) body.day_boundary_timezone = values.timezone;
       if (Number(values.hour) !== savedHour) body.day_boundary_hour = Number(values.hour);
+      if (parsed.domains !== null && parsed.domains.join('\n') !== savedDomains.join('\n')) {
+        body.transcript_allowed_domains = parsed.domains;
+      }
       try {
         await save.mutateAsync(body);
       } catch (error_) {
@@ -450,7 +503,41 @@ function ChatTimeoutForm({
         <p className="text-2xs text-content-tertiary">{t('settings.dayBoundary.scopeNote')}</p>
       </fieldset>
 
-      {canEdit && <FormSaveBar form={form} valid={amountsValid && problem === null} />}
+      <fieldset
+        disabled={!canEdit}
+        aria-labelledby="transcript-domains-heading"
+        className="flex flex-col gap-2 border-0 border-t border-border p-0 pt-5"
+      >
+        <div>
+          <h3 id="transcript-domains-heading" className="text-sm font-medium">
+            {t('settings.transcriptDomains.heading')}
+          </h3>
+          <p className="text-2xs text-content-tertiary">
+            {t('settings.transcriptDomains.description')}
+          </p>
+        </div>
+        <label
+          htmlFor="transcript-domains"
+          className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+        >
+          {t('settings.transcriptDomains.label')}
+        </label>
+        <textarea
+          id="transcript-domains"
+          rows={3}
+          value={form.values.domains}
+          onChange={(event) => form.setValue('domains', event.target.value)}
+          onBlur={() => form.blur('domains')}
+          placeholder="sirket.com"
+          aria-describedby="transcript-domains-error"
+          className="w-80 rounded-md border border-border bg-inset px-2 py-1.5 font-mono text-sm outline-none disabled:opacity-50"
+        />
+        <FieldError id="transcript-domains-error" message={form.errorFor('domains')} />
+      </fieldset>
+
+      {canEdit && (
+        <FormSaveBar form={form} valid={amountsValid && problem === null && form.isValid} />
+      )}
     </form>
   );
 }

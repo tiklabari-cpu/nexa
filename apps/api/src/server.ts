@@ -43,6 +43,7 @@ import scimRoutes from './routes/scim.js';
 import agentRoutes from './routes/agents.js';
 import notificationRoutes from './routes/notifications.js';
 import chatRoutes from './routes/chats.js';
+import transcriptRoutes from './routes/transcripts.js';
 import customerRoutes from './routes/customer.js';
 import customerDirectoryRoutes from './routes/customers.js';
 import memberRecognitionRoutes from './routes/member-recognition.js';
@@ -649,6 +650,8 @@ export async function buildServer({
         ...(appsHttp ? { appsHttp } : {}),
         ...(appsEndpoints ? { appsEndpoints } : {}),
       });
+      // A connection's transcript on demand (AR-04 · tm 338).
+      await api.register(transcriptRoutes);
       await api.register(agentRoutes);
       await api.register(notificationRoutes);
       await api.register(customerRoutes, {

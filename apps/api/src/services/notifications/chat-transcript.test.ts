@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { renderTranscript, transcriptRecipients, type TranscriptLine } from './chat-transcript.js';
+import {
+  renderTranscript,
+  transcriptMessages,
+  transcriptRecipients,
+  type TranscriptLine,
+} from './chat-transcript.js';
 
 describe('transcriptRecipients', () => {
   const assignee = { email: 'agent@example.test', name: 'Ada', emailEnabled: true };
@@ -189,5 +194,51 @@ describe('renderTranscript', () => {
       frame,
     });
     expect(content!.body).toContain('Visitor: (sent a file)');
+  });
+});
+
+describe('transcriptMessages (AR-04 · tm 338)', () => {
+  const lines: TranscriptLine[] = [
+    {
+      authorType: 'customer',
+      authorName: null,
+      text: 'Here is the receipt',
+      type: 'message',
+      recipients: 'all',
+      createdAt: new Date('2026-10-20T07:15:00.000Z'),
+      attachmentName: 'dekont.pdf',
+    },
+    {
+      authorType: 'agent',
+      authorName: 'Ada',
+      text: 'KYC pending',
+      type: 'message',
+      recipients: 'agents',
+      createdAt: new Date('2026-10-20T07:16:00.000Z'),
+    },
+  ];
+
+  it("names a file without a link, and points the team's copy at the panel", () => {
+    const team = transcriptMessages({
+      audience: 'team',
+      customerName: 'Ayşe',
+      lines,
+      locale: 'tr',
+      fileNote: true,
+    });
+    expect(team.map((m) => [m.role, m.who, m.text])).toEqual([
+      ['customer', 'Ayşe', 'Here is the receipt\n(dosya: dekont.pdf — panelde görüntüleyin)'],
+      ['note', 'Ada · dahili not', 'KYC pending'],
+    ]);
+  });
+
+  it("leaves every internal note out of the player's copy", () => {
+    const customer = transcriptMessages({
+      audience: 'customer',
+      customerName: null,
+      lines,
+      locale: 'en',
+    });
+    expect(customer.map((m) => m.text)).toEqual(['Here is the receipt\n(file: dekont.pdf)']);
   });
 });

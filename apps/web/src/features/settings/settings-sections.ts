@@ -258,7 +258,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.chatTimeout',
     scope: ACCESS_RULES,
     file: 'ChatTimeout',
-    keywords: ['auto close', 'idle'],
+    keywords: ['auto close', 'idle', 'transcript domains'],
   },
   {
     slug: 'ticket-email-templates',

@@ -28,6 +28,7 @@ import type { TranscriptFocus } from '../inbox/dayConnections.js';
 import { PlayerCard } from '../inbox/PlayerCard.js';
 import { Transcript } from '../inbox/Transcript.js';
 import { archiveRefusal } from './archive.js';
+import { TranscriptActions } from './TranscriptActions.js';
 import { useArchiveTranscript, useReopenConnection, useTeamNames } from './useArchive.js';
 
 type DetailQuery = UseQueryResult<ArchiveConversationDetail>;
@@ -150,6 +151,7 @@ function ConnectionHeader({
               {t('archive.action.timeline')}
             </button>
           )}
+          <TranscriptActions detail={detail} />
           {closed && canReopen && (
             <button
               type="button"

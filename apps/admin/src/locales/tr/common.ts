@@ -76,6 +76,8 @@ export const common: Messages = {
     'Bu işlemi onaylamak için doğrulama uygulamanızdan yeni bir kod girin.',
   'common.errors.platform_totp_required': 'Önce doğrulama uygulamanızdaki kodla girişi tamamlayın.',
   'common.errors.platform_workspace_state': 'Çalışma alanının şu anki durumu buna izin vermiyor.',
+  'common.errors.recipient_not_allowed':
+    'Döküm yalnız oyuncunun kendi adresine ya da çalışma alanının izin verdiği alan adlarına gönderilebilir.',
   'common.errors.request_timeout': 'Bu işlem çok uzun sürdü — yeniden deneyin.',
   'common.errors.sandbox_exists': 'Bu çalışma alanında zaten bir kum havuzu var.',
   'common.errors.service_unavailable': 'Servis geçici olarak kullanılamıyor — birazdan deneyin.',

@@ -91,6 +91,8 @@ export const auditLabels: Messages = {
   'audit.action.chat.connection_opened': 'Sohbete yeni bağlantı açıldı',
   'audit.action.chat.message_edited': 'Sohbet mesajı düzenlendi',
   'audit.action.chat.timeline_exported': 'Sohbetin zaman çizelgesi dışa aktarıldı',
+  'audit.action.chat.transcript_exported': 'Sohbet dökümü indirildi',
+  'audit.action.chat.transcript_emailed': 'Sohbet dökümü e-postayla gönderildi',
   'audit.action.customer.banned': 'Müşteri engellendi',
   'audit.action.customer.unbanned': 'Müşterinin engeli kaldırıldı',
   'audit.action.customer.identity_linked': 'Müşteri kayıtları aynı kişi olarak bağlandı',

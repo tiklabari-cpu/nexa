@@ -1739,6 +1739,10 @@ const CAPABILITY_LABELS: Record<CapabilityKey, { en: string; tr: string }> = {
     en: "See players' ratings and comments",
     tr: 'Oyuncu puanlarını ve yorumlarını görme',
   },
+  'transcripts.export': {
+    en: "Download, print and mail a chat's transcript",
+    tr: 'Sohbet dökümünü indirme, yazdırma ve gönderme',
+  },
   'tickets.view': { en: 'View tickets', tr: 'Talepleri görme' },
   'customers.contact.view': {
     en: "See a player's email and username",
@@ -1989,7 +1993,7 @@ function zone(timeZone: string): string {
 }
 
 /** "Times are in Europe/Istanbul time." — said once, under the transcript. */
-function zoneSentence(locale: MailLocale, timeZone: string): string {
+export function zoneSentence(locale: MailLocale, timeZone: string): string {
   const label = zoneLabel(timeZone);
   if (tr(locale))
     return label === 'UTC' ? "Saatler UTC'ye göredir." : `Saatler ${label} saatine göredir.`;

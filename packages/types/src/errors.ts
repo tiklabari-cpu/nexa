@@ -184,6 +184,12 @@ export const ERROR_TYPES = [
   'platform_recent_totp_required',
   'platform_totp_required',
   'platform_workspace_state',
+  // SiyahTuş addition — a transcript mailed on demand (AR-04 · tm 338): an
+  // address that is neither the player's own nor at one of the workspace's
+  // allowed domains (AR-04-S3). 403 like `message_rejected`: the caller may
+  // mail transcripts, the workspace's rule refused this recipient, and the
+  // modal answers "pick an allowed address" rather than "you lack permission".
+  'recipient_not_allowed',
   'request_timeout',
   // SiyahTuş addition — the sandbox workspace (FR-MOD-11.5 · 11.5-f). A licence may
   // hold at most one sandbox, and asking for a second is a conflict rather than
@@ -300,6 +306,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   platform_recent_totp_required: 403,
   platform_totp_required: 403,
   platform_workspace_state: 409,
+  recipient_not_allowed: 403,
   request_timeout: 408,
   sandbox_exists: 409,
   service_unavailable: 503,

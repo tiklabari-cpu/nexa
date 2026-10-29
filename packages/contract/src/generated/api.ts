@@ -1714,6 +1714,81 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/chats/{chatId}/threads/{threadId}/transcript': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Download one connection's transcript
+     * @description One connection's transcript as a file (AR-04), streamed:
+     *     `txt` (plain text) or `html` (a printable page — the browser's "Save
+     *     as PDF" keeps every Turkish letter). Headed with the workspace, the
+     *     Thread ID (`chat_id`) and the Chat ID (`thread_id`), the player's
+     *     username, the start and end in the workspace's time zone, the agents,
+     *     and who exported it when. A file is listed by its name with a note to
+     *     open it in the panel — no link to it.
+     *
+     *     `audience=customer` is the player's copy: no internal note.
+     *     `audience=internal` carries them, marked as notes (AR-04-S2).
+     *
+     *     Who may: the permission matrix's `transcripts.export`, inside
+     *     `chats.view` (AR-04-S1, Ekip Lideri and up by default): `own` — a
+     *     connection the person was assigned, wrote on or joined; `team` — one
+     *     routed to a team of theirs; `all` — any they may see. A role at `none`
+     *     is `403` `capability_required`; a chat or connection outside the reach,
+     *     or another workspace's, is `404` (NFR-S5). At most 10 downloads,
+     *     prints and mails a person a minute (`429`). Every download writes
+     *     `chat.transcript_exported` (format and copy, no text) to the audit log
+     *     before the first byte.
+     *
+     *     Agents only.
+     */
+    get: operations['getThreadTranscript'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/chats/{chatId}/threads/{threadId}/transcript/email': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Mail the player's copy of one connection's transcript
+     * @description Mails the player's copy (no internal note) of one connection (AR-04),
+     *     in the template the closing transcript uses, to `to`: the player's own
+     *     address, or one at a domain the workspace allows
+     *     (`transcript_allowed_domains`, AR-04-S3). Any other address is `403`
+     *     `recipient_not_allowed`. The internal copy is never mailed.
+     *
+     *     Who may: `transcripts.export` as for the download — or, for anyone who
+     *     can see the connection, the player's own address on a connection the
+     *     person was assigned, wrote on or joined (AR-04-S1). Counted against
+     *     the workspace's daily outbound mail cap; the same 10 a minute as the
+     *     download. Answers `202` once the mail is handed to the carrier and
+     *     writes `chat.transcript_emailed` (the recipient's domain, whether it
+     *     was the player's address — no address, no text).
+     *
+     *     Agents only.
+     */
+    post: operations['emailThreadTranscript'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/chats/{chatId}/supervise': {
     parameters: {
       query?: never;
@@ -8647,6 +8722,8 @@ export interface paths {
      *     whether the agent a connection was taken from stops receiving chats.
      *     So is `ticket_reopen_window_days` (1-365, HD-03): how many days after
      *     its last activity a player's e-mail answer still reopens a solved ticket.
+     *     And `transcript_allowed_domains` (AR-04-S3): where a transcript may be
+     *     mailed besides the player's own address.
      */
     put: operations['setChatTimeout'];
     post?: never;
@@ -18162,6 +18239,8 @@ export interface components {
        * @description How long a solved ticket waits for the player's answer by e-mail (HD-03): an answer within this many days of its last activity reopens it, a later one — or one to a closed ticket — opens a new ticket that names it (`related_ticket_id`). 30 unless set.
        */
       ticket_reopen_window_days?: number;
+      /** @description Domains a transcript may be mailed to besides the player's own address (AR-04-S3), lower-case, without the `@`; an address matches when its domain is exactly one of them. Empty unless set. */
+      transcript_allowed_domains?: string[];
       /** Format: date-time */
       updated_at: string | null;
     };
@@ -22433,6 +22512,7 @@ export interface components {
       | 'not_allowed'
       | 'not_found'
       | 'pending_requests_limit_reached'
+      | 'recipient_not_allowed'
       | 'request_timeout'
       | 'service_unavailable'
       | 'takeover_conflict'
@@ -25419,6 +25499,89 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+    };
+  };
+  getThreadTranscript: {
+    parameters: {
+      query?: {
+        format?: 'txt' | 'html';
+        audience?: 'customer' | 'internal';
+      };
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
+        chatId: components['parameters']['ChatId'];
+        /** @description One connection of the day (Panelde: Chat ID). */
+        threadId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The file (`Content-Disposition` attachment) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/plain': string;
+          'text/html': string;
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  emailThreadTranscript: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
+        chatId: components['parameters']['ChatId'];
+        /** @description One connection of the day (Panelde: Chat ID). */
+        threadId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /**
+           * Format: email
+           * @description The recipient. Absent: the player's registered address — for a caller who may not see it (`customers.contact.view`). A player with no address is `400`.
+           */
+          to?: string;
+          /**
+           * @description Only the player's copy is mailed.
+           * @default customer
+           * @enum {string}
+           */
+          audience?: 'customer';
+        };
+      };
+    };
+    responses: {
+      /** @description Accepted for delivery */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @enum {boolean} */
+            accepted: true;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
     };
   };
   superviseChat: {
@@ -35833,6 +35996,8 @@ export interface operations {
            * @description Days after its last activity that a player's e-mail answer still reopens a solved ticket (HD-03); later, a new related ticket opens. Left out, the stored value stays.
            */
           ticket_reopen_window_days?: number;
+          /** @description Domains a transcript may be mailed to besides the player's own address (AR-04-S3). Stored trimmed, lower-case and without a leading `@`, duplicates dropped; a value that is not a domain name is a 400. Left out, the stored list stays. */
+          transcript_allowed_domains?: string[];
         };
       };
     };

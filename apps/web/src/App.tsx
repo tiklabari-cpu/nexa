@@ -28,6 +28,7 @@ import { AuditLogPage } from './features/audit/AuditLogPage.js';
 import { AppsMarketplacePage } from './features/apps/AppsMarketplace.js';
 import { DeveloperPortalPage } from './features/developers/DeveloperPortal.js';
 import { ArchivePage } from './features/archive/ArchivePage.js';
+import { TranscriptPrintPage } from './features/archive/TranscriptPrintPage.js';
 import { TimelinePage } from './features/timeline/TimelinePage.js';
 import { InboxPage } from './features/inbox/InboxPage.js';
 import { HomePage } from './features/home/HomePage.js';
@@ -225,6 +226,9 @@ function SignedInRoutes({ onboarding }: { onboarding: boolean }): ReactElement {
           gate while the address is still this one, so without this the shell's
           "Page not found" showed for a moment before the inbox (tm 259.26). */}
       <Route path="/app/onboarding" element={<Navigate to="/app/inbox" replace />} />
+      {/* A transcript's print view (AR-04 · tm 338): outside the shell, so the
+          printed page is the transcript alone. */}
+      <Route path="/app/archive/:chatId/print" element={<TranscriptPrintPage />} />
       {/* Anything outside /app, including the OAuth callback path, lands in the inbox. */}
       <Route path="*" element={<Navigate to="/app/inbox" replace />} />
     </Routes>

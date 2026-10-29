@@ -149,6 +149,47 @@ export const archive: Messages = {
   'archive.action.reopen': 'Yeniden aç',
   'archive.action.reopening': 'Yeniden açılıyor…',
 
+  // Döküm dışarı (AR-04)
+  'archive.transcript.download': 'İndir (TXT)',
+  'archive.transcript.print': 'Yazdır / PDF',
+  'archive.transcript.email': 'Dökümü e-postayla gönder',
+  'archive.transcript.downloadTitle': 'Dökümü indir',
+  'archive.transcript.downloadDescription':
+    'Bu görüşmenin düz metin dosyası; başında iki numarası, oyuncu, temsilciler ve saat dilimi yazar.',
+  'archive.transcript.printTitle': 'Dökümü yazdır',
+  'archive.transcript.printDescription':
+    'Bu görüşmenin yazdırma görünümünü açar. PDF için yazdırma penceresinde "PDF olarak kaydet"i seçin.',
+  'archive.transcript.copy.legend': 'Kopya',
+  'archive.transcript.copy.customer': 'Oyuncu kopyası — iç not yok',
+  'archive.transcript.copy.internal': 'İç kopya — iç notlar dahil',
+  'archive.transcript.audited':
+    'Her indirme, yazdırma ve e-posta gönderimi denetim kaydına yazılır.',
+  'archive.transcript.cancel': 'Vazgeç',
+  'archive.transcript.close': 'Kapat',
+  'archive.transcript.preparing': 'Hazırlanıyor…',
+  'archive.transcript.submitDownload': 'İndir',
+  'archive.transcript.submitPrint': 'Yazdırma görünümünü aç',
+  'archive.transcript.emailTitle': 'Oyuncu kopyasını e-postayla gönder',
+  'archive.transcript.emailDescription':
+    'E-postayla yalnız oyuncu kopyası gider — iç notlar panelden çıkmaz.',
+  'archive.transcript.recipient.legend': 'Alıcı',
+  'archive.transcript.recipient.player': 'Oyuncunun kayıtlı e-posta adresi',
+  'archive.transcript.recipient.other': 'Başka bir adres',
+  'archive.transcript.recipient.address': 'E-posta adresi',
+  'archive.transcript.recipient.otherHint':
+    'Döküm yalnız çalışma alanının izin verdiği alan adlarındaki adreslere gönderilebilir (Ayarlar, Gelen kutusu).',
+  'archive.transcript.recipient.playerOnly':
+    'Rolünüz dökümü yalnız oyuncunun kendi adresine gönderebilir.',
+  'archive.transcript.send': 'Gönder',
+  'archive.transcript.sending': 'Gönderiliyor…',
+  'archive.transcript.sent': 'Döküm gönderildi.',
+
+  // Yazdırma görünümü
+  'archive.print.back': 'Geri',
+  'archive.print.print': 'Yazdır / PDF olarak kaydet',
+  'archive.print.loading': 'Döküm hazırlanıyor…',
+  'archive.print.error.title': 'Döküm hazırlanamadı',
+
   'archive.player.ariaLabel': 'Oyuncu ve konuşma ayrıntıları',
   'archive.player.title': 'Oyuncu',
   'archive.player.none': 'Kimin yazdığını görmek için bir konuşma seçin.',

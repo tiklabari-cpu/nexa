@@ -78,6 +78,8 @@ export const common: Messages = {
     'Enter a fresh authenticator code to confirm this action.',
   'common.errors.platform_totp_required': 'Finish signing in with your authenticator code first.',
   'common.errors.platform_workspace_state': 'The workspace is not in a state that allows this.',
+  'common.errors.recipient_not_allowed':
+    "Transcripts can only be mailed to the player's own address or to one of the workspace's allowed domains.",
   'common.errors.request_timeout': 'That took too long — try again.',
   'common.errors.sandbox_exists': 'This workspace already has a sandbox.',
   'common.errors.service_unavailable':

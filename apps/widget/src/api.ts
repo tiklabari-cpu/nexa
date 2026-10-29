@@ -512,8 +512,21 @@ export class WidgetApi {
     });
   }
 
-  async rate(value: 'good' | 'bad'): Promise<void> {
-    await this.#request('POST', '/customer/chat/rating', { value });
+  /**
+   * A vote, or a vote with its comment (AR-03 · WG-11): one rating per
+   * connection on the server, so sending the comment again with the same
+   * value writes onto the rating rather than adding one. `threadId` is the
+   * connection the prompt is for — without it the server rates the newest.
+   */
+  async rate(
+    value: 'good' | 'bad',
+    options: { threadId?: string | null; comment?: string } = {},
+  ): Promise<void> {
+    await this.#request('POST', '/customer/chat/rating', {
+      value,
+      ...(options.threadId ? { thread_id: options.threadId } : {}),
+      ...(options.comment ? { comment: options.comment } : {}),
+    });
   }
 
   /**

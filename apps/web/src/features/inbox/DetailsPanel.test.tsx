@@ -493,3 +493,27 @@ describe('DetailsPanel Teams section names the teams', () => {
     expect(screen.getByText('Not routed to a team.')).toBeInTheDocument();
   });
 });
+
+describe('DetailsPanel — the rating (AR-03 · WG-11 · tm 337)', () => {
+  it("shows the player's rating and comment on the connection the server returns it for", () => {
+    renderPanel(
+      baseChat({
+        rating: {
+          value: 'bad',
+          has_comment: true,
+          comment: 'Nobody answered for an hour',
+          rated_at: '2026-07-20T10:30:00.000Z',
+        },
+      }),
+    );
+    const row = rowValue('Rating');
+    expect(within(row).getByTestId('rating-badge')).toHaveTextContent('Rated bad (with a comment)');
+    expect(within(row).getByText('Nobody answered for an hour')).toBeInTheDocument();
+  });
+
+  it('draws no rating row when there is none, or none the caller may see', () => {
+    renderPanel(baseChat({ rating: null }));
+    expect(screen.queryByText('Rating')).toBeNull();
+    expect(screen.queryByTestId('rating-badge')).toBeNull();
+  });
+});

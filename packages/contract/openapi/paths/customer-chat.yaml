@@ -469,10 +469,23 @@ rating:
   post:
     tags: [Customer]
     operationId: rateCustomerChat
-    summary: Rate the conversation
+    summary: Rate a connection, or add a comment to its rating
     description: |
-      Applies to the visitor's most recent conversation whether or not it is
-      still open, because ratings usually arrive just after one closes.
+      One rating per connection (AR-03 · WG-11). `thread_id` names the
+      connection being rated — the widget sends the one its prompt is for, so
+      a player who has opened a new conversation since still rates the old one.
+      Without it the visitor's most recent connection is rated, open or not,
+      because ratings usually arrive just after one closes.
+
+      A connection already rated is not rated twice: the call writes onto its
+      rating (the newest, for one rated twice before this rule) and answers
+      `200` — a changed `value` replaces the old one and moves `rated_at`,
+      a `comment` is added to it, and neither adds to the rating count. A
+      first rating answers `201`. The comment is plain text, its card numbers,
+      IBANs and passwords masked before it is stored.
+
+      Only the player rates: no agent route writes or changes a rating. The
+      agents who have the conversation are told (`chat_rated`).
     requestBody:
       required: true
       content:
@@ -483,24 +496,43 @@ rating:
             properties:
               value: { type: string, enum: [good, bad] }
               comment: { type: string, maxLength: 1000 }
+              thread_id:
+                type: string
+                minLength: 1
+                maxLength: 12
+                description: |
+                  "Panelde: Chat ID (bağlantı)." One of this visitor's
+                  connections; any other is a 404.
     responses:
+      "200":
+        description: The connection's rating, changed or commented
+        content:
+          application/json:
+            schema: { $ref: "#/ratingRecorded" }
       "201":
         description: Rating recorded
         content:
           application/json:
-            schema:
-              type: object
-              required: [id, value, chat_id]
-              properties:
-                id: { type: string, format: uuid }
-                value: { type: string, enum: [good, bad] }
-                chat_id:
-                  type: string
-                  description: "Panelde: Thread ID (günlük)."
+            schema: { $ref: "#/ratingRecorded" }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+ratingRecorded:
+  type: object
+  required: [id, value, chat_id, thread_id, has_comment]
+  properties:
+    id: { type: string, format: uuid }
+    value: { type: string, enum: [good, bad] }
+    chat_id:
+      type: string
+      description: "Panelde: Thread ID (günlük)."
+    thread_id:
+      type: string
+      nullable: true
+      description: "Panelde: Chat ID (bağlantı) — the connection rated."
+    has_comment: { type: boolean }
 
 leaveTicket:
   post:

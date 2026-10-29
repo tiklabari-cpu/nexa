@@ -2,6 +2,7 @@ import { useState, type ReactElement } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { CopyId } from '../../components/CopyId.js';
+import { RatingBadge, RatingComment } from '../../components/RatingBadge.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { Banner, Dropdown, Modal, Panel, PanelSection } from '../../components/ui/index.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
@@ -281,6 +282,21 @@ export function DetailsPanel({
           <Row label={t('inbox.details.row.started')}>
             <span className="text-xs">{formatDateTime(chat.created_at)}</span>
           </Row>
+          {/* The player's verdict on this connection (AR-03 · WG-11), as soon as it is given —
+              `chat_rated` re-reads the chat. Absent when unrated or not the caller's to see. */}
+          {chat.thread?.rating && (
+            <Row label={t('archive.facts.rating')}>
+              <span className="flex flex-col items-end gap-0.5">
+                <RatingBadge
+                  value={chat.thread.rating.value}
+                  hasComment={chat.thread.rating.has_comment}
+                />
+                {chat.thread.rating.comment && (
+                  <RatingComment comment={chat.thread.rating.comment} />
+                )}
+              </span>
+            </Row>
+          )}
           {/* Everything that happened in the day on one page (ID-09 · tm 334.2). Here rather than in
               the thread header: a labelled action there costs the visitor's name its room at 1280 px. */}
           {onOpenTimeline && capabilities?.['timeline.view'] !== 'none' && (

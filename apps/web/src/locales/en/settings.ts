@@ -1515,6 +1515,7 @@ export const settings: Messages = {
   'permissions.capability.chats.view': 'View chats',
   'permissions.capability.chats.takeover': 'Take over a chat',
   'permissions.capability.timeline.view': "View a chat's timeline",
+  'permissions.capability.ratings.view': "See players' ratings and comments",
   'permissions.capability.tickets.view': 'View tickets',
   'permissions.capability.customers.contact.view': "See a player's email and username",
   'permissions.capability.customers.edit': 'Edit player records',

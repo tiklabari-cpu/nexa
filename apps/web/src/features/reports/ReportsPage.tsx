@@ -53,6 +53,7 @@ import { SurveyPopover } from './SurveyPopover.js';
 import { ShareControl } from './ShareControl.js';
 import { QA_PATH } from './qa/qa.js';
 import { AiMetricsPanel } from './AiMetricsPanel.js';
+import { ReviewComments } from './ReviewComments.js';
 import { roleAtLeast } from '../team/RoleMenu.js';
 
 interface Period {
@@ -1282,6 +1283,9 @@ function ReviewsTab(props: TabProps): ReactElement {
           <InsightList insights={data.insights} />
         </Card>
       </Section>
+
+      {/* What the players wrote with their ratings (WG-11): the reason behind the split above. */}
+      <ReviewComments range={props.range} rangeKey={props.rangeKey} />
 
       <Section
         title={t('reports.reviews.byDay.title')}

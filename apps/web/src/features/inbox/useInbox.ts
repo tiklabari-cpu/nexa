@@ -1168,6 +1168,9 @@ export function useRealtime(onPush?: PushHandler): void {
         // The AI handed a conversation over and left its card (AI-10): the
         // Details panel's top and the transcript's card line, within a second.
         'ai_handoff_created',
+        // The player rated a connection or commented on its rating (AR-03 ·
+        // WG-11): the Details panel's Rating row, and an open archive row.
+        'chat_rated',
         // A message landed on a ticket, or a reply's e-mail settled (HD-01 · tm
         // 356): the open ticket's thread, and the status a reply moved.
         'ticket_message_created',
@@ -1567,6 +1570,17 @@ export function applyPush(
       // note is the server's to show or hide for this caller.
       void queryClient.invalidateQueries({ queryKey: RISK_FLAGS_KEY });
       return;
+
+    case 'chat_rated': {
+      // Ids only: whether this caller sees the rating is the server's call
+      // (`ratings.view`), so the chat and the archive re-read.
+      const chatId = payload['chat_id'];
+      if (typeof chatId === 'string') {
+        void queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
+      }
+      void queryClient.invalidateQueries({ queryKey: ['archive'] });
+      return;
+    }
 
     case 'ai_handoff_created': {
       // The push names the card, not its contents: the chat re-reads with its

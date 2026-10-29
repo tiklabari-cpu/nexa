@@ -162,6 +162,8 @@ export function filterSql(
   filters: ArchiveFilters,
   range: StartedRange,
   status: ArchiveStatus = 'closed',
+  /** Where the caller may see a rating (`ratingReachSql` over `t`); everywhere by default. */
+  ratingReach: Prisma.Sql = Prisma.sql`TRUE`,
 ): Prisma.Sql[] {
   const where: Prisma.Sql[] = [];
 
@@ -209,7 +211,7 @@ export function filterSql(
     )`);
   }
 
-  if (filters.rating) where.push(ratingSql(licenseId, filters.rating));
+  if (filters.rating) where.push(ratingSql(licenseId, filters.rating, ratingReach));
 
   if (filters.tags?.length) {
     const tags = [...new Set(filters.tags.map((id) => id.toLowerCase()))];
@@ -266,24 +268,25 @@ export function filterSql(
 /**
  * The rating filter, on the connection's newest rating — the one the row
  * shows (`pageSql`'s lateral read, same order). "Has a comment" is the row's
- * `has_comment`: something other than white space.
+ * `has_comment`: something other than white space. A rating outside the
+ * caller's `ratingReach` is no rating, as the row shows it (AR-03-S1).
  */
-function ratingSql(licenseId: bigint, rating: ArchiveRatingFilter): Prisma.Sql {
+function ratingSql(licenseId: bigint, rating: ArchiveRatingFilter, reach: Prisma.Sql): Prisma.Sql {
   const ratings = Prisma.sql`FROM ratings rt
     WHERE rt.license_id = ${licenseId} AND rt.thread_id = t.id`;
-  const newest = (condition: Prisma.Sql): Prisma.Sql => Prisma.sql`EXISTS (
+  const newest = (condition: Prisma.Sql): Prisma.Sql => Prisma.sql`(${reach} AND EXISTS (
     SELECT 1 FROM (
       SELECT rt.value, rt.comment ${ratings}
       ORDER BY rt.created_at DESC, rt.id DESC
       LIMIT 1
     ) lr WHERE ${condition}
-  )`;
+  ))`;
   const commented = Prisma.sql`lr.comment ~ '[^[:space:]]'`;
   switch (rating) {
     case 'any':
-      return Prisma.sql`EXISTS (SELECT 1 ${ratings})`;
+      return Prisma.sql`(${reach} AND EXISTS (SELECT 1 ${ratings}))`;
     case 'not_rated':
-      return Prisma.sql`NOT EXISTS (SELECT 1 ${ratings})`;
+      return Prisma.sql`NOT (${reach} AND EXISTS (SELECT 1 ${ratings}))`;
     case 'good':
     case 'bad':
       return newest(Prisma.sql`lr.value = ${rating}`);

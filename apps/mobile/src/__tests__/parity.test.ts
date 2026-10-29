@@ -1079,7 +1079,10 @@ describe('module parity matrix — what is still owed', () => {
       // `POST /chats/{chatId}/timeline/export` (tm 334.1) — the conversation
       // timeline (ID-09), a QA and complaint review screen of the web console
       // (tm 334.2); the app has no timeline screen, and nothing here re-scopes.
-      contractEndpoints: 344,
+      // 344 -> 345 with `GET /reports/reviews/comments` (tm 337) — the players'
+      // rating comments (WG-11) on the web console's Reviews tab; the app has no
+      // reports screen, and nothing here re-scopes.
+      contractEndpoints: 345,
       scopeBoundaries: 1,
     });
   });

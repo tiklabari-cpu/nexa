@@ -782,6 +782,8 @@ paths:
     $ref: "./paths/reports.yaml#/aiAgentConversations"
   /reports/reviews:
     $ref: "./paths/reports.yaml#/reviews"
+  /reports/reviews/comments:
+    $ref: "./paths/reports.yaml#/reviewComments"
   /reports/topics:
     $ref: "./paths/reports.yaml#/topics"
   /reports/cases:
@@ -1683,6 +1685,63 @@ components:
         tags:
           type: array
           items: { type: string }
+        rating:
+          allOf:
+            - $ref: "#/components/schemas/ThreadRating"
+          nullable: true
+          description: |
+            The player's rating of this connection (AR-03 · WG-11), with its
+            comment. Null when it is not rated, or when the caller may not see
+            it (`ratings.view`: an Ekip Üyesi reads the ratings of their own
+            connections). Present only on the agent's fetch of a single chat
+            (`GET /chats/{chatId}`); a change is pushed as `chat_rated`.
+
+    ThreadRating:
+      type: object
+      required: [value, has_comment, comment, rated_at]
+      properties:
+        value: { type: string, enum: [good, bad] }
+        has_comment: { type: boolean }
+        comment:
+          type: string
+          nullable: true
+          description: Plain text as the player wrote it, sensitive values masked.
+        rated_at: { type: string, format: date-time }
+
+    ReviewComment:
+      type: object
+      required: [rating_id, chat_id, thread_id, value, comment, rated_at, customer, assignee]
+      description: One rating with a comment, as the Reviews report lists it (WG-11).
+      properties:
+        rating_id: { type: string, format: uuid }
+        chat_id: { type: string, description: The day (panel "Thread ID"). }
+        thread_id: { type: string, description: The connection (panel "Chat ID"). }
+        value: { type: string, enum: [good, bad] }
+        comment: { type: string, description: Plain text, sensitive values masked. }
+        rated_at: { type: string, format: date-time }
+        customer:
+          type: object
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string, nullable: true }
+        assignee:
+          type: object
+          nullable: true
+          description: Who had the connection — at the close, for a closed one.
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+
+    ReviewCommentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ReviewComment" }
+        next_page_id: { type: string }
 
     ChatConnection:
       type: object

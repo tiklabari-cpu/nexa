@@ -233,6 +233,38 @@ describe('retention sweep (NFR-C8)', () => {
       expect(a?.threads).toBe(1);
     });
 
+    it("clears a swept connection's rating comment and keeps its value; a recent one keeps both (WG-11)", async () => {
+      const expired = await seedClosedThread(fx.a, daysAgo(400));
+      const recent = await seedClosedThread(fx.a, daysAgo(10));
+      for (const { chatId, threadId } of [expired, recent]) {
+        await owner.rating.create({
+          data: {
+            chatId,
+            threadId,
+            licenseId: fx.a.licenseId,
+            value: 'bad',
+            comment: 'çekim gelmedi',
+          },
+        });
+      }
+
+      await runner().run({ dryRun: false });
+
+      expect(await threadExists(expired.threadId)).toBe(false);
+      const left = await owner.rating.findMany({
+        where: { licenseId: fx.a.licenseId },
+        select: { threadId: true, value: true, comment: true },
+        orderBy: { threadId: 'asc' },
+      });
+      expect(left).toEqual(
+        expect.arrayContaining([
+          { threadId: expired.threadId, value: 'bad', comment: null },
+          { threadId: recent.threadId, value: 'bad', comment: 'çekim gelmedi' },
+        ]),
+      );
+      expect(left).toHaveLength(2);
+    });
+
     it('hard-deletes visitor telemetry past the window and keeps recent visits', async () => {
       const old = await seedVisit(fx.a, daysAgo(400));
       const fresh = await seedVisit(fx.a, daysAgo(10));

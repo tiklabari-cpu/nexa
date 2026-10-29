@@ -201,6 +201,22 @@ export const CAPABILITIES = [
     defaults: { owner: 'all', admin: 'all', team_lead: 'team', agent: 'own' },
   },
   {
+    // Checked (AR-03 · WG-11 · tm 337): seeing a player's rating of a
+    // connection and its comment — the archive's rows and detail, the Inbox's
+    // Details panel, the Reviews report's comments. `own` = a connection the
+    // person was assigned or wrote to the player on; `team` = one routed to a
+    // team of theirs; `all` = any they may see. Outside the reach the rating
+    // reads as none. AR-03-S1: an Ekip Üyesi their own conversations', an Ekip
+    // Lideri and up every one.
+    key: 'ratings.view',
+    group: 'chats',
+    labelKey: 'permissions.capability.ratings.view',
+    values: ['none', 'own', 'team', 'all'],
+    scopes: {},
+    floorRole: 'agent',
+    defaults: { owner: 'all', admin: 'all', team_lead: 'all', agent: 'own' },
+  },
+  {
     // `all` is also the ticket rules and the ticket email templates — they are
     // gated on `tickets--all:rw` today.
     key: 'tickets.view',

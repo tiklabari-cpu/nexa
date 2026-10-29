@@ -1151,6 +1151,19 @@ describe('applyPush — incoming_chat re-reads the open chat (ID-02)', () => {
   });
 });
 
+describe('applyPush — chat_rated re-reads the open chat and the archive (AR-03 · tm 337)', () => {
+  it('invalidates that chat and every archive read, and nothing for a push without a chat', () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(['chat', CHAT], { id: CHAT });
+    queryClient.setQueryData(['chat', 'other'], { id: 'other' });
+    queryClient.setQueryData(['archive', 'detail', 'C1'], { thread_id: 'C1' });
+    applyPush(queryClient, 'chat_rated', { chat_id: CHAT, thread_id: 'C1' });
+    expect(queryClient.getQueryState(['chat', CHAT])?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(['chat', 'other'])?.isInvalidated).toBe(false);
+    expect(queryClient.getQueryState(['archive', 'detail', 'C1'])?.isInvalidated).toBe(true);
+  });
+});
+
 describe('applyPush — a quiet connection (WG-03 · tm 340.3)', () => {
   beforeEach(() => {
     api.get.mockReset();

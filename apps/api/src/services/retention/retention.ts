@@ -445,16 +445,24 @@ export class RetentionRunner {
     // cascades to its events and thread tags (ON DELETE CASCADE), which is how
     // the largest table is pruned without ever naming it here. RLS confines the
     // subselect and the delete to the current tenant.
+    //
+    // A rating hangs off the chat, not the thread, so it outlives its
+    // connection: the value stays for the CSAT history, the player's comment —
+    // free text, personal data like the transcript — goes with the
+    // connection, in the same statement (WG-11 · tm 337).
     return tx.$executeRaw`
-      DELETE FROM threads
-       WHERE id IN (
+      WITH doomed AS (
          SELECT id FROM threads
           WHERE active = false
             AND closed_at IS NOT NULL
             AND closed_at < ${cutoff}
           ORDER BY closed_at
           LIMIT ${RETENTION_BATCH}
-       )`;
+       ), uncommented AS (
+         UPDATE ratings SET comment = NULL
+          WHERE thread_id IN (SELECT id FROM doomed) AND comment IS NOT NULL
+       )
+      DELETE FROM threads WHERE id IN (SELECT id FROM doomed)`;
   }
 
   #deleteVisitBatch(tx: TenantClient, cutoff: Date): Promise<number> {

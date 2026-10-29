@@ -289,14 +289,6 @@ const INDIRECT = [
     },
   },
   {
-    op: 'GET /reports/reviews',
-    reason: 'same `useReport(kind)` call site as `GET /reports/breakdown`.',
-    site: {
-      file: 'apps/web/src/features/reports/ReportsPage.tsx',
-      contains: '`/reports/${kind}?${reportQuery(',
-    },
-  },
-  {
     op: 'GET /reports/topics',
     reason: 'same `useReport(kind)` call site as `GET /reports/breakdown`.',
     site: {

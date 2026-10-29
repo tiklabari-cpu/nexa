@@ -20,6 +20,7 @@ import {
   isIdentityTrust,
   readHumanButtonLabel,
   humanButtonText,
+  RATING_COMMENT_MAX,
   REFERRER_MAX_LENGTH,
   SALES_TRACKER_EXTERNAL_ORDER_ID_MAX_LENGTH,
   SALES_TRACKER_EXTERNAL_ORDER_ID_RE,
@@ -50,7 +51,7 @@ import { fireCampaignsAtVisitor } from '../services/campaigns/campaign-trigger.j
 import { createGoalConversionRecorder } from '../services/goals/goal-triggers.js';
 import { AiResponder } from '../services/ai/ai-responder.js';
 import { HumanRequestService } from '../services/ai/human-request.js';
-import { ratingSubjectOf, recordOutcomeRating } from '../services/reports/ai-outcomes.js';
+import { recordRating } from '../services/ratings/rating-service.js';
 import type { AiJobRun } from '../services/ai/ai-job-worker.js';
 import {
   AI_JOB_MAX_UNFINISHED_PER_CHAT,
@@ -133,7 +134,8 @@ const startSchema = z
 
 const rateSchema = z.object({
   value: z.enum(['good', 'bad']),
-  comment: z.string().trim().max(1000).optional(),
+  comment: z.string().trim().max(RATING_COMMENT_MAX).optional(),
+  thread_id: z.string().min(1).max(12).optional(),
 });
 
 /**
@@ -1522,7 +1524,11 @@ export default async function customerRoutes(
     return reply.status(201).send({ ticket_id: result.ticketId });
   });
 
-  /** Customer satisfaction rating (FR-MOD-11). */
+  /**
+   * Customer satisfaction rating (FR-MOD-11 · AR-03 · WG-11): one per
+   * connection — a second call writes onto it (`services/ratings`), and the
+   * chat's agents are told (`chat_rated`).
+   */
   app.post(
     '/customer/chat/rating',
     { config: { principals: ['customer'] } },
@@ -1533,41 +1539,23 @@ export default async function customerRoutes(
       const body = parse(rateSchema, request.body);
       const tenant = request.tenant();
 
-      const rating = await request.withTenant(async (tx) => {
-        // The most recent conversation, open or not: ratings usually arrive
-        // just after it closes.
-        const chat = await tx.chat.findFirst({
-          where: { customerId: principal.customerId },
-          orderBy: { createdAt: 'desc' },
-          include: { threads: { orderBy: { createdAt: 'desc' }, take: 1 } },
-        });
-        if (!chat) throw ApiError.notFound('No conversation to rate.');
+      const rating = await request.withTenant((tx) =>
+        recordRating(tx, tenant.licenseId, principal.customerId, {
+          value: body.value,
+          comment: body.comment,
+          threadId: body.thread_id,
+        }),
+      );
+      if (rating.threadId !== null) {
+        await chats.announceRated(tenant, { chatId: rating.chatId, threadId: rating.threadId });
+      }
 
-        const threadId = chat.threads[0]?.id ?? null;
-        // Whom it judges (tm 320.1 · AI-25-S2): the AI until a person wrote
-        // to the player on the connection — BSAT and CSAT apart.
-        const subject = threadId ? await ratingSubjectOf(tx, threadId) : null;
-        const created = await tx.rating.create({
-          data: {
-            chatId: chat.id,
-            licenseId: tenant.licenseId,
-            threadId,
-            value: body.value,
-            subject,
-            // A rating comment is visitor free text written to the database —
-            // masked at the source like every other write path (FR-MOD-08.9.5 · AI-26).
-            ...(body.comment ? { comment: maskForWrite(body.comment, 'customer').text } : {}),
-          },
-          select: { id: true, value: true, chatId: true },
-        });
-        if (threadId && subject) await recordOutcomeRating(tx, threadId, subject, body.value);
-        return created;
-      });
-
-      return reply.status(201).send({
+      return reply.status(rating.created ? 201 : 200).send({
         id: rating.id,
         value: rating.value,
         chat_id: rating.chatId,
+        thread_id: rating.threadId,
+        has_comment: rating.hasComment,
       });
     },
   );

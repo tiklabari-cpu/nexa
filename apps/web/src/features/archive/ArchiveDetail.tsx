@@ -17,6 +17,7 @@ import { CopyId } from '../../components/CopyId.js';
 import { timelineAddress } from '../timeline/timeline.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { LoadError } from '../../components/LoadError.js';
+import { RatingBadge, RatingComment } from '../../components/RatingBadge.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { Panel, PanelSection } from '../../components/ui/index.js';
 import { errorMessageKey } from '../../lib/api-client.js';
@@ -284,12 +285,8 @@ function ConnectionFacts({ detail }: { detail: ArchiveConversationDetail }): Rea
         <Fact label={t('archive.facts.rating')}>
           {detail.rating ? (
             <span className="flex flex-col items-end gap-0.5">
-              <span>{t(`archive.rating.${detail.rating.value}`)}</span>
-              {detail.rating.comment && (
-                <span className="break-words text-2xs text-content-secondary">
-                  {detail.rating.comment}
-                </span>
-              )}
+              <RatingBadge value={detail.rating.value} hasComment={detail.rating.has_comment} />
+              {detail.rating.comment && <RatingComment comment={detail.rating.comment} />}
             </span>
           ) : (
             none

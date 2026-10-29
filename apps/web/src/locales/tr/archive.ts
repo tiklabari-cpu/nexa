@@ -141,6 +141,7 @@ export const archive: Messages = {
   'archive.detail.transcriptError.title': 'Mesajlar yüklenemedi',
 
   'archive.action.openInbox': "Gelen Kutusu'nda aç",
+  'archive.action.timeline': 'Zaman çizelgesi',
   'archive.action.reopen': 'Yeniden aç',
   'archive.action.reopening': 'Yeniden açılıyor…',
 

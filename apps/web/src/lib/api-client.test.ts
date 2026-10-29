@@ -134,6 +134,45 @@ describe('ApiClient', () => {
     expect(error.requestId).toBe('rq-9');
   });
 
+  it('posts a JSON body and hands the file back with the name the server gave (postFile)', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () =>
+        new Response(new Blob(['a,b']), {
+          headers: { 'content-disposition': 'attachment; filename="siyahtus-timeline-X.csv"' },
+        }),
+    );
+    const client = new ApiClient({ fetchImpl });
+
+    const { blob, filename } = await client.postFile('/chats/X/timeline/export', {
+      format: 'csv',
+      mask_pii: true,
+    });
+
+    expect(filename).toBe('siyahtus-timeline-X.csv');
+    expect(blob.size).toBeGreaterThan(0);
+    const [, init] = fetchImpl.mock.calls[0]!;
+    expect(init?.method).toBe('POST');
+    expect(init?.body).toBe(JSON.stringify({ format: 'csv', mask_pii: true }));
+    expect(new Headers(init?.headers).get('content-type')).toBe('application/json');
+  });
+
+  it('carries the refusal of a file request made with a body, like getFile', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      jsonResponse(
+        { error: { type: 'authorization', message: 'No.', request_id: 'rq-3' } },
+        { status: 403 },
+      ),
+    );
+    const client = new ApiClient({ fetchImpl });
+
+    const error = (await client
+      .postFile('/chats/X/timeline/export', { format: 'csv' })
+      .catch((e: unknown) => e)) as ApiClientError;
+
+    expect(error.status).toBe(403);
+    expect(error.type).toBe('authorization');
+  });
+
   it('normalises the base url so paths never double up slashes', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse({}));
     const client = new ApiClient({ baseUrl: 'http://localhost:4000/api/v1/', fetchImpl });

@@ -383,20 +383,6 @@ const TRACKED = [
       '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
       'the timeline viewer (tm 334) reads it too.',
   },
-  {
-    op: 'GET /chats/{chatId}/timeline',
-    owner: 'tm 334.2',
-    reason:
-      "a conversation's timeline (tm 334.1 · ID-09) — the inbox's Timeline tab and the " +
-      'full page /app/inbox/timeline, which TL-WEB (tm 334.2) draws.',
-  },
-  {
-    op: 'POST /chats/{chatId}/timeline/export',
-    owner: 'tm 334.2',
-    reason:
-      "the timeline's masked download (tm 334.1 · ID-09 §5) — the export dialog of the " +
-      'timeline screen (tm 334.2).',
-  },
 ];
 
 /** The platform contract's operations with no client, and why (tm 389.3). */
@@ -502,17 +488,18 @@ function pathMatcher(path, { wholePath = false } = {}) {
 
 /**
  * The method markers, most specific first. `get[A-Za-z]*` covers the web
- * client's `getBlob`/`getFile`, which are GETs that hand back a download.
+ * client's `getBlob`/`getFile`, which are GETs that hand back a download, and
+ * `postFile`, the POST that hands one back (the timeline export).
  */
 const MARKERS = [
   // `api.post(`, `api.delete<`, `client.get<`, `anonymous.post(` — the HTTP
   // receivers this repo has. Narrow on purpose: a bare `.delete(` would match
   // `map.delete(` and credit a verb nobody sent.
-  /\b(?:api|client|anonymous|apiClient)\.(get[A-Za-z]*|post|put|patch|delete)\s*[<(]/g,
+  /\b(?:api|client|anonymous|apiClient)\.(get[A-Za-z]*|post[A-Za-z]*|put|patch|delete)\s*[<(]/g,
   // The same call with its receiver on the line above — `apiRef.current` then a
   // chained `.post(…)`. Anchored at the start of the line, which is what keeps
   // it from re-admitting `map.delete(`.
-  /^\s*\.(get[A-Za-z]*|post|put|patch|delete)\s*[<(]/gm,
+  /^\s*\.(get[A-Za-z]*|post[A-Za-z]*|put|patch|delete)\s*[<(]/gm,
   // `client.request('delete', …)` (mobile), `this.#request('POST', …)` (widget)
   // and `api.request<undefined>('DELETE', …)` (web, for the verbs with no
   // shorthand). The generic argument is optional and has to be skipped.
@@ -529,7 +516,7 @@ function markersOn(line) {
     let match;
     while ((match = pattern.exec(line)) !== null) {
       const verb = match[1].toLowerCase();
-      found.push(verb.startsWith('get') ? 'get' : verb);
+      found.push(verb.startsWith('get') ? 'get' : verb.startsWith('post') ? 'post' : verb);
     }
   }
   return found;

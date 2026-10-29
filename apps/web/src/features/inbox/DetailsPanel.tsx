@@ -57,6 +57,7 @@ export function DetailsPanel({
   chatId,
   onCollapse,
   onOpenChat,
+  onOpenTimeline,
   onTransferred,
 }: {
   chat: ChatDetail;
@@ -68,6 +69,8 @@ export function DetailsPanel({
    * this one (an earlier day's conversation continues under today's, ID-02-S6).
    */
   onOpenChat?: (chatId: string) => void;
+  /** Open this day's timeline page (ID-09 · tm 334.2); absent where the panel has no router. */
+  onOpenTimeline?: () => void;
   /** After a hand-off (IN-04): the notice to show, and whether the chat left the caller's sight. */
   onTransferred?: (outcome: { notice: TransferNotice; left: boolean }) => void;
 }): ReactElement {
@@ -278,6 +281,17 @@ export function DetailsPanel({
           <Row label={t('inbox.details.row.started')}>
             <span className="text-xs">{formatDateTime(chat.created_at)}</span>
           </Row>
+          {/* Everything that happened in the day on one page (ID-09 · tm 334.2). Here rather than in
+              the thread header: a labelled action there costs the visitor's name its room at 1280 px. */}
+          {onOpenTimeline && capabilities?.['timeline.view'] !== 'none' && (
+            <button
+              type="button"
+              onClick={onOpenTimeline}
+              className="mt-2 text-left text-xs text-content-brand underline underline-offset-2"
+            >
+              {t('inbox.thread.timeline')}
+            </button>
+          )}
         </PanelSection>
 
         {/* What the conversation and the player are flagged for (AI-27 · tm 302.3). */}

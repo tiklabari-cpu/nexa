@@ -49,6 +49,7 @@ export const NAMESPACES = [
   'settings',
   'shell',
   'team',
+  'timeline',
 ] as const;
 
 export type Namespace = (typeof NAMESPACES)[number];
@@ -83,6 +84,7 @@ export const NAMESPACE_PREFIXES: Record<Namespace, readonly string[]> = {
   settings: ['settings.', 'permissions.'],
   shell: ['shell.', 'nav.', 'palette.'],
   team: ['team.'],
+  timeline: ['timeline.'],
 };
 
 /**

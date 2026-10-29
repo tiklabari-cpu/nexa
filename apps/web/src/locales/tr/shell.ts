@@ -76,6 +76,7 @@ export const shell: Messages = {
   'shell.account': 'Hesap',
   'shell.account.agentFallback': 'Temsilci',
   'shell.account.signOut': 'Çıkış Yap',
+  'shell.account.profile': 'Profilim',
   'shell.account.language': 'Dil',
   'shell.account.theme': 'Tema',
   'shell.account.theme.dark': 'Koyu',

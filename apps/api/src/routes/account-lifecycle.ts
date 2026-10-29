@@ -15,6 +15,7 @@ import { z } from 'zod';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { withTenant } from '../lib/tenant.js';
+import { verifyPassword } from '../lib/crypto.js';
 import { writeAuditEntry, type AuditEntry } from '../services/audit/audit-log.js';
 import {
   LifecycleService,
@@ -40,6 +41,7 @@ import {
   accountExistsMail,
   invitationMail,
   joinVerifyEmailMail,
+  passwordChangedMail,
   passwordResetMail,
   verifyEmailMail,
 } from '../services/mail/templates/messages.js';
@@ -68,6 +70,11 @@ const VERIFY_ATTEMPTS_PER_HOUR = 5;
 /** New links per address per hour, on top of the anonymous per-IP limit. */
 const VERIFY_RESENDS_PER_HOUR = 3;
 const HOUR_MS = 3_600_000;
+/**
+ * Password changes per account per hour (RL-06): every attempt counts, so a
+ * stolen session cannot guess the current password faster than this.
+ */
+const PASSWORD_CHANGES_PER_HOUR = 10;
 
 const signupBody = z.object({
   email: z.string().trim().email().max(320),
@@ -99,6 +106,15 @@ const resetConfirmBody = z.object({
   token: z.string().min(20).max(200),
   password: z.string().min(12).max(200),
 });
+
+// `/auth/login`'s bounds for the password presented, sign-up's for the one
+// chosen. Nothing is trimmed: leading and trailing space is part of a password.
+const changePasswordBody = z
+  .object({
+    current_password: z.string().min(1).max(512),
+    new_password: z.string().min(12).max(200),
+  })
+  .strict();
 
 const inviteBody = z.object({
   emails: z.array(z.string().trim().max(320)).min(1).max(50),
@@ -658,6 +674,127 @@ export default async function accountLifecycleRoutes(
 
     return reply.code(204).send();
   });
+
+  // --- Changing the password from inside the panel (RL-06 · tm 327) ----------
+  //
+  // The current password, not a link: it spends none of the address's daily
+  // account mail, and a stolen session alone cannot change it. Every other
+  // session of the account ends (RL-06-S1); this one stays signed in.
+
+  app.post(
+    '/auth/password',
+    { config: { scopes: ['accounts--my:rw'], principals: ['agent'] } },
+    async (request, reply) => {
+      const principal = request.requirePrincipal();
+      if (principal.kind !== 'agent') throw ApiError.authorization();
+      // A sign-in session only: it is the session that is kept, and a personal
+      // access token is a credential the password does not stand behind.
+      if (principal.tokenKind !== 'oauth') {
+        throw new ApiError('not_allowed', 'Change your password from a signed-in session.', {
+          details: { reason: 'session_required' },
+        });
+      }
+      const body = parse(changePasswordBody, request.body);
+
+      // Charged per attempt, right or wrong, before the password is read: a
+      // budget charged only on failures would let a caller past it keep guessing.
+      if (
+        !(await spend(request, `rl:pwchange:${principal.accountId}`, PASSWORD_CHANGES_PER_HOUR))
+      ) {
+        throw ApiError.tooManyRequests(
+          3600,
+          'Too many password change attempts. Wait an hour before trying again.',
+        );
+      }
+
+      const { account, enforcedSso, organization } = await request.withTenant(async (tx) => ({
+        account: await tx.account.findUnique({
+          where: { id: principal.accountId },
+          select: { email: true, passwordHash: true },
+        }),
+        // Owners keep the password door into an enforced workspace (break-glass,
+        // `passwordLoginAvailable` in `routes/auth.ts`), so they keep this too.
+        enforcedSso:
+          principal.role === 'owner'
+            ? null
+            : await tx.ssoConnection.findFirst({
+                where: { enabled: true, enforced: true },
+                select: { id: true },
+              }),
+        organization: await tx.organization.findUnique({
+          where: { id: principal.organizationId },
+          select: { name: true },
+        }),
+      }));
+      if (!account) throw ApiError.notFound('Resource not found.');
+      if (enforcedSso) {
+        throw new ApiError(
+          'not_allowed',
+          'This workspace signs you in through your identity provider. Change your password there.',
+          { details: { reason: 'sso_enforced' } },
+        );
+      }
+      if (account.passwordHash === null) {
+        throw new ApiError(
+          'not_allowed',
+          'This account signs in through an identity provider and has no password to change.',
+          { details: { reason: 'no_password' } },
+        );
+      }
+      if (!(await verifyPassword(body.current_password, account.passwordHash))) {
+        throw ApiError.authentication('That password is not correct.');
+      }
+      if (body.new_password === body.current_password) {
+        throw ApiError.validation('new_password: choose a password other than the current one.', {
+          fields: [{ field: 'new_password', message: 'Same as the current password.' }],
+        });
+      }
+
+      const ended = await lifecycle.changePassword(
+        principal.accountId,
+        body.new_password,
+        principal.tokenId,
+      );
+      await recordForAccount(request, principal.accountId, {
+        action: 'account.password_changed',
+        target: `account:${principal.accountId}`,
+        metadata: { ended_sessions: ended },
+      });
+
+      // After the change, never awaited: account mail with the security
+      // reserve, and a daily cap that refuses it does not undo the change.
+      app.backgroundMail.send(
+        {
+          to: account.email,
+          licenseId: null,
+          kind: 'notification',
+          ...passwordChangedMail(
+            { locale: requestLocale(request), appUrl: env.WEB_APP_URL },
+            {
+              email: account.email,
+              workspaceName: organization?.name ?? 'SiyahTuş',
+              at: new Date(),
+              endedSessions: ended,
+              resetUrl: `${env.WEB_APP_URL}/forgot-password`,
+            },
+          ),
+        },
+        (outcome) => {
+          if (outcome.status === 'sent' || isCapRefusal(outcome)) return;
+          request.log.warn(
+            {
+              event: 'password_changed.mail',
+              outcome: outcome.status,
+              mail: mailFailureFields(outcome.error),
+            },
+            'password change notice not confirmed as sent',
+          );
+        },
+      );
+
+      return reply.code(204).send();
+    },
+  );
 
   // --- Email verification (tm 257.7 · ADR K-e(1)) ----------------------------
   //

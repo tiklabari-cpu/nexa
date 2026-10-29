@@ -907,6 +907,14 @@ function AccountMenu(): ReactElement {
           <p className="mt-1 text-2xs uppercase tracking-wide text-content-tertiary">
             {agent ? enumLabel(t, 'team.role', agent.role) : null}
           </p>
+          {/* Name, visitor-facing name and password (RL-06 · tm 327). */}
+          <Link
+            to="/app/settings/profile"
+            onClick={() => close(false)}
+            className="mt-3 block w-full rounded-md border border-border px-2 py-1.5 text-center text-sm hover:bg-surface-2"
+          >
+            {t('shell.account.profile')}
+          </Link>
 
           {/* Language switcher (I18N1): a plain labelled select so the whole panel
               re-renders in the chosen language the instant it changes. */}

@@ -56,6 +56,13 @@ export const AUDIT_ACTIONS = [
   'auth.sso_login',
   'auth.sso_login_failed',
   'auth.password_reset',
+  // The person changed their own name or the name visitors see (RL-06 · tm
+  // 327), from "My profile" — into the workspace the session is in, naming the
+  // fields; and their password with the current one, into every workspace the
+  // account reaches, as `auth.password_reset` is. Neither carries a value: the
+  // name is on the account, the password is nobody's to read.
+  'account.profile_updated',
+  'account.password_changed',
   // Sign-up email verification (tm 257.7). `verification_sent` is a link
   // issued — at sign-up or on request — and `email_verified` the owner opening
   // it with the password. An account fact written into each workspace the

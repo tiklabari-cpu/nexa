@@ -174,6 +174,8 @@ paths:
     $ref: "./paths/auth.yaml#/impersonationEnd"
   /auth/me:
     $ref: "./paths/auth.yaml#/me"
+  /auth/password:
+    $ref: "./paths/auth.yaml#/changePassword"
   /auth/sso/{connectionId}:
     $ref: "./paths/saml.yaml#/publicConnection"
   /auth/saml/{connectionId}/login:
@@ -347,6 +349,8 @@ paths:
     $ref: "./paths/agents.yaml#/agentExpertise"
   /agents/{agentId}/work-schedule:
     $ref: "./paths/agents.yaml#/workSchedule"
+  /agents/me:
+    $ref: "./paths/agents.yaml#/me"
   /agents/me/routing-status:
     $ref: "./paths/agents.yaml#/routingStatus"
   /agents/me/notification-preferences:
@@ -11784,6 +11788,12 @@ components:
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
+        public_name:
+          type: string
+          nullable: true
+          description: |
+            What visitors see in the widget instead of `name` (RL-06), set by
+            the person on "My profile". `null` means `name` is shown.
         email: { type: string, format: email }
         avatar_url: { type: string, nullable: true }
         role: { $ref: "#/components/schemas/AgentRole" }

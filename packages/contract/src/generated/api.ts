@@ -378,6 +378,47 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/auth/password': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Change the caller's password
+     * @description Changes the caller's password from inside the panel (RL-06), with the
+     *     current password rather than a reset link — so it does not spend the
+     *     address's daily account mail, and a stolen session alone cannot change
+     *     it. The new password follows sign-up's rule (12 to 200 characters) and
+     *     may not be the current one.
+     *
+     *     On success every other session of the account, in every workspace, is
+     *     ended: their refresh tokens and access tokens are revoked, so another
+     *     device is signed out at its next request or renewal. The session that
+     *     made the change stays signed in. Personal access tokens are not touched
+     *     — they are integrations somebody set up on purpose, listed and revoked
+     *     on their own screen.
+     *
+     *     Refused with 403 `not_allowed` and `details.reason`: `sso_enforced`
+     *     while the session's workspace signs its members in through an identity
+     *     provider (owners excepted, as at sign-in), and `no_password` for an
+     *     account that has never had one. Refused with 401 for a wrong current
+     *     password. Every attempt, right or wrong, counts against a budget of 10
+     *     per account per hour (429).
+     *
+     *     The account holder is told by mail. The mail is best-effort: a daily
+     *     mail cap does not stop the change.
+     */
+    post: operations['changePassword'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/auth/sso/{connectionId}': {
     parameters: {
       query?: never;
@@ -3351,6 +3392,39 @@ export interface paths {
     options?: never;
     head?: never;
     patch?: never;
+    trace?: never;
+  };
+  '/agents/me': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Edit the caller's own name and the name visitors see
+     * @description "My profile" (RL-06). Send only what changed; at least one key is
+     *     required and an unknown key is a `400`. Both names are the account's,
+     *     not the membership's: one person carries one name across every
+     *     workspace they belong to.
+     *
+     *     `name` is the panel's name — the team list, the inbox, the audit trail.
+     *     `public_name` is optional and only ever shown to visitors, in the
+     *     widget; `null` (or an empty string) clears it and the widget shows
+     *     `name` again. Both are trimmed; `name` must keep 1–120 characters,
+     *     `public_name` at most 120.
+     *
+     *     Writes `account.profile_updated` to the audit trail of the workspace
+     *     the session is in, naming the fields that changed. The response is the
+     *     caller's row as `GET /agents` lists it.
+     */
+    patch: operations['updateMyProfile'];
     trace?: never;
   };
   '/agents/me/routing-status': {
@@ -19925,6 +19999,11 @@ export interface components {
       /** Format: uuid */
       id: string;
       name: string;
+      /**
+       * @description What visitors see in the widget instead of `name` (RL-06), set by
+       *     the person on "My profile". `null` means `name` is shown.
+       */
+      public_name?: string | null;
       /** Format: email */
       email: string;
       avatar_url?: string | null;
@@ -22989,6 +23068,11 @@ export interface operations {
             account_id?: string;
             email?: string;
             name?: string;
+            /**
+             * @description Agent principals only. The name visitors see in the widget
+             *     instead of `name` (RL-06); `null` means `name` is shown.
+             */
+            public_name?: string | null;
             role?: components['schemas']['AgentRole'];
             /** Format: uuid */
             organization_id: string;
@@ -23095,6 +23179,37 @@ export interface operations {
         };
       };
       401: components['responses']['Unauthorized'];
+    };
+  };
+  changePassword: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description The password the account has now. */
+          current_password: string;
+          /** @description The password to set. Not trimmed. */
+          new_password: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Password changed; other sessions ended */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
     };
   };
   readPublicSsoConnection: {
@@ -27300,6 +27415,37 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateMyProfile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name?: string;
+          public_name?: string | null;
+        };
+      };
+    };
+    responses: {
+      /** @description Profile updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Agent'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
     };
   };

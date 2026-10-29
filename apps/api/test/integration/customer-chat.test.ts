@@ -804,6 +804,22 @@ describe('customer chat api', () => {
       expect((state.json() as AgentState).agent?.name).toBe('Agent a');
     });
 
+    it('shows the name the agent chose for visitors when they set one (RL-06 · tm 327)', async () => {
+      await owner.account.update({
+        where: { id: fx.a.agentAccountId },
+        data: { publicName: 'Deniz' },
+      });
+      const { token } = await widgetToken();
+      await server.post('/customer/chat/events', { text: 'Hi' }, auth(token));
+      await owner.thread.updateMany({
+        where: { licenseId: fx.a.licenseId },
+        data: { assigneeId: fx.a.agentAccountId },
+      });
+
+      const state = await server.get('/customer/chat', auth(token));
+      expect((state.json() as AgentState).agent?.name).toBe('Deniz');
+    });
+
     it('prefers a human assignee over the active AI persona', async () => {
       await owner.aiAgent.create({
         data: { licenseId: fx.a.licenseId, name: 'Ada', active: true },

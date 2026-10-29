@@ -196,6 +196,54 @@ uiPreferences:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+me:
+  patch:
+    tags: [Configuration]
+    operationId: updateMyProfile
+    summary: Edit the caller's own name and the name visitors see
+    description: |
+      "My profile" (RL-06). Send only what changed; at least one key is
+      required and an unknown key is a `400`. Both names are the account's,
+      not the membership's: one person carries one name across every
+      workspace they belong to.
+
+      `name` is the panel's name — the team list, the inbox, the audit trail.
+      `public_name` is optional and only ever shown to visitors, in the
+      widget; `null` (or an empty string) clears it and the widget shows
+      `name` again. Both are trimmed; `name` must keep 1–120 characters,
+      `public_name` at most 120.
+
+      Writes `account.profile_updated` to the audit trail of the workspace
+      the session is in, naming the fields that changed. The response is the
+      caller's row as `GET /agents` lists it.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            additionalProperties: false
+            properties:
+              name:
+                type: string
+                minLength: 1
+                maxLength: 120
+              public_name:
+                type: string
+                nullable: true
+                maxLength: 120
+    responses:
+      "200":
+        description: Profile updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Agent" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 agents:
   get:
     tags: [Configuration]

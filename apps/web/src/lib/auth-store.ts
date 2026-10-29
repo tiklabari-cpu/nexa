@@ -62,6 +62,8 @@ export interface CurrentAgent {
   account_id: string;
   email: string | null;
   name: string | null;
+  /** The name visitors see in the widget instead of `name` (RL-06); absent from an older server. */
+  public_name?: string | null;
   role: string;
   organization_id: string;
   license_id: string;
@@ -277,6 +279,12 @@ interface AuthState {
    * answer; rolled back if the write fails.
    */
   setFontPreset: (preset: PanelFontPreset | null) => Promise<void>;
+  /**
+   * "My profile" (RL-06 · tm 327): save the caller's names and put what the
+   * server kept on the profile, so the account menu shows the new name at once.
+   * Rejects with the server's refusal; nothing changes then.
+   */
+  updateProfile: (patch: { name?: string; public_name?: string | null }) => Promise<void>;
   /** Re-read which font applies — after the owner changed the workspace default. */
   refreshAppearance: () => Promise<void>;
   /** Flip the local gate once the wizard has told the server setup is done. */
@@ -1356,6 +1364,16 @@ export const useAuth = create<AuthState>((set, get) => {
       } catch (error) {
         useFontStore.getState().setAppearance(previous);
         throw error;
+      }
+    },
+
+    async updateProfile(patch) {
+      if (!get().accessToken) return;
+      type Saved = Pick<CurrentAgent, 'name' | 'public_name'>;
+      const saved = await sessionClient().request<Saved>('PATCH', '/agents/me', patch);
+      const current = get().agent;
+      if (current) {
+        set({ agent: { ...current, name: saved.name, public_name: saved.public_name ?? null } });
       }
     },
 

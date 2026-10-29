@@ -330,7 +330,7 @@ export const IMPERSONATION_FORBIDDEN_PATHS: readonly ImpersonationForbiddenRule[
       /^\/auth\/(login|authorize|token|signup|verify-email|verify-email\/resend|invitations\/accept|saml\/[^/]+\/acs|impersonation\/exchange)$/,
     category: 'sign_in',
   },
-  { pattern: /^\/auth\/password-reset(\/confirm)?$/, category: 'password' },
+  { pattern: /^\/auth\/password(-reset(\/confirm)?)?$/, category: 'password' },
   { pattern: /^\/auth\/2fa(\/(enroll|activate|recovery-codes))?$/, category: 'two_factor' },
   { pattern: /^\/auth\/personal-access-tokens(\/[^/]+)?$/, category: 'credentials' },
   { pattern: /^\/settings\/scim-tokens(\/[^/]+)?$/, category: 'credentials' },
@@ -346,6 +346,9 @@ export const IMPERSONATION_FORBIDDEN_PATHS: readonly ImpersonationForbiddenRule[
   { pattern: /^\/settings\/sso(\/.*)?$/, category: 'security' },
   { pattern: /^\/invitations(\/[^/]+)?$/, category: 'membership' },
   { pattern: /^\/agents\/[^/]+\/(role|suspension)$/, category: 'membership' },
+  // The member's own name, account-wide (RL-06): how they appear in every
+  // workspace they belong to, not this one's daily work.
+  { pattern: /^\/agents\/me$/, category: 'membership' },
   { pattern: /^\/billing\/(payment-method|api-packages|ai-packages)$/, category: 'payment' },
   { pattern: /^\/billing\/subscription$/, category: 'subscription' },
   { pattern: /^\/settings\/compliance\/baa$/, category: 'baa' },

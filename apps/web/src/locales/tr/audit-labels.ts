@@ -8,6 +8,8 @@ export const auditLabels: Messages = {
   'audit.action.auth.sso_login': 'Tek oturum açma ile oturum açıldı',
   'audit.action.auth.sso_login_failed': 'Tek oturum açma başarısız',
   'audit.action.auth.password_reset': 'Parola sıfırlandı',
+  'audit.action.account.profile_updated': 'Profil güncellendi',
+  'audit.action.account.password_changed': 'Şifre değiştirildi',
   'audit.action.auth.verification_sent': 'Doğrulama e-postası gönderildi',
   'audit.action.auth.email_verified': 'E-posta adresi doğrulandı',
   'audit.action.auth.token_revoked': 'Erişim belirteci iptal edildi',

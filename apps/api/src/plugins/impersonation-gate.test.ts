@@ -76,6 +76,7 @@ describe('impersonation write verdicts against the tenant contract (tm 389.15)',
       verdict: 'forbidden',
       category: 'password',
     });
+    expect(verdictOf('/auth/password')).toEqual({ verdict: 'forbidden', category: 'password' });
     expect(verdictOf('/auth/2fa/enroll')).toEqual({ verdict: 'forbidden', category: 'two_factor' });
     expect(verdictOf('/auth/2fa')).toEqual({ verdict: 'forbidden', category: 'two_factor' });
     expect(verdictOf('/auth/personal-access-tokens')).toMatchObject({ category: 'credentials' });
@@ -91,6 +92,7 @@ describe('impersonation write verdicts against the tenant contract (tm 389.15)',
     // New standing access and new data egress, on top of the requirement's list.
     expect(verdictOf('/invitations')).toMatchObject({ category: 'membership' });
     expect(verdictOf('/agents/{agentId}/role')).toMatchObject({ category: 'membership' });
+    expect(verdictOf('/agents/me')).toMatchObject({ category: 'membership' });
     expect(verdictOf('/webhooks')).toMatchObject({ category: 'data_egress' });
   });
 

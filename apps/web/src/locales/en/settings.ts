@@ -51,6 +51,7 @@ export const settings: Messages = {
   'settings.nav.group.usage': 'Usage and quotas',
   'settings.nav.group.billing': 'Billing',
   'settings.nav.section.notifications': 'Notifications',
+  'settings.nav.section.profile': 'My profile',
   'settings.nav.section.company': 'Company details',
   'settings.nav.section.brands': 'Brands',
   'settings.nav.section.appearance': 'Appearance',
@@ -1456,6 +1457,41 @@ export const settings: Messages = {
   'settings.permissions.resetCell': 'Reset {name} to the default ({value})',
   'settings.permissions.resetCellShort': 'Reset to the default ({value})',
   'settings.permissions.lockedBecause': 'locked: {reason}',
+
+  // My profile — MyProfile.tsx (RL-06 · tm 327)
+  'settings.profile.title': 'My profile',
+  'settings.profile.description':
+    'Your name in the panel, the name visitors see, and your password. They belong to your account, so they apply in every workspace you are in.',
+  'settings.profile.email': 'Signed in as {email}',
+  'settings.profile.name.label': 'Name',
+  'settings.profile.name.hint':
+    'How your team sees you: the team list, the inbox and the audit log.',
+  'settings.profile.name.required': 'Enter your name.',
+  'settings.profile.publicName.label': 'Name visitors see (optional)',
+  'settings.profile.publicName.hint':
+    'Shown to visitors in the chat widget instead of your name. Leave it empty to show your name.',
+  'settings.profile.tooLong': 'Use at most {max} characters.',
+  'settings.profile.saved': 'Profile saved.',
+  'settings.profile.password.title': 'Password',
+  'settings.profile.password.description':
+    'Change your password with the one you use now. No email is needed.',
+  'settings.profile.password.otherSessions':
+    'When you change it, every other device signed in to your account is signed out. This one stays signed in.',
+  'settings.profile.password.current': 'Current password',
+  'settings.profile.password.next': 'New password',
+  'settings.profile.password.confirm': 'Repeat the new password',
+  'settings.profile.password.currentRequired': 'Enter your current password.',
+  'settings.profile.password.length': 'Use {min} to {max} characters.',
+  'settings.profile.password.same': 'Choose a password other than the current one.',
+  'settings.profile.password.mismatch': 'The two new passwords do not match.',
+  'settings.profile.password.wrongCurrent': 'That is not your current password.',
+  'settings.profile.password.ssoEnforced':
+    'This workspace signs you in through your identity provider. Change your password there.',
+  'settings.profile.password.noPassword':
+    'Your account signs in through an identity provider and has no password to change.',
+  'settings.profile.password.submit': 'Change password',
+  'settings.profile.password.submitting': 'Changing…',
+  'settings.profile.password.changed': 'Password changed. Your other devices have been signed out.',
 
   // My permissions — MyPermissions.tsx (RL-02 · tm 325.4)
   'settings.myPermissions.title': 'My permissions',

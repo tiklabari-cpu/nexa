@@ -753,7 +753,7 @@ export default async function customerRoutes(
       const responder = assigneeId
         ? await tx.account.findUnique({
             where: { id: assigneeId },
-            select: { name: true, avatarUrl: true },
+            select: { name: true, publicName: true, avatarUrl: true },
           })
         : // The customer-facing persona only — `kind: 'copilot'` is the agent's
           // assistant, not who the visitor is talking to. Oldest-first so the
@@ -831,7 +831,13 @@ export default async function customerRoutes(
       // The name and face the widget shows in its header, so the visitor knows
       // whether they are talking to a person or the AI persona (FR-MOD-11.3).
       agent: state.responder
-        ? { name: state.responder.name, avatar_url: state.responder.avatarUrl }
+        ? {
+            // The agent's visitor-facing name when they set one (RL-06-S2).
+            name:
+              ('publicName' in state.responder ? state.responder.publicName : null) ??
+              state.responder.name,
+            avatar_url: state.responder.avatarUrl,
+          }
         : null,
       // The proactive message this poll is carrying, if one was owed
       // (FR-MOD-03.3.2). Null on every other poll, which is nearly all of them.

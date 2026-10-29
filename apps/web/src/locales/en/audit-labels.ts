@@ -15,6 +15,8 @@ export const auditLabels: Messages = {
   'audit.action.auth.sso_login': 'Signed in with single sign-on',
   'audit.action.auth.sso_login_failed': 'Single sign-on failed',
   'audit.action.auth.password_reset': 'Password reset',
+  'audit.action.account.profile_updated': 'Profile updated',
+  'audit.action.account.password_changed': 'Password changed',
   'audit.action.auth.verification_sent': 'Verification email sent',
   'audit.action.auth.email_verified': 'Email address verified',
   'audit.action.auth.token_revoked': 'Access token revoked',

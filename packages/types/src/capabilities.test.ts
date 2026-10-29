@@ -47,11 +47,14 @@ describe('the capability catalogue', () => {
   // RL-02 kept the first version to 20–30 rows (it shipped 25, tm 325.1); the
   // features that came after add their rows as the catalogue says they must
   // (RL-03's `chats.takeover` was the 31st, tm 326; ID-09's three timeline rows
-  // the 32nd–34th, tm 334.1). The ceiling is what keeps
+  // the 32nd–34th, tm 334.1; AR-03's `ratings.view` the 35th, tm 337). AR-04's
+  // `transcripts.export` is the 36th (tm 338) and raised the ceiling to 36 on
+  // purpose: taking a transcript out is a choice the Founder must be able to
+  // make per role. The ceiling is what keeps
   // the screen readable — raise it as a decision, not to make a test pass.
-  it('stays a matrix a Founder can read: 20–35 rows, unique keys, every group used', () => {
+  it('stays a matrix a Founder can read: 20–36 rows, unique keys, every group used', () => {
     expect(CATALOGUE.length).toBeGreaterThanOrEqual(20);
-    expect(CATALOGUE.length).toBeLessThanOrEqual(35);
+    expect(CATALOGUE.length).toBeLessThanOrEqual(36);
     const keys = CATALOGUE.map((c) => c.key);
     expect(new Set(keys).size).toBe(keys.length);
     expect(new Set(CATALOGUE.map((c) => c.group))).toEqual(new Set(CAPABILITY_GROUPS));
@@ -277,6 +280,18 @@ describe('the owner’s K7 defaults (tm 325.5)', () => {
     expect(capabilityChangeProblem(set('agent', 'ratings.view', 'team'))).toBeNull();
     // A checked row: the role sets stay what they were.
     expect(def('ratings.view').scopes).toEqual({});
+  });
+
+  it('lets an Ekip Lideri and up take a transcript out and keeps an Ekip Üyesi to the player mail by default (AR-04-S1)', () => {
+    expect(at('owner')['transcripts.export']).toBe('all');
+    expect(at('admin')['transcripts.export']).toBe('all');
+    expect(at('team_lead')['transcripts.export']).toBe('all');
+    expect(at('agent')['transcripts.export']).toBe('none');
+    // A default, not a floor: the Founder may open a member's own conversations.
+    expect(capabilityChangeProblem(set('agent', 'transcripts.export', 'own'))).toBeNull();
+    expect(capabilityChangeProblem(set('team_lead', 'transcripts.export', 'team'))).toBeNull();
+    // A checked row: the role sets stay what they were.
+    expect(def('transcripts.export').scopes).toEqual({});
   });
 
   it('lets a Yönetici read billing and not change it, in a cell the Founder cannot unlock (FR-MOD-04.RBAC)', () => {

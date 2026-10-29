@@ -155,6 +155,46 @@ export const archive: Messages = {
   'archive.action.reopen': 'Reopen',
   'archive.action.reopening': 'Reopening…',
 
+  // The transcript, taken out (AR-04)
+  'archive.transcript.download': 'Download (TXT)',
+  'archive.transcript.print': 'Print / PDF',
+  'archive.transcript.email': 'Email transcript',
+  'archive.transcript.downloadTitle': 'Download the transcript',
+  'archive.transcript.downloadDescription':
+    'A plain-text file of this conversation, headed with both of its numbers, the player, the agents and the time zone.',
+  'archive.transcript.printTitle': 'Print the transcript',
+  'archive.transcript.printDescription':
+    'Opens a print view of this conversation. Choose "Save as PDF" in the print dialog for a PDF.',
+  'archive.transcript.copy.legend': 'Copy',
+  'archive.transcript.copy.customer': "Player's copy — no internal notes",
+  'archive.transcript.copy.internal': 'Internal copy — internal notes included',
+  'archive.transcript.audited': 'Every download, print and email is recorded in the audit log.',
+  'archive.transcript.cancel': 'Cancel',
+  'archive.transcript.close': 'Close',
+  'archive.transcript.preparing': 'Preparing…',
+  'archive.transcript.submitDownload': 'Download',
+  'archive.transcript.submitPrint': 'Open print view',
+  'archive.transcript.emailTitle': "Email the player's copy",
+  'archive.transcript.emailDescription':
+    "Only the player's copy is emailed — internal notes never leave the panel.",
+  'archive.transcript.recipient.legend': 'Recipient',
+  'archive.transcript.recipient.player': "The player's registered email address",
+  'archive.transcript.recipient.other': 'Another address',
+  'archive.transcript.recipient.address': 'Email address',
+  'archive.transcript.recipient.otherHint':
+    "Only addresses at the workspace's allowed domains (Settings, Inbox) can receive a transcript.",
+  'archive.transcript.recipient.playerOnly':
+    "Your role can email a transcript only to the player's own address.",
+  'archive.transcript.send': 'Send',
+  'archive.transcript.sending': 'Sending…',
+  'archive.transcript.sent': 'The transcript is on its way.',
+
+  // The print view
+  'archive.print.back': 'Back',
+  'archive.print.print': 'Print / Save as PDF',
+  'archive.print.loading': 'Preparing the transcript…',
+  'archive.print.error.title': "The transcript couldn't be prepared",
+
   // The player pane
   'archive.player.ariaLabel': 'Player and conversation details',
   'archive.player.title': 'Player',

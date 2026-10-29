@@ -440,6 +440,13 @@ export const AUDIT_ACTIONS = [
   // as asked for. Metadata is the connection (when one was asked for), the
   // format and `masked`; never a row.
   'chat.timeline_exported',
+  // A connection's transcript taken out (AR-04 · tm 338): downloaded or opened
+  // for printing (`chat.transcript_exported`, metadata the connection, the
+  // format and the copy — `customer` or `internal`), or mailed
+  // (`chat.transcript_emailed`, the connection, the recipient's domain and
+  // whether it was the player's own address). Never the text, never the address.
+  'chat.transcript_exported',
+  'chat.transcript_emailed',
   // Denying a visitor service (FR-MOD-08.9.2) — a moderation decision, not a
   // configuration change, so only the transition is recorded: repeating a ban
   // that already holds, or lifting one already lifted, leaves no second line.

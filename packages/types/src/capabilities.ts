@@ -217,6 +217,24 @@ export const CAPABILITIES = [
     defaults: { owner: 'all', admin: 'all', team_lead: 'all', agent: 'own' },
   },
   {
+    // Checked (AR-04 · tm 338): taking a connection's transcript out — the
+    // text download, the printable page and the mail to an allowed domain,
+    // either copy (`GET`/`POST /chats/{id}/threads/{id}/transcript…`). `own` =
+    // a connection the person was assigned, wrote on or joined; `team` = one
+    // routed to a team of theirs; `all` = any they may see. Bounded by
+    // `chats.view`. AR-04-S1/S2: an Ekip Lideri and up export (the internal
+    // copy included); an Ekip Üyesi only mails the player's copy of their own
+    // conversation to the player's address, which needs no row. Every export
+    // is audited (`chat.transcript_exported`, `chat.transcript_emailed`).
+    key: 'transcripts.export',
+    group: 'chats',
+    labelKey: 'permissions.capability.transcripts.export',
+    values: ['none', 'own', 'team', 'all'],
+    scopes: {},
+    floorRole: 'agent',
+    defaults: { owner: 'all', admin: 'all', team_lead: 'all', agent: 'none' },
+  },
+  {
     // `all` is also the ticket rules and the ticket email templates — they are
     // gated on `tickets--all:rw` today.
     key: 'tickets.view',

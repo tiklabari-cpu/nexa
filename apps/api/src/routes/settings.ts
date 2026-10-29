@@ -51,6 +51,8 @@ import {
   SLA_MAX_TARGET_MINUTES,
   TICKET_REOPEN_WINDOW_DAYS_DEFAULT,
   TICKET_REOPEN_WINDOW_DAYS_MAX,
+  TRANSCRIPT_ALLOWED_DOMAINS_MAX,
+  normaliseTranscriptDomain,
 } from '@siyahtus/types';
 import type {
   CompanySector,
@@ -583,7 +585,31 @@ const updateChatTimeoutBody = z.object({
   // How long a solved ticket still reopens on the player's e-mailed answer
   // (tm 358 · HD-03). Optional the same way; the CHECK holds the same bounds.
   ticket_reopen_window_days: z.number().int().min(1).max(TICKET_REOPEN_WINDOW_DAYS_MAX).optional(),
+  // Where a transcript may be mailed besides the player's own address
+  // (AR-04-S3 · tm 338). Optional the same way; normalised before it is stored.
+  transcript_allowed_domains: z
+    .array(z.string().min(1).max(254))
+    .max(TRANSCRIPT_ALLOWED_DOMAINS_MAX)
+    .optional(),
 });
+
+/**
+ * The allowed transcript domains as stored: normalised, duplicates dropped, in
+ * the order given. A value that is not a domain name refuses the whole save.
+ */
+function transcriptDomainsOrThrow(input: readonly string[]): string[] {
+  const domains: string[] = [];
+  for (const [index, raw] of input.entries()) {
+    const domain = normaliseTranscriptDomain(raw);
+    if (domain === null) {
+      throw ApiError.validation(`transcript_allowed_domains.${index}: not a domain name.`, {
+        fields: [{ field: `transcript_allowed_domains.${index}`, message: 'not a domain name' }],
+      });
+    }
+    if (!domains.includes(domain)) domains.push(domain);
+  }
+  return domains;
+}
 
 /** What a save whose windows are out of order is told (`chatInactivityOrderProblem`). */
 const CHAT_INACTIVITY_ORDER_MESSAGES: Record<ChatInactivityOrderProblem, string> = {
@@ -2812,6 +2838,11 @@ export default async function settingsRoutes(
           ...(body.ticket_reopen_window_days === undefined
             ? {}
             : { ticketReopenWindowDays: body.ticket_reopen_window_days }),
+          ...(body.transcript_allowed_domains === undefined
+            ? {}
+            : {
+                transcriptAllowedDomains: transcriptDomainsOrThrow(body.transcript_allowed_domains),
+              }),
         };
         const row = await tx.inboxSettings.upsert({
           where,
@@ -2840,6 +2871,7 @@ export default async function settingsRoutes(
             inactive_after_seconds: row.inactiveAfterSeconds,
             pause_unresponsive_agents: row.pauseUnresponsiveAgents,
             ticket_reopen_window_days: row.ticketReopenWindowDays,
+            transcript_allowed_domains: row.transcriptAllowedDomains,
             day_boundary_timezone: after.timezone,
             day_boundary_hour: after.hour,
             // Only when it moved: a timeout-only save is not a boundary change,
@@ -3679,6 +3711,7 @@ function serialiseInbox(
         inactiveAfterSeconds: number | null;
         pauseUnresponsiveAgents: boolean;
         ticketReopenWindowDays: number;
+        transcriptAllowedDomains: string[];
         updatedAt: Date;
       })
     | null,
@@ -3697,6 +3730,7 @@ function serialiseInbox(
     // No row = the column's default: on.
     pause_unresponsive_agents: row?.pauseUnresponsiveAgents ?? true,
     ticket_reopen_window_days: row?.ticketReopenWindowDays ?? TICKET_REOPEN_WINDOW_DAYS_DEFAULT,
+    transcript_allowed_domains: row?.transcriptAllowedDomains ?? [],
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
 }

@@ -218,6 +218,9 @@ describe('AuditLogPage', () => {
       'chat.message_edited',
       // The conversation's timeline downloaded (ID-09 · tm 334.1).
       'chat.timeline_exported',
+      // A transcript downloaded, printed or mailed (AR-04 · tm 338).
+      'chat.transcript_exported',
+      'chat.transcript_emailed',
     ]);
 
     await userEvent.selectOptions(filter, 'chat.archived');

@@ -3857,6 +3857,10 @@ model InboxSettings {
   /// a solved ticket (HD-03 · tm 358); later, or on a closed ticket, it opens a
   /// related one. 1-365 by CHECK; `TICKET_REOPEN_WINDOW_DAYS_DEFAULT`.
   ticketReopenWindowDays Int @default(30) @map("ticket_reopen_window_days")
+  /// Domains a transcript may be mailed to besides the player's own address
+  /// (AR-04-S3 · tm 338), lower-case, without the `@`; matched exactly. Empty:
+  /// only the player's address. At most `TRANSCRIPT_ALLOWED_DOMAINS_MAX`.
+  transcriptAllowedDomains String[] @default([]) @map("transcript_allowed_domains")
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)

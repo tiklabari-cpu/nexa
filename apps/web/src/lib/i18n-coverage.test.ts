@@ -89,6 +89,8 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/archive/ArchiveFilters.tsx',
   'src/features/archive/ArchiveList.tsx',
   'src/features/archive/ArchivePage.tsx',
+  'src/features/archive/TranscriptActions.tsx',
+  'src/features/archive/TranscriptPrintPage.tsx',
   'src/features/timeline/TimelineExportModal.tsx',
   'src/features/timeline/TimelinePage.tsx',
   'src/features/timeline/TimelineRow.tsx',

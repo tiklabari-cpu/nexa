@@ -80,6 +80,12 @@ export interface TranscriptLine {
   /** 'all' reaches the customer; 'agents' is an internal note. */
   recipients: string;
   createdAt: Date;
+  /**
+   * The name of the file the line carried, when it carried one (AR-04 · tm
+   * 338). Only the name: a link would outlive its signature and leave the
+   * workspace with the copy.
+   */
+  attachmentName?: string | null;
 }
 
 /**
@@ -113,22 +119,19 @@ export function renderTranscript(opts: {
   lines: TranscriptLine[];
   frame: TranscriptFrame;
 }): RenderedEmail | null {
-  const visible =
-    opts.audience === 'customer'
-      ? opts.lines.filter((line) => line.recipients === 'all')
-      : opts.lines;
+  const visible = visibleLines(opts.audience, opts.lines);
 
   // A transcript of nothing but "chat opened / chat closed" is noise; require at
   // least one real message before mailing anyone.
   if (!visible.some((line) => line.authorType !== 'system')) return null;
 
   const tr = opts.frame.locale === 'tr';
-  const messages: TranscriptMessage[] = visible.map((line) => ({
-    role: roleOf(line, opts.audience),
-    who: authorLabel(line, opts.customerName, tr),
-    text: line.text?.trim() ? line.text.trim() : systemText(line.type, tr),
-    at: line.createdAt,
-  }));
+  const messages = transcriptMessages({
+    audience: opts.audience,
+    customerName: opts.customerName,
+    lines: visible,
+    locale: opts.frame.locale,
+  });
 
   if (opts.audience === 'customer') {
     // A visitor gets no link to the agent panel: nothing there is theirs.
@@ -152,6 +155,43 @@ export function renderTranscript(opts: {
       messages,
     },
   );
+}
+
+/** The lines one audience may read: the customer's copy is the `all`-recipient ones. */
+export function visibleLines(audience: TranscriptParty, lines: TranscriptLine[]): TranscriptLine[] {
+  return audience === 'customer' ? lines.filter((line) => line.recipients === 'all') : lines;
+}
+
+/**
+ * The lines as the templates show them — who, in which role, saying what —
+ * for one audience. Shared by the closing mail and the on-demand copies
+ * (AR-04 · tm 338), so the two cannot word a line differently. `fileNote`
+ * adds "open it in the panel" after a file's name, for the copies the team
+ * keeps; a player has no panel to open it in.
+ */
+export function transcriptMessages(opts: {
+  audience: TranscriptParty;
+  customerName: string | null;
+  lines: TranscriptLine[];
+  locale: MailLocale;
+  fileNote?: boolean;
+}): TranscriptMessage[] {
+  const tr = opts.locale === 'tr';
+  return visibleLines(opts.audience, opts.lines).map((line) => ({
+    role: roleOf(line, opts.audience),
+    who: authorLabel(line, opts.customerName, tr),
+    text: lineText(line, tr, opts.fileNote === true),
+    at: line.createdAt,
+  }));
+}
+
+function lineText(line: TranscriptLine, tr: boolean, fileNote: boolean): string {
+  const text = line.text?.trim() ? line.text.trim() : null;
+  const name = line.attachmentName?.trim() ? line.attachmentName.trim() : null;
+  if (name === null) return text ?? systemText(line.type, tr);
+  const note = fileNote ? (tr ? ' — panelde görüntüleyin' : ' — open it in the panel') : '';
+  const file = tr ? `(dosya: ${name}${note})` : `(file: ${name}${note})`;
+  return text === null ? file : `${text}\n${file}`;
 }
 
 function roleOf(line: TranscriptLine, audience: TranscriptParty): TranscriptRole {

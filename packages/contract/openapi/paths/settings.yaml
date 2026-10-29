@@ -1565,6 +1565,8 @@ chatTimeout:
       whether the agent a connection was taken from stops receiving chats.
       So is `ticket_reopen_window_days` (1-365, HD-03): how many days after
       its last activity a player's e-mail answer still reopens a solved ticket.
+      And `transcript_allowed_domains` (AR-04-S3): where a transcript may be
+      mailed besides the player's own address.
     requestBody:
       required: true
       content:
@@ -1627,6 +1629,15 @@ chatTimeout:
                   Days after its last activity that a player's e-mail answer
                   still reopens a solved ticket (HD-03); later, a new related
                   ticket opens. Left out, the stored value stays.
+              transcript_allowed_domains:
+                type: array
+                maxItems: 20
+                items: { type: string, minLength: 1, maxLength: 254 }
+                description: >-
+                  Domains a transcript may be mailed to besides the player's
+                  own address (AR-04-S3). Stored trimmed, lower-case and
+                  without a leading `@`, duplicates dropped; a value that is
+                  not a domain name is a 400. Left out, the stored list stays.
     responses:
       "200":
         description: Updated

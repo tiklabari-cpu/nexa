@@ -210,6 +210,9 @@ describe('error taxonomy', () => {
     // session, and a route no operator may take on a member's behalf.
     'impersonation_read_only',
     'impersonation_forbidden_path',
+    // A transcript mailed on demand (AR-04 · tm 338): an address outside the
+    // player's own and the workspace's allowed domains.
+    'recipient_not_allowed',
   ];
 
   it('carries the 24 documented types, plus SiyahTuş additions', () => {

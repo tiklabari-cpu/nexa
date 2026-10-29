@@ -1082,7 +1082,11 @@ describe('module parity matrix — what is still owed', () => {
       // 344 -> 345 with `GET /reports/reviews/comments` (tm 337) — the players'
       // rating comments (WG-11) on the web console's Reviews tab; the app has no
       // reports screen, and nothing here re-scopes.
-      contractEndpoints: 345,
+      // 345 -> 347 with `GET /chats/{chatId}/threads/{threadId}/transcript` and
+      // `POST …/transcript/email` (tm 338) — the transcript download, print view
+      // and mail (AR-04) of the web console's Archive; the app has no archive
+      // screen, and nothing here re-scopes.
+      contractEndpoints: 347,
       scopeBoundaries: 1,
     });
   });

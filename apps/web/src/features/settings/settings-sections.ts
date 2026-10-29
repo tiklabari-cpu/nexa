@@ -117,6 +117,15 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     file: 'NotificationSettings',
     keywords: ['alerts', 'email digest'],
   },
+  // The caller's own names and password (RL-06 · tm 327) — every member; the
+  // account menu's "My profile" opens it.
+  {
+    slug: 'profile',
+    group: 'general',
+    labelKey: 'settings.nav.section.profile',
+    file: 'MyProfile',
+    keywords: ['name', 'password', 'nickname', 'profilim', 'ad', 'şifre', 'takma ad'],
+  },
   {
     slug: 'company',
     group: 'general',

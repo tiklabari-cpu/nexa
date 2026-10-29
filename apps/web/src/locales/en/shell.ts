@@ -82,6 +82,7 @@ export const shell: Messages = {
   'shell.account': 'Account',
   'shell.account.agentFallback': 'Agent',
   'shell.account.signOut': 'Sign out',
+  'shell.account.profile': 'My profile',
   'shell.account.language': 'Language',
   'shell.account.theme': 'Theme',
   'shell.account.theme.dark': 'Dark',

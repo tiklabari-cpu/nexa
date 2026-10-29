@@ -39,6 +39,7 @@ export const settings: Messages = {
   'settings.nav.group.usage': 'Kullanım ve kotalar',
   'settings.nav.group.billing': 'Faturalandırma',
   'settings.nav.section.notifications': 'Bildirimler',
+  'settings.nav.section.profile': 'Profilim',
   'settings.nav.section.company': 'Şirket bilgileri',
   'settings.nav.section.brands': 'Markalar',
   'settings.nav.section.appearance': 'Görünüm',
@@ -1454,6 +1455,42 @@ export const settings: Messages = {
   'settings.permissions.resetCell': '{name}: varsayılana döndür ({value})',
   'settings.permissions.resetCellShort': 'Varsayılana döndür ({value})',
   'settings.permissions.lockedBecause': 'kilitli: {reason}',
+
+  // Profilim — MyProfile.tsx (RL-06 · tm 327)
+  'settings.profile.title': 'Profilim',
+  'settings.profile.description':
+    'Paneldeki adınız, oyuncuların gördüğü ad ve şifreniz. Hesabınıza aittirler; üyesi olduğunuz her çalışma alanında geçerlidirler.',
+  'settings.profile.email': 'Oturum: {email}',
+  'settings.profile.name.label': 'Ad',
+  'settings.profile.name.hint':
+    'Ekibinizin sizi gördüğü ad: ekip listesi, gelen kutusu ve denetim kaydı.',
+  'settings.profile.name.required': 'Adınızı girin.',
+  'settings.profile.publicName.label': 'Oyuncuların gördüğü ad (isteğe bağlı)',
+  'settings.profile.publicName.hint':
+    'Sohbet penceresinde oyunculara adınızın yerine bu gösterilir. Boş bırakırsanız adınız gösterilir.',
+  'settings.profile.tooLong': 'En fazla {max} karakter kullanın.',
+  'settings.profile.saved': 'Profil kaydedildi.',
+  'settings.profile.password.title': 'Şifre',
+  'settings.profile.password.description':
+    'Şifrenizi şu anki şifrenizle değiştirin. E-posta gerekmez.',
+  'settings.profile.password.otherSessions':
+    'Değiştirdiğinizde hesabınızda oturumu açık diğer bütün cihazların oturumu kapanır. Bu cihaz açık kalır.',
+  'settings.profile.password.current': 'Mevcut şifre',
+  'settings.profile.password.next': 'Yeni şifre',
+  'settings.profile.password.confirm': 'Yeni şifre (tekrar)',
+  'settings.profile.password.currentRequired': 'Mevcut şifrenizi girin.',
+  'settings.profile.password.length': '{min}–{max} karakter kullanın.',
+  'settings.profile.password.same': 'Mevcut şifrenizden farklı bir şifre seçin.',
+  'settings.profile.password.mismatch': 'Yeni şifreler birbirini tutmuyor.',
+  'settings.profile.password.wrongCurrent': 'Mevcut şifreniz bu değil.',
+  'settings.profile.password.ssoEnforced':
+    'Bu çalışma alanında kimlik sağlayıcınızla giriş yapıyorsunuz. Şifrenizi orada değiştirin.',
+  'settings.profile.password.noPassword':
+    'Hesabınız kimlik sağlayıcıyla giriş yapıyor; değiştirilecek bir şifresi yok.',
+  'settings.profile.password.submit': 'Şifreyi değiştir',
+  'settings.profile.password.submitting': 'Değiştiriliyor…',
+  'settings.profile.password.changed':
+    'Şifre değiştirildi. Diğer cihazlarınızın oturumu kapatıldı.',
 
   // Yetkilerim — MyPermissions.tsx (RL-02 · tm 325.4)
   'settings.myPermissions.title': 'Yetkilerim',

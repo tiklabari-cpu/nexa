@@ -946,7 +946,7 @@ export default async function authRoutes(
           const [account, membership, license, organization, trial] = await Promise.all([
             tx.account.findUnique({
               where: { id: principal.accountId },
-              select: { email: true, name: true, avatarUrl: true },
+              select: { email: true, name: true, publicName: true, avatarUrl: true },
             }),
             tx.agentMembership.findUnique({
               where: {
@@ -1012,6 +1012,8 @@ export default async function authRoutes(
         account_id: principal.accountId,
         email: profile.account?.email ?? null,
         name: profile.account?.name ?? null,
+        // The name visitors see instead (RL-06); "My profile" edits both.
+        public_name: profile.account?.publicName ?? null,
         avatar_url: profile.account?.avatarUrl ?? null,
         role: principal.role,
         organization_id: principal.organizationId,

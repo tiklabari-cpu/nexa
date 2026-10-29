@@ -419,6 +419,69 @@ export function twoFactorEnabledMail(
   });
 }
 
+/**
+ * The password was changed from inside the panel (RL-06 · tm 327). Sent every
+ * time, like the two-factor notice above: the person who did it learns
+ * nothing new, the person who did not learns the one thing they must act on.
+ */
+export function passwordChangedMail(
+  ctx: MailContext,
+  input: {
+    email: string;
+    workspaceName: string;
+    at: Date;
+    endedSessions: number;
+    resetUrl: string;
+  },
+): RenderedEmail {
+  const t = tr(ctx.locale);
+  return renderEmail({
+    locale: ctx.locale,
+    homeUrl: ctx.appUrl ?? '',
+    subject: t ? 'SiyahTuş şifreniz değiştirildi' : 'Your SiyahTuş password was changed',
+    preheader: t
+      ? 'Hesabınızda bir güvenlik değişikliği oldu; sizin yaptığınızdan emin olun.'
+      : 'A security setting on your account changed. Make sure it was you.',
+    icon: ICON.lock,
+    heading: t ? 'Şifreniz değiştirildi' : 'Your password was changed',
+    blocks: [
+      {
+        type: 'paragraph',
+        text: t
+          ? 'Hesabınızın şifresi, oturum açık bir cihazdan mevcut şifre girilerek az önce değiştirildi. Bu cihaz dışındaki bütün oturumlar kapatıldı.'
+          : 'The password for your account was just changed from a signed-in device, with the current password. Every other session was signed out.',
+      },
+      {
+        type: 'facts',
+        rows: [
+          [t ? 'Hesap' : 'Account', input.email],
+          [t ? 'Çalışma alanı' : 'Workspace', input.workspaceName],
+          [t ? 'Zaman' : 'When', formatDateTime(input.at, ctx.locale, 'UTC')],
+          [t ? 'Kapatılan oturum' : 'Sessions signed out', String(input.endedSessions)],
+        ],
+      },
+      {
+        type: 'callout',
+        text: t
+          ? 'Bunu siz yapmadıysanız hesabınıza başkası erişmiş olabilir. Aşağıdaki bağlantıyla şifrenizi hemen sıfırlayın ve çalışma alanının bir sahibine haber verin.'
+          : 'If this was not you, someone else may have access to your account. Reset your password now with the link below, and tell an owner of the workspace.',
+      },
+      {
+        type: 'button',
+        label: t ? 'Şifreyi sıfırla' : 'Reset password',
+        url: input.resetUrl,
+        fallback: fallback(ctx),
+      },
+    ],
+    footer: [
+      t
+        ? 'Bu, hesabınızın güvenliği için gönderilen bir bildirimdir ve kapatılamaz.'
+        : 'This is a security notice about your account and cannot be turned off.',
+      signature(ctx),
+    ],
+  });
+}
+
 // --- Platform (root panel) mail -----------------------------------------------------
 
 /** How an operator role reads in a sentence. */

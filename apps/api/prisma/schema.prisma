@@ -313,6 +313,9 @@ model Account {
   id           String    @id @default(uuid()) @db.Uuid
   email        String    @unique @db.Citext
   name         String
+  /// What visitors see in the widget instead of `name` (RL-06 · tm 327); null
+  /// shows `name`. 1–120 characters (CHECK `accounts_public_name_length`).
+  publicName   String?   @map("public_name")
   avatarUrl    String?   @map("avatar_url")
   /// scrypt (RFC 7914). Null for accounts that only sign in via SSO.
   passwordHash String?   @map("password_hash")

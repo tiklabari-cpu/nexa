@@ -375,6 +375,20 @@ export class LifecycleService {
   }
 
   /**
+   * Set a new password the caller has already proved the right to set (RL-06 ·
+   * tm 327 — the route checked the current one), and end every other session
+   * of the account: each refresh family but the one `keepTokenId` belongs to,
+   * with its access tokens, in every workspace. Returns how many sessions were
+   * ended. Personal access tokens stay (`auth_change_password`).
+   */
+  async changePassword(accountId: string, password: string, keepTokenId: string): Promise<number> {
+    const passwordHash = await hashPassword(password);
+    const rows = await this.#db.$queryRaw<Array<{ ended: number }>>`
+      SELECT auth_change_password(${accountId}::uuid, ${passwordHash}, ${keepTokenId}::uuid) AS ended`;
+    return rows[0]?.ended ?? 0;
+  }
+
+  /**
    * Records a verification link for an address whose account is still waiting
    * on one (tm 257.7), spending any earlier link. Null for an address with no
    * account, or one already verified; otherwise the link's token and whose

@@ -1071,7 +1071,11 @@ describe('module parity matrix — what is still owed', () => {
       // `/reports/ai-agent/conversations` (tm 320.2) — the AI quality metrics
       // (AI-25), read in the web console's reports; the app has no reports
       // screen, and nothing here re-scopes.
-      contractEndpoints: 340,
+      // 340 -> 342 with `PATCH /agents/me` and `POST /auth/password` (tm 327) —
+      // "My profile" (RL-06): names and an in-app password change, in the web
+      // console's settings. The app's Account card keeps the name read-only
+      // (the task's "sonraki iş"), and nothing here re-scopes.
+      contractEndpoints: 342,
       scopeBoundaries: 1,
     });
   });

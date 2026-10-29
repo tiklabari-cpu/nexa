@@ -228,6 +228,23 @@ const uiPrefsBody = z
   })
   .strict()
   .refine((body) => Object.values(body).some((v) => v !== undefined), 'at least one is required');
+/**
+ * "My profile" (RL-06 · tm 327): partial, strict, never empty. Both names are
+ * trimmed; an empty `public_name` clears it like `null` does.
+ */
+const myProfileBody = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    public_name: z
+      .string()
+      .trim()
+      .max(120)
+      .nullable()
+      .optional()
+      .transform((value) => (value === '' ? null : value)),
+  })
+  .strict()
+  .refine((body) => Object.values(body).some((v) => v !== undefined), 'at least one is required');
 const listAgentsQuery = z.object({
   status: z.enum(['active', 'suspended', 'all']).default('active'),
 });
@@ -328,6 +345,7 @@ function serialiseWorkSchedule(
 const agentSelect = {
   id: true,
   name: true,
+  publicName: true,
   email: true,
   avatarUrl: true,
   lastSeenAt: true,
@@ -345,6 +363,7 @@ type MembershipWithAgent = {
   agent: {
     id: string;
     name: string;
+    publicName: string | null;
     email: string;
     avatarUrl: string | null;
     lastSeenAt: Date | null;
@@ -356,6 +375,7 @@ function serialiseAgent(m: MembershipWithAgent) {
   return {
     id: m.agent.id,
     name: m.agent.name,
+    public_name: m.agent.publicName,
     email: m.agent.email,
     avatar_url: m.agent.avatarUrl,
     role: m.role,
@@ -548,6 +568,66 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
         }),
       );
       return reply.send(prefs);
+    },
+  );
+
+  // The caller's own names (RL-06 · tm 327). Account-wide, like the account
+  // they sit on; the audit entry goes to the workspace the session is in and
+  // names the fields, not the values — the account carries those.
+  app.patch(
+    '/agents/me',
+    { config: { scopes: ['accounts--my:rw'], principals: ['agent'] } },
+    async (request, reply) => {
+      const parsed = myProfileBody.safeParse(request.body);
+      if (!parsed.success) {
+        throw ApiError.validation(
+          'Send name (1-120 characters) and/or public_name (up to 120 characters, or null), nothing else.',
+        );
+      }
+      const principal = request.requirePrincipal();
+      if (principal.kind !== 'agent') throw ApiError.authorization();
+
+      const updated = await request.withTenant(async (tx) => {
+        const before = await tx.account.findUnique({
+          where: { id: principal.accountId },
+          select: { name: true, publicName: true },
+        });
+        if (!before) throw ApiError.notFound('Resource not found.');
+
+        const data: { name?: string; publicName?: string | null } = {};
+        if (parsed.data.name !== undefined && parsed.data.name !== before.name) {
+          data.name = parsed.data.name;
+        }
+        if (
+          parsed.data.public_name !== undefined &&
+          parsed.data.public_name !== before.publicName
+        ) {
+          data.publicName = parsed.data.public_name;
+        }
+        const fields = [
+          ...(data.name !== undefined ? ['name'] : []),
+          ...(data.publicName !== undefined ? ['public_name'] : []),
+        ];
+        // A save that changes nothing writes nothing, so the trail never shows
+        // a change nobody made.
+        if (fields.length > 0) {
+          await tx.account.update({ where: { id: principal.accountId }, data });
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'account.profile_updated',
+            target: `account:${principal.accountId}`,
+            metadata: { fields },
+          });
+        }
+
+        return tx.agentMembership.findUnique({
+          where: {
+            licenseId_agentId: { licenseId: principal.licenseId, agentId: principal.accountId },
+          },
+          include: { agent: { select: agentSelect } },
+        });
+      });
+      if (!updated) throw ApiError.notFound('Resource not found.');
+      return reply.send(serialiseAgent(updated));
     },
   );
 

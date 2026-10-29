@@ -428,6 +428,12 @@ me:
                 account_id: { type: string, format: uuid }
                 email: { type: string }
                 name: { type: string }
+                public_name:
+                  type: string
+                  nullable: true
+                  description: |
+                    Agent principals only. The name visitors see in the widget
+                    instead of `name` (RL-06); `null` means `name` is shown.
                 role: { $ref: "../openapi.yaml#/components/schemas/AgentRole" }
                 organization_id: { type: string, format: uuid }
                 organization_name:
@@ -807,6 +813,59 @@ twoFactorReauthentication:
         with no password — for everyone else the factor cannot re-authenticate
         its own removal, since the phone is one of the things stolen along with
         a laptop.
+
+changePassword:
+  post:
+    tags: [Auth]
+    operationId: changePassword
+    summary: Change the caller's password
+    description: |
+      Changes the caller's password from inside the panel (RL-06), with the
+      current password rather than a reset link — so it does not spend the
+      address's daily account mail, and a stolen session alone cannot change
+      it. The new password follows sign-up's rule (12 to 200 characters) and
+      may not be the current one.
+
+      On success every other session of the account, in every workspace, is
+      ended: their refresh tokens and access tokens are revoked, so another
+      device is signed out at its next request or renewal. The session that
+      made the change stays signed in. Personal access tokens are not touched
+      — they are integrations somebody set up on purpose, listed and revoked
+      on their own screen.
+
+      Refused with 403 `not_allowed` and `details.reason`: `sso_enforced`
+      while the session's workspace signs its members in through an identity
+      provider (owners excepted, as at sign-in), and `no_password` for an
+      account that has never had one. Refused with 401 for a wrong current
+      password. Every attempt, right or wrong, counts against a budget of 10
+      per account per hour (429).
+
+      The account holder is told by mail. The mail is best-effort: a daily
+      mail cap does not stop the change.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [current_password, new_password]
+            additionalProperties: false
+            properties:
+              current_password:
+                type: string
+                maxLength: 512
+                description: The password the account has now.
+              new_password:
+                type: string
+                minLength: 12
+                maxLength: 200
+                description: The password to set. Not trimmed.
+    responses:
+      "204": { description: Password changed; other sessions ended }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
 personalAccessTokens:
   get:

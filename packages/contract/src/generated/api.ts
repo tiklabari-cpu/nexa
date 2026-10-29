@@ -8814,6 +8814,50 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/settings/widget/phrases': {
+    parameters: {
+      query: {
+        /** @description Which of the widget's eight languages. */
+        locale: 'en' | 'tr' | 'de' | 'fr' | 'es' | 'it' | 'pt' | 'ar';
+      };
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The brand's own widget texts in one language
+     * @description The widget texts the active brand rewrote in `locale` (WG-05) — the
+     *     offline notice, the queue line, the message box placeholder and the
+     *     rest of `WIDGET_PHRASE_KEYS`. A key that is absent shows the widget's
+     *     own text for that language; the panel shows that text as the
+     *     placeholder of the empty field.
+     */
+    get: operations['getWidgetPhrases'];
+    /**
+     * Replace the brand's own widget texts in one language
+     * @description Replaces every custom text of `locale`; a key left out goes back to
+     *     the widget's own text. A key outside `WIDGET_PHRASE_KEYS`, a text over
+     *     its key's limit, HTML, a line break or a placeholder the key does not
+     *     allow (anything but `{n}` / `{minutes}` where listed) is refused 400
+     *     and nothing is saved. Takes effect on each visitor's next token mint.
+     */
+    put: operations['setWidgetPhrases'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/settings/prechat': {
     parameters: {
       query?: never;
@@ -18383,6 +18427,60 @@ export interface components {
       configured: boolean;
     };
     /**
+     * @description A brand's own wording for widget texts in one language (WG-05), keyed
+     *     by `WIDGET_PHRASE_KEYS` (`@siyahtus/types`) — a closed list, each with
+     *     a length limit and the placeholders it may use (`{n}` the queue
+     *     position, `{minutes}` the estimated wait). Plain text: no HTML, no line
+     *     breaks. A key that is absent shows the widget's own text for that
+     *     language.
+     */
+    WidgetPhraseMap: {
+      [key: string]: string;
+    };
+    WidgetPhrases: {
+      /** Format: uuid */
+      brand_id: string;
+      /** @enum {string} */
+      locale: 'en' | 'tr' | 'de' | 'fr' | 'es' | 'it' | 'pt' | 'ar';
+      phrases: components['schemas']['WidgetPhraseMap'];
+      /**
+       * Format: date-time
+       * @description The newest change to this language's texts; null when none is saved.
+       */
+      updated_at: string | null;
+    };
+    /**
+     * @description Every custom text of the language, replacing what was saved: a key left
+     *     out goes back to the widget's own text ("reset to default").
+     */
+    WidgetPhrasesUpdate: {
+      phrases: components['schemas']['WidgetPhraseMap'];
+    };
+    /**
+     * @description The brand's custom widget texts for the one language the widget will
+     *     show (WG-05), chosen like the widget chooses: the snippet's language,
+     *     the brand's pinned language, the browser's languages, the fallback.
+     *     `phrases` is empty when that language has none. The widget uses them
+     *     only when it settled on the same `locale`.
+     */
+    MintedWidgetPhrases: {
+      /** @enum {string} */
+      locale: 'en' | 'tr' | 'de' | 'fr' | 'es' | 'it' | 'pt' | 'ar';
+      phrases: components['schemas']['WidgetPhraseMap'];
+    };
+    /**
+     * @description Roughly how long the visitor will still wait in the queue (WG-05), as a
+     *     range of whole minutes: the median and 80th percentile of the waits
+     *     of the same team's queue over the last 7 days, times the queue position,
+     *     over the agents of the team accepting chats now. Null outside the
+     *     queue, with fewer than 20 finished waits to go on, or while nobody of
+     *     the team accepts chats — the widget then shows the position alone.
+     */
+    EstimatedWait: {
+      min_minutes: number;
+      max_minutes: number;
+    } | null;
+    /**
      * @description The look the visitor's widget renders, as the token mint delivers it
      *     (FR-MOD-11.7 · FR-MOD-11.5). The five appearance fields are the
      *     workspace's `WidgetSettings` without the bookkeeping; the two links
@@ -22419,6 +22517,7 @@ export interface components {
         id: string;
         thread_id?: string | null;
         queue_position?: number | null;
+        estimated_wait?: components['schemas']['EstimatedWait'];
       } | null;
       /**
        * @description A proactive campaign message owed to this visitor (FR-MOD-03.3.2),
@@ -24662,6 +24761,16 @@ export interface operations {
            *     when the request is flagged; otherwise ignored.
            */
           challenge_token?: string;
+          /**
+           * @description The language the embedding page's snippet names
+           *     (`data-language`), if any (WG-05). With `browser_languages`
+           *     and the brand's own language setting it decides which
+           *     language's custom widget texts `widget_phrases` carries —
+           *     the same choice the widget makes for what it shows.
+           */
+          language?: string;
+          /** @description The visitor's browser languages, most preferred first (WG-05). */
+          browser_languages?: string[];
         };
       };
     };
@@ -24787,6 +24896,7 @@ export interface operations {
              *     the same request, as `prospect_fields`.
              */
             prospect_form?: components['schemas']['WidgetFormField'][];
+            widget_phrases?: components['schemas']['MintedWidgetPhrases'];
           };
         };
       };
@@ -36284,6 +36394,82 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['WidgetSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getWidgetPhrases: {
+    parameters: {
+      query: {
+        /** @description Which of the widget's eight languages. */
+        locale: 'en' | 'tr' | 'de' | 'fr' | 'es' | 'it' | 'pt' | 'ar';
+      };
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The language's custom texts */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['WidgetPhrases'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  setWidgetPhrases: {
+    parameters: {
+      query: {
+        /** @description Which of the widget's eight languages. */
+        locale: 'en' | 'tr' | 'de' | 'fr' | 'es' | 'it' | 'pt' | 'ar';
+      };
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['WidgetPhrasesUpdate'];
+      };
+    };
+    responses: {
+      /** @description Saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['WidgetPhrases'];
         };
       };
       400: components['responses']['BadRequest'];

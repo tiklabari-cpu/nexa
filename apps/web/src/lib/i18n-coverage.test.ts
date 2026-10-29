@@ -251,6 +251,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/settings/TicketRules.tsx',
   'src/features/settings/TwoFactor.tsx',
   'src/features/settings/WidgetCustomization.tsx',
+  'src/features/settings/widget/WidgetPhrases.tsx',
   'src/features/team/CopilotKnowledge.tsx',
   'src/features/team/TeamAiPerformance.tsx',
   'src/features/team/TeamTabs.tsx',

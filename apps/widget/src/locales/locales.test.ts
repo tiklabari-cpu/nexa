@@ -8,6 +8,7 @@
  * showing up as silent English inside an Arabic chat.
  */
 import { describe, expect, it } from 'vitest';
+import { WIDGET_PHRASE_DEFAULTS, WIDGET_PHRASE_KEYS, WIDGET_UI_LOCALES } from '@siyahtus/types';
 import { CATALOGS, RTL_LOCALES } from './index.js';
 
 describe('widget locale catalogs', () => {
@@ -40,6 +41,19 @@ describe('widget locale catalogs', () => {
         .map(([key, value]) => `${locale}['${key}']: ${value}`),
     );
     expect(hits).toEqual([]);
+  });
+
+  // The panel shows a brand the widget's own text beside each field it may
+  // rewrite (WG-05) from a copy in `@siyahtus/types`; the copy is this.
+  it('keeps the panel copy of the rewritable texts equal to the catalogs (tm 344)', () => {
+    expect([...WIDGET_UI_LOCALES].sort()).toEqual([...locales].sort());
+    for (const locale of locales) {
+      for (const key of WIDGET_PHRASE_KEYS) {
+        expect(WIDGET_PHRASE_DEFAULTS[locale][key], `${locale}['${key}']`).toBe(
+          CATALOGS[locale][key],
+        );
+      }
+    }
   });
 
   it('marks only Arabic as right-to-left', () => {

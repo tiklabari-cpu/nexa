@@ -36,6 +36,12 @@ const MAX_CHALLENGE_ROUNDS = 3;
 export type MintedAppearance = WidgetAppearance &
   Partial<Pick<WidgetTokenAppearance, 'privacy_policy_url' | 'powered_by_url'>>;
 
+/** A brand's own widget texts for one language, off a token mint (WG-05). */
+export interface MintedPhrases {
+  locale: string;
+  phrases: Record<string, string>;
+}
+
 export interface WidgetEvent {
   id: string;
   text: string | null;
@@ -93,7 +99,13 @@ export interface WidgetState {
   customer: { id: string; name: string | null; email: string | null };
   /** Who the visitor is talking to — a person or the AI persona. */
   agent: { name: string; avatar_url: string | null } | null;
-  chat: { id: string; thread_id: string | null; queue_position: number | null } | null;
+  chat: {
+    id: string;
+    thread_id: string | null;
+    queue_position: number | null;
+    /** Roughly how long the queue still is, in minutes (WG-05); absent from an older server. */
+    estimated_wait?: { min_minutes: number; max_minutes: number } | null;
+  } | null;
   /**
    * A proactive campaign message owed to this visitor (FR-MOD-03.3.2), handed
    * over on this poll and stamped delivered server-side in the same request —
@@ -156,6 +168,17 @@ export class WidgetApi {
   #forgotten = false;
   /** Asked for a token when the API answers `challenge_required`; unset = the error surfaces. */
   #challenge: ChallengeHandler | null = null;
+  /**
+   * The brand's own texts for one language (WG-05) from the last mint, or null
+   * from a server predating them.
+   */
+  #phrases: MintedPhrases | null = null;
+  /**
+   * What the mint is told about the visitor's language (WG-05) so it can pick
+   * the custom texts of the language the widget will show: the snippet's
+   * `data-language` and the browser's languages.
+   */
+  localeHints: { language?: string; browser: readonly string[] } = { browser: [] };
 
   /**
    * Teach this client to answer a `403 challenge_required` (tm 339.3): the
@@ -197,6 +220,11 @@ export class WidgetApi {
    */
   get appearance(): MintedAppearance | null {
     return this.#appearance;
+  }
+
+  /** The brand's custom texts from the last mint (WG-05), for the language it names. */
+  get phrases(): MintedPhrases | null {
+    return this.#phrases;
   }
 
   /** The last token mint's file-sharing switch (FR-MOD-08.9.4). */
@@ -326,6 +354,14 @@ export class WidgetApi {
           ...(stored ? { customer_id: stored } : {}),
           ...(this.hostOrigin ? { host_origin: this.hostOrigin } : {}),
           ...(challengeToken ? { challenge_token: challengeToken } : {}),
+          // Hints only, and never a reason to refuse the token: what the
+          // server would not take (over-long tags) is left out.
+          ...(this.localeHints.language && this.localeHints.language.length <= 35
+            ? { language: this.localeHints.language }
+            : {}),
+          browser_languages: this.localeHints.browser
+            .filter((tag) => tag.length <= 35)
+            .slice(0, 10),
         }),
       });
       if (!attempt.ok) throw await failure(attempt);
@@ -344,6 +380,7 @@ export class WidgetApi {
       post_chat_form,
       ticket_form,
       prospect_form,
+      widget_phrases,
     } = (await response.json()) as {
       token: string;
       customer_id: string;
@@ -356,6 +393,7 @@ export class WidgetApi {
       post_chat_form?: WidgetFormField[];
       ticket_form?: WidgetFormField[];
       prospect_form?: WidgetFormField[];
+      widget_phrases?: MintedPhrases;
     };
     this.#token = token;
     this.#rtmUrl = typeof rtm_url === 'string' && rtm_url !== '' ? rtm_url : null;
@@ -366,6 +404,8 @@ export class WidgetApi {
     this.#postChatForm = Array.isArray(post_chat_form) ? post_chat_form : [];
     this.#ticketForm = Array.isArray(ticket_form) ? ticket_form : [];
     this.#prospectForm = Array.isArray(prospect_form) ? prospect_form : [];
+    this.#phrases =
+      widget_phrases && typeof widget_phrases.phrases === 'object' ? widget_phrases : null;
     // Absent exactly when the cookie carried the token: it then lives only
     // where no script can read it, and the copy here goes. Present otherwise —
     // the fallback for a browser that would not keep that cookie.

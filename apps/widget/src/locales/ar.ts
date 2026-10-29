@@ -8,6 +8,7 @@ export const ar: Record<string, string> = {
   'panel.label': 'محادثة دعم العملاء',
   'transcript.label': 'المحادثة',
   'status.queue': 'أنت رقم {n} في قائمة الانتظار',
+  'status.queueWait': 'أنت رقم {n} في قائمة الانتظار · حوالي {minutes} دقيقة',
   'status.offline': 'لا يوجد أحد متاح الآن — اترك رسالة وسنقوم بالرد.',
   'connection.lost': 'انقطع الاتصال. جارٍ إعادة الاتصال…',
   'error.connect': 'المحادثة غير متاحة حاليًا. يرجى المحاولة مرة أخرى بعد قليل.',

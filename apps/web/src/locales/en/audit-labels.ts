@@ -57,6 +57,7 @@ export const auditLabels: Messages = {
   'audit.action.settings.chat_timeout_updated': 'Chat timeout or day boundary updated',
   'audit.action.settings.widget_updated': 'Chat widget updated',
   'audit.action.settings.prechat_updated': 'Pre-chat form updated',
+  'audit.action.settings.widget_phrases_updated': 'Widget texts updated',
   'audit.action.settings.sales_tracker_updated': 'Sales tracker updated',
   'audit.action.settings.appearance_updated': 'Panel font default changed',
   'audit.action.settings.ai_usage_alerts_updated': 'AI usage alert recipients changed',

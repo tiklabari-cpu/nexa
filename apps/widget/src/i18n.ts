@@ -10,8 +10,11 @@
  *
  * The fallback chain matches the panel — active locale → English → the key — so
  * a gap in a locale's table shows English rather than a raw key, and a typo'd
- * key is visible rather than fatal.
+ * key is visible rather than fatal. A brand's own wording (WG-05) comes first:
+ * the texts the token mint carried for this language, only for the keys a
+ * brand may rewrite (`WIDGET_PHRASE_KEYS`).
  */
+import { pickWidgetUiLocale, type WidgetLocaleSources } from '@siyahtus/types';
 import { CATALOGS, RTL_LOCALES, type WidgetLocale } from './locales/index.js';
 
 export type { WidgetLocale };
@@ -31,28 +34,13 @@ export function resolveWidgetLocale(language: string | null | undefined): Widget
   return SUPPORTED_LOCALES.includes(primary as WidgetLocale) ? (primary as WidgetLocale) : 'en';
 }
 
-/** A BCP-47 tag's primary subtag, when it is one of the supported languages. */
-function supportedLocale(tag: string | null | undefined): WidgetLocale | null {
-  const primary = (tag ?? '').toLowerCase().split(/[-_]/)[0];
-  return SUPPORTED_LOCALES.includes(primary as WidgetLocale) ? (primary as WidgetLocale) : null;
-}
-
 /** The languages the visitor's browser prefers, most preferred first. */
 export function browserLanguages(nav: Pick<Navigator, 'language' | 'languages'>): string[] {
   const list = nav.languages?.length ? nav.languages : [nav.language];
   return list.filter((tag): tag is string => typeof tag === 'string' && tag !== '');
 }
 
-export interface WidgetLanguageSources {
-  /** A `language` the embedding page wrote into its install snippet. */
-  snippet?: string | null;
-  /** The panel's choice from the token mint — absent until the mint lands. */
-  panel?: string | null;
-  /** The panel's fallback from the token mint. */
-  fallback?: string | null;
-  /** `navigator.languages`. */
-  browser?: readonly string[];
-}
+export type WidgetLanguageSources = WidgetLocaleSources;
 
 /**
  * Which language the widget shows (WG-02), in this order:
@@ -65,24 +53,16 @@ export interface WidgetLanguageSources {
  * 4. the panel's fallback language.
  *
  * A snippet language we do not ship (`ru`) is no choice at all and falls
- * through, instead of pinning English the way the old single-value lookup did.
- * Before the mint the panel's half is unknown, so `panel` and `fallback` are
- * absent: the answer is then snippet → browser → English, which for the common
- * case (a browser language we ship, panel on auto) is already the final answer
- * and nothing is redrawn when the mint lands.
+ * through. Before the mint the panel's half is unknown, so `panel` and
+ * `fallback` are absent: the answer is then snippet → browser → English, which
+ * for the common case (a browser language we ship, panel on auto) is already
+ * the final answer and nothing is redrawn when the mint lands.
+ *
+ * Shared with the token mint (`@siyahtus/types`), which picks the same
+ * language's custom texts (WG-05) without being told the answer.
  */
 export function pickWidgetLocale(sources: WidgetLanguageSources): WidgetLocale {
-  const fromSnippet = supportedLocale(sources.snippet);
-  if (fromSnippet) return fromSnippet;
-  if (sources.panel && sources.panel !== 'auto') {
-    const pinned = supportedLocale(sources.panel);
-    if (pinned) return pinned;
-  }
-  for (const tag of sources.browser ?? []) {
-    const match = supportedLocale(tag);
-    if (match) return match;
-  }
-  return supportedLocale(sources.fallback) ?? 'en';
+  return pickWidgetUiLocale(sources);
 }
 
 /** Whether `locale` reads right-to-left (NFR-I18N1) — Arabic today. */
@@ -97,12 +77,19 @@ function interpolate(template: string, params?: Record<string, string | number>)
   );
 }
 
-/** A translator bound to `language` for the life of the widget. */
-export function createTranslator(language: string | null | undefined): WidgetTranslate {
+/**
+ * A translator bound to `language` for the life of the widget, reading a
+ * brand's own texts for that language (`overrides`, WG-05) before the catalog.
+ */
+export function createTranslator(
+  language: string | null | undefined,
+  overrides: Readonly<Record<string, string>> = {},
+): WidgetTranslate {
   const locale = resolveWidgetLocale(language);
   const catalog = CATALOGS[locale];
   return (key, params) => {
-    const template = catalog[key] ?? CATALOGS.en[key] ?? key;
+    const own = Object.prototype.hasOwnProperty.call(overrides, key) ? overrides[key] : undefined;
+    const template = own || catalog[key] || CATALOGS.en[key] || key;
     return interpolate(template, params);
   };
 }

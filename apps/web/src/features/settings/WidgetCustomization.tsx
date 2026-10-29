@@ -230,7 +230,7 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
 }
 
 /** Each language in its own name — a picker reads the same in every panel language. */
-const LANGUAGE_NAMES: Record<WidgetUiLocale, string> = {
+export const LANGUAGE_NAMES: Record<WidgetUiLocale, string> = {
   en: 'English',
   tr: 'Türkçe',
   de: 'Deutsch',

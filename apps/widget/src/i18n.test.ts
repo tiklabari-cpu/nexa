@@ -96,6 +96,29 @@ describe('createTranslator', () => {
   });
 });
 
+describe('createTranslator with brand texts (tm 344 · WG-05)', () => {
+  const brand = {
+    'status.offline': 'Değerli üyemiz, şu an kapalıyız.',
+    'status.queue': 'Sıranız: {n}',
+  };
+
+  it('reads the brand text first, then the catalog, then English, then the key', () => {
+    const t = createTranslator('tr', brand);
+    expect(t('status.offline')).toBe('Değerli üyemiz, şu an kapalıyız.');
+    expect(t('status.queue', { n: 4 })).toBe('Sıranız: 4');
+    expect(t('input.placeholder')).toBe(CATALOGS.tr['input.placeholder']);
+    expect(t('no.such.key')).toBe('no.such.key');
+  });
+
+  it('leaves another language and a translator without texts untouched', () => {
+    expect(createTranslator('tr')('status.offline')).toBe(CATALOGS.tr['status.offline']);
+    // An empty text is no text: the catalog speaks.
+    expect(createTranslator('tr', { 'status.offline': '' })('status.offline')).toBe(
+      CATALOGS.tr['status.offline'],
+    );
+  });
+});
+
 describe('pickWidgetLocale (WG-02)', () => {
   it('lets the snippet beat the panel, the browser and the fallback', () => {
     expect(

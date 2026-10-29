@@ -269,6 +269,7 @@ model License {
   securitySettings       SecuritySettings[]
   inboxSettings          InboxSettings[]
   widgetSettings         WidgetSettings[]
+  widgetPhrases          WidgetPhrase[]
   appInstallations       AppInstallation[]
   kbCategories           KbCategory[]
   kbArticles             KbArticle[]
@@ -3679,6 +3680,7 @@ model Brand {
   securitySettings SecuritySettings[]
   inboxSettings    InboxSettings[]
   widgetSettings   WidgetSettings[]
+  widgetPhrases    WidgetPhrase[]
   handoffRoutes    HandoffRoute[]
   aiAccessInfo     AiAccessInfo[]
   aiTestScenarios  AiTestScenario[]
@@ -3933,6 +3935,26 @@ model WidgetSettings {
 
   @@id([licenseId, brandId])
   @@map("widget_settings")
+}
+
+/// A brand's own wording for one widget text in one language (tm 344 · WG-05).
+/// `key` is one of `WIDGET_PHRASE_KEYS` (`@siyahtus/types`), checked by the
+/// settings endpoint; `locale` and the length are the `widget_phrases_*`
+/// checks. No row = the widget's own text.
+model WidgetPhrase {
+  licenseId BigInt   @map("license_id")
+  brandId   String   @map("brand_id") @db.Uuid
+  locale    String
+  key       String
+  text      String
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  brand   Brand   @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@id([licenseId, brandId, locale, key])
+  @@index([brandId])
+  @@map("widget_phrases")
 }
 
 // ===========================================================================

@@ -1779,6 +1779,62 @@ widgetSettings:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+widgetPhrases:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/BrandHeader"
+    - name: locale
+      in: query
+      required: true
+      description: Which of the widget's eight languages.
+      schema:
+        type: string
+        enum: [en, tr, de, fr, es, it, pt, ar]
+  get:
+    tags: [Settings]
+    operationId: getWidgetPhrases
+    summary: The brand's own widget texts in one language
+    description: |
+      The widget texts the active brand rewrote in `locale` (WG-05) — the
+      offline notice, the queue line, the message box placeholder and the
+      rest of `WIDGET_PHRASE_KEYS`. A key that is absent shows the widget's
+      own text for that language; the panel shows that text as the
+      placeholder of the empty field.
+    responses:
+      "200":
+        description: The language's custom texts
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/WidgetPhrases" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  put:
+    tags: [Settings]
+    operationId: setWidgetPhrases
+    summary: Replace the brand's own widget texts in one language
+    description: |
+      Replaces every custom text of `locale`; a key left out goes back to
+      the widget's own text. A key outside `WIDGET_PHRASE_KEYS`, a text over
+      its key's limit, HTML, a line break or a placeholder the key does not
+      allow (anything but `{n}` / `{minutes}` where listed) is refused 400
+      and nothing is saved. Takes effect on each visitor's next token mint.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/WidgetPhrasesUpdate" }
+    responses:
+      "200":
+        description: Saved
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/WidgetPhrases" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 prechatSettings:
   get:
     tags: [Settings]

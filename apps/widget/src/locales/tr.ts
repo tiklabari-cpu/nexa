@@ -7,6 +7,7 @@ export const tr: Record<string, string> = {
   'panel.label': 'Müşteri destek sohbeti',
   'transcript.label': 'Konuşma',
   'status.queue': 'Sırada {n}. sıradasınız',
+  'status.queueWait': 'Sırada {n}. sıradasınız · yaklaşık {minutes} dk',
   'status.offline': 'Şu anda kimse müsait değil — mesaj bırakın, size döneceğiz.',
   'connection.lost': 'Bağlantı koptu, yeniden deneniyor…',
   'error.connect': 'Sohbet şu anda kullanılamıyor. Lütfen birazdan tekrar deneyin.',

@@ -1063,6 +1063,20 @@ customerToken:
                   The human check's answer (tm 339.2), sent only after this
                   endpoint answered `403 challenge_required`. Verified only
                   when the request is flagged; otherwise ignored.
+              language:
+                type: string
+                maxLength: 35
+                description: |
+                  The language the embedding page's snippet names
+                  (`data-language`), if any (WG-05). With `browser_languages`
+                  and the brand's own language setting it decides which
+                  language's custom widget texts `widget_phrases` carries —
+                  the same choice the widget makes for what it shows.
+              browser_languages:
+                type: array
+                maxItems: 10
+                items: { type: string, maxLength: 35 }
+                description: The visitor's browser languages, most preferred first (WG-05).
     responses:
       "200":
         description: Customer token issued
@@ -1191,6 +1205,8 @@ customerToken:
                     where the two chat forms' answers go. The answers travel in
                     the same request, as `prospect_fields`.
                   items: { $ref: "../openapi.yaml#/components/schemas/WidgetFormField" }
+                widget_phrases:
+                  $ref: "../openapi.yaml#/components/schemas/MintedWidgetPhrases"
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "403":
         description: |

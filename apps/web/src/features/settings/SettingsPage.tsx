@@ -32,6 +32,7 @@ import { Appearance } from './Appearance.js';
 import { McpConnection } from './McpConnection.js';
 import { WebsiteWidgets } from './WebsiteWidgets.js';
 import { WidgetCustomization } from './WidgetCustomization.js';
+import { WidgetPhrasesSettings } from './widget/WidgetPhrases.js';
 import { SalesTracker } from './SalesTracker.js';
 import { ChannelsGrid } from './Channels.js';
 import { IpAllowlist } from './IpAllowlist.js';
@@ -133,7 +134,12 @@ export const SECTION_ELEMENTS: Record<string, (p: SectionPermissions) => ReactEl
   brands: (p) => <Brands canEdit={p.canManageBrands} />,
   channels: () => <ChannelsGrid />,
   'website-widgets': (p) => <WebsiteWidgets canEdit={p.canManageAccess} />,
-  widget: (p) => <WidgetCustomization canEdit={p.canManageAccess} />,
+  widget: (p) => (
+    <>
+      <WidgetCustomization canEdit={p.canManageAccess} />
+      <WidgetPhrasesSettings canEdit={p.canManageAccess} />
+    </>
+  ),
   'sales-tracker': (p) => <SalesTracker canEdit={p.canManageAccess} />,
   'routing-rules': (p) => <RoutingRules canEdit={p.canManageAccess} />,
   skills: (p) => <Skills canEdit={p.canManageAccess} />,

@@ -1,8 +1,10 @@
+import { AI_METRICS_MIN_SAMPLE, aiQualityRates, emptyAiMetricCounts } from '@siyahtus/types';
 import { describe, expect, it } from 'vitest';
 import {
   isLowBase,
   LOW_BASE_THRESHOLD,
   performanceKpis,
+  qualityKpis,
   type AiAgentReport,
   type PerformanceKpi,
 } from './performance.js';
@@ -84,5 +86,40 @@ describe('performanceKpis', () => {
     const kpis = performanceKpis(report(), { score: null, responses: 0 });
     expect(rate(kpis, 'resolution_rate').rate).toBeNull();
     expect(rate(kpis, 'resolution_rate').lowBase).toBe(false);
+  });
+});
+
+describe('qualityKpis (AI-25 · tm 320.3)', () => {
+  const withN = (conversations: number, confirmed: number) =>
+    report({
+      quality: aiQualityRates({
+        ...emptyAiMetricCounts(),
+        ended: conversations,
+        conversations,
+        confirmed,
+      }),
+    });
+
+  it('shows the four quality rates in order, from the report', () => {
+    const kpis = qualityKpis(withN(40, 10));
+    expect(kpis.map((k) => k.key)).toEqual([
+      'confirmed_resolution',
+      'false_resolution',
+      'handoff_quality',
+      'mandatory_handoff_compliance',
+    ]);
+    expect(kpis[0]?.rate).toBe(0.25);
+  });
+
+  it('cautions over N, the same threshold the server calls few samples', () => {
+    expect(LOW_BASE_THRESHOLD).toBe(AI_METRICS_MIN_SAMPLE);
+    expect(qualityKpis(withN(AI_METRICS_MIN_SAMPLE - 1, 1)).every((k) => k.lowBase)).toBe(true);
+    expect(qualityKpis(withN(AI_METRICS_MIN_SAMPLE, 1)).some((k) => k.lowBase)).toBe(false);
+    // Nothing ended: unknown, not few.
+    expect(qualityKpis(withN(0, 0)).some((k) => k.lowBase)).toBe(false);
+  });
+
+  it('is empty for a report without the quality block', () => {
+    expect(qualityKpis(report())).toEqual([]);
   });
 });

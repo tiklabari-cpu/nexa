@@ -142,6 +142,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/settings/TicketEmailTemplates.tsx',
   'src/features/settings/TrustedDomains.tsx',
   'src/features/settings/WebsiteWidgets.tsx',
+  'src/features/reports/AiMetricsPanel.tsx',
   'src/features/reports/ReportsPage.tsx',
   'src/features/reports/SurveyPopover.tsx',
   'src/features/reports/ShareControl.tsx',

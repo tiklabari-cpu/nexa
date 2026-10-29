@@ -754,6 +754,10 @@ export const playbook: Messages = {
   'playbook.performance.lowBaseHint': 'Based on few chats — treat as indicative.',
   'playbook.performance.lowBaseFooter':
     'A percentage over a handful of chats swings on a single case. The warned cards will settle as more conversations close.',
+  'playbook.performance.qualityTitle': 'What was really solved',
+  'playbook.performance.qualityFooter':
+    'These count what the player confirmed and what came back; the cards above are the billed figures.',
+  'playbook.performance.qualityLink': 'All AI quality figures in Reports',
   'playbook.performance.kpiResolutionRate': 'Resolution rate',
   'playbook.performance.kpiAiChats': 'AI chats',
   'playbook.performance.kpiCsat': 'CSAT',

@@ -751,6 +751,10 @@ export const playbook: Messages = {
     'Az sayıda sohbete dayanıyor — gösterge olarak değerlendirin.',
   'playbook.performance.lowBaseFooter':
     'Az sayıda sohbet üzerindeki bir yüzde, tek bir vakayla oynayabilir. Daha fazla sohbet kapandıkça uyarılı kartlar oturacak.',
+  'playbook.performance.qualityTitle': 'Gerçekte ne çözüldü',
+  'playbook.performance.qualityFooter':
+    'Bunlar oyuncunun onayladığını ve geri geleni sayar; yukarıdaki kartlar faturalanan rakamlardır.',
+  'playbook.performance.qualityLink': 'Tüm AI kalite rakamları Raporlar’da',
   'playbook.performance.kpiResolutionRate': 'Çözüm oranı',
   'playbook.performance.kpiAiChats': 'AI sohbetleri',
   'playbook.performance.kpiCsat': 'CSAT',

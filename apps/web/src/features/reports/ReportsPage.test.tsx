@@ -87,6 +87,9 @@ const OVERVIEW = {
 
 function mockReports(aiAgent: AiAgent): void {
   api.get.mockImplementation((path: string) => {
+    // The AI quality panel under the billed figures (tm 320.3) has its own
+    // file (`AiMetricsPanel.test.tsx`); here it stays loading.
+    if (path.startsWith('/reports/ai-agent/')) return new Promise(() => {});
     if (path.startsWith('/reports/ai-agent')) {
       return Promise.resolve({
         range: OVERVIEW.range,
@@ -327,6 +330,8 @@ describe('ReportsPage — AI Agent report (07.4)', () => {
     // The KK made visible: the report ties its number to the billing counter, so
     // a reader never treats the report and the invoice as two separate figures.
     expect(screen.getByText(/the same figure the invoice bills/i)).toBeInTheDocument();
+    // AI-25-S1: the billed box is labelled apart from the quality panel under it.
+    expect(screen.getByRole('region', { name: 'Billed AI resolution' })).toBeInTheDocument();
   });
 
   it('queries the shared ADR-09 endpoint with the selected range', async () => {

@@ -4,7 +4,9 @@
  * the AI is off the figures are labelled as history.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import type { AiQualityRates } from '@siyahtus/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
@@ -26,6 +28,7 @@ function mockReports(over: {
   transfer_rate?: number | null;
   score?: number | null;
   responses?: number;
+  quality?: AiQualityRates;
 }): void {
   api.get.mockImplementation((path: string) => {
     if (path === '/reports/ai-agent') {
@@ -36,6 +39,7 @@ function mockReports(over: {
         transfer_rate: over.transfer_rate ?? null,
         skill_runs: 0,
         avg_automated_duration_seconds: null,
+        ...(over.quality ? { quality: over.quality } : {}),
       });
     }
     if (path === '/reports/overview') {
@@ -98,6 +102,56 @@ describe('AiPerformance', () => {
 
     await screen.findByText('Resolution rate');
     expect(screen.queryByText(/historical figures/i)).not.toBeInTheDocument();
+  });
+
+  it('adds the quality rates beside the billed ones, cautioned over few conversations (FR-MOD-06.5)', async () => {
+    const quality: AiQualityRates = {
+      conversations: 10,
+      low_sample: true,
+      confirmed_resolution: 0.3,
+      assumed_resolution: 0.3,
+      unsettled: 0,
+      false_resolution: 0.1429,
+      containment: 0.7,
+      handoff_rate: 0.3,
+      handoff_quality: 0.5,
+      reask_rate: 0.5,
+      mandatory_handoff_compliance: 0.5,
+      guardrail_violation: 0,
+      guardrail_suspected: 0,
+      bsat: null,
+      csat_after_handoff: null,
+      clarification_efficiency: null,
+      repeat_unmeasured: 0,
+    };
+    mockReports({ resolutions: 40, resolution_rate: 0.8, transfers: 10, quality });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <AiPerformance agentActive canRead />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    const section = await screen.findByRole('region', { name: 'What was really solved' });
+    const value = (label: string) =>
+      within(section).getByText(label).nextElementSibling as HTMLElement;
+    expect(value('Confirmed resolution')).toHaveTextContent('30%');
+    expect(value('False resolution')).toHaveTextContent('14%');
+    expect(value('Hand-over quality')).toHaveTextContent('50%');
+    // Below its 100% target, and N = 10 is few: both read as a warning.
+    expect(value('Mandatory hand-over compliance')).toHaveClass('text-warning');
+    expect(within(section).getAllByText(/Based on few chats/)).toHaveLength(4);
+    // The billed headline is untouched beside them (ADR-09a).
+    expect(screen.getByText('80%')).toBeInTheDocument();
+  });
+
+  it('shows no quality cards for a report without the block', async () => {
+    mockReports({ resolutions: 30, resolution_rate: 0.5 });
+    renderPerf(<AiPerformance agentActive canRead />);
+    await screen.findByText('Resolution rate');
+    expect(screen.queryByRole('region', { name: 'What was really solved' })).toBeNull();
   });
 
   it('asks for the reports permission when the caller lacks it, and fetches nothing', () => {

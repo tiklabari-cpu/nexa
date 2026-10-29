@@ -13,7 +13,14 @@
  * every chat the AI *finished*, whether it resolved the chat itself or handed
  * it to a human — not `report.resolutions` alone, which is only the resolved
  * subset and undercounts the AI's actual workload.
+ *
+ * Beside those, four of the AI quality rates (AI-25 · tm 320.3) from the same
+ * response's `quality` block: confirmed and false resolution, hand-over
+ * quality and mandatory hand-over compliance. They rest on N — the ended
+ * conversations the AI wrote in — so the same few-samples caution applies to
+ * them over N, not over the billed chats.
  */
+import type { AiMetricKey, AiQualityRates } from '@siyahtus/types';
 
 /** Below this many cases a percentage is noise, not a signal — flag, don't hide. */
 export const LOW_BASE_THRESHOLD = 20;
@@ -25,6 +32,8 @@ export interface AiAgentReport {
   transfer_rate: number | null;
   skill_runs: number;
   avg_automated_duration_seconds: number | null;
+  /** The AI quality block (tm 320.2); absent from a response that predates it. */
+  quality?: AiQualityRates;
 }
 
 export interface SatisfactionSummary {
@@ -82,4 +91,26 @@ export function performanceKpis(
       lowBase: isLowBase(finished),
     },
   ];
+}
+
+/** The quality rates the performance tab shows, in order. */
+export const QUALITY_KPI_KEYS = [
+  'confirmed_resolution',
+  'false_resolution',
+  'handoff_quality',
+  'mandatory_handoff_compliance',
+] as const satisfies readonly AiMetricKey[];
+
+export interface QualityKpi {
+  key: (typeof QUALITY_KPI_KEYS)[number];
+  rate: number | null;
+  lowBase: boolean;
+}
+
+/** The quality cards, each flagged when N is above zero but under the threshold. */
+export function qualityKpis(report: AiAgentReport): QualityKpi[] {
+  const quality = report.quality;
+  if (!quality) return [];
+  const lowBase = isLowBase(quality.conversations);
+  return QUALITY_KPI_KEYS.map((key) => ({ key, rate: quality[key], lowBase }));
 }

@@ -383,21 +383,6 @@ const TRACKED = [
       '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
       'the timeline viewer (tm 334) reads it too.',
   },
-  {
-    op: 'GET /reports/ai-agent/breakdown',
-    owner: 'tm 320.3',
-    reason:
-      'the AI quality metrics by topic, reason, version, language, brand or team (tm 320.2 · ' +
-      'AI-25) — the version comparison and filters of Raporlar › AI Agent, drawn by MET-WEB ' +
-      '(tm 320.3).',
-  },
-  {
-    op: 'GET /reports/ai-agent/conversations',
-    owner: 'tm 320.3',
-    reason:
-      'the connections behind an AI quality figure, by id (tm 320.2 · AI-25) — the drill-down ' +
-      'and the mandatory hand-over violations list of Raporlar › AI Agent (tm 320.3).',
-  },
 ];
 
 /** The platform contract's operations with no client, and why (tm 389.3). */

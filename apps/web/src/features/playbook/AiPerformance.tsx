@@ -15,10 +15,16 @@ import { Card, ErrorNotice, Kpi, KpiGrid } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount, formatRate, formatUsdEstimate } from '../../lib/format.js';
-import { useTranslate } from '../../lib/i18n.js';
+import { useLocale, useTranslate } from '../../lib/i18n.js';
 import { canViewAiUsage, useAiUsage, type AiUsage } from '../settings/ai-usage.js';
 import { PerMemberQuota } from '../../components/settings/PerMemberQuota.js';
-import { performanceKpis, type AiAgentReport, type SatisfactionSummary } from './performance.js';
+import { metricHint, metricLabel, missesTarget } from '../reports/ai-metrics.js';
+import {
+  performanceKpis,
+  qualityKpis,
+  type AiAgentReport,
+  type SatisfactionSummary,
+} from './performance.js';
 
 interface OverviewResponse {
   satisfaction: SatisfactionSummary;
@@ -42,6 +48,7 @@ export function AiPerformance({
   canRead: boolean;
 }): ReactElement {
   const t = useTranslate();
+  const { locale } = useLocale();
   const api = useApiClient();
 
   const report = useQuery({
@@ -83,7 +90,9 @@ export function AiPerformance({
   }
 
   const kpis = performanceKpis(report.data, overview.data.satisfaction);
-  const anyLowBase = kpis.some((k) => k.kind === 'rate' && k.lowBase);
+  const quality = qualityKpis(report.data);
+  const anyLowBase =
+    kpis.some((k) => k.kind === 'rate' && k.lowBase) || quality.some((k) => k.lowBase);
 
   return (
     <div className="flex flex-col gap-3">
@@ -115,6 +124,35 @@ export function AiPerformance({
           ),
         )}
       </KpiGrid>
+
+      {/* AI-25 (tm 320.3): what was really solved, beside the billed rate above.
+          The hint is the metric's definition, or the few-samples caution. */}
+      {quality.length > 0 && (
+        <section aria-labelledby="ai-performance-quality" className="flex flex-col gap-2">
+          <h3 id="ai-performance-quality" className="text-xs font-semibold">
+            {t('playbook.performance.qualityTitle')}
+          </h3>
+          <KpiGrid>
+            {quality.map((kpi) => (
+              <Kpi
+                key={kpi.key}
+                label={metricLabel(kpi.key, locale)}
+                value={formatRate(kpi.rate)}
+                tone={kpi.lowBase || missesTarget(kpi.key, kpi.rate) ? 'warn' : 'neutral'}
+                hint={
+                  kpi.lowBase ? t('playbook.performance.lowBaseHint') : metricHint(kpi.key, locale)
+                }
+              />
+            ))}
+          </KpiGrid>
+          <p className="text-2xs text-content-tertiary">
+            {t('playbook.performance.qualityFooter')}{' '}
+            <Link to="/app/reports" className="underline">
+              {t('playbook.performance.qualityLink')}
+            </Link>
+          </p>
+        </section>
+      )}
 
       {anyLowBase && (
         <p className="text-2xs text-content-tertiary">{t('playbook.performance.lowBaseFooter')}</p>

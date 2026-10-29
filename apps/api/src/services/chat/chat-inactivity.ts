@@ -55,14 +55,26 @@
  * and a pass is idempotent — a connection it passed on has a new agent and a
  * fresh `assigned_at`, one it marked is inactive already.
  *
+ * Before either, in the same pass, a connection nobody answers asks its player
+ * how to reach them (WG-08 · tm 342, `ask-email.ts`): an e-mail card, or "we
+ * will reply here" when the team already knows how. It comes first because a
+ * player who has left is the reason to have the address; the transfer then
+ * starts its own wait from the new agent (`assigned_at`), and the one event
+ * the ask wrote is not asked for twice.
+ *
  * Still to come on this sweep: a team in manual assignment mode (WG-07 ·
- * tm 346) turns the transfer into a "nobody took it" notice, and asking the
- * player for an e-mail (WG-08 · tm 342) runs before the transfer in the same
- * pass.
+ * tm 346) turns the transfer into a "nobody took it" notice.
  */
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { type TenantClient, type TenantContext, withTenant } from '../../lib/tenant.js';
 import { type ChatService } from './chat-service.js';
+import {
+  contactRequestRule,
+  contactRequestSql,
+  readAskEmailSettings,
+  ruleIsOff,
+  type ContactRequestRule,
+} from './ask-email.js';
 
 /**
  * The predicate over a `threads` row aliased `t`: its agent has left it
@@ -119,6 +131,10 @@ export async function readInactivitySettings(tx: TenantClient): Promise<Inactivi
 export interface TenantInactivityResult {
   /** Stringified: a bigint cannot be JSON-serialised. */
   licenseId: string;
+  /** Players asked for an e-mail this pass (WG-08). */
+  askedEmail: number;
+  /** Players told the team will reply in the conversation instead (WG-08). */
+  repliedHere: number;
   /** Connections the listing found unanswered. */
   unanswered: number;
   /** Of those, the ones given to someone else in the team. */
@@ -137,6 +153,8 @@ export interface ChatInactivityReport {
   tenants: TenantInactivityResult[];
   totals: {
     tenants: number;
+    askedEmail: number;
+    repliedHere: number;
     transferred: number;
     queued: number;
     markedInactive: number;
@@ -178,6 +196,8 @@ export class ChatInactivitySweeper {
       tenants: results,
       totals: {
         tenants: results.length,
+        askedEmail: sum('askedEmail'),
+        repliedHere: sum('repliedHere'),
         transferred: sum('transferred'),
         queued: sum('queued'),
         markedInactive: sum('markedInactive'),
@@ -191,6 +211,9 @@ export class ChatInactivitySweeper {
       licenseId: tenant.license_id,
       organizationId: tenant.organization_id,
     };
+    // First, so a connection about to be passed on is asked before it is.
+    const contact = await this.#askForContact(context, now);
+
     const { settings, transferCutoff, candidates } = await withTenant(
       this.#db,
       context,
@@ -240,11 +263,51 @@ export class ChatInactivitySweeper {
 
     return {
       licenseId: tenant.license_id.toString(),
+      askedEmail: contact.askedEmail,
+      repliedHere: contact.repliedHere,
       unanswered: candidates.length,
       transferred,
       queued,
       markedInactive: inactivity.marked,
       clearedInactive: inactivity.cleared,
     };
+  }
+
+  /**
+   * The ask-for-an-e-mail step (WG-08): list the connections the rule names,
+   * longest waiting first, and let `ChatService.requestContact` ask each one
+   * under its locks. Nothing is read beyond the settings row while both
+   * triggers are off.
+   */
+  async #askForContact(
+    context: TenantContext,
+    now: Date,
+  ): Promise<{ askedEmail: number; repliedHere: number }> {
+    const found = await withTenant(this.#db, context, async (tx) => {
+      const settings = await readAskEmailSettings(tx);
+      if (settings.afterSeconds === null && !settings.whenOffline) return null;
+      const rule = await contactRequestRule(tx, settings, now);
+      if (ruleIsOff(rule)) return null;
+      const rows = await tx.$queryRaw<Array<{ chat_id: string; thread_id: string }>>`
+        SELECT t.chat_id, t.id AS thread_id
+          FROM threads t
+         WHERE t.license_id = ${context.licenseId} AND ${contactRequestSql(rule)}
+         ORDER BY t.created_at ASC, t.id ASC`;
+      return { rule, rows };
+    });
+    let askedEmail = 0;
+    let repliedHere = 0;
+    if (!found) return { askedEmail, repliedHere };
+    const rule: ContactRequestRule = found.rule;
+    for (const row of found.rows) {
+      const outcome = await this.#chats.requestContact(
+        context,
+        { chatId: row.chat_id, threadId: row.thread_id },
+        rule,
+      );
+      if (outcome?.kind === 'ask_email') askedEmail += 1;
+      else if (outcome?.kind === 'reply_here') repliedHere += 1;
+    }
+    return { askedEmail, repliedHere };
   }
 }

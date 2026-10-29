@@ -20,6 +20,7 @@ import {
   DEFAULT_WIDGET_AVAILABILITY_MODE,
   isIdentityTrust,
   readHumanButtonLabel,
+  ASK_EMAIL_ADDRESS_MAX_LENGTH,
   humanButtonText,
   RATING_COMMENT_MAX,
   REFERRER_MAX_LENGTH,
@@ -196,6 +197,13 @@ const resolutionAnswerSchema = z.object({ answer: z.enum(AI_OUTCOME_CONFIRMATION
 
 /** Presses of "Talk to an agent" one visitor may make in an hour (GV-01). */
 const HUMAN_REQUESTS_PER_HOUR = 10;
+
+/** The e-mail card's answer (WG-08 · tm 342): a typo fixed, not a way to churn the contact row. */
+const contactEmailSchema = z
+  .object({ email: z.string().trim().email().max(ASK_EMAIL_ADDRESS_MAX_LENGTH) })
+  .strict();
+/** Answers to the e-mail card one visitor may send in an hour. */
+const CONTACT_EMAILS_PER_HOUR = 10;
 
 const typingSchema = z.object({
   is_typing: z.boolean(),
@@ -412,24 +420,29 @@ export default async function customerRoutes(
   async function consumePressBudget(
     request: FastifyRequest,
     principal: { organizationId: string; customerId: string },
+    budget: { key: string; limit: number; message: string } = {
+      key: 'human-request',
+      limit: HUMAN_REQUESTS_PER_HOUR,
+      message: 'Too many requests for an agent — try again later.',
+    },
   ): Promise<void> {
     let allowed = true;
     try {
       const decision = await app.rateLimiter.consume(
-        `rl:human-request:${principal.organizationId}:${principal.customerId}`,
-        HUMAN_REQUESTS_PER_HOUR,
+        `rl:${budget.key}:${principal.organizationId}:${principal.customerId}`,
+        budget.limit,
         3_600_000,
       );
       allowed = decision.allowed;
       if (!allowed) {
         throw ApiError.tooManyRequests(
           Math.max(1, Math.ceil(decision.resetMs / 1000)),
-          'Too many requests for an agent — try again later.',
+          budget.message,
         );
       }
     } catch (error) {
       if (!allowed) throw error;
-      request.log.error({ err: error }, 'human request budget unavailable — allowing the press');
+      request.log.error({ err: error }, `${budget.key} budget unavailable — allowing the press`);
     }
   }
 
@@ -935,6 +948,39 @@ export default async function customerRoutes(
         human_available: outcome.humanAvailable,
         requested: outcome.requested,
       });
+    },
+  );
+
+  /**
+   * The answer to the widget's "leave your e-mail" card (WG-08 · tm 342): the
+   * address goes on the contact (and makes them a lead, as the pre-chat form
+   * does) and the connection gets an `ask_email_answered` event so the card
+   * reads as answered. Only a connection the sweep actually asked takes it.
+   */
+  app.post(
+    '/customer/chat/email',
+    { config: { principals: ['customer'] } },
+    async (request, reply) => {
+      const principal = request.requirePrincipal();
+      if (principal.kind !== 'customer') throw ApiError.notFound('Resource not found.');
+      const body = parse(contactEmailSchema, request.body);
+      await consumePressBudget(request, principal, {
+        key: 'contact-email',
+        limit: CONTACT_EMAILS_PER_HOUR,
+        message: 'Too many e-mail answers — try again later.',
+      });
+      const thread = await openConnection(request, principal.customerId, 'leave an e-mail on');
+
+      const saved = await chats.recordContactEmail(
+        request.tenant(),
+        { chatId: thread.chatId, threadId: thread.id },
+        principal.customerId,
+        body.email,
+      );
+      if (saved.outcome === 'not_asked') throw ApiError.notFound('Resource not found.');
+      // After the commit: `evaluate` reads `is_lead` back, so it has to see the write.
+      if (saved.becameLead) await goals.record(request.tenant(), principal.customerId);
+      return reply.status(204).send();
     },
   );
 

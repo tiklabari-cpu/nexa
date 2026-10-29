@@ -1,9 +1,15 @@
 /**
- * Inactivity, chat timeout and day boundary (FR-MOD-08.7.3 · WG-03).
+ * Inactivity, chat timeout and day boundary (FR-MOD-08.7.3 · WG-03 · WG-08).
  *
- * Three windows, in the order a conversation goes quiet, each saved in whole
+ * Four windows, in the order a conversation goes quiet, each saved in whole
  * seconds (or `null` for "off") on the same `inbox_settings` row:
  *
+ *   0. **Ask for an e-mail** (`ask_email_after_seconds`, tm 342): a player who
+ *      has waited this long for a person's first reply is asked, once, for an
+ *      e-mail in a card in the widget (or told the answer will come here when
+ *      the team already knows how to reach them). Beside it, whether to ask at
+ *      once while nobody is accepting chats (`ask_email_when_offline`), and a
+ *      preview of the card as the player sees it.
  *   1. **Pass on unanswered chats** (`unanswered_transfer_seconds`, tm 340): an
  *      agent who has not sent a first reply this long after a chat was given to
  *      them loses it to someone else in the team — the server's
@@ -47,6 +53,7 @@ import { useState, type ReactElement, type ReactNode } from 'react';
 import {
   CHAT_INACTIVITY_ORDER_PROBLEMS,
   DEFAULT_DAY_BOUNDARY,
+  askEmailText,
   INACTIVITY_WINDOW_MAX_SECONDS,
   TRANSCRIPT_ALLOWED_DOMAINS_MAX,
   chatInactivityOrderProblem,
@@ -60,7 +67,7 @@ import { FormSaveBar } from '../../components/settings/FormSaveBar.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { FieldError, useForm } from '../../lib/form.js';
-import { useTranslate, type TFunction } from '../../lib/i18n.js';
+import { useLocale, useTranslate, type TFunction } from '../../lib/i18n.js';
 import { IANA_TIMEZONES, timeZoneOptionLabel } from '../../lib/timezones.js';
 
 interface ChatTimeoutSettings {
@@ -73,6 +80,9 @@ interface ChatTimeoutSettings {
   inactive_after_seconds?: number | null;
   /** Absent only from a server that predates tm 340.2: read as the column's default, on. */
   pause_unresponsive_agents?: boolean;
+  /** Absent only from a server that predates tm 342 (WG-08): read as off. */
+  ask_email_after_seconds?: number | null;
+  ask_email_when_offline?: boolean;
   /** Absent only from a server that predates tm 338: read as none. */
   transcript_allowed_domains?: string[];
   updated_at: string | null;
@@ -85,17 +95,21 @@ interface ChatTimeoutBody {
   unanswered_transfer_seconds?: number | null;
   inactive_after_seconds?: number | null;
   pause_unresponsive_agents?: boolean;
+  ask_email_after_seconds?: number | null;
+  ask_email_when_offline?: boolean;
   transcript_allowed_domains?: string[];
 }
 
 type DurationUnit = 'minutes' | 'hours';
-/** The three windows, in the order a conversation goes quiet. */
-type Window = 'transfer' | 'inactive' | 'timeout';
+/** The four windows, in the order a conversation goes quiet. */
+type Window = 'ask' | 'transfer' | 'inactive' | 'timeout';
+const WINDOWS: readonly Window[] = ['ask', 'transfer', 'inactive', 'timeout'];
 type FormValues = Record<
   | `${Window}Enabled`
   | `${Window}Amount`
   | `${Window}Unit`
   | 'pause'
+  | 'askOffline'
   | 'timezone'
   | 'hour'
   | 'domains',
@@ -109,10 +123,13 @@ type FormValues = Record<
 const MAX_SECONDS = INACTIVITY_WINDOW_MAX_SECONDS;
 const UNIT_SECONDS: Record<DurationUnit, number> = { minutes: 60, hours: 3600 };
 /** What an off window's amount box offers if it is turned on — 05 WG-03's defaults. */
-const DEFAULT_AMOUNTS: Record<Window, number> = { transfer: 3, inactive: 10, timeout: 30 };
+const DEFAULT_AMOUNTS: Record<Window, number> = { ask: 2, transfer: 3, inactive: 10, timeout: 30 };
 const BOUNDARY_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 
 const ORDER_MESSAGE_KEYS: Record<ChatInactivityOrderProblem, string> = {
+  ask_email_not_before_transfer: 'settings.chatTimeout.order.askBeforeTransfer',
+  ask_email_not_before_inactive: 'settings.chatTimeout.order.askBeforeInactive',
+  ask_email_not_before_timeout: 'settings.chatTimeout.order.askBeforeTimeout',
   transfer_not_before_inactive: 'settings.chatTimeout.order.transferBeforeInactive',
   transfer_not_before_timeout: 'settings.chatTimeout.order.transferBeforeTimeout',
   inactive_not_before_timeout: 'settings.chatTimeout.order.inactiveBeforeTimeout',
@@ -149,6 +166,7 @@ function secondsOf(values: FormValues, window: Window): number | null {
 /** The pair out of order, judged only once every amount that is on is valid. */
 function orderProblem(values: FormValues): ChatInactivityOrderProblem | null {
   return chatInactivityOrderProblem({
+    askEmailSeconds: secondsOf(values, 'ask'),
     unansweredTransferSeconds: secondsOf(values, 'transfer'),
     inactiveAfterSeconds: secondsOf(values, 'inactive'),
     chatTimeoutSeconds: secondsOf(values, 'timeout'),
@@ -270,11 +288,13 @@ function ChatTimeoutForm({
   const t = useTranslate();
   const api = useApiClient();
   const saved: Record<Window, number | null> = {
+    ask: config.ask_email_after_seconds ?? null,
     transfer: config.unanswered_transfer_seconds ?? null,
     inactive: config.inactive_after_seconds ?? null,
     timeout: config.chat_timeout_seconds,
   };
   const savedPause = config.pause_unresponsive_agents ?? true;
+  const savedAskOffline = config.ask_email_when_offline ?? false;
   const savedTimezone = config.day_boundary_timezone ?? DEFAULT_DAY_BOUNDARY.timezone;
   const savedHour = config.day_boundary_hour ?? DEFAULT_DAY_BOUNDARY.hour;
   const savedDomains = config.transcript_allowed_domains ?? [];
@@ -289,13 +309,14 @@ function ChatTimeoutForm({
   });
 
   const initial = {} as FormValues;
-  for (const window of ['transfer', 'inactive', 'timeout'] as const) {
+  for (const window of WINDOWS) {
     const draft = draftFromSeconds(saved[window], window);
     initial[`${window}Enabled`] = String(saved[window] !== null);
     initial[`${window}Amount`] = draft.amount;
     initial[`${window}Unit`] = draft.unit;
   }
   initial.pause = String(savedPause);
+  initial.askOffline = String(savedAskOffline);
   initial.timezone = savedTimezone;
   initial.hour = String(savedHour);
   initial.domains = savedDomains.join('\n');
@@ -315,7 +336,7 @@ function ChatTimeoutForm({
     // `Validator` cannot see. `amountError` and `orderProblem` check the form.
     onSubmit: async (values, { setFieldError, setSubmitError }) => {
       let invalid = false;
-      for (const window of ['transfer', 'inactive', 'timeout'] as const) {
+      for (const window of WINDOWS) {
         const error = amountError(t, values, window);
         if (error) {
           setFieldError(`${window}Amount`, error);
@@ -330,11 +351,16 @@ function ChatTimeoutForm({
       if (invalid || orderProblem(values)) return;
 
       const windows: Record<Window, number | null> = {
+        ask: secondsOf(values, 'ask'),
         transfer: secondsOf(values, 'transfer'),
         inactive: secondsOf(values, 'inactive'),
         timeout: secondsOf(values, 'timeout'),
       };
       const body: ChatTimeoutBody = { chat_timeout_seconds: windows.timeout };
+      if (windows.ask !== saved.ask) body.ask_email_after_seconds = windows.ask;
+      if ((values.askOffline === 'true') !== savedAskOffline) {
+        body.ask_email_when_offline = values.askOffline === 'true';
+      }
       if (windows.transfer !== saved.transfer) body.unanswered_transfer_seconds = windows.transfer;
       if (windows.inactive !== saved.inactive) body.inactive_after_seconds = windows.inactive;
       if ((values.pause === 'true') !== savedPause) {
@@ -355,6 +381,7 @@ function ChatTimeoutForm({
   });
 
   const errors: Record<Window, string | null> = {
+    ask: amountError(t, form.values, 'ask'),
     transfer: amountError(t, form.values, 'transfer'),
     inactive: amountError(t, form.values, 'inactive'),
     timeout: amountError(t, form.values, 'timeout'),
@@ -372,6 +399,28 @@ function ChatTimeoutForm({
   }
 
   const rows: Array<{ window: Window; id: string; extra?: ReactNode }> = [
+    {
+      window: 'ask',
+      id: 'ask-email',
+      extra: (
+        <div className="flex flex-col gap-3 pl-7">
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              checked={form.values.askOffline === 'true'}
+              onChange={(event) => form.setValue('askOffline', String(event.target.checked))}
+            />
+            <span className="text-sm">
+              {t('settings.chatTimeout.ask.offlineLabel')}
+              <span className="block text-2xs text-content-tertiary">
+                {t('settings.chatTimeout.ask.offlineHint')}
+              </span>
+            </span>
+          </label>
+          <AskEmailPreview />
+        </div>
+      ),
+    },
     {
       window: 'transfer',
       id: 'unanswered-transfer',
@@ -544,6 +593,12 @@ function ChatTimeoutForm({
 
 /** Catalogue keys per window; the auto-close row keeps the keys it always had. */
 const ROW_KEYS: Record<Window, { enable: string; hint: string; amount: string; unit: string }> = {
+  ask: {
+    enable: 'settings.chatTimeout.ask.enableLabel',
+    hint: 'settings.chatTimeout.ask.enableHint',
+    amount: 'settings.chatTimeout.ask.amountLabel',
+    unit: 'settings.chatTimeout.ask.unitLabel',
+  },
   transfer: {
     enable: 'settings.chatTimeout.transfer.enableLabel',
     hint: 'settings.chatTimeout.transfer.enableHint',
@@ -563,6 +618,35 @@ const ROW_KEYS: Record<Window, { enable: string; hint: string; amount: string; u
     unit: 'settings.chatTimeout.unitLabel',
   },
 };
+
+/**
+ * The card as the player will see it, in the console's language: the sentence
+ * the server writes (`askEmailText`, the one the widget shows) over an e-mail
+ * box and a send button. Inert: it is a picture of the widget, not a form.
+ */
+function AskEmailPreview(): ReactElement {
+  const t = useTranslate();
+  const { locale } = useLocale();
+  return (
+    <div
+      role="group"
+      aria-label={t('settings.chatTimeout.ask.previewLabel')}
+      className="flex max-w-sm flex-col gap-2 rounded-md border border-border bg-inset p-3"
+    >
+      <p className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+        {t('settings.chatTimeout.ask.previewLabel')}
+      </p>
+      <p className="text-sm">{askEmailText(locale, 'ask')}</p>
+      <div
+        aria-hidden="true"
+        className="rounded-md border border-border px-2 py-1.5 text-sm text-content-tertiary"
+      >
+        {t('settings.chatTimeout.ask.previewPlaceholder')}
+      </div>
+      <p className="text-2xs text-content-tertiary">{t('settings.chatTimeout.ask.previewNote')}</p>
+    </div>
+  );
+}
 
 /** One window: its switch with what it does, then the amount and the unit. */
 function WindowRow({

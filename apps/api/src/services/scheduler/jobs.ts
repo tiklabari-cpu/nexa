@@ -598,6 +598,8 @@ export function buildSchedulerJobs({
         return {
           counts: {
             tenants: report.totals.tenants,
+            asked_email: report.totals.askedEmail,
+            replied_here: report.totals.repliedHere,
             transferred: report.totals.transferred,
             queued: report.totals.queued,
             marked_inactive: report.totals.markedInactive,

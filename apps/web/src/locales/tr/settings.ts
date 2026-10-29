@@ -245,7 +245,19 @@ export const settings: Messages = {
   // Konuşma günü sınırı — ChatTimeout.tsx (ID-04)
   'settings.dayBoundary.heading': 'Gün sınırı',
   'settings.chatTimeout.orderHint':
-    'Süreler sohbetin sessizleştiği sırayı izler: önce aktarılır, sonra pasif sayılır, en son kapatılır. Açık olan her süre bir sonrakinden kısa olmalıdır.',
+    'Süreler sohbetin sessizleştiği sırayı izler: önce oyuncudan e-posta istenir, sonra aktarılır, sonra pasif sayılır, en son kapatılır. Açık olan her süre bir sonrakinden kısa olmalıdır.',
+  'settings.chatTimeout.ask.enableLabel': 'Kimse yanıtlamıyorsa oyuncudan e-posta iste',
+  'settings.chatTimeout.ask.enableHint':
+    'İlk yanıtı bu süre boyunca bekleyen oyuncuya widget’ta bir kez e-posta bırakması söylenir; ayrılırsa ona geri dönebilirsiniz. E-postası ya da kullanıcı adı zaten bilinen oyuncuya bunun yerine yanıtın sohbetten geleceği söylenir.',
+  'settings.chatTimeout.ask.amountLabel': 'Şu süre beklenince',
+  'settings.chatTimeout.ask.unitLabel': 'E-posta isteme birimi',
+  'settings.chatTimeout.ask.offlineLabel': 'Kimse sohbet kabul etmiyorsa hemen de iste',
+  'settings.chatTimeout.ask.offlineHint':
+    'Yukarıdaki süreyi beklemeden. Bir AI ajanı yanıtlıyorsa oyuncudan yalnızca sohbeti bir kişiye devrettikten sonra istenir.',
+  'settings.chatTimeout.ask.previewLabel': 'Oyuncunun gördüğü',
+  'settings.chatTimeout.ask.previewPlaceholder': 'E-posta adresiniz',
+  'settings.chatTimeout.ask.previewNote':
+    'Konuşma başına bir kez gösterilir. Adres kişiye kaydedilir ve kişi potansiyel müşteri olur.',
   'settings.chatTimeout.transfer.enableLabel': 'Yanıtlanmayan sohbetleri başka bir ajana aktar',
   'settings.chatTimeout.transfer.enableHint':
     'Sohbetin verildiği ajan oyuncuya bu süre içinde ilk yanıtı yazmazsa sohbet aynı ekipte başka birine geçer. İki aktarmadan sonra ya da ekipte boş kimse yoksa ekibin kuyruğunun başında bekler ve ekip liderine bildirilir.',
@@ -259,6 +271,12 @@ export const settings: Messages = {
     'Bu süre boyunca mesaj gelmeyen sohbet ajanın eşzamanlı sohbet sınırına sayılmaz ve gelen kutusunda soluk görünür. Yeni mesajla yeniden aktifleşir.',
   'settings.chatTimeout.inactive.amountLabel': 'Şu süre sessiz kalınca',
   'settings.chatTimeout.inactive.unitLabel': 'Pasiflik birimi',
+  'settings.chatTimeout.order.askBeforeTransfer':
+    'E-posta isteme, yanıtlanmayan sohbetler aktarılmadan önce olmalıdır.',
+  'settings.chatTimeout.order.askBeforeInactive':
+    'E-posta isteme, sohbetler pasif sayılmadan önce olmalıdır.',
+  'settings.chatTimeout.order.askBeforeTimeout':
+    'E-posta isteme, boşta kalanlar kapatılmadan önce olmalıdır.',
   'settings.chatTimeout.order.transferBeforeInactive':
     'Yanıtlanmayan sohbetler, pasif sayılmadan önce aktarılmalıdır.',
   'settings.chatTimeout.order.transferBeforeTimeout':

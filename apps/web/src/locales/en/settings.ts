@@ -251,7 +251,19 @@ export const settings: Messages = {
   'settings.chatTimeout.unitHours': 'Hours',
   'settings.chatTimeout.amountError': 'Enter a whole number greater than 0, up to 30 days total.',
   'settings.chatTimeout.orderHint':
-    'The windows follow the order a chat goes quiet: passed on first, then marked inactive, then closed. Each one that is on must be shorter than the next.',
+    'The windows follow the order a chat goes quiet: the player is asked for an e-mail first, then the chat is passed on, then marked inactive, then closed. Each one that is on must be shorter than the next.',
+  'settings.chatTimeout.ask.enableLabel': 'Ask the player for an e-mail while nobody answers',
+  'settings.chatTimeout.ask.enableHint':
+    'A player who has waited this long for a person’s first reply is asked once, in the widget, to leave an e-mail so you can write back if they go. A player you already know by e-mail or username is told the answer will come in the chat instead.',
+  'settings.chatTimeout.ask.amountLabel': 'Waiting for',
+  'settings.chatTimeout.ask.unitLabel': 'E-mail request unit',
+  'settings.chatTimeout.ask.offlineLabel': 'Also ask at once when nobody is accepting chats',
+  'settings.chatTimeout.ask.offlineHint':
+    'Without waiting for the time above. While an AI agent is answering, the player is asked only after it hands the chat over to a person.',
+  'settings.chatTimeout.ask.previewLabel': 'What the player sees',
+  'settings.chatTimeout.ask.previewPlaceholder': 'Your e-mail address',
+  'settings.chatTimeout.ask.previewNote':
+    'Shown once per conversation. The address is saved on the contact, who becomes a lead.',
   'settings.chatTimeout.transfer.enableLabel': 'Pass unanswered chats to another agent',
   'settings.chatTimeout.transfer.enableHint':
     'When the agent a chat was given to has not sent the player a first reply for this long, it goes to someone else in the same team. After two such hand-offs, or when nobody in the team is free, it waits at the front of the team’s queue and the team lead is told.',
@@ -265,6 +277,12 @@ export const settings: Messages = {
     'A chat with no message for this long stops counting against its agent’s concurrent chat limit and is shown dimmed in the inbox. The next message makes it active again.',
   'settings.chatTimeout.inactive.amountLabel': 'Quiet for',
   'settings.chatTimeout.inactive.unitLabel': 'Inactivity unit',
+  'settings.chatTimeout.order.askBeforeTransfer':
+    'Ask for an e-mail sooner than unanswered chats are passed on.',
+  'settings.chatTimeout.order.askBeforeInactive':
+    'Ask for an e-mail sooner than chats become inactive.',
+  'settings.chatTimeout.order.askBeforeTimeout':
+    'Ask for an e-mail sooner than idle chats are closed.',
   'settings.chatTimeout.order.transferBeforeInactive':
     'Pass unanswered chats on sooner than chats become inactive.',
   'settings.chatTimeout.order.transferBeforeTimeout':

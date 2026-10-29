@@ -2265,6 +2265,38 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/customer/chat/email': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Answer the widget's "leave your e-mail" card
+     * @description WG-08 (tm 342). While nobody answers, the server writes one system event
+     *     with `properties.system_event` = `ask_email` to the open connection and
+     *     the widget draws an inline card with an e-mail box. The address typed
+     *     there comes back here: it is stored on the contact (`customers.email`,
+     *     which makes them a lead the way the pre-chat form does), and the
+     *     connection gets an `ask_email_answered` system event carrying no address,
+     *     so the card reads as answered from then on — on a reload too.
+     *
+     *     Only an open connection that was actually asked takes it: no open
+     *     conversation is a 409 `chat_inactive`, a connection nobody asked is a
+     *     404. Sending it again is harmless: the address is replaced and the
+     *     answered event is written once. Limited per visitor (GV-01): 429 with
+     *     `Retry-After`.
+     */
+    post: operations['submitCustomerContactEmail'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/customer/chat/close': {
     parameters: {
       query?: never;
@@ -8724,6 +8756,11 @@ export interface paths {
      *     its last activity a player's e-mail answer still reopens a solved ticket.
      *     And `transcript_allowed_domains` (AR-04-S3): where a transcript may be
      *     mailed besides the player's own address.
+     *     `ask_email_after_seconds` (WG-08) is a third window, before the
+     *     transfer: ask the player for an e-mail once a connection has waited this
+     *     long for a person's first reply. When on it must be below the transfer,
+     *     inactive and auto-close windows that are on, or the save is a 400.
+     *     `ask_email_when_offline` asks at once while nobody is accepting chats.
      */
     put: operations['setChatTimeout'];
     post?: never;
@@ -18200,6 +18237,10 @@ export interface components {
      *     transfer < inactive < auto-close. `pause_unresponsive_agents` (on unless
      *     turned off) also stops routing to an agent the transfer took a
      *     connection from: they go `not_accepting_chats` until they switch back.
+     *     `ask_email_after_seconds` (off by default) comes before all of them: a
+     *     connection that waited that long for a person's first reply asks the
+     *     player for an e-mail, once; `ask_email_when_offline` asks at once while
+     *     nobody is accepting chats (WG-08).
      */
     ChatTimeoutSettings: {
       /**
@@ -18234,6 +18275,13 @@ export interface components {
       inactive_after_seconds: number | null;
       /** @description Whether an agent whose connection the unanswered transfer took is set to `not_accepting_chats` (and told why). True unless turned off. */
       pause_unresponsive_agents: boolean;
+      /**
+       * Format: int32
+       * @description Seconds a connection waits for a person's first reply before the player is asked for an e-mail; null when off.
+       */
+      ask_email_after_seconds: number | null;
+      /** @description Whether a connection waiting for a person while nobody is accepting chats asks the player for an e-mail at once. False unless turned on. */
+      ask_email_when_offline: boolean;
       /**
        * Format: int32
        * @description How long a solved ticket waits for the player's answer by e-mail (HD-03): an answer within this many days of its last activity reopens it, a later one — or one to a closed ticket — opens a new ticket that names it (`related_ticket_id`). 30 unless set.
@@ -26251,6 +26299,44 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       404: components['responses']['NotFound'];
       /** @description There is no open conversation to answer on */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  submitCustomerContactEmail: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: email */
+          email: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The address is stored and the card is answered */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      /** @description There is no open conversation */
       409: {
         headers: {
           [name: string]: unknown;
@@ -36016,6 +36102,13 @@ export interface operations {
           inactive_after_seconds?: number | null;
           /** @description Whether an agent whose connection the unanswered transfer took goes `not_accepting_chats`. Left out, the stored value stays. */
           pause_unresponsive_agents?: boolean;
+          /**
+           * Format: int32
+           * @description Seconds a connection may wait for a person's first reply before the player is asked for an e-mail (once; a player whose e-mail or username is known is told the answer will come here instead); null turns it off. Must be below `unanswered_transfer_seconds`, `inactive_after_seconds` and `chat_timeout_seconds` when those are on.
+           */
+          ask_email_after_seconds?: number | null;
+          /** @description Whether a connection waiting for a person while nobody is accepting chats asks at once. With an AI answering, it asks only after the AI hands over. Left out, the stored value stays. */
+          ask_email_when_offline?: boolean;
           /**
            * Format: int32
            * @description Days after its last activity that a player's e-mail answer still reopens a solved ticket (HD-03); later, a new related ticket opens. Left out, the stored value stays.

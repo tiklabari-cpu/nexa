@@ -566,6 +566,11 @@ export class WidgetApi {
     return this.#request('POST', '/customer/chat/request-human', { reason: 'button' });
   }
 
+  /** The answer to the "leave your e-mail" card (WG-08 · tm 342). */
+  async submitContactEmail(email: string): Promise<void> {
+    await this.#request('POST', '/customer/chat/email', { email });
+  }
+
   /**
    * "Is it solved?" answered with the buttons (tm 320.1 · AI-25-S2): yes is
    * thanked, no hands the connection to a person.

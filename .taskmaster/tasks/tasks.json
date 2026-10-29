@@ -14545,7 +14545,7 @@
           "329"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-29T05:30:25.452Z",
+        "updatedAt": "2026-10-29T07:09:43.055Z",
         "subtasks": [
           {
             "id": 1,
@@ -14553,11 +14553,11 @@
             "description": "Zaman çizelgesi API: kontrat + audit_log indeksi + kaynakları birleştirme/sayfalama/görünürlük + maskeli akışlı dışa aktarma",
             "details": "contract (GET timeline, POST export) + audit_log (license_id, target, created_at) indeksi (CONCURRENTLY, kendi dosyası) + services/chat/timeline.ts (kaynaklar, (at, kind_sırası, id) birleştirme ve sayfalama, görünürlük, görünmeyen 404) + akışlı dışa aktarma (≤20.000, varsayılan maskeli, maskesiz yalnız export_unmasked, audit chat.timeline_exported) + yetenekler (timeline.view/export/export_unmasked). Ayrıntı ve kabul maddeleri: üst görev #334 details (tek kaynak).",
             "testStrategy": "Entegrasyon (birleştirme/sıralama, 404, maskeleme + audit); `pnpm test:gate`.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "334",
             "priority": "medium",
-            "updatedAt": "2026-10-29T05:30:25.452Z"
+            "updatedAt": "2026-10-29T07:09:43.055Z"
           },
           {
             "id": 2,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-29T05:30:25.452Z",
+      "lastModified": "2026-10-29T07:09:43.056Z",
       "taskCount": 390,
       "completedCount": 339,
       "tags": [

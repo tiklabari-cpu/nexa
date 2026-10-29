@@ -9252,6 +9252,7 @@ components:
           welcome_text,
           language,
           fallback_language,
+          availability_mode,
           updated_at,
         ]
       properties:
@@ -9304,6 +9305,14 @@ components:
           type: string
           enum: [en, tr, de, fr, es, it, pt, ar]
           description: What `auto` falls back to when the browser speaks none of the eight.
+        availability_mode:
+          type: string
+          enum: [always, agents_only]
+          description: |
+            When a visitor may start a chat (WG-09): `always` (default) or
+            only while someone answers — `agents_only` offers the offline form
+            when no AI would answer and nobody accepts chats. Server-side; the
+            widget reads the outcome as `CustomerChatState.can_start_chat`.
         updated_at: { type: string, format: date-time, nullable: true }
 
     PrechatFieldRule:
@@ -14515,11 +14524,28 @@ components:
 
     CustomerChatState:
       type: object
-      required: [online, customer, chat, events]
+      required: [online, can_start_chat, answered_by, customer, chat, events]
       properties:
         online:
           type: boolean
           description: Whether any agent is currently accepting chats.
+        can_start_chat:
+          type: boolean
+          description: |
+            Whether the widget offers a chat (WG-09) rather than the offline
+            form. True while an AI would answer (an active agent with something
+            to run, today's AI allowance and the visitor's own not spent), while
+            anyone accepts chats, and always under the `always` availability
+            mode; false only under `agents_only` with neither. True while the
+            visitor has an open conversation.
+        answered_by:
+          type: string
+          enum: [human, ai, none]
+          description: |
+            Who answers the visitor now (WG-09): with an open conversation its
+            owner (`queue` reads `human` while anyone accepts chats, else
+            `none`); without one, `ai` when an AI would answer a new chat,
+            else `human` while anyone accepts chats, else `none`.
         customer:
           type: object
           required: [id]

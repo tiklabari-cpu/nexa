@@ -126,6 +126,21 @@ export async function customerAiTurnsToday(
   return rows[0]?.ai_turns ?? 0;
 }
 
+/**
+ * Whether the member has a turn of today's allowance left — the claim's
+ * question, read only (WG-09: an AI the member has used up is no AI for the
+ * widget's availability). `brandId` is the brand a conversation opened now
+ * would carry. True when the workspace has no per-member allowance.
+ */
+export async function customerHasAiTurnLeft(
+  tx: TenantClient,
+  input: { licenseId: bigint; customerId: string; brandId: string | null; at?: Date },
+): Promise<boolean> {
+  const cap = await customerAiTurnCap(tx, input.brandId);
+  if (cap <= 0) return true;
+  return (await customerAiTurnsToday(tx, input)) < cap;
+}
+
 /** What the usage screen shows of the per-member allowance (tm 339.3). */
 export interface CustomerAiQuotaToday {
   /** `YYYY-MM-DD`, the workspace's conversation day the counts are for. */

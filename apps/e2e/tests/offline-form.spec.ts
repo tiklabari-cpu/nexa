@@ -11,13 +11,20 @@
  * them in a real cross-origin iframe, and an agent reads one answer on a ticket
  * and the other on the contact.
  *
- * One thing is faked and it is worth naming: `online`. Availability is a count
- * of the workspace's accepting agents, and the seed makes every member of this
- * tenant accepting — turning them off would change routing for the rest of the
- * suite, which shares one database and runs serially. So the visitor's state
- * poll is intercepted and its `online` flag flipped to false, and nothing else
- * is: the token mint that carries the two forms, the `POST /customer/ticket`
- * that opens the ticket, and every read the console makes are the real thing.
+ * One thing is faked and it is worth naming: availability. It is a count of the
+ * workspace's accepting agents (and, since WG-09, whether an AI would answer),
+ * and the seed makes every member of this tenant accepting — turning them off
+ * would change routing for the rest of the suite, which shares one database and
+ * runs serially. So the visitor's state poll is intercepted and made to say
+ * what `agents_only` with nobody there says (`online` false, `can_start_chat`
+ * false, `answered_by` none), and nothing else is: the token mint that carries
+ * the two forms, the `POST /customer/ticket` that opens the ticket, and every
+ * read and save the console makes are the real thing.
+ *
+ * The second test is WG-09's own (tm 341): the admin picks "Only when agents
+ * are accepting chats" on the real screen, and a workspace that built no
+ * question gets the form with its built-in fields — which the server takes only
+ * because of that setting.
  *
  * Self-cleaning: the two definitions are removed at the end, so the tenant is
  * left as it was found. The ticket is not — the seed reseeds without truncating
@@ -32,7 +39,23 @@ import {
   test,
   widgetFrame,
 } from './fixtures.js';
+import type { Page } from '@playwright/test';
 import { fromNode } from './stack-ports.js';
+
+/** The state poll, saying nobody can take a chat under `agents_only` — and nothing else changed. */
+async function nobodyAvailable(visitor: Page): Promise<void> {
+  await visitor.route(
+    (url) => url.pathname === '/api/v1/customer/chat',
+    async (route) => {
+      const response = await route.fetch({ url: fromNode(route.request().url()) });
+      const body = (await response.json()) as Record<string, unknown>;
+      await route.fulfill({
+        response,
+        json: { ...body, online: false, can_start_chat: false, answered_by: 'none' },
+      });
+    },
+  );
+}
 
 interface Definition {
   id: string;
@@ -116,17 +139,10 @@ test.describe('offline form — ticket + prospect (FR-MOD-08.7.7)', () => {
       const visitorContext = await browser.newContext();
       const visitor = await visitorContext.newPage();
       try {
-        // The one thing faked, and only this: the availability flag on the
-        // state poll. The mint below is untouched, so the questions the widget
-        // renders are the ones the admin just built.
-        await visitor.route(
-          (url) => url.pathname === '/api/v1/customer/chat',
-          async (route) => {
-            const response = await route.fetch({ url: fromNode(route.request().url()) });
-            const body = (await response.json()) as Record<string, unknown>;
-            await route.fulfill({ response, json: { ...body, online: false } });
-          },
-        );
+        // The one thing faked, and only this: availability on the state poll.
+        // The mint below is untouched, so the questions the widget renders are
+        // the ones the admin just built.
+        await nobodyAvailable(visitor);
 
         await visitor.goto(`${site.origin}/demo.html?organization_id=${organizationId}`);
         const frame = widgetFrame(visitor);
@@ -182,6 +198,83 @@ test.describe('offline form — ticket + prospect (FR-MOD-08.7.7)', () => {
       for (const id of created) {
         await request.delete(`${API_BASE}/settings/custom-fields/${id}`, { headers: auth });
       }
+    }
+  });
+
+  test('"only when agents are accepting chats": the built-in form alone, no question built (WG-09)', async ({
+    agentPage,
+    browser,
+    request,
+    organizationId,
+  }) => {
+    test.slow();
+    const stamp = Date.now().toString().slice(-6);
+    const auth = { authorization: `Bearer ${await ownerAccessToken(request)}` };
+    const subject = `Gece çekim sorusu — ${stamp}`;
+    const site = tenantSubdomain(`avail-${stamp}`);
+    // No question of the tenant's own is on either offline form: this is the
+    // form with nothing but its built-in fields.
+    expect(
+      (await definitions(request, auth)).filter(
+        (d) => d.form_placement === 'ticket' || d.form_placement === 'prospect',
+      ),
+    ).toEqual([]);
+
+    try {
+      // --- 1. The admin picks the mode on the real screen -------------------
+      await agentPage.goto('/app/settings/widget');
+      const appearance = agentPage.getByRole('region', { name: /Widget appearance/ });
+      const availability = appearance.getByRole('group', { name: 'Availability' });
+      await expect(availability.getByRole('radio', { name: /^Always/ })).toBeChecked();
+      await availability
+        .getByRole('radio', { name: /^Only when agents are accepting chats/ })
+        .check();
+      const save = appearance.getByRole('button', { name: 'Save', exact: true });
+      await save.click();
+      await expect(save).toBeDisabled();
+      await agentPage.screenshot({ path: 'kanit/11.7-widget-availability.png', fullPage: true });
+      const saved = await request.get(`${API_BASE}/settings/widget`, { headers: auth });
+      expect(((await saved.json()) as { availability_mode: string }).availability_mode).toBe(
+        'agents_only',
+      );
+
+      // --- 2. A visitor with nobody to answer leaves a message --------------
+      const visitorContext = await browser.newContext();
+      const visitor = await visitorContext.newPage();
+      try {
+        await nobodyAvailable(visitor);
+        await visitor.goto(`${site.origin}/demo.html?organization_id=${organizationId}`);
+        const frame = widgetFrame(visitor);
+        await frame.getByRole('button', { name: 'Open chat' }).click();
+
+        const form = frame.getByRole('form', { name: 'Leave a message' });
+        await expect(form).toBeVisible({ timeout: 20_000 });
+        await expect(frame.getByRole('textbox', { name: 'Message' })).toBeHidden();
+        // The built-in three and nothing else.
+        await expect(form.getByRole('textbox')).toHaveCount(3);
+
+        await form.getByRole('textbox', { name: 'How can we help?' }).fill(subject);
+        await form.getByRole('textbox', { name: 'Your name' }).fill(`Deniz ${stamp}`);
+        await form.getByRole('textbox', { name: 'Email' }).fill(`deniz-${stamp}@example.com`);
+        await form.getByRole('button', { name: 'Send message' }).click();
+        // Only a 201 shows the thank-you; under `always` this workspace would be
+        // refused, having built no question.
+        await expect(frame.getByText(/we have your message/i)).toBeVisible({ timeout: 20_000 });
+      } finally {
+        await visitorContext.close();
+      }
+
+      // --- 3. The message is a ticket in the console ------------------------
+      await agentPage.goto('/app/inbox');
+      await agentPage.getByRole('button', { name: 'All tickets' }).click();
+      const grid = agentPage.getByRole('table', { name: 'Tickets' });
+      await expect(grid.getByRole('button', { name: subject })).toBeVisible();
+    } finally {
+      // Back to the default: the rest of the suite expects `always`.
+      await request.put(`${API_BASE}/settings/widget`, {
+        headers: auth,
+        data: { availability_mode: 'always' },
+      });
     }
   });
 });

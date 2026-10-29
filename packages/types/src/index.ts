@@ -44,6 +44,7 @@ export * from './handoff-routes.js';
 export * from './member-recognition.js';
 export * from './realtime-bus.js';
 export * from './widget.js';
+export * from './widget-availability.js';
 export * from './sales-tracker.js';
 export * from './referrer.js';
 export * from './home.js';

@@ -51,6 +51,12 @@ declare module 'fastify' {
      * worker, answering a visitor's message after its response (tm 289.5).
      */
     requireAiBudget: (tenant: TenantContext) => Promise<void>;
+    /**
+     * Whether today's caps leave the workspace no room for even the smallest
+     * call — the same answer, read only: no refusal is logged and nobody is
+     * told. For the widget's availability (WG-09), asked on every poll.
+     */
+    aiBudgetExhausted: (tenant: TenantContext) => Promise<boolean>;
   }
 
   interface FastifyContextConfig {
@@ -88,6 +94,10 @@ async function aiBudgetPlugin(app: FastifyInstance, options: AiBudgetPluginOptio
   app.decorate('requireAiBudget', async (tenant: TenantContext): Promise<void> => {
     if (!metered()) return;
     await budget.check(tenant, 'llm', minimum());
+  });
+  app.decorate('aiBudgetExhausted', async (tenant: TenantContext): Promise<boolean> => {
+    if (!metered()) return false;
+    return (await budget.exhausted(tenant, 'llm', minimum())) !== null;
   });
   app.decorateRequest('requireAiBudget', async function (this: FastifyRequest): Promise<void> {
     await app.requireAiBudget(this.tenant());

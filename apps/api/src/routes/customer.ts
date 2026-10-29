@@ -17,6 +17,7 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import {
   AI_OUTCOME_CONFIRMATIONS,
+  DEFAULT_WIDGET_AVAILABILITY_MODE,
   isIdentityTrust,
   readHumanButtonLabel,
   humanButtonText,
@@ -28,7 +29,9 @@ import {
   SNEAK_PEEK_MAX_LENGTH,
   typingStateKey,
   WIDGET_UI_LOCALES,
+  widgetAvailability,
   type Region,
+  type WidgetAvailability,
 } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import type { SafeHttp } from '../lib/safe-fetch.js';
@@ -38,9 +41,10 @@ import { isIpBanned } from '../lib/banned-ip.js';
 import { evaluateSpam, isSpamFilterEnabled } from '../services/security/spam-filter.js';
 import { assessRisk, passedRecently, readCaptchaMode } from '../services/security/abuse-guard.js';
 import { CAPTCHA_TOKEN_MAX_LENGTH } from '../services/security/captcha.js';
-import { customerAiTurnsToday } from '../services/ai/customer-ai-quota.js';
+import { customerAiTurnsToday, customerHasAiTurnLeft } from '../services/ai/customer-ai-quota.js';
 import type { Env } from '../config/env.js';
 import { ChatService } from '../services/chat/chat-service.js';
+import { aiAnswersVisitors } from '../services/chat/ai-first.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { CustomerService } from '../services/customers/customer-service.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
@@ -83,6 +87,7 @@ import { pushToAgentDevices } from '../services/notifications/push.js';
 import { resolveAttribution } from '../services/sales/attribution.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { missingPrechatFields, readCustomerPrechat } from '../services/websites/prechat.js';
+import { readCustomerAvailabilityMode } from '../services/websites/availability.js';
 
 const startSchema = z
   .object({
@@ -793,7 +798,32 @@ export default async function customerRoutes(
       });
       const humanButtonLabel = readHumanButtonLabel(aiAgent?.persona ?? null);
 
-      return { chat, agentsOnline, customer, responder, campaign, owned, humanButtonLabel };
+      // Whether a chat opened now would be the AI's (WG-09) — asked only with
+      // no open connection, where it decides between a chat and the offline
+      // form. The workspace's day cap is read after this transaction.
+      const aiReady = owned
+        ? false
+        : (await aiAnswersVisitors(tx)) &&
+          (await customerHasAiTurnLeft(tx, {
+            licenseId: request.tenant().licenseId,
+            customerId: principal.customerId,
+            brandId: principal.brandId ?? null,
+          }));
+      const availabilityMode = owned
+        ? DEFAULT_WIDGET_AVAILABILITY_MODE
+        : await readCustomerAvailabilityMode(tx, principal.brandId);
+
+      return {
+        chat,
+        agentsOnline,
+        customer,
+        responder,
+        campaign,
+        owned,
+        humanButtonLabel,
+        aiReady,
+        availabilityMode,
+      };
     });
     if (state.chat) {
       bindChatLogContext(request, {
@@ -813,10 +843,30 @@ export default async function customerRoutes(
       ? (await app.redis.get(typingStateKey(request.tenant().licenseId, state.chat.id))) !== null
       : false;
 
+    // Who answers the visitor now, and whether the widget offers a chat at all
+    // (WG-09). An open connection is answered by its owner — the queue by a
+    // person while anyone accepts chats. Without one, the brand's mode decides
+    // when neither an AI nor a person would: an AI out of today's allowance is
+    // no AI (read only — a poll is not a call the cap turned away).
+    const humansOnline = state.agentsOnline > 0;
+    const availability: WidgetAvailability = state.owned
+      ? {
+          can_start_chat: true,
+          answered_by:
+            state.owned.owner === 'queue' ? (humansOnline ? 'human' : 'none') : state.owned.owner,
+        }
+      : widgetAvailability({
+          mode: state.availabilityMode,
+          aiAvailable: state.aiReady && !(await app.aiBudgetExhausted(request.tenant())),
+          humansOnline,
+        });
+
     return reply.send({
       // The widget shows "we're away" rather than pretending someone will
       // answer immediately.
-      online: state.agentsOnline > 0,
+      online: humansOnline,
+      can_start_chat: availability.can_start_chat,
+      answered_by: availability.answered_by,
       agent_typing: agentTyping,
       customer: {
         id: principal.customerId,
@@ -1466,10 +1516,16 @@ export default async function customerRoutes(
 
     const result = await request.withTenant(async (tx) => {
       // Opt-in, checked inside the transaction that would do the writing: a
-      // workspace that has built neither form has not turned this on.
+      // workspace that has built neither form has not turned this on — unless
+      // its brand's widget runs `agents_only` (WG-09), whose offline form is
+      // the built-in name, e-mail and message whatever else was built.
       const ticketForm = await customFields.listTicketForm(tx, tenant);
       const prospectForm = await customFields.listProspectForm(tx, tenant);
-      if (ticketForm.length === 0 && prospectForm.length === 0) {
+      if (
+        ticketForm.length === 0 &&
+        prospectForm.length === 0 &&
+        (await readCustomerAvailabilityMode(tx, principal.brandId)) !== 'agents_only'
+      ) {
         throw ApiError.validation('This workspace does not take messages left in the widget.');
       }
 

@@ -10,8 +10,11 @@
  * the token mint, for the post-chat form's reason: the widget makes no second
  * fetch, and whether anybody is available is only known once a poll lands.
  *
- * The panel is opt-in on this side too: a workspace that has built neither form
- * gets exactly the widget it had before this existed.
+ * Whether it opens is the server's call since WG-09 (tm 341): `can_start_chat`
+ * false — the workspace's `agents_only` mode with neither an AI nor a person to
+ * answer — opens it, with the built-in name, e-mail and message even when no
+ * question was built. A server predating that keeps the old rule: nobody
+ * online and a form built.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WidgetFormField } from '@siyahtus/types';
@@ -40,8 +43,11 @@ let calls: FetchCall[] = [];
 /** What the mint reports as the workspace's two offline forms. */
 let ticketForm: WidgetFormField[] = [];
 let prospectForm: WidgetFormField[] = [];
-/** Whether the poll says an agent is available. */
-let online = false;
+/** What the poll says about who answers (WG-09); `NOBODY` is agents_only with nobody. */
+type Availability = { online: boolean; can_start_chat?: boolean; answered_by?: string };
+const NOBODY: Availability = { online: false, can_start_chat: false, answered_by: 'none' };
+const AGENT: Availability = { online: true, can_start_chat: true, answered_by: 'human' };
+let availability: Availability = NOBODY;
 /** `/customer/ticket` responds with this — 400 exercises the failure path. */
 let leaveStatus = 201;
 
@@ -72,7 +78,7 @@ function stubFetch(): void {
       }
       if (url.endsWith('/customer/chat')) {
         return jsonResponse({
-          online,
+          ...availability,
           agent_typing: false,
           customer: { id: 'cust-1', name: null, email: null },
           agent: null,
@@ -125,7 +131,7 @@ function fill(root: HTMLElement, selector: string, value: string): void {
 
 beforeEach(() => {
   calls = [];
-  online = false;
+  availability = NOBODY;
   leaveStatus = 201;
   ticketForm = [
     { definition_id: 'f-order', label: 'Affected order', type: 'text', required: true },
@@ -173,7 +179,7 @@ describe('widget offline form (FR-MOD-08.7.7)', () => {
   });
 
   it('stays away entirely while an agent is available', async () => {
-    online = true;
+    availability = AGENT;
     const root = mountWidget();
     openPanel(root);
     await settled();
@@ -183,10 +189,63 @@ describe('widget offline form (FR-MOD-08.7.7)', () => {
     expect(root.querySelector<HTMLElement>('.nx-prechat')!.hidden).toBe(false);
   });
 
-  it('stays away when the workspace has built neither form, offline or not', async () => {
-    // Opt-in: without questions there is no form, and the widget is exactly the
-    // one it was before this existed — an offline visitor still gets the
-    // way into a chat (the pre-chat form, then the composer).
+  it('stays away while the AI answers, form built and nobody online (WG-09)', async () => {
+    availability = { online: false, can_start_chat: true, answered_by: 'ai' };
+    const root = mountWidget();
+    openPanel(root);
+    await settled();
+
+    expect(root.querySelector<HTMLElement>('.nx-offline')!.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>('.nx-prechat')!.hidden).toBe(false);
+    // Somebody does answer: no "nobody is available" line.
+    expect(root.querySelector<HTMLElement>('.nx-status')!.textContent).toBe('');
+  });
+
+  it('stays away under `always` with nobody there — the chat opens and waits (WG-09)', async () => {
+    availability = { online: false, can_start_chat: true, answered_by: 'none' };
+    const root = mountWidget();
+    openPanel(root);
+    await settled();
+
+    expect(root.querySelector<HTMLElement>('.nx-offline')!.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>('.nx-prechat')!.hidden).toBe(false);
+  });
+
+  it('opens with the built-in fields alone under `agents_only`, no question built (WG-09)', async () => {
+    ticketForm = [];
+    prospectForm = [];
+    const root = mountWidget();
+    openPanel(root);
+    await vi.waitFor(() =>
+      expect(root.querySelector<HTMLElement>('.nx-offline')!.hidden).toBe(false),
+    );
+    expect(root.querySelectorAll('.nx-offline input[data-def-id]')).toHaveLength(0);
+
+    const form = root.querySelector<HTMLFormElement>('.nx-offline')!;
+    fill(root, '.nx-offline input[type="text"]', 'Çekimim nerede?');
+    root.querySelectorAll<HTMLInputElement>('.nx-offline input[type="text"]')[1]!.value = 'Dana';
+    fill(root, '.nx-offline input[type="email"]', 'dana@example.com');
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+
+    await vi.waitFor(() => expect(leaveCalls()).toHaveLength(1));
+    expect(leaveCalls()[0]!.body).toEqual({
+      subject: 'Çekimim nerede?',
+      name: 'Dana',
+      email: 'dana@example.com',
+    });
+  });
+
+  it('keeps the old rule against a server predating WG-09: a built form, nobody online', async () => {
+    availability = { online: false };
+    const root = mountWidget();
+    openPanel(root);
+    await vi.waitFor(() =>
+      expect(root.querySelector<HTMLElement>('.nx-offline')!.hidden).toBe(false),
+    );
+  });
+
+  it('…and no form at all there when none was built', async () => {
+    availability = { online: false };
     ticketForm = [];
     prospectForm = [];
     const root = mountWidget();
@@ -194,7 +253,6 @@ describe('widget offline form (FR-MOD-08.7.7)', () => {
     await settled();
 
     expect(root.querySelector<HTMLElement>('.nx-offline')!.hidden).toBe(true);
-    // A first-time visitor's way into a live chat is the pre-chat form.
     expect(root.querySelector<HTMLElement>('.nx-prechat')!.hidden).toBe(false);
   });
 
@@ -305,7 +363,7 @@ describe('widget offline form (FR-MOD-08.7.7)', () => {
     );
 
     // Availability is a poll-to-poll fact, so the choice is re-made on each one.
-    online = true;
+    availability = AGENT;
     await vi.waitFor(
       () => {
         expect(root.querySelector<HTMLElement>('.nx-offline')!.hidden).toBe(true);

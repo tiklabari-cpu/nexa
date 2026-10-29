@@ -308,6 +308,32 @@ export class AiDailyBudget {
   async check(tenant: TenantContext, meter: AiMeter, minimum: number): Promise<void> {
     const at = this.#now();
     const caps = await this.#caps.capsFor(tenant);
+    const scope = await this.#exhausted(tenant, meter, minimum, at, caps);
+    if (scope) throw this.#refuse(tenant, meter, scope, at, caps.workspace[meter]);
+  }
+
+  /**
+   * {@link check}'s question without its refusal: the cap that would refuse
+   * `minimum` tokens on `meter` now, or null. Reads only, logs nothing and
+   * tells nobody — for a caller that asks on every poll whether the AI is
+   * there at all (the widget's availability, WG-09), where a refusal is not
+   * a call that was turned away.
+   */
+  async exhausted(
+    tenant: TenantContext,
+    meter: AiMeter,
+    minimum: number,
+  ): Promise<AiCapScope | null> {
+    return this.#exhausted(tenant, meter, minimum, this.#now(), await this.#caps.capsFor(tenant));
+  }
+
+  async #exhausted(
+    tenant: TenantContext,
+    meter: AiMeter,
+    minimum: number,
+    at: Date,
+    caps: ResolvedAiCaps,
+  ): Promise<AiCapScope | null> {
     const rows = await withTenant(
       this.#db,
       tenant,
@@ -315,8 +341,7 @@ export class AiDailyBudget {
         SELECT ai_budget_exhausted(${utcDayKey(at)}, ${meter}, ${BigInt(minimum)},
           ${BigInt(caps.workspace[meter])}, ${BigInt(caps.global[aiLiveMeterOf(meter)])}) AS scope`,
     );
-    const scope = rows[0]?.scope ?? null;
-    if (scope) throw this.#refuse(tenant, meter, scope, at, caps.workspace[meter]);
+    return rows[0]?.scope ?? null;
   }
 
   /**

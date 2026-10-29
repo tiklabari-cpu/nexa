@@ -629,6 +629,19 @@ export const settings: Messages = {
     'Used when Automatic finds none of the eight languages in the visitor’s browser.',
   'settings.widgetCustomization.languageSnippetNote':
     'A language written into your install snippet (data-language) overrides this setting on that page.',
+  'settings.widgetCustomization.availabilityLegend': 'Availability',
+  'settings.widgetCustomization.availabilityHint':
+    'When visitors can start a chat. An active AI agent answers chats in either mode.',
+  'settings.widgetCustomization.availability.always': 'Always',
+  'settings.widgetCustomization.availability.alwaysWhat1':
+    'Visitors can always start a chat, even when no agent is accepting chats.',
+  'settings.widgetCustomization.availability.alwaysWhat2':
+    'With nobody available, the chat waits unassigned until an agent takes it.',
+  'settings.widgetCustomization.availability.agents_only': 'Only when agents are accepting chats',
+  'settings.widgetCustomization.availability.agents_onlyWhat1':
+    'With no AI agent answering and no agent accepting chats, the widget shows a leave-a-message form instead.',
+  'settings.widgetCustomization.availability.agents_onlyWhat2':
+    'The form asks for name, e-mail and message, plus your ticket questions, and creates a ticket.',
   'settings.widgetCustomization.entitlementError':
     'Removing the SiyahTuş badge is an Enterprise feature. Upgrade the plan to hide it.',
   'settings.widgetCustomization.previewLabel': 'Preview',

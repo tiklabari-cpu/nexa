@@ -83,7 +83,7 @@ export async function resolveWidgetBrandId(
 }
 
 /** The licence's default brand, or undefined for a licence without one. */
-async function defaultBrandId(tx: TenantClient): Promise<string | undefined> {
+export async function defaultBrandId(tx: TenantClient): Promise<string | undefined> {
   const brand = await tx.brand.findFirst({ where: { isDefault: true }, select: { id: true } });
   return brand?.id;
 }

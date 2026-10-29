@@ -46,6 +46,24 @@ import type { TenantClient } from '../../lib/tenant.js';
  * Tenant-scoped by RLS on all three tables.
  */
 export async function opensAiFirst(tx: TenantClient): Promise<boolean> {
+  const row = await answeringAgents(tx);
+  return row !== undefined && row.answering > 0 && row.ai_first === row.answering;
+}
+
+/**
+ * Whether some AI agent would answer a visitor's connection opened now — the
+ * same reading as {@link opensAiFirst}, whatever the agents' assignment mode.
+ * The widget's availability (WG-09, `routes/customer.ts`) asks it: an AI with
+ * nothing to run, or a paused one, keeps no chat open for the visitor.
+ */
+export async function aiAnswersVisitors(tx: TenantClient): Promise<boolean> {
+  const row = await answeringAgents(tx);
+  return row !== undefined && row.answering > 0;
+}
+
+async function answeringAgents(
+  tx: TenantClient,
+): Promise<{ answering: number; ai_first: number } | undefined> {
   const rows = await tx.$queryRaw<Array<{ answering: number; ai_first: number }>>`
     SELECT count(*)::int AS answering,
            count(*) FILTER (
@@ -59,6 +77,5 @@ export async function opensAiFirst(tx: TenantClient): Promise<boolean> {
          SELECT 1 FROM skills s
           WHERE s.ai_agent_id = a.id AND s.active AND s.kind = 'ai_agent'
        )`;
-  const row = rows[0];
-  return row !== undefined && row.answering > 0 && row.ai_first === row.answering;
+  return rows[0];
 }

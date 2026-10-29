@@ -18285,6 +18285,14 @@ export interface components {
        * @enum {string}
        */
       fallback_language: 'en' | 'tr' | 'de' | 'fr' | 'es' | 'it' | 'pt' | 'ar';
+      /**
+       * @description When a visitor may start a chat (WG-09): `always` (default) or
+       *     only while someone answers — `agents_only` offers the offline form
+       *     when no AI would answer and nobody accepts chats. Server-side; the
+       *     widget reads the outcome as `CustomerChatState.can_start_chat`.
+       * @enum {string}
+       */
+      availability_mode: 'always' | 'agents_only';
       /** Format: date-time */
       updated_at: string | null;
     };
@@ -22282,6 +22290,23 @@ export interface components {
     CustomerChatState: {
       /** @description Whether any agent is currently accepting chats. */
       online: boolean;
+      /**
+       * @description Whether the widget offers a chat (WG-09) rather than the offline
+       *     form. True while an AI would answer (an active agent with something
+       *     to run, today's AI allowance and the visitor's own not spent), while
+       *     anyone accepts chats, and always under the `always` availability
+       *     mode; false only under `agents_only` with neither. True while the
+       *     visitor has an open conversation.
+       */
+      can_start_chat: boolean;
+      /**
+       * @description Who answers the visitor now (WG-09): with an open conversation its
+       *     owner (`queue` reads `human` while anyone accepts chats, else
+       *     `none`); without one, `ai` when an AI would answer a new chat,
+       *     else `human` while anyone accepts chats, else `none`.
+       * @enum {string}
+       */
+      answered_by: 'human' | 'ai' | 'none';
       customer: {
         /** Format: uuid */
         id: string;
@@ -36091,6 +36116,16 @@ export interface operations {
            * @enum {string}
            */
           fallback_language?: 'en' | 'tr' | 'de' | 'fr' | 'es' | 'it' | 'pt' | 'ar';
+          /**
+           * @description When a visitor may start a chat (WG-09). `always`: a chat
+           *     opens whoever is there and waits unassigned when nobody is.
+           *     `agents_only`: with no AI to answer and nobody accepting
+           *     chats, the widget offers the offline form instead (name,
+           *     e-mail and message, plus any ticket/prospect questions). An
+           *     AI that would answer keeps the chat open in either mode.
+           * @enum {string}
+           */
+          availability_mode?: 'always' | 'agents_only';
         };
       };
     };

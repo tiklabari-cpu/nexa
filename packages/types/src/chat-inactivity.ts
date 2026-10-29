@@ -70,8 +70,14 @@ export interface ChatInactivityChangedPush {
   inactive: boolean;
 }
 
-/** The three windows a `PUT /settings/chat-timeout` leaves stored; null = off. */
+/** The windows a `PUT /settings/chat-timeout` leaves stored; null = off. */
 export interface ChatInactivityWindows {
+  /**
+   * When to ask the player for an e-mail (WG-08 · tm 342, `ask-email.ts`). It
+   * runs before the transfer in the same sweep pass, so it is the first of the
+   * windows. A caller that does not know it leaves it out: off.
+   */
+  askEmailSeconds?: number | null;
   unansweredTransferSeconds: number | null;
   inactiveAfterSeconds: number | null;
   chatTimeoutSeconds: number | null;
@@ -79,6 +85,9 @@ export interface ChatInactivityWindows {
 
 /** Why a set of windows is out of order, as `chatInactivityOrderProblem` names it. */
 export const CHAT_INACTIVITY_ORDER_PROBLEMS = [
+  'ask_email_not_before_transfer',
+  'ask_email_not_before_inactive',
+  'ask_email_not_before_timeout',
   'transfer_not_before_inactive',
   'transfer_not_before_timeout',
   'inactive_not_before_timeout',
@@ -86,15 +95,25 @@ export const CHAT_INACTIVITY_ORDER_PROBLEMS = [
 export type ChatInactivityOrderProblem = (typeof CHAT_INACTIVITY_ORDER_PROBLEMS)[number];
 
 /**
- * The first pair of windows that is out of order — transfer < inactive <
- * auto-close, strictly, between whichever of them are on — or null when the
- * order holds. A window that is off (null) is in no pair.
+ * The first pair of windows that is out of order — ask for an e-mail <
+ * transfer < inactive < auto-close, strictly, between whichever of them are on
+ * — or null when the order holds. A window that is off (null) is in no pair.
  */
 export function chatInactivityOrderProblem(
   windows: ChatInactivityWindows,
 ): ChatInactivityOrderProblem | null {
   const { unansweredTransferSeconds: transfer, inactiveAfterSeconds: inactive } = windows;
   const timeout = windows.chatTimeoutSeconds;
+  const ask = windows.askEmailSeconds ?? null;
+  if (ask !== null && transfer !== null && ask >= transfer) {
+    return 'ask_email_not_before_transfer';
+  }
+  if (ask !== null && inactive !== null && ask >= inactive) {
+    return 'ask_email_not_before_inactive';
+  }
+  if (ask !== null && timeout !== null && ask >= timeout) {
+    return 'ask_email_not_before_timeout';
+  }
   if (transfer !== null && inactive !== null && transfer >= inactive) {
     return 'transfer_not_before_inactive';
   }

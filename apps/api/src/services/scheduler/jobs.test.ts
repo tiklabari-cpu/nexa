@@ -183,6 +183,8 @@ describe('buildSchedulerJobs', () => {
       const outcome = await job?.run(context());
       expect(outcome?.counts).toEqual({
         tenants: 0,
+        asked_email: 0,
+        replied_here: 0,
         transferred: 0,
         queued: 0,
         marked_inactive: 0,

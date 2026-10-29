@@ -280,6 +280,51 @@ requestHuman:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+contactEmail:
+  post:
+    tags: [Customer]
+    operationId: submitCustomerContactEmail
+    summary: Answer the widget's "leave your e-mail" card
+    description: |
+      WG-08 (tm 342). While nobody answers, the server writes one system event
+      with `properties.system_event` = `ask_email` to the open connection and
+      the widget draws an inline card with an e-mail box. The address typed
+      there comes back here: it is stored on the contact (`customers.email`,
+      which makes them a lead the way the pre-chat form does), and the
+      connection gets an `ask_email_answered` system event carrying no address,
+      so the card reads as answered from then on — on a reload too.
+
+      Only an open connection that was actually asked takes it: no open
+      conversation is a 409 `chat_inactive`, a connection nobody asked is a
+      404. Sending it again is harmless: the address is replaced and the
+      answered event is written once. Limited per visitor (GV-01): 429 with
+      `Retry-After`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [email]
+            properties:
+              email:
+                type: string
+                format: email
+                maxLength: 254
+    responses:
+      "204":
+        description: The address is stored and the card is answered
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: There is no open conversation
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 resolution:
   post:
     tags: [Customer]

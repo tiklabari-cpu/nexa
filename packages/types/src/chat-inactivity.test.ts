@@ -63,3 +63,30 @@ describe('the inactivity sweep vocabulary (WG-03 · tm 340.2)', () => {
     expect(UNANSWERED_ALERT_REASONS).toEqual(['no_agent', 'transfer_limit']);
   });
 });
+
+describe('chatInactivityOrderProblem with the e-mail request window (WG-08)', () => {
+  const withAsk = (
+    ask: number | null,
+    ...rest: [number | null, number | null, number | null]
+  ): ChatInactivityWindows => ({ ...windows(...rest), askEmailSeconds: ask });
+
+  it('accepts ask < transfer < inactive < auto-close, and any of them off', () => {
+    expect(chatInactivityOrderProblem(withAsk(120, 180, 600, 1800))).toBeNull();
+    expect(chatInactivityOrderProblem(withAsk(120, null, null, null))).toBeNull();
+    expect(chatInactivityOrderProblem(withAsk(null, 180, 600, 1800))).toBeNull();
+    // A caller that does not know the window leaves it out: off.
+    expect(chatInactivityOrderProblem(windows(180, 600, 1800))).toBeNull();
+  });
+
+  it('refuses a request window at or past the transfer, inactive or auto-close one', () => {
+    expect(chatInactivityOrderProblem(withAsk(180, 180, 600, 1800))).toBe(
+      'ask_email_not_before_transfer',
+    );
+    expect(chatInactivityOrderProblem(withAsk(600, null, 600, 1800))).toBe(
+      'ask_email_not_before_inactive',
+    );
+    expect(chatInactivityOrderProblem(withAsk(1800, null, null, 1800))).toBe(
+      'ask_email_not_before_timeout',
+    );
+  });
+});

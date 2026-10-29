@@ -488,6 +488,114 @@ describe('ChatTimeout inactivity windows (WG-03)', () => {
   });
 });
 
+/**
+ * Asking the player for an e-mail while nobody answers (WG-08 · tm 342): the
+ * first of the windows, with its offline switch and a preview of the card. Off
+ * until set; saved as whole seconds, sending only what changed; refused before
+ * the network when it is not shorter than the transfer.
+ */
+describe('ChatTimeout e-mail request (WG-08)', () => {
+  const ASKING = {
+    ...DEFAULTS,
+    chat_timeout_seconds: 900,
+    unanswered_transfer_seconds: 300,
+    ask_email_after_seconds: 120,
+    ask_email_when_offline: false,
+  };
+  const askBox = () =>
+    screen.findByRole('checkbox', { name: /Ask the player for an e-mail while nobody answers/ });
+
+  it('is off for a workspace that never set it, offering 2 minutes', async () => {
+    renderChatTimeout();
+    expect(await askBox()).not.toBeChecked();
+    expect(screen.getByLabelText('Waiting for')).toHaveValue(2);
+    expect(screen.getByLabelText('Waiting for')).toBeDisabled();
+    expect(
+      screen.getByRole('checkbox', { name: /Also ask at once when nobody is accepting chats/ }),
+    ).not.toBeChecked();
+  });
+
+  it('reads the saved window and sits before the transfer', async () => {
+    stubFetch(ASKING);
+    renderChatTimeout();
+    const ask = await askBox();
+    expect(ask).toBeChecked();
+    expect(screen.getByLabelText('Waiting for')).toHaveValue(2);
+    expect(screen.getByLabelText('E-mail request unit')).toHaveValue('minutes');
+    const transfer = screen.getByRole('checkbox', {
+      name: /Pass unanswered chats to another agent/,
+    });
+    expect(ask.compareDocumentPosition(transfer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('previews the card the player sees, in the console language', async () => {
+    renderChatTimeout();
+    await askBox();
+    const preview = screen.getByRole('group', { name: 'What the player sees' });
+    expect(within(preview).getByText(/Leave your e-mail address/)).toBeInTheDocument();
+    expect(within(preview).getByText(/Shown once per conversation/)).toBeInTheDocument();
+  });
+
+  it('saves the window as whole seconds and the offline switch, only what changed', async () => {
+    renderChatTimeout();
+    await userEvent.click(await askBox());
+    await userEvent.click(
+      screen.getByRole('checkbox', { name: /Also ask at once when nobody is accepting chats/ }),
+    );
+    const amount = screen.getByLabelText('Waiting for');
+    await userEvent.clear(amount);
+    await userEvent.type(amount, '5');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(putBodies).toHaveLength(1));
+    expect(putBodies[0]).toEqual({
+      chat_timeout_seconds: null,
+      ask_email_after_seconds: 300,
+      ask_email_when_offline: true,
+    });
+  });
+
+  it('turns the window off as null', async () => {
+    stubFetch(ASKING);
+    renderChatTimeout();
+    await userEvent.click(await askBox());
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(putBodies).toHaveLength(1));
+    expect(putBodies[0]).toEqual({ chat_timeout_seconds: 900, ask_email_after_seconds: null });
+  });
+
+  it('refuses a window that is not shorter than the transfer, before the network', async () => {
+    stubFetch(ASKING);
+    renderChatTimeout();
+    const amount = await screen.findByLabelText('Waiting for');
+    await userEvent.clear(amount);
+    await userEvent.type(amount, '5');
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Ask for an e-mail sooner than unanswered chats are passed on.',
+    );
+    const save = screen.getByRole('button', { name: 'Save' });
+    expect(save).toBeDisabled();
+    await userEvent.click(save);
+    expect(putBodies).toHaveLength(0);
+  });
+
+  it('reads the server’s refusal back as the same sentence', async () => {
+    stubFetch(ASKING);
+    renderChatTimeout();
+    const amount = await screen.findByLabelText('Waiting for');
+    await userEvent.clear(amount);
+    await userEvent.type(amount, '3');
+    nextPutFails = true;
+    nextPutDetails = { problem: 'ask_email_not_before_timeout' };
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Ask for an e-mail sooner than idle chats are closed.',
+    );
+  });
+});
+
 /** One sentinel for this file's DoD claim of being translated (I18N-j precedent, tm 133.10). */
 describe('ChatTimeout localisation (NFR-I18N2)', () => {
   afterEach(() => {

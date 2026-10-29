@@ -12,6 +12,8 @@
  */
 import {
   AI_BOT_ID,
+  ASK_EMAIL_ANSWERED_SYSTEM_EVENT,
+  ASK_EMAIL_SYSTEM_EVENT,
   DEFAULT_PRECHAT_CONFIG,
   PRECHAT_FIELD_KEYS,
   prechatAsksAnything,
@@ -637,6 +639,13 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     // and restart CSS animations on messages already on screen.
     for (const event of state.events.slice(renderedCount)) {
       ui.transcript.append(renderBubble(doc, event, api, attachmentCache, t, locale));
+      // The player's answer to the e-mail card, here or from another tab: the
+      // card above it stops asking.
+      if (event.properties?.['system_event'] === ASK_EMAIL_ANSWERED_SYSTEM_EVENT) {
+        for (const card of ui.transcript.querySelectorAll<HTMLElement>('.nx-askemail')) {
+          settleAskEmailCard(doc, card, t);
+        }
+      }
     }
     renderedCount = state.events.length;
     ui.transcript.scrollTop = ui.transcript.scrollHeight;
@@ -3759,6 +3768,74 @@ function isAiMessage(event: WidgetEvent): boolean {
   return event.author_type === 'bot' && event.author_id === AI_BOT_ID;
 }
 
+/**
+ * The inline "leave your e-mail" card (WG-08 · tm 342): the sentence the server
+ * wrote in the player's language, an e-mail box and a send button. Sending
+ * stores the address on the contact (`POST /customer/chat/email`); the card
+ * then reads as sent, and the server's `ask_email_answered` line follows.
+ */
+function renderAskEmailCard(
+  doc: Document,
+  event: WidgetEvent,
+  api: WidgetApi,
+  t: WidgetTranslate,
+): HTMLElement {
+  const card = doc.createElement('form');
+  card.className = 'nx-askemail';
+  card.noValidate = true;
+  const text = doc.createElement('p');
+  text.className = 'nx-askemail-text';
+  text.textContent = event.text ?? '';
+  const input = doc.createElement('input');
+  input.type = 'email';
+  input.className = 'nx-prechat-input';
+  input.autocomplete = 'email';
+  input.maxLength = 254;
+  input.required = true;
+  input.placeholder = t('askEmail.label');
+  input.setAttribute('aria-label', t('askEmail.label'));
+  const send = doc.createElement('button');
+  send.type = 'submit';
+  send.className = 'nx-askemail-send';
+  send.textContent = t('send');
+  const note = doc.createElement('p');
+  note.className = 'nx-askemail-note';
+  note.setAttribute('role', 'alert');
+  note.hidden = true;
+  card.append(text, input, send, note);
+
+  card.addEventListener('submit', (submitted) => {
+    submitted.preventDefault();
+    if (!input.value.trim() || !input.checkValidity()) {
+      note.textContent = t('askEmail.invalid');
+      note.hidden = false;
+      input.setAttribute('aria-invalid', 'true');
+      return;
+    }
+    send.disabled = true;
+    note.hidden = true;
+    api.submitContactEmail(input.value.trim()).then(
+      () => settleAskEmailCard(doc, card, t),
+      () => {
+        send.disabled = false;
+        note.textContent = t('askEmail.failed');
+        note.hidden = false;
+      },
+    );
+  });
+  return card;
+}
+
+/** The card after the answer: the sentence stays, the box gives way to "Sent". */
+function settleAskEmailCard(doc: Document, card: HTMLElement, t: WidgetTranslate): void {
+  if (card.dataset['answered']) return;
+  card.dataset['answered'] = 'true';
+  const done = doc.createElement('p');
+  done.className = 'nx-askemail-done';
+  done.textContent = t('askEmail.sent');
+  card.replaceChildren(card.querySelector('.nx-askemail-text') ?? '', done);
+}
+
 function renderBubble(
   doc: Document,
   event: WidgetEvent,
@@ -3771,6 +3848,11 @@ function renderBubble(
   row.className = `nx-row nx-row--${event.author_type}`;
 
   if (event.type === 'system_message') {
+    // The server asks for an e-mail (WG-08 · tm 342): a card with a box, not a pill.
+    if (event.properties?.['system_event'] === ASK_EMAIL_SYSTEM_EVENT) {
+      row.append(renderAskEmailCard(doc, event, api, t));
+      return row;
+    }
     const notice = doc.createElement('p');
     // The sensitive-data warning (tm 300.2 · AI-26 §4) is a sentence the
     // visitor has to read, not a "Chat transferred" pill: it is set as a
@@ -4820,6 +4902,19 @@ button { -webkit-tap-highlight-color: transparent; }
   margin: 0; padding: 5px 12px; border-radius: 999px; background: var(--nx-pill);
   font-size: 12px; font-weight: 600; color: var(--nx-muted); text-align: center;
 }
+.nx-askemail {
+  display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 12px;
+  border-radius: 12px; border: 1px solid var(--nx-border); background: var(--nx-surface);
+}
+.nx-askemail-text, .nx-askemail-note, .nx-askemail-done { margin: 0; font-size: 13px; line-height: 18px; }
+.nx-askemail-text { font-weight: 500; color: var(--nx-text); }
+.nx-askemail-note { color: var(--nx-danger); }
+.nx-askemail-done { font-weight: 600; color: var(--nx-muted); }
+.nx-askemail-send {
+  min-height: 40px; border: 0; border-radius: 12px; padding: 0 16px;
+  background: var(--nx-cta); color: var(--nx-on-brand); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.nx-askemail-send:disabled { opacity: .6; cursor: default; }
 .nx-system--warning {
   border-radius: 12px; border: 1px solid var(--nx-border); color: var(--nx-text);
   font-weight: 500; text-align: start; line-height: 18px;

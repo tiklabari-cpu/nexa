@@ -46,6 +46,7 @@ import {
   chatInactivityOrderProblem,
   type ChatInactivityOrderProblem,
   INACTIVITY_WINDOW_MAX_SECONDS,
+  ASK_EMAIL_MAX_SECONDS,
   CAPTCHA_MODES,
   isCaptchaMode,
   AI_TURNS_PER_CUSTOMER_DAY_MAX,
@@ -584,6 +585,17 @@ const updateChatTimeoutBody = z.object({
   // Whether the transfer also stops routing to the agent it took the
   // connection from (tm 340.2). Optional the same way.
   pause_unresponsive_agents: z.boolean().optional(),
+  // Asking the player for an e-mail while nobody answers (WG-08 · tm 342):
+  // the wait before it, positive for the windows' reason, and whether it also
+  // asks at once while nobody is accepting chats. Optional the same way.
+  ask_email_after_seconds: z
+    .number()
+    .int()
+    .positive()
+    .max(ASK_EMAIL_MAX_SECONDS)
+    .nullable()
+    .optional(),
+  ask_email_when_offline: z.boolean().optional(),
   // How long a solved ticket still reopens on the player's e-mailed answer
   // (tm 358 · HD-03). Optional the same way; the CHECK holds the same bounds.
   ticket_reopen_window_days: z.number().int().min(1).max(TICKET_REOPEN_WINDOW_DAYS_MAX).optional(),
@@ -615,6 +627,12 @@ function transcriptDomainsOrThrow(input: readonly string[]): string[] {
 
 /** What a save whose windows are out of order is told (`chatInactivityOrderProblem`). */
 const CHAT_INACTIVITY_ORDER_MESSAGES: Record<ChatInactivityOrderProblem, string> = {
+  ask_email_not_before_transfer:
+    'ask_email_after_seconds must be shorter than unanswered_transfer_seconds.',
+  ask_email_not_before_inactive:
+    'ask_email_after_seconds must be shorter than inactive_after_seconds.',
+  ask_email_not_before_timeout:
+    'ask_email_after_seconds must be shorter than chat_timeout_seconds.',
   transfer_not_before_inactive:
     'unanswered_transfer_seconds must be shorter than inactive_after_seconds.',
   transfer_not_before_timeout:
@@ -2821,9 +2839,15 @@ export default async function settingsRoutes(
             body.inactive_after_seconds === undefined
               ? (stored?.inactiveAfterSeconds ?? null)
               : body.inactive_after_seconds,
+          askEmailAfterSeconds:
+            body.ask_email_after_seconds === undefined
+              ? (stored?.askEmailAfterSeconds ?? null)
+              : body.ask_email_after_seconds,
         };
         const problem = chatInactivityOrderProblem({
-          ...windows,
+          unansweredTransferSeconds: windows.unansweredTransferSeconds,
+          inactiveAfterSeconds: windows.inactiveAfterSeconds,
+          askEmailSeconds: windows.askEmailAfterSeconds,
           chatTimeoutSeconds: body.chat_timeout_seconds,
         });
         if (problem) {
@@ -2841,6 +2865,9 @@ export default async function settingsRoutes(
           ...(body.pause_unresponsive_agents === undefined
             ? {}
             : { pauseUnresponsiveAgents: body.pause_unresponsive_agents }),
+          ...(body.ask_email_when_offline === undefined
+            ? {}
+            : { askEmailWhenOffline: body.ask_email_when_offline }),
           ...(body.ticket_reopen_window_days === undefined
             ? {}
             : { ticketReopenWindowDays: body.ticket_reopen_window_days }),
@@ -2876,6 +2903,8 @@ export default async function settingsRoutes(
             unanswered_transfer_seconds: row.unansweredTransferSeconds,
             inactive_after_seconds: row.inactiveAfterSeconds,
             pause_unresponsive_agents: row.pauseUnresponsiveAgents,
+            ask_email_after_seconds: row.askEmailAfterSeconds,
+            ask_email_when_offline: row.askEmailWhenOffline,
             ticket_reopen_window_days: row.ticketReopenWindowDays,
             transcript_allowed_domains: row.transcriptAllowedDomains,
             day_boundary_timezone: after.timezone,
@@ -3720,6 +3749,8 @@ function serialiseInbox(
         unansweredTransferSeconds: number | null;
         inactiveAfterSeconds: number | null;
         pauseUnresponsiveAgents: boolean;
+        askEmailAfterSeconds: number | null;
+        askEmailWhenOffline: boolean;
         ticketReopenWindowDays: number;
         transcriptAllowedDomains: string[];
         updatedAt: Date;
@@ -3739,6 +3770,8 @@ function serialiseInbox(
     inactive_after_seconds: row?.inactiveAfterSeconds ?? null,
     // No row = the column's default: on.
     pause_unresponsive_agents: row?.pauseUnresponsiveAgents ?? true,
+    ask_email_after_seconds: row?.askEmailAfterSeconds ?? null,
+    ask_email_when_offline: row?.askEmailWhenOffline ?? false,
     ticket_reopen_window_days: row?.ticketReopenWindowDays ?? TICKET_REOPEN_WINDOW_DAYS_DEFAULT,
     transcript_allowed_domains: row?.transcriptAllowedDomains ?? [],
     updated_at: row ? row.updatedAt.toISOString() : null,

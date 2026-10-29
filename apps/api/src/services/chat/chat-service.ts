@@ -22,6 +22,9 @@ import {
   AGENT_ROLES,
   buildEventId,
   composerStateKey,
+  ASK_EMAIL_ANSWERED_SYSTEM_EVENT,
+  ASK_EMAIL_SYSTEM_EVENT,
+  askEmailText,
   CONTINUED_FROM_CHAT_PROPERTY,
   EDITED_AT_PROPERTY,
   EDITED_BY_PROPERTY,
@@ -29,8 +32,10 @@ import {
   isEditableEventType,
   isWithinEditWindow,
   MESSAGE_EDIT_WINDOW_SECONDS,
+  playerIsReachable,
   readSensitiveTypes,
   RATING_VALUES,
+  REPLY_HERE_SYSTEM_EVENT,
   RESPONSIBLE_GAMBLING_ROLE,
   SENSITIVE_TYPES,
   SENSITIVE_TYPES_PROPERTY,
@@ -119,6 +124,7 @@ import {
 import { opensAiFirst } from './ai-first.js';
 import { aiStalled } from './ai-stall.js';
 import { LAST_ACTIVITY_SQL, unansweredSql } from './chat-inactivity.js';
+import { contactRequestSql, ruleIsOff, type ContactRequestRule } from './ask-email.js';
 import { publishTrafficChange } from '../traffic/traffic-events.js';
 import { SupervisionService } from '../traffic/supervision-service.js';
 import { evaluate as evaluateSla, evaluateSubject, readClock } from '../sla/sla-service.js';
@@ -4370,6 +4376,140 @@ export class ChatService {
   }
 
   /**
+   * Ask a waiting player how to reach them (WG-08 · tm 342) — the inactivity
+   * sweep's first step, `services/chat/ask-email.ts`. Writes ONE system event
+   * to the connection and tells the player's widget and the inbox:
+   *
+   *   - `ask_email` when the team has neither an e-mail nor a username for the
+   *     player — the widget draws a card with an e-mail box;
+   *   - `reply_here` when it has either — a line saying the answer will come to
+   *     this conversation, no card.
+   *
+   * The chat's row is taken and then the thread's, the order every append
+   * takes them, and the rule's own predicate is asked again under both
+   * (`contactRequestSql`): a reply that committed first spares the connection,
+   * and the existence check inside it is what makes a second pass — or a second
+   * process — write nothing. Null when nothing is owed any more.
+   */
+  async requestContact(
+    tenant: TenantContext,
+    ref: { chatId: string; threadId: string },
+    rule: ContactRequestRule,
+  ): Promise<ContactRequestOutcome | null> {
+    if (ruleIsOff(rule)) return null;
+    const result = await withTenant(this.db, tenant, async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM chats WHERE id = ${ref.chatId} FOR NO KEY UPDATE`;
+      const [row] = await tx.$queryRaw<Array<{ ok: number }>>`
+        SELECT 1 AS ok FROM threads t
+         WHERE t.id = ${ref.threadId} AND t.chat_id = ${ref.chatId} AND ${contactRequestSql(rule)}
+         FOR UPDATE`;
+      if (!row) return null;
+
+      const chat = await tx.chat.findUniqueOrThrow({
+        where: { id: ref.chatId },
+        include: chatInclude,
+      });
+      const player = await tx.customer.findUnique({
+        where: { id: chat.customerId },
+        select: { email: true, username: true, locale: true },
+      });
+      const known = playerIsReachable({ email: player?.email, username: player?.username });
+      const event = await this.#appendEvent(tx, {
+        licenseId: tenant.licenseId,
+        chatId: ref.chatId,
+        threadId: ref.threadId,
+        authorId: null,
+        authorType: 'system',
+        input: {
+          type: 'system_message',
+          text: askEmailText(player?.locale, known ? 'reply_here' : 'ask'),
+          recipients: 'all',
+          properties: { system_event: known ? REPLY_HERE_SYSTEM_EVENT : ASK_EMAIL_SYSTEM_EVENT },
+        },
+      });
+      return { event, known, audience: this.#audienceFor(chat) };
+    });
+    if (!result) return null;
+    await this.#announceEvent(tenant, {
+      event: result.event,
+      recipients: 'all',
+      audience: result.audience,
+    });
+    return { kind: result.known ? 'reply_here' : 'ask_email' };
+  }
+
+  /**
+   * The player's answer to the `ask_email` card (WG-08 · tm 342): the address
+   * is stored on the contact — which makes them a lead, as the pre-chat form
+   * does — and the connection gets an `ask_email_answered` event carrying no
+   * address, so the card reads as answered from then on, on a reload too.
+   *
+   * `not_asked` when the connection holds no `ask_email` event: the endpoint
+   * is the card's, not a general way to set an address. Sending again replaces
+   * the address and writes the answered event once.
+   */
+  async recordContactEmail(
+    tenant: TenantContext,
+    ref: { chatId: string; threadId: string },
+    customerId: string,
+    email: string,
+  ): Promise<{ outcome: 'not_asked' } | { outcome: 'saved'; becameLead: boolean }> {
+    const result = await withTenant(this.db, tenant, async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM chats WHERE id = ${ref.chatId} FOR NO KEY UPDATE`;
+      const marks = await tx.$queryRaw<Array<{ system_event: string }>>`
+        SELECT DISTINCT e.properties->>'system_event' AS system_event
+          FROM events e
+         WHERE e.thread_id = ${ref.threadId} AND e.type = 'system_message'
+           AND e.properties->>'system_event' IN (${ASK_EMAIL_SYSTEM_EVENT}, ${ASK_EMAIL_ANSWERED_SYSTEM_EVENT})`;
+      const seen = new Set(marks.map((mark) => mark.system_event));
+      if (!seen.has(ASK_EMAIL_SYSTEM_EVENT)) return null;
+
+      const before = await tx.customer.findUnique({
+        where: { id: customerId },
+        select: { isLead: true, locale: true },
+      });
+      await tx.customer.update({
+        where: { id: customerId },
+        data: { email, isLead: true, lastActivityAt: new Date() },
+      });
+      if (seen.has(ASK_EMAIL_ANSWERED_SYSTEM_EVENT)) {
+        return { becameLead: before?.isLead === false, event: null, audience: null };
+      }
+      const chat = await tx.chat.findUniqueOrThrow({
+        where: { id: ref.chatId },
+        include: chatInclude,
+      });
+      const event = await this.#appendEvent(tx, {
+        licenseId: tenant.licenseId,
+        chatId: ref.chatId,
+        threadId: ref.threadId,
+        authorId: null,
+        authorType: 'system',
+        input: {
+          type: 'system_message',
+          text: askEmailText(before?.locale, 'answered'),
+          recipients: 'all',
+          properties: { system_event: ASK_EMAIL_ANSWERED_SYSTEM_EVENT },
+        },
+      });
+      return {
+        becameLead: before?.isLead === false,
+        event,
+        audience: this.#audienceFor(chat),
+      };
+    });
+    if (!result) return { outcome: 'not_asked' };
+    if (result.event && result.audience) {
+      await this.#announceEvent(tenant, {
+        event: result.event,
+        recipients: 'all',
+        audience: result.audience,
+      });
+    }
+    return { outcome: 'saved', becameLead: result.becameLead };
+  }
+
+  /**
    * Keep `threads.inactive_since` true to the workspace's inactive window
    * (WG-03 · tm 340.2) — the inactivity sweep's second step. `cutoff` is the
    * moment a connection's last activity must be older than to be inactive;
@@ -5777,6 +5917,12 @@ export interface ChatDetail {
    * agent's or bot's `get`; null when the AI handed nothing over.
    */
   latest_ai_handoff?: AiHandoffCardView | null;
+}
+
+/** What asking a waiting player for a contact wrote (`ChatService.requestContact`, WG-08). */
+export interface ContactRequestOutcome {
+  /** The event written: the e-mail card, or the "we will reply here" line. */
+  kind: 'ask_email' | 'reply_here';
 }
 
 /** The chat after a hand-off, and what became of it (`ChatTransferResult`, IN-04). */

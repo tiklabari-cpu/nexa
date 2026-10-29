@@ -280,6 +280,8 @@ paths:
     $ref: "./paths/customer-chat.yaml#/requestHuman"
   /customer/chat/resolution:
     $ref: "./paths/customer-chat.yaml#/resolution"
+  /customer/chat/email:
+    $ref: "./paths/customer-chat.yaml#/contactEmail"
   /customer/chat/close:
     $ref: "./paths/customer-chat.yaml#/close"
   /customer/chat/form-response:
@@ -9157,6 +9159,10 @@ components:
         transfer < inactive < auto-close. `pause_unresponsive_agents` (on unless
         turned off) also stops routing to an agent the transfer took a
         connection from: they go `not_accepting_chats` until they switch back.
+        `ask_email_after_seconds` (off by default) comes before all of them: a
+        connection that waited that long for a person's first reply asks the
+        player for an e-mail, once; `ask_email_when_offline` asks at once while
+        nobody is accepting chats (WG-08).
       required:
         [
           chat_timeout_seconds,
@@ -9165,6 +9171,8 @@ components:
           unanswered_transfer_seconds,
           inactive_after_seconds,
           pause_unresponsive_agents,
+          ask_email_after_seconds,
+          ask_email_when_offline,
           updated_at,
         ]
       properties:
@@ -9215,6 +9223,19 @@ components:
           description: >-
             Whether an agent whose connection the unanswered transfer took is
             set to `not_accepting_chats` (and told why). True unless turned off.
+        ask_email_after_seconds:
+          type: integer
+          format: int32
+          nullable: true
+          minimum: 1
+          description: >-
+            Seconds a connection waits for a person's first reply before the
+            player is asked for an e-mail; null when off.
+        ask_email_when_offline:
+          type: boolean
+          description: >-
+            Whether a connection waiting for a person while nobody is accepting
+            chats asks the player for an e-mail at once. False unless turned on.
         ticket_reopen_window_days:
           type: integer
           format: int32

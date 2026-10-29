@@ -3853,6 +3853,12 @@ model InboxSettings {
   /// Whether the inactivity sweep sets an agent it took an unanswered
   /// connection from to `not_accepting_chats` (WG-03 · tm 340.2). On by default.
   pauseUnresponsiveAgents Boolean @default(true) @map("pause_unresponsive_agents")
+  /// Seconds a connection waits for a person's first reply before the player is
+  /// asked for an e-mail (WG-08 · tm 342). Null: off. Positive by CHECK.
+  askEmailAfterSeconds Int? @map("ask_email_after_seconds")
+  /// Whether a connection that waits for a person while nobody is accepting
+  /// chats asks the player for an e-mail at once (WG-08 · tm 342). Off by default.
+  askEmailWhenOffline Boolean @default(false) @map("ask_email_when_offline")
   /// Days after its last activity that a player's e-mailed answer still reopens
   /// a solved ticket (HD-03 · tm 358); later, or on a closed ticket, it opens a
   /// related one. 1-365 by CHECK; `TICKET_REOPEN_WINDOW_DAYS_DEFAULT`.

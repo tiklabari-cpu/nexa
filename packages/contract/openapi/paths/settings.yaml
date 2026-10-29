@@ -1567,6 +1567,11 @@ chatTimeout:
       its last activity a player's e-mail answer still reopens a solved ticket.
       And `transcript_allowed_domains` (AR-04-S3): where a transcript may be
       mailed besides the player's own address.
+      `ask_email_after_seconds` (WG-08) is a third window, before the
+      transfer: ask the player for an e-mail once a connection has waited this
+      long for a person's first reply. When on it must be below the transfer,
+      inactive and auto-close windows that are on, or the save is a 400.
+      `ask_email_when_offline` asks at once while nobody is accepting chats.
     requestBody:
       required: true
       content:
@@ -1620,6 +1625,25 @@ chatTimeout:
                 description: >-
                   Whether an agent whose connection the unanswered transfer took
                   goes `not_accepting_chats`. Left out, the stored value stays.
+              ask_email_after_seconds:
+                type: integer
+                format: int32
+                minimum: 1
+                maximum: 2592000
+                nullable: true
+                description: >-
+                  Seconds a connection may wait for a person's first reply
+                  before the player is asked for an e-mail (once; a player whose
+                  e-mail or username is known is told the answer will come
+                  here instead); null turns it off. Must be below
+                  `unanswered_transfer_seconds`, `inactive_after_seconds` and
+                  `chat_timeout_seconds` when those are on.
+              ask_email_when_offline:
+                type: boolean
+                description: >-
+                  Whether a connection waiting for a person while nobody is
+                  accepting chats asks at once. With an AI answering, it asks
+                  only after the AI hands over. Left out, the stored value stays.
               ticket_reopen_window_days:
                 type: integer
                 format: int32

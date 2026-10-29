@@ -18,6 +18,7 @@ import {
   COMPANY_SIZES,
   DEFAULT_SALES_TRACKER_CONFIG,
   DEFAULT_WIDGET_APPEARANCE,
+  DEFAULT_WIDGET_AVAILABILITY_MODE,
   WIDGET_WELCOME_TEXT_MAX,
   WIDGET_WELCOME_TITLE_MAX,
   EXPERTISE_NAME_MAX_LENGTH,
@@ -33,6 +34,7 @@ import {
   SALES_TRACKER_ATTRIBUTION_WINDOW_MAX_DAYS,
   SALES_TRACKER_ATTRIBUTION_WINDOW_MIN_DAYS,
   SALES_TRACKER_CURRENCIES,
+  WIDGET_AVAILABILITY_MODES,
   WIDGET_COLOR_PATTERN,
   WIDGET_POSITIONS,
   WIDGET_THEMES,
@@ -655,6 +657,10 @@ const updateWidgetBody = z
     // The widget's language (WG-02) and what `auto` falls back to.
     language: z.enum(['auto', ...WIDGET_UI_LOCALES] as [string, ...string[]]).optional(),
     fallback_language: z.enum(WIDGET_UI_LOCALES as unknown as [string, ...string[]]).optional(),
+    // When a visitor may start a chat (WG-09).
+    availability_mode: z
+      .enum(WIDGET_AVAILABILITY_MODES as unknown as [string, ...string[]])
+      .optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -2953,6 +2959,9 @@ export default async function settingsRoutes(
         ...(body.fallback_language !== undefined
           ? { fallbackLanguage: body.fallback_language }
           : {}),
+        ...(body.availability_mode !== undefined
+          ? { availabilityMode: body.availability_mode }
+          : {}),
       };
 
       // Upsert because signup leaves no row: a workspace customising the widget
@@ -2981,6 +2990,7 @@ export default async function settingsRoutes(
             poweredBy: DEFAULT_WIDGET_APPEARANCE.powered_by,
             language: DEFAULT_WIDGET_APPEARANCE.language,
             fallbackLanguage: DEFAULT_WIDGET_APPEARANCE.fallback_language,
+            availabilityMode: DEFAULT_WIDGET_AVAILABILITY_MODE,
             ...data,
           },
           update: data,
@@ -3756,6 +3766,7 @@ function serialiseWidget(
     welcomeText: string | null;
     language: string;
     fallbackLanguage: string;
+    availabilityMode: string;
     updatedAt: Date;
   } | null,
   brandId: string,
@@ -3772,6 +3783,7 @@ function serialiseWidget(
     welcome_text: row?.welcomeText ?? DEFAULT_WIDGET_APPEARANCE.welcome_text,
     language: row?.language ?? DEFAULT_WIDGET_APPEARANCE.language,
     fallback_language: row?.fallbackLanguage ?? DEFAULT_WIDGET_APPEARANCE.fallback_language,
+    availability_mode: row?.availabilityMode ?? DEFAULT_WIDGET_AVAILABILITY_MODE,
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
 }

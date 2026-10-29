@@ -3908,6 +3908,9 @@ model WidgetSettings {
   /// What `auto` falls back to; the column default `en` keeps rows that existed
   /// before WG-02 as they were, new rows are written `tr` by the application.
   fallbackLanguage String   @default("en") @map("fallback_language")
+  /// When a visitor may start a chat (WG-09): `always` or `agents_only` —
+  /// `widget_settings_availability_mode_check`.
+  availabilityMode String   @default("always") @map("availability_mode")
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)

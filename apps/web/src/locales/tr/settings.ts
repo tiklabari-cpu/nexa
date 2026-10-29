@@ -623,6 +623,20 @@ export const settings: Messages = {
     'Otomatik, ziyaretçinin tarayıcısında bu sekiz dilden hiçbirini bulamazsa kullanılır.',
   'settings.widgetCustomization.languageSnippetNote':
     'Kurulum kodunuza yazılmış bir dil (data-language), o sayfada bu ayarı geçersiz kılar.',
+  'settings.widgetCustomization.availabilityLegend': 'Uygunluk',
+  'settings.widgetCustomization.availabilityHint':
+    'Ziyaretçilerin ne zaman sohbet başlatabileceği. Etkin bir AI ajanı iki modda da sohbetleri yanıtlar.',
+  'settings.widgetCustomization.availability.always': 'Her zaman',
+  'settings.widgetCustomization.availability.alwaysWhat1':
+    'Ziyaretçiler, sohbet kabul eden temsilci olmasa da her zaman sohbet başlatabilir.',
+  'settings.widgetCustomization.availability.alwaysWhat2':
+    'Kimse yoksa sohbet, bir temsilci alana kadar atanmamış bekler.',
+  'settings.widgetCustomization.availability.agents_only':
+    'Yalnız temsilciler sohbet kabul ederken',
+  'settings.widgetCustomization.availability.agents_onlyWhat1':
+    'Yanıt veren bir AI ajanı ve sohbet kabul eden temsilci yoksa widget bunun yerine mesaj bırakma formunu gösterir.',
+  'settings.widgetCustomization.availability.agents_onlyWhat2':
+    'Form ad, e-posta ve mesajı (varsa talep sorularınızla birlikte) sorar ve bir talep oluşturur.',
   'settings.widgetCustomization.entitlementError':
     'SiyahTuş rozetini kaldırmak bir Enterprise özelliğidir. Gizlemek için planı yükseltin.',
   'settings.widgetCustomization.previewLabel': 'Önizleme',

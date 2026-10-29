@@ -82,6 +82,12 @@ export interface LeaveTicketInput {
 
 export interface WidgetState {
   online: boolean;
+  /**
+   * Whether a chat is offered rather than the offline form (WG-09), and who
+   * answers now. Absent from a server predating them.
+   */
+  can_start_chat?: boolean;
+  answered_by?: 'human' | 'ai' | 'none';
   /** Whether an agent is mid-reply, for the "…is typing" line (FR-MOD-02.9). */
   agent_typing?: boolean;
   customer: { id: string; name: string | null; email: string | null };

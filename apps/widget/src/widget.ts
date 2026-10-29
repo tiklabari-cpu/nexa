@@ -207,7 +207,10 @@ interface WidgetConfig {
 interface State {
   open: boolean;
   connected: boolean;
+  /** Someone answers now — a person, or the AI (WG-09 `answered_by`). */
   online: boolean;
+  /** The server's `can_start_chat` (WG-09); undefined from a server predating it. */
+  canStartChat?: boolean;
   chatId: string | null;
   /**
    * The connection open in that chat (ID-02): the visitor's chat holds their
@@ -1409,21 +1412,34 @@ export function mount(doc: Document = document, win: Window = window): () => voi
    * Is the offline form what this visitor should be looking at?
    *
    * Every condition is a reason the *live* composer would be the wrong offer:
-   * nobody is available to receive a message, the visitor is not already in a
-   * conversation, and the workspace has actually built the form — the same
-   * opt-in the endpoint enforces from the other side, so the widget is not
-   * asking questions nowhere is set up to answer. A chat that just closed keeps
+   * the server says no chat is offered — the workspace's `agents_only` mode
+   * with neither an AI nor a person to answer (WG-09), the same rule the
+   * endpoint applies to a message left here — and the visitor is not already
+   * in a conversation. A chat that just closed keeps
    * its own screen: the CSAT prompt and the post-chat form are already there,
    * and a third panel underneath them would bury both.
    */
   function offlineFormOpen(): boolean {
     return (
       state.connected &&
-      !state.online &&
+      !(
+        state.canStartChat ??
+        (state.online || state.ticketFields.length + state.prospectFields.length === 0)
+      ) &&
       state.chatId === null &&
-      !state.closed &&
-      state.ticketFields.length + state.prospectFields.length > 0
+      !state.closed
     );
+  }
+
+  /**
+   * Who answers, and whether a chat is offered at all (WG-09): the server
+   * decides from the workspace's availability mode, an AI that would answer
+   * and who accepts chats. A server predating it sends neither, and the
+   * widget keeps its old rule (nobody online and a form built).
+   */
+  function applyAvailability(snapshot: WidgetState): void {
+    state.online = snapshot.answered_by ? snapshot.answered_by !== 'none' : snapshot.online;
+    state.canStartChat = snapshot.can_start_chat;
   }
 
   /**
@@ -1711,7 +1727,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       state.prospectFields = api.prospectForm;
       renderOfflineFields();
       state.connected = true;
-      state.online = snapshot.online;
+      applyAvailability(snapshot);
       state.chatId = snapshot.chat?.id ?? null;
       state.threadId = snapshot.chat?.thread_id ?? null;
       state.queuePosition = snapshot.chat?.queue_position ?? null;
@@ -2020,7 +2036,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     try {
       const previousChatId = state.chatId;
       const previousThreadId = state.threadId;
-      state.online = snapshot.online;
+      applyAvailability(snapshot);
       state.chatId = snapshot.chat?.id ?? null;
       state.threadId = snapshot.chat?.thread_id ?? null;
       state.queuePosition = snapshot.chat?.queue_position ?? null;

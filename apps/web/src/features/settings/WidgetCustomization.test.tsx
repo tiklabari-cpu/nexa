@@ -144,6 +144,32 @@ describe('WidgetCustomization', () => {
     expect(putBodies[0]).toEqual({ language: 'en', fallback_language: 'de' });
   });
 
+  it('chooses when visitors can start a chat, saying what each choice does (WG-09)', async () => {
+    renderWidget();
+    const group = await screen.findByRole('group', { name: 'Availability' });
+    // The label carries its "what happens" list, so the radio's name starts with it.
+    const always = within(group).getByRole('radio', { name: /^Always/ });
+    const agentsOnly = within(group).getByRole('radio', {
+      name: /^Only when agents are accepting chats/,
+    });
+    // A row never saved reads `always`.
+    expect(always).toBeChecked();
+    expect(
+      within(group).getByText(
+        'With nobody available, the chat waits unassigned until an agent takes it.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(group).getByText(/the widget shows a leave-a-message form instead/),
+    ).toBeInTheDocument();
+
+    await userEvent.click(agentsOnly);
+    expect(agentsOnly).toBeChecked();
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(putBodies).toHaveLength(1));
+    expect(putBodies[0]).toEqual({ availability_mode: 'agents_only' });
+  });
+
   it('says a language in the install snippet beats the panel setting (WG-02)', async () => {
     renderWidget();
     expect(await screen.findByText(/install snippet \(data-language\) overrides/)).toBeVisible();

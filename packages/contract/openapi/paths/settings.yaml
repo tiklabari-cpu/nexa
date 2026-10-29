@@ -1734,6 +1734,16 @@ widgetSettings:
                 type: string
                 enum: [en, tr, de, fr, es, it, pt, ar]
                 description: What `auto` falls back to when the browser speaks none of the eight.
+              availability_mode:
+                type: string
+                enum: [always, agents_only]
+                description: |
+                  When a visitor may start a chat (WG-09). `always`: a chat
+                  opens whoever is there and waits unassigned when nobody is.
+                  `agents_only`: with no AI to answer and nobody accepting
+                  chats, the widget offers the offline form instead (name,
+                  e-mail and message, plus any ticket/prospect questions). An
+                  AI that would answer keeps the chat open in either mode.
     responses:
       "200":
         description: Updated

@@ -21,11 +21,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type ReactElement } from 'react';
 import {
   DEFAULT_WIDGET_APPEARANCE,
+  DEFAULT_WIDGET_AVAILABILITY_MODE,
+  WIDGET_AVAILABILITY_MODES,
   WIDGET_COLOR_PATTERN,
   WIDGET_UI_LOCALES,
   WIDGET_WELCOME_TEXT_MAX,
   WIDGET_WELCOME_TITLE_MAX,
   type WidgetAppearance,
+  type WidgetAvailabilityMode,
   type WidgetLanguage,
   type WidgetPosition,
   type WidgetUiLocale,
@@ -39,12 +42,15 @@ import { useApiClient, useBrand } from '../../lib/auth-store.js';
 import { useEntitlementNote } from '../../lib/entitlement-note.js';
 import { useTranslate } from '../../lib/i18n.js';
 
-interface WidgetSettings extends WidgetAppearance {
+/** The appearance plus when visitors may start a chat (WG-09), which the widget does not render. */
+type WidgetForm = WidgetAppearance & { availability_mode: WidgetAvailabilityMode };
+
+interface WidgetSettings extends WidgetForm {
   updated_at: string | null;
 }
 
 /** The editable subset — everything but the read-only `updated_at`. */
-type Edits = Partial<WidgetAppearance>;
+type Edits = Partial<WidgetForm>;
 
 export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactElement {
   const t = useTranslate();
@@ -91,13 +97,14 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
   // The unsaved draft: server values with the pending edits laid over them, or
   // the shipped defaults until the first load resolves.
   const current = settings.data;
-  const value: WidgetAppearance = {
+  const value: WidgetForm = {
     ...DEFAULT_WIDGET_APPEARANCE,
+    availability_mode: DEFAULT_WIDGET_AVAILABILITY_MODE,
     ...(current ?? {}),
     ...edits,
   };
   const dirty = Object.keys(edits).length > 0;
-  const set = <K extends keyof WidgetAppearance>(key: K, next: WidgetAppearance[K]): void =>
+  const set = <K extends keyof WidgetForm>(key: K, next: WidgetForm[K]): void =>
     setEdits((prev) => ({ ...prev, [key]: next }));
 
   const colorValid = WIDGET_COLOR_PATTERN.test(value.primary_color);
@@ -190,6 +197,11 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
                   text={value.welcome_text ?? ''}
                   onTitleChange={(next) => set('welcome_title', next)}
                   onTextChange={(next) => set('welcome_text', next)}
+                />
+
+                <AvailabilityControl
+                  value={value.availability_mode}
+                  onChange={(next) => set('availability_mode', next)}
                 />
               </fieldset>
 
@@ -350,6 +362,62 @@ function ToggleControl({
         <span className="block text-2xs text-content-tertiary">{hint}</span>
       </span>
     </label>
+  );
+}
+
+/**
+ * When visitors may start a chat (WG-09): two choices, each with what it
+ * does, so the admin reads the consequence before saving rather than finding
+ * out from a player at night.
+ */
+function AvailabilityControl({
+  value,
+  onChange,
+}: {
+  value: WidgetAvailabilityMode;
+  onChange: (next: WidgetAvailabilityMode) => void;
+}): ReactElement {
+  const t = useTranslate();
+  return (
+    <fieldset
+      className="flex flex-col gap-2 border-0 p-0"
+      aria-describedby="widget-availability-hint"
+    >
+      <legend className="mb-1 text-sm font-medium">
+        {t('settings.widgetCustomization.availabilityLegend')}
+      </legend>
+      <p id="widget-availability-hint" className="text-2xs text-content-tertiary">
+        {t('settings.widgetCustomization.availabilityHint')}
+      </p>
+      {WIDGET_AVAILABILITY_MODES.map((mode) => (
+        <label
+          key={mode}
+          className={`flex cursor-pointer items-start gap-2 rounded-md border p-2.5 text-sm transition-colors ${
+            value === mode
+              ? 'border-brand-500 bg-brand-100 dark:bg-brand-950'
+              : 'border-border hover:bg-surface-2'
+          }`}
+        >
+          <input
+            type="radio"
+            name="widget-availability"
+            value={mode}
+            checked={value === mode}
+            onChange={() => onChange(mode)}
+            className="mt-1"
+          />
+          <span className="flex flex-col gap-1">
+            <span className="font-medium text-content">
+              {t(`settings.widgetCustomization.availability.${mode}`)}
+            </span>
+            <ul className="list-disc pl-4 text-2xs text-content-secondary">
+              <li>{t(`settings.widgetCustomization.availability.${mode}What1`)}</li>
+              <li>{t(`settings.widgetCustomization.availability.${mode}What2`)}</li>
+            </ul>
+          </span>
+        </label>
+      ))}
+    </fieldset>
   );
 }
 

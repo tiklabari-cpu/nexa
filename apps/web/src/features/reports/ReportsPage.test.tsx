@@ -536,9 +536,13 @@ const REVIEWS_BASE = {
   },
 };
 
-function mockReviews(overrides: Partial<typeof REVIEWS_BASE>): void {
+function mockReviews(
+  overrides: Partial<typeof REVIEWS_BASE>,
+  comments: { items: unknown[]; next_page_id?: string } = { items: [] },
+): void {
   const payload = { ...REVIEWS_BASE, ...overrides };
   api.get.mockImplementation((path: string) => {
+    if (path.startsWith('/reports/reviews/comments')) return Promise.resolve(comments);
     if (path.startsWith('/reports/reviews')) return Promise.resolve(payload);
     if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
     if (path === '/reports/share-links') return Promise.resolve({ items: [] });
@@ -661,6 +665,58 @@ describe('ReportsPage — Reviews report (07.8)', () => {
     await openReviewsTab();
 
     expect(api.get).toHaveBeenCalledWith(expect.stringMatching(/^\/reports\/reviews\?from=.*&to=/));
+  });
+
+  // --- Comments (WG-11 · tm 337) ------------------------------------------
+
+  it("lists the players' comments in the window, each with its connection, and narrows to the bad ones", async () => {
+    const comment = (id: string, value: 'good' | 'bad', text: string) => ({
+      rating_id: id,
+      chat_id: 'DAY1',
+      thread_id: `C-${id}`,
+      value,
+      comment: text,
+      rated_at: '2026-07-21T10:00:00.000Z',
+      customer: { id: 'cust-1', name: 'Mira Kaya' },
+      assignee: { id: 'a-1', name: 'Agent Bora' },
+    });
+    mockReviews(
+      {},
+      {
+        items: [comment('r1', 'bad', 'Withdrawal still pending'), comment('r2', 'good', 'Quick')],
+        next_page_id: 'p2',
+      },
+    );
+    renderReports(<ReportsPage />);
+    await openReviewsTab();
+
+    const list = await screen.findByTestId('review-comments');
+    expect(within(list).getByText('Withdrawal still pending')).toBeInTheDocument();
+    expect(within(list).getAllByTestId('rating-badge')[0]).toHaveTextContent(
+      'Rated bad (with a comment)',
+    );
+    // The connection's Chat ID opens it in the archive.
+    expect(within(list).getByRole('link', { name: 'C-r1' })).toHaveAttribute(
+      'href',
+      '/app/archive?c=C-r1',
+    );
+    expect(within(list).getAllByText(/handled by Agent Bora/)).toHaveLength(2);
+    expect(api.get).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/reports\/reviews\/comments\?from=.*&to=.*&limit=20$/),
+    );
+    expect(screen.getByRole('button', { name: 'Load more' })).toBeInTheDocument();
+
+    await userEvent.selectOptions(screen.getByLabelText('Show'), 'bad');
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith(expect.stringMatching(/comments\?.*&value=bad$/)),
+    );
+  });
+
+  it('says so when no player has commented in the window', async () => {
+    mockReviews({});
+    renderReports(<ReportsPage />);
+    await openReviewsTab();
+    expect(await screen.findByText('No comments yet')).toBeInTheDocument();
   });
 
   // --- Insights (FR-MOD-07.8) ---------------------------------------------

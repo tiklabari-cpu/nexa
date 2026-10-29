@@ -228,6 +228,48 @@ reviews:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+reviewComments:
+  get:
+    tags: [Reports]
+    operationId: listReportsReviewComments
+    summary: Reviews — the comments players left with their ratings
+    description: |
+      The comments beside the Reviews report's figures (WG-11): every
+      connection rated in the window whose rating carries a comment, newest
+      first, `limit` at a time — `next_page_id` while more remain. The window
+      is the rating's time, as on the report. `value` narrows to the good or
+      the bad ones.
+
+      What a caller reads is bounded by `ratings.view` (AR-03-S1): an Ekip
+      Üyesi sees only the comments on their own connections, an Ekip Lideri and
+      up every one, unless the workspace chose otherwise. The comment is plain
+      text, its sensitive values masked when it was stored.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
+      - name: value
+        in: query
+        required: false
+        schema: { type: string, enum: [good, bad] }
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      - name: page_id
+        in: query
+        required: false
+        schema: { type: string, maxLength: 200 }
+    responses:
+      "200":
+        description: One page of rating comments
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ReviewCommentList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 topics:
   get:
     tags: [Reports]

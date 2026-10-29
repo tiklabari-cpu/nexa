@@ -73,6 +73,7 @@ import type { Principal } from '../auth/principal.js';
 import { resolveVisibility, type ChatVisibility } from '../chat/access.js';
 import { readDayBoundary } from '../chat/day-boundary.js';
 import { seesPlayerContact } from '../customers/player-contact.js';
+import { ratingReachSql, resolveRatingReach } from '../ratings/rating-reach.js';
 import {
   applyTenantWindows,
   capRetentionForHipaa,
@@ -179,6 +180,9 @@ export class ArchiveService {
     );
     const visibility = await resolveVisibility(tx, principal, 'read');
     const cutoff = await this.#retentionCutoff(tx, tenant);
+    // The rating a row shows and the one its filter reads are the same: the
+    // caller's `ratings.view` (AR-03-S1), outside which a rating reads as none.
+    const reach = await resolveRatingReach(tx, principal);
 
     // Everything that says what the list is — the cursor deliberately left
     // out, so `total` counts the list rather than what is left of it.
@@ -188,12 +192,17 @@ export class ArchiveService {
       ...(cutoff ? [Prisma.sql`(t.closed_at IS NULL OR t.closed_at >= ${cutoff})`] : []),
       ...(input.customerId ? [Prisma.sql`c.customer_id = ${input.customerId}::uuid`] : []),
       visibilitySql(visibility),
-      ...filterSql(tenant.licenseId, filters, range, input.status),
+      ...filterSql(tenant.licenseId, filters, range, input.status, ratingReachSql(reach, 't')),
     ];
     const paged = cursor ? [...where, cursorSql(cursor)] : where;
 
     const rows = await tx.$queryRaw<Row[]>(
-      pageSql(tenant.licenseId, Prisma.join(paged, ' AND '), input.limit + 1),
+      pageSql(
+        tenant.licenseId,
+        Prisma.join(paged, ' AND '),
+        input.limit + 1,
+        ratingReachSql(reach, 'p'),
+      ),
     );
     const [counted] = await tx.$queryRaw<Array<{ n: number }>>`
       SELECT count(*)::int AS n FROM (
@@ -226,6 +235,7 @@ export class ArchiveService {
     threadId: string,
   ): Promise<ArchiveConversationDetail> {
     const visibility = await resolveVisibility(tx, principal, 'read');
+    const reach = await resolveRatingReach(tx, principal);
     const where = Prisma.join(
       [
         Prisma.sql`t.license_id = ${tenant.licenseId}`,
@@ -234,7 +244,9 @@ export class ArchiveService {
       ],
       ' AND ',
     );
-    const [row] = await tx.$queryRaw<Row[]>(pageSql(tenant.licenseId, where, 1));
+    const [row] = await tx.$queryRaw<Row[]>(
+      pageSql(tenant.licenseId, where, 1, ratingReachSql(reach, 'p')),
+    );
     if (!row) throw ApiError.notFound('Conversation not found.');
 
     const cutoff = await this.#retentionCutoff(tx, tenant);
@@ -310,7 +322,7 @@ function statusSql(status: ArchiveStatus): Prisma.Sql {
  * will not rewrite into `= ANY (hashed …)`, so each row costs one primary-key
  * lookup on `chat_access (chat_id, group_id)`.
  */
-function visibilitySql(visibility: ChatVisibility): Prisma.Sql {
+export function visibilitySql(visibility: ChatVisibility): Prisma.Sql {
   if (visibility.isCustomer) return Prisma.sql`c.customer_id = ${visibility.actorId}::uuid`;
   if (visibility.unrestricted) return Prisma.sql`TRUE`;
   const groups = `{${visibility.groupIds.join(',')}}`;
@@ -336,12 +348,20 @@ function cursorSql(cursor: Cursor): Prisma.Sql {
   return Prisma.sql`(t.closed_at <= ${at} AND (t.closed_at < ${at} OR t.id < ${cursor.id}))`;
 }
 
-/** The page: its rows chosen by `where`, then described — one statement. */
-function pageSql(licenseId: bigint, where: Prisma.Sql, limit: number): Prisma.Sql {
+/**
+ * The page: its rows chosen by `where`, then described — one statement. The
+ * rating is read only where `ratingReach` (over the page row `p`) allows.
+ */
+function pageSql(
+  licenseId: bigint,
+  where: Prisma.Sql,
+  limit: number,
+  ratingReach: Prisma.Sql,
+): Prisma.Sql {
   return Prisma.sql`
     WITH page AS (
       SELECT t.id, t.chat_id, t.created_at, t.closed_at, t.assignee_id, t.group_id,
-             t.handled_by, t.summary, t.risk_flags, c.customer_id,
+             t.agent_ids, t.handled_by, t.summary, t.risk_flags, c.customer_id,
              (extract(epoch FROM t.closed_at) * 1000000)::bigint AS closed_key
       FROM threads t
       JOIN chats c ON c.id = t.chat_id
@@ -376,7 +396,7 @@ function pageSql(licenseId: bigint, where: Prisma.Sql, limit: number): Prisma.Sq
     LEFT JOIN accounts a ON a.id = p.assignee_id
     LEFT JOIN LATERAL (
       SELECT rt.value, rt.comment, rt.created_at FROM ratings rt
-      WHERE rt.license_id = ${licenseId} AND rt.thread_id = p.id
+      WHERE rt.license_id = ${licenseId} AND rt.thread_id = p.id AND ${ratingReach}
       ORDER BY rt.created_at DESC, rt.id DESC
       LIMIT 1
     ) r ON TRUE

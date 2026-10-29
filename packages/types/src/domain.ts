@@ -376,6 +376,37 @@ export type UsageMetric = (typeof USAGE_METRICS)[number];
 export const RATING_VALUES = ['good', 'bad'] as const;
 export type RatingValue = (typeof RATING_VALUES)[number];
 
+/** A rating comment's longest length, as the widget offers it and the API accepts it (WG-11). */
+export const RATING_COMMENT_MAX = 1000;
+
+/**
+ * A connection's rating as an agent reads it (AR-03 · WG-11): the chat's
+ * `thread.rating` and the archive's detail. `comment` is plain text, masked.
+ */
+export interface ThreadRating {
+  value: RatingValue;
+  has_comment: boolean;
+  comment: string | null;
+  rated_at: string;
+}
+
+/** One commented rating in the Reviews report's list (`GET /reports/reviews/comments`). */
+export interface ReviewComment {
+  rating_id: string;
+  chat_id: string;
+  thread_id: string;
+  value: RatingValue;
+  comment: string;
+  rated_at: string;
+  customer: { id: string; name: string | null };
+  assignee: { id: string; name: string } | null;
+}
+
+export interface ReviewCommentList {
+  items: ReviewComment[];
+  next_page_id?: string;
+}
+
 // --- Region (ADR-12: chosen at signup, immutable afterwards) ----------------
 //
 // Two values since C4 (NFR-C4/C9): an enterprise buying HIPAA cover needs its

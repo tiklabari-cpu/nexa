@@ -336,6 +336,20 @@ export const reports: Messages = {
     'CSAT {rate}: {responses} değerlendirmenin {good} tanesi olumlu.',
   'reports.reviews.csat.donutUnknown': 'bilinmiyor',
   'reports.reviews.byDay.title': 'Güne göre değerlendirmeler',
+  'reports.reviews.comments.title': 'Yorumlar',
+  'reports.reviews.comments.description':
+    'Oyuncuların bu dönemde puanlarıyla birlikte yazdıkları, en yenisi önce.',
+  'reports.reviews.comments.filter': 'Göster',
+  'reports.reviews.comments.all': 'Tüm puanlar',
+  'reports.reviews.comments.bad': 'Kötü puanlar',
+  'reports.reviews.comments.good': 'İyi puanlar',
+  'reports.reviews.comments.loading': 'Yorumlar yükleniyor…',
+  'reports.reviews.comments.error': 'Yorumlar yüklenemedi. Biraz sonra yeniden deneyin.',
+  'reports.reviews.comments.emptyTitle': 'Henüz yorum yok',
+  'reports.reviews.comments.emptyDescription':
+    'Bir oyuncu puanına yorum eklediğinde burada görünür.',
+  'reports.reviews.comments.handledBy': 'ilgilenen: {name}',
+  'reports.reviews.comments.more': 'Daha fazla yükle',
   'reports.reviews.byDay.description':
     'Aralıktaki her UTC günü için günlük değerlendirme hacmi, olumlu ve olumsuz.',
   'reports.reviews.byDay.emptyTitle': 'Bu aralıkta değerlendirme yok',

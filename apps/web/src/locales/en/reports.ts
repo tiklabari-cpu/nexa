@@ -346,6 +346,20 @@ export const reports: Messages = {
   'reports.reviews.csat.donutLabel': 'CSAT {rate}: {good} of {responses} rated good.',
   'reports.reviews.csat.donutUnknown': 'unknown',
   'reports.reviews.byDay.title': 'Ratings by day',
+  'reports.reviews.comments.title': 'Comments',
+  'reports.reviews.comments.description':
+    'What players wrote with their rating in this period, newest first.',
+  'reports.reviews.comments.filter': 'Show',
+  'reports.reviews.comments.all': 'All ratings',
+  'reports.reviews.comments.bad': 'Bad ratings',
+  'reports.reviews.comments.good': 'Good ratings',
+  'reports.reviews.comments.loading': 'Loading comments…',
+  'reports.reviews.comments.error': 'The comments could not be loaded. Try again in a moment.',
+  'reports.reviews.comments.emptyTitle': 'No comments yet',
+  'reports.reviews.comments.emptyDescription':
+    'When a player adds a comment to their rating, it appears here.',
+  'reports.reviews.comments.handledBy': 'handled by {name}',
+  'reports.reviews.comments.more': 'Load more',
   'reports.reviews.byDay.description':
     'Daily rating volume, good vs bad, over each UTC day in the window.',
   'reports.reviews.byDay.emptyTitle': 'No ratings in this window',

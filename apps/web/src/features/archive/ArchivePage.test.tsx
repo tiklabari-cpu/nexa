@@ -216,7 +216,7 @@ describe('Archive list', () => {
 
     expect(within(rows[1]!).getByText('bonus')).toBeInTheDocument();
     expect(within(rows[1]!).getByText(/Agent Bora/)).toBeInTheDocument();
-    expect(within(rows[1]!).getByText('Rated bad')).toBeInTheDocument();
+    expect(within(rows[1]!).getByText('Rated bad (with a comment)')).toBeInTheDocument();
 
     // The third has none of those — they are not the day's latest connection's.
     expect(within(rows[2]!).queryByText('bonus')).toBeNull();
@@ -312,7 +312,7 @@ describe('Archive conversation', () => {
     expect(await within(panel).findByTestId('player-card')).toBeInTheDocument();
     const facts = within(panel).getByTestId('archive-facts');
     expect(within(facts).getByText('Agent Bora')).toBeInTheDocument();
-    expect(within(facts).getByText('Rated bad')).toBeInTheDocument();
+    expect(within(facts).getByText('Rated bad (with a comment)')).toBeInTheDocument();
     expect(within(facts).getByText('Took too long')).toBeInTheDocument();
     expect(within(facts).getByText('Handled by the AI')).toBeInTheDocument();
 

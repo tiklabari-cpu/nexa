@@ -2,6 +2,7 @@ import type {
   AiHandoffCardView,
   CustomFieldValue,
   ThreadPriority,
+  ThreadRating,
   TicketMessageAttachment,
   TicketMessageAuthorType,
   TicketMessageDeliveryStatus,
@@ -134,6 +135,11 @@ export interface ChatDetail {
     ai_mode?: AiMode | null;
     /** Whether the AI ever answered in the connection — on the single-chat read only. */
     ai_took_part?: boolean;
+    /**
+     * The player's rating and comment (AR-03 · WG-11), on the single-chat read
+     * only; null when unrated or not the caller's to see (`ratings.view`).
+     */
+    rating?: ThreadRating | null;
     tags: string[];
   } | null;
   /** The conversation day (`YYYY-MM-DD`) this chat is filed under; null before ID-02. */

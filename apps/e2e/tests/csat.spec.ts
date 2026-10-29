@@ -394,3 +394,90 @@ test('a visitor back the same day is asked again for the new connection, and bot
     await visitorContext.close();
   }
 });
+
+/**
+ * A bad vote with a comment (AR-03 · WG-11 · tm 337). The comment arrives as a
+ * second call for the same connection and must land on the vote rather than
+ * count as another; the agent who has the conversation open sees both as they
+ * are given (`chat_rated`), and the archive's row says the rating carries one.
+ */
+test("a 👎 with a comment is one rating, shown in the open Inbox at once and in the archive with the player's words (AR-03 · WG-11)", async ({
+  browser,
+  organizationId,
+}) => {
+  test.slow();
+
+  const visitorContext = await browser.newContext();
+  const agentContext = await browser.newContext();
+  const visitor = await visitorContext.newPage();
+  const agent = await agentContext.newPage();
+  const stamp = Date.now().toString().slice(-6);
+  const question = `Where is my withdrawal? — ${stamp}`;
+  const comment = `Three days and still pending ${stamp}`;
+
+  try {
+    await signIn(agent);
+    await agent.getByLabel('Availability').selectOption('accepting_chats');
+
+    await openWidget(visitor, organizationId);
+    await visitorSends(visitor, question);
+    const frame = widgetFrame(visitor);
+
+    const list = agent.getByRole('region', { name: 'Conversations' });
+    await expect(list).toContainText(question, { timeout: 20_000 });
+    await list.getByRole('button').first().click();
+    await expect(agent.locator('main')).toContainText(question);
+    const details = agent.getByRole('complementary', { name: 'Conversation details' });
+    await expect(details.getByTestId('rating-badge')).toHaveCount(0);
+
+    // --- The player votes early from the menu, then explains ----------------
+    const before = await csat();
+    await frame.getByRole('button', { name: 'More options' }).click();
+    await frame.getByRole('menuitem', { name: 'Rate this chat' }).click();
+    const rating = frame.getByRole('group', { name: 'Rate this chat' });
+    await rating.getByRole('button', { name: '👎 Not good' }).click();
+    // After a bad vote the box is open at once.
+    const box = rating.getByRole('textbox', { name: "Anything you'd like to add?" });
+    await expect(box).toBeVisible();
+    await box.fill(comment);
+    const commented = visitor.waitForResponse(
+      (response) =>
+        response.url().endsWith('/customer/chat/rating') && response.request().method() === 'POST',
+    );
+    await rating.getByRole('button', { name: 'Send comment' }).click();
+    // Written onto the vote: 200, not a second 201.
+    expect((await commented).status()).toBe(200);
+    await expect(rating.getByText('Thanks — we have your comment.')).toBeVisible();
+    await visitor.screenshot({ path: 'kanit/ar-03-widget-comment.png', fullPage: true });
+
+    // --- The agent sees it without reloading (`chat_rated`) ----------------
+    await expect(details.getByTestId('rating-badge')).toHaveText(/Rated bad \(with a comment\)/, {
+      timeout: 15_000,
+    });
+    await expect(details.getByText(comment)).toBeVisible();
+
+    // One vote, however many calls it took.
+    await expect.poll(async () => (await csat()).bad, { timeout: 20_000 }).toBe(before.bad + 1);
+    expect((await csat()).responses).toBe(before.responses + 1);
+
+    // --- The archive: the row says so, the detail has the words ------------
+    await frame.getByRole('button', { name: 'More options' }).click();
+    await frame.getByRole('menuitem', { name: 'End chat' }).click();
+    await frame
+      .getByRole('dialog', { name: 'End this chat?' })
+      .getByRole('button', { name: 'End chat' })
+      .click();
+    await expect(frame.getByText('Chat ended.')).toBeVisible();
+
+    await agent.goto('/app/archive');
+    const row = agent.getByRole('button').filter({ hasText: question }).first();
+    await expect(row).toBeVisible({ timeout: 20_000 });
+    await expect(row.getByTestId('rating-badge')).toHaveText(/Rated bad \(with a comment\)/);
+    await row.click();
+    await expect(agent.getByTestId('archive-facts')).toContainText(comment);
+    await agent.screenshot({ path: 'kanit/ar-03-archive-rating.png', fullPage: true });
+  } finally {
+    await visitorContext.close();
+    await agentContext.close();
+  }
+});

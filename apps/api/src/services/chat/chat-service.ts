@@ -30,6 +30,7 @@ import {
   isWithinEditWindow,
   MESSAGE_EDIT_WINDOW_SECONDS,
   readSensitiveTypes,
+  RATING_VALUES,
   RESPONSIBLE_GAMBLING_ROLE,
   SENSITIVE_TYPES,
   SENSITIVE_TYPES_PROPERTY,
@@ -63,6 +64,9 @@ import {
   type TransferReason,
   type AiHandoffCardView,
   type MessageSearchMatch,
+  type ChatRatedPush,
+  type RatingValue,
+  type ThreadRating,
 } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import { maskForWrite, sensitiveAuthorOf, type MaskedForWrite } from '../../lib/sensitive-mask.js';
@@ -100,6 +104,8 @@ import { recordFirstHumanReply, settleOutcomeAtClose } from '../reports/ai-outco
 import { recordAbandonment } from './ai-unresolved.js';
 import { serialiseAiHandoff } from './ai-handoff-view.js';
 import { seesPlayerContact } from '../customers/player-contact.js';
+import { reachesRating, resolveRatingReach } from '../ratings/rating-reach.js';
+import { hasRatingComment } from '../ratings/rating-service.js';
 import {
   AI_MODE_SYSTEM_ACTOR,
   aiModeNoteText,
@@ -606,6 +612,7 @@ export class ChatService {
             select: { id: true },
           });
           detail.thread.ai_took_part = turn !== null;
+          detail.thread.rating = await this.#threadRating(tx, principal, chat);
         }
         // The newest hand-over card (tm 304.1 · AI-10 §9): the inbox reads it
         // with the chat, in one query.
@@ -2073,6 +2080,68 @@ export class ChatService {
     const audience = this.#audienceFor(chat);
     if (event) await this.#announceEvent(tenant, { event, recipients: 'agents', audience });
     return { groupIds: audience.groupIds, agentIds: audience.agentIds };
+  }
+
+  /**
+   * The newest connection's rating (AR-03 · WG-11) as the caller may see it —
+   * `ratings.view`, outside which there is none — its newest row, as the
+   * archive reads it.
+   */
+  async #threadRating(
+    tx: TenantClient,
+    principal: Principal,
+    chat: ChatRow,
+  ): Promise<ThreadRating | null> {
+    const thread = chat.threads[0];
+    if (!thread) return null;
+    const reach = await resolveRatingReach(tx, principal);
+    const groups = chat.access.map((a) => a.groupId);
+    if (!reachesRating(reach, thread, groups)) return null;
+    const row = await tx.rating.findFirst({
+      where: { threadId: thread.id },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: { value: true, comment: true, createdAt: true },
+    });
+    if (!row || !(RATING_VALUES as readonly string[]).includes(row.value)) return null;
+    const commented = hasRatingComment(row.comment);
+    return {
+      value: row.value as RatingValue,
+      has_comment: commented,
+      comment: commented ? row.comment : null,
+      rated_at: row.createdAt.toISOString(),
+    };
+  }
+
+  /**
+   * After commit: the player rated connection `ref.threadId` or commented on
+   * its rating (AR-03 · WG-11) — `chat_rated` to the chat's agents and teams.
+   * Ids only: each reader re-reads the chat, whose rating `ratings.view`
+   * shows or withholds.
+   */
+  async announceRated(
+    tenant: TenantContext,
+    ref: { chatId: string; threadId: string },
+  ): Promise<void> {
+    if (!this.publisher) return;
+    const chat = await withTenant(this.db, tenant, (tx) =>
+      tx.chat.findUnique({
+        where: { id: ref.chatId },
+        select: {
+          customerId: true,
+          access: { select: { groupId: true } },
+          users: { select: { userId: true, userType: true } },
+        },
+      }),
+    );
+    if (!chat) return;
+    const audience = this.#audienceFor(chat);
+    if (audience.groupIds.length === 0 && audience.agentIds.length === 0) return;
+    await this.publisher.publish(
+      tenant,
+      'chat_rated',
+      { groupIds: audience.groupIds, agentIds: audience.agentIds },
+      { chat_id: ref.chatId, thread_id: ref.threadId } satisfies ChatRatedPush,
+    );
   }
 
   /**
@@ -5687,6 +5756,8 @@ export interface ChatDetail {
     ai_mode: AiConversationMode | null;
     /** Whether the AI answered in the connection — only on an agent's `get`. */
     ai_took_part?: boolean;
+    /** The player's rating, as the caller may see it (`ratings.view`) — only on an agent's `get`. */
+    rating?: ThreadRating | null;
     tags: string[];
   } | null;
   /**
@@ -5738,6 +5809,8 @@ interface ThreadRow {
   closedAt: Date | null;
   openedVia: string | null;
   groupId: bigint | null;
+  /** Who wrote to the player on it, written at the close (`threads.agent_ids`); read by `ratings.view`. */
+  agentIds?: string[];
   /** One of `AI_CONVERSATION_MODES` (the column's CHECK), or null. */
   aiMode: string | null;
   /** `THREAD_PRIORITY_RANK` (the column's CHECK). */

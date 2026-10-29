@@ -1735,6 +1735,10 @@ const CAPABILITY_LABELS: Record<CapabilityKey, { en: string; tr: string }> = {
   'chats.view': { en: 'View chats', tr: 'Sohbetleri görme' },
   'chats.takeover': { en: 'Take over a chat', tr: 'Sohbeti devralma' },
   'timeline.view': { en: "View a chat's timeline", tr: 'Sohbetin zaman çizelgesini görme' },
+  'ratings.view': {
+    en: "See players' ratings and comments",
+    tr: 'Oyuncu puanlarını ve yorumlarını görme',
+  },
   'tickets.view': { en: 'View tickets', tr: 'Talepleri görme' },
   'customers.contact.view': {
     en: "See a player's email and username",

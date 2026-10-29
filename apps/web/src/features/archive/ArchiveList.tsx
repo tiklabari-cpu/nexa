@@ -11,6 +11,7 @@ import type { ReactElement } from 'react';
 import type { ArchiveConversation } from '@siyahtus/types';
 import { EmptyState } from '../../components/EmptyState.js';
 import { LoadError } from '../../components/LoadError.js';
+import { RatingBadge } from '../../components/RatingBadge.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { formatCount, formatDateTime, formatTime } from '../../lib/format.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
@@ -215,13 +216,7 @@ function ArchiveRow({
             </span>
           )}
           {row.rating && (
-            <span
-              className={`shrink-0 rounded-sm bg-inset px-1.5 py-0.5 text-2xs ${
-                row.rating.value === 'bad' ? 'text-danger' : 'text-success'
-              }`}
-            >
-              {t(`archive.rating.${row.rating.value}`)}
-            </span>
+            <RatingBadge value={row.rating.value} hasComment={row.rating.has_comment} />
           )}
           {row.risk_flags.length > 0 && (
             <span

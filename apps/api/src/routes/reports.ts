@@ -18,9 +18,14 @@ import {
   hasAnyScope,
   isWorkScheduleProblem,
   normalizeWorkSchedule,
+  RATING_VALUES,
   type GoalFunnel,
 } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
+import { visibilitySql } from '../services/archive/archive-service.js';
+import { resolveVisibility } from '../services/chat/access.js';
+import { resolveRatingReach } from '../services/ratings/rating-reach.js';
+import { listReviewComments } from '../services/ratings/rating-service.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import {
   BENCHMARK_BASELINES,
@@ -292,6 +297,13 @@ const aiMetricsFilterQuery = z.object({
 
 const aiMetricsBreakdownQuery = aiMetricsFilterQuery.extend({
   by: z.enum(AI_METRICS_BREAKDOWN_DIMENSIONS),
+});
+
+/** `GET /reports/reviews/comments` beside the report window (WG-11). */
+const reviewCommentsQuery = z.object({
+  value: z.enum(RATING_VALUES).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  page_id: z.string().min(1).max(200).optional(),
 });
 
 const aiMetricsConversationsQuery = aiMetricsFilterQuery.extend({
@@ -1667,6 +1679,32 @@ export default async function reportRoutes(
     );
     return reply.send(body);
   });
+
+  // The comments players left with their ratings (WG-11 · tm 337), beside the
+  // Reviews figures: newest first, a page at a time, inside the chat
+  // visibility and the caller's `ratings.view` (AR-03-S1).
+  app.get(
+    '/reports/reviews/comments',
+    { config: { scopes: ['reports_read'] } },
+    async (request, reply) => {
+      const { from, to } = resolveReportQuery(request.query);
+      const query = parse(reviewCommentsQuery, request.query);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
+      const body = await request.withTenantRead(async (tx) => {
+        const visibility = await resolveVisibility(tx, principal, 'read');
+        const reach = await resolveRatingReach(tx, principal);
+        return listReviewComments(tx, tenant.licenseId, reach, visibilitySql(visibility), {
+          from,
+          to,
+          value: query.value,
+          limit: query.limit,
+          pageId: query.page_id,
+        });
+      });
+      return reply.send(body);
+    },
+  );
 
   // Chat topics (FR-MOD-07.6): conversations clustered into topics with volume
   // and trend. Clustering is deterministic and on-the-fly (@siyahtus/ai-mock, no real

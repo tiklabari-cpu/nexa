@@ -1514,6 +1514,7 @@ export const settings: Messages = {
   'permissions.capability.chats.view': 'Sohbetleri görme',
   'permissions.capability.chats.takeover': 'Sohbeti devralma',
   'permissions.capability.timeline.view': 'Sohbetin zaman çizelgesini görme',
+  'permissions.capability.ratings.view': 'Oyuncu puanlarını ve yorumlarını görme',
   'permissions.capability.tickets.view': 'Talepleri görme',
   'permissions.capability.customers.contact.view': 'Oyuncunun e-postasını ve kullanıcı adını görme',
   'permissions.capability.customers.edit': 'Oyuncu kayıtlarını düzenleme',

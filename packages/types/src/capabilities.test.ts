@@ -267,6 +267,18 @@ describe('the owner’s K7 defaults (tm 325.5)', () => {
     }
   });
 
+  it("shows a player's rating to an Ekip Üyesi on their own conversations and to an Ekip Lideri and up on every one (AR-03-S1)", () => {
+    expect(at('owner')['ratings.view']).toBe('all');
+    expect(at('admin')['ratings.view']).toBe('all');
+    expect(at('team_lead')['ratings.view']).toBe('all');
+    expect(at('agent')['ratings.view']).toBe('own');
+    // The Founder may narrow a lead to their teams, or open a member's to theirs.
+    expect(capabilityChangeProblem(set('team_lead', 'ratings.view', 'team'))).toBeNull();
+    expect(capabilityChangeProblem(set('agent', 'ratings.view', 'team'))).toBeNull();
+    // A checked row: the role sets stay what they were.
+    expect(def('ratings.view').scopes).toEqual({});
+  });
+
   it('lets a Yönetici read billing and not change it, in a cell the Founder cannot unlock (FR-MOD-04.RBAC)', () => {
     for (const role of ['admin', 'viceowner']) {
       expect(at(role)['billing.manage'], role).toBe('off');

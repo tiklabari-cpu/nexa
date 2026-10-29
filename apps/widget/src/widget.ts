@@ -289,10 +289,18 @@ interface State {
    * The CSAT prompt (FR-MOD-07.8/11): `chatId` is whichever chat it targets —
    * the one that just closed, or the current one when opened early from the
    * header menu. `value` is null until the vote round-trips, which flips the
-   * prompt to a "thanks" state; voting again still posts (the server neither
-   * blocks nor dedupes a second rating, so the UI does not either).
+   * prompt to a "thanks" state; voting again still posts, and the server
+   * writes it onto the connection's one rating. `commentOpen`: the visitor
+   * asked to add a comment to a good vote (a bad one offers it at once);
+   * `commented`: one was sent (WG-11).
    */
-  rating: { chatId: string; threadId: string | null; value: 'good' | 'bad' | null } | null;
+  rating: {
+    chatId: string;
+    threadId: string | null;
+    value: 'good' | 'bad' | null;
+    commentOpen?: boolean;
+    commented?: boolean;
+  } | null;
   ratingSubmitting: boolean;
   /**
    * The visitor's chat has ended — by their own "End chat" (FR-MOD-11.4-b) or
@@ -895,9 +903,10 @@ export function mount(doc: Document = document, win: Window = window): () => voi
 
   /**
    * Not voted: the prompt + both buttons. Voted: a "thanks" line instead of the
-   * prompt, buttons left enabled — the server does not reject a second rating
-   * (`routes/customer.ts` creates a fresh row every time), so neither does this:
-   * the visitor can change their mind and it simply posts again.
+   * prompt, buttons left enabled — the visitor can change their mind and it
+   * simply posts again (the server writes it onto the same rating). After a
+   * vote, an optional comment (WG-11): open at once after a bad one, behind
+   * "Add a comment" after a good one, and gone once sent.
    */
   function renderRating(): void {
     const rating = state.rating;
@@ -910,6 +919,31 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     ui.ratingBad.setAttribute('aria-pressed', String(rating.value === 'bad'));
     ui.ratingGood.disabled = state.ratingSubmitting;
     ui.ratingBad.disabled = state.ratingSubmitting;
+    const open = voted && !rating.commented && (rating.value === 'bad' || !!rating.commentOpen);
+    ui.ratingComment.hidden = !open;
+    ui.ratingComment.classList.toggle('nx-rating-comment-bad', rating.value === 'bad');
+    ui.ratingCommentAdd.hidden = !voted || !!rating.commented || open;
+    ui.ratingCommentSend.disabled = state.ratingSubmitting;
+    ui.ratingThanks.textContent = t(rating.commented ? 'rating.commentThanks' : 'rating.thanks');
+  }
+
+  async function sendRatingComment(): Promise<void> {
+    const target = state.rating;
+    const comment = ui.ratingCommentInput.value.trim();
+    if (!target?.value || !comment || state.ratingSubmitting) return;
+    state.ratingSubmitting = true;
+    renderRating();
+    try {
+      await api.rate(target.value, { threadId: target.threadId, comment });
+      state.rating = { ...target, commented: true };
+      ui.ratingCommentInput.value = '';
+    } catch (error) {
+      // As a vote: the form stays, with the visitor's words, to send again.
+      console.warn('siyahtus widget: rating comment failed', error);
+    } finally {
+      state.ratingSubmitting = false;
+      renderRating();
+    }
   }
 
   async function vote(value: 'good' | 'bad'): Promise<void> {
@@ -918,7 +952,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     state.ratingSubmitting = true;
     renderRating();
     try {
-      await api.rate(value);
+      await api.rate(value, { threadId: target.threadId });
       state.rating = { ...target, value };
     } catch (error) {
       // Fire-and-forget from the visitor's perspective, like `typing`/`trackSale`
@@ -2491,6 +2525,16 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       state.rating = null;
       renderRating();
     });
+    ui.ratingCommentAdd.addEventListener('click', () => {
+      if (!state.rating) return;
+      state.rating = { ...state.rating, commentOpen: true };
+      renderRating();
+      ui.ratingCommentInput.focus();
+    });
+    ui.ratingComment.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void sendRatingComment();
+    });
 
     // Header "⋮" menu → "End chat" (FR-MOD-11.4-b): menu → confirm → request.
     // Cancelling closes the dialog without sending anything.
@@ -2830,6 +2874,11 @@ interface Ui {
   ratingBad: HTMLButtonElement;
   ratingThanks: HTMLElement;
   ratingDismiss: HTMLButtonElement;
+  /** The optional comment after a vote (WG-11), and the link that opens it after a good one. */
+  ratingComment: HTMLFormElement;
+  ratingCommentInput: HTMLTextAreaElement;
+  ratingCommentSend: HTMLButtonElement;
+  ratingCommentAdd: HTMLButtonElement;
   greeting: HTMLElement;
   greetMsg: HTMLElement;
   preview: HTMLElement;
@@ -3185,7 +3234,38 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   ratingDismiss.type = 'button';
   ratingDismiss.className = 'nx-rating-dismiss';
   ratingDismiss.textContent = t('rating.dismiss');
-  rating.append(ratingPrompt, ratingThanks, ratingActions, ratingDismiss);
+  // The comment (WG-11): a labelled box, plain text, as long as the API takes.
+  const ratingComment = doc.createElement('form');
+  ratingComment.className = 'nx-rating-comment';
+  ratingComment.hidden = true;
+  ratingComment.noValidate = true;
+  const ratingCommentLabel = doc.createElement('label');
+  ratingCommentLabel.className = 'nx-field-label';
+  ratingCommentLabel.htmlFor = 'nx-rating-comment-input';
+  ratingCommentLabel.textContent = t('rating.commentLabel');
+  const ratingCommentInput = doc.createElement('textarea');
+  ratingCommentInput.id = 'nx-rating-comment-input';
+  ratingCommentInput.className = 'nx-prechat-input nx-prechat-message';
+  ratingCommentInput.maxLength = 1000;
+  ratingCommentInput.rows = 3;
+  const ratingCommentSend = doc.createElement('button');
+  ratingCommentSend.type = 'submit';
+  ratingCommentSend.className = 'nx-postchat-submit';
+  ratingCommentSend.textContent = t('rating.commentSend');
+  ratingComment.append(ratingCommentLabel, ratingCommentInput, ratingCommentSend);
+  const ratingCommentAdd = doc.createElement('button');
+  ratingCommentAdd.type = 'button';
+  ratingCommentAdd.className = 'nx-rating-add';
+  ratingCommentAdd.hidden = true;
+  ratingCommentAdd.textContent = t('rating.commentAdd');
+  rating.append(
+    ratingPrompt,
+    ratingThanks,
+    ratingActions,
+    ratingComment,
+    ratingCommentAdd,
+    ratingDismiss,
+  );
 
   // "Chat ended" banner (FR-MOD-11.4-b): shown instead of an active composer
   // once `state.closed` is set; "Start a new chat" just clears it.
@@ -3515,6 +3595,10 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     ratingBad,
     ratingThanks,
     ratingDismiss,
+    ratingComment,
+    ratingCommentInput,
+    ratingCommentSend,
+    ratingCommentAdd,
     greeting,
     greetMsg,
     preview,
@@ -4793,7 +4877,9 @@ button { -webkit-tap-highlight-color: transparent; }
   border-color: var(--nx-brand); box-shadow: 0 0 0 1px var(--nx-brand);
 }
 .nx-rating-good:disabled, .nx-rating-bad:disabled { opacity: .6; cursor: default; }
-.nx-rating-dismiss {
+.nx-rating-comment { display: flex; flex-direction: column; gap: 6px; }
+.nx-rating-comment-bad .nx-field-label { color: var(--nx-title); font-size: 13px; }
+.nx-rating-dismiss, .nx-rating-add {
   align-self: center; min-height: 44px; padding: 0 12px; border: 0; background: transparent;
   color: var(--nx-muted); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer;
 }

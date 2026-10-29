@@ -2258,9 +2258,22 @@ export interface paths {
     get?: never;
     put?: never;
     /**
-     * Rate the conversation
-     * @description Applies to the visitor's most recent conversation whether or not it is
-     *     still open, because ratings usually arrive just after one closes.
+     * Rate a connection, or add a comment to its rating
+     * @description One rating per connection (AR-03 · WG-11). `thread_id` names the
+     *     connection being rated — the widget sends the one its prompt is for, so
+     *     a player who has opened a new conversation since still rates the old one.
+     *     Without it the visitor's most recent connection is rated, open or not,
+     *     because ratings usually arrive just after one closes.
+     *
+     *     A connection already rated is not rated twice: the call writes onto its
+     *     rating (the newest, for one rated twice before this rule) and answers
+     *     `200` — a changed `value` replaces the old one and moves `rated_at`,
+     *     a `comment` is added to it, and neither adds to the rating count. A
+     *     first rating answers `201`. The comment is plain text, its card numbers,
+     *     IBANs and passwords masked before it is stored.
+     *
+     *     Only the player rates: no agent route writes or changes a rating. The
+     *     agents who have the conversation are told (`chat_rated`).
      */
     post: operations['rateCustomerChat'];
     delete?: never;
@@ -10311,6 +10324,35 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/reports/reviews/comments': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Reviews — the comments players left with their ratings
+     * @description The comments beside the Reviews report's figures (WG-11): every
+     *     connection rated in the window whose rating carries a comment, newest
+     *     first, `limit` at a time — `next_page_id` while more remain. The window
+     *     is the rating's time, as on the report. `value` narrows to the good or
+     *     the bad ones.
+     *
+     *     What a caller reads is bounded by `ratings.view` (AR-03-S1): an Ekip
+     *     Üyesi sees only the comments on their own connections, an Ekip Lideri and
+     *     up every one, unless the workspace chose otherwise. The comment is plain
+     *     text, its sensitive values masked when it was stored.
+     */
+    get: operations['listReportsReviewComments'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/reports/topics': {
     parameters: {
       query?: never;
@@ -12548,6 +12590,53 @@ export interface components {
        */
       ai_took_part?: boolean;
       tags?: string[];
+      /**
+       * @description The player's rating of this connection (AR-03 · WG-11), with its
+       *     comment. Null when it is not rated, or when the caller may not see
+       *     it (`ratings.view`: an Ekip Üyesi reads the ratings of their own
+       *     connections). Present only on the agent's fetch of a single chat
+       *     (`GET /chats/{chatId}`); a change is pushed as `chat_rated`.
+       */
+      rating?: components['schemas']['ThreadRating'] | null;
+    };
+    ThreadRating: {
+      /** @enum {string} */
+      value: 'good' | 'bad';
+      has_comment: boolean;
+      /** @description Plain text as the player wrote it, sensitive values masked. */
+      comment: string | null;
+      /** Format: date-time */
+      rated_at: string;
+    };
+    /** @description One rating with a comment, as the Reviews report lists it (WG-11). */
+    ReviewComment: {
+      /** Format: uuid */
+      rating_id: string;
+      /** @description The day (panel "Thread ID"). */
+      chat_id: string;
+      /** @description The connection (panel "Chat ID"). */
+      thread_id: string;
+      /** @enum {string} */
+      value: 'good' | 'bad';
+      /** @description Plain text */
+      comment: string;
+      /** Format: date-time */
+      rated_at: string;
+      customer: {
+        /** Format: uuid */
+        id: string;
+        name: string | null;
+      };
+      /** @description Who had the connection — at the close, for a closed one. */
+      assignee: {
+        /** Format: uuid */
+        id: string;
+        name: string;
+      } | null;
+    };
+    ReviewCommentList: {
+      items: components['schemas']['ReviewComment'][];
+      next_page_id?: string;
     };
     /**
      * @description One connection of a chat's day (ID-02), as `Chat.connections` lists it —
@@ -22375,6 +22464,17 @@ export interface components {
        */
       password?: string;
     };
+    ratingRecorded: {
+      /** Format: uuid */
+      id: string;
+      /** @enum {string} */
+      value: 'good' | 'bad';
+      /** @description Panelde: Thread ID (günlük). */
+      chat_id: string;
+      /** @description Panelde: Chat ID (bağlantı) — the connection rated. */
+      thread_id: string | null;
+      has_comment: boolean;
+    };
     /**
      * @description A registered handset, as everything except the sender is allowed to see it.
      *     There is no `token` field, and there is no operation that adds one.
@@ -26048,24 +26148,31 @@ export interface operations {
           /** @enum {string} */
           value: 'good' | 'bad';
           comment?: string;
+          /**
+           * @description "Panelde: Chat ID (bağlantı)." One of this visitor's
+           *     connections; any other is a 404.
+           */
+          thread_id?: string;
         };
       };
     };
     responses: {
+      /** @description The connection's rating, changed or commented */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ratingRecorded'];
+        };
+      };
       /** @description Rating recorded */
       201: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': {
-            /** Format: uuid */
-            id: string;
-            /** @enum {string} */
-            value: 'good' | 'bad';
-            /** @description Panelde: Thread ID (günlük). */
-            chat_id: string;
-          };
+          'application/json': components['schemas']['ratingRecorded'];
         };
       };
       400: components['responses']['BadRequest'];
@@ -38231,6 +38338,53 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ReportsReviews'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listReportsReviewComments: {
+    parameters: {
+      query?: {
+        /**
+         * @description Start of the reporting window. Defaults to 30 days before `to`.
+         *
+         *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
+         *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
+         *     a read replica or a column-store analytics warehouse, neither of which
+         *     this deployment has, so the window a single query may scan is bounded
+         *     instead. 366 rather than 365 so a twelve-month window that spans a leap
+         *     day is not the one that fails. The limit applies to the group endpoints
+         *     and to `/reports/export` alike — both run the same aggregation, so
+         *     capping only the download would leave the identical scan one query
+         *     string away.
+         */
+        from?: components['parameters']['ReportRangeFrom'];
+        /**
+         * @description End of the reporting window. Defaults to now. The 366-day span limit
+         *     described on `from` is measured across this pair.
+         */
+        to?: components['parameters']['ReportRangeTo'];
+        value?: 'good' | 'bad';
+        limit?: number;
+        page_id?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page of rating comments */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReviewCommentList'];
         };
       };
       400: components['responses']['BadRequest'];

@@ -150,6 +150,10 @@ export const RTM_PUSH_ACTIONS = [
   // (`ChatInactivityChangedPush`), to its agents.
   'chat_unanswered_alert',
   'chat_inactivity_changed',
+  // The player rated a connection or commented on its rating (AR-03 · WG-11 ·
+  // tm 337, `ChatRatedPush`): to the chat's agents and teams. Ids only — what
+  // a caller may see of the rating is the server's call (`ratings.view`).
+  'chat_rated',
   'user_added_to_chat',
   'user_removed_from_chat',
   'queue_positions_updated',
@@ -225,6 +229,17 @@ export interface IncomingChatPush {
     thread: { id: string; active: boolean; queue_position: number | null };
   };
   transferred_from?: { group_ids: number[]; agent_ids: string[] };
+}
+
+/**
+ * `chat_rated` (AR-03 · WG-11): the player rated connection `thread_id` of
+ * chat `chat_id`, or added a comment to its rating. Carries no value: the
+ * reader re-reads the chat, whose `thread.rating` is shown or withheld by the
+ * reader's `ratings.view`.
+ */
+export interface ChatRatedPush {
+  chat_id: string;
+  thread_id: string;
 }
 
 export interface IncomingEventPush {

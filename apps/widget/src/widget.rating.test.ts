@@ -6,10 +6,11 @@
  * gone — an agent archived it or the idle-timeout swept it, and the widget
  * holds no socket to be told directly — and manually, from the header "⋮"
  * menu's "Rate this chat" item while a conversation is still open. Both paths
- * end at the same `POST /customer/chat/rating` (`api.ts#rate`), which the
- * server accepts for the visitor's most recent chat whether it is active or
- * not, and never rejects a second vote (`routes/customer.ts` inserts a fresh
- * row every time) — so the UI does not block a changed mind either.
+ * end at the same `POST /customer/chat/rating` (`api.ts#rate`), naming the
+ * connection the prompt is for (`thread_id`, AR-03). The server keeps one
+ * rating per connection and writes a second vote onto it, so the UI does not
+ * block a changed mind; after a vote the visitor may add a comment (WG-11),
+ * which is sent as the same vote with its text.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount } from './widget.js';
@@ -162,7 +163,7 @@ describe('widget rating — automatic prompt on close (FR-MOD-07.8-b)', () => {
 
     good.click();
     await vi.waitFor(() => expect(ratingCalls()).toHaveLength(1));
-    expect(ratingCalls()[0]!.body).toEqual({ value: 'good' });
+    expect(ratingCalls()[0]!.body).toEqual({ value: 'good', thread_id: 'thr-1' });
 
     await vi.waitFor(() =>
       expect(root.querySelector<HTMLElement>('.nx-rating-thanks')!.hidden).toBe(false),
@@ -171,7 +172,7 @@ describe('widget rating — automatic prompt on close (FR-MOD-07.8-b)', () => {
     expect(good.getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('lets the visitor change their vote — the server neither blocks nor dedupes a second one', async () => {
+  it('lets the visitor change their vote — the server writes it onto the same rating', async () => {
     chatStateAt = (poll) =>
       poll === 1
         ? { chat: { id: 'chat-1', thread_id: 'thr-1', queue_position: null }, events: [OPEN_EVENT] }
@@ -196,7 +197,10 @@ describe('widget rating — automatic prompt on close (FR-MOD-07.8-b)', () => {
 
     bad.click();
     await vi.waitFor(() => expect(bad.getAttribute('aria-pressed')).toBe('true'));
-    expect(ratingCalls().map((c) => c.body)).toEqual([{ value: 'good' }, { value: 'bad' }]);
+    expect(ratingCalls().map((c) => c.body)).toEqual([
+      { value: 'good', thread_id: 'thr-1' },
+      { value: 'bad', thread_id: 'thr-1' },
+    ]);
 
     expect(good.getAttribute('aria-pressed')).toBe('false');
     expect(root.querySelector<HTMLElement>('.nx-rating-thanks')!.hidden).toBe(false);
@@ -219,6 +223,91 @@ describe('widget rating — automatic prompt on close (FR-MOD-07.8-b)', () => {
     root.querySelector<HTMLButtonElement>('.nx-rating-dismiss')!.click();
     expect(root.querySelector<HTMLElement>('.nx-rating')!.hidden).toBe(true);
     expect(ratingCalls()).toHaveLength(0);
+  });
+});
+
+describe('widget rating — a comment after the vote (WG-11)', () => {
+  /** The automatic prompt for `thr-1`, raised by the poll finding the chat closed. */
+  async function closedPrompt(): Promise<HTMLElement> {
+    chatStateAt = (poll) =>
+      poll === 1
+        ? { chat: { id: 'chat-1', thread_id: 'thr-1', queue_position: null }, events: [OPEN_EVENT] }
+        : { chat: null, events: [] };
+    vi.useFakeTimers();
+    const root = mountWidget();
+    openPanel(root);
+    await vi.waitFor(() => expect(chatPolls).toBeGreaterThanOrEqual(1));
+    await vi.advanceTimersByTimeAsync(4_000);
+    await vi.waitFor(() => expect(chatPolls).toBeGreaterThanOrEqual(2));
+    return root;
+  }
+
+  it('opens the comment box at once after a bad vote and sends it as the same vote, for the same connection', async () => {
+    const root = await closedPrompt();
+    const box = root.querySelector<HTMLFormElement>('.nx-rating-comment')!;
+    expect(box.hidden).toBe(true);
+
+    root.querySelector<HTMLButtonElement>('.nx-rating-bad')!.click();
+    await vi.waitFor(() => expect(box.hidden).toBe(false));
+    expect(box.classList.contains('nx-rating-comment-bad')).toBe(true);
+    // A labelled box, not a bare one.
+    const input = root.querySelector<HTMLTextAreaElement>('#nx-rating-comment-input')!;
+    expect(root.querySelector('label[for="nx-rating-comment-input"]')!.textContent).toMatch(
+      /add\?/,
+    );
+    expect(input.maxLength).toBe(1000);
+    expect(root.querySelector<HTMLElement>('.nx-rating-add')!.hidden).toBe(true);
+
+    input.value = '  My withdrawal is still pending  ';
+    root.querySelector<HTMLButtonElement>('.nx-rating-comment .nx-postchat-submit')!.click();
+    await vi.waitFor(() => expect(ratingCalls()).toHaveLength(2));
+    expect(ratingCalls()[1]!.body).toEqual({
+      value: 'bad',
+      thread_id: 'thr-1',
+      comment: 'My withdrawal is still pending',
+    });
+    await vi.waitFor(() => expect(box.hidden).toBe(true));
+    expect(root.querySelector<HTMLElement>('.nx-rating-thanks')!.textContent).toMatch(/comment/);
+    expect(root.querySelector<HTMLElement>('.nx-rating-add')!.hidden).toBe(true);
+  });
+
+  it('keeps the comment behind "Add a comment" after a good vote, and sends nothing empty', async () => {
+    const root = await closedPrompt();
+    root.querySelector<HTMLButtonElement>('.nx-rating-good')!.click();
+    const add = root.querySelector<HTMLButtonElement>('.nx-rating-add')!;
+    await vi.waitFor(() => expect(add.hidden).toBe(false));
+    const box = root.querySelector<HTMLFormElement>('.nx-rating-comment')!;
+    expect(box.hidden).toBe(true);
+
+    add.click();
+    expect(box.hidden).toBe(false);
+    expect(add.hidden).toBe(true);
+    root.querySelector<HTMLButtonElement>('.nx-rating-comment .nx-postchat-submit')!.click();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(ratingCalls()).toHaveLength(1);
+  });
+
+  it('keeps the words on screen when the comment fails, to send again', async () => {
+    const root = await closedPrompt();
+    root.querySelector<HTMLButtonElement>('.nx-rating-bad')!.click();
+    const box = root.querySelector<HTMLFormElement>('.nx-rating-comment')!;
+    await vi.waitFor(() => expect(box.hidden).toBe(false));
+
+    const fetchMock = vi.mocked(fetch);
+    const ok = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input, init) =>
+      String(input).includes('/customer/chat/rating')
+        ? jsonResponse({ error: { type: 'internal', message: 'down' } }, 503)
+        : ok(input, init),
+    );
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const input = root.querySelector<HTMLTextAreaElement>('#nx-rating-comment-input')!;
+    input.value = 'Nobody answered';
+    root.querySelector<HTMLButtonElement>('.nx-rating-comment .nx-postchat-submit')!.click();
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled());
+    expect(box.hidden).toBe(false);
+    expect(input.value).toBe('Nobody answered');
+    warn.mockRestore();
   });
 });
 
@@ -299,7 +388,7 @@ describe('widget rating — early vote from the header menu (FR-MOD-07.8-b)', ()
 
     root.querySelector<HTMLButtonElement>('.nx-rating-good')!.click();
     await vi.waitFor(() => expect(ratingCalls()).toHaveLength(1));
-    expect(ratingCalls()[0]!.body).toEqual({ value: 'good' });
+    expect(ratingCalls()[0]!.body).toEqual({ value: 'good', thread_id: 'thr-1' });
   });
 
   it('the menu is hidden before any conversation exists', () => {

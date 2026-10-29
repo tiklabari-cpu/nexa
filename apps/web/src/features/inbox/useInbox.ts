@@ -352,6 +352,7 @@ export function refreshChatHeads(): void {
  *
  * `queueGroupId` narrows to one team's queue — the Queued view's team tabs
  * (AU-01) — server-side, like `channel`; so does `priority` (AI-12, `chat-priority.ts`).
+ * `enabled: false` reads nothing — the "My team" count for someone who leads no team.
  */
 export function useChatList(
   view: InboxView,
@@ -359,6 +360,7 @@ export function useChatList(
   channel: AdapterChannelType | null = null,
   queueGroupId: number | null = null,
   priority: ThreadPriority | null = null,
+  enabled = true,
 ): PagedQueryResult<ChatSummary> {
   const api = useApiClient();
   const queryClient = useQueryClient();
@@ -371,6 +373,7 @@ export function useChatList(
   const query = usePagedQuery<ChatSummary>({
     queryKey: chatsKey(view, sort, channel, queueGroupId, priority),
     buildUrl,
+    enabled,
   });
 
   // Read through a ref, not a dependency: the merge writes the page array that
@@ -1759,6 +1762,7 @@ export function applyPush(
  */
 export function useViewCounts(
   channel: AdapterChannelType | null = null,
+  leadsTeam = false,
 ): Record<InboxView, number | null | undefined> {
   const all = useChatList('all', DEFAULT_CHAT_SORT, channel);
   const mine = useChatList('my', DEFAULT_CHAT_SORT, channel);
@@ -1774,6 +1778,9 @@ export function useViewCounts(
   // human queue, and the AI resolutions ("Solved") counter.
   const ai = useChatList('ai', DEFAULT_CHAT_SORT, channel);
   const aiSolved = useChatList('ai_solved', DEFAULT_CHAT_SORT, channel);
+  // "My team" (RL-03): read only for someone who leads a team — the rail
+  // shows the view to nobody else, and the server would answer empty.
+  const team = useChatList('team', DEFAULT_CHAT_SORT, channel, null, null, leadsTeam);
 
   // Read straight through rather than memoised: the counts are consumed as
   // plain numbers by the rail buttons, so a stable object identity buys
@@ -1808,6 +1815,7 @@ export function useViewCounts(
     archived: count(archived),
     ai: count(ai),
     ai_solved: count(aiSolved),
+    team: leadsTeam ? count(team) : undefined,
   };
 }
 

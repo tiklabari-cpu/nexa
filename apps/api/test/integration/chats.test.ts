@@ -1286,7 +1286,8 @@ describe('agent chat api', () => {
 
     it('refuses an agent-role teammate, even with the all-chats scope', async () => {
       const chat = await chatHeldByAgent();
-      // Agent role but a broad token: proves the *role* gate fires, not the scope.
+      // Agent role but a broad token: proves the person's `chats.takeover`
+      // capability decides (RL-03 · tm 326), not the token's scope.
       const agentAllToken = await grantToken(owner, {
         licenseId: fx.a.licenseId,
         organizationId: fx.a.organizationId,
@@ -1439,10 +1440,11 @@ describe('agent chat api', () => {
 
     it('separates the two surfaces — an agent-role token may transfer but never take over', async () => {
       // The two paths are deliberately distinct: transfer is a consented,
-      // scope-gated hand-off (no role gate); takeover is the admin-only seizure.
+      // scope-gated hand-off (no role gate); takeover is the seizure the
+      // `chats.takeover` capability gates, which an Ekip Üyesi never holds.
       // One credential pins the split — the same agent-role token, holding the
       // very scope takeover asks for, succeeds at transfer and is refused the
-      // takeover on the *role* gate, not the scope.
+      // takeover on the capability, not the scope.
       const chat = await chatHeldByAgent();
       const agentAllToken = await grantToken(owner, {
         licenseId: fx.a.licenseId,
@@ -1459,7 +1461,7 @@ describe('agent chat api', () => {
       );
       expect(transfer.statusCode).toBe(200);
 
-      // Takeover: the same token, refused on the admin role gate.
+      // Takeover: the same token, refused on the capability.
       const takeover = await server.post(`/chats/${chat.id}/takeover`, {}, auth(agentAllToken));
       expect(takeover.statusCode).toBe(403);
       expect(takeover.json().error.type).toBe('authorization');

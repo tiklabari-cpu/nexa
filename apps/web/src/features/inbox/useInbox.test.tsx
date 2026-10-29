@@ -581,6 +581,8 @@ const VIEW_TOTALS: Record<InboxView, number> = {
   // Ten more resolutions than a page can carry, so "counted the page" and
   // "counted the view" cannot give the same answer.
   ai_solved: 137,
+  // "My team" (RL-03): counted for a lead, like every other view.
+  team: 5,
 };
 
 /** The view a `/chats` request is for. */
@@ -599,9 +601,9 @@ function viewPage(view: InboxView): PagedResponse<ChatSummary> {
   };
 }
 
-function renderViewCounts() {
+function renderViewCounts(leadsTeam = true) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const rendered = renderHook(() => useViewCounts(), {
+  const rendered = renderHook(() => useViewCounts(null, leadsTeam), {
     wrapper: ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     ),
@@ -631,6 +633,16 @@ describe('useViewCounts — the count is the view, not the rows fetched', () => 
     // ceiling, so they all read the server's number now.
     await waitFor(() => expect(result.current.all).toBeDefined());
     expect(result.current).toEqual(VIEW_TOTALS);
+  });
+
+  it('never reads My team for someone who leads no team (RL-03)', async () => {
+    api.get.mockImplementation((url: string) => Promise.resolve(viewPage(viewOf(url))));
+
+    const { result } = renderViewCounts(false);
+    await waitFor(() => expect(result.current.ai_solved).toBe(137));
+    expect(result.current.team).toBeUndefined();
+    const views = api.get.mock.calls.map(([url]) => viewOf(url as string));
+    expect(views).not.toContain('team');
   });
 
   it('says nothing at all until the first page lands', async () => {

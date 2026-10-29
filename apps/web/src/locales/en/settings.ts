@@ -1477,6 +1477,7 @@ export const settings: Messages = {
   'permissions.group.billing': 'Billing',
   'permissions.group.logs': 'Logs',
   'permissions.capability.chats.view': 'View chats',
+  'permissions.capability.chats.takeover': 'Take over a chat',
   'permissions.capability.tickets.view': 'View tickets',
   'permissions.capability.customers.contact.view': "See a player's email and username",
   'permissions.capability.customers.edit': 'Edit player records',

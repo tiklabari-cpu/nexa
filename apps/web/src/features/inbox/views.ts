@@ -130,6 +130,7 @@ const BASE_VIEWS: InboxView[] = [
   'archived',
   'ai',
   'ai_solved',
+  'team',
 ];
 const TRAFFIC_TABS: TrafficTab[] = ['all', 'chatting', 'queued', 'waiting'];
 

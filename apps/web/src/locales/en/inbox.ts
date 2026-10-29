@@ -22,6 +22,7 @@ export const inbox: Messages = {
   'inbox.rail.title': 'Inbox',
   'inbox.rail.view.all': 'All',
   'inbox.rail.view.my': 'My chats',
+  'inbox.rail.view.team': 'My team',
   'inbox.rail.view.queued': 'Queued',
   'inbox.rail.view.unassigned': 'Unassigned',
   'inbox.rail.view.supervised': 'Supervised',
@@ -88,6 +89,13 @@ export const inbox: Messages = {
   'inbox.list.empty.supervised':
     'Supervising nothing right now. Watch a conversation from Traffic and it lands here.',
   'inbox.list.empty.ai': 'Conversations the AI agent is handling appear here.',
+  'inbox.list.empty.team':
+    'Open conversations of the teams you lead appear here, the AI’s included.',
+  // A "My team" row's own actions (RL-03 · tm 326)
+  'inbox.list.team.watch': 'Watch',
+  'inbox.list.team.watchAria': 'Watch {name}',
+  'inbox.list.team.takeoverAria': 'Take over {name}',
+  'inbox.list.team.watchError': 'Could not start watching this chat.',
   'inbox.list.empty.aiSolved': 'Conversations the AI resolved on its own appear here.',
   'inbox.list.empty.channel': 'No conversations have arrived on this channel yet.',
   'inbox.list.empty.description': 'New conversations land here as they arrive.',
@@ -421,7 +429,7 @@ export const inbox: Messages = {
   'inbox.details.takeover.fallbackName': 'the current agent',
   'inbox.details.takeover.errorGeneric': 'Could not take over this chat.',
   // The two refusals the dialog keeps apart (a 403 and a 409 must not read alike).
-  'inbox.details.takeover.errorForbidden': 'Only an admin or owner can take over a chat.',
+  'inbox.details.takeover.errorForbidden': 'Your role cannot take over this chat.',
   'inbox.details.takeover.errorConflict': 'Another supervisor took this chat over first.',
   'inbox.details.takeover.cancel': 'Cancel',
   'inbox.details.takeover.pending': 'Taking over…',

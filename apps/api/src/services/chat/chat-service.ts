@@ -74,7 +74,9 @@ import {
 import type { WorkspaceEventDispatcher } from '../webhooks/workspace-events.js';
 import { writeAuditEntry, type AuditContext } from '../audit/audit-log.js';
 import { withTenant, type TenantClient, type TenantContext } from '../../lib/tenant.js';
+import { hasCapability } from '../auth/capability.js';
 import { roleAtLeast, type Principal } from '../auth/principal.js';
+import { ledGroupIds } from '../team/led-groups.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
 import { recordAiResolution } from '../billing/metering.js';
 import { recordAgentIds } from '../archive/archive-filters.js';
@@ -140,7 +142,16 @@ const IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60;
 const ID_GENERATION_ATTEMPTS = 5;
 
 export interface ChatListOptions {
-  view: 'all' | 'my' | 'queued' | 'unassigned' | 'supervised' | 'archived' | 'ai' | 'ai_solved';
+  view:
+    | 'all'
+    | 'my'
+    | 'queued'
+    | 'unassigned'
+    | 'supervised'
+    | 'archived'
+    | 'ai'
+    | 'ai_solved'
+    | 'team';
   customerId?: string;
   groupId?: bigint;
   /**
@@ -3534,9 +3545,9 @@ export class ChatService {
    * A supervisor forcibly seizes a chat from whoever holds it (FR-MOD-08.6.3).
    *
    * This is deliberately *not* `transfer`: transfer is a consented, scope-gated
-   * hand-off any chat-writer may perform; takeover is an authority action an
-   * admin/owner takes over someone else's conversation, so the route gates it on
-   * role and this method records it. Three properties are load-bearing, and are
+   * hand-off any chat-writer may perform; takeover is an authority action a
+   * supervisor takes over someone else's conversation, so this method decides
+   * who may and records it. Three properties are load-bearing, and are
    * why the read, the write and the audit entry all live in one transaction:
    *
    *  - **The race has exactly one winner.** Two supervisors seizing the same chat
@@ -3546,9 +3557,16 @@ export class ChatService {
    *    against the now-committed row, matches nothing and reports zero rows —
    *    which becomes `takeover_conflict` (409). No `SELECT … FOR UPDATE`, no lock
    *    ordering to get wrong.
-   *  - **Authority and the write are one unit.** The role gate is at the route;
-   *    the conditional re-assign and the audit entry commit together, so a
-   *    seizure that happened is always recorded and one that lost records nothing.
+   *  - **Authority and the write are one unit.** Who may seize which chat is
+   *    the caller's `chats.takeover` capability (RL-02 matrix · RL-03 · tm
+   *    326), decided here rather than at the route: `all` reaches any chat the
+   *    caller may see, `team` only one routed to a team they lead — any of the
+   *    chat's teams will do, the rule for a day whose connections went to
+   *    different teams — and `none` nothing. The led teams are read inside the
+   *    same transaction as the seizure, so a lead demoted a moment ago seizes
+   *    nothing; the conditional re-assign and the audit entry commit together,
+   *    so a seizure that happened is always recorded and one that lost records
+   *    nothing.
    *  - **The previous holder is demoted, not evicted.** Their `chat_users` row
    *    stays (present=false) so the transcript and trail of who was there survive
    *    — the same shape a transfer that moves the assignee on leaves behind.
@@ -3560,11 +3578,32 @@ export class ChatService {
     reason: string | null,
     audit: AuditContext,
   ): Promise<ChatDetail> {
+    // A person's act: a bot token or an Ekip Üyesi is refused before the chat
+    // is read, so the refusal says nothing about whether the id exists.
+    if (principal.kind !== 'agent') {
+      throw ApiError.authorization('Only a signed-in teammate can take over a chat.');
+    }
+    if (!hasCapability(principal, 'chats.takeover')) {
+      throw ApiError.authorization(
+        'Your role does not have the chats.takeover permission in this workspace.',
+        { reason: 'capability_required', capability: 'chats.takeover' },
+      );
+    }
     const supervisorId = actorOf(principal);
 
     const result = await withTenant(this.db, tenant, async (tx) => {
       const visibility = await resolveVisibility(tx, principal, 'write');
       const chat = await this.#loadVisibleChat(tx, visibility, chatId);
+
+      // `team`: one of the chat's teams must be one the caller leads. Another
+      // team's chat answers as an absent one (RL-03 · NFR-S5), whether or not
+      // the caller can read it as a member — it is not theirs to seize.
+      if (!hasCapability(principal, 'chats.takeover', 'all')) {
+        const led = await ledGroupIds(tx, supervisorId);
+        if (!chat.access.some((row) => led.includes(row.groupId))) {
+          throw ApiError.notFound('Chat not found.');
+        }
+      }
 
       const thread = chat.threads.find((t) => t.active);
       if (!chat.active || !thread) throw ApiError.chatInactive('Cannot take over a closed chat.');
@@ -4867,6 +4906,15 @@ export async function listChatsInTenant(
       },
     });
   }
+  // "My team" (RL-03 · tm 326): routed to a team the caller leads, read now so
+  // a lead made or unmade a moment ago sees the change on the next read. Its
+  // own AND clause, beside visibility rather than instead of it, and apart
+  // from `groupId`'s `access` filter, which a spread would overwrite. Someone
+  // who leads no team gets `{ in: [] }` — nothing, not the whole workspace.
+  if (options.view === 'team') {
+    const led = await ledGroupIds(tx, visibility.actorId);
+    scope.push({ access: { some: { groupId: { in: led } } } });
+  }
   // How pressing (AI-12): its own AND clause, for the same reason.
   if (options.priority !== undefined) {
     scope.push({
@@ -5349,6 +5397,11 @@ function viewFilter(view: ChatListOptions['view'], actorId: string): Record<stri
       // never disagree, so the condition lives there and nowhere here: no extra
       // clause (e.g. "has a bot event") the counter lacks.
       return { active: false, threads: { some: aiResolvedThreadWhere() } };
+    // A lead's worklist (RL-03): every open chat of the teams they lead,
+    // whoever holds it — a teammate, the queue, or the AI. The teams are the
+    // caller's AND clause in `listChatsInTenant`; this is only "open".
+    case 'team':
+      return { active: true };
     case 'all':
     default:
       return {};

@@ -7,6 +7,7 @@ export const inbox: Messages = {
   'inbox.rail.title': 'Gelen Kutusu',
   'inbox.rail.view.all': 'Tümü',
   'inbox.rail.view.my': 'Sohbetlerim',
+  'inbox.rail.view.team': 'Ekibim',
   'inbox.rail.view.queued': 'Sırada',
   'inbox.rail.view.unassigned': 'Atanmamış',
   'inbox.rail.view.supervised': 'Gözetlenen',
@@ -72,6 +73,13 @@ export const inbox: Messages = {
   'inbox.list.empty.supervised':
     'Şu anda gözetlediğiniz sohbet yok. Trafik ekranından bir sohbeti gözetlemeye alın, burada görünsün.',
   'inbox.list.empty.ai': 'AI ajanının yürüttüğü sohbetler burada görünür.',
+  'inbox.list.empty.team':
+    'Lideri olduğunuz ekiplerin açık sohbetleri burada görünür; AI’ın yürüttükleri de dahil.',
+  // "Ekibim" satırının eylemleri (RL-03 · tm 326)
+  'inbox.list.team.watch': 'İzle',
+  'inbox.list.team.watchAria': 'İzle: {name}',
+  'inbox.list.team.takeoverAria': 'Devral: {name}',
+  'inbox.list.team.watchError': 'Bu sohbet izlenemedi.',
   'inbox.list.empty.aiSolved': "AI'nın kendi başına çözdüğü sohbetler burada görünür.",
   'inbox.list.empty.channel': 'Bu kanaldan henüz sohbet gelmedi.',
   'inbox.list.empty.description': 'Yeni sohbetler geldikçe burada görünür.',
@@ -399,8 +407,7 @@ export const inbox: Messages = {
   'inbox.details.takeover.fallbackName': 'geçerli temsilci',
   'inbox.details.takeover.errorGeneric': 'Bu sohbet devralınamadı.',
   // The two refusals the dialog keeps apart (a 403 and a 409 must not read alike).
-  'inbox.details.takeover.errorForbidden':
-    'Bir sohbeti yalnızca yönetici ya da sahip devralabilir.',
+  'inbox.details.takeover.errorForbidden': 'Rolünüz bu sohbeti devralamaz.',
   'inbox.details.takeover.errorConflict': 'Bu sohbeti başka bir süpervizör daha önce devraldı.',
   'inbox.details.takeover.cancel': 'Vazgeç',
   'inbox.details.takeover.pending': 'Devralınıyor…',

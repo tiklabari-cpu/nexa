@@ -4,6 +4,10 @@ import {
   CUSTOM_FIELD_TYPES,
   FORM_PLACEMENTS,
   TICKET_FORM_PLACEMENTS,
+  CUSTOM_FIELD_OPTIONS_MAX,
+  customFieldDisplayValue,
+  customFieldOptionsProblem,
+  isChoiceFieldType,
   checkCustomFieldValue,
   customFieldError,
   formPlacementEntity,
@@ -17,9 +21,17 @@ const boolean = { label: 'KYC done', type: 'boolean' as const, required: false }
 const date = { label: 'Verified on', type: 'date' as const, required: false };
 
 describe('custom field catalogue', () => {
-  it('lists the two entities and four value types', () => {
+  it('lists the two entities and the seven value types (WG-04)', () => {
     expect(CUSTOM_FIELD_ENTITIES).toEqual(['ticket', 'contact']);
-    expect(CUSTOM_FIELD_TYPES).toEqual(['text', 'number', 'boolean', 'date']);
+    expect(CUSTOM_FIELD_TYPES).toEqual([
+      'text',
+      'number',
+      'boolean',
+      'date',
+      'select',
+      'multiselect',
+      'topic',
+    ]);
   });
 });
 
@@ -100,5 +112,73 @@ describe('customFieldError — the form-facing view of the same rule', () => {
     expect(customFieldError(number, 'lots')).toMatch(/number/i);
     expect(customFieldError(number, '42')).toBeNull();
     expect(customFieldError(text, '')).toBeNull();
+  });
+});
+
+describe('choice types — select, multiselect, topic (WG-04)', () => {
+  const options = [
+    { value: 'withdrawal', label: 'Para çekme', target_group_id: 7 },
+    { value: 'deposit', label: 'Para yatırma' },
+    { value: 'other', label: 'Diğer' },
+  ];
+  const select = { label: 'Konu', type: 'select' as const, required: true, options };
+  const topic = { label: 'Konu', type: 'topic' as const, required: false, options };
+  const multi = { label: 'Oyunlar', type: 'multiselect' as const, required: false, options };
+
+  it('names the three choice types', () => {
+    expect(isChoiceFieldType('select')).toBe(true);
+    expect(isChoiceFieldType('multiselect')).toBe(true);
+    expect(isChoiceFieldType('topic')).toBe(true);
+    expect(isChoiceFieldType('text')).toBe(false);
+  });
+
+  it('accepts only a value from the options for select and topic', () => {
+    expect(checkCustomFieldValue(select, 'deposit')).toEqual({ value: 'deposit' });
+    expect(checkCustomFieldValue(topic, ' withdrawal ')).toEqual({ value: 'withdrawal' });
+    // The label is what the visitor sees, not what is stored.
+    expect(isCustomFieldProblem(checkCustomFieldValue(select, 'Para yatırma'))).toBe(true);
+    expect(customFieldError(topic, 'casino')).toMatch(/one of its options/);
+    expect(customFieldError(select, '')).toMatch(/required/);
+  });
+
+  it('stores a multiselect as a JSON array in the options order, once each', () => {
+    expect(checkCustomFieldValue(multi, '["other","withdrawal","other"]')).toEqual({
+      value: '["withdrawal","other"]',
+    });
+    expect(checkCustomFieldValue(multi, '[]')).toEqual({ value: null });
+    expect(isCustomFieldProblem(checkCustomFieldValue(multi, '["casino"]'))).toBe(true);
+    expect(isCustomFieldProblem(checkCustomFieldValue(multi, 'withdrawal'))).toBe(true);
+    expect(customFieldError({ ...multi, required: true }, '[]')).toMatch(/required/);
+  });
+
+  it('shows a stored choice by its label, and an unknown one as stored', () => {
+    expect(customFieldDisplayValue(select, 'deposit')).toBe('Para yatırma');
+    expect(customFieldDisplayValue(multi, '["withdrawal","gone"]')).toBe('Para çekme, gone');
+    expect(customFieldDisplayValue({ type: 'text' }, 'deposit')).toBe('deposit');
+    expect(customFieldDisplayValue(select, null)).toBeNull();
+  });
+
+  it('judges a definition’s options: 1–50, distinct, short, routing only on a topic', () => {
+    expect(customFieldOptionsProblem('topic', options)).toBeNull();
+    expect(customFieldOptionsProblem('select', [])).toMatch(/at least one/);
+    expect(customFieldOptionsProblem('select', null)).toMatch(/at least one/);
+    expect(customFieldOptionsProblem('select', options)).toMatch(/only a topic/);
+    expect(customFieldOptionsProblem('text', options)).toMatch(/no options/);
+    expect(customFieldOptionsProblem('text', null)).toBeNull();
+    const many = Array.from({ length: CUSTOM_FIELD_OPTIONS_MAX + 1 }, (_, i) => ({
+      value: `v${i}`,
+      label: `L${i}`,
+    }));
+    expect(customFieldOptionsProblem('multiselect', many)).toMatch(/at most 50/);
+    expect(customFieldOptionsProblem('select', [{ value: 'a', label: 'x'.repeat(81) }])).toMatch(
+      /80/,
+    );
+    expect(
+      customFieldOptionsProblem('select', [
+        { value: 'a', label: 'A' },
+        { value: 'a', label: 'B' },
+      ]),
+    ).toMatch(/twice/);
+    expect(customFieldOptionsProblem('select', [{ value: ' ', label: 'A' }])).toMatch(/label/);
   });
 });

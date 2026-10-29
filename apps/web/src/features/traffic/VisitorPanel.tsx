@@ -29,6 +29,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
+import { customFieldDisplayValue } from '@siyahtus/types';
 import { CardSkeleton } from '../../components/Page.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { Modal } from '../../components/ui/Modal.js';
@@ -104,8 +105,11 @@ export function VisitorPanel({
                 {preChatAnswers.map((field) => (
                   <div key={field.definition_id} className="contents">
                     <dt className="text-content-secondary">{field.label}</dt>
-                    <dd className="truncate text-right" title={field.value ?? undefined}>
-                      {field.value}
+                    <dd
+                      className="truncate text-right"
+                      title={customFieldDisplayValue(field, field.value) ?? undefined}
+                    >
+                      {customFieldDisplayValue(field, field.value)}
                     </dd>
                   </div>
                 ))}

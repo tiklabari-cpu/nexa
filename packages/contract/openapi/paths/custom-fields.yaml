@@ -12,7 +12,9 @@ customFields:
     tags: [Settings]
     operationId: listCustomFields
     summary: List custom field definitions
-    description: In authoring order — oldest first. Optionally filtered to one entity.
+    description: |
+      In `position` order (oldest first among equals). Optionally filtered to
+      one entity.
     parameters:
       - name: entity
         in: query
@@ -53,18 +55,29 @@ customFields:
             properties:
               entity: { type: string, enum: [ticket, contact] }
               label: { type: string, minLength: 1, maxLength: 120 }
-              type: { type: string, enum: [text, number, boolean, date] }
+              type:
+                { type: string, enum: [text, number, boolean, date, select, multiselect, topic] }
               required:
                 type: boolean
                 description: Whether a value may be left blank. Defaults to false.
               form_placement:
                 type: string
-                enum: [pre_chat, post_chat]
+                enum: [pre_chat, post_chat, ticket, prospect]
                 nullable: true
                 description: |
-                  Also ask this field as a widget form (FR-MOD-08.7.7) — before
-                  the conversation starts, or once it ends. Only a `contact`
-                  field may carry a placement; a `ticket` one is a 400.
+                  Also ask this field as a widget form (FR-MOD-08.7.7). The
+                  placement decides the entity (`ticket` on a ticket field,
+                  the rest on a contact field); a mismatch is a 400. A `topic`
+                  must be `pre_chat`.
+              options:
+                type: array
+                maxItems: 50
+                items: { $ref: "../openapi.yaml#/components/schemas/CustomFieldOption" }
+                description: |
+                  Required (1–50) for `select`, `multiselect` and `topic`,
+                  refused for any other type. Only a topic option may name a
+                  `target_group_id`, and it must be one of the workspace's
+                  teams. A second topic in the workspace is a 400.
               show_in_table:
                 type: boolean
                 description: |
@@ -92,11 +105,12 @@ customField:
   patch:
     tags: [Settings]
     operationId: updateCustomField
-    summary: Rename a custom field or change whether it is required
+    summary: Edit a custom field — label, required, placement, options, order
     description: |
       Only the fields present in the body change. The `entity` and `type` are
       immutable — changing a field's type would leave stored values validated
-      against a rule that no longer holds.
+      against a rule that no longer holds. `position` moves the field within
+      its form (WG-04): the others of that form shift to make room.
     requestBody:
       required: true
       content:
@@ -109,11 +123,23 @@ customField:
               required: { type: boolean }
               form_placement:
                 type: string
-                enum: [pre_chat, post_chat]
+                enum: [pre_chat, post_chat, ticket, prospect]
                 nullable: true
                 description: |
                   Move the field between the widget forms, or null to stop
                   asking it and keep it as a CRM-only field (FR-MOD-08.7.7).
+                  It joins the end of its new form. A `topic` stays `pre_chat`.
+              options:
+                type: array
+                maxItems: 50
+                items: { $ref: "../openapi.yaml#/components/schemas/CustomFieldOption" }
+                description: Replace a choice field's options (same rules as on create).
+              position:
+                type: integer
+                minimum: 0
+                description: |
+                  The field's new place in its form, 0 first; past the end
+                  means last.
               show_in_table:
                 type: boolean
                 description: |

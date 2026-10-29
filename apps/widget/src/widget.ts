@@ -2714,11 +2714,57 @@ export function mount(doc: Document = document, win: Window = window): () => voi
  * makes it idempotent, so a re-connect replaces the rows instead of stacking
  * duplicates. Each input carries its definition id and type in `dataset`, which
  * is how `readFormAnswers` gets the answers back out without a parallel model.
+ *
+ * A list question (WG-04) is a native control, so the keyboard and screen
+ * readers get what the platform gives them: a `select` / `topic` is a drop-down
+ * with an empty first entry (nothing is chosen for the visitor), a
+ * `multiselect` a fieldset of checkboxes named by its legend.
  */
 function renderFormFields(doc: Document, host: HTMLElement, fields: WidgetFormField[]): void {
   host.replaceChildren();
   for (const field of fields) {
     const marked = field.required ? `${field.label} *` : field.label;
+
+    if (field.type === 'multiselect') {
+      const group = doc.createElement('fieldset');
+      group.className = 'nx-field nx-choices';
+      group.dataset.defId = field.definition_id;
+      if (field.required) group.dataset.required = '1';
+      const legend = doc.createElement('legend');
+      legend.className = 'nx-field-label';
+      legend.textContent = marked;
+      group.append(legend);
+      for (const option of field.options ?? []) {
+        const wrap = doc.createElement('label');
+        wrap.className = 'nx-prechat-check';
+        const box = doc.createElement('input');
+        box.type = 'checkbox';
+        box.value = option.value;
+        const span = doc.createElement('span');
+        span.textContent = option.label;
+        wrap.append(box, span);
+        group.append(wrap);
+      }
+      host.append(group);
+      continue;
+    }
+
+    if (field.type === 'select' || field.type === 'topic') {
+      const select = doc.createElement('select');
+      select.className = 'nx-prechat-input';
+      select.setAttribute('aria-label', field.label);
+      select.dataset.defId = field.definition_id;
+      select.required = field.required;
+      select.append(doc.createElement('option'));
+      for (const option of field.options ?? []) {
+        const item = doc.createElement('option');
+        item.value = option.value;
+        item.textContent = option.label;
+        select.append(item);
+      }
+      host.append(labelledField(doc, select, field.label, field.required));
+      continue;
+    }
 
     if (field.type === 'boolean') {
       const wrap = doc.createElement('label');
@@ -2762,7 +2808,7 @@ let fieldSequence = 0;
  */
 function labelledField(
   doc: Document,
-  input: HTMLInputElement | HTMLTextAreaElement,
+  input: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
   text: string,
   required: boolean,
 ): HTMLElement {
@@ -2792,15 +2838,28 @@ function labelledField(
  *
  * An empty optional field is left out rather than sent blank: the server reads
  * a blank as "clear this field", and a visitor who skipped a question did not
- * ask to erase an answer they gave earlier. A checkbox always has an answer.
+ * ask to erase an answer they gave earlier. A checkbox always has an answer; a
+ * multiselect's is the JSON array of what is ticked (WG-04).
  */
 function readFormAnswers(host: HTMLElement): Record<string, string> | null {
   const answers: Record<string, string> = {};
-  for (const el of host.querySelectorAll<HTMLInputElement>('input[data-def-id]')) {
+  for (const el of host.querySelectorAll<HTMLInputElement>(
+    'input[data-def-id], select[data-def-id], fieldset[data-def-id]',
+  )) {
     const id = el.dataset.defId ?? '';
     if (!id) continue;
     if (el.dataset.fieldType === 'boolean') {
       answers[id] = el.checked ? 'true' : 'false';
+      continue;
+    }
+    if (el.tagName === 'FIELDSET') {
+      const boxes = [...el.querySelectorAll<HTMLInputElement>('input')];
+      const ticked = boxes.filter((box) => box.checked).map((box) => box.value);
+      if (ticked.length > 0) answers[id] = JSON.stringify(ticked);
+      else if (el.dataset.required) {
+        boxes[0]?.focus();
+        return null;
+      }
       continue;
     }
     const value = el.value.trim();
@@ -4773,6 +4832,9 @@ button { -webkit-tap-highlight-color: transparent; }
 .nx-field { display: flex; flex-direction: column; gap: 4px; }
 .nx-field-label { font-size: 12px; font-weight: 600; color: var(--nx-muted); padding: 0 2px; }
 .nx-field-required { color: var(--nx-danger); margin-inline-start: 2px; }
+/* A multiselect question (WG-04): the fieldset groups its boxes, nothing more. */
+.nx-choices { border: 0; padding: 0; margin: 0; min-width: 0; }
+.nx-choices .nx-prechat-check { min-height: 32px; }
 .nx-prechat-input, .nx-input {
   font: inherit; font-size: 14px; font-weight: 500; color: var(--nx-text);
 }

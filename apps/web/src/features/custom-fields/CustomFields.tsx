@@ -15,7 +15,12 @@
  * different queries.
  */
 import { useEffect, useMemo, useState, type FormEvent, type ReactElement } from 'react';
-import { customFieldError, type CustomFieldValue } from '@siyahtus/types';
+import {
+  customFieldDisplayValue,
+  customFieldError,
+  parseMultiselectValue,
+  type CustomFieldValue,
+} from '@siyahtus/types';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useTranslate } from '../../lib/i18n.js';
 
@@ -44,10 +49,11 @@ export function CustomFields({ fields, canEdit, save }: Props): ReactElement | n
   const errorFor = useMemo(() => {
     const map = new Map<string, string | null>();
     for (const field of fields) {
-      map.set(
-        field.definition_id,
-        canEdit ? customFieldError(field, drafts[field.definition_id] ?? '') : null,
-      );
+      const draft = drafts[field.definition_id] ?? '';
+      // A stored value left as it is was accepted once — an answer under an
+      // option removed since (WG-04) must not block saving the other fields.
+      const untouched = field.value !== null && draft === field.value;
+      map.set(field.definition_id, canEdit && !untouched ? customFieldError(field, draft) : null);
     }
     return map;
   }, [fields, drafts, canEdit]);
@@ -86,7 +92,7 @@ export function CustomFields({ fields, canEdit, save }: Props): ReactElement | n
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
         {fields.map((field) => (
           <FragmentRow key={field.definition_id} label={field.label}>
-            {field.value ?? '—'}
+            {customFieldDisplayValue(field, field.value) ?? '—'}
           </FragmentRow>
         ))}
       </dl>
@@ -114,7 +120,49 @@ export function CustomFields({ fields, canEdit, save }: Props): ReactElement | n
               )}
             </span>
 
-            {field.type === 'boolean' ? (
+            {field.type === 'multiselect' ? (
+              // Any number of choices, kept as the JSON array the server stores.
+              <select
+                id={id}
+                multiple
+                value={parseMultiselectValue(value) ?? []}
+                onChange={(event) =>
+                  set(
+                    JSON.stringify([...event.target.selectedOptions].map((option) => option.value)),
+                  )
+                }
+                aria-invalid={message ? true : undefined}
+                aria-describedby={message ? `${id}-error` : undefined}
+                className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
+              >
+                {(field.options ?? []).map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            ) : field.type === 'select' || field.type === 'topic' ? (
+              <select
+                id={id}
+                value={value}
+                onChange={(event) => set(event.target.value)}
+                aria-invalid={message ? true : undefined}
+                aria-describedby={message ? `${id}-error` : undefined}
+                className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
+              >
+                <option value="">—</option>
+                {(field.options ?? []).map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+                {/* A stored answer whose option was since removed stays
+                    choosable, so opening the form does not change it. */}
+                {value && !(field.options ?? []).some((option) => option.value === value) && (
+                  <option value={value}>{value}</option>
+                )}
+              </select>
+            ) : field.type === 'boolean' ? (
               <select
                 id={id}
                 value={value}

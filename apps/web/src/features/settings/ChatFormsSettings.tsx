@@ -32,7 +32,7 @@
  * server enum leaking through.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState, type ReactElement } from 'react';
+import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { useSettingsLeaveGuard } from '../../components/settings/FormSaveBar.js';
 import { SaveBar } from '../../components/settings/SaveBar.js';
@@ -45,14 +45,18 @@ import { FieldError, required, useForm } from '../../lib/form.js';
 import { enumLabel } from '../../lib/enum-label.js';
 import { useTranslate } from '../../lib/i18n.js';
 import {
+  CUSTOM_FIELD_OPTIONS_MAX,
+  CUSTOM_FIELD_OPTION_LABEL_MAX,
   CUSTOM_FIELD_TYPES,
   DEFAULT_PRECHAT_CONFIG,
   FORM_PLACEMENTS,
   PRECHAT_FIELD_KEYS,
   formPlacementEntity,
+  isChoiceFieldType,
   prechatAsksAnything,
   type CustomFieldDefinition,
   type CustomFieldEntity,
+  type CustomFieldOption,
   type CustomFieldType,
   type FormPlacement,
   type PrechatConfig,
@@ -65,6 +69,9 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
   const api = useApiClient();
   const queryClient = useQueryClient();
   const [isRequired, setIsRequired] = useState(false);
+  const [options, setOptions] = useState<DraftOption[]>([]);
+  const [editing, setEditing] = useState<string | null>(null);
+  const teams = useTeams();
 
   // Every custom field, not one entity's: a form question is now either a
   // contact field or — for the `ticket` placement — a ticket one, and asking
@@ -86,7 +93,14 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
       type: CustomFieldType;
       required: boolean;
       form_placement: FormPlacement;
+      options?: CustomFieldOption[];
     }) => api.post<CustomFieldDefinition>('/settings/custom-fields', body),
+    onSuccess: invalidate,
+  });
+
+  const update = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: FieldPatch }) =>
+      api.patch<CustomFieldDefinition>(`/settings/custom-fields/${id}`, body),
     onSuccess: invalidate,
   });
 
@@ -100,6 +114,7 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
     validators: { label: required(t('settings.chatForms.labelError')) },
     onSubmit: async (values, { setSubmitError, reset }) => {
       const placement = values.placement as FormPlacement;
+      const type = values.type as CustomFieldType;
       try {
         await create.mutateAsync({
           // Derived, never chosen: the placement decides where its answers land,
@@ -107,12 +122,14 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
           // constraint from disagreeing about which entity that is.
           entity: formPlacementEntity(placement),
           label: values.label.trim(),
-          type: values.type as CustomFieldType,
+          type,
           required: isRequired,
           form_placement: placement,
+          ...(isChoiceFieldType(type) ? { options: toOptions(options, type) } : {}),
         });
         reset();
         setIsRequired(false);
+        setOptions([]);
       } catch (error) {
         setSubmitError(t(errorMessageKey(error)));
       }
@@ -120,11 +137,36 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
   });
   useSettingsLeaveGuard(form.isDirty, form.isSubmitting);
   const labelError = form.errorFor('label');
+  const newType = form.values.type as CustomFieldType;
+  const newOptionsError = isChoiceFieldType(newType) ? optionsErrorKey(options) : null;
 
   // Only the fields asked in the widget: the query returns every custom field,
   // on both entities, but this builder is about the ones with a placement.
-  const fields = (list.data?.items ?? []).filter((field) => field.form_placement !== null);
+  // Grouped by form and in each form's order (WG-04), so the list reads the
+  // way the widget asks.
+  const fields = (list.data?.items ?? [])
+    .filter((field) => field.form_placement !== null)
+    .sort(
+      (a, b) =>
+        FORM_PLACEMENTS.indexOf(a.form_placement!) - FORM_PLACEMENTS.indexOf(b.form_placement!) ||
+        a.position - b.position,
+    );
   const customPreChatCount = fields.filter((field) => field.form_placement === 'pre_chat').length;
+  // One topic per workspace, asked before the chat: the type is offered only
+  // where it can be saved.
+  const hasTopic = fields.some((field) => field.type === 'topic');
+  const offeredTypes = CUSTOM_FIELD_TYPES.filter(
+    (type) => type !== 'topic' || (form.values.placement === 'pre_chat' && !hasTopic),
+  );
+
+  /** The fields of `field`'s own form, in order — what ↑ / ↓ move it among. */
+  const siblings = (field: CustomFieldDefinition) =>
+    fields.filter((other) => other.form_placement === field.form_placement);
+
+  const move = (field: CustomFieldDefinition, by: -1 | 1) => {
+    const index = siblings(field).indexOf(field);
+    update.mutate({ id: field.id, body: { position: index + by } });
+  };
 
   return (
     <Section
@@ -170,7 +212,7 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
                   onChange={(event) => form.setValue('type', event.target.value)}
                   className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
                 >
-                  {CUSTOM_FIELD_TYPES.map((type) => (
+                  {offeredTypes.map((type) => (
                     <option key={type} value={type}>
                       {enumLabel(t, 'settings.fieldType', type)}
                     </option>
@@ -188,7 +230,13 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
                 <select
                   id="pcf-placement"
                   value={form.values.placement}
-                  onChange={(event) => form.setValue('placement', event.target.value)}
+                  onChange={(event) => {
+                    form.setValue('placement', event.target.value);
+                    // A topic is a pre-chat question only.
+                    if (event.target.value !== 'pre_chat' && form.values.type === 'topic') {
+                      form.setValue('type', 'select');
+                    }
+                  }}
                   className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
                 >
                   {FORM_PLACEMENTS.map((placement) => (
@@ -210,11 +258,22 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
 
               <button
                 type="submit"
-                disabled={!form.canSubmit}
+                disabled={!form.canSubmit || newOptionsError !== null}
                 className="mt-5 rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
               >
                 {form.isSubmitting ? t('settings.adding') : t('settings.chatForms.addButton')}
               </button>
+
+              {isChoiceFieldType(newType) && (
+                <OptionsEditor
+                  idPrefix="pcf-new"
+                  options={options}
+                  onChange={setOptions}
+                  topic={newType === 'topic'}
+                  teams={teams}
+                  errorKey={newOptionsError}
+                />
+              )}
 
               {form.submitError && (
                 <p role="alert" className="w-full text-2xs text-danger">
@@ -234,7 +293,29 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
           ) : (
             <ul className="divide-y divide-border">
               {fields.map((field) => (
-                <li key={field.id} className="flex items-center gap-3 px-4 py-2.5">
+                <li key={field.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
+                  {canEdit && (
+                    <span className="flex flex-col gap-1">
+                      <button
+                        type="button"
+                        aria-label={t('settings.chatForms.moveUp', { label: field.label })}
+                        disabled={siblings(field)[0] === field || update.isPending}
+                        onClick={() => move(field, -1)}
+                        className="rounded border border-border px-1.5 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-30"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={t('settings.chatForms.moveDown', { label: field.label })}
+                        disabled={siblings(field).at(-1) === field || update.isPending}
+                        onClick={() => move(field, 1)}
+                        className="rounded border border-border px-1.5 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-30"
+                      >
+                        ↓
+                      </button>
+                    </span>
+                  )}
                   <span className="flex-1 text-sm font-medium">{field.label}</span>
                   {/* Which form it shows on — otherwise one flat list gives no
                       way to tell a pre-chat question from a post-chat one. */}
@@ -245,6 +326,17 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
                     {enumLabel(t, 'settings.fieldType', field.type)}
                     {field.required ? t('settings.requiredSuffix') : ''}
                   </span>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      aria-expanded={editing === field.id}
+                      aria-label={t('settings.chatForms.editAriaLabel', { label: field.label })}
+                      onClick={() => setEditing(editing === field.id ? null : field.id)}
+                      className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+                    >
+                      {t('settings.chatForms.editButton')}
+                    </button>
+                  )}
                   {canEdit && (
                     <button
                       type="button"
@@ -262,6 +354,17 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
                     >
                       {t('settings.delete')}
                     </button>
+                  )}
+                  {canEdit && editing === field.id && (
+                    <FieldEditor
+                      field={field}
+                      teams={teams}
+                      onCancel={() => setEditing(null)}
+                      onSave={async (body) => {
+                        await update.mutateAsync({ id: field.id, body });
+                        setEditing(null);
+                      }}
+                    />
                   )}
                 </li>
               ))}
@@ -290,6 +393,266 @@ const PLACEMENT_KEYS: Record<FormPlacement, string> = {
 
 function placementKey(placement: FormPlacement): string {
   return PLACEMENT_KEYS[placement];
+}
+
+// --- List questions (WG-04) --------------------------------------------------
+
+/**
+ * One option as the admin edits it. `value` is set once the option has been
+ * saved and never changes after: rewording the label keeps every stored
+ * answer pointing at the same choice. A new option takes its label as value.
+ */
+interface DraftOption {
+  value?: string;
+  label: string;
+  target_group_id: number | null;
+}
+
+interface FieldPatch {
+  label?: string;
+  required?: boolean;
+  options?: CustomFieldOption[];
+  position?: number;
+}
+
+interface Team {
+  id: number;
+  name: string;
+}
+
+/** The workspace's teams, for a topic option's routing. */
+function useTeams(): Team[] {
+  const api = useApiClient();
+  const teams = useQuery({
+    queryKey: ['team', 'groups'],
+    queryFn: () => api.get<{ items: Team[] }>('/groups'),
+    staleTime: 60_000,
+  });
+  return teams.data?.items ?? [];
+}
+
+function toOptions(drafts: DraftOption[], type: CustomFieldType): CustomFieldOption[] {
+  return drafts.map((draft) => ({
+    value: draft.value ?? draft.label.trim(),
+    label: draft.label.trim(),
+    // Only a topic routes; a team left on a draft of another type is dropped.
+    ...(type === 'topic' && draft.target_group_id !== null
+      ? { target_group_id: draft.target_group_id }
+      : {}),
+  }));
+}
+
+function draftsOf(field: CustomFieldDefinition): DraftOption[] {
+  return (field.options ?? []).map((option) => ({
+    value: option.value,
+    label: option.label,
+    target_group_id: option.target_group_id ?? null,
+  }));
+}
+
+/**
+ * What stops these options being saved, as a catalogue key — the same rules
+ * the server holds (`customFieldOptionsProblem`), said in the admin's language.
+ * The length cap is the inputs' own `maxLength`, and the count cap disables
+ * "Add option", so neither needs a sentence.
+ */
+function optionsErrorKey(drafts: DraftOption[]): string | null {
+  if (drafts.length === 0) return 'settings.chatForms.options.errorEmpty';
+  if (drafts.some((draft) => !draft.label.trim())) return 'settings.chatForms.options.errorLabel';
+  const values = drafts.map((draft) => draft.value ?? draft.label.trim());
+  if (new Set(values).size !== values.length) return 'settings.chatForms.options.errorDuplicate';
+  return null;
+}
+
+/**
+ * The options of a list question: a label per row, and — for a topic — the
+ * team that choice routes to (none: the routing rules decide). The visitor
+ * sees only the label, so a queue's name never leaks into the widget.
+ */
+function OptionsEditor({
+  idPrefix,
+  options,
+  onChange,
+  topic,
+  teams,
+  errorKey,
+}: {
+  idPrefix: string;
+  options: DraftOption[];
+  onChange: (next: DraftOption[]) => void;
+  topic: boolean;
+  teams: Team[];
+  errorKey: string | null;
+}): ReactElement {
+  const t = useTranslate();
+  const set = (index: number, change: Partial<DraftOption>) =>
+    onChange(options.map((option, i) => (i === index ? { ...option, ...change } : option)));
+
+  return (
+    <fieldset className="flex w-full flex-col gap-2">
+      <legend className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+        {t('settings.chatForms.options.legend')}
+      </legend>
+      {topic && (
+        <p className="text-2xs text-content-secondary">
+          {t('settings.chatForms.options.topicHint')}
+        </p>
+      )}
+      {options.map((option, index) => (
+        <div key={index} className="flex flex-wrap items-center gap-2">
+          <input
+            id={`${idPrefix}-option-${index}`}
+            value={option.label}
+            onChange={(event) => set(index, { label: event.target.value })}
+            aria-label={t('settings.chatForms.options.labelAria', { index: index + 1 })}
+            maxLength={CUSTOM_FIELD_OPTION_LABEL_MAX}
+            className="w-56 rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
+          />
+          {topic && (
+            <select
+              value={option.target_group_id ?? ''}
+              onChange={(event) =>
+                set(index, {
+                  target_group_id: event.target.value ? Number(event.target.value) : null,
+                })
+              }
+              aria-label={t('settings.chatForms.options.teamAria', { index: index + 1 })}
+              className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
+            >
+              <option value="">{t('settings.chatForms.options.noTeam')}</option>
+              {teams.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <button
+            type="button"
+            onClick={() => onChange(options.filter((_, i) => i !== index))}
+            aria-label={t('settings.chatForms.options.removeAria', { index: index + 1 })}
+            className="rounded border border-border px-1.5 py-0.5 text-2xs text-content-secondary transition-colors hover:bg-surface-2 hover:text-danger"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        disabled={options.length >= CUSTOM_FIELD_OPTIONS_MAX}
+        onClick={() => onChange([...options, { label: '', target_group_id: null }])}
+        className="self-start rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+      >
+        {t('settings.chatForms.options.add')}
+      </button>
+      {errorKey && <p className="text-2xs text-content-secondary">{t(errorKey)}</p>}
+    </fieldset>
+  );
+}
+
+/**
+ * Edit a form question in place (WG-04): its label, whether it is required
+ * and, for a list, its options. The type and the form it is on stay — a
+ * re-typed field is a new field, and its answers were given to this one.
+ */
+function FieldEditor({
+  field,
+  teams,
+  onSave,
+  onCancel,
+}: {
+  field: CustomFieldDefinition;
+  teams: Team[];
+  onSave: (body: FieldPatch) => Promise<void>;
+  onCancel: () => void;
+}): ReactElement {
+  const t = useTranslate();
+  const [label, setLabel] = useState(field.label);
+  const [isRequired, setIsRequired] = useState(field.required);
+  const [options, setOptions] = useState(() => draftsOf(field));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const choice = isChoiceFieldType(field.type);
+  const optionsError = choice ? optionsErrorKey(options) : null;
+  const id = `pcf-edit-${field.id}`;
+
+  async function save(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    if (!label.trim() || optionsError || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave({
+        label: label.trim(),
+        required: isRequired,
+        ...(choice ? { options: toOptions(options, field.type) } : {}),
+      });
+    } catch (cause) {
+      setError(t(errorMessageKey(cause)));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={(event) => void save(event)}
+      noValidate
+      className="flex w-full flex-wrap items-start gap-3 rounded-md bg-surface-2 p-3"
+    >
+      <label htmlFor={`${id}-label`} className="flex w-56 flex-col gap-1">
+        <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+          {t('settings.chatForms.labelLabel')}
+        </span>
+        <input
+          id={`${id}-label`}
+          value={label}
+          onChange={(event) => setLabel(event.target.value)}
+          maxLength={120}
+          className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
+        />
+      </label>
+      <label className="mt-5 flex items-center gap-2 py-1.5 text-sm text-content-secondary">
+        <input
+          type="checkbox"
+          checked={isRequired}
+          onChange={(event) => setIsRequired(event.target.checked)}
+        />
+        {t('settings.requiredLabel')}
+      </label>
+      {choice && (
+        <OptionsEditor
+          idPrefix={id}
+          options={options}
+          onChange={setOptions}
+          topic={field.type === 'topic'}
+          teams={teams}
+          errorKey={optionsError}
+        />
+      )}
+      <div className="flex w-full gap-2">
+        <button
+          type="submit"
+          disabled={!label.trim() || optionsError !== null || saving}
+          className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+        >
+          {saving ? t('settings.saving') : t('settings.save')}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-md border border-border px-3 py-1.5 text-sm text-content-secondary transition-colors hover:bg-surface-2"
+        >
+          {t('settings.cancel')}
+        </button>
+      </div>
+      {error && (
+        <p role="alert" className="w-full text-2xs text-danger">
+          {error}
+        </p>
+      )}
+    </form>
+  );
 }
 
 // --- Built-in fields (WG-01) -------------------------------------------------

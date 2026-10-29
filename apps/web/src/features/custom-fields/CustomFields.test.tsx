@@ -92,4 +92,50 @@ describe('CustomFields localisation (NFR-I18N2)', () => {
     renderWithLocale(<CustomFields fields={[playerId, balance]} canEdit save={vi.fn()} />, 'tr');
     expect(screen.getByRole('button', { name: 'Alanları kaydet' })).toBeInTheDocument();
   });
+
+  describe('list questions (WG-04)', () => {
+    const options = [
+      { value: 'withdrawal', label: 'Para çekme' },
+      { value: 'deposit', label: 'Para yatırma' },
+    ];
+    const topic: CustomFieldValue = {
+      definition_id: 'def-3',
+      label: 'Konu',
+      type: 'topic',
+      required: false,
+      value: 'withdrawal',
+      form_placement: 'pre_chat',
+      show_in_table: false,
+      options,
+    };
+    const games: CustomFieldValue = {
+      ...topic,
+      definition_id: 'def-4',
+      label: 'Oyunlar',
+      type: 'multiselect',
+      value: '["deposit","withdrawal"]',
+    };
+
+    it('shows a stored choice by its label to a reader', () => {
+      render(<CustomFields fields={[topic, games]} canEdit={false} save={vi.fn()} />);
+      expect(screen.getByText('Para çekme')).toBeInTheDocument();
+      expect(screen.getByText('Para yatırma, Para çekme')).toBeInTheDocument();
+    });
+
+    it('edits a choice from its options and saves the stored value', async () => {
+      const save = vi.fn().mockResolvedValue(undefined);
+      render(<CustomFields fields={[topic]} canEdit save={save} />);
+      await userEvent.selectOptions(screen.getByLabelText(/Konu/), 'Para yatırma');
+      await userEvent.click(screen.getByRole('button', { name: /save/i }));
+      await waitFor(() => expect(save).toHaveBeenCalledWith({ 'def-3': 'deposit' }));
+    });
+
+    it('does not block saving over an answer whose option was removed since', async () => {
+      const save = vi.fn().mockResolvedValue(undefined);
+      render(<CustomFields fields={[{ ...topic, value: 'gone' }, balance]} canEdit save={save} />);
+      await userEvent.type(screen.getByLabelText(/Balance/), '5');
+      await userEvent.click(screen.getByRole('button', { name: /save/i }));
+      await waitFor(() => expect(save).toHaveBeenCalledWith({ 'def-2': '5' }));
+    });
+  });
 });

@@ -14,6 +14,7 @@ import { reports } from './reports.js';
 import { settings } from './settings.js';
 import { shell } from './shell.js';
 import { team } from './team.js';
+import { timeline } from './timeline.js';
 
 /** The Turkish catalogue, one entry per namespace file. */
 export const trNamespaces: Record<Namespace, Messages> = {
@@ -32,6 +33,7 @@ export const trNamespaces: Record<Namespace, Messages> = {
   settings,
   shell,
   team,
+  timeline,
 };
 
 /** The flat lookup table `t()` reads. Throws at import on a duplicate key. */

@@ -14545,7 +14545,7 @@
           "329"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-29T07:09:43.055Z",
+        "updatedAt": "2026-10-29T07:10:52.971Z",
         "subtasks": [
           {
             "id": 1,
@@ -14565,13 +14565,13 @@
             "description": "Zaman çizelgesi ekranı: TimelinePage, sayfa içi süzme, bağlantı ayırıcıları, dışa aktarma modali",
             "details": "features/timeline/TimelinePage.tsx; üst görev KURALLAR'ının arayüz maddeleri (sanallaştırma YOK, 200 satırlık sayfalar, sayfa içi süzme, workspace TZ + UTC tooltip, bağlantı ayırıcıları, saklama notu); dışa aktarma modali; Inbox'tan giriş. Uçlar ve sözleşme önceki alt görevde bitti: `packages/contract` + üretilen tipler tek kaynak; sunucu davranışını kod haritasıyla bul (`trace_path`, `search_graph`), düzenleyeceğin dosyayı Read ile oku. Ayrıntı ve kabul maddeleri: üst görev #334 details (tek kaynak).",
             "testStrategy": "e2e (Inbox'tan aç, AI karar satırını bul, CSV indir, \"Thread ID (chat_id)\" başlığı); `pnpm test:gate`.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "334.1"
             ],
             "parentId": "334",
             "priority": "medium",
-            "updatedAt": "2026-10-16T07:00:34.672Z"
+            "updatedAt": "2026-10-29T07:10:52.971Z"
           }
         ]
       },
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-29T07:09:43.056Z",
+      "lastModified": "2026-10-29T07:10:52.972Z",
       "taskCount": 390,
       "completedCount": 339,
       "tags": [

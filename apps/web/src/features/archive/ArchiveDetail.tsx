@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { ArchiveConversationDetail } from '@siyahtus/types';
 import { CopyId } from '../../components/CopyId.js';
+import { timelineAddress } from '../timeline/timeline.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { LoadError } from '../../components/LoadError.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
@@ -120,6 +121,7 @@ function ConnectionHeader({
   const navigate = useNavigate();
   const reopen = useReopenConnection();
   const closed = detail.ended_at !== null;
+  const timelineAllowed = useAuth((s) => s.agent?.capabilities?.['timeline.view']) !== 'none';
 
   return (
     <header className="flex flex-col gap-2 border-b border-border px-5 py-3">
@@ -138,6 +140,15 @@ function ConnectionHeader({
           >
             {t('archive.action.openInbox')}
           </button>
+          {timelineAllowed && (
+            <button
+              type="button"
+              onClick={() => navigate(timelineAddress(detail.chat_id, detail.thread_id))}
+              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-2"
+            >
+              {t('archive.action.timeline')}
+            </button>
+          )}
           {closed && canReopen && (
             <button
               type="button"

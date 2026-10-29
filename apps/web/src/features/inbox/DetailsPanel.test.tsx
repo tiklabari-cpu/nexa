@@ -163,6 +163,46 @@ describe('DetailsPanel visitor context', () => {
   });
 });
 
+describe('DetailsPanel — timeline entry (ID-09 · tm 334.2)', () => {
+  function renderWithTimeline(onOpenTimeline?: () => void) {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const chat = baseChat();
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <DetailsPanel
+          chat={chat}
+          chatId={chat.id}
+          {...(onOpenTimeline ? { onOpenTimeline } : {})}
+        />
+      </QueryClientProvider>,
+    );
+  }
+
+  it('opens the day timeline from the Conversation section', () => {
+    authState.agent = { role: 'agent', account_id: 'me' };
+    const open = vi.fn();
+    renderWithTimeline(open);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Timeline' }));
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers nothing to a caller whose timeline.view is none, or where there is no router', () => {
+    authState.agent = {
+      role: 'agent',
+      account_id: 'me',
+      capabilities: { 'timeline.view': 'none' },
+    };
+    const { unmount } = renderWithTimeline(vi.fn());
+    expect(screen.queryByRole('button', { name: 'Timeline' })).toBeNull();
+    unmount();
+
+    authState.agent = { role: 'agent', account_id: 'me' };
+    renderWithTimeline();
+    expect(screen.queryByRole('button', { name: 'Timeline' })).toBeNull();
+  });
+});
+
 describe('DetailsPanel — supervisor takeover', () => {
   it('renders no Take over control for an agent-role caller', () => {
     authState.agent = { role: 'agent' };

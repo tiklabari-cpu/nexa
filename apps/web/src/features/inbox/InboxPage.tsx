@@ -6,7 +6,7 @@
  * comes from a token; no component hard-codes a hex value.
  */
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
@@ -93,6 +93,7 @@ import {
   type ChatPriorityFilter,
 } from './chat-priority.js';
 import { parseChatSort, writeChatSort, type ChatSort } from './chat-sort.js';
+import { timelineAddress } from '../timeline/timeline.js';
 import type { InboxView, TicketView, TrafficTab } from './types.js';
 
 /**
@@ -178,6 +179,7 @@ export function InboxPage(): ReactElement {
   const t = useTranslate();
   usePageTitle(t('inbox.rail.title'));
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const [selection, setSelection] = useState<Selection>({ kind: 'chat', view: 'all' });
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -1173,6 +1175,7 @@ export function InboxPage(): ReactElement {
                     setSelection({ kind: 'chat', view: 'all' });
                     setSelectedId(id);
                   }}
+                  onOpenTimeline={() => navigate(timelineAddress(selectedId))}
                   onTransferred={onTransferred}
                 />
               ))}

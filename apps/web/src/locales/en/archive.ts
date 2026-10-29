@@ -147,6 +147,7 @@ export const archive: Messages = {
 
   // Actions — the archive itself is read-only; these leave it
   'archive.action.openInbox': 'Open in Inbox',
+  'archive.action.timeline': 'Timeline',
   'archive.action.reopen': 'Reopen',
   'archive.action.reopening': 'Reopening…',
 

@@ -531,6 +531,40 @@ test.describe('WCAG 2.1 AA (axe)', () => {
       });
 
       /**
+       * The conversation timeline (ID-09 · tm 334.2): opened from an archived
+       * conversation when the workspace has one — a filter box, eleven kind
+       * switches and a list of rows with expandable details — otherwise the
+       * page's own "no conversation chosen" message.
+       */
+      test('timeline has no serious or critical violations', async ({ agentPage }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/archive');
+        const rows = agentPage.getByRole('list', { name: 'Conversations' });
+        await expect(rows.or(agentPage.getByText('No archive yet'))).toBeVisible();
+        if ((await rows.getByRole('button').count()) > 0) {
+          await rows.getByRole('button').first().click();
+          // The detail loads behind the click; a loaded suite can take longer than the default 10 s.
+          await agentPage
+            .getByRole('button', { name: 'Timeline', exact: true })
+            .click({ timeout: 30_000 });
+        } else {
+          await agentPage.goto('/app/inbox/timeline');
+        }
+        await scanPanel(agentPage, 'Timeline', theme, testInfo, async () => {
+          await expect(
+            agentPage.getByRole('heading', { name: 'Timeline', level: 1 }),
+          ).toBeVisible();
+          // Past the loading line: the rows, or the page's own empty message.
+          await expect(
+            agentPage
+              .getByRole('list', { name: 'Timeline rows' })
+              .or(agentPage.getByText('No conversation chosen'))
+              .or(agentPage.getByText('Nothing recorded yet')),
+          ).toBeVisible();
+        });
+      });
+
+      /**
        * The logo's app menu, open (FR-MOD-01.1.1).
        *
        * Closed by default, so the inbox scan above never renders its panel —
@@ -1607,6 +1641,7 @@ test.describe('WCAG 2.1 AA (axe)', () => {
     const SCANNED_APP_ROUTES = [
       '/app/home',
       '/app/inbox',
+      '/app/inbox/timeline',
       '/app/archive',
       '/app/customers',
       '/app/customers/campaigns',

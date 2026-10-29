@@ -293,11 +293,36 @@ export class ApiClient {
    * reason the caller needs.
    */
   getFile(path: string, init: RequestInit = {}): Promise<{ blob: Blob; filename: string | null }> {
+    return this.#file('GET', path, undefined, init);
+  }
+
+  /**
+   * {@link getFile} for an export that is asked for with a body — the
+   * conversation timeline's (`POST /chats/{id}/timeline/export`, ID-09): the
+   * format and the masking choice travel as JSON, the file comes back.
+   */
+  postFile(
+    path: string,
+    body: unknown,
+    init: RequestInit = {},
+  ): Promise<{ blob: Blob; filename: string | null }> {
+    return this.#file('POST', path, body, init);
+  }
+
+  #file(
+    method: 'GET' | 'POST',
+    path: string,
+    body: unknown,
+    init: RequestInit,
+  ): Promise<{ blob: Blob; filename: string | null }> {
     return this.#withSession(async (token) => {
+      const headers = this.#authHeaders(init, token);
+      if (body !== undefined) headers.set('Content-Type', 'application/json');
       const response = await this.#fetch(`${this.#baseUrl}${path}`, {
         ...init,
-        method: 'GET',
-        headers: this.#authHeaders(init, token),
+        method,
+        headers,
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
         credentials: 'same-origin',
       });
       if (!response.ok) {

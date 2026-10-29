@@ -27,7 +27,7 @@
  * A capability whose surface does not exist yet is not listed here — a row
  * that changes nothing would tell the Founder something false. The feature
  * that builds the surface adds its row with its check (timeline export #334,
- * AI publish #316, team takeover #326, team-scoped reports #368).
+ * AI publish #316, team-scoped reports #368).
  *
  * Here rather than in `apps/api` for the reason `role-scopes.ts` is: the REST
  * edge and the RTM gateway have to reach the same answer for the same session
@@ -148,9 +148,9 @@ export const CAPABILITIES = [
   {
     // `own` = assigned or joined chats; `team` = today's `chats--access`
     // rule (the chat's teams ∩ the person's); `all` = the workspace. Archive
-    // and takeover ride on it: the archive applies the same visibility rule,
-    // and taking over or supervising any chat is what `chats--all:rw` opens
-    // today. Team-bounded takeover is #326's row. K7: an Ekip Üyesi sees
+    // and supervision ride on it: the archive applies the same visibility
+    // rule, and watching a chat needs only seeing it. Taking one over is
+    // `chats.takeover`, below, inside what this row shows. K7: an Ekip Üyesi sees
     // their own teams' chats and the ones they are in, never another team's.
     key: 'chats.view',
     group: 'chats',
@@ -165,6 +165,23 @@ export const CAPABILITIES = [
     },
     floorRole: 'agent',
     defaults: { owner: 'all', admin: 'all', team_lead: 'team', agent: 'team' },
+  },
+  {
+    // Checked (RL-03 · tm 326): seizing a conversation from whoever holds it,
+    // by `POST /chats/{id}/takeover`. `team` = a chat routed to a team the
+    // person leads (`group_agents.is_lead`) — any one of the chat's teams is
+    // enough; `all` = any chat the person may see. Bounded by `chats.view`
+    // either way: a chat the person cannot see is not there to seize. The
+    // floor keeps it off an Ekip Üyesi (RL-03 "Ekip Üyesi devralamaz");
+    // RL-03-S3 — an Ekip Lideri taking over another team's chat — is the
+    // Founder raising that cell to `all`.
+    key: 'chats.takeover',
+    group: 'chats',
+    labelKey: 'permissions.capability.chats.takeover',
+    values: ['none', 'team', 'all'],
+    scopes: {},
+    floorRole: 'team_lead',
+    defaults: { owner: 'all', admin: 'all', team_lead: 'team', agent: 'none' },
   },
   {
     // `all` is also the ticket rules and the ticket email templates — they are

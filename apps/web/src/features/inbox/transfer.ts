@@ -20,7 +20,8 @@ export interface TransferTeam {
   topic_role?: string | null;
   /** Members accepting chats now (`Group.accepting_count`); absent from an older server. */
   accepting_count?: number;
-  agents?: Array<{ agent_id: string }>;
+  /** `lead`: they lead this team (RL-01); absent from a server older than tm 324.2. */
+  agents?: Array<{ agent_id: string; lead?: boolean }>;
 }
 
 /**

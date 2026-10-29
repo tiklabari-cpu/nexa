@@ -62,7 +62,8 @@ describe('GET /chats `channel` (FR-MOD-02.1.4)', () => {
     for (const channel of ADAPTER_CHANNEL_TYPES) {
       expect(views).not.toContain(channel);
     }
-    // And the axis it *is* — eight buckets, unchanged by this filter.
+    // And the axis it *is* — nine buckets (`team`, RL-03 · tm 326), unchanged
+    // by this filter.
     expect(views).toEqual([
       'all',
       'my',
@@ -72,6 +73,7 @@ describe('GET /chats `channel` (FR-MOD-02.1.4)', () => {
       'archived',
       'ai',
       'ai_solved',
+      'team',
     ]);
   });
 });

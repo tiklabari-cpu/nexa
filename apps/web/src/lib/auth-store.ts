@@ -66,6 +66,12 @@ export interface CurrentAgent {
   organization_id: string;
   license_id: string;
   scopes: string[];
+  /**
+   * What the caller's role holds in the permission matrix (RL-02 · tm 325.2),
+   * for a capability no scope carries (`chats.takeover`, tm 326). Absent from
+   * an older server.
+   */
+  capabilities?: Record<string, string>;
   routing_status: 'accepting_chats' | 'not_accepting_chats' | 'offline';
   /**
    * Every channel this agent can be reached through (FR-MOD-13.8), per user and

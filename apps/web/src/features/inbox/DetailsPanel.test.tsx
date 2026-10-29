@@ -20,7 +20,13 @@ import type { ChatDetail, ChatVisitor } from './types.js';
 
 const { api, authState } = vi.hoisted(() => ({
   api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
-  authState: { agent: null as { role: string } | null },
+  authState: {
+    agent: null as {
+      role: string;
+      account_id?: string;
+      capabilities?: Record<string, string>;
+    } | null,
+  },
 }));
 
 vi.mock('../../lib/auth-store.js', () => ({
@@ -172,6 +178,57 @@ describe('DetailsPanel — supervisor takeover', () => {
     expect(screen.getByRole('button', { name: 'Take over' })).toBeInTheDocument();
   });
 
+  // RL-03 · tm 326: the capability decides, and `team` reaches a team the caller leads.
+  function serveTeams(): void {
+    api.get.mockImplementation((path: string) =>
+      path === '/groups'
+        ? Promise.resolve({
+            items: [
+              { id: 7, name: 'Sales', agents: [{ agent_id: 'lead-1', lead: true }] },
+              { id: 8, name: 'Support', agents: [{ agent_id: 'lead-1', lead: false }] },
+            ],
+          })
+        : Promise.resolve({ items: [] }),
+    );
+  }
+
+  it('renders the control for an Ekip Lideri on a chat of a team they lead (RL-03)', async () => {
+    authState.agent = {
+      role: 'team_lead',
+      account_id: 'lead-1',
+      capabilities: { 'chats.takeover': 'team' },
+    };
+    serveTeams();
+    renderPanel({ ...baseChat(), access: { group_ids: [8, 7] } });
+
+    expect(await screen.findByRole('button', { name: 'Take over' })).toBeInTheDocument();
+  });
+
+  it('renders no control for an Ekip Lideri on a team they are only a member of (RL-03)', async () => {
+    authState.agent = {
+      role: 'team_lead',
+      account_id: 'lead-1',
+      capabilities: { 'chats.takeover': 'team' },
+    };
+    serveTeams();
+    renderPanel({ ...baseChat(), access: { group_ids: [8] } });
+
+    // The teams have loaded (the row names Support) and still no control.
+    expect(await screen.findByText('Support')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Take over' })).not.toBeInTheDocument();
+  });
+
+  it('follows the matrix over the role: `all` for a lead, `none` for an admin (RL-03-S3)', () => {
+    authState.agent = { role: 'team_lead', capabilities: { 'chats.takeover': 'all' } };
+    const { unmount } = renderPanel(baseChat());
+    expect(screen.getByRole('button', { name: 'Take over' })).toBeInTheDocument();
+    unmount();
+
+    authState.agent = { role: 'admin', capabilities: { 'chats.takeover': 'none' } };
+    renderPanel(baseChat());
+    expect(screen.queryByRole('button', { name: 'Take over' })).not.toBeInTheDocument();
+  });
+
   it('opens a confirmation naming the current assignee, then calls the takeover endpoint', async () => {
     authState.agent = { role: 'admin' };
     api.get.mockImplementation((path: string) =>
@@ -215,7 +272,7 @@ describe('DetailsPanel — supervisor takeover', () => {
       new ApiClientError({
         type: 'authorization',
         status: 403,
-        message: 'Only an admin or owner can take over a chat.',
+        message: 'Your role does not have the chats.takeover permission in this workspace.',
         requestId: 'req-1',
       }),
     );
@@ -226,7 +283,7 @@ describe('DetailsPanel — supervisor takeover', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Take over' }));
 
     expect(
-      await within(dialog).findByText('Only an admin or owner can take over a chat.'),
+      await within(dialog).findByText('Your role cannot take over this chat.'),
     ).toBeInTheDocument();
     // The dialog stays open — the caller may not retry a 403, but should see why it failed.
     expect(screen.getByRole('dialog')).toBeInTheDocument();
@@ -251,17 +308,15 @@ describe('DetailsPanel — supervisor takeover', () => {
     expect(
       await within(dialog).findByText('Another supervisor took this chat over first.'),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByText('Only an admin or owner can take over a chat.'),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Your role cannot take over this chat.')).not.toBeInTheDocument();
   });
 
   it.each([
     [
       'authorization',
       403,
-      'Only an admin or owner can take over a chat.',
-      'yalnızca yönetici ya da sahip',
+      'Your role does not have the chats.takeover permission in this workspace.',
+      'Rolünüz bu sohbeti devralamaz',
     ],
     [
       'takeover_conflict',

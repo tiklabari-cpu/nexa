@@ -44,9 +44,13 @@ const set = (role: string, capability: string, value: string): CapabilityOverrid
 });
 
 describe('the capability catalogue', () => {
-  it('stays a first version a Founder can read: 20–30 rows, unique keys, every group used', () => {
+  // RL-02 kept the first version to 20–30 rows (it shipped 25, tm 325.1); the
+  // features that came after add their rows as the catalogue says they must
+  // (RL-03's `chats.takeover` was the 31st, tm 326). The ceiling is what keeps
+  // the screen readable — raise it as a decision, not to make a test pass.
+  it('stays a matrix a Founder can read: 20–35 rows, unique keys, every group used', () => {
     expect(CATALOGUE.length).toBeGreaterThanOrEqual(20);
-    expect(CATALOGUE.length).toBeLessThanOrEqual(30);
+    expect(CATALOGUE.length).toBeLessThanOrEqual(35);
     const keys = CATALOGUE.map((c) => c.key);
     expect(new Set(keys).size).toBe(keys.length);
     expect(new Set(CATALOGUE.map((c) => c.group))).toEqual(new Set(CAPABILITY_GROUPS));
@@ -225,6 +229,21 @@ describe('the owner’s K7 defaults (tm 325.5)', () => {
     const expected = def('reports.view').values.includes('team') ? 'team' : 'none';
     expect(at('team_lead')['reports.view']).toBe(expected);
     expect(scopesForRole('team_lead', [])).not.toContain('reports_read');
+  });
+
+  it('lets an Ekip Lideri take over in the teams they lead, and never an Ekip Üyesi (RL-03 · FR-MOD-04.RBAC)', () => {
+    expect(at('owner')['chats.takeover']).toBe('all');
+    expect(at('admin')['chats.takeover']).toBe('all');
+    expect(at('team_lead')['chats.takeover']).toBe('team');
+    expect(at('agent')['chats.takeover']).toBe('none');
+    // A checked row: it moves no scope, so the role sets stay what they were.
+    expect(def('chats.takeover').scopes).toEqual({});
+    // RL-03-S3: the Founder may open every team to a lead, never takeover to a member.
+    expect(capabilityChangeProblem(set('team_lead', 'chats.takeover', 'all'))).toBeNull();
+    expect(capabilityChangeProblem(set('agent', 'chats.takeover', 'team'))).toBe('below_floor');
+    expect(capabilitiesForRole('agent', [set('agent', 'chats.takeover', 'all')])).toMatchObject({
+      'chats.takeover': 'none',
+    });
   });
 
   it('lets a Yönetici read billing and not change it, in a cell the Founder cannot unlock (FR-MOD-04.RBAC)', () => {

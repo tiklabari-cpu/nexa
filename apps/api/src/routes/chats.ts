@@ -30,7 +30,7 @@ import { conversationView } from '../services/ai/conversation/conversation-view.
 import { loadConversation } from '../services/ai/conversation/state-store.js';
 import { toTurnState } from '../services/ai/conversation/turn.js';
 import { SupervisionService } from '../services/traffic/supervision-service.js';
-import { roleAtLeast, type Principal } from '../services/auth/principal.js';
+import type { Principal } from '../services/auth/principal.js';
 import { logUnsentMail } from '../services/mail/delivery.js';
 import type { PushProvider } from '../services/push/push-provider.js';
 import { pushToAgentDevices } from '../services/notifications/push.js';
@@ -42,7 +42,17 @@ const chatIdSchema = z.string().refine(isShortId, 'not a valid chat id');
 
 const listQuery = z.object({
   view: z
-    .enum(['all', 'my', 'queued', 'unassigned', 'supervised', 'archived', 'ai', 'ai_solved'])
+    .enum([
+      'all',
+      'my',
+      'queued',
+      'unassigned',
+      'supervised',
+      'archived',
+      'ai',
+      'ai_solved',
+      'team',
+    ])
     .default('all'),
   /**
    * The inbox's channel views (FR-MOD-02.1.4) — a second axis, not a ninth
@@ -670,26 +680,20 @@ export default async function chatRoutes(
 
   app.post<{ Params: { chatId: string } }>(
     '/chats/:chatId/takeover',
-    { config: { scopes: ['chats--all:rw'] } },
+    { config: { scopes: ['chats--all:rw', 'chats--access:rw'] } },
     async (request, reply) => {
       const chatId = parse(chatIdSchema, request.params.chatId);
       const body = parse(takeoverSchema, request.body ?? {});
 
-      // Both gates, as with agent suspension: the scope says the token may reach
-      // every chat, the role says the person may seize one. Takeover is an
-      // authority action on someone else's conversation — not the consented
-      // hand-off `transfer` is — so a bot token or an agent-role user is refused.
-      const principal = request.requirePrincipal();
-      if (principal.kind !== 'agent') {
-        throw ApiError.authorization('Only a signed-in teammate can take over a chat.');
-      }
-      if (!roleAtLeast(principal.role, 'admin')) {
-        throw ApiError.authorization('Only an admin or owner can take over a chat.');
-      }
-
+      // The scope says the token may write to chats at all; whether the person
+      // may seize *this* one is their `chats.takeover` capability against the
+      // chat's teams (RL-03 · tm 326), which `takeover` decides inside the
+      // transaction that seizes it. A Team Lead holds `chats--access:rw` and
+      // takes over in the teams they lead; a bot token or an Ekip Üyesi is
+      // refused there whatever scope the token carries.
       const chat = await chats.takeover(
         request.tenant(),
-        principal,
+        request.requirePrincipal(),
         chatId,
         body.reason ?? null,
         request.auditContext(),

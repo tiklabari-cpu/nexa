@@ -1475,6 +1475,7 @@ export const settings: Messages = {
   'permissions.group.billing': 'Faturalama',
   'permissions.group.logs': 'Kayıtlar',
   'permissions.capability.chats.view': 'Sohbetleri görme',
+  'permissions.capability.chats.takeover': 'Sohbeti devralma',
   'permissions.capability.tickets.view': 'Talepleri görme',
   'permissions.capability.customers.contact.view': 'Oyuncunun e-postasını ve kullanıcı adını görme',
   'permissions.capability.customers.edit': 'Oyuncu kayıtlarını düzenleme',

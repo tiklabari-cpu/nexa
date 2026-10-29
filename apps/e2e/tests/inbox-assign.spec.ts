@@ -288,8 +288,13 @@ test.describe('when the system changes availability', () => {
       await expect(alert).toContainText(
         `${RECEIVER.name} did not reply to a new chat in time and nobody else in the team was free.`,
       );
-      await alert.getByRole('link', { name: 'Open chat' }).click();
-      await expect(agentPage).toHaveURL(new RegExp(`chat=${chatId}`));
+      // The link names the chat; the address itself is transient — the inbox
+      // consumes `?chat=` and replaces it as soon as it has selected the chat
+      // (`InboxPage.tsx`), so asserting the URL after the click raced that
+      // (flaky 11 times, tm 326). The transcript is what opening it means.
+      const open = alert.getByRole('link', { name: 'Open chat' });
+      await expect(open).toHaveAttribute('href', new RegExp(`chat=${chatId}`));
+      await open.click();
       await expect(agentPage.getByRole('log', { name: 'Conversation transcript' })).toContainText(
         question,
       );

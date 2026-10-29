@@ -18,7 +18,7 @@ import {
 import { RiskSection } from '../risk/RiskSection.js';
 import { AiHandoffSection, JUDGE_SCOPES } from './AiHandoffCard.js';
 import { PlayerCard } from './PlayerCard.js';
-import { SUPERVISOR_ROLES } from './roles.js';
+import { canTakeOver } from './takeover.js';
 import { TransferDialog } from './TransferDialog.js';
 import { TEAMS_KEY, transferTeams, type TransferNotice, type TransferTeam } from './transfer.js';
 import { useChatAction } from './useInbox.js';
@@ -78,12 +78,10 @@ export function DetailsPanel({
   const api = useApiClient();
   const actions = useChatAction(chatId);
   const role = useAuth((s) => s.agent?.role ?? null);
+  const accountId = useAuth((s) => s.agent?.account_id ?? null);
+  const capabilities = useAuth((s) => s.agent?.capabilities);
   const scopes = useAuth((s) => s.agent?.scopes) ?? [];
   const t = useTranslate();
-  // Takeover only makes sense on a chat still open to reassign (a closed one
-  // answers 409 `chat_inactive`) and to a supervisor-ranked caller — the same
-  // pair the route itself checks (chats.ts: roleAtLeast(role, 'admin')).
-  const canTakeover = chat.active && role !== null && SUPERVISOR_ROLES.has(role);
   // Handing the chat to a named teammate is the consented move, so it asks for
   // what `POST /chats/{id}/transfer` asks for — write access to the chat — and
   // not for a rank. An ordinary agent holds `chats--access:rw` and may do it.
@@ -136,6 +134,17 @@ export function DetailsPanel({
     queryFn: () => api.get<{ items: TransferTeam[] }>('/groups'),
     staleTime: 60_000,
   });
+  // Takeover only makes sense on a chat still open to reassign (a closed one
+  // answers 409 `chat_inactive`) and to a caller whose `chats.takeover` reaches
+  // it — every chat, or one of a team they lead (RL-03) — the question
+  // `ChatService.takeover` itself asks (`takeover.ts`).
+  const canTakeover =
+    chat.active &&
+    canTakeOver(
+      { role, accountId, ...(capabilities ? { capabilities } : {}) },
+      chat.access.group_ids,
+      teamsQuery.data?.items ?? [],
+    );
   const knownTeams = new Map((teamsQuery.data?.items ?? []).map((team) => [team.id, team.name]));
   const teamName = (id: number): string =>
     teamsQuery.isPending ? '…' : (knownTeams.get(id) ?? t('inbox.details.teams.unknown', { id }));
@@ -749,17 +758,21 @@ function takeoverErrorMessage(error: unknown, t: TFunction): string {
  * The confirmation dialog for a supervisor takeover. Split out of
  * `DetailsPanel` so its own `useChatAction` mutation only runs while the
  * dialog is actually open; the assignee's name comes from the panel, which
- * needs the roster for its own picker and so has already asked for it.
+ * needs the roster for its own picker and so has already asked for it. The
+ * "My team" row opens the same dialog (`TeamRowActions.tsx`, RL-03).
  */
-function TakeoverModal({
+export function TakeoverModal({
   chatId,
   assigneeName,
   onClose,
+  onTaken,
 }: {
   chatId: string;
   /** The current holder's name, or null when the chat is unassigned. */
   assigneeName: string | null;
   onClose: () => void;
+  /** After the chat became the caller's — the row opens it. */
+  onTaken?: () => void;
 }): ReactElement {
   const actions = useChatAction(chatId);
   const t = useTranslate();
@@ -792,7 +805,14 @@ function TakeoverModal({
         </button>
         <button
           type="button"
-          onClick={() => actions.takeover.mutate(undefined, { onSuccess: onClose })}
+          onClick={() =>
+            actions.takeover.mutate(undefined, {
+              onSuccess: () => {
+                onClose();
+                onTaken?.();
+              },
+            })
+          }
           disabled={actions.takeover.isPending}
           className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
         >

@@ -164,7 +164,7 @@ export interface ChatTransferResult extends ChatDetail {
 export type TransferTarget = ({ agent_id: string } | { group_id: number }) & { note?: string };
 
 export type InboxView =
-  'all' | 'my' | 'queued' | 'unassigned' | 'supervised' | 'archived' | 'ai' | 'ai_solved';
+  'all' | 'my' | 'queued' | 'unassigned' | 'supervised' | 'archived' | 'ai' | 'ai_solved' | 'team';
 
 /** Real-time list tabs — a live segmentation of the loaded chats (FR-MOD-03.1.1). */
 export type TrafficTab = 'all' | 'chatting' | 'queued' | 'waiting';

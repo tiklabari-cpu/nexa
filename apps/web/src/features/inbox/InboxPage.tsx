@@ -7,8 +7,9 @@
  */
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
-import { useAuth } from '../../lib/auth-store.js';
+import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { useDeployment } from '../../lib/deployment.js';
 import { usePageTitle } from '../../lib/document-title.js';
 import { useSetRoutingStatus } from '../../lib/routing-status.js';
@@ -68,7 +69,9 @@ import {
   toggleTicketSelection,
 } from './ticket-selection.js';
 import { ThreadHeader } from './ThreadHeader.js';
-import type { TransferNotice } from './transfer.js';
+import { TEAMS_KEY, type TransferNotice, type TransferTeam } from './transfer.js';
+import { canTakeOver, ledTeamIds } from './takeover.js';
+import { TeamRowActions } from './TeamRowActions.js';
 import { TRAFFIC_TABS, filterByTrafficTab, trafficTabCounts } from './traffic.js';
 import { QueueTeamTabs } from './QueueTeamTabs.js';
 import {
@@ -94,13 +97,15 @@ import type { InboxView, TicketView, TrafficTab } from './types.js';
 
 /**
  * The Chats group, in the PRD's own order (02.1.1): All · My chats · Queued ·
- * Unassigned · Supervised · Archive. `supervised` is the conversations this
+ * Unassigned · Supervised · Archive, and "My team" after My chats for whoever
+ * leads a team (RL-03). `supervised` is the conversations this
  * agent is watching without owning — the Traffic board's Supervise action is
  * what puts one here.
  */
 const VIEWS: Array<{ id: InboxView; icon: string }> = [
   { id: 'all', icon: '▤' },
   { id: 'my', icon: '◍' },
+  { id: 'team', icon: '◎' },
   { id: 'queued', icon: '◔' },
   { id: 'unassigned', icon: '◌' },
   { id: 'supervised', icon: '◉' },
@@ -122,6 +127,7 @@ const AI_VIEWS: Array<{ id: InboxView; icon: string }> = [
 const VIEW_LABEL_KEY: Record<InboxView, string> = {
   all: 'inbox.rail.view.all',
   my: 'inbox.rail.view.my',
+  team: 'inbox.rail.view.team',
   queued: 'inbox.rail.view.queued',
   unassigned: 'inbox.rail.view.unassigned',
   supervised: 'inbox.rail.view.supervised',
@@ -315,7 +321,32 @@ export function InboxPage(): ReactElement {
   const rtmStatus = useRealtimeStatus();
   // Both narrowed by the channel view, so the rail badge and the list it labels
   // are counting the same filter (FR-MOD-02.1.4; the tm 179.4 rule).
-  const counts = useViewCounts(activeChannel);
+  // "My team" (RL-03 · tm 326): offered to whoever leads a team, read from
+  // `GET /groups` under the key the Details panel and the queue tabs share.
+  const api = useApiClient();
+  const myAccountId = useAuth((s) => s.agent?.account_id ?? null);
+  const myRole = useAuth((s) => s.agent?.role ?? null);
+  const myCapabilities = useAuth((s) => s.agent?.capabilities);
+  const teamsQuery = useQuery({
+    queryKey: TEAMS_KEY,
+    queryFn: () => api.get<{ items: TransferTeam[] }>('/groups'),
+    staleTime: 60_000,
+  });
+  const ledTeams = ledTeamIds(teamsQuery.data?.items ?? [], myAccountId);
+  const leadsTeam = ledTeams.length > 0;
+  // Every row of the view is a led team's chat, so the led teams stand in
+  // for the row's own (a list summary carries none).
+  const canTakeOverTeamRow = canTakeOver(
+    {
+      role: myRole,
+      accountId: myAccountId,
+      ...(myCapabilities ? { capabilities: myCapabilities } : {}),
+    },
+    ledTeams,
+    teamsQuery.data?.items ?? [],
+  );
+  const chatViews = leadsTeam ? VIEWS : VIEWS.filter((item) => item.id !== 'team');
+  const counts = useViewCounts(activeChannel, leadsTeam);
   // How pressing (AI-12 · tm 307.3): the URL's job and the server's, like the
   // sort — see `chat-priority.ts`. An archived chat has no priority, so that
   // view neither offers the filter nor sends it.
@@ -533,7 +564,7 @@ export function InboxPage(): ReactElement {
           </header>
 
           <ul className="flex flex-col gap-0.5 px-2">
-            {VIEWS.map((item) => (
+            {chatViews.map((item) => (
               <li key={item.id}>
                 <ViewButton
                   label={t(VIEW_LABEL_KEY[item.id])}
@@ -879,11 +910,13 @@ export function InboxPage(): ReactElement {
                                 ? t('inbox.list.empty.archived')
                                 : view === 'supervised'
                                   ? t('inbox.list.empty.supervised')
-                                  : view === 'ai'
-                                    ? t('inbox.list.empty.ai')
-                                    : view === 'ai_solved'
-                                      ? t('inbox.list.empty.aiSolved')
-                                      : t('inbox.list.empty.description')
+                                  : view === 'team'
+                                    ? t('inbox.list.empty.team')
+                                    : view === 'ai'
+                                      ? t('inbox.list.empty.ai')
+                                      : view === 'ai_solved'
+                                        ? t('inbox.list.empty.aiSolved')
+                                        : t('inbox.list.empty.description')
                         }
                       />
                     ) : (
@@ -970,6 +1003,17 @@ export function InboxPage(): ReactElement {
                                 </span>
                               )}
                             </button>
+                            {view === 'team' && (
+                              <TeamRowActions
+                                chatId={item.id}
+                                customerName={
+                                  item.customer_name ?? t('inbox.list.item.visitorFallback')
+                                }
+                                assigneeId={item.assignee_id}
+                                canTakeover={item.active && canTakeOverTeamRow}
+                                onOpen={setSelectedId}
+                              />
+                            )}
                           </li>
                         ))}
                       </ul>

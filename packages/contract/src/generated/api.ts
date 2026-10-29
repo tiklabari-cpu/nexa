@@ -1429,7 +1429,7 @@ export interface paths {
     put?: never;
     /**
      * Forcibly take a chat over as a supervisor
-     * @description Reassigns the chat to the calling supervisor, whoever held it. Unlike `transfer` (a consented, rule-driven hand-off), takeover is restricted to admin/owner-role teammates and is recorded in the audit log. A second supervisor racing for the same chat loses and receives `409 takeover_conflict`.
+     * @description Reassigns the chat to the calling supervisor, whoever held it. Unlike `transfer` (a consented, rule-driven hand-off), takeover is an authority act decided by the caller's `chats.takeover` capability (RL-02 matrix · RL-03): `all` (the Founder and administrators by default) takes over any chat the caller may see; `team` (a Team Lead by default) only a chat routed to a team the caller leads — any one of the chat's teams is enough — and any other chat answers 404; `none` (a Team Member, and every bot) is 403. Recorded in the audit log (`chat.taken_over`). A second supervisor racing for the same chat loses and receives `409 takeover_conflict`.
      */
     post: operations['takeoverChat'];
     delete?: never;
@@ -24301,11 +24301,21 @@ export interface operations {
          *     `ai` — the AI agent is handling it (a bot has replied and no human
          *     has), kept out of the human queue · `ai_solved` — closed with no
          *     human reply and not handed off by the AI or a rule bot, i.e. an AI
-         *     resolution (ADR-09a, the same line billing counts) · `all` — every
-         *     chat the caller may see.
+         *     resolution (ADR-09a, the same line billing counts) · `team` — open
+         *     and routed to a team the caller leads (`group_agents.is_lead`,
+         *     RL-03), whoever holds it, the AI included; empty for someone who
+         *     leads no team · `all` — every chat the caller may see.
          */
         view?:
-          'all' | 'my' | 'queued' | 'unassigned' | 'supervised' | 'archived' | 'ai' | 'ai_solved';
+          | 'all'
+          | 'my'
+          | 'queued'
+          | 'unassigned'
+          | 'supervised'
+          | 'archived'
+          | 'ai'
+          | 'ai_solved'
+          | 'team';
         /**
          * @description Narrows to the conversations that arrived over one messaging channel
          *     — the inbox's channel views (FR-MOD-02.1.4). An axis of its own, at

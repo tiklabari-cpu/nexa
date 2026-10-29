@@ -52,6 +52,7 @@ import {
 import { SurveyPopover } from './SurveyPopover.js';
 import { ShareControl } from './ShareControl.js';
 import { QA_PATH } from './qa/qa.js';
+import { AiMetricsPanel } from './AiMetricsPanel.js';
 import { roleAtLeast } from '../team/RoleMenu.js';
 
 interface Period {
@@ -1189,6 +1190,10 @@ function AiAgentTab(props: TabProps): ReactElement {
           <Kpi label={t('reports.aiAgent.kpi.skillsRun')} value={formatCount(data.skill_runs)} />
         </KpiGrid>
       </Section>
+
+      {/* AI-25 (tm 320.3): what the AI really solved, beside — never instead
+          of — the billed figure above. */}
+      <AiMetricsPanel range={props.range} rangeKey={props.rangeKey} />
     </>
   );
 }

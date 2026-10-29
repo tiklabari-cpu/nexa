@@ -1636,6 +1636,9 @@ model Ticket {
   /// Serves the per-address activity the forwarding-address list reports
   /// (FR-MOD-08.5.3) — without it that aggregate scans the licence's tickets.
   @@index([inboundAddressId], map: "tickets_inbound_address_idx")
+  /// Serves the conversation timeline's "tickets opened from this chat"
+  /// (ID-09 · tm 334.1) and the `ON DELETE SET NULL` of a deleted chat.
+  @@index([sourceChatId], map: "tickets_source_chat_idx")
   @@map("tickets")
 }
 
@@ -4375,6 +4378,10 @@ model AuditLogEntry {
   /// Ascending index of its own, because a SIEM feed is a forward scan and the
   /// alternative is a sort of the workspace's entire trail on every poll.
   @@index([licenseId, createdAt, id])
+  /// The conversation timeline (ID-09 · tm 334.1) reads one chat's rows
+  /// (`target = 'chat:<id>'`) in time order. Built CONCURRENTLY in its own
+  /// migration (20261121090000_audit_log_target_index).
+  @@index([licenseId, target, createdAt])
   @@map("audit_log")
 }
 

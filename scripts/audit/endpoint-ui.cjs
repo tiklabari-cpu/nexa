@@ -383,6 +383,20 @@ const TRACKED = [
       '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
       'the timeline viewer (tm 334) reads it too.',
   },
+  {
+    op: 'GET /chats/{chatId}/timeline',
+    owner: 'tm 334.2',
+    reason:
+      "a conversation's timeline (tm 334.1 · ID-09) — the inbox's Timeline tab and the " +
+      'full page /app/inbox/timeline, which TL-WEB (tm 334.2) draws.',
+  },
+  {
+    op: 'POST /chats/{chatId}/timeline/export',
+    owner: 'tm 334.2',
+    reason:
+      "the timeline's masked download (tm 334.1 · ID-09 §5) — the export dialog of the " +
+      'timeline screen (tm 334.2).',
+  },
 ];
 
 /** The platform contract's operations with no client, and why (tm 389.3). */

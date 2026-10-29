@@ -216,6 +216,8 @@ describe('AuditLogPage', () => {
       // reason the others do, and it is the only one whose subject — the words
       // in the transcript — no longer exists anywhere else once it is written.
       'chat.message_edited',
+      // The conversation's timeline downloaded (ID-09 · tm 334.1).
+      'chat.timeline_exported',
     ]);
 
     await userEvent.selectOptions(filter, 'chat.archived');

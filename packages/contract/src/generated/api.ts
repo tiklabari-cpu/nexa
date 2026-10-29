@@ -1646,6 +1646,74 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/chats/{chatId}/timeline': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Everything that happened in a conversation, in one list
+     * @description The conversation's timeline (ID-09): its messages and internal notes,
+     *     the AI's decisions (procedure, step, sources, hand-over reason) and
+     *     procedure runs, assignment and the queue, transfers, tags, the closing
+     *     and reopening lines, the rating, SLA misses, tickets opened from it and
+     *     the audit rows whose target is the chat — oldest first, ordered by
+     *     `(at, kind, id)`, 200 rows a page (`page_id`).
+     *
+     *     Who may open it is the permission matrix's `timeline.view`, inside
+     *     `chats.view` (ID-09-S1): `own` — a chat the person is assigned to or has
+     *     joined; `team` — one routed to a team of theirs; `all` — any chat they
+     *     may see. A chat outside that reach, or another workspace's, is `404`
+     *     (NFR-S5); a role at `none` is `403` `capability_required`. The audit rows
+     *     are only for a caller who may read the audit log (`audit`). The player's
+     *     email and username are blanked out of the text for a caller without
+     *     `customers.contact.view`.
+     *
+     *     Agents and bots only.
+     */
+    get: operations['getChatTimeline'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/chats/{chatId}/timeline/export': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Download a conversation's timeline
+     * @description The timeline as a file (ID-09 §5), streamed, at most 20,000 rows:
+     *     `csv` (headers "Thread ID (chat_id)" and "Chat ID (thread_id)"),
+     *     `ndjson` (one `TimelineItem` a line) or `txt` (one line a row, a
+     *     separator between connections).
+     *
+     *     Masked by default (`mask_pii`): the player's email, username and name
+     *     and every email, phone and card pattern in the text are blanked.
+     *     Exporting is `timeline.export` (ID-09-S2, Yönetici and Kurucu by
+     *     default); `mask_pii: false` is `timeline.export_unmasked`, the
+     *     Founder's alone (ID-09-S3) — either missing is `403`
+     *     `capability_required`. The reach is the timeline's (`404` outside it).
+     *     Every export writes `chat.timeline_exported` to the audit log before
+     *     the first byte.
+     */
+    post: operations['exportChatTimeline'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/chats/{chatId}/supervise': {
     parameters: {
       query?: never;
@@ -13311,6 +13379,79 @@ export interface components {
       } | null;
       risk_flags: string[];
       last_ai_excerpt: string | null;
+    };
+    /**
+     * @description One row of a conversation's timeline (ID-09). `chat_id` is the day
+     *     (Panelde: Thread ID), `thread_id` the connection (Panelde: Chat ID) —
+     *     null for a row about the day as a whole.
+     */
+    TimelineItem: {
+      /** @description The row's id in its own source (event, AI decision, audit entry, rating…). */
+      id: string;
+      /** Format: date-time */
+      at: string;
+      /**
+       * @description Rows of the same millisecond are listed in this order. `note` is an
+       *     internal note; `system` the transcript's system lines (closing,
+       *     reopening, the AI's mode); `ai_decision` a turn the AI recorded
+       *     (procedure, step, sources, hand-over reason) or a procedure run.
+       * @enum {string}
+       */
+      kind:
+        | 'message'
+        | 'note'
+        | 'ai_decision'
+        | 'system'
+        | 'assignment'
+        | 'transfer'
+        | 'tag'
+        | 'rating'
+        | 'sla_breach'
+        | 'ticket'
+        | 'audit';
+      actor: {
+        /** @enum {string} */
+        type: 'agent' | 'customer' | 'bot' | 'system' | 'ai';
+        id: string | null;
+        name: string | null;
+      };
+      chat_id: string;
+      thread_id: string | null;
+      /** @description The transcript event the row is, or answers. */
+      event_id?: string;
+      text?: string;
+      /** @description The row's source fields — ids and codes. */
+      details: {
+        [key: string]: unknown;
+      };
+    };
+    TimelinePage: {
+      /** @description The day (panel "Thread ID"). */
+      chat_id: string;
+      /** @description The connection asked for (panel "Chat ID"); null for the whole day. */
+      thread_id: string | null;
+      items: components['schemas']['TimelineItem'][];
+      /**
+       * @description Present while rows remain. A page filtered by `kinds` may hold
+       *     fewer than `limit` rows before it.
+       */
+      next_page_id?: string;
+      /**
+       * @description Whether the audit trail is among the rows — only for a caller who may read the audit log.
+       * @enum {string}
+       */
+      audit: 'included' | 'not_permitted';
+      /**
+       * Format: date-time
+       * @description How far back the audit trail is kept.
+       */
+      audit_retained_since: string;
+      /**
+       * @description The conversation began before `audit_retained_since`: its earlier
+       *     audit rows were removed by retention, and the panel says "kayıt
+       *     saklama süresi dolmuş" instead of showing nothing.
+       */
+      audit_expired: boolean;
     };
     /** @description The player card (IN-02): `GET /chats/{chatId}/customer-context`. */
     CustomerContext: {
@@ -25093,6 +25234,85 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['CustomerContext'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  getChatTimeline: {
+    parameters: {
+      query?: {
+        /**
+         * @description One connection of the day (Panelde: Chat ID) — any id
+         *     `Chat.connections` lists. Absent: the whole day (Panelde: Thread
+         *     ID). A thread of another chat is `404`.
+         */
+        thread_id?: string;
+        /** @description Comma-separated kinds to keep; absent keeps every kind. */
+        kinds?: string;
+        /** @description Opaque keyset cursor from the previous page. */
+        page_id?: components['parameters']['PageId'];
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page of the timeline */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TimelinePage'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  exportChatTimeline: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @enum {string} */
+          format: 'csv' | 'ndjson' | 'txt';
+          /** @description One connection (Panelde: Chat ID); absent exports the whole day. */
+          thread_id?: string;
+          /** @default true */
+          mask_pii?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description The file */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/csv': string;
+          'application/x-ndjson': string;
+          'text/plain': string;
         };
       };
       400: components['responses']['BadRequest'];

@@ -252,6 +252,8 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
       'chat.ai_paused',
       'risk_flag.cleared',
       'chat.message_edited',
+      // A timeline download (ID-09 · tm 334.1): the conversation leaving in a file.
+      'chat.timeline_exported',
     ],
   },
   {

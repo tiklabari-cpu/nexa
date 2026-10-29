@@ -112,8 +112,15 @@ function csvField(cell: CsvCell): string {
  * that counts lines agrees with the row count.
  */
 export function toCsv(headers: readonly string[], rows: readonly CsvCell[][]): string {
-  const line = (cells: readonly CsvCell[]): string => cells.map(csvField).join(',');
-  return [line(headers), ...rows.map(line)].map((row) => `${row}\r\n`).join('');
+  return csvRows([headers, ...rows]);
+}
+
+/**
+ * Rows alone, each ended CRLF — {@link toCsv} without its header, for a file
+ * written a page at a time (the timeline export streams, tm 334.1).
+ */
+export function csvRows(rows: readonly (readonly CsvCell[])[]): string {
+  return rows.map((cells) => `${cells.map(csvField).join(',')}\r\n`).join('');
 }
 
 /** A download format the export endpoint can hand out. */

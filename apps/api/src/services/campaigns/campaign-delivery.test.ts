@@ -9,7 +9,8 @@
  * decisions cannot drift silently.
  */
 import { describe, expect, it } from 'vitest';
-import { pickDeliverableSend, type PendingSend } from './campaign-delivery.js';
+import { pickDeliverableSend, pickWaitingSend, type PendingSend } from './campaign-delivery.js';
+import { visitorPagesOf } from './campaign-matching.js';
 
 const NOW = new Date('2026-08-31T12:00:00.000Z');
 const hoursFromNow = (n: number): Date => new Date(NOW.getTime() + n * 3_600_000);
@@ -97,5 +98,42 @@ describe('pickDeliverableSend', () => {
     ];
     expect(pickDeliverableSend(blank, NOW)).toBeNull();
     expect(pickDeliverableSend([...blank, send('real')], NOW)?.campaignId).toBe('campaign-real');
+  });
+});
+
+describe('pickWaitingSend (EN-03)', () => {
+  const thirtyOnDeposit = {
+    match: 'all',
+    rules: [
+      { field: 'current_url', op: 'contains', value: '/deposit' },
+      { field: 'time_on_page', op: 'gte', value: 30 },
+    ],
+  };
+  const onDeposit = visitorPagesOf(['https://casino.test/deposit']);
+
+  it('offers a waiting card with the browser rules while the server rules hold (FR-MOD-03.3.2)', () => {
+    const picked = pickWaitingSend([send('a', { conditions: thirtyOnDeposit })], onDeposit, NOW);
+    expect(picked?.deliverable.campaignId).toBe('campaign-a');
+    expect(picked?.showWhen).toEqual({
+      match: 'all',
+      rules: [{ field: 'time_on_page', op: 'gte', value: 30 }],
+    });
+  });
+
+  it('does not offer it once the visitor has moved to another page', () => {
+    const moved = visitorPagesOf(['https://casino.test/deposit', 'https://casino.test/casino']);
+    expect(pickWaitingSend([send('a', { conditions: thirtyOnDeposit })], moved, NOW)).toBeNull();
+  });
+
+  it('skips a switched-off campaign and offers the next one', () => {
+    const picked = pickWaitingSend(
+      [
+        send('off', { conditions: thirtyOnDeposit, status: 'inactive' }),
+        send('on', { conditions: thirtyOnDeposit }),
+      ],
+      onDeposit,
+      NOW,
+    );
+    expect(picked?.deliverable.campaignId).toBe('campaign-on');
   });
 });

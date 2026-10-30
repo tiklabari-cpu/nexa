@@ -2573,6 +2573,70 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/customer/visit': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Report the page the visitor is on, and the site's session variables
+     * @description Campaign targeting (EN-03). The widget calls this when the host page
+     *     changes without a reload (a single-page site's `pushState` /
+     *     `popstate`) and when the site calls `siyahtus('setSessionVariables')`.
+     *     The page is recorded as a page view of the visitor's visit — the same
+     *     record the first message and the token mint write — and the running
+     *     campaigns are evaluated against it in the same transaction.
+     *
+     *     Sent only while the mint said `campaign_tracking` (the workspace has a
+     *     campaign running), debounced by the widget, and inside the customer
+     *     token's rate limit (60 per minute). A repeated page is not written again
+     *     but is evaluated again: a campaign can start while the visitor stands
+     *     still.
+     *
+     *     `variables` replaces the visit's set. They come from the visitor's
+     *     browser and are not verified: they are used for campaign targeting only
+     *     (`custom_var` rules), never returned by any API, never shown to the AI.
+     *     A card number in a key or a value is masked before it is stored.
+     */
+    post: operations['recordCustomerVisit'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/customer/campaigns/{campaignId}/shown': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * The widget showed a campaign card that waited for the browser
+     * @description For a campaign that reached the widget with `show_when` (EN-03): the
+     *     card has just been shown, so the send counts as displayed now — not on
+     *     the poll that carried it, which would count every visitor who never
+     *     reached the exit intent or the time on the page. Stamped once; a repeat
+     *     answers 204 and changes nothing. A campaign shown without `show_when`
+     *     was already counted by its poll.
+     *
+     *     404 when this visitor has no send of that campaign, or it was held back
+     *     for a risk flag.
+     */
+    post: operations['markCustomerCampaignShown'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/customer/kb/search': {
     parameters: {
       query?: never;
@@ -19412,15 +19476,89 @@ export interface components {
       last_activity_at?: string | null;
     };
     /**
-     * @description The trigger predicate (FR-MOD-03.3.2). Every key set must hold for a
-     *     visitor to match. `url_contains` — the one condition v1 ships — targets
-     *     the page they are on now, the last page of their visit and not an
-     *     earlier one; an empty predicate matches nobody, so a campaign
-     *     with no trigger is rejected rather than sent to everyone.
+     * @description The trigger (FR-MOD-03.3.2 · EN-03): up to 10 `rules` joined by
+     *     `match` — `all` (every rule holds) or `any` (one is enough). An
+     *     empty rule list matches nobody, so a campaign with no trigger is
+     *     rejected rather than sent to everyone.
+     *
+     *     **Two-stage evaluation.** The server decides the rules about where the
+     *     visitor is and who they are (`current_url`, `session_url`,
+     *     `referrer`, `country`, `visitor_type`, `custom_var`) on each page
+     *     view. `time_on_page` and `exit_intent` only the visitor's browser can
+     *     decide: a campaign that still waits for them reaches the widget with
+     *     those rules as `show_when` (`GET /customer/chat`), and counts as
+     *     displayed only when the widget reports it shown
+     *     (`POST /customer/campaigns/{campaignId}/shown`).
+     *
+     *     **The first shape.** `{ "url_contains": "…" }` is still accepted and
+     *     is read as one `current_url contains` rule. Answers carry `match` and
+     *     `rules`, plus `url_contains` while the rules are exactly that one
+     *     rule — kept for readers that predate EN-03; it will be dropped once
+     *     nothing reads it. On a write, `rules` wins when both are sent.
+     *
+     *     Text comparisons ignore case. A rule about a value the visitor does
+     *     not have (no referrer, unknown country, a variable the site never set)
+     *     fails `contains`, `equals` and the number comparisons, and holds for
+     *     `not_contains` and `not_equals`.
      */
     CampaignConditions: {
-      /** @description Case-insensitive substring the visitor's current page URL must contain. */
+      /**
+       * @default all
+       * @enum {string}
+       */
+      match: 'all' | 'any';
+      rules?: components['schemas']['CampaignRule'][];
+      /**
+       * @deprecated
+       * @description The first shape: a case-insensitive substring of the visitor's
+       *     current page URL. Read as one `current_url contains` rule.
+       */
       url_contains?: string;
+    };
+    /**
+     * @description One targeting rule (EN-03). Operators by field:
+     *
+     *     | field | operators | value |
+     *     | --- | --- | --- |
+     *     | `current_url` — the page the visitor is on | contains, not_contains, equals, not_equals | text |
+     *     | `session_url` — any page of this visit (`not_*`: none of them) | contains, not_contains, equals, not_equals | text |
+     *     | `referrer` — where the visit came from (origin + path) | contains, not_contains, equals, not_equals | text |
+     *     | `country` — where the visitor is (IP, resolved in-process) | equals, not_equals | ISO 3166-1 alpha-2 |
+     *     | `visitor_type` — no earlier visit, or one | equals, not_equals | `new` / `returning` |
+     *     | `custom_var` — a session variable the site set (`key`) | all eight | text or number; `gt`…`lte` compare numbers |
+     *     | `time_on_page` — seconds on the current page (browser) | gte, gt | 1–3600 |
+     *     | `exit_intent` — about to leave the page (browser) | equals | `true` |
+     *
+     *     Session variables come from the visitor's browser and are not
+     *     verified: they decide targeting and nothing else.
+     */
+    CampaignRule: {
+      /** @enum {string} */
+      field:
+        | 'current_url'
+        | 'session_url'
+        | 'referrer'
+        | 'country'
+        | 'visitor_type'
+        | 'time_on_page'
+        | 'exit_intent'
+        | 'custom_var';
+      /** @enum {string} */
+      op: 'contains' | 'not_contains' | 'equals' | 'not_equals' | 'gt' | 'gte' | 'lt' | 'lte';
+      value: string | number | boolean;
+      /** @description The session variable's name — `custom_var` only. */
+      key?: string;
+    };
+    /**
+     * @description The browser-side rules a campaign card still waits for (EN-03):
+     *     `time_on_page` and `exit_intent` only, joined by `match`. The
+     *     widget keeps the card back until they hold, shows it, and reports it
+     *     with `POST /customer/campaigns/{campaignId}/shown`.
+     */
+    CampaignShowWhen: {
+      /** @enum {string} */
+      match: 'all' | 'any';
+      rules: components['schemas']['CampaignRule'][];
     };
     /** @description What the campaign delivers to a matching visitor. */
     CampaignContent: {
@@ -22776,6 +22914,18 @@ export interface components {
         id: string;
         /** @description The message the campaign's author wrote. */
         message: string;
+        /**
+         * @description Null for a campaign the widget shows now. Otherwise the
+         *     browser-side rules the card waits for (EN-03): the send is
+         *     **not** stamped on this poll — it is offered on every poll
+         *     while the server-side rules still hold (a visitor who
+         *     navigated away is not offered it), and counts as delivered
+         *     only when the widget calls
+         *     `POST /customer/campaigns/{campaignId}/shown`. A card that
+         *     waits never holds back one that does not: a campaign to show
+         *     now is offered first.
+         */
+        show_when?: components['schemas']['CampaignShowWhen'] | null;
       } | null;
       /** @description Customer-visible events only. Internal notes never appear. */
       events: components['schemas']['Event'][];
@@ -25062,6 +25212,16 @@ export interface operations {
              */
             widget: components['schemas']['WidgetAppearance'];
             /**
+             * @description Whether the workspace has a campaign running (EN-03): only
+             *     then does the widget report page changes of a single-page
+             *     site and the site's session variables
+             *     (`POST /customer/visit`). A workspace with no campaign
+             *     pays no traffic for it. Read at mint, so a campaign
+             *     switched on reaches a visitor's page changes from their
+             *     next token.
+             */
+            campaign_tracking?: boolean;
+            /**
              * @description Whether this licence allows attachments (FR-MOD-08.9.4), so
              *     the widget can hide its attachment button rather than let a
              *     visitor pick a file only to have `POST /uploads` refuse it.
@@ -27057,6 +27217,72 @@ export interface operations {
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  recordCustomerVisit: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description The host page's URL (http or https). */
+          url: string;
+          /**
+           * @description Where the visitor came from; kept as the visit's origin only
+           *     when this page view opens the visit.
+           */
+          referrer?: string;
+          /**
+           * @description The site's session variables: at most 20, each key and value
+           *     at most 100 characters. A number or a boolean is kept as its
+           *     text.
+           */
+          variables?: {
+            [key: string]: string | number | boolean;
+          };
+        };
+      };
+    };
+    responses: {
+      /** @description Recorded and evaluated. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  markCustomerCampaignShown: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        campaignId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Counted as displayed (or already was). */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };

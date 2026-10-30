@@ -48,7 +48,7 @@
  * blockers. Oldest first because the alternative — newest first — lets a busy
  * workspace's fresh campaigns starve the ones already owed.
  */
-import type { CampaignContent } from '@siyahtus/types';
+import type { CampaignContent, CampaignShowWhen } from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { trialState } from '../billing/metering.js';
 import {
@@ -56,7 +56,13 @@ import {
   promoSuppressionOf,
   type PromoSuppressionReader,
 } from '../risk/promo-suppression.js';
-import { resolveCampaignStatus } from './campaign-matching.js';
+import {
+  evaluateCampaign,
+  hasBrowserRules,
+  resolveCampaignStatus,
+  type VisitorContext,
+} from './campaign-matching.js';
+import { loadVisitorContext } from './campaign-trigger.js';
 
 /**
  * How many still-owed sends to look at before giving up for this poll.
@@ -80,6 +86,8 @@ export interface PendingSend {
     content: unknown;
     startsAt: Date | null;
     endsAt: Date | null;
+    /** The trigger; only read for a campaign whose card waits for the browser. */
+    conditions?: unknown;
   };
 }
 
@@ -130,6 +138,39 @@ export function pickDeliverableSend(
   return null;
 }
 
+/** A waiting campaign the poll can offer, and the rules its card waits for. */
+export interface WaitingDelivery {
+  deliverable: DeliverableCampaign;
+  /** Null when the server-side rules alone now say "show it" (an `any` match). */
+  showWhen: CampaignShowWhen | null;
+}
+
+/**
+ * The first send whose card waits for the browser (EN-03) that the visitor
+ * can be offered right now, or null. Pure, like `pickDeliverableSend`, whose
+ * checks (a message, a running campaign) it applies first.
+ *
+ * The server-side rules are asked again here, against where the visitor is
+ * now, not trusted from the fire: a visitor who earned "30 seconds on
+ * /deposit" on /deposit and has since moved to /casino is not offered the
+ * card — the widget's clock for the page restarted with the move anyway. It
+ * stays owed, and is offered again if they come back.
+ */
+export function pickWaitingSend(
+  candidates: readonly PendingSend[],
+  visitor: VisitorContext,
+  now: Date,
+): WaitingDelivery | null {
+  for (const send of candidates) {
+    const deliverable = pickDeliverableSend([send], now);
+    if (!deliverable) continue;
+    const verdict = evaluateCampaign(send.campaign.conditions, visitor);
+    if (verdict.kind === 'none') continue;
+    return { deliverable, showWhen: verdict.kind === 'wait' ? verdict.showWhen : null };
+  }
+  return null;
+}
+
 /**
  * Deliver the campaign message this visitor is owed, if any.
  *
@@ -176,7 +217,7 @@ export async function deliverPendingCampaign(
   input: { customerId: string; hasOpenChat: boolean; bannedAt: Date | null },
   now: Date,
   readSuppression: PromoSuppressionReader = promoSuppressionOf,
-): Promise<{ id: string; message: string } | null> {
+): Promise<{ id: string; message: string; show_when?: CampaignShowWhen } | null> {
   if (input.hasOpenChat) return null;
   // A banned visitor cannot open a conversation (`chat-service` refuses on
   // `banned_at`), so inviting them into one would burn the send on a promise
@@ -202,7 +243,14 @@ export async function deliverPendingCampaign(
     select: {
       id: true,
       campaign: {
-        select: { id: true, status: true, content: true, startsAt: true, endsAt: true },
+        select: {
+          id: true,
+          status: true,
+          content: true,
+          startsAt: true,
+          endsAt: true,
+          conditions: true,
+        },
       },
     },
   });
@@ -212,8 +260,25 @@ export async function deliverPendingCampaign(
   // microseconds (measured, tm 176.1).
   if (candidates.length === 0) return null;
 
-  const deliverable = pickDeliverableSend(candidates, now);
-  if (!deliverable) return null;
+  // A card that waits for the browser (EN-03) never holds back one that does
+  // not: the campaigns to show now are offered first, oldest first as ever.
+  // Only when none is deliverable are the waiting ones looked at — and only
+  // then is the visitor's context read, so the poll of a workspace without
+  // such campaigns costs what it did.
+  let deliverable = pickDeliverableSend(
+    candidates.filter((send) => !hasBrowserRules(send.campaign.conditions)),
+    now,
+  );
+  let showWhen: CampaignShowWhen | null = null;
+  if (!deliverable) {
+    const waiting = candidates.filter((send) => hasBrowserRules(send.campaign.conditions));
+    if (waiting.length === 0) return null;
+    const visitor = await loadVisitorContext(tx, tenant, input.customerId);
+    const picked = pickWaitingSend(waiting, visitor, now);
+    if (!picked) return null;
+    deliverable = picked.deliverable;
+    showWhen = picked.showWhen;
+  }
 
   // An expired trial is read-only (ADR-10): existing conversations stay
   // readable, new ones are refused with `license_expired`. A campaign card is an
@@ -242,6 +307,14 @@ export async function deliverPendingCampaign(
     return null;
   }
 
+  // A card that waits is not stamped here: it is offered on every poll while
+  // the server-side rules hold, and counts as displayed when the widget says
+  // it showed it (`markCampaignShown`) — otherwise every visitor who never
+  // reached the exit intent would count as one who saw the message.
+  if (showWhen) {
+    return { id: deliverable.campaignId, message: deliverable.message, show_when: showWhen };
+  }
+
   // The stamp *is* the claim. `delivered_at: null` in the predicate makes it a
   // compare-and-set: two polls racing (a reconnect firing while the previous
   // request is still in flight) both read the same candidate, but the second
@@ -254,4 +327,36 @@ export async function deliverPendingCampaign(
   if (stamped.count !== 1) return null;
 
   return { id: deliverable.campaignId, message: deliverable.message };
+}
+
+/**
+ * The widget showed a card that waited for the browser (EN-03 ·
+ * `POST /customer/campaigns/{campaignId}/shown`): the send counts as
+ * displayed from now. The same compare-and-set as the poll's stamp, so two
+ * reports (two tabs) stamp once. False when this visitor has no such send,
+ * or it was held back for a risk flag — the route's 404; an already-stamped
+ * send is true and unchanged.
+ */
+export async function markCampaignShown(
+  tx: TenantClient,
+  tenant: TenantContext,
+  input: { customerId: string; campaignId: string },
+  now: Date,
+): Promise<boolean> {
+  const send = await tx.campaignSend.findFirst({
+    where: {
+      licenseId: tenant.licenseId,
+      customerId: input.customerId,
+      campaignId: input.campaignId,
+      suppressedAt: null,
+    },
+    select: { id: true, deliveredAt: true },
+  });
+  if (!send) return false;
+  if (send.deliveredAt) return true;
+  await tx.campaignSend.updateMany({
+    where: { id: send.id, deliveredAt: null, suppressedAt: null },
+    data: { deliveredAt: now },
+  });
+  return true;
 }

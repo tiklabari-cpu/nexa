@@ -3,6 +3,8 @@
  * the schema (PRD §8.4 / rapor-2 §5.3) — if one changes, the other must too.
  */
 
+import type { CampaignMatchMode, CampaignRule } from './campaign-conditions.js';
+
 // --- Identity & tenancy -----------------------------------------------------
 
 /**
@@ -578,15 +580,20 @@ export const CAMPAIGN_STATUS_FILTERS = ['all', ...CAMPAIGN_STATUSES] as const;
 export type CampaignStatusFilter = (typeof CAMPAIGN_STATUS_FILTERS)[number];
 
 /**
- * The trigger predicate (FR-MOD-03.3.2). A visitor matches when every key set
- * here holds. `url_contains` targets the page they are on now — the last page
- * of the visit, not any earlier one — the one condition v1 ships; the shape
- * stays an open object so geo/time rules slot in later without a contract
- * change. An empty predicate matches nobody: a campaign with no trigger is not
- * "send to everyone", it is simply not ready to send.
+ * The trigger (FR-MOD-03.3.2 · EN-03): rules joined by `match` — `all` (AND)
+ * or `any` (OR). See `campaign-conditions.ts` for the fields and which side
+ * decides each. An empty rule list matches nobody: a campaign with no trigger
+ * is not "send to everyone", it is simply not ready to send.
+ *
+ * `url_contains` is the first shape (v1's one condition, the visitor's current
+ * page). Still accepted on a write and read from old rows as one
+ * `current_url contains` rule; a saved campaign answers it beside `rules`
+ * only when the rules are exactly that one rule.
  */
 export interface CampaignConditions {
-  /** Case-insensitive substring the visitor's current page URL must contain. */
+  match?: CampaignMatchMode;
+  rules?: CampaignRule[];
+  /** @deprecated The first shape; read as one `current_url contains` rule. */
   url_contains?: string;
 }
 

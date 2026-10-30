@@ -1,14 +1,21 @@
+import type { CampaignRule } from '@siyahtus/types';
 import { describe, expect, it } from 'vitest';
 import {
   campaignPerformance,
   computeCampaignStatus,
   deriveActiveIntent,
+  evaluateCampaign,
+  hasBrowserRules,
   hasTrigger,
   matchesConditions,
+  needsVisitorDetails,
   resolveCampaignStatus,
+  serverRuleHolds,
+  storedConditions,
   visitedPagesOf,
   visitorPageUrls,
   visitorPagesOf,
+  type VisitorContext,
 } from './campaign-matching.js';
 
 describe('visitorPageUrls', () => {
@@ -296,5 +303,179 @@ describe('campaignPerformance', () => {
         { deliveredAt: null, suppressedAt: null, engaged: false, converted: false },
       ]),
     ).toEqual({ displayed: 1, chats: 1, conversion: 0, suppressed: 2 });
+  });
+});
+
+describe('evaluateCampaign — the rule engine (EN-03)', () => {
+  const visitor: VisitorContext = {
+    ...visitorPagesOf(['https://casino.test/home', 'https://casino.test/Deposit?step=1']),
+    referrer: 'https://www.google.com/search',
+    country: 'TR',
+    visitorType: 'returning',
+    variables: { tier: 'Gold', balance: '250.5', logged_in: 'true' },
+  };
+  const holds = (rule: CampaignRule, who: VisitorContext = visitor) => serverRuleHolds(rule, who);
+  const unknown: VisitorContext = visitorPagesOf([]);
+
+  it('current_url: every text operator, case-insensitive, current page only (FR-MOD-03.3.2)', () => {
+    expect(holds({ field: 'current_url', op: 'contains', value: '/deposit' })).toBe(true);
+    expect(holds({ field: 'current_url', op: 'contains', value: '/home' })).toBe(false);
+    expect(holds({ field: 'current_url', op: 'not_contains', value: '/home' })).toBe(true);
+    expect(holds({ field: 'current_url', op: 'not_contains', value: 'deposit' })).toBe(false);
+    expect(
+      holds({ field: 'current_url', op: 'equals', value: 'https://casino.test/deposit?step=1' }),
+    ).toBe(true);
+    expect(holds({ field: 'current_url', op: 'equals', value: 'https://casino.test/' })).toBe(
+      false,
+    );
+    expect(holds({ field: 'current_url', op: 'not_equals', value: 'https://casino.test/' })).toBe(
+      true,
+    );
+  });
+
+  it('session_url: a positive operator wants one page, a negative one wants none (FR-MOD-03.3.2)', () => {
+    expect(holds({ field: 'session_url', op: 'contains', value: '/home' })).toBe(true);
+    expect(holds({ field: 'session_url', op: 'not_contains', value: '/home' })).toBe(false);
+    expect(holds({ field: 'session_url', op: 'not_contains', value: '/withdraw' })).toBe(true);
+    expect(holds({ field: 'session_url', op: 'equals', value: 'https://casino.test/home' })).toBe(
+      true,
+    );
+    expect(
+      holds({ field: 'session_url', op: 'not_equals', value: 'https://casino.test/home' }),
+    ).toBe(false);
+    expect(holds({ field: 'session_url', op: 'contains', value: '/home' }, unknown)).toBe(false);
+    expect(holds({ field: 'session_url', op: 'not_contains', value: '/home' }, unknown)).toBe(true);
+  });
+
+  it('referrer, country, visitor_type: known values compare, unknown ones fail positives only', () => {
+    expect(holds({ field: 'referrer', op: 'contains', value: 'google' })).toBe(true);
+    expect(holds({ field: 'referrer', op: 'not_contains', value: 'google' })).toBe(false);
+    expect(holds({ field: 'referrer', op: 'contains', value: 'google' }, unknown)).toBe(false);
+    expect(holds({ field: 'referrer', op: 'not_contains', value: 'google' }, unknown)).toBe(true);
+    expect(holds({ field: 'country', op: 'equals', value: 'tr' })).toBe(true);
+    expect(holds({ field: 'country', op: 'not_equals', value: 'TR' })).toBe(false);
+    expect(holds({ field: 'country', op: 'equals', value: 'TR' }, unknown)).toBe(false);
+    expect(holds({ field: 'country', op: 'not_equals', value: 'TR' }, unknown)).toBe(true);
+    expect(holds({ field: 'visitor_type', op: 'equals', value: 'returning' })).toBe(true);
+    expect(holds({ field: 'visitor_type', op: 'equals', value: 'new' })).toBe(false);
+    expect(holds({ field: 'visitor_type', op: 'not_equals', value: 'new' })).toBe(true);
+  });
+
+  it('custom_var: every operator; numbers compare as numbers, text ignores case', () => {
+    const variable = (op: CampaignRule['op'], value: string | number, key = 'balance') =>
+      holds({ field: 'custom_var', op, value, key });
+    expect(variable('gt', 250)).toBe(true);
+    expect(variable('gt', 250.5)).toBe(false);
+    expect(variable('gte', '250.5')).toBe(true);
+    expect(variable('lt', 251)).toBe(true);
+    expect(variable('lt', 250.5)).toBe(false);
+    expect(variable('lte', 250.5)).toBe(true);
+    expect(variable('equals', '250.50')).toBe(true);
+    expect(variable('not_equals', 250.5)).toBe(false);
+    expect(variable('equals', 'gold', 'tier')).toBe(true);
+    expect(variable('not_equals', 'GOLD', 'tier')).toBe(false);
+    expect(variable('contains', 'ol', 'tier')).toBe(true);
+    expect(variable('not_contains', 'ol', 'tier')).toBe(false);
+    // A text variable never satisfies a number comparison.
+    expect(variable('gt', 1, 'tier')).toBe(false);
+    // A variable the site never set: positives fail, negatives hold.
+    expect(variable('equals', 'x', 'missing')).toBe(false);
+    expect(variable('gte', 0, 'missing')).toBe(false);
+    expect(variable('not_equals', 'x', 'missing')).toBe(true);
+    expect(variable('not_contains', 'x', 'missing')).toBe(true);
+    // An inherited property is not a variable.
+    expect(variable('equals', '[object Object]', '__proto__')).toBe(false);
+  });
+
+  const deposit: CampaignRule = { field: 'current_url', op: 'contains', value: '/deposit' };
+  const turkey: CampaignRule = { field: 'country', op: 'equals', value: 'TR' };
+  const thirty: CampaignRule = { field: 'time_on_page', op: 'gte', value: 30 };
+  const leaving: CampaignRule = { field: 'exit_intent', op: 'equals', value: true };
+
+  it('"TR AND /deposit AND 30 s": waits for the 30 s only when both server rules hold (FR-MOD-03.3.2)', () => {
+    const conditions = { match: 'all', rules: [turkey, deposit, thirty] };
+    expect(evaluateCampaign(conditions, visitor)).toEqual({
+      kind: 'wait',
+      showWhen: { match: 'all', rules: [thirty] },
+    });
+    expect(evaluateCampaign(conditions, { ...visitor, country: 'DE' })).toEqual({ kind: 'none' });
+    expect(
+      evaluateCampaign(conditions, { ...visitor, ...visitorPagesOf(['https://casino.test/']) }),
+    ).toEqual({ kind: 'none' });
+  });
+
+  it('"any": one server rule is enough to show now; none holding waits for any browser rule (FR-MOD-03.3.2)', () => {
+    const conditions = { match: 'any', rules: [turkey, deposit, thirty, leaving] };
+    expect(evaluateCampaign(conditions, { ...visitor, country: 'DE' })).toEqual({ kind: 'match' });
+    expect(evaluateCampaign(conditions, unknown)).toEqual({
+      kind: 'wait',
+      showWhen: { match: 'any', rules: [thirty, leaving] },
+    });
+    expect(evaluateCampaign({ match: 'any', rules: [turkey, deposit] }, unknown)).toEqual({
+      kind: 'none',
+    });
+  });
+
+  it('server rules alone match now; browser rules alone always wait', () => {
+    expect(evaluateCampaign({ match: 'all', rules: [turkey, deposit] }, visitor)).toEqual({
+      kind: 'match',
+    });
+    expect(evaluateCampaign({ rules: [leaving] }, unknown)).toEqual({
+      kind: 'wait',
+      showWhen: { match: 'all', rules: [leaving] },
+    });
+  });
+
+  it('matches nobody with no rules, or with a rule it cannot read', () => {
+    expect(evaluateCampaign({ match: 'any', rules: [] }, visitor)).toEqual({ kind: 'none' });
+    expect(
+      evaluateCampaign(
+        { rules: [deposit, { field: 'country', op: 'contains', value: 'TR' }] },
+        visitor,
+      ),
+    ).toEqual({ kind: 'none' });
+    expect(
+      evaluateCampaign({ rules: [deposit, { field: 'weather', op: 'equals' }] }, visitor),
+    ).toEqual({ kind: 'none' });
+    expect(hasTrigger({ rules: [{ field: 'country', op: 'equals', value: 'TUR' }] })).toBe(false);
+    expect(hasTrigger({ rules: [turkey] })).toBe(true);
+  });
+
+  it('reads an old campaign exactly as before the rules existed (EN-04 regression)', () => {
+    expect(evaluateCampaign({ url_contains: '/Deposit' }, visitor)).toEqual({ kind: 'match' });
+    expect(evaluateCampaign({ url_contains: '/home' }, visitor)).toEqual({ kind: 'none' });
+  });
+
+  it('knows which campaigns need more than the pages, and which wait for the browser', () => {
+    expect(needsVisitorDetails({ url_contains: '/x' })).toBe(false);
+    expect(needsVisitorDetails({ rules: [deposit, thirty] })).toBe(false);
+    expect(needsVisitorDetails({ rules: [deposit, turkey] })).toBe(true);
+    expect(hasBrowserRules({ rules: [deposit, turkey] })).toBe(false);
+    expect(hasBrowserRules({ rules: [deposit, leaving] })).toBe(true);
+  });
+});
+
+describe('storedConditions (EN-03)', () => {
+  it('stores rules, trimmed, the country upper-cased, and mirrors url_contains only for the first shape', () => {
+    expect(storedConditions({ url_contains: ' /x ' })).toEqual({
+      match: 'all',
+      rules: [{ field: 'current_url', op: 'contains', value: '/x' }],
+      url_contains: '/x',
+    });
+    expect(
+      storedConditions({
+        match: 'any',
+        rules: [
+          { field: 'country', op: 'equals', value: ' tr ' },
+          { field: 'custom_var', op: 'equals', value: ' gold ', key: ' tier ' },
+        ],
+      }),
+    ).toEqual({
+      match: 'any',
+      rules: [
+        { field: 'country', op: 'equals', value: 'TR' },
+        { field: 'custom_var', op: 'equals', value: 'gold', key: 'tier' },
+      ],
+    });
   });
 });

@@ -286,6 +286,10 @@ export class CustomerService {
    * answer is kept on the visit, and fills the contact's country only while it
    * is empty: a country an agent typed, or one an earlier visit found, is not
    * overwritten by where somebody happens to be today.
+   *
+   * `variables` (EN-03 · `POST /customer/visit`) replaces the visit's session
+   * variables when given — already checked and masked by the caller — and is
+   * written even when the page itself is a repeat.
    */
   async recordPageView(
     tx: TenantClient,
@@ -298,6 +302,8 @@ export class CustomerService {
       ip?: string | undefined;
       /** Where the visitor is; called only when this page starts a visit. */
       locate?: (() => GeoLocation | null) | undefined;
+      /** The site's session variables, replacing the visit's set. */
+      variables?: Record<string, string> | undefined;
     },
   ): Promise<string[]> {
     const since = new Date(Date.now() - 30 * 60_000);
@@ -320,14 +326,25 @@ export class CustomerService {
       // Nothing to write, but the visitor is still on these pages: the caller
       // gets the unchanged list rather than an empty one, so a reload is a
       // cheap re-evaluation instead of a blind spot.
-      if (lastUrl === entry.url) return visitorPageUrls(pages);
+      if (lastUrl === entry.url) {
+        if (input.variables) {
+          await tx.visit.update({
+            where: { id: current.id },
+            data: { variables: input.variables as Prisma.InputJsonValue },
+          });
+        }
+        return visitorPageUrls(pages);
+      }
 
       const updated = [...pages, entry].slice(-50);
       await tx.visit.update({
         where: { id: current.id },
         // Bounded: a visitor who leaves a tab open for hours must not grow one
         // JSON column without limit.
-        data: { pages: updated as Prisma.InputJsonValue },
+        data: {
+          pages: updated as Prisma.InputJsonValue,
+          ...(input.variables ? { variables: input.variables as Prisma.InputJsonValue } : {}),
+        },
       });
       return visitorPageUrls(updated);
     }
@@ -349,6 +366,7 @@ export class CustomerService {
         ip: input.ip ?? null,
         countryCode: location?.countryCode ?? null,
         city: location?.city ?? null,
+        ...(input.variables ? { variables: input.variables as Prisma.InputJsonValue } : {}),
       },
     });
     if (location?.countryCode) {

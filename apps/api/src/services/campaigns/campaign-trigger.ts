@@ -63,10 +63,16 @@
  * about how many *fresh* sends this evaluation produced.
  */
 import type { Prisma } from '@prisma/client';
-import type { CampaignConditions } from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { guardedPromoSuppression, suppressedSendData } from '../risk/promo-suppression.js';
-import { matchesConditions, resolveCampaignStatus, visitorPagesOf } from './campaign-matching.js';
+import {
+  matchesConditions,
+  needsVisitorDetails,
+  resolveCampaignStatus,
+  visitorPageUrls,
+  visitorPagesOf,
+  type VisitorContext,
+} from './campaign-matching.js';
 
 /**
  * How many of a workspace's campaigns one page view will evaluate.
@@ -97,8 +103,9 @@ export interface TriggerableCampaign {
 }
 
 /**
- * Which of these campaigns should fire at a visitor on these pages, right now.
- * `pageUrls` is the visit's pages in order; the last one is where they are.
+ * Which of these campaigns should fire at a visitor, right now. `visitor` is
+ * what the rules read (EN-03) — or just the visit's pages in order, the last
+ * one being where they are.
  *
  * Pure and separately tested for the same reason `pickDeliverableSend` is: this
  * is the decision — who gets an unsolicited message — and it should be pinnable
@@ -115,11 +122,11 @@ export interface TriggerableCampaign {
  */
 export function selectTriggeredCampaigns(
   campaigns: readonly TriggerableCampaign[],
-  pageUrls: readonly string[],
+  visitor: VisitorContext | readonly string[],
   now: Date,
 ): string[] {
   const fired: string[] = [];
-  const pages = visitorPagesOf(pageUrls);
+  const pages: VisitorContext = isUrlList(visitor) ? visitorPagesOf(visitor) : visitor;
   for (const campaign of campaigns) {
     if (resolveCampaignStatus(campaign, now) !== 'ongoing') continue;
 
@@ -127,7 +134,7 @@ export function selectTriggeredCampaigns(
     // campaign that somehow lost its trigger matches nobody rather than
     // everybody — the failure worth being explicit about on a path that sends
     // unsolicited messages.
-    if (matchesConditions((campaign.conditions ?? {}) as CampaignConditions, pages)) {
+    if (matchesConditions(campaign.conditions, pages)) {
       fired.push(campaign.id);
     }
   }
@@ -187,7 +194,14 @@ export async function fireCampaignsAtVisitor(
   });
   if (campaigns.length === 0) return 0;
 
-  const matched = selectTriggeredCampaigns(campaigns, input.pageUrls, now);
+  // The rules about more than the pages (referrer, country, new or
+  // returning, the site's variables · EN-03) are read only when a running
+  // campaign has one: a workspace whose campaigns are about pages pays
+  // nothing more than before.
+  const visitor = campaigns.some((campaign) => needsVisitorDetails(campaign.conditions))
+    ? await loadVisitorContext(tx, tenant, input.customerId, input.pageUrls)
+    : visitorPagesOf(input.pageUrls);
+  const matched = selectTriggeredCampaigns(campaigns, visitor, now);
   if (matched.length === 0) return 0;
 
   const suppression = await guardedPromoSuppression(tx, [input.customerId]);
@@ -206,4 +220,87 @@ export async function fireCampaignsAtVisitor(
     skipDuplicates: true,
   } satisfies Prisma.CampaignSendCreateManyArgs);
   return reason !== undefined ? 0 : result.count;
+}
+
+function isUrlList(value: VisitorContext | readonly string[]): value is readonly string[] {
+  return Array.isArray(value);
+}
+
+/**
+ * A visit's session variables as the rules read them (EN-03): text values
+ * only. Defensive like every reader of a JSON column here — anything else in
+ * a hand-edited row is skipped.
+ */
+export function visitVariablesOf(raw: unknown): Record<string, string> {
+  const variables: Record<string, string> = {};
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return variables;
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value === 'string') variables[key] = value;
+  }
+  return variables;
+}
+
+/**
+ * Everything the server-side rules read about one visitor (EN-03): their
+ * pages (handed in when a page view just wrote them, else their latest
+ * visit's — the poll's case), and from their latest
+ * visit where it came from, the country it was located in (else the
+ * contact's) and the site's variables; `returning` when an earlier visit
+ * exists. Three indexed reads (`visits(customer_id, started_at DESC)`, the
+ * customer's primary key), paid only when a running campaign asks about
+ * more than pages.
+ */
+export async function loadVisitorContext(
+  tx: TenantClient,
+  tenant: TenantContext,
+  customerId: string,
+  pageUrls?: readonly string[],
+): Promise<VisitorContext> {
+  const [visit, customer] = await Promise.all([
+    tx.visit.findFirst({
+      where: { customerId, licenseId: tenant.licenseId },
+      orderBy: { startedAt: 'desc' },
+      select: {
+        pages: pageUrls === undefined,
+        cameFrom: true,
+        countryCode: true,
+        variables: true,
+        startedAt: true,
+      },
+    }),
+    tx.customer.findUnique({ where: { id: customerId }, select: { countryCode: true } }),
+  ]);
+  const earlier = visit
+    ? await tx.visit.findFirst({
+        where: { customerId, licenseId: tenant.licenseId, startedAt: { lt: visit.startedAt } },
+        select: { id: true },
+      })
+    : null;
+  return {
+    ...visitorPagesOf(pageUrls ?? visitorPageUrls(visit?.pages)),
+    referrer: visit?.cameFrom ?? null,
+    country: (visit?.countryCode ?? customer?.countryCode ?? null)?.trim().toUpperCase() || null,
+    visitorType: earlier ? 'returning' : 'new',
+    variables: visitVariablesOf(visit?.variables),
+  };
+}
+
+/**
+ * Whether the workspace has a campaign running right now (EN-03): the mint's
+ * `campaign_tracking`, which decides whether the widget reports page changes
+ * and session variables at all. The same index-served read and the same
+ * clock-based reading of the status as the trigger above.
+ */
+export async function hasRunningCampaign(
+  tx: TenantClient,
+  tenant: TenantContext,
+  now: Date,
+): Promise<boolean> {
+  const campaigns = await tx.campaign.findMany({
+    where: { licenseId: tenant.licenseId, status: { in: ['ongoing', 'scheduled'] } },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    take: RUNNING_CAMPAIGN_LIMIT,
+    select: { status: true, startsAt: true, endsAt: true },
+  });
+  return campaigns.some((campaign) => resolveCampaignStatus(campaign, now) === 'ongoing');
 }

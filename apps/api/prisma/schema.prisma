@@ -1921,7 +1921,8 @@ model Campaign {
   name       String
   type       String    @default("targeted_message")
   status     String    @default("inactive")
-  /// Trigger predicate: url, time on page, exit intent, geo, …
+  /// Trigger rules (EN-03): `{ match, rules[] }`; old rows may also carry
+  /// `url_contains` (read as one `current_url contains` rule).
   conditions Json      @default("{}")
   content    Json      @default("{}")
   startsAt   DateTime? @map("starts_at") @db.Timestamptz(6)
@@ -2127,6 +2128,9 @@ model Visit {
   /// visit's start, in-process (`services/geo/`). Country and city only.
   countryCode String?   @map("country_code") @db.Char(2)
   city        String?
+  /// The session variables the site set (EN-03 · tm 352): at most 20, masked,
+  /// unverified — campaign targeting only, never returned by any API.
+  variables   Json      @default("{}")
   startedAt   DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
   endedAt     DateTime? @map("ended_at") @db.Timestamptz(6)
 

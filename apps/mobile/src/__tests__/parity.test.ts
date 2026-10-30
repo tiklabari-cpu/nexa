@@ -1104,7 +1104,10 @@ describe('module parity matrix — what is still owed', () => {
       // 352 -> 354 with `GET /customer/kb/search` and `GET /customer/kb/articles/{slug}`
       // (tm 348) — the widget's Help tab (WG-12), a visitor surface read with the
       // customer token; the agent app has nothing to add, and nothing here re-scopes.
-      contractEndpoints: 354,
+      // 354 -> 356 with `POST /customer/visit` and
+      // `POST /customer/campaigns/{campaignId}/shown` (tm 352.1) — campaign
+      // targeting from the widget (EN-03), a visitor surface; nothing for the agent app.
+      contractEndpoints: 356,
       scopeBoundaries: 1,
     });
   });

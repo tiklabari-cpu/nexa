@@ -1144,6 +1144,16 @@ customerToken:
                     snippet theme themselves from it. Always sent; the widget
                     falls back to the shipped look if a deployment predating it
                     omits it.
+                campaign_tracking:
+                  type: boolean
+                  description: |
+                    Whether the workspace has a campaign running (EN-03): only
+                    then does the widget report page changes of a single-page
+                    site and the site's session variables
+                    (`POST /customer/visit`). A workspace with no campaign
+                    pays no traffic for it. Read at mint, so a campaign
+                    switched on reaches a visitor's page changes from their
+                    next token.
                 file_sharing_enabled:
                   type: boolean
                   description: |

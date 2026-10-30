@@ -6,7 +6,20 @@
  * test can pin down exactly. The service around this reads the visitors, writes
  * the sends, and hands the clock in.
  */
-import type { CampaignConditions, CampaignPerformance, CampaignStatus } from '@siyahtus/types';
+import {
+  campaignRuleProblem,
+  isCampaignClientRule,
+  isCampaignNumericOp,
+  legacyUrlContains,
+  normalizeCampaignConditions,
+  type CampaignConditions,
+  type CampaignPerformance,
+  type CampaignRule,
+  type CampaignRuleOp,
+  type CampaignShowWhen,
+  type CampaignStatus,
+  type CampaignVisitorType,
+} from '@siyahtus/types';
 
 /** A page entry inside a visit's `pages` JSON (`{ url, at }`). */
 interface VisitPage {
@@ -59,9 +72,14 @@ export function visitedPagesOf(pages: unknown): Array<{ url: string; at?: string
   return result;
 }
 
-/** True when the trigger has at least one usable condition to match on. */
-export function hasTrigger(conditions: CampaignConditions): boolean {
-  return Boolean(conditions.url_contains && conditions.url_contains.trim());
+/**
+ * True when the trigger has something to match on and every rule in it is one
+ * the engine can read (EN-03). A row that fails this matches nobody; the write
+ * path refuses to switch such a campaign on.
+ */
+export function hasTrigger(conditions: unknown): boolean {
+  const { rules } = normalizeCampaignConditions(conditions);
+  return rules.length > 0 && rules.every((rule) => campaignRuleProblem(rule) === null);
 }
 
 /**
@@ -71,12 +89,29 @@ export function hasTrigger(conditions: CampaignConditions): boolean {
  * now; `sessionUrls` is every readable entry in order, that one included. A
  * trigger about "the page they are on" reads the first, never the second — a
  * visitor who passed `/withdraw` and is now on `/casino` is on `/casino`.
- * "Any page this session" is its own rule (EN-03), which is what the second
- * field is kept for.
+ * "Any page this session" is its own rule (`session_url`, EN-03), which is
+ * what the second field is kept for.
  */
 export interface VisitorPages {
   currentUrl: string | null;
   sessionUrls: readonly string[];
+}
+
+/**
+ * Everything the server-side rules read about a visitor (EN-03). The pages
+ * always; the rest only when a campaign has a rule about it — the caller
+ * fills them (`loadVisitorDetails`, `campaign-trigger.ts`) only then, so a
+ * workspace whose campaigns are all about pages pays no extra read. A field
+ * left out reads as "not known": `contains`/`equals` fail, `not_*` hold.
+ */
+export interface VisitorContext extends VisitorPages {
+  /** The visit's `came_from` (origin + path, `sanitizeReferrer`). */
+  referrer?: string | null;
+  /** ISO alpha-2, upper case: the visit's, else the contact's. */
+  country?: string | null;
+  visitorType?: CampaignVisitorType | null;
+  /** The visit's session variables, as stored (text). */
+  variables?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -89,29 +124,190 @@ export function visitorPagesOf(urls: readonly string[]): VisitorPages {
   return { currentUrl: urls.at(-1) ?? null, sessionUrls: urls };
 }
 
+/** True when a campaign has a rule about more than the visitor's pages. */
+export function needsVisitorDetails(conditions: unknown): boolean {
+  return normalizeCampaignConditions(conditions).rules.some(
+    (rule) =>
+      rule.field === 'referrer' ||
+      rule.field === 'country' ||
+      rule.field === 'visitor_type' ||
+      rule.field === 'custom_var',
+  );
+}
+
 /**
- * Does a visitor on these pages match the campaign's trigger?
- *
- * Every condition that is set must hold (AND). A predicate with nothing set
- * matches nobody — a campaign with no trigger is not "send to everyone", it is
- * not ready to send — which is what keeps the "trigger required" rule honest
- * even for a row that somehow reached the engine without one.
- *
- * `url_contains` looks at the current page only (EN-04). Until then it looked at
- * every page of the session, which contradicted what the builder and the type
- * both say.
+ * What the engine says about a campaign and a visitor (EN-03):
+ *   - `match` — fire, and the card is shown on the next poll;
+ *   - `wait`  — fire, but the card waits in the widget for the browser-side
+ *               rules in `showWhen` (time on the page, exit intent);
+ *   - `none`  — not this visitor, not now.
  */
-export function matchesConditions(conditions: CampaignConditions, pages: VisitorPages): boolean {
-  const checks: boolean[] = [];
+export type CampaignVerdict =
+  { kind: 'match' } | { kind: 'wait'; showWhen: CampaignShowWhen } | { kind: 'none' };
 
-  const urlNeedle = conditions.url_contains?.trim().toLowerCase();
-  if (urlNeedle) {
-    checks.push(pages.currentUrl?.toLowerCase().includes(urlNeedle) ?? false);
+const NONE: CampaignVerdict = { kind: 'none' };
+const MATCH: CampaignVerdict = { kind: 'match' };
+
+function textHolds(op: CampaignRuleOp, actual: string | undefined, expected: string): boolean {
+  const needle = expected.trim().toLowerCase();
+  const value = actual?.toLowerCase();
+  switch (op) {
+    case 'contains':
+      return value !== undefined && value.includes(needle);
+    case 'not_contains':
+      return value === undefined || !value.includes(needle);
+    case 'equals':
+      return value !== undefined && value === needle;
+    case 'not_equals':
+      return value === undefined || value !== needle;
+    default:
+      return false;
   }
+}
 
-  // Future condition kinds (geo, time-on-page, …) push their own check here.
-  if (checks.length === 0) return false;
-  return checks.every(Boolean);
+function numberOf(value: string | number | boolean): number | null {
+  if (typeof value === 'boolean') return null;
+  if (typeof value === 'string' && !value.trim()) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function variableHolds(rule: CampaignRule, actual: string | undefined): boolean {
+  if (isCampaignNumericOp(rule.op)) {
+    const left = actual === undefined ? null : numberOf(actual);
+    const right = numberOf(rule.value);
+    if (left === null || right === null) return false;
+    switch (rule.op) {
+      case 'gt':
+        return left > right;
+      case 'gte':
+        return left >= right;
+      case 'lt':
+        return left < right;
+      default:
+        return left <= right;
+    }
+  }
+  // "10" equals "10.0": two numbers are compared as numbers, anything else as
+  // text, ignoring case.
+  if ((rule.op === 'equals' || rule.op === 'not_equals') && actual !== undefined) {
+    const left = numberOf(actual);
+    const right = numberOf(rule.value);
+    if (left !== null && right !== null) {
+      return rule.op === 'equals' ? left === right : left !== right;
+    }
+  }
+  return textHolds(rule.op, actual, String(rule.value));
+}
+
+/**
+ * Does one server-side rule hold for this visitor? Pure. A browser-side rule
+ * (`time_on_page`, `exit_intent`) is never decided here: it answers false, and
+ * `evaluateCampaign` keeps such rules apart before it asks.
+ */
+export function serverRuleHolds(rule: CampaignRule, visitor: VisitorContext): boolean {
+  const expected = String(rule.value);
+  switch (rule.field) {
+    case 'current_url':
+      return textHolds(rule.op, visitor.currentUrl ?? undefined, expected);
+    case 'session_url': {
+      // "Any page this session": a positive operator holds when one page
+      // does, a negative one only when no page would match its positive twin.
+      const negative = rule.op === 'not_contains' || rule.op === 'not_equals';
+      const positive: CampaignRuleOp =
+        rule.op === 'not_contains' ? 'contains' : rule.op === 'not_equals' ? 'equals' : rule.op;
+      const some = visitor.sessionUrls.some((url) => textHolds(positive, url, expected));
+      return negative ? !some : some;
+    }
+    case 'referrer':
+      return textHolds(rule.op, visitor.referrer ?? undefined, expected);
+    case 'country':
+      return textHolds(rule.op, visitor.country ?? undefined, expected);
+    case 'visitor_type':
+      return textHolds(rule.op, visitor.visitorType ?? undefined, expected);
+    case 'custom_var': {
+      const key = rule.key?.trim() ?? '';
+      const variables = visitor.variables ?? {};
+      const actual = Object.prototype.hasOwnProperty.call(variables, key)
+        ? variables[key]
+        : undefined;
+      return variableHolds(rule, actual);
+    }
+    case 'time_on_page':
+    case 'exit_intent':
+      return false;
+  }
+}
+
+/**
+ * The two-stage decision (EN-03). The server decides its rules now; the
+ * browser-side ones go to the widget as `showWhen`:
+ *
+ *   - `all`: one failing server rule is `none`. All of them holding with no
+ *     browser rule is `match`; with browser rules, `wait` for every one of them.
+ *   - `any`: one server rule holding is `match` — the card needs nothing
+ *     else. None holding, with browser rules, is `wait` for any one of them;
+ *     without, `none`.
+ *
+ * A trigger with no rules, or with a rule the engine cannot read (a row
+ * written by hand, a field from a newer release), matches nobody — the
+ * failure worth being explicit about on a path that sends unsolicited
+ * messages. Pure, and the decision every fire and delivery path goes through.
+ */
+export function evaluateCampaign(conditions: unknown, visitor: VisitorContext): CampaignVerdict {
+  const { match, rules } = normalizeCampaignConditions(conditions);
+  if (rules.length === 0) return NONE;
+  if (rules.some((rule) => campaignRuleProblem(rule) !== null)) return NONE;
+
+  const browser = rules.filter(isCampaignClientRule);
+  const server = rules.filter((rule) => !isCampaignClientRule(rule));
+
+  if (match === 'all') {
+    if (!server.every((rule) => serverRuleHolds(rule, visitor))) return NONE;
+    return browser.length === 0 ? MATCH : { kind: 'wait', showWhen: { match, rules: browser } };
+  }
+  if (server.some((rule) => serverRuleHolds(rule, visitor))) return MATCH;
+  return browser.length === 0 ? NONE : { kind: 'wait', showWhen: { match, rules: browser } };
+}
+
+/**
+ * Should this campaign fire at this visitor — shown now or waiting in the
+ * widget? The yes/no every fire path asks; `evaluateCampaign` says which.
+ *
+ * `url_contains` (the first shape) looks at the current page only (EN-04).
+ */
+export function matchesConditions(conditions: unknown, visitor: VisitorContext): boolean {
+  return evaluateCampaign(conditions, visitor).kind !== 'none';
+}
+
+/** True when a campaign's card would wait for the browser (it has such a rule). */
+export function hasBrowserRules(conditions: unknown): boolean {
+  return normalizeCampaignConditions(conditions).rules.some(isCampaignClientRule);
+}
+
+/**
+ * The trigger as it is stored and answered: the rules, plus `url_contains`
+ * while they say exactly what the first shape could (`legacyUrlContains`) —
+ * kept for the builder and for a replica of the previous release, which read
+ * only that key. Values are trimmed and a country upper-cased once, here.
+ */
+export function storedConditions(conditions: unknown): CampaignConditions {
+  const set = normalizeCampaignConditions(conditions);
+  const rules = set.rules.map((rule): CampaignRule => {
+    const value =
+      typeof rule.value !== 'string'
+        ? rule.value
+        : rule.field === 'country'
+          ? rule.value.trim().toUpperCase()
+          : rule.value.trim();
+    const key = rule.field === 'custom_var' ? rule.key?.trim() : undefined;
+    return key !== undefined
+      ? { field: rule.field, op: rule.op, value, key }
+      : { field: rule.field, op: rule.op, value };
+  });
+  const normalised = { match: set.match, rules };
+  const legacy = legacyUrlContains(normalised);
+  return legacy !== undefined ? { ...normalised, url_contains: legacy } : normalised;
 }
 
 /**

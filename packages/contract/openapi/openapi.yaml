@@ -282,6 +282,8 @@ paths:
     $ref: "./paths/customer-chat.yaml#/resolution"
   /customer/chat/email:
     $ref: "./paths/customer-chat.yaml#/contactEmail"
+  /customer/chat/transcript:
+    $ref: "./paths/customer-chat.yaml#/transcriptRequest"
   /customer/chat/close:
     $ref: "./paths/customer-chat.yaml#/close"
   /customer/chat/form-response:
@@ -9256,6 +9258,21 @@ components:
             Domains a transcript may be mailed to besides the player's own
             address (AR-04-S3), lower-case, without the `@`; an address
             matches when its domain is exactly one of them. Empty unless set.
+        transcript_forward_to:
+          type: array
+          maxItems: 5
+          items: { type: string, format: email, maxLength: 254, example: arsiv@sirket.com }
+          description: >-
+            Addresses every closed connection is forwarded to (WG-06), each
+            mailed on its own, as an internal mail (outside the external
+            daily cap). A closing chat no longer mails the player (K26): the
+            player asks for their copy from the widget. Empty unless set.
+        transcript_forward_include_notes:
+          type: boolean
+          description: >-
+            Whether the forwarded copy is the team's, internal notes marked,
+            rather than the player's. Only addresses at the workspace's
+            verified SSO domains may receive it. False unless turned on.
         updated_at: { type: string, format: date-time, nullable: true }
 
     WidgetSettings:

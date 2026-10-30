@@ -54,3 +54,53 @@ export function emailDomain(address: string): string | null {
     .trim()
     .toLowerCase();
 }
+
+/*
+ * A player's own copy, and the copies a workspace forwards (WG-06 · tm 345).
+ *
+ * K26: a closing chat no longer mails the player. The player asks for their
+ * copy from the widget (`POST /customer/chat/transcript`), and a workspace may
+ * forward every closed connection to up to five addresses of its own
+ * (`inbox_settings.transcript_forward_to`) — the player's copy, or with
+ * `transcript_forward_include_notes` the team's, which only addresses at the
+ * workspace's verified domains may receive.
+ */
+
+/** How many addresses every closed connection may be forwarded to. */
+export const TRANSCRIPT_FORWARD_MAX = 5;
+
+/** How many times a player may have one connection mailed to them. */
+export const TRANSCRIPT_REQUESTS_PER_CHAT = 3;
+
+/** How many copies one player may ask for in an hour, across connections. */
+export const TRANSCRIPT_REQUESTS_PER_HOUR = 5;
+
+/**
+ * A forwarding address as the settings store it: trimmed, its domain
+ * lower-case — or null when it is not an address at a domain name.
+ */
+export function normaliseForwardAddress(input: string): string | null {
+  const address = input.trim();
+  const at = address.lastIndexOf('@');
+  if (at <= 0 || address.length > 254) return null;
+  const local = address.slice(0, at);
+  if (/[\s@<>,;"]/.test(local)) return null;
+  const domain = normaliseTranscriptDomain(address.slice(at + 1));
+  return domain === null ? null : `${local}@${domain}`;
+}
+
+/**
+ * The first forwarding address whose domain is not one the workspace has
+ * verified, or null when every one is — the rule for forwarding internal
+ * notes (WG-06 Q2). Without notes any address may be forwarded to.
+ */
+export function unverifiedForwardAddress(
+  addresses: readonly string[],
+  verifiedDomains: readonly string[],
+): string | null {
+  for (const address of addresses) {
+    const domain = emailDomain(address);
+    if (domain === null || !verifiedDomains.includes(domain)) return address;
+  }
+  return null;
+}

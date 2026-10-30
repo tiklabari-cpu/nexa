@@ -329,6 +329,48 @@ describe('ChatTimeout day boundary (ID-04)', () => {
     });
   });
 
+  it('saves the forwarding addresses normalised, and refuses a sixth (WG-06)', async () => {
+    renderChatTimeout();
+    const box = await screen.findByLabelText('Forwarding addresses (one per line, at most 5)');
+    await userEvent.type(
+      box,
+      'a@b.com{Enter}c@d.com{Enter}e@f.com{Enter}g@h.com{Enter}i@j.com{Enter}k@l.com',
+    );
+    await userEvent.tab();
+    expect(await screen.findByText('At most 5 addresses.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+    await userEvent.clear(box);
+    await userEvent.type(box, ' Arsiv@Sirket.COM {Enter}arsiv@sirket.com');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(putBodies).toHaveLength(1));
+    expect(putBodies[0]).toEqual({
+      chat_timeout_seconds: null,
+      transcript_forward_to: ['Arsiv@sirket.com'],
+    });
+  });
+
+  it('warns about internal notes and shows the server refusing an unverified domain (WG-06)', async () => {
+    renderChatTimeout();
+    const box = await screen.findByLabelText('Forwarding addresses (one per line, at most 5)');
+    await userEvent.type(box, 'arsiv@gmail.com');
+    await userEvent.click(screen.getByRole('checkbox', { name: /Include internal notes/ }));
+    expect(
+      screen.getByText(
+        /Internal notes are forwarded only to addresses at your verified SSO domains/,
+      ),
+    ).toBeInTheDocument();
+
+    nextPutFails = true;
+    nextPutDetails = { reason: 'domain_not_verified' };
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(
+      await screen.findByText(
+        'Internal notes can only go to addresses at your verified SSO domains.',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('typing in the search box alone does not make the form dirty', async () => {
     renderChatTimeout();
     await screen.findByLabelText('Time zone');

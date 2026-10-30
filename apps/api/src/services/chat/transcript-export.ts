@@ -385,7 +385,7 @@ export async function readTranscriptHeader(
  */
 export async function* transcriptLines(
   read: <T>(fn: (tx: TenantClient) => Promise<T>) => Promise<T>,
-  scope: TranscriptScope,
+  scope: Pick<TranscriptScope, 'threadId' | 'customer' | 'contactVisible'>,
   audience: TranscriptAudience,
   pageSize: number = PAGE,
 ): AsyncGenerator<TranscriptLine[]> {

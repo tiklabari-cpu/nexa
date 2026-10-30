@@ -85,11 +85,12 @@ export interface Message {
    * 202 (tm 257.7): the answer cannot say which happened, so the mailbox is
    * where a test — and the pilot rehearsal's spool check — tells them apart.
    *
-   * `chat_transcript` is a closed chat's transcript sent to the visitor (tm
-   * 257.14), split out of `notification` for `ticket_notice`'s second reason:
-   * it leaves the workspace, to an address a visitor typed, which is what the
-   * external daily cap counts. The team's copy goes to a teammate and stays a
-   * `notification`.
+   * `chat_transcript` is a player's copy of a conversation (tm 257.14) — since
+   * K26 (tm 345) only when the player asks for it from the widget, or an agent
+   * mails it to them (AR-04) — split out of `notification` for
+   * `ticket_notice`'s second reason: it leaves the workspace, to an address a
+   * visitor typed, which is what the external daily cap counts. The team's
+   * copy and the workspace's forwarded copies (WG-06) stay a `notification`.
    *
    * `ticket_reply` is an agent's answer on a ticket, mailed to its player (tm
    * 356.3 · HD-01) — external for the same reason as `ticket_notice`, and its

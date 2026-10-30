@@ -248,6 +248,9 @@ describe('routes under the daily mail caps (tm 257.14)', () => {
       auth(adminToken),
     );
     expect(archived.statusCode).toBe(200);
+    // A close no longer mails the visitor (K26 · tm 345); they ask for it.
+    const requested = await h.server.post('/customer/chat/transcript', {}, auth(visitorToken));
+    expect(requested.statusCode).toBe(202);
     await solveTicketWithNotice(owner, h.server, fx.a, adminToken);
 
     expect(await outbox()).toEqual(

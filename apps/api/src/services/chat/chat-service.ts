@@ -2848,8 +2848,10 @@ export class ChatService {
   }
 
   /**
-   * Mail the closed conversation to the visitor and to the agent who handled it
-   * (FR-MOD-08.7.4).
+   * Mail the closed conversation to the agent who handled it (FR-MOD-08.7.4)
+   * and to the workspace's forwarding addresses (WG-06 · tm 345) — never to
+   * the visitor (K26): a player asks for their copy from the widget
+   * (`POST /customer/chat/transcript`).
    *
    * Runs after the close transaction commits, never inside it: a mail is a
    * side effect that must not be able to roll a close back or hold its lock, and
@@ -2858,9 +2860,10 @@ export class ChatService {
    * every lookup to this workspace exactly as the close was; a transcript can no
    * more cross a tenant boundary than the conversation it copies.
    *
-   * The customer's copy honours the one invariant this service exists to keep —
-   * an internal note never reaches a customer — because `renderTranscript` builds
-   * it from the `all`-recipient events only.
+   * A forwarded copy without notes is the player's, and honours the one
+   * invariant this service exists to keep — an internal note never reaches a
+   * customer's copy — because `renderTranscript` builds it from the
+   * `all`-recipient events only.
    */
   async #emailTranscript(tenant: TenantContext, chatId: string, threadId: string): Promise<void> {
     const mailer = this.mailer;
@@ -2870,9 +2873,17 @@ export class ChatService {
       const data = await withTenant(this.db, tenant, async (tx) => {
         const chat = await tx.chat.findUnique({
           where: { id: chatId },
-          select: { customer: { select: { name: true, email: true, locale: true } } },
+          select: { brandId: true, customer: { select: { name: true } } },
         });
         if (!chat) return null;
+
+        // Where the workspace forwards every closed connection (WG-06), for
+        // the chat's brand or the default brand's — the rule the on-demand
+        // copies read their allowed domains by.
+        const settings = await tx.inboxSettings.findFirst({
+          where: chat.brandId !== null ? { brandId: chat.brandId } : { brand: { isDefault: true } },
+          select: { transcriptForwardTo: true, transcriptForwardIncludeNotes: true },
+        });
 
         const thread = await tx.thread.findUnique({
           where: { id: threadId },
@@ -2946,12 +2957,10 @@ export class ChatService {
 
         return {
           customer: chat.customer,
-          // The visitor's copy is written in the language their widget showed
-          // (WG-02). The mail templates have two languages; a visitor on any
-          // other widget language reads English, as every visitor did before.
-          customerLocale: (isMailLocale(chat.customer?.locale)
-            ? chat.customer.locale
-            : 'en') as MailLocale,
+          forward: {
+            to: settings?.transcriptForwardTo ?? [],
+            includeNotes: settings?.transcriptForwardIncludeNotes ?? false,
+          },
           assignee,
           assigneeLocale,
           events,
@@ -2963,8 +2972,8 @@ export class ChatService {
       if (!data) return;
 
       const recipients = transcriptRecipients({
-        customer: { email: data.customer?.email ?? null, name: data.customer?.name ?? null },
         assignee: data.assignee,
+        forward: data.forward,
       });
       if (recipients.length === 0) return;
 
@@ -2987,27 +2996,28 @@ export class ChatService {
           frame: {
             workspaceName: data.workspaceName,
             timeZone: data.timeZone,
-            // The team's copy reads in the assignee's panel language, the
-            // visitor's in the language their widget showed (WG-02).
-            locale: recipient.party === 'team' ? data.assigneeLocale : data.customerLocale,
+            // Every copy here stays with the team, so it reads in the
+            // assignee's panel language (English with nobody assigned).
+            locale: data.assigneeLocale,
           },
         });
         // Nothing worth sending this party (e.g. a chat of only system events).
         if (!content) continue;
-        // Each party on its own (tm 255.4): `deliver` does not throw, so the
-        // visitor's copy failing no longer costs the agent theirs. The carrier
+        // Each recipient on its own (tm 255.4): `deliver` does not throw, so
+        // one forwarding address failing does not cost the agent their copy. The carrier
         // logs its own failure; this service holds no logger to add to it. The
         // agent-archive route hands in `backgroundMail.asMailer` (tm 256.4), so
         // there this returns as soon as the copy is handed over and the route's
         // callback logs the outcome.
         //
-        // The visitor's copy is `chat_transcript` (tm 257.14): it leaves the
-        // workspace, to an address a visitor typed, and counts against the
-        // external daily cap. The team's copy goes to a teammate.
+        // Every one is a `notification`: the assignee is a teammate and a
+        // forwarding address is one the workspace chose for itself, so none
+        // counts against the external daily cap (WG-06's open point, decided
+        // that way). `chat_transcript` is the player's own copy, asked for.
         await deliver(mailer, {
           to: recipient.to,
           licenseId: tenant.licenseId,
-          kind: recipient.party === 'customer' ? 'chat_transcript' : 'notification',
+          kind: 'notification',
           ...content,
         });
       }

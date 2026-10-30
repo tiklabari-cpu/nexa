@@ -1566,7 +1566,9 @@ chatTimeout:
       So is `ticket_reopen_window_days` (1-365, HD-03): how many days after
       its last activity a player's e-mail answer still reopens a solved ticket.
       And `transcript_allowed_domains` (AR-04-S3): where a transcript may be
-      mailed besides the player's own address.
+      mailed besides the player's own address. `transcript_forward_to` and
+      `transcript_forward_include_notes` (WG-06): where every closed
+      connection is forwarded, and whether the copy carries internal notes.
       `ask_email_after_seconds` (WG-08) is a third window, before the
       transfer: ask the player for an e-mail once a connection has waited this
       long for a person's first reply. When on it must be below the transfer,
@@ -1662,6 +1664,23 @@ chatTimeout:
                   own address (AR-04-S3). Stored trimmed, lower-case and
                   without a leading `@`, duplicates dropped; a value that is
                   not a domain name is a 400. Left out, the stored list stays.
+              transcript_forward_to:
+                type: array
+                maxItems: 5
+                items: { type: string, minLength: 3, maxLength: 254 }
+                description: >-
+                  Addresses every closed connection is forwarded to (WG-06),
+                  at most five. Stored trimmed with the domain lower-case,
+                  duplicates dropped; a value that is not an address is a 400.
+                  Left out, the stored list stays.
+              transcript_forward_include_notes:
+                type: boolean
+                description: >-
+                  Forward the team's copy, internal notes marked. Refused (400,
+                  `reason: domain_not_verified`, nothing saved) while any
+                  forwarding address — as this save leaves the list — is
+                  outside the workspace's verified SSO domains. Left out, the
+                  stored value stays.
     responses:
       "200":
         description: Updated

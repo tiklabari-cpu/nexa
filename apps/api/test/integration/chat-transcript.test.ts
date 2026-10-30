@@ -1,16 +1,21 @@
 /**
  * End-of-chat transcript e-mail (FR-MOD-08.7.4).
  *
- * When a conversation ends a copy is mailed to the visitor and to the human who
- * handled it. Proven the way the notification channel is — with a real
- * `FileMailer` pointed at a temp directory, reading the spool back — because the
- * things that must hold are about *who* the mail reaches and *what* it carries:
+ * When a conversation ends a copy is mailed to the human who handled it and to
+ * the workspace's forwarding addresses (WG-06 · tm 345) — never to the visitor
+ * (K26): the player asks for their copy from the widget
+ * (`transcript-request.test.ts`). Proven the way the notification channel is —
+ * with a real `FileMailer` pointed at a temp directory, reading the spool back
+ * — because the things that must hold are about *who* the mail reaches and
+ * *what* it carries:
  *
- *   1. Both an agent-archived close and an idle-timeout close send a transcript,
- *      because both go through the one shared close path.
- *   2. The visitor's copy never carries an internal note; the team's copy does.
- *   3. No address, no assignee, or an opted-out agent means that copy is skipped.
- *   4. A close driven in one tenant's context can never mail another's people —
+ *   1. Both an agent-archived close and an idle-timeout close mail the team,
+ *      never the visitor, because both go through the one shared close path —
+ *      and the conversation's own record is as complete as before.
+ *   2. A forwarded copy is the player's (no internal note) unless the workspace
+ *      includes notes; each address is mailed on its own, as a `notification`.
+ *   3. No assignee or an opted-out agent means that copy is skipped.
+ *   4. A close driven in one tenant's context can never mail another tenant's people —
  *      RLS scopes the transcript exactly as it scopes the close.
  */
 import { PrismaClient } from '@prisma/client';
@@ -26,6 +31,7 @@ import type { AgentPrincipal } from '../../src/services/auth/principal.js';
 import {
   auditContextFor,
   ownerClient,
+  seedDefaultBrand,
   seedFixtures,
   type Fixtures,
   type TenantFixture,
@@ -171,12 +177,27 @@ describe('chat transcript e-mail (FR-MOD-08.7.4)', () => {
     return { chatId, threadId };
   }
 
-  // Both copies: the team's is a `notification`, the visitor's has been its
-  // own `chat_transcript` kind since tm 257.14.
+  // Every closing copy is a `notification`; a `chat_transcript` here would be
+  // the visitor's copy, which a close no longer sends (K26).
   const notifications = async () =>
     (await mailer.outbox()).filter(
       (m) => m.kind === 'notification' || m.kind === 'chat_transcript',
     );
+
+  /** The workspace's forwarding settings (WG-06), on the default brand. */
+  async function forwardTo(t: TenantFixture, to: string[], includeNotes = false): Promise<void> {
+    const brand = await seedDefaultBrand(owner, t.licenseId);
+    await owner.inboxSettings.upsert({
+      where: { licenseId_brandId: { licenseId: t.licenseId, brandId: brand } },
+      create: {
+        licenseId: t.licenseId,
+        brandId: brand,
+        transcriptForwardTo: to,
+        transcriptForwardIncludeNotes: includeNotes,
+      },
+      update: { transcriptForwardTo: to, transcriptForwardIncludeNotes: includeNotes },
+    });
+  }
 
   beforeAll(async () => {
     if (!APP_URL) throw new Error('DATABASE_APP_URL must be set');
@@ -205,7 +226,7 @@ describe('chat transcript e-mail (FR-MOD-08.7.4)', () => {
   // Both close paths send a transcript
   // ==========================================================================
 
-  it('mails the visitor and the assignee when an agent archives the chat', async () => {
+  it('never mails the visitor at close, mails the assignee everything (K26 · FR-MOD-08.7.4)', async () => {
     const { chatId } = await seedChat(fx.a, {
       assigneeId: fx.a.agentAccountId,
       internalNote: true,
@@ -214,59 +235,90 @@ describe('chat transcript e-mail (FR-MOD-08.7.4)', () => {
     await chats().deactivate(ctx(fx.a), agent(fx.a), chatId, audit(fx.a));
 
     const mails = await notifications();
-    const toCustomer = mails.find((m) => m.to === 'visitor@example.test');
-    const toTeam = mails.find((m) => m.to === fx.a.agentEmail);
-
-    expect(toCustomer).toBeDefined();
-    expect(toTeam).toBeDefined();
-
-    // The visitor sees the conversation but never the internal note.
-    expect(toCustomer!.subject).toMatch(/^your conversation with /i);
-    expect(toCustomer!.body).toContain('My order is late');
-    expect(toCustomer!.body).toContain('Let me check on that');
-    expect(toCustomer!.body).not.toContain('refund pre-approved');
-
+    expect(mails.map((m) => `${m.kind} → ${m.to}`)).toEqual([`notification → ${fx.a.agentEmail}`]);
     // The team copy carries everything, including the note.
-    expect(toTeam!.body).toContain('refund pre-approved');
+    expect(mails[0]!.body).toContain('My order is late');
+    expect(mails[0]!.body).toContain('refund pre-approved');
   });
 
-  it('writes the visitor copy in the language their widget showed (WG-02)', async () => {
+  it("keeps the conversation's own record whole: events, archive, timeline (K26 regression)", async () => {
+    const { chatId, threadId } = await seedChat(fx.a, {
+      assigneeId: fx.a.agentAccountId,
+      internalNote: true,
+    });
+
+    await chats().deactivate(ctx(fx.a), agent(fx.a), chatId, audit(fx.a));
+
+    // Nothing the close used to keep is lost now that the visitor is not
+    // mailed: the three seeded lines (note included) and the close's own
+    // event are on the connection, the chat is archived, the thread ended.
+    const events = await owner.event.findMany({
+      where: { threadId },
+      orderBy: { createdAt: 'asc' },
+      select: { text: true, recipients: true, type: true },
+    });
+    expect(events.filter((e) => e.type === 'message').map((e) => e.text)).toEqual([
+      'My order is late',
+      'Let me check on that',
+      'VIP — refund pre-approved',
+    ]);
+    const chat = await owner.chat.findUnique({ where: { id: chatId }, select: { active: true } });
+    const thread = await owner.thread.findUnique({
+      where: { id: threadId },
+      select: { active: true, closedAt: true },
+    });
+    expect(chat?.active).toBe(false);
+    expect(thread?.active).toBe(false);
+    expect(thread?.closedAt).not.toBeNull();
+    const trail = await owner.auditLogEntry.findMany({
+      where: { licenseId: fx.a.licenseId, target: `chat:${chatId}` },
+      select: { action: true },
+    });
+    expect(trail.map((e) => e.action)).toContain('chat.archived');
+  });
+
+  it("forwards the player's copy to each address on its own, no note, as internal mail (WG-06)", async () => {
+    await forwardTo(fx.a, ['arsiv@sirket.test', 'uyum@sirket.test']);
     const { chatId } = await seedChat(fx.a, {
       assigneeId: fx.a.agentAccountId,
-      customerLocale: 'tr',
+      internalNote: true,
     });
 
     await chats().deactivate(ctx(fx.a), agent(fx.a), chatId, audit(fx.a));
 
     const mails = await notifications();
-    const toCustomer = mails.find((m) => m.to === 'visitor@example.test');
-    expect(toCustomer!.subject).toMatch(/görüşmenizin kopyası$/);
-    // The team's copy follows the assignee's panel language, not the visitor's.
-    expect(mails.find((m) => m.to === fx.a.agentEmail)!.subject).not.toMatch(/kopyası/);
+    expect(mails.map((m) => `${m.kind} → ${m.to}`).sort()).toEqual(
+      [
+        `notification → ${fx.a.agentEmail}`,
+        'notification → arsiv@sirket.test',
+        'notification → uyum@sirket.test',
+      ].sort(),
+    );
+    for (const to of ['arsiv@sirket.test', 'uyum@sirket.test']) {
+      const copy = mails.find((m) => m.to === to)!;
+      expect(copy.body).toContain('Let me check on that');
+      expect(copy.body).not.toContain('refund pre-approved');
+    }
+    expect(mails.some((m) => m.to === 'visitor@example.test')).toBe(false);
   });
 
-  it.each([null, 'de'])(
-    'reads English for a visitor with no recorded language, or one the mails do not speak (%s)',
-    async (locale) => {
-      const { chatId } = await seedChat(fx.a, {
-        assigneeId: fx.a.agentAccountId,
-        customerLocale: locale,
-      });
+  it("forwards the team's copy, notes marked, when the workspace includes them (WG-06)", async () => {
+    await forwardTo(fx.a, ['arsiv@sirket.test'], true);
+    const { chatId } = await seedChat(fx.a, { assigneeId: null, internalNote: true });
 
-      await chats().deactivate(ctx(fx.a), agent(fx.a), chatId, audit(fx.a));
+    await chats().deactivate(ctx(fx.a), agent(fx.a), chatId, audit(fx.a));
 
-      const toCustomer = (await notifications()).find((m) => m.to === 'visitor@example.test');
-      expect(toCustomer!.subject).toMatch(/^your conversation with /i);
-    },
-  );
+    const mails = await notifications();
+    expect(mails.map((m) => m.to)).toEqual(['arsiv@sirket.test']);
+    expect(mails[0]!.body).toContain('refund pre-approved');
+  });
 
-  it("still mails the assignee when the visitor's copy is refused, and still closes (tm 255.4)", async () => {
-    // The visitor is mailed first. Before tm 255.4 a refusal there was thrown
-    // into the method's catch-all, and the agent's copy was never attempted.
+  it('still mails the assignee when a forwarding address is refused, and still closes (tm 255.4)', async () => {
+    await forwardTo(fx.a, ['arsiv@sirket.test']);
     const { chatId } = await seedChat(fx.a, { assigneeId: fx.a.agentAccountId });
     const refusing: Mailer = {
       send: async (message) => {
-        if (message.to === 'visitor@example.test') {
+        if (message.to === 'arsiv@sirket.test') {
           throw new PermanentMailError({ code: 'rejected', phase: 'rcpt_to', smtpCode: 550 });
         }
         await mailer.send(message);
@@ -283,7 +335,7 @@ describe('chat transcript e-mail (FR-MOD-08.7.4)', () => {
     expect(closed?.active).toBe(false);
   });
 
-  it('mails a transcript when the idle-timeout sweep closes the chat', async () => {
+  it('mails the team, not the visitor, when the idle-timeout sweep closes the chat (K26)', async () => {
     const now = new Date();
     const { chatId } = await seedChat(fx.a, {
       assigneeId: fx.a.agentAccountId,
@@ -299,35 +351,19 @@ describe('chat transcript e-mail (FR-MOD-08.7.4)', () => {
     expect(closed).not.toBeNull();
 
     const mails = await notifications();
-    expect(mails.some((m) => m.to === 'visitor@example.test')).toBe(true);
-    expect(mails.some((m) => m.to === fx.a.agentEmail)).toBe(true);
+    expect(mails.map((m) => m.to)).toEqual([fx.a.agentEmail]);
   });
 
   // ==========================================================================
   // Who is skipped
   // ==========================================================================
 
-  it('skips the visitor copy when we captured no address, still mails the team', async () => {
-    const { chatId } = await seedChat(fx.a, {
-      customerEmail: null,
-      assigneeId: fx.a.agentAccountId,
-    });
-
-    await chats().deactivate(ctx(fx.a), agent(fx.a), chatId, audit(fx.a));
-
-    const mails = await notifications();
-    expect(mails).toHaveLength(1);
-    expect(mails[0]!.to).toBe(fx.a.agentEmail);
-  });
-
-  it('skips the team copy for an AI-only chat with no assignee, still mails the visitor', async () => {
+  it('mails nobody for an AI-only chat with no assignee and no forwarding', async () => {
     const { chatId } = await seedChat(fx.a, { assigneeId: null });
 
     await chats().deactivate(ctx(fx.a), agent(fx.a), chatId, audit(fx.a));
 
-    const mails = await notifications();
-    expect(mails).toHaveLength(1);
-    expect(mails[0]!.to).toBe('visitor@example.test');
+    expect(await notifications()).toEqual([]);
   });
 
   it('skips the team copy for an assignee who turned the e-mail channel off (FR-MOD-08.2)', async () => {
@@ -339,8 +375,7 @@ describe('chat transcript e-mail (FR-MOD-08.7.4)', () => {
     const { chatId } = await seedChat(fx.a, { assigneeId: fx.a.agentAccountId });
     await chats().deactivate(ctx(fx.a), agent(fx.a), chatId, audit(fx.a));
 
-    const mails = await notifications();
-    expect(mails.map((m) => m.to)).toEqual(['visitor@example.test']);
+    expect(await notifications()).toEqual([]);
   });
 
   // ==========================================================================

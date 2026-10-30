@@ -444,19 +444,29 @@ describe('daily mail caps at the counter (tm 257.14)', () => {
     // test/integration → test → api → apps → repo root.
     const repoRoot = resolve(import.meta.dirname, '../../../..');
 
-    async function idleChatWithVisitorEmail(t: TenantFixture, email: string): Promise<string> {
+    /**
+     * An idle chat whose close is forwarded to `email` (WG-06): since K26 the
+     * close mails no visitor, so the workspace's own archive address is the
+     * courtesy mail the cap may drop.
+     */
+    async function idleChatForwardedTo(t: TenantFixture, email: string): Promise<string> {
       const brand = await owner.brand.findFirstOrThrow({
         where: { licenseId: t.licenseId, isDefault: true },
         select: { id: true },
       });
       await owner.inboxSettings.upsert({
         where: { licenseId_brandId: { licenseId: t.licenseId, brandId: brand.id } },
-        create: { licenseId: t.licenseId, brandId: brand.id, chatTimeoutSeconds: 3600 },
-        update: { chatTimeoutSeconds: 3600 },
+        create: {
+          licenseId: t.licenseId,
+          brandId: brand.id,
+          chatTimeoutSeconds: 3600,
+          transcriptForwardTo: [email],
+        },
+        update: { chatTimeoutSeconds: 3600, transcriptForwardTo: [email] },
       });
       const lastActivity = new Date(Date.now() - 2 * 3_600_000);
       const customer = await owner.customer.create({
-        data: { organizationId: t.organizationId, name: 'Vic', email },
+        data: { organizationId: t.organizationId, name: 'Vic', email: 'visitor@example.test' },
         select: { id: true },
       });
       const chatId = generateShortId();
@@ -504,8 +514,8 @@ describe('daily mail caps at the counter (tm 257.14)', () => {
           seedDefaultBrand(owner, fx.a.licenseId),
           seedDefaultBrand(owner, fx.b.licenseId),
         ]);
-        const cappedChat = await idleChatWithVisitorEmail(fx.a, 'capped-visitor@example.test');
-        const openChat = await idleChatWithVisitorEmail(fx.b, 'open-visitor@example.test');
+        const cappedChat = await idleChatForwardedTo(fx.a, 'capped-archive@example.test');
+        const openChat = await idleChatForwardedTo(fx.b, 'open-archive@example.test');
         // Workspace A has used its whole day — today's and, should the job start
         // after midnight UTC, tomorrow's.
         const today = new Date();
@@ -537,7 +547,7 @@ describe('daily mail caps at the counter (tm 257.14)', () => {
 
           const sent = await new FileMailer(scriptMailDir).outbox();
           expect(sent.map((m) => `${m.kind} → ${m.to}`)).toEqual([
-            'chat_transcript → open-visitor@example.test',
+            'notification → open-archive@example.test',
           ]);
           expect(sent[0]!.licenseId).toBe(fx.b.licenseId);
         } finally {

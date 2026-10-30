@@ -225,6 +225,8 @@ interface State {
   queuePosition: number | null;
   /** Roughly how long the queue still is (WG-05); null shows the position alone. */
   estimatedWait: { min_minutes: number; max_minutes: number } | null;
+  /** The address the player gave before, offered in "E-mail me the transcript" (WG-06). */
+  customerEmail: string | null;
   events: WidgetEvent[];
   /** Who the visitor is talking to, shown in the header (FR-MOD-11.3). */
   agent: { name: string; avatarUrl: string | null } | null;
@@ -464,6 +466,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     threadId: null,
     queuePosition: null,
     estimatedWait: null,
+    customerEmail: null,
     events: [],
     agent: null,
     agentTyping: false,
@@ -1070,6 +1073,64 @@ export function mount(doc: Document = document, win: Window = window): () => voi
   function renderEndConfirm(): void {
     ui.endConfirm.hidden = !endConfirmOpen;
     if (endConfirmOpen) ui.endConfirmCancel.focus();
+  }
+
+  // --- "E-mail me the transcript" (WG-06 · tm 345) ---------------------------
+  //
+  // K26: a closing chat no longer mails the player; they ask here, from the
+  // header menu while a conversation is open or the "Chat ended" banner after.
+  // The server sends their latest connection, in their language, without a
+  // note. The box offers the address they gave before; an empty one asks.
+
+  let mailCopyOpen = false;
+
+  function openMailCopy(): void {
+    menuOpen = false;
+    renderMenu();
+    mailCopyOpen = true;
+    ui.mailCopyMsg.textContent = t('transcriptMail.prompt');
+    ui.mailCopyInput.hidden = false;
+    ui.mailCopyInput.value = state.customerEmail ?? '';
+    ui.mailCopyInput.removeAttribute('aria-invalid');
+    ui.mailCopyNote.hidden = true;
+    ui.mailCopySend.hidden = false;
+    ui.mailCopySend.disabled = false;
+    ui.mailCopyCancel.textContent = t('chat.end.cancelButton');
+    ui.mailCopy.hidden = false;
+    ui.mailCopyInput.focus();
+  }
+
+  function closeMailCopy(): void {
+    mailCopyOpen = false;
+    ui.mailCopy.hidden = true;
+  }
+
+  async function sendMailCopy(): Promise<void> {
+    const email = ui.mailCopyInput.value.trim();
+    if (!email || !ui.mailCopyInput.checkValidity()) {
+      ui.mailCopyNote.textContent = t('askEmail.invalid');
+      ui.mailCopyNote.hidden = false;
+      ui.mailCopyInput.setAttribute('aria-invalid', 'true');
+      return;
+    }
+    ui.mailCopySend.disabled = true;
+    ui.mailCopyNote.hidden = true;
+    try {
+      await api.requestTranscript(email);
+      ui.mailCopyMsg.textContent = t('askEmail.sent');
+      ui.mailCopyInput.hidden = true;
+      ui.mailCopySend.hidden = true;
+      ui.mailCopyCancel.textContent = t('transcriptMail.close');
+      ui.mailCopyCancel.focus();
+    } catch (error) {
+      ui.mailCopySend.disabled = false;
+      ui.mailCopyNote.textContent = t(
+        error instanceof WidgetApiError && error.status === 429
+          ? 'transcriptMail.tooMany'
+          : 'askEmail.failed',
+      );
+      ui.mailCopyNote.hidden = false;
+    }
   }
 
   /**
@@ -1767,6 +1828,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       state.threadId = snapshot.chat?.thread_id ?? null;
       state.queuePosition = snapshot.chat?.queue_position ?? null;
       state.estimatedWait = snapshot.chat?.estimated_wait ?? null;
+      state.customerEmail = snapshot.customer?.email ?? null;
       state.events = snapshot.events;
       pendingBubbleIds = [];
       noteTranscriptCursor();
@@ -2077,6 +2139,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       state.threadId = snapshot.chat?.thread_id ?? null;
       state.queuePosition = snapshot.chat?.queue_position ?? null;
       state.estimatedWait = snapshot.chat?.estimated_wait ?? null;
+      state.customerEmail = snapshot.customer?.email ?? null;
 
       // The widget holds no socket (see `startPolling` below), so this poll is
       // the only signal that a conversation just ended — agent archive or the
@@ -2609,6 +2672,13 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       renderEndConfirm();
       void endChat();
     });
+    ui.menuTranscript.addEventListener('click', openMailCopy);
+    ui.closedTranscript.addEventListener('click', openMailCopy);
+    ui.mailCopyCancel.addEventListener('click', closeMailCopy);
+    ui.mailCopy.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void sendMailCopy();
+    });
     ui.closedRestart.addEventListener('click', () => {
       state.closed = false;
       renderClosed();
@@ -2635,6 +2705,10 @@ export function mount(doc: Document = document, win: Window = window): () => voi
   doc.addEventListener(
     'keydown',
     (event) => {
+      if (event.key === 'Escape' && mailCopyOpen) {
+        closeMailCopy();
+        return;
+      }
       if (event.key === 'Escape' && endConfirmOpen) {
         endConfirmOpen = false;
         renderEndConfirm();
@@ -2951,6 +3025,15 @@ interface Ui {
   menuCopy: HTMLButtonElement;
   /** Header "⋮" → "End chat" (FR-MOD-11.4-b). */
   menuEnd: HTMLButtonElement;
+  /** Header "⋮" / "Chat ended" → "E-mail me the transcript" (WG-06), and its dialog. */
+  menuTranscript: HTMLButtonElement;
+  closedTranscript: HTMLButtonElement;
+  mailCopy: HTMLFormElement;
+  mailCopyMsg: HTMLElement;
+  mailCopyInput: HTMLInputElement;
+  mailCopyNote: HTMLElement;
+  mailCopySend: HTMLButtonElement;
+  mailCopyCancel: HTMLButtonElement;
   /** The "End chat" confirmation dialog — `role=dialog`, focused on open. */
   endConfirm: HTMLElement;
   endConfirmCancel: HTMLButtonElement;
@@ -3113,7 +3196,46 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   menuEnd.className = 'nx-menu-end';
   menuEnd.setAttribute('role', 'menuitem');
   menuEnd.textContent = t('chat.end.menuItem');
-  menu.append(menuSupport, menuCopy, menuRate, menuEnd);
+  const menuTranscript = doc.createElement('button');
+  menuTranscript.type = 'button';
+  menuTranscript.className = 'nx-menu-rate';
+  menuTranscript.setAttribute('role', 'menuitem');
+  menuTranscript.textContent = t('transcriptMail.menuItem');
+  menu.append(menuSupport, menuCopy, menuRate, menuTranscript, menuEnd);
+
+  // "E-mail me the transcript" (WG-06): the end-confirm card's look, a form.
+  const mailCopy = doc.createElement('form');
+  mailCopy.className = 'nx-end-confirm';
+  mailCopy.noValidate = true;
+  mailCopy.hidden = true;
+  mailCopy.setAttribute('role', 'dialog');
+  mailCopy.setAttribute('aria-label', t('transcriptMail.menuItem'));
+  const mailCopyMsg = doc.createElement('p');
+  mailCopyMsg.className = 'nx-end-confirm-msg';
+  mailCopyMsg.setAttribute('aria-live', 'polite');
+  const mailCopyInput = doc.createElement('input');
+  mailCopyInput.type = 'email';
+  mailCopyInput.className = 'nx-prechat-input';
+  mailCopyInput.autocomplete = 'email';
+  mailCopyInput.maxLength = 254;
+  mailCopyInput.required = true;
+  mailCopyInput.placeholder = t('askEmail.label');
+  mailCopyInput.setAttribute('aria-label', t('askEmail.label'));
+  const mailCopyNote = doc.createElement('p');
+  mailCopyNote.className = 'nx-askemail-note';
+  mailCopyNote.setAttribute('role', 'alert');
+  mailCopyNote.hidden = true;
+  const mailCopyActions = doc.createElement('div');
+  mailCopyActions.className = 'nx-end-confirm-actions';
+  const mailCopyCancel = doc.createElement('button');
+  mailCopyCancel.type = 'button';
+  mailCopyCancel.className = 'nx-end-confirm-cancel';
+  const mailCopySend = doc.createElement('button');
+  mailCopySend.type = 'submit';
+  mailCopySend.className = 'nx-end-confirm-confirm';
+  mailCopySend.textContent = t('send');
+  mailCopyActions.append(mailCopyCancel, mailCopySend);
+  mailCopy.append(mailCopyMsg, mailCopyInput, mailCopyNote, mailCopyActions);
   menuWrap.append(menuButton, menu);
 
   // "End chat" confirmation (FR-MOD-11.4-b): a modal card over the panel,
@@ -3392,7 +3514,11 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   closedRestart.type = 'button';
   closedRestart.className = 'nx-closed-restart';
   closedRestart.textContent = t('chat.end.startNew');
-  closedBanner.append(closedMsg, closedRestart);
+  const closedTranscript = doc.createElement('button');
+  closedTranscript.type = 'button';
+  closedTranscript.className = 'nx-rating-add';
+  closedTranscript.textContent = t('transcriptMail.menuItem');
+  closedBanner.append(closedMsg, closedTranscript, closedRestart);
 
   // Shows the picked file before it is sent; hidden until there is one.
   const chip = doc.createElement('div');
@@ -3590,6 +3716,9 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     // by: nobody is available, so the message goes to a queue rather than to a
     // conversation.
     offline,
+    // Over the panel like the end-confirm card; after the conversation so a
+    // card inside it is found first.
+    mailCopy,
     offlineThanks,
     chip,
     form,
@@ -3682,6 +3811,14 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     menuSupportId,
     menuCopy,
     menuEnd,
+    menuTranscript,
+    closedTranscript,
+    mailCopy,
+    mailCopyMsg,
+    mailCopyInput,
+    mailCopyNote,
+    mailCopySend,
+    mailCopyCancel,
     endConfirm,
     endConfirmCancel,
     endConfirmConfirm,

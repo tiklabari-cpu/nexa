@@ -298,6 +298,10 @@ paths:
     $ref: "./paths/customer-chat.yaml#/sale"
   /customer/ticket:
     $ref: "./paths/customer-chat.yaml#/leaveTicket"
+  /customer/visit:
+    $ref: "./paths/customer-chat.yaml#/visit"
+  /customer/campaigns/{campaignId}/shown:
+    $ref: "./paths/customer-chat.yaml#/campaignShown"
   /customer/kb/search:
     $ref: "./paths/customer-kb.yaml#/search"
   /customer/kb/articles/{slug}:
@@ -10567,16 +10571,106 @@ components:
     CampaignConditions:
       type: object
       description: |
-        The trigger predicate (FR-MOD-03.3.2). Every key set must hold for a
-        visitor to match. `url_contains` — the one condition v1 ships — targets
-        the page they are on now, the last page of their visit and not an
-        earlier one; an empty predicate matches nobody, so a campaign
-        with no trigger is rejected rather than sent to everyone.
+        The trigger (FR-MOD-03.3.2 · EN-03): up to 10 `rules` joined by
+        `match` — `all` (every rule holds) or `any` (one is enough). An
+        empty rule list matches nobody, so a campaign with no trigger is
+        rejected rather than sent to everyone.
+
+        **Two-stage evaluation.** The server decides the rules about where the
+        visitor is and who they are (`current_url`, `session_url`,
+        `referrer`, `country`, `visitor_type`, `custom_var`) on each page
+        view. `time_on_page` and `exit_intent` only the visitor's browser can
+        decide: a campaign that still waits for them reaches the widget with
+        those rules as `show_when` (`GET /customer/chat`), and counts as
+        displayed only when the widget reports it shown
+        (`POST /customer/campaigns/{campaignId}/shown`).
+
+        **The first shape.** `{ "url_contains": "…" }` is still accepted and
+        is read as one `current_url contains` rule. Answers carry `match` and
+        `rules`, plus `url_contains` while the rules are exactly that one
+        rule — kept for readers that predate EN-03; it will be dropped once
+        nothing reads it. On a write, `rules` wins when both are sent.
+
+        Text comparisons ignore case. A rule about a value the visitor does
+        not have (no referrer, unknown country, a variable the site never set)
+        fails `contains`, `equals` and the number comparisons, and holds for
+        `not_contains` and `not_equals`.
       properties:
+        match:
+          type: string
+          enum: [all, any]
+          default: all
+        rules:
+          type: array
+          maxItems: 10
+          items: { $ref: "#/components/schemas/CampaignRule" }
         url_contains:
           type: string
           maxLength: 2048
-          description: Case-insensitive substring the visitor's current page URL must contain.
+          deprecated: true
+          description: |
+            The first shape: a case-insensitive substring of the visitor's
+            current page URL. Read as one `current_url contains` rule.
+
+    CampaignRule:
+      type: object
+      description: |
+        One targeting rule (EN-03). Operators by field:
+
+        | field | operators | value |
+        | --- | --- | --- |
+        | `current_url` — the page the visitor is on | contains, not_contains, equals, not_equals | text |
+        | `session_url` — any page of this visit (`not_*`: none of them) | contains, not_contains, equals, not_equals | text |
+        | `referrer` — where the visit came from (origin + path) | contains, not_contains, equals, not_equals | text |
+        | `country` — where the visitor is (IP, resolved in-process) | equals, not_equals | ISO 3166-1 alpha-2 |
+        | `visitor_type` — no earlier visit, or one | equals, not_equals | `new` / `returning` |
+        | `custom_var` — a session variable the site set (`key`) | all eight | text or number; `gt`…`lte` compare numbers |
+        | `time_on_page` — seconds on the current page (browser) | gte, gt | 1–3600 |
+        | `exit_intent` — about to leave the page (browser) | equals | `true` |
+
+        Session variables come from the visitor's browser and are not
+        verified: they decide targeting and nothing else.
+      required: [field, op, value]
+      properties:
+        field:
+          type: string
+          enum:
+            [
+              current_url,
+              session_url,
+              referrer,
+              country,
+              visitor_type,
+              time_on_page,
+              exit_intent,
+              custom_var,
+            ]
+        op:
+          type: string
+          enum: [contains, not_contains, equals, not_equals, gt, gte, lt, lte]
+        value:
+          oneOf:
+            - { type: string, maxLength: 2048 }
+            - { type: number }
+            - { type: boolean }
+        key:
+          type: string
+          maxLength: 100
+          description: The session variable's name — `custom_var` only.
+
+    CampaignShowWhen:
+      type: object
+      description: |
+        The browser-side rules a campaign card still waits for (EN-03):
+        `time_on_page` and `exit_intent` only, joined by `match`. The
+        widget keeps the card back until they hold, shows it, and reports it
+        with `POST /customer/campaigns/{campaignId}/shown`.
+      required: [match, rules]
+      properties:
+        match: { type: string, enum: [all, any] }
+        rules:
+          type: array
+          items: { $ref: "#/components/schemas/CampaignRule" }
 
     CampaignContent:
       type: object
@@ -14907,6 +15001,20 @@ components:
             message:
               type: string
               description: The message the campaign's author wrote.
+            show_when:
+              allOf:
+                - $ref: "#/components/schemas/CampaignShowWhen"
+              nullable: true
+              description: |
+                Absent for a campaign the widget shows now. Otherwise the
+                browser-side rules the card waits for (EN-03): the send is
+                **not** stamped on this poll — it is offered on every poll
+                while the server-side rules still hold (a visitor who
+                navigated away is not offered it), and counts as delivered
+                only when the widget calls
+                `POST /customer/campaigns/{campaignId}/shown`. A card that
+                waits never holds back one that does not: a campaign to show
+                now is offered first.
         events:
           type: array
           description: Customer-visible events only. Internal notes never appear.

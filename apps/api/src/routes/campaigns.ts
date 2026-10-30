@@ -10,6 +10,14 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import {
+  CAMPAIGN_MATCH_MODES,
+  CAMPAIGN_RULE_FIELDS,
+  CAMPAIGN_RULE_OPS,
+  CAMPAIGN_RULE_TEXT_MAX,
+  CAMPAIGN_RULES_MAX,
+  SESSION_VARIABLE_MAX_LENGTH,
+} from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import type { TenantContext } from '../lib/tenant.js';
 import {
@@ -25,9 +33,25 @@ const listQuery = z.object({
 });
 
 // `.strict()` so a typo in a condition key (`url_contain`) is a 400, not a
-// silently-ignored rule that quietly matches nobody.
+// silently-ignored rule that quietly matches nobody. The shape is checked
+// here; whether each rule makes sense for its field (`campaignRuleProblem`)
+// and the rule cap are the service's, so every caller gets the same answer.
+const ruleSchema = z
+  .object({
+    field: z.enum(CAMPAIGN_RULE_FIELDS),
+    op: z.enum(CAMPAIGN_RULE_OPS),
+    value: z.union([z.string().max(CAMPAIGN_RULE_TEXT_MAX), z.number(), z.boolean()]),
+    key: z.string().max(SESSION_VARIABLE_MAX_LENGTH).optional(),
+  })
+  .strict();
 const conditionsSchema = z
-  .object({ url_contains: z.string().trim().max(2048).optional() })
+  .object({
+    match: z.enum(CAMPAIGN_MATCH_MODES).optional(),
+    rules: z.array(ruleSchema).max(CAMPAIGN_RULES_MAX).optional(),
+    // The first shape (EN-04's "current page contains"); `rules` wins when both
+    // are sent, so a client echoing a saved campaign back is not refused.
+    url_contains: z.string().trim().max(2048).optional(),
+  })
   .strict();
 const contentSchema = z.object({ message: z.string().trim().min(1).max(2000).optional() }).strict();
 

@@ -21,12 +21,15 @@
  * fire at another's visitors — the property the integration test pins first.
  */
 import type { Prisma } from '@prisma/client';
-import type {
-  Campaign,
-  CampaignConditions,
-  CampaignContent,
-  CampaignStatus,
-  CampaignStatusFilter,
+import {
+  CAMPAIGN_RULES_MAX,
+  campaignRuleProblem,
+  normalizeCampaignConditions,
+  type Campaign,
+  type CampaignConditions,
+  type CampaignContent,
+  type CampaignStatus,
+  type CampaignStatusFilter,
 } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
@@ -37,10 +40,14 @@ import {
   deriveActiveIntent,
   hasTrigger,
   matchesConditions,
+  needsVisitorDetails,
   resolveCampaignStatus,
+  storedConditions,
   visitorPageUrls,
   visitorPagesOf,
+  type VisitorContext,
 } from './campaign-matching.js';
+import { visitVariablesOf } from './campaign-trigger.js';
 
 /** How recent a visit has to be for a visitor to count as "on the site now". */
 const LIVE_WINDOW_MINUTES = 30;
@@ -194,7 +201,8 @@ export class CampaignService {
   ): Promise<CampaignWriteResult> {
     const name = input.name.trim();
     if (!name) throw ApiError.validation('name: a campaign needs a name.');
-    if (!hasTrigger(input.conditions)) {
+    const conditions = checkedConditions(input.conditions);
+    if (!hasTrigger(conditions)) {
       throw ApiError.validation('conditions: a campaign needs a trigger.');
     }
     const message = input.content.message?.trim();
@@ -210,7 +218,7 @@ export class CampaignService {
         licenseId: tenant.licenseId,
         name,
         status,
-        conditions: input.conditions as Prisma.InputJsonValue,
+        conditions: conditions as Prisma.InputJsonValue,
         content: { message } satisfies CampaignContent as Prisma.InputJsonValue,
         startsAt,
         endsAt,
@@ -219,7 +227,7 @@ export class CampaignService {
       select: { id: true },
     });
 
-    const fired = await this.#fireIfRunning(tx, tenant, created.id, input.conditions, status, now);
+    const fired = await this.#fireIfRunning(tx, tenant, created.id, conditions, status, now);
     return { campaign: await this.#reload(tx, tenant, created.id), ...fired };
   }
 
@@ -254,8 +262,9 @@ export class CampaignService {
     const endsAt = patch.endsAt !== undefined ? patch.endsAt : existing.endsAt;
     this.#assertWindow(startsAt, endsAt);
 
-    const resultingConditions = (patch.conditions ??
-      (existing.conditions as CampaignConditions)) as CampaignConditions;
+    const patchedConditions =
+      patch.conditions !== undefined ? checkedConditions(patch.conditions) : undefined;
+    const resultingConditions = patchedConditions ?? storedConditions(existing.conditions);
     const resultingMessage =
       patch.content?.message !== undefined
         ? patch.content.message?.trim()
@@ -279,7 +288,9 @@ export class CampaignService {
       if (!name) throw ApiError.validation('name: a campaign needs a name.');
       data.name = name;
     }
-    if (patch.conditions !== undefined) data.conditions = patch.conditions as Prisma.InputJsonValue;
+    if (patchedConditions !== undefined) {
+      data.conditions = patchedConditions as Prisma.InputJsonValue;
+    }
     if (patch.content !== undefined) {
       data.content = {
         message: resultingMessage,
@@ -328,18 +339,60 @@ export class CampaignService {
         customer: { organizationId: tenant.organizationId },
       },
       orderBy: { startedAt: 'desc' },
-      select: { customerId: true, pages: true },
+      select: {
+        customerId: true,
+        pages: true,
+        cameFrom: true,
+        countryCode: true,
+        variables: true,
+        startedAt: true,
+        customer: { select: { countryCode: true } },
+      },
     });
 
     // One evaluation per customer — the newest visit wins, matching the board.
-    const seen = new Set<string>();
-    const matched: string[] = [];
+    const latest = new Map<string, (typeof visits)[number]>();
     for (const visit of visits) {
-      if (seen.has(visit.customerId)) continue;
-      seen.add(visit.customerId);
-      if (matchesConditions(conditions, visitorPagesOf(visitorPageUrls(visit.pages)))) {
-        matched.push(visit.customerId);
+      if (!latest.has(visit.customerId)) latest.set(visit.customerId, visit);
+    }
+
+    // New or returning (EN-03), asked only when the rules do: one grouped
+    // read of each live visitor's first visit, rather than one per visitor.
+    const firstVisit = new Map<string, Date>();
+    if (
+      latest.size > 0 &&
+      normalizeCampaignConditions(conditions).rules.some((rule) => rule.field === 'visitor_type')
+    ) {
+      const firsts = await tx.visit.groupBy({
+        by: ['customerId'],
+        where: { licenseId: tenant.licenseId, customerId: { in: [...latest.keys()] } },
+        _min: { startedAt: true },
+      });
+      for (const first of firsts) {
+        if (first._min.startedAt) firstVisit.set(first.customerId, first._min.startedAt);
       }
+    }
+
+    const details = needsVisitorDetails(conditions);
+    const matched: string[] = [];
+    for (const visit of latest.values()) {
+      const pages = visitorPagesOf(visitorPageUrls(visit.pages));
+      const visitor: VisitorContext = details
+        ? {
+            ...pages,
+            referrer: visit.cameFrom,
+            country:
+              (visit.countryCode ?? visit.customer.countryCode ?? null)?.trim().toUpperCase() ||
+              null,
+            visitorType:
+              (firstVisit.get(visit.customerId)?.getTime() ?? visit.startedAt.getTime()) <
+              visit.startedAt.getTime()
+                ? 'returning'
+                : 'new',
+            variables: visitVariablesOf(visit.variables),
+          }
+        : pages;
+      if (matchesConditions(conditions, visitor)) matched.push(visit.customerId);
     }
     if (matched.length === 0) return { sent: 0, invited: [] };
 
@@ -404,7 +457,7 @@ export class CampaignService {
       id: row.id,
       name: row.name,
       status,
-      conditions: (row.conditions ?? {}) as CampaignConditions,
+      conditions: storedConditions(row.conditions),
       content: (row.content ?? {}) as CampaignContent,
       starts_at: row.startsAt ? row.startsAt.toISOString() : null,
       ends_at: row.endsAt ? row.endsAt.toISOString() : null,
@@ -413,4 +466,22 @@ export class CampaignService {
       performance: campaignPerformance(row.sends),
     };
   }
+}
+
+/**
+ * A trigger as submitted, checked and put in the stored shape (EN-03): at
+ * most `CAMPAIGN_RULES_MAX` rules, each one the engine can read
+ * (`campaignRuleProblem` — the same sentence the builder shows). A 400 names
+ * the first rule at fault.
+ */
+function checkedConditions(conditions: CampaignConditions): CampaignConditions {
+  const { rules } = normalizeCampaignConditions(conditions);
+  if (rules.length > CAMPAIGN_RULES_MAX) {
+    throw ApiError.validation(`conditions.rules: at most ${CAMPAIGN_RULES_MAX} rules.`);
+  }
+  rules.forEach((rule, index) => {
+    const problem = campaignRuleProblem(rule);
+    if (problem) throw ApiError.validation(`conditions.rules.${index}: ${problem}.`);
+  });
+  return storedConditions(conditions);
 }

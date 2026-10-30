@@ -46,6 +46,7 @@ import chatRoutes from './routes/chats.js';
 import transcriptRoutes from './routes/transcripts.js';
 import customerRoutes from './routes/customer.js';
 import customerKbRoutes from './routes/customer-kb.js';
+import customerVisitRoutes from './routes/customer-visit.js';
 import customerDirectoryRoutes from './routes/customers.js';
 import memberRecognitionRoutes from './routes/member-recognition.js';
 import trafficRoutes from './routes/traffic.js';
@@ -718,6 +719,7 @@ export async function buildServer({
       await api.register(knowledgeTableRoutes, { knowledge });
       await api.register(publicKbRoutes);
       await api.register(customerKbRoutes);
+      await api.register(customerVisitRoutes);
       await api.register(publicKbHtmlRoutes, {
         canonicalBase: `${env.API_BASE_URL}${API_PREFIX}`,
       });

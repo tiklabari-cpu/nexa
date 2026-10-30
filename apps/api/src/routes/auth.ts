@@ -38,7 +38,10 @@ import { isMailCapError } from '../services/mail/mail-error.js';
 import { isIpBanned } from '../lib/banned-ip.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 import { CustomerService, fillEmptyCountry } from '../services/customers/customer-service.js';
-import { fireCampaignsAtVisitor } from '../services/campaigns/campaign-trigger.js';
+import {
+  fireCampaignsAtVisitor,
+  hasRunningCampaign,
+} from '../services/campaigns/campaign-trigger.js';
 import {
   writeAuditEntry,
   type AuditContext,
@@ -2013,7 +2016,7 @@ export default async function authRoutes(
     // round-trip is least welcome.
     // All best-effort — the widget falls back to the shipped look and no extra
     // fields, so a read failure must never deny a token.
-    const [widget, forms, fileSharingEnabled, prechat] = await Promise.all([
+    const [widget, forms, fileSharingEnabled, prechat, campaignTracking] = await Promise.all([
       widgetAppearance(
         app.db,
         tenant,
@@ -2029,6 +2032,7 @@ export default async function authRoutes(
       readWidgetForms(app.db, tenant, request),
       fileSharingEnabledFor(app.db, tenant, request),
       prechatFor(app.db, tenant, request, brandId),
+      campaignTrackingFor(app.db, tenant, request),
     ]);
     // After the appearance, whose language and fallback it needs (WG-05).
     const widgetPhrases = await widgetPhrasesFor(app.db, tenant, request, brandId, {
@@ -2068,6 +2072,7 @@ export default async function authRoutes(
       rtm_url: `${env.RTM_BASE_URL}${RTM_PATHS.customer}`,
       widget,
       file_sharing_enabled: fileSharingEnabled,
+      campaign_tracking: campaignTracking,
       prechat,
       pre_chat_form: forms.pre_chat,
       post_chat_form: forms.post_chat,
@@ -2266,6 +2271,26 @@ async function fileSharingEnabledFor(
   } catch (error) {
     request.log.warn({ err: error }, 'failed to read file-sharing policy');
     return true;
+  }
+}
+
+/**
+ * Whether the widget should report page changes and session variables
+ * (EN-03 · `POST /customer/visit`): only while the workspace has a campaign
+ * running, so a workspace without one pays no traffic for it. Guarded like
+ * the reads around it; on a failure the widget stays quiet (false) — a
+ * missed page change costs a campaign one match, not the visitor a token.
+ */
+async function campaignTrackingFor(
+  db: PrismaClient,
+  tenant: TenantContext,
+  request: FastifyRequest,
+): Promise<boolean> {
+  try {
+    return await withTenant(db, tenant, (tx) => hasRunningCampaign(tx, tenant, new Date()));
+  } catch (error) {
+    request.log.warn({ err: error }, 'failed to read whether a campaign is running');
+    return false;
   }
 }
 

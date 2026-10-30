@@ -235,6 +235,96 @@ typing:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+visit:
+  post:
+    tags: [Customer]
+    operationId: recordCustomerVisit
+    summary: Report the page the visitor is on, and the site's session variables
+    description: |
+      Campaign targeting (EN-03). The widget calls this when the host page
+      changes without a reload (a single-page site's `pushState` /
+      `popstate`) and when the site calls `siyahtus('setSessionVariables')`.
+      The page is recorded as a page view of the visitor's visit — the same
+      record the first message and the token mint write — and the running
+      campaigns are evaluated against it in the same transaction.
+
+      Sent only while the mint said `campaign_tracking` (the workspace has a
+      campaign running), debounced by the widget, and inside the customer
+      token's rate limit (60 per minute). A repeated page is not written again
+      but is evaluated again: a campaign can start while the visitor stands
+      still.
+
+      `variables` replaces the visit's set. They come from the visitor's
+      browser and are not verified: they are used for campaign targeting only
+      (`custom_var` rules), never returned by any API, never shown to the AI.
+      A card number in a key or a value is masked before it is stored.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [url]
+            additionalProperties: false
+            properties:
+              url:
+                type: string
+                maxLength: 2048
+                description: The host page's URL (http or https).
+              referrer:
+                type: string
+                maxLength: 2048
+                description: |
+                  Where the visitor came from; kept as the visit's origin only
+                  when this page view opens the visit.
+              variables:
+                type: object
+                maxProperties: 20
+                description: |
+                  The site's session variables: at most 20, each key and value
+                  at most 100 characters. A number or a boolean is kept as its
+                  text.
+                additionalProperties:
+                  oneOf:
+                    - { type: string, maxLength: 100 }
+                    - { type: number }
+                    - { type: boolean }
+    responses:
+      "204":
+        description: Recorded and evaluated.
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+campaignShown:
+  post:
+    tags: [Customer]
+    operationId: markCustomerCampaignShown
+    summary: The widget showed a campaign card that waited for the browser
+    description: |
+      For a campaign that reached the widget with `show_when` (EN-03): the
+      card has just been shown, so the send counts as displayed now — not on
+      the poll that carried it, which would count every visitor who never
+      reached the exit intent or the time on the page. Stamped once; a repeat
+      answers 204 and changes nothing. A campaign shown without `show_when`
+      was already counted by its poll.
+
+      404 when this visitor has no send of that campaign, or it was held back
+      for a risk flag.
+    parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      "204":
+        description: Counted as displayed (or already was).
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 requestHuman:
   post:
     tags: [Customer]

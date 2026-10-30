@@ -29,6 +29,8 @@ export const shell: Messages = {
     'A new chat has gone unanswered by {count} agent. It is waiting at the front of the team’s queue for you to decide.',
   'shell.presence.alert.transferLimit.other':
     'A new chat has gone unanswered by {count} agents in a row. It is waiting at the front of the team’s queue for you to decide.',
+  'shell.presence.alert.unclaimed':
+    'A chat has waited in a manual team’s queue and nobody has taken it. It is still waiting there.',
   'shell.presence.alert.someone': 'An agent',
   'shell.presence.alert.open': 'Open chat',
   'shell.modules': 'Modules',

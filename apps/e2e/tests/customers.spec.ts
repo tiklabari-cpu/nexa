@@ -25,6 +25,9 @@ test.describe('customers', () => {
 
     const table = agentPage.getByRole('table', { name: 'Customers' });
     await expect(table).toBeVisible();
+    // Found by name, not by page 1: the visitors earlier specs in the shard
+    // wrote in as are newer, and fill the first page (tm 346).
+    await agentPage.getByRole('searchbox', { name: 'Search customers' }).fill('Alex Moreau');
     // The seed gives Alex a conversation. `customers.chats_count` is never
     // written by anything, so a screen reading it would show 0 here.
     const alex = table.getByRole('row').filter({ hasText: 'Alex Moreau' });
@@ -58,6 +61,9 @@ test.describe('customers', () => {
 
   test('edits a customer without touching the fields left alone', async ({ agentPage }) => {
     await agentPage.goto('/app/customers');
+    // By name, not by page 1 (see the first test).
+    const search = agentPage.getByRole('searchbox', { name: 'Search customers' });
+    await search.fill('Robin Fields');
     await agentPage.getByRole('button', { name: /Robin Fields/ }).click();
 
     const phone = agentPage.getByLabel('Phone');
@@ -67,6 +73,7 @@ test.describe('customers', () => {
     await agentPage.getByRole('button', { name: 'Save changes' }).click();
 
     await agentPage.reload();
+    await search.fill('Robin Fields');
     await agentPage.getByRole('button', { name: /Robin Fields/ }).click();
     await expect(agentPage.getByLabel('Phone')).toHaveValue(newPhone);
     // The name was never sent, so it must be untouched.

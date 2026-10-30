@@ -22,6 +22,28 @@ export interface TransferTeam {
   accepting_count?: number;
   /** `lead`: they lead this team (RL-01); absent from a server older than tm 324.2. */
   agents?: Array<{ agent_id: string; lead?: boolean }>;
+  /** How its chats reach its agents (WG-07); absent from a server older than tm 346. */
+  assignment_mode?: string;
+}
+
+/**
+ * The manual teams (WG-07 · tm 346) the agent is a member of — whose waiting
+ * conversations a Queued-view row offers to take (`ClaimRowAction`).
+ */
+export function claimableTeamIds(
+  teams: readonly TransferTeam[],
+  accountId: string | null,
+): Set<number> {
+  if (accountId === null) return new Set();
+  return new Set(
+    teams
+      .filter(
+        (team) =>
+          team.assignment_mode === 'manual' &&
+          (team.agents ?? []).some((member) => member.agent_id === accountId),
+      )
+      .map((team) => team.id),
+  );
 }
 
 /**

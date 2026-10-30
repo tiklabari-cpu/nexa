@@ -7,7 +7,9 @@
  * topic the team's queue serves (`topic_role`, at most one team per role),
  * what the queue does out of hours (`after_hours_mode`), and the skills an
  * agent needs — every one — to join the team and be given its conversations
- * (`required_expertise_ids`). The Responsible Gambling team is the one with
+ * (`required_expertise_ids`); and since tm 346 how its conversations reach its
+ * agents (`assignment_mode`, WG-07) — never manual on the Responsible
+ * Gambling team. The Responsible Gambling team is the one with
  * rules of its own (tm 305.3): it keeps its role, it cannot be deleted, and it
  * always requires its training.
  *
@@ -19,10 +21,12 @@
  */
 import {
   DEFAULT_AFTER_HOURS_MODE,
+  DEFAULT_GROUP_ASSIGNMENT_MODE,
   QUEUE_TOPIC_ROLES,
   RESPONSIBLE_GAMBLING_ROLE,
   isQueueTopicRole,
   type AfterHoursMode,
+  type GroupAssignmentMode,
   type QueueTopicRole,
 } from '@siyahtus/types';
 import { ApiClientError, type ApiClient } from '../../lib/api-client.js';
@@ -31,6 +35,8 @@ import { ApiClientError, type ApiClient } from '../../lib/api-client.js';
 export interface QueueSettings {
   topic_role: QueueTopicRole | null;
   after_hours_mode: AfterHoursMode;
+  /** Optional: a server older than tm 346 does not send it, and every team was `auto`. */
+  assignment_mode?: GroupAssignmentMode;
   required_expertise_ids: number[];
 }
 
@@ -41,6 +47,7 @@ export type QueueSettingsBody = Partial<QueueSettings>;
 export interface QueueSettingsValues {
   topic_role: string;
   after_hours_mode: string;
+  assignment_mode: string;
   required_expertise: string;
 }
 
@@ -67,6 +74,7 @@ export function queueSettingsValues(team: QueueSettings | null): QueueSettingsVa
   return {
     topic_role: team?.topic_role ?? '',
     after_hours_mode: team?.after_hours_mode ?? DEFAULT_AFTER_HOURS_MODE,
+    assignment_mode: team?.assignment_mode ?? DEFAULT_GROUP_ASSIGNMENT_MODE,
     required_expertise: formatIdList(team?.required_expertise_ids ?? []),
   };
 }
@@ -88,6 +96,9 @@ export function queueSettingsBody(
   }
   if (values.after_hours_mode !== before.after_hours_mode) {
     body.after_hours_mode = values.after_hours_mode as AfterHoursMode;
+  }
+  if (values.assignment_mode !== before.assignment_mode) {
+    body.assignment_mode = values.assignment_mode as GroupAssignmentMode;
   }
   if (values.required_expertise !== before.required_expertise) {
     body.required_expertise_ids = parseIdList(values.required_expertise);

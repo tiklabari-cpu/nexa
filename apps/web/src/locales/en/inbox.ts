@@ -96,6 +96,12 @@ export const inbox: Messages = {
   'inbox.list.team.watchAria': 'Watch {name}',
   'inbox.list.team.takeoverAria': 'Take over {name}',
   'inbox.list.team.watchError': 'Could not start watching this chat.',
+  // A Queued-view row's Take, on a manual team's queue (WG-07 · tm 346)
+  'inbox.list.claim.cta': 'Take',
+  'inbox.list.claim.aria': 'Take {name}',
+  'inbox.list.claim.taken': 'Someone else took this chat first.',
+  'inbox.list.claim.limit': 'You are at your chat limit. Close a chat first.',
+  'inbox.list.claim.gone': 'This chat is no longer waiting.',
   'inbox.list.empty.aiSolved': 'Conversations the AI resolved on its own appear here.',
   'inbox.list.empty.channel': 'No conversations have arrived on this channel yet.',
   'inbox.list.empty.description': 'New conversations land here as they arrive.',

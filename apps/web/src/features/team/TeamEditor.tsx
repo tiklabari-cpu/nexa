@@ -11,6 +11,9 @@
  * changed is sent. The Responsible Gambling team keeps its topic and always
  * requires a skill — its training — so its picker is locked and an empty
  * requirement is stopped here rather than sent for a `409 group_protected`.
+ * Its conversations are taken without waiting, so it never offers manual
+ * assignment (WG-07 · tm 346): the option is off, and a topic switched to it
+ * while manual is stopped here rather than sent for a 400.
  *
  * Delete lives here rather than on the card: a team a routing rule still
  * targets, or one with an open conversation, comes back `409 group_in_use`
@@ -21,7 +24,12 @@
  */
 import { useState, type ReactElement } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AFTER_HOURS_MODES, QUEUE_TOPIC_ROLES, RESPONSIBLE_GAMBLING_ROLE } from '@siyahtus/types';
+import {
+  AFTER_HOURS_MODES,
+  GROUP_ASSIGNMENT_MODES,
+  QUEUE_TOPIC_ROLES,
+  RESPONSIBLE_GAMBLING_ROLE,
+} from '@siyahtus/types';
 import { Modal, useConfirm } from '../../components/ui/index.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
@@ -119,7 +127,7 @@ export function TeamEditor({
       language_code: languageCode(t('team.teams.editor.languageError')),
     },
     onSubmit: async (values, { setSubmitError }) => {
-      if (trainingMissing) return;
+      if (trainingMissing || manualResponsibleGambling) return;
       try {
         const body: GroupBody = {
           name: values.name.trim(),
@@ -141,6 +149,10 @@ export function TeamEditor({
   // as trained.
   const trainingMissing =
     form.values.topic_role === RESPONSIBLE_GAMBLING_ROLE && form.values.required_expertise === '';
+  // Responsible Gambling is never manual (WG-07 decision 1): refused with a 400.
+  const manualResponsibleGambling =
+    form.values.topic_role === RESPONSIBLE_GAMBLING_ROLE &&
+    form.values.assignment_mode === 'manual';
 
   const close = useCloseGuard({
     isDirty: form.isDirty,
@@ -170,6 +182,9 @@ export function TeamEditor({
             : t('team.teams.editor.createTitle')
         }
         description={t('team.teams.editor.description')}
+        // Name, language and four queue settings outgrow a laptop's height: the
+        // panel scrolls inside the viewport so Save stays reachable.
+        className="max-h-full overflow-y-auto"
       >
         <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-3">
           {form.submitError && (
@@ -279,6 +294,41 @@ export function TeamEditor({
               </select>
             </div>
 
+            <div>
+              <label htmlFor="team-assignment" className="mb-1 block text-sm font-medium">
+                {t('team.teams.editor.queue.assignmentLabel')}
+              </label>
+              <select
+                id="team-assignment"
+                value={form.values.assignment_mode}
+                aria-describedby="team-assignment-hint"
+                onChange={(event) => form.setValue('assignment_mode', event.target.value)}
+                className="w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+              >
+                {GROUP_ASSIGNMENT_MODES.map((mode) => (
+                  <option
+                    key={mode}
+                    value={mode}
+                    disabled={
+                      mode === 'manual' && form.values.topic_role === RESPONSIBLE_GAMBLING_ROLE
+                    }
+                  >
+                    {t(`team.queue.assignment.${mode}`)}
+                  </option>
+                ))}
+              </select>
+              <p id="team-assignment-hint" className="mt-1 text-2xs text-content-tertiary">
+                {form.values.topic_role === RESPONSIBLE_GAMBLING_ROLE
+                  ? t('team.teams.editor.queue.assignmentLocked')
+                  : t('team.teams.editor.queue.assignmentHint')}
+              </p>
+              {manualResponsibleGambling && (
+                <p role="alert" className="mt-1 text-xs text-danger">
+                  {t('team.teams.editor.queue.assignmentRefused')}
+                </p>
+              )}
+            </div>
+
             <fieldset aria-describedby="team-skills-hint">
               <legend className="mb-1 text-sm font-medium">
                 {t('team.teams.editor.queue.skillsLabel')}
@@ -366,7 +416,7 @@ export function TeamEditor({
               </button>
               <button
                 type="submit"
-                disabled={!form.canSubmit || trainingMissing}
+                disabled={!form.canSubmit || trainingMissing || manualResponsibleGambling}
                 className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {form.isSubmitting

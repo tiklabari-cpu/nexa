@@ -1665,7 +1665,8 @@ export function applyPush(
 
     case 'chat_unanswered_alert': {
       // To a team's leads only (the API addresses it): a chat went unanswered
-      // and waits at the front of the queue (WG-03). The shell's banner says so.
+      // and waits at the front of the queue (WG-03), or waited in a manual
+      // team's queue with nobody taking it (WG-07). The shell's banner says so.
       const chatId = payload['chat_id'];
       const threadId = payload['thread_id'];
       const groupId = payload['group_id'];
@@ -1674,7 +1675,9 @@ export function applyPush(
       const transfers = payload['transfers'];
       const position = payload['queue_position'];
       if (typeof chatId !== 'string' || typeof threadId !== 'string') return;
-      if (typeof groupId !== 'number' || typeof agentId !== 'string') return;
+      if (typeof groupId !== 'number') return;
+      // Null only for a manual team's unclaimed chat (WG-07): nobody had it.
+      if (typeof agentId !== 'string' && !(agentId === null && reason === 'unclaimed')) return;
       if (!(UNANSWERED_ALERT_REASONS as readonly unknown[]).includes(reason)) return;
       if (typeof transfers !== 'number') return;
       noteUnansweredAlert({

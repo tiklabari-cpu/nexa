@@ -80,6 +80,12 @@ export const inbox: Messages = {
   'inbox.list.team.watchAria': 'İzle: {name}',
   'inbox.list.team.takeoverAria': 'Devral: {name}',
   'inbox.list.team.watchError': 'Bu sohbet izlenemedi.',
+  // Kuyrukta görünümünde manuel ekip satırının Al düğmesi (WG-07 · tm 346)
+  'inbox.list.claim.cta': 'Al',
+  'inbox.list.claim.aria': 'Al: {name}',
+  'inbox.list.claim.taken': 'Bu sohbeti önce bir başkası aldı.',
+  'inbox.list.claim.limit': 'Sohbet sınırınızdasınız. Önce bir sohbeti kapatın.',
+  'inbox.list.claim.gone': 'Bu sohbet artık beklemiyor.',
   'inbox.list.empty.aiSolved': "AI'nın kendi başına çözdüğü sohbetler burada görünür.",
   'inbox.list.empty.channel': 'Bu kanaldan henüz sohbet gelmedi.',
   'inbox.list.empty.description': 'Yeni sohbetler geldikçe burada görünür.',

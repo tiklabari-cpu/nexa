@@ -77,6 +77,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/inbox/AiHandoffCard.tsx',
   'src/features/inbox/QueueTeamTabs.tsx',
   'src/features/inbox/TeamRowActions.tsx',
+  'src/features/inbox/ClaimRowAction.tsx',
   'src/features/inbox/AiModeControls.tsx',
   'src/features/inbox/Attachment.tsx',
   'src/features/inbox/Composer.tsx',

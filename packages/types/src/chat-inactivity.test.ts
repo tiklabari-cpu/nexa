@@ -60,7 +60,7 @@ describe('the inactivity sweep vocabulary (WG-03 · tm 340.2)', () => {
 
   it('passes a connection on twice before it waits for the lead', () => {
     expect(UNRESPONSIVE_TRANSFER_LIMIT).toBe(2);
-    expect(UNANSWERED_ALERT_REASONS).toEqual(['no_agent', 'transfer_limit']);
+    expect(UNANSWERED_ALERT_REASONS).toEqual(['no_agent', 'transfer_limit', 'unclaimed']);
   });
 });
 

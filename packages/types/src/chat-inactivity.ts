@@ -31,9 +31,12 @@ export const UNRESPONSIVE_TRANSFER_LIMIT = 2;
  * Why the sweep put an unanswered connection in its team's queue rather than
  * with someone else (`ChatUnansweredAlertPush.reason`): nobody in the team
  * could take it, or it already went to {@link UNRESPONSIVE_TRANSFER_LIMIT}
- * people who did not answer either.
+ * people who did not answer either. `unclaimed` is a manual team's (WG-07 ·
+ * tm 346): nobody is given its conversations, so the window is how long one
+ * waited in the queue without anyone taking it — the lead is told once per
+ * stay, and the conversation stays where it is.
  */
-export const UNANSWERED_ALERT_REASONS = ['no_agent', 'transfer_limit'] as const;
+export const UNANSWERED_ALERT_REASONS = ['no_agent', 'transfer_limit', 'unclaimed'] as const;
 export type UnansweredAlertReason = (typeof UNANSWERED_ALERT_REASONS)[number];
 
 /**
@@ -47,8 +50,8 @@ export interface ChatUnansweredAlertPush {
   chat_id: string;
   thread_id: string;
   group_id: number;
-  /** The agent who did not answer. */
-  agent_id: string;
+  /** The agent who did not answer; null for `unclaimed` — nobody had it. */
+  agent_id: string | null;
   reason: UnansweredAlertReason;
   /** How many times the sweep has taken it from a silent agent, this one included. */
   transfers: number;

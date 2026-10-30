@@ -77,6 +77,34 @@ export type AfterHoursMode = (typeof AFTER_HOURS_MODES)[number];
 export const DEFAULT_AFTER_HOURS_MODE: AfterHoursMode = 'queue';
 
 /**
+ * How a team's conversations reach its agents (WG-07 · tm 346):
+ *
+ *   - `auto`   — routing picks the agent (ADR-08: tier, load, longest idle);
+ *                the default, and what every team did before tm 346;
+ *   - `manual` — routing picks nobody: the conversation waits in the team's
+ *                queue, every member hears of it (`incoming_chat` to the
+ *                team), and the first to "Take" it (`POST /chats/{id}/claim`)
+ *                has it, within their concurrent limit.
+ *
+ * Stored on the team (`groups.assignment_mode`). The Responsible Gambling
+ * team is never `manual` (WG-07 decision 1): its conversations must be taken
+ * without waiting for someone to choose them — the API refuses it and the
+ * CHECK `groups_rg_assignment_mode_check` holds it.
+ */
+export const GROUP_ASSIGNMENT_MODES = ['auto', 'manual'] as const;
+export type GroupAssignmentMode = (typeof GROUP_ASSIGNMENT_MODES)[number];
+
+export const DEFAULT_GROUP_ASSIGNMENT_MODE: GroupAssignmentMode = 'auto';
+
+/** Whether a team of this topic may take this mode (WG-07 decision 1). */
+export function assignmentModeAllowed(
+  topicRole: string | null | undefined,
+  mode: GroupAssignmentMode,
+): boolean {
+  return !(mode === 'manual' && topicRole === RESPONSIBLE_GAMBLING_ROLE);
+}
+
+/**
  * How pressing a connection is (ADR-08a §2.3, AI-12): `urgent` for self-harm,
  * a suspected minor and a self-exclusion request; `high` for a repeat contact
  * the same day or an angry player; `normal` otherwise. Most pressing first —

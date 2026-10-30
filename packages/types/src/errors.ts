@@ -205,6 +205,13 @@ export const ERROR_TYPES = [
   // — the loser *was* allowed, they simply lost the race) and not `chat_inactive`
   // (the chat is open); kept narrow like `ticket_exists`, not a generic conflict.
   'takeover_conflict',
+  // SiyahTuş addition — manual assignment (WG-07 · tm 346): "Take" on a
+  // conversation waiting in a team's queue that refused — another agent took it
+  // first (`details.reason` `claimed`), the caller is at their concurrent
+  // limit (`limit`), or it no longer waits in a queue the caller may take from
+  // (`not_waiting`). 409 and narrow like `takeover_conflict`: the Queued view
+  // drops the row or says "you are full" instead of showing an error.
+  'chat_claim_refused',
   // SiyahTuş addition — ready-made templates (AI-15 · tm 311.3): switching off
   // or deleting an installed copy of a locked template (`self_exclusion`,
   // `responsible_gambling_signal`). The request was fine and allowed; the
@@ -271,6 +278,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   brand_exists: 409,
   brand_not_found: 404,
   chat_anonymized: 410,
+  chat_claim_refused: 409,
   chat_inactive: 409,
   challenge_required: 403,
   customer_banned: 403,

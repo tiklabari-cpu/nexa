@@ -231,6 +231,8 @@ paths:
     $ref: "./paths/chats.yaml#/transfer"
   /chats/{chatId}/takeover:
     $ref: "./paths/chats.yaml#/takeover"
+  /chats/{chatId}/claim:
+    $ref: "./paths/chats.yaml#/claim"
   /chats/{chatId}/return-to-ai:
     $ref: "./paths/chats.yaml#/returnToAi"
   /chats/{chatId}/pause-ai:
@@ -12217,6 +12219,15 @@ components:
           allOf:
             - $ref: "#/components/schemas/AfterHoursMode"
           default: queue
+        assignment_mode:
+          description: |
+            How the team's conversations reach its agents (WG-07). Omitted on
+            create: `auto`. The `responsible_gambling` team is never
+            `manual` — naming it there, or giving the role to a manual team,
+            is a 400 `validation` with `details.reason: assignment_mode`.
+          allOf:
+            - $ref: "#/components/schemas/GroupAssignmentMode"
+          default: auto
         required_expertise_ids:
           type: array
           maxItems: 20
@@ -12248,6 +12259,21 @@ components:
         waits for the next agent; `ticket` — it becomes a ticket the player
         is answered on by email (HD-01 / WG-08).
       enum: [queue, ticket]
+
+    GroupAssignmentMode:
+      type: string
+      description: |
+        How a team's conversations reach its agents (WG-07 · `@siyahtus/types`
+        `GROUP_ASSIGNMENT_MODES`): `auto` — routing picks the agent (tier,
+        load, longest idle); `manual` — routing picks nobody: the
+        conversation waits in the team's queue, every member is told
+        (`incoming_chat`), and the first to take it
+        (`POST /chats/{chatId}/claim`) has it, within their concurrent limit.
+        With the workspace's unanswered window set, a conversation nobody has
+        taken for that long is reported to the team's leads
+        (`chat_unanswered_alert`, reason `unclaimed`) instead of being
+        passed on.
+      enum: [auto, manual]
 
     ThreadPriority:
       type: string
@@ -12364,6 +12390,7 @@ components:
           language_code,
           topic_role,
           after_hours_mode,
+          assignment_mode,
           required_expertise_ids,
           accepting_count,
           agents,
@@ -12385,6 +12412,7 @@ components:
             - $ref: "#/components/schemas/QueueTopicRole"
           nullable: true
         after_hours_mode: { $ref: "#/components/schemas/AfterHoursMode" }
+        assignment_mode: { $ref: "#/components/schemas/GroupAssignmentMode" }
         required_expertise_ids:
           type: array
           items: { type: integer, format: int64 }
@@ -14984,6 +15012,7 @@ components:
         - brand_not_found
         - challenge_required
         - chat_anonymized
+        - chat_claim_refused
         - chat_inactive
         - customer_banned
         - greeting_not_found

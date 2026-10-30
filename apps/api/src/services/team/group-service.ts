@@ -71,7 +71,9 @@
 import { Prisma } from '@prisma/client';
 import {
   RESPONSIBLE_GAMBLING_ROLE,
+  assignmentModeAllowed,
   type AfterHoursMode,
+  type GroupAssignmentMode,
   type GroupPriority,
   type QueueTopicRole,
 } from '@siyahtus/types';
@@ -89,6 +91,7 @@ export interface GroupWithAgents {
   languageCode: string;
   topicRole: string | null;
   afterHoursMode: string;
+  assignmentMode: string;
   requiredExpertise: Array<{ expertiseId: bigint }>;
   agents: Array<{ agentId: string; priority: string; isLead: boolean }>;
 }
@@ -137,7 +140,23 @@ export const GROUP_INCLUDE = {
 export interface GroupQueueSettings {
   topicRole?: QueueTopicRole | null;
   afterHoursMode?: AfterHoursMode;
+  assignmentMode?: GroupAssignmentMode;
   requiredExpertiseIds?: readonly bigint[];
+}
+
+/**
+ * Refuse a team that would be the Responsible Gambling team in manual mode
+ * (WG-07 decision 1): its conversations are taken without waiting for someone
+ * to choose them. A 400 — the body asks for a combination the product does not
+ * have — naming what refused it, whichever of the two fields moved. The CHECK
+ * `groups_rg_assignment_mode_check` holds the same rule under the API.
+ */
+function assertAssignmentModeAllowed(topicRole: string | null, mode: string): void {
+  if (assignmentModeAllowed(topicRole, mode as GroupAssignmentMode)) return;
+  throw ApiError.validation(
+    'The responsible gambling team cannot use manual assignment: its conversations must be taken without waiting.',
+    { reason: 'assignment_mode', topic_role: RESPONSIBLE_GAMBLING_ROLE },
+  );
 }
 
 function topicRoleTaken(role: string, holderId?: bigint): ApiError {
@@ -389,6 +408,7 @@ function groupAuditFields(group: GroupWithAgents): Record<string, unknown> {
     language_code: group.languageCode,
     topic_role: group.topicRole,
     after_hours_mode: group.afterHoursMode,
+    assignment_mode: group.assignmentMode,
     required_expertise_ids: group.requiredExpertise.map((row) => Number(row.expertiseId)),
   };
 }
@@ -510,6 +530,7 @@ export async function createGroup(
     await lockTeamStaffing(tx, licenseId);
     if (expertiseIds.length === 0) throw protectedTeam('required_expertise');
   }
+  assertAssignmentModeAllowed(input.topicRole ?? null, input.assignmentMode ?? 'auto');
   if (input.topicRole) await assertTopicRoleFree(tx, input.topicRole);
   await assertExpertiseExists(tx, expertiseIds);
 
@@ -521,6 +542,7 @@ export async function createGroup(
         ...(input.languageCode !== undefined ? { languageCode: input.languageCode } : {}),
         ...(input.topicRole ? { topicRole: input.topicRole } : {}),
         ...(input.afterHoursMode !== undefined ? { afterHoursMode: input.afterHoursMode } : {}),
+        ...(input.assignmentMode !== undefined ? { assignmentMode: input.assignmentMode } : {}),
       },
       select: { id: true },
     }),
@@ -566,7 +588,8 @@ export async function updateGroup(
     (input.name !== undefined && input.name !== before.name) ||
     (input.languageCode !== undefined && input.languageCode !== before.languageCode) ||
     roleMoved ||
-    (input.afterHoursMode !== undefined && input.afterHoursMode !== before.afterHoursMode);
+    (input.afterHoursMode !== undefined && input.afterHoursMode !== before.afterHoursMode) ||
+    (input.assignmentMode !== undefined && input.assignmentMode !== before.assignmentMode);
   const wantedExpertise =
     input.requiredExpertiseIds !== undefined ? distinctIds(input.requiredExpertiseIds) : null;
   const expertiseMoved =
@@ -589,6 +612,10 @@ export async function updateGroup(
   if (responsibleGambling && required.length === 0) {
     throw protectedTeam('required_expertise', groupId);
   }
+  assertAssignmentModeAllowed(
+    roleMoved ? (input.topicRole ?? null) : before.topicRole,
+    input.assignmentMode ?? before.assignmentMode,
+  );
 
   if (roleMoved && input.topicRole) await assertTopicRoleFree(tx, input.topicRole, groupId);
   if (wantedExpertise !== null && expertiseMoved) {
@@ -612,6 +639,7 @@ export async function updateGroup(
           ...(input.languageCode !== undefined ? { languageCode: input.languageCode } : {}),
           ...(input.topicRole !== undefined ? { topicRole: input.topicRole } : {}),
           ...(input.afterHoursMode !== undefined ? { afterHoursMode: input.afterHoursMode } : {}),
+          ...(input.assignmentMode !== undefined ? { assignmentMode: input.assignmentMode } : {}),
         },
         select: { id: true },
       }),

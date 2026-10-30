@@ -72,18 +72,6 @@ test.describe('campaigns', () => {
     const token = await ownerAccessToken(request);
     const headers = { authorization: `Bearer ${token}` };
 
-    // Running before the visitor arrives, aimed at this run's page only.
-    const created = await request.post(`${API_BASE}/campaigns`, {
-      headers,
-      data: {
-        name,
-        conditions: { url_contains: `promo-${run}` },
-        content: { message: 'Hoş geldin bonusu seni bekliyor!' },
-      },
-    });
-    expect(created.ok(), `campaigns: ${created.status()} ${await created.text()}`).toBe(true);
-    const campaignId = ((await created.json()) as { id: string }).id;
-
     const context = await browser.newContext();
     try {
       const visitor = await context.newPage();
@@ -94,9 +82,23 @@ test.describe('campaigns', () => {
           response.request().method() === 'POST' &&
           response.ok(),
       );
-      // The page view matches the campaign: a send is queued, held while they chat.
       await visitorSends(visitor, `Promo proof ${run}`);
       const { chat_id: chatId } = (await (await opened).json()) as { chat_id: string };
+
+      // Saved only now, with the visitor already mid-chat on the page it targets:
+      // a campaign running before they arrived would be fired at them when the
+      // widget opens (EN-04) and shown on the first poll, before there is a
+      // chat to flag. The save queues the send, held while they chat.
+      const created = await request.post(`${API_BASE}/campaigns`, {
+        headers,
+        data: {
+          name,
+          conditions: { url_contains: `promo-${run}` },
+          content: { message: 'Hoş geldin bonusu seni bekliyor!' },
+        },
+      });
+      expect(created.ok(), `campaigns: ${created.status()} ${await created.text()}`).toBe(true);
+      const campaignId = ((await created.json()) as { id: string }).id;
 
       // The player asks to be excluded; an agent flags it. The queued send stops here.
       const raised = await request.post(`${API_BASE}/chats/${chatId}/risk-flags`, {

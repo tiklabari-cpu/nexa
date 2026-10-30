@@ -52,12 +52,15 @@ describe('selectTriggeredCampaigns', () => {
     );
   });
 
-  it('matches on any page of the visit, not only the newest', () => {
-    // Same reading as the create-time engine and the goal funnel: somebody who
-    // passed /pricing and then wrote in from /support is still on the journey
-    // the campaign was aimed at.
-    const pages = ['https://shop.example/pricing', 'https://shop.example/support'];
-    expect(selectTriggeredCampaigns([campaign('a')], pages, NOW)).toEqual(['a']);
+  it('EN-04 · matches the page the visitor is on, not one they passed', () => {
+    // "The page they are on" is the last page of the visit: somebody who passed
+    // /pricing and is now on /support is not on /pricing, and the campaign aimed
+    // at that page does not fire at them. (Goals, which ask whether a visitor
+    // ever reached a page, still read the whole visit.)
+    const passed = ['https://shop.example/pricing', 'https://shop.example/support'];
+    expect(selectTriggeredCampaigns([campaign('a')], passed, NOW)).toEqual([]);
+    const arrived = ['https://shop.example/support', 'https://shop.example/pricing'];
+    expect(selectTriggeredCampaigns([campaign('a')], arrived, NOW)).toEqual(['a']);
   });
 
   // --- Running *now*, not according to a status somebody last wrote ---------

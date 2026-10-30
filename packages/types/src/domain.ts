@@ -579,10 +579,11 @@ export type CampaignStatusFilter = (typeof CAMPAIGN_STATUS_FILTERS)[number];
 
 /**
  * The trigger predicate (FR-MOD-03.3.2). A visitor matches when every key set
- * here holds. `url_contains` targets the page they are on — the one condition
- * v1 ships; the shape stays an open object so geo/time rules slot in later
- * without a contract change. An empty predicate matches nobody: a campaign with
- * no trigger is not "send to everyone", it is simply not ready to send.
+ * here holds. `url_contains` targets the page they are on now — the last page
+ * of the visit, not any earlier one — the one condition v1 ships; the shape
+ * stays an open object so geo/time rules slot in later without a contract
+ * change. An empty predicate matches nobody: a campaign with no trigger is not
+ * "send to everyone", it is simply not ready to send.
  */
 export interface CampaignConditions {
   /** Case-insensitive substring the visitor's current page URL must contain. */

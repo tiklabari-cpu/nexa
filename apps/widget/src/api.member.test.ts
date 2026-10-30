@@ -94,6 +94,24 @@ describe('the member token (ID-03 · K4)', () => {
     expect(mintBodies[0]).not.toHaveProperty('customer_id');
   });
 
+  it('EN-04 · tells the mint which page it opened on and where the visitor came from', async () => {
+    const api = new WidgetApi(API, ORG);
+    api.pageHints = {
+      host_url: 'https://shop.example/pricing',
+      host_referrer: 'https://g.example/',
+    };
+    await api.connect();
+
+    expect(mintBodies[0]).toMatchObject({
+      host_url: 'https://shop.example/pricing',
+      host_referrer: 'https://g.example/',
+    });
+    // Without a page to report the mint carries neither field.
+    await new WidgetApi(API, ORG).connect();
+    expect(mintBodies[1]).not.toHaveProperty('host_url');
+    expect(mintBodies[1]).not.toHaveProperty('host_referrer');
+  });
+
   it('keeps the member token the mint hands back, for the next load', async () => {
     window.localStorage.setItem(keys.memberToken, 'nxm1.1.kept.sig');
     mintAnswer = { ...mintAnswer, member_token: 'nxm1.1.resigned.sig' };

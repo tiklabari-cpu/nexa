@@ -10569,7 +10569,8 @@ components:
       description: |
         The trigger predicate (FR-MOD-03.3.2). Every key set must hold for a
         visitor to match. `url_contains` — the one condition v1 ships — targets
-        the page they are on; an empty predicate matches nobody, so a campaign
+        the page they are on now, the last page of their visit and not an
+        earlier one; an empty predicate matches nobody, so a campaign
         with no trigger is rejected rather than sent to everyone.
       properties:
         url_contains:

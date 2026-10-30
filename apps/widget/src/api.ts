@@ -182,6 +182,12 @@ export class WidgetApi {
    * `data-language` and the browser's languages.
    */
   localeHints: { language?: string; browser: readonly string[] } = { browser: [] };
+  /**
+   * The embedding page the visitor is on and where they came from, handed to
+   * the mint (EN-04): a visitor who has not written yet is otherwise unseen by
+   * a campaign's "current page" trigger.
+   */
+  pageHints: { host_url?: string; host_referrer?: string } = {};
 
   /**
    * Teach this client to answer a `403 challenge_required` (tm 339.3): the
@@ -376,6 +382,7 @@ export class WidgetApi {
           ...(stored ? { customer_id: stored } : {}),
           ...(this.hostOrigin ? { host_origin: this.hostOrigin } : {}),
           ...(challengeToken ? { challenge_token: challengeToken } : {}),
+          ...this.pageHints,
           // Hints only, and never a reason to refuse the token: what the
           // server would not take (over-long tags) is left out.
           ...(this.localeHints.language && this.localeHints.language.length <= 35

@@ -66,7 +66,7 @@ import type { Prisma } from '@prisma/client';
 import type { CampaignConditions } from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { guardedPromoSuppression, suppressedSendData } from '../risk/promo-suppression.js';
-import { matchesConditions, resolveCampaignStatus } from './campaign-matching.js';
+import { matchesConditions, resolveCampaignStatus, visitorPagesOf } from './campaign-matching.js';
 
 /**
  * How many of a workspace's campaigns one page view will evaluate.
@@ -98,6 +98,7 @@ export interface TriggerableCampaign {
 
 /**
  * Which of these campaigns should fire at a visitor on these pages, right now.
+ * `pageUrls` is the visit's pages in order; the last one is where they are.
  *
  * Pure and separately tested for the same reason `pickDeliverableSend` is: this
  * is the decision — who gets an unsolicited message — and it should be pinnable
@@ -118,6 +119,7 @@ export function selectTriggeredCampaigns(
   now: Date,
 ): string[] {
   const fired: string[] = [];
+  const pages = visitorPagesOf(pageUrls);
   for (const campaign of campaigns) {
     if (resolveCampaignStatus(campaign, now) !== 'ongoing') continue;
 
@@ -125,7 +127,7 @@ export function selectTriggeredCampaigns(
     // campaign that somehow lost its trigger matches nobody rather than
     // everybody — the failure worth being explicit about on a path that sends
     // unsolicited messages.
-    if (matchesConditions((campaign.conditions ?? {}) as CampaignConditions, [...pageUrls])) {
+    if (matchesConditions((campaign.conditions ?? {}) as CampaignConditions, pages)) {
       fired.push(campaign.id);
     }
   }

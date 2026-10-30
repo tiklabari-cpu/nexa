@@ -35,6 +35,13 @@ const distDir = resolve(import.meta.dirname, '../dist');
 const TOTAL_BUDGET_BYTES = 63.5 * 1024;
 /** The loader runs on the host page itself, so it gets a far tighter budget. */
 const LOADER_BUDGET_BYTES = 8 * 1024;
+/**
+ * The Help tab (WG-12, tm 348) is its own chunk, fetched only when a visitor
+ * opens the tab (`help-chunk.ts`), so it is not part of what every page
+ * downloads — and has a ceiling of its own so it cannot grow unnoticed either.
+ */
+const HELP_BUDGET_BYTES = 6 * 1024;
+const HELP_CHUNK = /[\\/]help-[\w-]+\.js$/;
 
 function gzippedSize(path: string): number {
   return gzipSync(readFileSync(path), { level: 9 }).byteLength;
@@ -59,7 +66,7 @@ describe('widget bundle budget', () => {
 
   it('keeps everything the browser downloads under 63 KB gzipped (NFR-P3)', () => {
     expect(existsSync(distDir), 'run `pnpm --filter @siyahtus/widget build` first').toBe(true);
-    const assets = collectAssets(distDir);
+    const assets = collectAssets(distDir).filter((file) => !HELP_CHUNK.test(file));
     expect(assets.length).toBeGreaterThan(0);
 
     const total = assets.reduce((sum, file) => sum + gzippedSize(file), 0);
@@ -68,5 +75,23 @@ describe('widget bundle budget', () => {
       .join('\n');
 
     expect(total, `total ${total} B gzipped\n${breakdown}`).toBeLessThanOrEqual(TOTAL_BUDGET_BYTES);
+  });
+
+  it('ships the Help tab as one chunk of its own, under 6 KB, with no preload helper on the page (WG-12)', () => {
+    const chunks = collectAssets(distDir).filter((file) => HELP_CHUNK.test(file));
+    expect(chunks, 'one help-*.js chunk').toHaveLength(1);
+    const size = gzippedSize(chunks[0]!);
+    expect(size, `help chunk is ${size} B gzipped`).toBeLessThanOrEqual(HELP_BUDGET_BYTES);
+
+    // Every page's chunk names the help chunk by URL and carries none of Vite's
+    // preload machinery, nor a second chunk it would have to fetch.
+    const pages = collectAssets(join(distDir, 'assets')).filter(
+      (file) => file.endsWith('.js') && !HELP_CHUNK.test(file),
+    );
+    expect(pages).toHaveLength(1);
+    const page = readFileSync(pages[0]!, 'utf8');
+    expect(page).toContain(chunks[0]!.split(/[\\/]/).pop());
+    expect(page).not.toMatch(/vite:preloadError|modulepreload/);
+    expect(page).not.toMatch(/^import\s*["']/m);
   });
 });

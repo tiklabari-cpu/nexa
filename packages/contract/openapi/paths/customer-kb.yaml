@@ -1,0 +1,78 @@
+# The widget's "Help" tab (WG-12 · tm 348): published knowledge base articles,
+# read with the visitor's customer token. The workspace is the token's; nothing
+# in the request can name another one.
+search:
+  get:
+    tags: [Customer]
+    operationId: searchCustomerKb
+    summary: Search the workspace's published help articles
+    description: |
+      The search box of the widget's Help tab. Only published articles of the
+      token's workspace are searched: a draft, an unpublished article and
+      another workspace's article are never in the result, and none of them
+      is told apart from an article that does not exist.
+
+      Every word of `q` must start a word of the article's title or body, in
+      any order ("papara yat" finds "Papara ile yatırım"). Turkish letters and
+      their plain spelling match each other ("cekim" finds "Çekim"), and case
+      does not matter. Title matches rank first. At most 8 words count.
+
+      While the workspace has the Help tab switched off (`help_enabled` in the
+      widget settings) the result is empty. The query is never written to a
+      log in clear text. Inside the customer token's rate limit.
+    parameters:
+      - name: q
+        in: query
+        required: true
+        schema: { type: string, minLength: 2, maxLength: 200 }
+      - name: locale
+        in: query
+        required: false
+        description: |
+          The widget's language. Articles carry no language yet, so it does
+          not narrow the result today; it is accepted so the widget does not
+          change when they do.
+        schema: { type: string, enum: [en, tr, de, fr, es, it, pt, ar] }
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer, minimum: 1, maximum: 20, default: 10 }
+    responses:
+      "200":
+        description: Matching articles, best first
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/CustomerKbSearchHit" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+article:
+  get:
+    tags: [Customer]
+    operationId: getCustomerKbArticle
+    summary: Read one published help article
+    description: |
+      The article view of the widget's Help tab. A draft, another workspace's
+      article, an unknown slug and a workspace with the Help tab switched off
+      all answer the same 404.
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema: { type: string, minLength: 1, maxLength: 200 }
+    responses:
+      "200":
+        description: The article
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CustomerKbArticle" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

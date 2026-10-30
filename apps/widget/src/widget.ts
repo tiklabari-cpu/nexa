@@ -38,6 +38,7 @@ import {
 } from './api.js';
 import { buildChallengeParts, drawChallenge, type ChallengeParts } from './challenge.js';
 import { insertEmojiAtCaret, WIDGET_EMOJI_CATEGORIES } from './emoji.js';
+import type { HelpView } from './help.js';
 import { appendRichText } from './rich-text.js';
 import { WidgetSocket } from './socket.js';
 import {
@@ -171,6 +172,8 @@ interface Appearance {
   /** The brand's logo for the panel header and its alt text (WG-10). Server-supplied. */
   logoUrl: string | null;
   brandName: string | null;
+  /** The "Help" tab (WG-12). Server-supplied. */
+  helpEnabled: boolean;
 }
 
 const DEFAULT_APPEARANCE: Appearance = {
@@ -187,6 +190,7 @@ const DEFAULT_APPEARANCE: Appearance = {
   welcomeText: null,
   logoUrl: null,
   brandName: null,
+  helpEnabled: false,
 };
 
 /** A `#rrggbb` colour — the one shape allowed to reach the `--nx-brand` var. */
@@ -559,6 +563,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     rootEl.classList.toggle('nx-mobile-full', appearance.mobileFullscreen);
     renderFooter(doc, ui, appearance, t);
     renderWelcome(doc, ui, appearance, t);
+    ui.help.hidden = !appearance.helpEnabled;
     ui.logo.hidden = !appearance.logoUrl;
     if (appearance.logoUrl) {
       ui.logo.src = appearance.logoUrl;
@@ -660,6 +665,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
 
     old.style.remove();
     old.panel.remove();
+    helpView = null;
     old.greeting.remove();
     old.preview.remove();
     old.launcher.remove();
@@ -2594,11 +2600,42 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     { signal },
   );
 
+  // --- Help tab (WG-12) ---------------------------------------------------
+
+  // Its own chunk, fetched on the first open: words, styles and the article
+  // renderer stay out of what every page loads.
+  let helpView: HelpView | null = null;
+
+  async function toggleHelp(): Promise<void> {
+    if (helpView) return helpView.close();
+    // The build hands this over as a chunk URL, without Vite's preload helper (help-chunk.ts).
+    const { openHelp } = await import('./help.js');
+    ui.help.setAttribute('aria-pressed', 'true');
+    helpView = openHelp({
+      doc,
+      panel: ui.panel,
+      locale,
+      get: (path) => api.help(path),
+      // "Start a chat": the pre-chat form when it is due, else the composer.
+      chat: () => {
+        helpView?.close();
+        if (needsPrechat()) state.prechat = true;
+        renderPanelBody();
+        (state.prechat ? firstPrechatInput() : ui.input).focus();
+      },
+      closed: () => {
+        helpView = null;
+        ui.help.setAttribute('aria-pressed', 'false');
+      },
+    });
+  }
+
   // The listeners on the widget's own elements, in one function so a rebuilt
   // set of elements (`rebuildUi`) gets exactly the ones the first set had. The
   // `doc`/`win` listeners around it are set once and read `ui` live.
   function wireUi(): void {
     ui.launcher.addEventListener('click', () => setOpen(!state.open));
+    ui.help.addEventListener('click', () => void toggleHelp());
     ui.close.addEventListener('click', () => {
       setOpen(false);
       ui.launcher.focus();
@@ -3065,6 +3102,8 @@ interface Ui {
   avatar: HTMLElement;
   /** The brand's logo at the head of the panel (WG-10). */
   logo: HTMLImageElement;
+  /** Opens and closes the Help tab (WG-12); hidden unless the workspace turned it on. */
+  help: HTMLButtonElement;
   /** Stand-in for the avatar until an agent or persona is named. */
   team: HTMLElement;
   title: HTMLElement;
@@ -3325,7 +3364,14 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   close.className = 'nx-close';
   close.setAttribute('aria-label', t('launcher.close'));
   close.textContent = '×';
-  header.append(logo, identity, menuWrap, close);
+  const help = doc.createElement('button');
+  help.type = 'button';
+  help.className = 'nx-help-btn';
+  help.hidden = true;
+  help.textContent = '?';
+  help.setAttribute('aria-label', t('help.open'));
+  help.setAttribute('aria-pressed', 'false');
+  header.append(logo, identity, help, menuWrap, close);
 
   const transcript = doc.createElement('div');
   transcript.className = 'nx-transcript';
@@ -3860,6 +3906,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     close,
     avatar,
     logo,
+    help,
     team,
     title,
     menuWrap,
@@ -4524,6 +4571,7 @@ function readAppearance(params: URLSearchParams): Appearance {
     welcomeText: DEFAULT_APPEARANCE.welcomeText,
     logoUrl: null,
     brandName: null,
+    helpEnabled: false,
   };
 }
 
@@ -4543,6 +4591,7 @@ function appearanceFromApi(a: MintedAppearance): Appearance {
     welcomeText: welcomeString(a.welcome_text),
     logoUrl: welcomeString(a.logo_url),
     brandName: welcomeString(a.brand_name),
+    helpEnabled: a.help_enabled === true,
   };
 }
 
@@ -4994,7 +5043,7 @@ button { -webkit-tap-highlight-color: transparent; }
   margin: 0; font-size: 18px; line-height: 24px; font-weight: 700;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.nx-close, .nx-menu-btn {
+.nx-close, .nx-menu-btn, .nx-help-btn {
   flex: none; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
   background: transparent; color: var(--nx-on-brand); cursor: pointer;
@@ -5002,7 +5051,8 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 .nx-close::before { width: 22px; height: 22px; -webkit-mask-image: var(--nx-icon-down); mask-image: var(--nx-icon-down); }
 .nx-menu-btn::before { width: 20px; height: 20px; -webkit-mask-image: var(--nx-icon-more); mask-image: var(--nx-icon-more); }
-.nx-close:hover, .nx-menu-btn:hover, .nx-menu-btn[aria-expanded="true"] { background: rgba(255, 255, 255, .14); }
+.nx-close:hover, .nx-menu-btn:hover, .nx-help-btn:hover, .nx-menu-btn[aria-expanded="true"] { background: rgba(255, 255, 255, .14); }
+.nx-help-btn { font-size: 20px; font-weight: 700; }
 .nx-menu-wrap { position: relative; }
 .nx-menu {
   position: absolute; inset-inline-end: 0; top: 100%; margin-top: 6px;

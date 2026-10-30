@@ -298,6 +298,10 @@ paths:
     $ref: "./paths/customer-chat.yaml#/sale"
   /customer/ticket:
     $ref: "./paths/customer-chat.yaml#/leaveTicket"
+  /customer/kb/search:
+    $ref: "./paths/customer-kb.yaml#/search"
+  /customer/kb/articles/{slug}:
+    $ref: "./paths/customer-kb.yaml#/article"
 
   /customers:
     $ref: "./paths/customers.yaml#/customers"
@@ -9299,6 +9303,7 @@ components:
           availability_mode,
           launcher_visibility,
           show_logo,
+          help_enabled,
           updated_at,
         ]
       properties:
@@ -9374,6 +9379,12 @@ components:
             Show the brand's logo (Settings › Brands) in the panel header
             (WG-10). Off by default; has no effect while the brand has no
             `https` logo address.
+        help_enabled:
+          type: boolean
+          description: >-
+            The widget's "Help" tab (WG-12): visitors search the workspace's
+            published knowledge base articles inside the widget. Off by
+            default; delivered with the token mint.
         updated_at: { type: string, format: date-time, nullable: true }
 
     PrechatFieldRule:
@@ -9507,6 +9518,7 @@ components:
           fallback_language,
           launcher_visibility,
           show_logo,
+          help_enabled,
           privacy_policy_url,
           powered_by_url,
           logo_url,
@@ -9559,6 +9571,9 @@ components:
         show_logo:
           type: boolean
           description: Whether the brand's logo heads the panel (WG-10).
+        help_enabled:
+          type: boolean
+          description: Whether the widget shows its "Help" tab (WG-12); see `WidgetSettings`.
         logo_url:
           type: string
           format: uri
@@ -9586,6 +9601,35 @@ components:
             Where the "Powered by SiyahTuş" text links to. Null in the public
             pilot (`PILOT_MODE`), where the widget shows the words without a
             link.
+
+    CustomerKbSearchHit:
+      type: object
+      description: |
+        One published article in the widget's Help search (WG-12): what the
+        result list shows, without the body.
+      required: [slug, title, excerpt]
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        excerpt:
+          type: string
+          description: >-
+            The article's own excerpt, else the start of its body as plain
+            text, at most 160 characters.
+
+    CustomerKbArticle:
+      type: object
+      description: |
+        A published article as the widget's Help tab shows it (WG-12). The
+        body is the author's text in the knowledge base's markdown subset:
+        "##" and "###" headings, "- " lists, bold, inline code and links to
+        https addresses. The widget draws it without HTML.
+      required: [slug, title, body, updated_at]
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        body: { type: string }
+        updated_at: { type: string, format: date-time }
 
     SalesTrackerSettings:
       type: object

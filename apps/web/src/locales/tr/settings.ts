@@ -702,6 +702,9 @@ export const settings: Messages = {
   'settings.widgetCustomization.showLogoHint':
     'Ayarlar › Markalar’daki logoyu sohbet penceresinin başında gösterir. Yalnızca güvenli (https) adresteki logo gösterilir.',
   'settings.widgetCustomization.previewLogo': 'LOGO',
+  'settings.widgetCustomization.helpEnabledLabel': 'Yardım sekmesini göster',
+  'settings.widgetCustomization.helpEnabledHint':
+    'Sohbet penceresinin başlığına bir “?” ekler: ziyaretçiler yayımlanmış bilgi bankası makalelerinizde arar ve her ekrandan sohbet başlatabilir. Taslaklar asla gösterilmez.',
   'settings.widgetCustomization.entitlementError':
     'SiyahTuş rozetini kaldırmak bir Enterprise özelliğidir. Gizlemek için planı yükseltin.',
   'settings.widgetCustomization.previewLabel': 'Önizleme',

@@ -636,6 +636,11 @@ export class WidgetApi {
     await this.#request('POST', '/customer/chat/transcript', { email });
   }
 
+  /** A read for the Help tab (WG-12 · tm 348): `/customer/kb/...` with the visitor's token. */
+  async help<T>(path: string): Promise<T> {
+    return this.#request('GET', path);
+  }
+
   /** The answer to the "leave your e-mail" card (WG-08 · tm 342). */
   async submitContactEmail(email: string): Promise<void> {
     await this.#request('POST', '/customer/chat/email', { email });

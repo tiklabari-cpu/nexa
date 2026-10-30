@@ -2573,6 +2573,60 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/customer/kb/search': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Search the workspace's published help articles
+     * @description The search box of the widget's Help tab. Only published articles of the
+     *     token's workspace are searched: a draft, an unpublished article and
+     *     another workspace's article are never in the result, and none of them
+     *     is told apart from an article that does not exist.
+     *
+     *     Every word of `q` must start a word of the article's title or body, in
+     *     any order ("papara yat" finds "Papara ile yatırım"). Turkish letters and
+     *     their plain spelling match each other ("cekim" finds "Çekim"), and case
+     *     does not matter. Title matches rank first. At most 8 words count.
+     *
+     *     While the workspace has the Help tab switched off (`help_enabled` in the
+     *     widget settings) the result is empty. The query is never written to a
+     *     log in clear text. Inside the customer token's rate limit.
+     */
+    get: operations['searchCustomerKb'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/customer/kb/articles/{slug}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read one published help article
+     * @description The article view of the widget's Help tab. A draft, another workspace's
+     *     article, an unknown slug and a workspace with the Help tab switched off
+     *     all answer the same 404.
+     */
+    get: operations['getCustomerKbArticle'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/customers': {
     parameters: {
       query?: never;
@@ -18488,6 +18542,8 @@ export interface components {
       launcher_visibility: 'always' | 'until_opened' | 'never';
       /** @description Show the brand's logo (Settings › Brands) in the panel header (WG-10). Off by default; has no effect while the brand has no `https` logo address. */
       show_logo: boolean;
+      /** @description The widget's "Help" tab (WG-12): visitors search the workspace's published knowledge base articles inside the widget. Off by default; delivered with the token mint. */
+      help_enabled: boolean;
       /** Format: date-time */
       updated_at: string | null;
     };
@@ -18618,6 +18674,8 @@ export interface components {
       launcher_visibility: 'always' | 'until_opened' | 'never';
       /** @description Whether the brand's logo heads the panel (WG-10). */
       show_logo: boolean;
+      /** @description Whether the widget shows its "Help" tab (WG-12); see `WidgetSettings`. */
+      help_enabled: boolean;
       /**
        * Format: uri
        * @description The brand's logo for the panel header (WG-10), or null — none is set, `show_logo` is off, or the stored address is not an `https` URL the widget may load.
@@ -18635,6 +18693,29 @@ export interface components {
        * @description Where the "Powered by SiyahTuş" text links to. Null in the public pilot (`PILOT_MODE`), where the widget shows the words without a link.
        */
       powered_by_url: string | null;
+    };
+    /**
+     * @description One published article in the widget's Help search (WG-12): what the
+     *     result list shows, without the body.
+     */
+    CustomerKbSearchHit: {
+      slug: string;
+      title: string;
+      /** @description The article's own excerpt, else the start of its body as plain text, at most 160 characters. */
+      excerpt: string;
+    };
+    /**
+     * @description A published article as the widget's Help tab shows it (WG-12). The
+     *     body is the author's text in the knowledge base's markdown subset:
+     *     "##" and "###" headings, "- " lists, bold, inline code and links to
+     *     https addresses. The widget draws it without HTML.
+     */
+    CustomerKbArticle: {
+      slug: string;
+      title: string;
+      body: string;
+      /** Format: date-time */
+      updated_at: string;
     };
     /**
      * @description Per-license sales tracker configuration (FR-MOD-13.5,
@@ -26960,6 +27041,65 @@ export interface operations {
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  searchCustomerKb: {
+    parameters: {
+      query: {
+        q: string;
+        /**
+         * @description The widget's language. Articles carry no language yet, so it does
+         *     not narrow the result today; it is accepted so the widget does not
+         *     change when they do.
+         */
+        locale?: 'en' | 'tr' | 'de' | 'fr' | 'es' | 'it' | 'pt' | 'ar';
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Matching articles, best first */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['CustomerKbSearchHit'][];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getCustomerKbArticle: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        slug: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The article */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CustomerKbArticle'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
@@ -36640,6 +36780,8 @@ export interface operations {
           launcher_visibility?: 'always' | 'until_opened' | 'never';
           /** @description Show the brand's logo in the panel header (WG-10). */
           show_logo?: boolean;
+          /** @description Show the widget's "Help" tab, a search of published KB articles (WG-12). */
+          help_enabled?: boolean;
         };
       };
     };

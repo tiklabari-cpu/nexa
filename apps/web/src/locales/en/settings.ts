@@ -707,6 +707,9 @@ export const settings: Messages = {
   'settings.widgetCustomization.showLogoHint':
     'Shows the logo from Settings › Brands at the top of the chat window. Only a logo on a secure (https) address is shown.',
   'settings.widgetCustomization.previewLogo': 'LOGO',
+  'settings.widgetCustomization.helpEnabledLabel': 'Show the Help tab',
+  'settings.widgetCustomization.helpEnabledHint':
+    'Adds a “?” to the chat window header: visitors search your published knowledge base articles and can start a chat from every screen. Drafts are never shown.',
   'settings.widgetCustomization.entitlementError':
     'Removing the SiyahTuş badge is an Enterprise feature. Upgrade the plan to hide it.',
   'settings.widgetCustomization.previewLabel': 'Preview',

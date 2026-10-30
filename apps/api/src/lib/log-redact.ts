@@ -187,7 +187,7 @@ const EMAIL = /[A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
  * `code`); the trailing `=` makes the distinction load-bearing either way.
  */
 const SENSITIVE_QUERY_KEY =
-  /([?&](?:access_token|refresh_token|code_verifier|client_secret|signature|password|secret|token|email|query|code|state|key|sig)=)[^&#]*/gi;
+  /([?&](?:access_token|refresh_token|code_verifier|client_secret|signature|password|secret|token|email|query|code|state|key|sig|q)=)[^&#]*/gi;
 
 /**
  * Mask personal data in free text — an address, a card number, and every other

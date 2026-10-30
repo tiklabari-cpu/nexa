@@ -1798,6 +1798,9 @@ widgetSettings:
               show_logo:
                 type: boolean
                 description: Show the brand's logo in the panel header (WG-10).
+              help_enabled:
+                type: boolean
+                description: Show the widget's "Help" tab, a search of published KB articles (WG-12).
     responses:
       "200":
         description: Updated

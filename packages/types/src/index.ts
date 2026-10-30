@@ -47,6 +47,7 @@ export * from './realtime-bus.js';
 export * from './widget.js';
 export * from './widget-availability.js';
 export * from './widget-phrases.js';
+export * from './widget-help.js';
 export * from './sales-tracker.js';
 export * from './referrer.js';
 export * from './home.js';

@@ -199,6 +199,13 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
                 />
 
                 <ToggleControl
+                  label={t('settings.widgetCustomization.helpEnabledLabel')}
+                  hint={t('settings.widgetCustomization.helpEnabledHint')}
+                  checked={value.help_enabled}
+                  onChange={(next) => set('help_enabled', next)}
+                />
+
+                <ToggleControl
                   label={t('settings.widgetCustomization.poweredByLabel')}
                   hint={t('settings.widgetCustomization.poweredByHint')}
                   checked={value.powered_by}

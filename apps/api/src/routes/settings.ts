@@ -714,6 +714,8 @@ const updateWidgetBody = z
       .enum(WIDGET_LAUNCHER_VISIBILITIES as unknown as [string, ...string[]])
       .optional(),
     show_logo: z.boolean().optional(),
+    // The widget's Help tab: search of published KB articles (WG-12).
+    help_enabled: z.boolean().optional(),
     // When a visitor may start a chat (WG-09).
     availability_mode: z
       .enum(WIDGET_AVAILABILITY_MODES as unknown as [string, ...string[]])
@@ -3087,6 +3089,7 @@ export default async function settingsRoutes(
           ? { launcherVisibility: body.launcher_visibility }
           : {}),
         ...(body.show_logo !== undefined ? { showLogo: body.show_logo } : {}),
+        ...(body.help_enabled !== undefined ? { helpEnabled: body.help_enabled } : {}),
       };
 
       // Upsert because signup leaves no row: a workspace customising the widget
@@ -3957,6 +3960,7 @@ function serialiseWidget(
     availabilityMode: string;
     launcherVisibility: string;
     showLogo: boolean;
+    helpEnabled: boolean;
     updatedAt: Date;
   } | null,
   brandId: string,
@@ -3976,6 +3980,7 @@ function serialiseWidget(
     availability_mode: row?.availabilityMode ?? DEFAULT_WIDGET_AVAILABILITY_MODE,
     launcher_visibility: row?.launcherVisibility ?? DEFAULT_WIDGET_APPEARANCE.launcher_visibility,
     show_logo: row?.showLogo ?? DEFAULT_WIDGET_APPEARANCE.show_logo,
+    help_enabled: row?.helpEnabled ?? DEFAULT_WIDGET_APPEARANCE.help_enabled,
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
 }

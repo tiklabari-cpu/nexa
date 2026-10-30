@@ -8,45 +8,56 @@ import {
 
 describe('transcriptRecipients', () => {
   const assignee = { email: 'agent@example.test', name: 'Ada', emailEnabled: true };
+  const noForward = { to: [], includeNotes: false };
 
-  it('mails both the visitor and the human who handled the chat', () => {
-    const to = transcriptRecipients({
-      customer: { email: 'visitor@example.test', name: 'Vic' },
-      assignee,
-    });
-    expect(to).toEqual([
-      { party: 'customer', to: 'visitor@example.test', name: 'Vic' },
-      { party: 'team', to: 'agent@example.test', name: 'Ada' },
-    ]);
-  });
-
-  it('skips the visitor when we never captured an address', () => {
-    const to = transcriptRecipients({ customer: { email: null, name: 'Vic' }, assignee });
-    expect(to.map((r) => r.party)).toEqual(['team']);
+  it('never mails the player at close, only the human who handled the chat (K26 · FR-MOD-08.7.4)', () => {
+    const to = transcriptRecipients({ assignee, forward: noForward });
+    expect(to).toEqual([{ party: 'team', to: 'agent@example.test', name: 'Ada', via: 'assignee' }]);
   });
 
   it('skips the team copy for an AI-only / queued chat with no assignee', () => {
-    const to = transcriptRecipients({
-      customer: { email: 'visitor@example.test', name: 'Vic' },
-      assignee: null,
-    });
-    expect(to.map((r) => r.party)).toEqual(['customer']);
+    expect(transcriptRecipients({ assignee: null, forward: noForward })).toEqual([]);
   });
 
   it('honours the agent e-mail opt-out for the team copy (FR-MOD-08.2)', () => {
     const to = transcriptRecipients({
-      customer: { email: 'visitor@example.test', name: 'Vic' },
       assignee: { ...assignee, emailEnabled: false },
+      forward: noForward,
     });
-    expect(to.map((r) => r.party)).toEqual(['customer']);
+    expect(to).toEqual([]);
   });
 
   it('does not send to an empty address', () => {
     const to = transcriptRecipients({
-      customer: { email: '', name: 'Vic' },
       assignee: { ...assignee, email: '' },
+      forward: { to: [''], includeNotes: false },
     });
     expect(to).toEqual([]);
+  });
+
+  it("forwards the player's copy to each address on its own (WG-06)", () => {
+    const to = transcriptRecipients({
+      assignee: null,
+      forward: { to: ['arsiv@sirket.com', 'uyum@sirket.com'], includeNotes: false },
+    });
+    expect(to).toEqual([
+      { party: 'customer', to: 'arsiv@sirket.com', name: null, via: 'forward' },
+      { party: 'customer', to: 'uyum@sirket.com', name: null, via: 'forward' },
+    ]);
+  });
+
+  it("forwards the team's copy when the workspace includes notes, and mails an address once", () => {
+    const to = transcriptRecipients({
+      assignee,
+      forward: {
+        to: ['Agent@example.test', 'arsiv@sirket.com', 'arsiv@sirket.com'],
+        includeNotes: true,
+      },
+    });
+    expect(to.map((r) => `${r.via}:${r.party}:${r.to}`)).toEqual([
+      'assignee:team:agent@example.test',
+      'forward:team:arsiv@sirket.com',
+    ]);
   });
 });
 

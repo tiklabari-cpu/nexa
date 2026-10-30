@@ -81,9 +81,11 @@ export const SECURITY_MAIL_PER_RECIPIENT = 5;
 /**
  * Workspace mail that leaves the workspace: the invitation (to somebody who is
  * not a member yet), the ticket notice and the visitor's transcript (to an
- * address a customer or a visitor typed), and since tm 356.3 an agent's reply
- * on a ticket, to its player. Assignee notices, the team's transcript copy,
- * scheduled reports and SLA digests go to the workspace's own people.
+ * address a customer or a visitor typed — since K26 only the copy they ask for),
+ * and since tm 356.3 an agent's reply on a ticket, to its player. Assignee
+ * notices, the team's transcript copy, the copies a workspace forwards to its
+ * own addresses (WG-06), scheduled reports and SLA digests go to the
+ * workspace's own people.
  */
 export const EXTERNAL_KINDS: ReadonlySet<Message['kind']> = new Set([
   'invitation',

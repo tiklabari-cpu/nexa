@@ -57,7 +57,10 @@ import {
   TICKET_REOPEN_WINDOW_DAYS_DEFAULT,
   TICKET_REOPEN_WINDOW_DAYS_MAX,
   TRANSCRIPT_ALLOWED_DOMAINS_MAX,
+  TRANSCRIPT_FORWARD_MAX,
+  normaliseForwardAddress,
   normaliseTranscriptDomain,
+  unverifiedForwardAddress,
 } from '@siyahtus/types';
 import type {
   CompanySector,
@@ -107,6 +110,7 @@ import {
 } from '../lib/sso-connection.js';
 import { writeAuditEntry, type AuditEntry } from '../services/audit/audit-log.js';
 import { dayBoundaryFromRow, type DayBoundaryRow } from '../services/chat/day-boundary.js';
+import { readVerifiedMailDomains } from '../services/chat/transcript-request.js';
 import type { Mailer } from '../services/mail/mailer.js';
 import { deliver, isCapRefusal, mailFailureFields } from '../services/mail/delivery.js';
 import { secondsUntilUtcMidnight } from '../services/ai/ai-daily-budget.js';
@@ -612,7 +616,29 @@ const updateChatTimeoutBody = z.object({
     .array(z.string().min(1).max(254))
     .max(TRANSCRIPT_ALLOWED_DOMAINS_MAX)
     .optional(),
+  // Where every closed connection is forwarded, and whether with its notes
+  // (WG-06 · tm 345). Optional the same way; checked together below.
+  transcript_forward_to: z.array(z.string().min(3).max(254)).max(TRANSCRIPT_FORWARD_MAX).optional(),
+  transcript_forward_include_notes: z.boolean().optional(),
 });
+
+/**
+ * The forwarding addresses as stored: normalised, duplicates dropped, in the
+ * order given. A value that is not an address refuses the whole save.
+ */
+function forwardAddressesOrThrow(input: readonly string[]): string[] {
+  const addresses: string[] = [];
+  for (const [index, raw] of input.entries()) {
+    const address = normaliseForwardAddress(raw);
+    if (address === null) {
+      throw ApiError.validation(`transcript_forward_to.${index}: not an e-mail address.`, {
+        fields: [{ field: `transcript_forward_to.${index}`, message: 'not an e-mail address' }],
+      });
+    }
+    if (!addresses.some((a) => a.toLowerCase() === address.toLowerCase())) addresses.push(address);
+  }
+  return addresses;
+}
 
 /**
  * The allowed transcript domains as stored: normalised, duplicates dropped, in
@@ -2897,6 +2923,38 @@ export default async function settingsRoutes(
                 transcriptAllowedDomains: transcriptDomainsOrThrow(body.transcript_allowed_domains),
               }),
         };
+        // Forwarding (WG-06): the list and the notes switch as this save leaves
+        // them. Internal notes go only to the workspace's verified domains —
+        // every address, or nothing is written.
+        const forward = {
+          transcriptForwardTo:
+            body.transcript_forward_to === undefined
+              ? (stored?.transcriptForwardTo ?? [])
+              : forwardAddressesOrThrow(body.transcript_forward_to),
+          transcriptForwardIncludeNotes:
+            body.transcript_forward_include_notes ?? stored?.transcriptForwardIncludeNotes ?? false,
+        };
+        if (forward.transcriptForwardIncludeNotes && forward.transcriptForwardTo.length > 0) {
+          const outside = unverifiedForwardAddress(
+            forward.transcriptForwardTo,
+            await readVerifiedMailDomains(tx),
+          );
+          if (outside !== null) {
+            const index = forward.transcriptForwardTo.indexOf(outside);
+            throw ApiError.validation(
+              'Internal notes are forwarded only to addresses at your verified SSO domains.',
+              {
+                reason: 'domain_not_verified',
+                fields: [
+                  {
+                    field: `transcript_forward_to.${index}`,
+                    message: 'not at a verified domain',
+                  },
+                ],
+              },
+            );
+          }
+        }
         const row = await tx.inboxSettings.upsert({
           where,
           create: {
@@ -2906,12 +2964,14 @@ export default async function settingsRoutes(
             ...windows,
             ...dayBoundary,
             ...pauseAndReopen,
+            ...forward,
           },
           update: {
             chatTimeoutSeconds: body.chat_timeout_seconds,
             ...windows,
             ...dayBoundary,
             ...pauseAndReopen,
+            ...forward,
           },
         });
         const after = dayBoundaryFromRow(row);
@@ -2927,6 +2987,12 @@ export default async function settingsRoutes(
             ask_email_when_offline: row.askEmailWhenOffline,
             ticket_reopen_window_days: row.ticketReopenWindowDays,
             transcript_allowed_domains: row.transcriptAllowedDomains,
+            // The domains only, as the transcript mails are recorded.
+            transcript_forward_domains: [
+              ...new Set(row.transcriptForwardTo.map((a) => a.slice(a.lastIndexOf('@') + 1))),
+            ],
+            transcript_forward_count: row.transcriptForwardTo.length,
+            transcript_forward_include_notes: row.transcriptForwardIncludeNotes,
             day_boundary_timezone: after.timezone,
             day_boundary_hour: after.hour,
             // Only when it moved: a timeout-only save is not a boundary change,
@@ -3828,6 +3894,8 @@ function serialiseInbox(
         askEmailWhenOffline: boolean;
         ticketReopenWindowDays: number;
         transcriptAllowedDomains: string[];
+        transcriptForwardTo: string[];
+        transcriptForwardIncludeNotes: boolean;
         updatedAt: Date;
       })
     | null,
@@ -3849,6 +3917,8 @@ function serialiseInbox(
     ask_email_when_offline: row?.askEmailWhenOffline ?? false,
     ticket_reopen_window_days: row?.ticketReopenWindowDays ?? TICKET_REOPEN_WINDOW_DAYS_DEFAULT,
     transcript_allowed_domains: row?.transcriptAllowedDomains ?? [],
+    transcript_forward_to: row?.transcriptForwardTo ?? [],
+    transcript_forward_include_notes: row?.transcriptForwardIncludeNotes ?? false,
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
 }

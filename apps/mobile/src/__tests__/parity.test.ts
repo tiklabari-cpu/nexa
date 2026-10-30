@@ -1092,7 +1092,10 @@ describe('module parity matrix — what is still owed', () => {
       // 348 -> 349 with `/settings/widget/phrases` (tm 344) — a brand's own
       // widget texts per language (WG-05), edited in the web console's widget
       // settings; the app has no widget settings, and nothing here re-scopes.
-      contractEndpoints: 349,
+      // 349 -> 350 with `POST /customer/chat/transcript` (tm 345) — the
+      // widget's "E-mail me the transcript" (WG-06), a visitor surface; the
+      // agent app has nothing to add, and nothing here re-scopes.
+      contractEndpoints: 350,
       scopeBoundaries: 1,
     });
   });

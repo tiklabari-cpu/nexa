@@ -3878,6 +3878,13 @@ model InboxSettings {
   /// (AR-04-S3 · tm 338), lower-case, without the `@`; matched exactly. Empty:
   /// only the player's address. At most `TRANSCRIPT_ALLOWED_DOMAINS_MAX`.
   transcriptAllowedDomains String[] @default([]) @map("transcript_allowed_domains")
+  /// Addresses every closed connection is forwarded to (WG-06 · tm 345), each
+  /// mailed on its own as an internal mail, the domain lower-case. At most
+  /// `TRANSCRIPT_FORWARD_MAX` (CHECK). K26: a closing chat never mails the player.
+  transcriptForwardTo String[] @default([]) @map("transcript_forward_to")
+  /// Whether the forwarded copy is the team's, notes marked (WG-06). Only set
+  /// while every forwarding address is at a verified SSO domain (the endpoint).
+  transcriptForwardIncludeNotes Boolean @default(false) @map("transcript_forward_include_notes")
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)

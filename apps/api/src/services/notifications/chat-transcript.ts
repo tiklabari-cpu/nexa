@@ -28,39 +28,66 @@ import {
 export type TranscriptParty = 'customer' | 'team';
 
 export interface TranscriptParticipants {
-  /** The visitor. `email` is null when we never captured one — nobody to write to. */
-  customer: { email: string | null; name: string | null };
   /**
    * The human who handled the chat, or null when nobody did (it was queued or
    * answered only by the AI) — then there is no team copy to send.
    */
   assignee: { email: string | null; name: string | null; emailEnabled: boolean } | null;
+  /**
+   * The workspace's forwarding addresses (WG-06 · tm 345,
+   * `inbox_settings.transcript_forward_to`) and whether they get the team's
+   * copy — which the settings only allow at the workspace's verified domains.
+   */
+  forward: { to: readonly string[]; includeNotes: boolean };
 }
 
 export interface TranscriptRecipient {
   party: TranscriptParty;
   to: string;
   name: string | null;
+  /** `assignee` — the agent's own copy; `forward` — one of the workspace's addresses. */
+  via: 'assignee' | 'forward';
 }
 
 /**
  * Who receives a transcript when a chat ends.
  *
- * The visitor gets their conversation whenever we can reach them. The team copy
- * goes to the assignee, honouring the per-user, per-license e-mail opt-out
- * (FR-MOD-08.2) — an agent who silenced the channel for new messages does not
- * want a transcript in their inbox either — and only when there was a human
- * assignee at all.
+ * Never the player (K26 · tm 345): the player asks for their copy from the
+ * widget (`POST /customer/chat/transcript`), so an address someone typed into
+ * a pre-chat form is not mailed a conversation unasked. The conversation's
+ * own record — its events, the archive, the timeline — is untouched by this;
+ * only the outgoing mail stopped.
+ *
+ * The team copy goes to the assignee, honouring the per-user, per-license
+ * e-mail opt-out (FR-MOD-08.2) — an agent who silenced the channel for new
+ * messages does not want a transcript in their inbox either — and only when
+ * there was a human assignee at all. Each forwarding address gets its own
+ * copy: the player's, or the team's when the workspace includes notes. An
+ * address already on the list (the assignee's, a repeat) is mailed once.
  */
 export function transcriptRecipients(p: TranscriptParticipants): TranscriptRecipient[] {
   const recipients: TranscriptRecipient[] = [];
-
-  if (hasAddress(p.customer.email)) {
-    recipients.push({ party: 'customer', to: p.customer.email, name: p.customer.name });
-  }
+  const seen = new Set<string>();
 
   if (p.assignee && p.assignee.emailEnabled && hasAddress(p.assignee.email)) {
-    recipients.push({ party: 'team', to: p.assignee.email, name: p.assignee.name });
+    recipients.push({
+      party: 'team',
+      to: p.assignee.email,
+      name: p.assignee.name,
+      via: 'assignee',
+    });
+    seen.add(p.assignee.email.toLowerCase());
+  }
+
+  for (const to of p.forward.to) {
+    if (!hasAddress(to) || seen.has(to.toLowerCase())) continue;
+    seen.add(to.toLowerCase());
+    recipients.push({
+      party: p.forward.includeNotes ? 'team' : 'customer',
+      to,
+      name: null,
+      via: 'forward',
+    });
   }
 
   return recipients;

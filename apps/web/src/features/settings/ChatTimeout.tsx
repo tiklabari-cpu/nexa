@@ -44,6 +44,11 @@
  * · tm 338, `transcript_allowed_domains`): one domain a line, checked with the
  * same `normaliseTranscriptDomain` the server stores them with.
  *
+ * And where every closed connection is forwarded (WG-06 · tm 345,
+ * `transcript_forward_to`, at most five), with a switch for the team's copy,
+ * internal notes included — which the server allows only at the workspace's
+ * verified SSO domains. A closing chat no longer mails the player (K26).
+ *
  * A save sends `chat_timeout_seconds` (the endpoint requires it) and every other
  * field only when it changed, like the company form's diff: a timeout-only save
  * should not read as a transfer or day-boundary change in the audit trail.
@@ -56,7 +61,9 @@ import {
   askEmailText,
   INACTIVITY_WINDOW_MAX_SECONDS,
   TRANSCRIPT_ALLOWED_DOMAINS_MAX,
+  TRANSCRIPT_FORWARD_MAX,
   chatInactivityOrderProblem,
+  normaliseForwardAddress,
   normaliseTranscriptDomain,
   isDayBoundaryHour,
   localDayKey,
@@ -85,6 +92,9 @@ interface ChatTimeoutSettings {
   ask_email_when_offline?: boolean;
   /** Absent only from a server that predates tm 338: read as none. */
   transcript_allowed_domains?: string[];
+  /** Absent only from a server that predates tm 345 (WG-06): read as none / off. */
+  transcript_forward_to?: string[];
+  transcript_forward_include_notes?: boolean;
   updated_at: string | null;
 }
 
@@ -98,6 +108,8 @@ interface ChatTimeoutBody {
   ask_email_after_seconds?: number | null;
   ask_email_when_offline?: boolean;
   transcript_allowed_domains?: string[];
+  transcript_forward_to?: string[];
+  transcript_forward_include_notes?: boolean;
 }
 
 type DurationUnit = 'minutes' | 'hours';
@@ -112,7 +124,9 @@ type FormValues = Record<
   | 'askOffline'
   | 'timezone'
   | 'hour'
-  | 'domains',
+  | 'domains'
+  | 'forwardTo'
+  | 'forwardNotes',
   string
 >;
 
@@ -200,6 +214,35 @@ function parseDomains(
     return { domains: null, error: 'settings.transcriptDomains.tooMany' };
   }
   return { domains, error: null };
+}
+
+/**
+ * The forwarding box as the server would store it — one address a line,
+ * normalised, duplicates dropped — or the error key for what is wrong.
+ */
+function parseForwardTo(
+  value: string,
+): { addresses: string[]; error: null } | { addresses: null; error: string } {
+  const addresses: string[] = [];
+  for (const line of value.split('\n')) {
+    if (line.trim() === '') continue;
+    const address = normaliseForwardAddress(line);
+    if (address === null) return { addresses: null, error: 'settings.transcriptForward.invalid' };
+    if (!addresses.some((a) => a.toLowerCase() === address.toLowerCase())) addresses.push(address);
+  }
+  if (addresses.length > TRANSCRIPT_FORWARD_MAX) {
+    return { addresses: null, error: 'settings.transcriptForward.tooMany' };
+  }
+  return { addresses, error: null };
+}
+
+/** The server refused internal notes for an address outside the verified domains. */
+function notesRefused(error: unknown): boolean {
+  return (
+    error instanceof ApiClientError &&
+    error.type === 'validation' &&
+    error.details?.['reason'] === 'domain_not_verified'
+  );
 }
 
 function hourLabel(hour: number): string {
@@ -298,6 +341,8 @@ function ChatTimeoutForm({
   const savedTimezone = config.day_boundary_timezone ?? DEFAULT_DAY_BOUNDARY.timezone;
   const savedHour = config.day_boundary_hour ?? DEFAULT_DAY_BOUNDARY.hour;
   const savedDomains = config.transcript_allowed_domains ?? [];
+  const savedForwardTo = config.transcript_forward_to ?? [];
+  const savedForwardNotes = config.transcript_forward_include_notes ?? false;
   // The zone search narrows the list; it is not part of what is saved, so it
   // lives outside the form and never makes the form dirty.
   const [zoneSearch, setZoneSearch] = useState('');
@@ -320,6 +365,8 @@ function ChatTimeoutForm({
   initial.timezone = savedTimezone;
   initial.hour = String(savedHour);
   initial.domains = savedDomains.join('\n');
+  initial.forwardTo = savedForwardTo.join('\n');
+  initial.forwardNotes = String(savedForwardNotes);
 
   const form = useForm<FormValues>({
     initial,
@@ -329,6 +376,10 @@ function ChatTimeoutForm({
         return parsed.error !== null
           ? t(parsed.error, { max: TRANSCRIPT_ALLOWED_DOMAINS_MAX })
           : null;
+      },
+      forwardTo: (value) => {
+        const parsed = parseForwardTo(value);
+        return parsed.error !== null ? t(parsed.error, { max: TRANSCRIPT_FORWARD_MAX }) : null;
       },
     },
     // No validators here for the amounts: each one's valid range depends on its
@@ -346,6 +397,11 @@ function ChatTimeoutForm({
       const parsed = parseDomains(values.domains);
       if (parsed.error !== null) {
         setFieldError('domains', t(parsed.error, { max: TRANSCRIPT_ALLOWED_DOMAINS_MAX }));
+        invalid = true;
+      }
+      const forward = parseForwardTo(values.forwardTo);
+      if (forward.error !== null) {
+        setFieldError('forwardTo', t(forward.error, { max: TRANSCRIPT_FORWARD_MAX }));
         invalid = true;
       }
       if (invalid || orderProblem(values)) return;
@@ -371,9 +427,22 @@ function ChatTimeoutForm({
       if (parsed.domains !== null && parsed.domains.join('\n') !== savedDomains.join('\n')) {
         body.transcript_allowed_domains = parsed.domains;
       }
+      if (
+        forward.addresses !== null &&
+        forward.addresses.join('\n') !== savedForwardTo.join('\n')
+      ) {
+        body.transcript_forward_to = forward.addresses;
+      }
+      if ((values.forwardNotes === 'true') !== savedForwardNotes) {
+        body.transcript_forward_include_notes = values.forwardNotes === 'true';
+      }
       try {
         await save.mutateAsync(body);
       } catch (error_) {
+        if (notesRefused(error_)) {
+          setFieldError('forwardTo', t('settings.transcriptForward.notVerified'));
+          return;
+        }
         const problem = serverOrderProblem(error_);
         setSubmitError(t(problem ? ORDER_MESSAGE_KEYS[problem] : errorMessageKey(error_)));
       }
@@ -582,6 +651,56 @@ function ChatTimeoutForm({
           className="w-80 rounded-md border border-border bg-inset px-2 py-1.5 font-mono text-sm outline-none disabled:opacity-50"
         />
         <FieldError id="transcript-domains-error" message={form.errorFor('domains')} />
+      </fieldset>
+
+      <fieldset
+        disabled={!canEdit}
+        aria-labelledby="transcript-forward-heading"
+        className="flex flex-col gap-2 border-0 border-t border-border p-0 pt-5"
+      >
+        <div>
+          <h3 id="transcript-forward-heading" className="text-sm font-medium">
+            {t('settings.transcriptForward.heading')}
+          </h3>
+          <p className="text-2xs text-content-tertiary">
+            {t('settings.transcriptForward.description')}
+          </p>
+        </div>
+        <label
+          htmlFor="transcript-forward"
+          className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+        >
+          {t('settings.transcriptForward.label', { max: TRANSCRIPT_FORWARD_MAX })}
+        </label>
+        <textarea
+          id="transcript-forward"
+          rows={3}
+          value={form.values.forwardTo}
+          onChange={(event) => form.setValue('forwardTo', event.target.value)}
+          onBlur={() => form.blur('forwardTo')}
+          placeholder={t('settings.transcriptForward.placeholder')}
+          aria-describedby="transcript-forward-error"
+          className="w-80 rounded-md border border-border bg-inset px-2 py-1.5 font-mono text-sm outline-none disabled:opacity-50"
+        />
+        <FieldError id="transcript-forward-error" message={form.errorFor('forwardTo')} />
+        <label className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            checked={form.values.forwardNotes === 'true'}
+            onChange={(event) => form.setValue('forwardNotes', String(event.target.checked))}
+          />
+          <span className="text-sm">
+            {t('settings.transcriptForward.notesLabel')}
+            <span className="block text-2xs text-content-tertiary">
+              {t('settings.transcriptForward.notesHint')}
+            </span>
+          </span>
+        </label>
+        {form.values.forwardNotes === 'true' && (
+          <p role="note" className="text-2xs text-warning">
+            {t('settings.transcriptForward.notesWarning')}
+          </p>
+        )}
       </fieldset>
 
       {canEdit && (

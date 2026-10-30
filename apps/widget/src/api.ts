@@ -606,6 +606,11 @@ export class WidgetApi {
     return this.#request('POST', '/customer/chat/request-human', { reason: 'button' });
   }
 
+  /** "E-mail me the transcript" (WG-06 · tm 345): the latest connection, to `email`. */
+  async requestTranscript(email: string): Promise<void> {
+    await this.#request('POST', '/customer/chat/transcript', { email });
+  }
+
   /** The answer to the "leave your e-mail" card (WG-08 · tm 342). */
   async submitContactEmail(email: string): Promise<void> {
     await this.#request('POST', '/customer/chat/email', { email });

@@ -2297,6 +2297,38 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/customer/chat/transcript': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * E-mail the player a copy of their latest conversation
+     * @description WG-06 (tm 345). A closing chat no longer mails the player (K26); the
+     *     widget's "E-mail me the transcript" asks for the copy here instead. The
+     *     copy is the visitor's latest connection — open or closed, never another
+     *     one — in the player's copy of the AR-04 template: the language their
+     *     widget showed (the mails speak English and Turkish), no internal note.
+     *
+     *     `email` is where it goes; left out, the address the player gave before
+     *     (`customers.email`). Neither is a 400 with `reason: no_player_address`;
+     *     a connection with no message yet is a 400 `empty_transcript`; a visitor
+     *     with no conversation is a 404. The address is not stored on the contact.
+     *     The mail leaves the workspace, so it counts against the external daily
+     *     cap; it is sent after the answer. Limited to three copies a connection
+     *     and five an hour a visitor: 429 with `Retry-After`.
+     */
+    post: operations['requestCustomerTranscript'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/customer/chat/close': {
     parameters: {
       query?: never;
@@ -8757,7 +8789,9 @@ export interface paths {
      *     So is `ticket_reopen_window_days` (1-365, HD-03): how many days after
      *     its last activity a player's e-mail answer still reopens a solved ticket.
      *     And `transcript_allowed_domains` (AR-04-S3): where a transcript may be
-     *     mailed besides the player's own address.
+     *     mailed besides the player's own address. `transcript_forward_to` and
+     *     `transcript_forward_include_notes` (WG-06): where every closed
+     *     connection is forwarded, and whether the copy carries internal notes.
      *     `ask_email_after_seconds` (WG-08) is a third window, before the
      *     transfer: ask the player for an e-mail once a connection has waited this
      *     long for a person's first reply. When on it must be below the transfer,
@@ -18335,6 +18369,10 @@ export interface components {
       ticket_reopen_window_days?: number;
       /** @description Domains a transcript may be mailed to besides the player's own address (AR-04-S3), lower-case, without the `@`; an address matches when its domain is exactly one of them. Empty unless set. */
       transcript_allowed_domains?: string[];
+      /** @description Addresses every closed connection is forwarded to (WG-06), each mailed on its own, as an internal mail (outside the external daily cap). A closing chat no longer mails the player (K26): the player asks for their copy from the widget. Empty unless set. */
+      transcript_forward_to?: string[];
+      /** @description Whether the forwarded copy is the team's, internal notes marked, rather than the player's. Only addresses at the workspace's verified SSO domains may receive it. False unless turned on. */
+      transcript_forward_include_notes?: boolean;
       /** Format: date-time */
       updated_at: string | null;
     };
@@ -26493,6 +26531,40 @@ export interface operations {
           'application/json': components['schemas']['Error'];
         };
       };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  requestCustomerTranscript: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          /** Format: email */
+          email?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The copy is handed to the mail carrier */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @enum {boolean} */
+            accepted: true;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };
@@ -36280,6 +36352,10 @@ export interface operations {
           ticket_reopen_window_days?: number;
           /** @description Domains a transcript may be mailed to besides the player's own address (AR-04-S3). Stored trimmed, lower-case and without a leading `@`, duplicates dropped; a value that is not a domain name is a 400. Left out, the stored list stays. */
           transcript_allowed_domains?: string[];
+          /** @description Addresses every closed connection is forwarded to (WG-06), at most five. Stored trimmed with the domain lower-case, duplicates dropped; a value that is not an address is a 400. Left out, the stored list stays. */
+          transcript_forward_to?: string[];
+          /** @description Forward the team's copy, internal notes marked. Refused (400, `reason: domain_not_verified`, nothing saved) while any forwarding address — as this save leaves the list — is outside the workspace's verified SSO domains. Left out, the stored value stays. */
+          transcript_forward_include_notes?: boolean;
         };
       };
     };

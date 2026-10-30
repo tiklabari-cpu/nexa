@@ -325,6 +325,52 @@ contactEmail:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+transcriptRequest:
+  post:
+    tags: [Customer]
+    operationId: requestCustomerTranscript
+    summary: E-mail the player a copy of their latest conversation
+    description: |
+      WG-06 (tm 345). A closing chat no longer mails the player (K26); the
+      widget's "E-mail me the transcript" asks for the copy here instead. The
+      copy is the visitor's latest connection — open or closed, never another
+      one — in the player's copy of the AR-04 template: the language their
+      widget showed (the mails speak English and Turkish), no internal note.
+
+      `email` is where it goes; left out, the address the player gave before
+      (`customers.email`). Neither is a 400 with `reason: no_player_address`;
+      a connection with no message yet is a 400 `empty_transcript`; a visitor
+      with no conversation is a 404. The address is not stored on the contact.
+      The mail leaves the workspace, so it counts against the external daily
+      cap; it is sent after the answer. Limited to three copies a connection
+      and five an hour a visitor: 429 with `Retry-After`.
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              email:
+                type: string
+                format: email
+                maxLength: 254
+    responses:
+      "202":
+        description: The copy is handed to the mail carrier
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accepted]
+              properties:
+                accepted: { type: boolean, enum: [true] }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 resolution:
   post:
     tags: [Customer]

@@ -313,6 +313,21 @@ export const settings: Messages = {
   'settings.transcriptDomains.label': 'Allowed domains (one per line)',
   'settings.transcriptDomains.invalid': 'Each line must be a domain name, like sirket.com.',
   'settings.transcriptDomains.tooMany': 'At most {max} domains.',
+  'settings.transcriptForward.heading': 'Forward every transcript',
+  'settings.transcriptForward.description':
+    'When a conversation ends, its transcript is emailed to these addresses — for example a compliance or archive mailbox. Players are not emailed when a chat closes; they can ask for their copy from the widget.',
+  'settings.transcriptForward.label': 'Forwarding addresses (one per line, at most {max})',
+  'settings.transcriptForward.placeholder': 'archive@company.com',
+  'settings.transcriptForward.invalid':
+    'Each line must be an email address, like arsiv@sirket.com.',
+  'settings.transcriptForward.tooMany': 'At most {max} addresses.',
+  'settings.transcriptForward.notesLabel': 'Include internal notes',
+  'settings.transcriptForward.notesHint':
+    "Sends the team's copy, with internal notes marked, instead of the player's copy.",
+  'settings.transcriptForward.notesWarning':
+    'Internal notes are forwarded only to addresses at your verified SSO domains. Saving is refused for any other address.',
+  'settings.transcriptForward.notVerified':
+    'Internal notes can only go to addresses at your verified SSO domains.',
 
   // Ticket email templates — TicketEmailTemplates.tsx
   'settings.ticketEmailTemplates.title': 'Ticket email templates',

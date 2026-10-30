@@ -173,10 +173,11 @@ describe('courtesy mail leaves the request (tm 256.4)', () => {
   });
 
   /**
-   * The three requests that each cause one of the mails, every one of them
-   * held to the deadline: a visitor writes in (assignee e-mail), the agent
-   * archives the chat (transcript to the visitor and the agent), the agent
-   * solves a ticket with a template (customer notice).
+   * The requests that each cause one of the mails, every one of them held to
+   * the deadline: a visitor writes in (assignee e-mail), the agent archives
+   * the chat (the team's transcript), the visitor asks for their own copy —
+   * a close no longer mails it (K26 · tm 345) — and the agent solves a ticket
+   * with a template (customer notice).
    */
   async function causeAllThree(): Promise<void> {
     const widget = await server.post(
@@ -203,6 +204,12 @@ describe('courtesy mail leaves the request (tm 256.4)', () => {
       server.post(`/chats/${chatId}/deactivate`, undefined, auth(agentToken)),
     );
     expect(archived.statusCode).toBe(200);
+
+    const requested = await answered(
+      "the visitor's transcript request",
+      server.post('/customer/chat/transcript', {}, auth(visitorToken)),
+    );
+    expect(requested.statusCode).toBe(202);
 
     const customer = await owner.customer.create({
       data: { organizationId: fx.a.organizationId, name: 'Ada Lovelace', email: TICKET_CUSTOMER },
@@ -235,11 +242,12 @@ describe('courtesy mail leaves the request (tm 256.4)', () => {
     expect(solved.statusCode).toBe(200);
   }
 
-  it('answers all three while the carrier holds every message, and delivers them once it answers (FR-MOD-13.8 · FR-MOD-08.7.4 · FR-MOD-08.7.5)', async () => {
+  it('answers every request while the carrier holds every message, and delivers them once it answers (FR-MOD-13.8 · FR-MOD-08.7.4 · FR-MOD-08.7.5)', async () => {
     await causeAllThree();
 
     // Every mail is on its way and stuck with the carrier — the answers above
-    // came back without them: the assignee's, two transcript copies, the notice.
+    // came back without them: the assignee's, the team's transcript, the
+    // visitor's requested copy, the notice.
     await vi.waitFor(() => expect(carrier.held).toBe(4), { timeout: 5_000 });
     expect(await spool.outbox()).toEqual([]);
 
@@ -251,13 +259,13 @@ describe('courtesy mail leaves the request (tm 256.4)', () => {
       [
         `notification → ${fx.a.agentEmail}`, // the assignee's new-message e-mail
         `notification → ${fx.a.agentEmail}`, // the team copy of the transcript
-        `chat_transcript → ${VISITOR}`, // the visitor's copy of the transcript (its own kind since tm 257.14)
+        `chat_transcript → ${VISITOR}`, // the copy the visitor asked for (WG-06; its own kind since tm 257.14)
         `ticket_notice → ${TICKET_CUSTOMER}`,
       ].sort(),
     );
   });
 
-  it('answers all three when the carrier refuses, and logs each refusal without its recipient', async () => {
+  it('answers every request when the carrier refuses, and logs each refusal without its recipient', async () => {
     carrier.mode = 'refuse';
 
     await causeAllThree();
@@ -272,7 +280,8 @@ describe('courtesy mail leaves the request (tm 256.4)', () => {
       .map((line) => JSON.parse(line) as Record<string, unknown>)
       .filter((entry) => events.includes(entry['event'] as string));
 
-    // One line per message that did not go out: the transcript has two copies.
+    // One line per message that did not go out: the team's transcript and the
+    // visitor's requested copy are two.
     expect(failures.map((entry) => entry['event']).sort()).toEqual(
       [
         'assignee_notification.mail',

@@ -304,6 +304,21 @@ export const settings: Messages = {
   'settings.transcriptDomains.label': 'İzin verilen alan adları (her satıra bir tane)',
   'settings.transcriptDomains.invalid': 'Her satır sirket.com gibi bir alan adı olmalı.',
   'settings.transcriptDomains.tooMany': 'En fazla {max} alan adı.',
+  'settings.transcriptForward.heading': 'Tüm dökümleri ilet',
+  'settings.transcriptForward.description':
+    "Bir sohbet kapanınca dökümü bu adreslere e-postayla gider — örneğin bir uyum ya da arşiv kutusu. Sohbet kapanınca oyuncuya e-posta gitmez; oyuncu kendi kopyasını widget'tan isteyebilir.",
+  'settings.transcriptForward.label': 'İletme adresleri (her satıra bir tane, en fazla {max})',
+  'settings.transcriptForward.placeholder': 'arsiv@sirket.com',
+  'settings.transcriptForward.invalid':
+    'Her satır arsiv@sirket.com gibi bir e-posta adresi olmalı.',
+  'settings.transcriptForward.tooMany': 'En fazla {max} adres.',
+  'settings.transcriptForward.notesLabel': 'İç notları da ekle',
+  'settings.transcriptForward.notesHint':
+    'Oyuncu kopyası yerine, iç notları işaretli ekip kopyasını gönderir.',
+  'settings.transcriptForward.notesWarning':
+    'İç notlar yalnız doğrulanmış SSO alan adlarınızdaki adreslere iletilir. Başka bir adres varken kaydetme reddedilir.',
+  'settings.transcriptForward.notVerified':
+    'İç notlar yalnız doğrulanmış SSO alan adlarınızdaki adreslere gidebilir.',
 
   // Talep e-posta şablonları — TicketEmailTemplates.tsx
   'settings.ticketEmailTemplates.title': 'Talep e-posta şablonları',

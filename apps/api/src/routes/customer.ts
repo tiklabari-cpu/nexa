@@ -34,6 +34,7 @@ import {
   SALES_TRACKER_EXTERNAL_ORDER_ID_RE,
   SALES_TRACKER_MAX_AMOUNT_CENTS,
   SNEAK_PEEK_MAX_LENGTH,
+  TRANSCRIPT_REQUESTS_PER_HOUR,
   typingStateKey,
   WIDGET_UI_LOCALES,
   widgetAvailability,
@@ -95,6 +96,16 @@ import { resolveAttribution } from '../services/sales/attribution.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { missingPrechatFields, readCustomerPrechat } from '../services/websites/prechat.js';
 import { readCustomerAvailabilityMode } from '../services/websites/availability.js';
+import { transcriptLines } from '../services/chat/transcript-export.js';
+import {
+  latestTranscript,
+  spendTranscriptRequest,
+  transcriptRequestAddress,
+} from '../services/chat/transcript-request.js';
+import {
+  renderTranscript,
+  type TranscriptLine,
+} from '../services/notifications/chat-transcript.js';
 
 const startSchema = z
   .object({
@@ -210,6 +221,11 @@ const contactEmailSchema = z
   .strict();
 /** Answers to the e-mail card one visitor may send in an hour. */
 const CONTACT_EMAILS_PER_HOUR = 10;
+
+/** "E-mail me the transcript" (WG-06): where to, else the address given before. */
+const transcriptRequestSchema = z
+  .object({ email: z.string().trim().email().max(254).optional() })
+  .strict();
 
 const typingSchema = z.object({
   is_typing: z.boolean(),
@@ -1005,6 +1021,95 @@ export default async function customerRoutes(
       // After the commit: `evaluate` reads `is_lead` back, so it has to see the write.
       if (saved.becameLead) await goals.record(request.tenant(), principal.customerId);
       return reply.status(204).send();
+    },
+  );
+
+  /**
+   * "E-mail me the transcript" (WG-06 · tm 345, K26): the player's copy of
+   * their latest connection — the closing chat no longer mails it unasked.
+   * See `services/chat/transcript-request.ts`: the visitor's budget (five an
+   * hour), the connection, its own budget (three), the address, then the
+   * copy in the player's language without a note, handed over after the
+   * answer as `chat_transcript` (the external daily cap). On the record as
+   * the panel's mails are (`chat.transcript_emailed`), by the customer.
+   */
+  app.post(
+    '/customer/chat/transcript',
+    { config: { principals: ['customer'] } },
+    async (request, reply) => {
+      const principal = request.requirePrincipal();
+      if (principal.kind !== 'customer') throw ApiError.notFound('Resource not found.');
+      const body = parse(transcriptRequestSchema, request.body ?? {});
+      await consumePressBudget(request, principal, {
+        key: 'transcript-request',
+        limit: TRANSCRIPT_REQUESTS_PER_HOUR,
+        message: 'Too many transcript requests — try again later.',
+      });
+      const tenant = request.tenant();
+
+      const { scope, frame } = await request.withTenant(async (tx) => {
+        const scope = await latestTranscript(tx, principal.customerId);
+        const organization = await tx.organization.findUnique({
+          where: { id: tenant.organizationId },
+          select: { name: true, timezone: true },
+        });
+        return {
+          scope,
+          frame: {
+            workspaceName: organization?.name ?? 'SiyahTuş',
+            timeZone: organization?.timezone ?? 'UTC',
+          },
+        };
+      });
+      bindChatLogContext(request, { chatId: scope.chatId, threadId: scope.threadId });
+      await spendTranscriptRequest(
+        app.rateLimiter,
+        principal.organizationId,
+        scope.threadId,
+        (error) =>
+          request.log.error({ err: error }, 'transcript-request budget unavailable — allowing'),
+      );
+      const recipient = transcriptRequestAddress(body.email, scope.customer.email);
+
+      const lines: TranscriptLine[] = [];
+      for await (const page of transcriptLines((fn) => request.withTenant(fn), scope, 'customer')) {
+        lines.push(...page);
+      }
+      // The language their widget showed (WG-02); the mails speak two.
+      const content = renderTranscript({
+        audience: 'customer',
+        chatId: scope.chatId,
+        customerName: scope.customer.name,
+        lines,
+        frame: {
+          ...frame,
+          locale: isMailLocale(scope.customer.locale) ? scope.customer.locale : 'en',
+        },
+      });
+      if (content === null) {
+        throw ApiError.validation('This conversation has no messages to send.', {
+          reason: 'empty_transcript',
+        });
+      }
+
+      await request.withTenant((tx) =>
+        writeAuditEntry(tx, request.auditContext(), {
+          action: 'chat.transcript_emailed',
+          target: `chat:${scope.chatId}`,
+          metadata: {
+            thread_id: scope.threadId,
+            audience: 'customer',
+            recipient_domain: recipient.domain,
+            to_player: recipient.toStored,
+            requested_by: 'player',
+          },
+        }),
+      );
+      app.backgroundMail.send(
+        { to: recipient.to, licenseId: tenant.licenseId, kind: 'chat_transcript', ...content },
+        (outcome) => logUnsentMail(app.log, 'chat.transcript_mail', outcome),
+      );
+      return reply.code(202).send({ accepted: true });
     },
   );
 

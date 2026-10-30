@@ -666,6 +666,45 @@ export interface CampaignWriteResult extends Campaign {
   matched: number;
 }
 
+/**
+ * A campaign's funnel over the sends in a window (EN-05): the card's numbers
+ * plus `clicks` (a button on the card pressed). `chats`, `clicks` and
+ * `conversion` are subsets of `displayed`; `suppressed` is disjoint from it.
+ */
+export interface CampaignReportCounts {
+  displayed: number;
+  clicks: number;
+  chats: number;
+  conversion: number;
+  suppressed: number;
+}
+
+/** One campaign's totals in `GET /reports/campaigns`. */
+export interface CampaignReportRow extends CampaignReportCounts {
+  campaign_id: string;
+  name: string;
+  archived: boolean;
+}
+
+/** One campaign's figures for one UTC day (the day its sends were written). */
+export interface CampaignReportDayRow extends CampaignReportCounts {
+  date: string;
+  campaign_id: string;
+  name: string;
+}
+
+/** `GET /reports/campaigns` (EN-05). */
+export interface CampaignsReport {
+  range: { from: string; to: string };
+  totals: CampaignReportCounts;
+  campaigns: CampaignReportRow[];
+  by_day: CampaignReportDayRow[];
+  previous_period: CampaignReportCounts & {
+    baseline: 'previous_period' | 'previous_year';
+    range: { from: string; to: string };
+  };
+}
+
 // --- Goals (FR-MOD-13.3) -----------------------------------------------------
 
 /**

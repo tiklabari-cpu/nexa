@@ -45,6 +45,11 @@ import {
   visibleReportGroups,
 } from './reports-export.js';
 import {
+  CAMPAIGN_REPORT_FILTER_MAX,
+  campaignReport,
+  campaignsBenchmark,
+} from '../services/reports/campaign-report.js';
+import {
   achievedGoalCount,
   aiAgentBenchmark,
   aiAgentSkillRunCount,
@@ -221,6 +226,16 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   return result.data;
 }
 
+/**
+ * `campaign_id`, once or repeated (EN-05): the campaigns a campaign report is
+ * narrowed to. A single value is a list of one; the cap keeps the `ANY(...)`
+ * list a request can make the database read to something small.
+ */
+const campaignIdsParam = z
+  .union([z.string().uuid(), z.array(z.string().uuid()).max(CAMPAIGN_REPORT_FILTER_MAX)])
+  .transform((value) => (typeof value === 'string' ? [value] : value))
+  .optional();
+
 const rangeQuery = z.object({
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
@@ -244,6 +259,7 @@ const rangeQuery = z.object({
 const exportQuery = rangeQuery.extend({
   group: z.string().min(1).max(64),
   format: z.enum(['csv', 'pdf']).default('csv'),
+  campaign_id: campaignIdsParam,
 });
 
 /**
@@ -1822,6 +1838,33 @@ export default async function reportRoutes(
     return reply.send(body);
   });
 
+  // Campaigns (EN-05): per-campaign and per-day displayed / clicks / chats /
+  // conversion / suppressed, archived campaigns included (see
+  // services/reports/campaign-report.ts). Same reports_read + withTenantRead
+  // surface as the other tabs, and the same aggregation the `campaigns` export
+  // group serialises.
+  app.get(
+    '/reports/campaigns',
+    { config: { scopes: ['reports_read'] } },
+    async (request, reply) => {
+      const { from, to, baseline } = resolveReportQuery(request.query);
+      const filter = parse(z.object({ campaign_id: campaignIdsParam }), request.query);
+      const tenant = request.tenant();
+
+      const body = await request.withTenantRead(async (tx) => {
+        const report = await campaignReport(tx, tenant.licenseId, from, to, filter.campaign_id);
+        return withBenchmark(
+          { range: { from: from.toISOString(), to: to.toISOString() }, ...report },
+          from,
+          to,
+          baseline,
+          (window) => campaignsBenchmark(tx, tenant.licenseId, window, filter.campaign_id),
+        );
+      });
+      return reply.send(body);
+    },
+  );
+
   // Staffing forecast (PRD §5.3-Vardiya): required / scheduled / rostered agents
   // per UTC weekday-hour, derived from historical volume, the presence event log
   // and the saved work schedules (see buildStaffingForecastReport). Same
@@ -1906,7 +1949,9 @@ export default async function reportRoutes(
 
     const tenant = request.tenant();
     const table = await request.withTenantRead((tx) =>
-      buildGroupCsv(tx, tenant.licenseId, group.id, from, to, parsed.data.baseline),
+      buildGroupCsv(tx, tenant.licenseId, group.id, from, to, parsed.data.baseline, {
+        campaignIds: parsed.data.campaign_id,
+      }),
     );
 
     // A report is a point-in-time snapshot; never let a shared cache serve a

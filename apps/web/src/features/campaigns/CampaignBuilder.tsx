@@ -27,6 +27,7 @@ import {
 } from '@siyahtus/types';
 import { CampaignCardEditor, blankCard, cardProblems } from './CampaignCardEditor.js';
 import { CampaignRuleEditor } from './CampaignRuleEditor.js';
+import type { CampaignDraft } from './templates.js';
 import {
   conditionsFromDrafts,
   draftProblem,
@@ -50,17 +51,22 @@ function fromDateTimeLocal(value: string): string | null {
 
 export function CampaignBuilder({
   campaign,
+  draft = null,
   api,
   onClose,
   onSaved,
 }: {
   /** The campaign to edit, or null to create a new one. */
   campaign: Campaign | null;
+  /** A template to start a new campaign from (EN-05): filled in, saved only on Create. */
+  draft?: CampaignDraft | null;
   api: ApiClient;
   onClose: () => void;
   onSaved: (result: { campaign: Campaign; reached: number }) => void;
 }): ReactElement {
   const t = useTranslate();
+  // What the form opens with: the campaign being edited, else the template.
+  const base = campaign ?? draft;
   const save = useMutation({
     mutationFn: (body: unknown) =>
       campaign
@@ -69,7 +75,7 @@ export function CampaignBuilder({
   });
 
   // The trigger is a list of rows, not a string, so it lives beside the form.
-  const [initialRules] = useState(() => draftsFromConditions(campaign?.conditions));
+  const [initialRules] = useState(() => draftsFromConditions(base?.conditions));
   const [rules, setRules] = useState<{ match: CampaignMatchMode; drafts: RuleDraft[] }>(
     initialRules,
   );
@@ -79,10 +85,10 @@ export function CampaignBuilder({
   const rulesReady = rules.drafts.every((draft) => draftProblem(draft) === null);
 
   // Text or a card (EN-02), beside the form like the rules: a card is a tree.
-  const initialKind: CampaignContentType = campaign?.content.type === 'card' ? 'card' : 'text';
+  const initialKind: CampaignContentType = base?.content.type === 'card' ? 'card' : 'text';
   const [kind, setKind] = useState<CampaignContentType>(initialKind);
   const [initialCard] = useState<RichCard>(() => {
-    const saved = campaign?.content.card;
+    const saved = base?.content.card;
     return saved
       ? { ...saved, title: saved.title ?? '', image: saved.image ?? { url: '', alt: '' } }
       : blankCard();
@@ -94,8 +100,8 @@ export function CampaignBuilder({
 
   const form = useForm({
     initial: {
-      name: campaign?.name ?? '',
-      message: campaign?.content.message ?? '',
+      name: base?.name ?? '',
+      message: base?.content.message ?? '',
       starts_at: toDateTimeLocal(campaign?.starts_at ?? null),
       ends_at: toDateTimeLocal(campaign?.ends_at ?? null),
     },

@@ -72,6 +72,53 @@ test.describe('campaigns', () => {
     await agentPage.screenshot({ path: 'kanit/04-campaigns.png', fullPage: true });
   });
 
+  // EN-05 (tm 354): a template opens as an editable draft; a campaign can be
+  // copied (switched off) and deleted behind a confirmation; the report names
+  // what is left.
+  test('starts from a template, copies and deletes a campaign, and opens the report (EN-05)', async ({
+    agentPage,
+  }) => {
+    const name = `Deposit nudge ${Date.now()}`;
+    const row = (title: string) =>
+      agentPage
+        .getByRole('listitem')
+        .filter({ has: agentPage.getByRole('heading', { name: title, exact: true }) });
+
+    await agentPage.goto('/app/customers/campaigns');
+    await agentPage.getByRole('button', { name: 'From a template' }).click();
+    await agentPage.getByRole('button', { name: 'Use the “Deposit help” template' }).click();
+
+    // The draft is filled in and editable; nothing exists until Create.
+    const dialog = agentPage.getByRole('dialog', { name: 'New campaign' });
+    await expect(dialog.getByLabel('Name')).toHaveValue('Deposit help');
+    await expect(dialog.getByLabel('Message')).not.toHaveValue('');
+    await dialog.getByLabel('Name').fill(name);
+    await dialog.getByRole('button', { name: 'Create campaign' }).click();
+    await expect(row(name)).toBeVisible();
+
+    // A copy is a switched-off twin.
+    await row(name)
+      .getByRole('button', { name: `Copy “${name}”` })
+      .click();
+    const copy = row(`${name} (copy)`);
+    await expect(copy).toBeVisible();
+    await expect(copy.getByRole('button', { name: 'Turn on' })).toBeVisible();
+
+    // Delete asks first, then the campaign leaves the list.
+    await copy.getByRole('button', { name: `Delete “${name} (copy)”` }).click();
+    const confirm = agentPage.getByRole('dialog');
+    await expect(confirm.getByText(`Delete “${name} (copy)”?`)).toBeVisible();
+    await confirm.getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect(copy).toHaveCount(0);
+    await expect(row(name)).toBeVisible();
+
+    // The report lists the campaign that is left, and offers the CSV.
+    await agentPage.getByRole('button', { name: 'Report', exact: true }).click();
+    await expect(agentPage.getByTestId('campaign-report-totals')).toBeVisible();
+    await expect(agentPage.getByRole('cell', { name, exact: true }).first()).toBeVisible();
+    await expect(agentPage.getByRole('button', { name: 'Export CSV' })).toBeEnabled();
+  });
+
   test('a flagged player is shown no campaign: the card counts it and the inbox says so (EN-01)', async ({
     agentPage,
     browser,

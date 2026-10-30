@@ -124,6 +124,8 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/campaigns/CampaignRuleEditor.tsx',
   'src/features/campaigns/CampaignCardEditor.tsx',
   'src/features/campaigns/RichCardView.tsx',
+  'src/features/campaigns/CampaignsReportView.tsx',
+  'src/features/campaigns/CampaignTemplateGallery.tsx',
   'src/features/goals/GoalsPage.tsx',
   'src/features/goals/GoalBuilder.tsx',
   'src/features/goals/GoalsFunnel.tsx',

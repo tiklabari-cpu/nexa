@@ -1110,7 +1110,11 @@ describe('module parity matrix — what is still owed', () => {
       // 356 -> 357 with `POST /customer/campaigns/{campaignId}/clicked` (tm 353) — a
       // campaign card's link or coupon button pressed in the widget (EN-02), a visitor
       // surface; nothing for the agent app.
-      contractEndpoints: 357,
+      // 357 -> 359 with `POST /campaigns/{campaignId}/duplicate` and `GET /reports/campaigns`
+      // (tm 354) — copying a campaign and the campaign report (EN-05), both in the web
+      // Campaigns screen; the handset has no campaign builder or report tab, and nothing
+      // here re-scopes.
+      contractEndpoints: 359,
       scopeBoundaries: 1,
     });
   });

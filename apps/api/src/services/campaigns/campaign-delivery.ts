@@ -92,6 +92,8 @@ export interface PendingSend {
     content: unknown;
     startsAt: Date | null;
     endsAt: Date | null;
+    /** Set once the campaign is archived (EN-05): never delivered again. */
+    archivedAt?: Date | null;
     /** The trigger; only read for a campaign whose card waits for the browser. */
     conditions?: unknown;
   };
@@ -270,6 +272,7 @@ export async function deliverPendingCampaign(
           content: true,
           startsAt: true,
           endsAt: true,
+          archivedAt: true,
           conditions: true,
         },
       },

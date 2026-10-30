@@ -1929,6 +1929,9 @@ model Campaign {
   endsAt     DateTime? @map("ends_at") @db.Timestamptz(6)
   recurring  Boolean   @default(false)
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// Soft delete (EN-05 · tm 354): the list hides it, it never fires or delivers
+  /// again and cannot be switched back on; its sends stay for the report.
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz(6)
 
   license License        @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   sends   CampaignSend[]

@@ -38,6 +38,7 @@ import {
   type BenchmarkBaseline,
 } from '../../routes/reports-metrics.js';
 import { type CsvCell } from '../../routes/reports-export.js';
+import { campaignReportCsv, campaignsBenchmark } from './campaign-report.js';
 import { reviewInsights, type ReviewInsight } from './review-insights.js';
 import { aiResolvedSql } from '../billing/ai-resolution.js';
 
@@ -1416,6 +1417,7 @@ export async function buildGroupCsv(
   from: Date,
   to: Date,
   baseline?: BenchmarkBaseline,
+  filters: GroupFilters = {},
 ): Promise<{ headers: string[]; rows: CsvCell[][] }> {
   const table = await groupCsvTable(
     tx,
@@ -1424,15 +1426,33 @@ export async function buildGroupCsv(
     from,
     to,
     baseline ?? DEFAULT_BENCHMARK_BASELINE,
+    filters,
   );
   if (baseline === undefined) return table;
   return {
     headers: table.headers,
     rows: [
       ...table.rows,
-      ...(await benchmarkCsvRows(tx, licenseId, groupId, from, to, baseline, table.headers.length)),
+      ...(await benchmarkCsvRows(
+        tx,
+        licenseId,
+        groupId,
+        from,
+        to,
+        baseline,
+        table.headers.length,
+        filters,
+      )),
     ],
   };
+}
+
+/**
+ * Filters an export may carry beyond the window. Only the `campaigns` group
+ * reads one today (EN-05); every other group ignores them.
+ */
+export interface GroupFilters {
+  campaignIds?: readonly string[];
 }
 
 /**
@@ -1456,12 +1476,13 @@ async function benchmarkCsvRows(
   to: Date,
   baseline: BenchmarkBaseline,
   columns: number,
+  filters: GroupFilters,
 ): Promise<CsvCell[][]> {
   const window = benchmarkWindow(from, to, baseline);
   // The same measurement function the group's JSON report hands to
   // `withBenchmark`, so the exported benchmark is the number the tab shows for
   // that window — the invariant every other row in this file already keeps.
-  const figures = await groupBenchmark(tx, licenseId, groupId, window);
+  const figures = await groupBenchmark(tx, licenseId, groupId, window, filters);
 
   const rows: CsvCell[][] = [
     ['benchmark_baseline', baseline],
@@ -1539,6 +1560,7 @@ function groupBenchmark(
   licenseId: bigint,
   groupId: string,
   window: { from: Date; to: Date },
+  filters: GroupFilters = {},
 ): Promise<Record<string, unknown>> {
   switch (groupId) {
     case 'overview':
@@ -1562,6 +1584,8 @@ function groupBenchmark(
       return salesBenchmark(tx, licenseId, window);
     case 'goals':
       return goalsBenchmark(tx, licenseId, window);
+    case 'campaigns':
+      return campaignsBenchmark(tx, licenseId, window, filters.campaignIds);
     case 'topics':
       // Topics keeps each cluster's baseline volume on its own row
       // (`previous_volume`), where it can be matched to the topic it belongs
@@ -1584,6 +1608,7 @@ async function groupCsvTable(
   from: Date,
   to: Date,
   baseline: BenchmarkBaseline,
+  filters: GroupFilters,
 ): Promise<{ headers: string[]; rows: CsvCell[][] }> {
   switch (groupId) {
     case 'overview': {
@@ -1809,6 +1834,8 @@ async function groupCsvTable(
         ],
       };
     }
+    case 'campaigns':
+      return campaignReportCsv(tx, licenseId, from, to, filters.campaignIds);
     case 'sales': {
       // Same figures the JSON report reads ({@link salesReportFigures}), so
       // this can never disagree with what the tab shows — real values once

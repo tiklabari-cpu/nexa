@@ -406,6 +406,98 @@ export const customers: Messages = {
   'campaigns.builder.saving': 'Kaydediliyor…',
   'campaigns.builder.saveChanges': 'Değişiklikleri kaydet',
   'campaigns.builder.create': 'Kampanya oluştur',
+  'campaigns.page.viewAriaLabel': 'Kampanya görünümü',
+  'campaigns.page.view.list': 'Kampanyalar',
+  'campaigns.page.view.report': 'Rapor',
+  'campaigns.page.fromTemplate': 'Şablondan oluştur',
+  'campaigns.page.copy': 'Kopyala',
+  'campaigns.page.copyNamed': '“{name}” kampanyasını kopyala',
+  'campaigns.page.copyName': '{name} (kopya)',
+  'campaigns.page.delete': 'Sil',
+  'campaigns.page.deleteNamed': '“{name}” kampanyasını sil',
+  'campaigns.page.delete.title': '“{name}” silinsin mi?',
+  'campaigns.page.delete.description':
+    'Listeden kalkar ve ziyaretçilere ulaşmayı bırakır; yeniden açılamaz, ama kopyalanabilir. Geçmişi raporda kalır.',
+  'campaigns.page.delete.confirm': 'Sil',
+  'campaigns.page.delete.failed': '“{name}” silinemedi.',
+  'campaigns.page.notice.copied': '“{name}” kapalı olarak oluşturuldu. Hazır olunca açın.',
+  'campaigns.page.notice.deleted': '“{name}” silindi. Geçmişi raporda kalır.',
+  'campaigns.gallery.title': 'Şablondan başlayın',
+  'campaigns.gallery.description':
+    'Birini seçin, sonra istediğinizi değiştirin. Kampanyayı oluşturana kadar hiçbir şey kaydedilmez ya da gönderilmez.',
+  'campaigns.gallery.category.greet': 'Karşıla',
+  'campaigns.gallery.category.help': 'Yardım et',
+  'campaigns.gallery.category.promotion': 'Promosyon',
+  'campaigns.gallery.promotionNote':
+    'Promosyon: risk bayraklı oyunculara gösterilmez. Sonunda sorumlu oyun satırı hazır gelir.',
+  'campaigns.gallery.use': 'Kullan',
+  'campaigns.gallery.useNamed': '“{name}” şablonunu kullan',
+  'campaigns.template.welcome_new.name': 'Hoş geldiniz (yeni ziyaretçi)',
+  'campaigns.template.welcome_new.description':
+    'Bir sayfada 10 saniye kalan ilk kez gelen ziyaretçiyi karşılar.',
+  'campaigns.template.welcome_new.message':
+    'Merhaba, hoş geldiniz! Aklınıza takılan bir şey olursa buraya yazmanız yeterli, yardımcı olurum.',
+  'campaigns.template.welcome_back.name': 'Tekrar hoş geldiniz',
+  'campaigns.template.welcome_back.description':
+    '10 saniye kalan, daha önce gelmiş ziyaretçiyi karşılar.',
+  'campaigns.template.welcome_back.message':
+    'Tekrar hoş geldiniz! Bugün size nasıl yardımcı olabilirim?',
+  'campaigns.template.deposit_help.name': 'Yatırım yardımı',
+  'campaigns.template.deposit_help.description':
+    'Yatırım sayfasında 30 saniye kalan ziyaretçiye yardım önerir.',
+  'campaigns.template.deposit_help.message':
+    'Yatırım yaparken takıldığınız bir yer mi var? Buraya yazın, uygun yöntemi birlikte seçelim.',
+  'campaigns.template.withdraw_help.name': 'Çekim yardımı',
+  'campaigns.template.withdraw_help.description':
+    'Çekim sayfasında bekleyen ziyaretçiye yardım önerir.',
+  'campaigns.template.withdraw_help.message':
+    'Para çekme işleminizle ilgili bir sorunuz mu var? Size yardımcı olabilirim.',
+  'campaigns.template.login_help.name': 'Giriş sorunu',
+  'campaigns.template.login_help.description':
+    'Giriş sayfasında bekleyen ziyaretçiye yardım önerir.',
+  'campaigns.template.login_help.message':
+    'Hesabınıza giriş yapamıyor musunuz? Buraya yazın, birlikte bakalım.',
+  'campaigns.template.exit_intent.name': 'Çıkış niyeti: soru var mı?',
+  'campaigns.template.exit_intent.description':
+    'Sayfadan ayrılmak üzere olan ziyaretçiye tek düğmeli bir kart gösterir.',
+  'campaigns.template.exit_intent.cardTitle': 'Gitmeden önce',
+  'campaigns.template.exit_intent.cardBody':
+    'Yanıtlamamızı istediğiniz bir soru var mı? Birkaç saniyenizi alır.',
+  'campaigns.template.exit_intent.cardButton': 'Evet, sorum var',
+  'campaigns.template.welcome_bonus_terms.name': 'Hoş geldin bonusu koşulları',
+  'campaigns.template.welcome_bonus_terms.description':
+    'Bonus sayfasındaki ziyaretçiye koşulların bir mesaj uzağında olduğunu hatırlatır.',
+  'campaigns.template.welcome_bonus_terms.message':
+    'Hoş geldin bonusunun çevrim ve süre koşullarını merak ediyorsanız buraya yazın, açıklayayım. Yalnızca 18 yaş ve üzeri içindir; limitlerinizi belirlemeyi unutmayın.',
+  'campaigns.template.cashback_terms.name': 'Kayıp bonusu koşulları',
+  'campaigns.template.cashback_terms.description':
+    'Promosyon sayfasındaki ziyaretçiye koşulları birlikte gözden geçirmeyi önerir.',
+  'campaigns.template.cashback_terms.message':
+    'Bu promosyonun koşullarını birlikte gözden geçirelim mi? Buraya yazın. Eğlence amaçlı oynayın ve limitlerinizi belirleyin.',
+  'campaigns.report.title': 'Kampanya raporu',
+  'campaigns.report.rangeLabel': 'Dönem',
+  'campaigns.report.lastDays': 'Son {days} gün',
+  'campaigns.report.campaignLabel': 'Kampanya',
+  'campaigns.report.allCampaigns': 'Tüm kampanyalar',
+  'campaigns.report.archivedName': '{name} (silindi)',
+  'campaigns.report.archived': 'Silindi',
+  'campaigns.report.export': 'CSV indir',
+  'campaigns.report.exporting': 'İndiriliyor…',
+  'campaigns.report.loadError':
+    'Kampanya raporu yüklenemedi. API’ye ulaşılabildiğinden emin olup yeniden deneyin.',
+  'campaigns.report.emptyTitle': 'Kampanya hareketi yok',
+  'campaigns.report.emptyDescription': 'Bu dönemde hiçbir kampanya bir ziyaretçiye ulaşmadı.',
+  'campaigns.report.col.campaign': 'Kampanya',
+  'campaigns.report.col.day': 'Gün',
+  'campaigns.report.col.displayed': 'Gösterilen',
+  'campaigns.report.col.clicks': 'Tıklama',
+  'campaigns.report.col.chats': 'Sohbet',
+  'campaigns.report.col.conversion': 'Dönüşüm',
+  'campaigns.report.col.suppressed': 'Gösterilmeyen (risk)',
+  'campaigns.report.byCampaignCaption': 'Dönemin kampanya rakamları',
+  'campaigns.report.byDayCaption': 'Günlere göre kampanya rakamları',
+  'campaigns.report.dayNote':
+    'Gün, ziyaretçinin kampanyaya uyduğu gündür (UTC); sonrasında yaptıkları o güne yazılır.',
 
   // Goals — GoalsPage.tsx
   'goals.page.description': 'Bir ziyaretçinin ulaşmasının dönüşüm sayılacağı sayfaları tanımlayın.',

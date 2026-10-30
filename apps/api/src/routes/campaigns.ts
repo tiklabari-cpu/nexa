@@ -94,6 +94,8 @@ const updateBody = z
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
+const duplicateBody = z.object({ name: z.string().trim().min(1).max(120).optional() });
+
 const campaignIdSchema = z.string().uuid();
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
@@ -175,6 +177,34 @@ export default async function campaignRoutes(
     // it counts delivered sends, and nothing is delivered yet at this instant.
     return reply.status(201).send({ ...result.campaign, matched: result.sent });
   });
+
+  // Delete is an archive (EN-05): the campaign leaves the list and stops firing,
+  // its sends stay for the report.
+  app.delete<{ Params: { campaignId: string } }>(
+    '/campaigns/:campaignId',
+    { config: { scopes: ['customers:rw'] } },
+    async (request, reply) => {
+      const id = parse(campaignIdSchema, request.params.campaignId);
+      const tenant = request.tenant();
+      await request.withTenant((tx) => campaigns.archive(tx, tenant, id));
+      return reply.status(204).send();
+    },
+  );
+
+  // A copy, switched off — nothing is sent until its owner turns it on.
+  app.post<{ Params: { campaignId: string } }>(
+    '/campaigns/:campaignId/duplicate',
+    { config: { scopes: ['customers:rw'] } },
+    async (request, reply) => {
+      const id = parse(campaignIdSchema, request.params.campaignId);
+      const body = parse(duplicateBody, request.body ?? {});
+      const tenant = request.tenant();
+      const result = await request.withTenant((tx) =>
+        campaigns.duplicate(tx, tenant, id, body.name),
+      );
+      return reply.status(201).send({ ...result.campaign, matched: result.sent });
+    },
+  );
 
   app.patch<{ Params: { campaignId: string } }>(
     '/campaigns/:campaignId',

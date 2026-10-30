@@ -54,6 +54,9 @@ import {
 } from './campaign-matching.js';
 import { visitVariablesOf } from './campaign-trigger.js';
 
+/** The longest campaign name (the create body's cap). */
+const CAMPAIGN_NAME_MAX = 120;
+
 /** How recent a visit has to be for a visitor to count as "on the site now". */
 const LIVE_WINDOW_MINUTES = 30;
 
@@ -126,7 +129,7 @@ export class CampaignService {
     now: Date = new Date(),
   ): Promise<{ items: Campaign[]; total: number }> {
     const rows = await tx.campaign.findMany({
-      where: { licenseId: tenant.licenseId },
+      where: { licenseId: tenant.licenseId, archivedAt: null },
       orderBy: { createdAt: 'desc' },
       include: CAMPAIGN_INCLUDE,
     });
@@ -248,8 +251,10 @@ export class CampaignService {
     patch: CampaignPatch,
     now: Date = new Date(),
   ): Promise<CampaignWriteResult> {
+    // An archived campaign is gone as far as an edit is concerned (EN-05): it
+    // cannot be switched back on, only copied.
     const existing = await tx.campaign.findFirst({
-      where: { id, licenseId: tenant.licenseId },
+      where: { id, licenseId: tenant.licenseId, archivedAt: null },
       select: { status: true, conditions: true, content: true, startsAt: true, endsAt: true },
     });
     if (!existing) throw ApiError.notFound('Campaign not found.');
@@ -309,6 +314,63 @@ export class CampaignService {
 
     const fired = await this.#fireIfRunning(tx, tenant, id, resultingConditions, status, now);
     return { campaign: await this.#reload(tx, tenant, id), ...fired };
+  }
+
+  /**
+   * Delete a campaign — an archive, not a removal (EN-05 · tm 354). It leaves
+   * the list, is switched off in the same write, and the trigger and delivery
+   * paths read it as inactive from then on, so a send it had queued is never
+   * shown. Its sends stay: the report keeps the history, and a customer
+   * erasure still removes them through the customer row. Compare-and-set on
+   * `archived_at IS NULL`, so two archives cannot both succeed and an
+   * archived or unknown id is the same 404.
+   */
+  async archive(
+    tx: TenantClient,
+    tenant: TenantContext,
+    id: string,
+    now: Date = new Date(),
+  ): Promise<void> {
+    const result = await tx.campaign.updateMany({
+      where: { id, licenseId: tenant.licenseId, archivedAt: null },
+      data: { archivedAt: now, status: 'inactive' },
+    });
+    if (result.count === 0) throw ApiError.notFound('Campaign not found.');
+  }
+
+  /**
+   * A copy of a campaign with the same trigger, content, schedule and
+   * recurrence, switched off (EN-05): nothing is sent until its owner turns it
+   * on. The source may be archived — a copy is the only way back. Nothing is
+   * re-validated: the copy is what was saved, and refusing to copy a campaign
+   * that predates a later rule would strand it.
+   */
+  async duplicate(
+    tx: TenantClient,
+    tenant: TenantContext,
+    id: string,
+    name?: string,
+  ): Promise<CampaignWriteResult> {
+    const source = await tx.campaign.findFirst({
+      where: { id, licenseId: tenant.licenseId },
+    });
+    if (!source) throw ApiError.notFound('Campaign not found.');
+    const copyName = (name?.trim() || `${source.name} (copy)`).slice(0, CAMPAIGN_NAME_MAX);
+    const created = await tx.campaign.create({
+      data: {
+        licenseId: tenant.licenseId,
+        name: copyName,
+        type: source.type,
+        status: 'inactive',
+        conditions: source.conditions as Prisma.InputJsonValue,
+        content: source.content as Prisma.InputJsonValue,
+        startsAt: source.startsAt,
+        endsAt: source.endsAt,
+        recurring: source.recurring,
+      },
+      select: { id: true },
+    });
+    return { campaign: await this.#reload(tx, tenant, created.id), sent: 0, invited: [] };
   }
 
   /** A closed schedule window (`ends_at <= starts_at`) is a 400, not a DB 500. */

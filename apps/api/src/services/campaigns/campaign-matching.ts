@@ -381,9 +381,16 @@ export function deriveActiveIntent(
  * those rows back on.
  */
 export function resolveCampaignStatus(
-  campaign: { status: string; startsAt: Date | null; endsAt: Date | null },
+  campaign: {
+    status: string;
+    startsAt: Date | null;
+    endsAt: Date | null;
+    /** An archived campaign (EN-05) is inactive whatever its schedule says. */
+    archivedAt?: Date | null;
+  },
   now: Date,
 ): CampaignStatus {
+  if (campaign.archivedAt) return 'inactive';
   return computeCampaignStatus(
     {
       active: deriveActiveIntent(campaign, now),

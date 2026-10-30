@@ -3497,6 +3497,9 @@ export interface paths {
      *     The bucket is re-derived from each campaign's schedule as the list is
      *     read, so one whose start time has passed appears under `ongoing` rather
      *     than staying where its last save left it.
+     *
+     *     Archived campaigns (`DELETE /campaigns/{campaignId}`) are not listed in any
+     *     bucket; their history stays in `GET /reports/campaigns`.
      */
     get: operations['listCampaigns'];
     put?: never;
@@ -3527,7 +3530,19 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    delete?: never;
+    /**
+     * Delete (archive) a campaign
+     * @description A soft delete (EN-05). The campaign leaves the list, never fires again and
+     *     is never delivered again — a send it had queued but the visitor's widget
+     *     had not yet shown is dropped with it — and it cannot be switched back on
+     *     (an edit to an archived campaign is a 404; make a copy instead, see
+     *     `POST /campaigns/{campaignId}/duplicate`, which accepts an archived
+     *     source). Its sends are kept, so `GET /reports/campaigns` still reports
+     *     the history, and a customer erasure still removes them.
+     *
+     *     Archiving an already-archived or unknown campaign is a 404.
+     */
+    delete: operations['archiveCampaign'];
     options?: never;
     head?: never;
     /**
@@ -3540,6 +3555,34 @@ export interface paths {
      *     `matched` on a re-fire counts only the newly-targeted ones.
      */
     patch: operations['updateCampaign'];
+    trace?: never;
+  };
+  '/campaigns/{campaignId}/duplicate': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        campaignId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Copy a campaign
+     * @description Creates a new campaign with the source's trigger, content, schedule and
+     *     recurrence — **inactive**, so nothing is sent until its owner switches it
+     *     on, and with no sends of its own (the copy starts a fresh report). The
+     *     source may be archived: a copy is the only way back from an archive.
+     *
+     *     `name` defaults to the source's name followed by ` (copy)`, cut to 120
+     *     characters.
+     */
+    post: operations['duplicateCampaign'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
     trace?: never;
   };
   '/goals': {
@@ -10960,6 +11003,39 @@ export interface paths {
      *     result, and a retired goal keeps the conversions it already earned.
      */
     get: operations['getReportsGoals'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/campaigns': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Campaigns — displayed, clicks, chats, conversion and suppressed
+     * @description The campaign report (EN-05), counted from `campaign_sends` over the
+     *     window (default: the last 30 days). A send is placed on the UTC day it was
+     *     written — the day the visitor matched — so each day is a cohort and its
+     *     figures are nested: `displayed >= clicks, chats, conversion`. `suppressed`
+     *     counts the sends a risk flag kept from the player and is disjoint from
+     *     `displayed`.
+     *
+     *     Archived campaigns keep their history here (`archived: true`). `campaign_id`
+     *     narrows the report to the named campaigns (repeat the parameter; at most
+     *     50); an id that is not this workspace's contributes nothing. The CSV/PDF
+     *     export (`GET /reports/export?group=campaigns`) takes the same filter and
+     *     serialises the same figures: `section,date,campaign_id,name,displayed,clicks,chats,conversion,suppressed`
+     *     with a `total` row, a `campaign` row per campaign and a `day` row per
+     *     day and campaign.
+     */
+    get: operations['getReportsCampaigns'];
     put?: never;
     post?: never;
     delete?: never;
@@ -19846,6 +19922,66 @@ export interface components {
         components['schemas']['GoalFunnel'];
     };
     /**
+     * @description A campaign's funnel over the sends in a window (EN-05), counted the way
+     *     the campaign card counts it: `conversion`, `chats` and `clicks` are
+     *     subsets of `displayed`; `suppressed` sends were never shown.
+     */
+    CampaignReportCounts: {
+      /** @description Visitors the message was delivered to. */
+      displayed: number;
+      /** @description Of those, how many pressed a button on the card. */
+      clicks: number;
+      /** @description Of those, how many opened a conversation. */
+      chats: number;
+      /** @description Of those, how many reached a goal. */
+      conversion: number;
+      /** @description Matched visitors a risk flag kept the message from (EN-01). */
+      suppressed: number;
+    };
+    /**
+     * @description The `/reports/campaigns` payload (EN-05): per-campaign totals, a
+     *     day-by-campaign series and the benchmark window.
+     */
+    CampaignsReport: {
+      range: {
+        /** Format: date-time */
+        from: string;
+        /** Format: date-time */
+        to: string;
+      };
+      totals: components['schemas']['CampaignReportCounts'];
+      /**
+       * @description One row per campaign in scope, most displayed first. Without a
+       *     `campaign_id` filter that is every campaign that is not archived,
+       *     plus archived ones with sends in the window; with one, exactly the
+       *     campaigns named (a campaign nobody saw is a reportable result).
+       *     `totals` is the sum of these rows.
+       */
+      campaigns: (components['schemas']['CampaignReportCounts'] & {
+        /** Format: uuid */
+        campaign_id: string;
+        name: string;
+        archived: boolean;
+      })[];
+      /**
+       * @description One row per UTC day and campaign that has sends, oldest day first.
+       *     A send belongs to the day it was written — the day the visitor
+       *     matched — and carries its later outcome (delivered, clicked, chat,
+       *     conversion) with it, so a day's row is a cohort and the funnel
+       *     inside it is always nested. Sums to `totals`.
+       */
+      by_day: (components['schemas']['CampaignReportCounts'] & {
+        /** Format: date */
+        date: string;
+        /** Format: uuid */
+        campaign_id: string;
+        name: string;
+      })[];
+      /** @description The same totals measured over the benchmark window. */
+      previous_period: components['schemas']['BenchmarkWindow'] &
+        components['schemas']['CampaignReportCounts'];
+    };
+    /**
      * @description A ticket rule's trigger (FR-MOD-08.6.2). Every key set must hold (AND).
      *     An empty predicate matches nothing, so a rule with no condition is
      *     rejected rather than saved to fire at every ticket.
@@ -28592,6 +28728,30 @@ export interface operations {
       429: components['responses']['TooManyRequests'];
     };
   };
+  archiveCampaign: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        campaignId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Archived */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
   updateCampaign: {
     parameters: {
       query?: never;
@@ -28620,6 +28780,39 @@ export interface operations {
     responses: {
       /** @description Updated */
       200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CampaignWriteResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  duplicateCampaign: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        campaignId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          name?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The copy */
+      201: {
         headers: {
           [name: string]: unknown;
         };
@@ -40148,6 +40341,76 @@ export interface operations {
       429: components['responses']['TooManyRequests'];
     };
   };
+  getReportsCampaigns: {
+    parameters: {
+      query?: {
+        /**
+         * @description Start of the reporting window. Defaults to 30 days before `to`.
+         *
+         *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
+         *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
+         *     a read replica or a column-store analytics warehouse, neither of which
+         *     this deployment has, so the window a single query may scan is bounded
+         *     instead. 366 rather than 365 so a twelve-month window that spans a leap
+         *     day is not the one that fails. The limit applies to the group endpoints
+         *     and to `/reports/export` alike — both run the same aggregation, so
+         *     capping only the download would leave the identical scan one query
+         *     string away.
+         */
+        from?: components['parameters']['ReportRangeFrom'];
+        /**
+         * @description End of the reporting window. Defaults to now. The 366-day span limit
+         *     described on `from` is measured across this pair.
+         */
+        to?: components['parameters']['ReportRangeTo'];
+        /**
+         * @description Which of **this license's own** past windows the report is benchmarked
+         *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
+         *     `previous_period`, the comparison the Overview and Reviews reports made
+         *     before this parameter existed, so omitting it changes nothing.
+         *
+         *     - `previous_period` — the equal-length window immediately before the
+         *       requested one, ending a millisecond short of `from` so no instant
+         *       falls in both.
+         *     - `previous_year` — the same window shifted back 365 days: the
+         *       comparison for a seasonal figure, where the period immediately before
+         *       is the wrong yardstick. A fixed 365 days rather than calendar-year
+         *       arithmetic, so a leap day cannot make the two windows different
+         *       lengths.
+         *
+         *     There is deliberately **no** cross-license baseline — no industry
+         *     average, peer cohort or anonymised pool. Every report figure comes from
+         *     a license-scoped query under RLS (NFR-S4); a benchmark against other
+         *     licenses would have to read rows this tenant may not see, and
+         *     aggregation does not make that safe when the cohort can be narrowed to
+         *     one. An unrecognised value is a 400, not a silent fallback, so
+         *     `baseline=industry` fails loudly rather than appearing supported.
+         */
+        baseline?: components['parameters']['BenchmarkBaseline'];
+        /** @description Only these campaigns. Repeat the parameter for several. */
+        campaign_id?: string[];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The campaign figures for the requested window */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CampaignsReport'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
   getReportsStaffingForecast: {
     parameters: {
       query?: {
@@ -40217,7 +40480,7 @@ export interface operations {
   exportReport: {
     parameters: {
       query: {
-        /** @description Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`. */
+        /** @description Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `campaigns`. */
         group: string;
         /**
          * @description Download format. Defaults to `csv` — the only format v1 shipped, so a
@@ -40268,6 +40531,8 @@ export interface operations {
          *     `baseline=industry` fails loudly rather than appearing supported.
          */
         baseline?: components['parameters']['BenchmarkBaseline'];
+        /** @description Only for `group=campaigns`; the same filter as `GET /reports/campaigns`. Ignored by every other group. */
+        campaign_id?: string[];
       };
       header?: never;
       path?: never;

@@ -201,13 +201,143 @@ describe('CampaignsPage', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: 'New campaign' }));
     await userEvent.type(screen.getByLabelText('Name'), 'Pricing nudge');
-    await userEvent.type(screen.getByLabelText(/Trigger/), '/pricing');
+    await userEvent.type(screen.getByLabelText('Rule 1 value'), '/pricing');
     await userEvent.type(screen.getByLabelText('Message'), 'Questions about pricing?');
     await userEvent.click(screen.getByRole('button', { name: 'Create campaign' }));
 
     expect(api.post).toHaveBeenCalledWith('/campaigns', expect.anything());
     expect(
       await screen.findByText('“Pricing nudge” reached 3 on-site visitors.'),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('CampaignBuilder rules (EN-03 · tm 352.2)', () => {
+  it('builds a trigger of several rules joined by "any", and saves exactly what was built (FR-MOD-03.3.2)', async () => {
+    api.post.mockResolvedValue({ ...campaign('ongoing', 'Exit offer'), matched: 0 });
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'New campaign' }));
+    await userEvent.type(screen.getByLabelText('Name'), 'Exit offer');
+    // Nothing to join yet: the match choice appears with the second rule.
+    expect(screen.queryByLabelText('Reach visitors when')).not.toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Rule 1 value'), '/deposit');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add rule' }));
+    await userEvent.selectOptions(screen.getByLabelText('Rule 2 field'), 'time_on_page');
+    await userEvent.type(screen.getByLabelText('Rule 2 value'), '30');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add rule' }));
+    await userEvent.selectOptions(screen.getByLabelText('Rule 3 field'), 'exit_intent');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add rule' }));
+    await userEvent.selectOptions(screen.getByLabelText('Rule 4 field'), 'custom_var');
+    await userEvent.type(screen.getByLabelText('Rule 4 variable name'), 'plan');
+    await userEvent.type(screen.getByLabelText('Rule 4 value'), 'premium');
+
+    await userEvent.selectOptions(screen.getByLabelText('Reach visitors when'), 'any');
+    await userEvent.type(screen.getByLabelText('Message'), 'Wait, ten percent off.');
+    await userEvent.click(screen.getByRole('button', { name: 'Create campaign' }));
+
+    expect(api.post).toHaveBeenCalledWith(
+      '/campaigns',
+      expect.objectContaining({
+        conditions: {
+          match: 'any',
+          rules: [
+            { field: 'current_url', op: 'contains', value: '/deposit' },
+            { field: 'time_on_page', op: 'gte', value: 30 },
+            { field: 'exit_intent', op: 'equals', value: true },
+            { field: 'custom_var', op: 'contains', value: 'premium', key: 'plan' },
+          ],
+        },
+      }),
+    );
+  });
+
+  it('keeps Create off while a rule is unfinished or malformed, and says what is wrong', async () => {
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: 'New campaign' }));
+    await userEvent.type(screen.getByLabelText('Name'), 'Late');
+    await userEvent.type(screen.getByLabelText('Message'), 'Hi');
+    const create = screen.getByRole('button', { name: 'Create campaign' });
+    expect(create).toBeDisabled();
+
+    await userEvent.selectOptions(screen.getByLabelText('Rule 1 field'), 'time_on_page');
+    await userEvent.type(screen.getByLabelText('Rule 1 value'), '99999');
+    await userEvent.tab();
+    expect(await screen.findByText('Whole seconds, from 1 to 3600.')).toBeInTheDocument();
+    expect(create).toBeDisabled();
+
+    await userEvent.clear(screen.getByLabelText('Rule 1 value'));
+    await userEvent.type(screen.getByLabelText('Rule 1 value'), '45');
+    expect(create).toBeEnabled();
+  });
+
+  it('opens a campaign saved in the first shape as one URL rule, and a many-rule one as rows', async () => {
+    api.get.mockResolvedValue({
+      items: [
+        campaign('ongoing', 'Old'),
+        campaign('ongoing', 'Many', {
+          conditions: {
+            match: 'all',
+            rules: [
+              { field: 'country', op: 'equals', value: 'TR' },
+              { field: 'visitor_type', op: 'equals', value: 'returning' },
+            ],
+          },
+        }),
+      ],
+      total: 2,
+    });
+    renderPage();
+
+    const editButtons = await screen.findAllByRole('button', { name: 'Edit' });
+    await userEvent.click(editButtons[0]!);
+    expect(screen.getByLabelText('Rule 1 value')).toHaveValue('/pricing');
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Edit' }))[1]!);
+    expect(screen.getByLabelText('Rule 1 field')).toHaveValue('country');
+    expect(screen.getByLabelText('Rule 1 value')).toHaveValue('TR');
+    expect(screen.getByLabelText('Rule 2 value')).toHaveValue('returning');
+    expect(screen.getByLabelText('Reach visitors when')).toHaveValue('all');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove rule 2' }));
+    expect(screen.queryByLabelText('Rule 2 value')).not.toBeInTheDocument();
+    // One rule left: no remove button to leave an empty trigger.
+    expect(screen.queryByRole('button', { name: 'Remove rule 1' })).not.toBeInTheDocument();
+  });
+
+  it('stops at ten rules', async () => {
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: 'New campaign' }));
+    for (let i = 1; i < 10; i += 1) {
+      await userEvent.click(screen.getByRole('button', { name: 'Add rule' }));
+    }
+    expect(screen.getByRole('button', { name: 'Add rule' })).toBeDisabled();
+    expect(screen.getByText('At most 10 rules.')).toBeInTheDocument();
+  });
+
+  it('describes a many-rule campaign on its card', async () => {
+    api.get.mockResolvedValue({
+      items: [
+        campaign('ongoing', 'Many', {
+          conditions: {
+            match: 'any',
+            rules: [
+              { field: 'country', op: 'equals', value: 'TR' },
+              { field: 'exit_intent', op: 'equals', value: true },
+            ],
+          },
+        }),
+      ],
+      total: 1,
+    });
+    renderPage();
+    expect(await screen.findByText('When any of these holds:')).toBeInTheDocument();
+    expect(
+      screen.getByText('Country is TR · The visitor is about to leave the page'),
     ).toBeInTheDocument();
   });
 });

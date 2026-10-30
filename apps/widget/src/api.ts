@@ -16,6 +16,7 @@ import {
   type WidgetTokenAppearance,
   type ChallengeRequiredDetails,
   type ChallengeReason,
+  type CampaignShowWhen,
 } from '@siyahtus/types';
 
 /**
@@ -112,9 +113,12 @@ export interface WidgetState {
   /**
    * A proactive campaign message owed to this visitor (FR-MOD-03.3.2), handed
    * over on this poll and stamped delivered server-side in the same request —
-   * at-most-once, so the same `id` never arrives twice (`campaign-delivery.ts`).
+   * at-most-once, so the same `id` never arrives twice (`campaign-delivery.ts`) —
+   * unless it carries `show_when` (EN-03): the rules only the browser can decide.
+   * Then it is offered on every poll while the page still applies, and counts as
+   * delivered when the widget reports it shown (`campaignShown`).
    */
-  campaign: { id: string; message: string } | null;
+  campaign: { id: string; message: string; show_when?: CampaignShowWhen | null } | null;
   events: WidgetEvent[];
   /**
    * Who has the open connection (tm 308 · AI-29): "Talk to an agent" shows
@@ -155,6 +159,7 @@ export class WidgetApi {
    * only ever narrows once the real value is known.
    */
   #fileSharingEnabled = true;
+  #campaignTracking = false;
   /**
    * The built-in pre-chat form (WG-01) from the last mint. Starts as today's
    * form — open, all four required — which is also what a server predating
@@ -234,6 +239,11 @@ export class WidgetApi {
   /** The brand's custom texts from the last mint (WG-05), for the language it names. */
   get phrases(): MintedPhrases | null {
     return this.#phrases;
+  }
+
+  /** Whether the last mint found a campaign running: page changes are worth reporting (EN-03). */
+  get campaignTracking(): boolean {
+    return this.#campaignTracking;
   }
 
   /** The last token mint's file-sharing switch (FR-MOD-08.9.4). */
@@ -404,6 +414,7 @@ export class WidgetApi {
       rtm_url,
       widget,
       file_sharing_enabled,
+      campaign_tracking,
       prechat,
       pre_chat_form,
       post_chat_form,
@@ -417,6 +428,7 @@ export class WidgetApi {
       rtm_url?: string;
       widget?: MintedAppearance;
       file_sharing_enabled?: boolean;
+      campaign_tracking?: boolean;
       prechat?: unknown;
       pre_chat_form?: WidgetFormField[];
       post_chat_form?: WidgetFormField[];
@@ -431,6 +443,7 @@ export class WidgetApi {
       rememberLauncher(this.organizationId, widget.launcher_visibility);
     }
     if (typeof file_sharing_enabled === 'boolean') this.#fileSharingEnabled = file_sharing_enabled;
+    this.#campaignTracking = campaign_tracking === true;
     this.#prechat = normalizePrechatConfig(prechat);
     this.#preChatForm = Array.isArray(pre_chat_form) ? pre_chat_form : [];
     this.#postChatForm = Array.isArray(post_chat_form) ? post_chat_form : [];
@@ -636,6 +649,15 @@ export class WidgetApi {
   /** "Talk to an agent" (tm 308 · AI-29): the AI hands the connection to a person. */
   async requestHuman(): Promise<HumanRequestResult> {
     return this.#request('POST', '/customer/chat/request-human', { reason: 'button' });
+  }
+
+  /**
+   * A write with the visitor's token, for the lazy modules that have no method of
+   * their own here: the page and variables of campaign targeting (EN-03 ·
+   * `POST /customer/visit`) and `POST /customer/campaigns/{id}/shown`.
+   */
+  async post(path: string, body?: unknown): Promise<void> {
+    await this.#request('POST', path, body);
   }
 
   /** "E-mail me the transcript" (WG-06 · tm 345): the latest connection, to `email`. */

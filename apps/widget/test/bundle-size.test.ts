@@ -31,8 +31,16 @@ const distDir = resolve(import.meta.dirname, '../dist');
  * gzipped, and the 161 B left after tm 345 could not hold them even after the
  * build got a second compress pass and a leaner stylesheet (≈170 B won back).
  * To be confirmed by the owner (HANDOFF tm 347).
+ *
+ * Raised by three quarters of a kilobyte to 64.25 KB by tm 352.2 (EN-03): multi-rule
+ * targeting costs the host-page loader ≈0.43 KB (it alone sees the page change
+ * and the pointer leaving, so `watchVisit` cannot be a lazy chunk) and the
+ * widget ≈0.41 KB (the card hand-off, the messages from the loader, the mint's
+ * flag), against 182 B left. The rules themselves live in a lazy chunk
+ * (`src/targeting.ts`, below), so only the glue counts here. To be confirmed
+ * by the owner (HANDOFF tm 352.2).
  */
-const TOTAL_BUDGET_BYTES = 63.5 * 1024;
+const TOTAL_BUDGET_BYTES = 64.25 * 1024;
 /** The loader runs on the host page itself, so it gets a far tighter budget. */
 const LOADER_BUDGET_BYTES = 8 * 1024;
 /**
@@ -42,6 +50,13 @@ const LOADER_BUDGET_BYTES = 8 * 1024;
  */
 const HELP_BUDGET_BYTES = 6 * 1024;
 const HELP_CHUNK = /[\\/]help-[\w-]+\.js$/;
+/**
+ * The browser half of campaign targeting (EN-03, tm 352.2) is a chunk of its own
+ * too, fetched only for a workspace with a campaign running.
+ */
+const TARGETING_BUDGET_BYTES = 2 * 1024;
+const TARGETING_CHUNK = /[\\/]targeting-[\w-]+\.js$/;
+const LAZY_CHUNK = /[\\/](help|targeting)-[\w-]+\.js$/;
 
 function gzippedSize(path: string): number {
   return gzipSync(readFileSync(path), { level: 9 }).byteLength;
@@ -64,9 +79,9 @@ describe('widget bundle budget', () => {
     expect(size, `loader.js is ${size} B gzipped`).toBeLessThanOrEqual(LOADER_BUDGET_BYTES);
   });
 
-  it('keeps everything the browser downloads under 63 KB gzipped (NFR-P3)', () => {
+  it('keeps everything every page downloads under 64.25 KB gzipped (NFR-P3)', () => {
     expect(existsSync(distDir), 'run `pnpm --filter @siyahtus/widget build` first').toBe(true);
-    const assets = collectAssets(distDir).filter((file) => !HELP_CHUNK.test(file));
+    const assets = collectAssets(distDir).filter((file) => !LAZY_CHUNK.test(file));
     expect(assets.length).toBeGreaterThan(0);
 
     const total = assets.reduce((sum, file) => sum + gzippedSize(file), 0);
@@ -86,12 +101,32 @@ describe('widget bundle budget', () => {
     // Every page's chunk names the help chunk by URL and carries none of Vite's
     // preload machinery, nor a second chunk it would have to fetch.
     const pages = collectAssets(join(distDir, 'assets')).filter(
-      (file) => file.endsWith('.js') && !HELP_CHUNK.test(file),
+      (file) => file.endsWith('.js') && !LAZY_CHUNK.test(file),
     );
     expect(pages).toHaveLength(1);
     const page = readFileSync(pages[0]!, 'utf8');
     expect(page).toContain(chunks[0]!.split(/[\\/]/).pop());
     expect(page).not.toMatch(/vite:preloadError|modulepreload/);
     expect(page).not.toMatch(/^import\s*["']/m);
+  });
+
+  it('ships the targeting rules as one chunk of its own, under 2 KB, that no page imports statically (EN-03)', () => {
+    const chunks = collectAssets(distDir).filter((file) => TARGETING_CHUNK.test(file));
+    expect(chunks, 'one targeting-*.js chunk').toHaveLength(1);
+    const size = gzippedSize(chunks[0]!);
+    expect(size, `targeting chunk is ${size} B gzipped`).toBeLessThanOrEqual(
+      TARGETING_BUDGET_BYTES,
+    );
+
+    // Named by URL from the page chunk, and it pulls in nothing of its own: a
+    // value from the shared barrel would make a second chunk every page fetches.
+    const page = collectAssets(join(distDir, 'assets')).filter(
+      (file) => file.endsWith('.js') && !LAZY_CHUNK.test(file),
+    );
+    expect(readFileSync(page[0]!, 'utf8')).toContain(chunks[0]!.split(/[\\/]/).pop());
+    expect(readFileSync(chunks[0]!, 'utf8')).not.toMatch(/^import\s/m);
+    expect(
+      collectAssets(join(distDir, 'assets')).filter((file) => file.endsWith('.js')),
+    ).toHaveLength(3);
   });
 });

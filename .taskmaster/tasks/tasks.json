@@ -14965,7 +14965,7 @@
           "330"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-30T16:21:10.423Z",
+        "updatedAt": "2026-10-30T16:22:25.756Z",
         "subtasks": [
           {
             "id": 1,
@@ -14985,13 +14985,13 @@
             "description": "Hedefleme istemcisi: loader sayfa değişimi/çıkış niyeti/süre + setSessionVariables + kampanya kural editörü",
             "details": "loader/widget: pushState/popstate → iframe mesajı (debounce), siyahtus('setSessionVariables'), çıkış niyeti, sayfada kalma zamanlayıcısı, yalnız mint bayrağı olan kiracıda; CampaignBuilder kural editörü (match all/any, satır ekle/sil). Uçlar ve sözleşme önceki alt görevde bitti: `packages/contract` + üretilen tipler tek kaynak; sunucu davranışını kod haritasıyla bul (`trace_path`, `search_graph`), düzenleyeceğin dosyayı Read ile oku. Ayrıntı ve kabul maddeleri: üst görev #352 details (tek kaynak).",
             "testStrategy": "Widget birim + e2e; `pnpm test:gate`.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "352.1"
             ],
             "parentId": "352",
             "priority": "medium",
-            "updatedAt": "2026-10-16T07:00:34.672Z"
+            "updatedAt": "2026-10-30T16:22:25.756Z"
           }
         ]
       },
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-30T16:21:10.424Z",
+      "lastModified": "2026-10-30T16:22:25.757Z",
       "taskCount": 390,
       "completedCount": 351,
       "tags": [

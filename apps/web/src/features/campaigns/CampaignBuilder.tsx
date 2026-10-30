@@ -9,13 +9,20 @@
  * toast reports how many it reached.
  */
 import { useMutation } from '@tanstack/react-query';
-import { type ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import { Modal } from '../../components/ui/index.js';
 import { ApiClientError, errorMessageKey, type ApiClient } from '../../lib/api-client.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import { useCloseGuard } from '../../lib/dirty-guard.js';
 import { useTranslate } from '../../lib/i18n.js';
-import type { Campaign, CampaignWriteResult } from '@siyahtus/types';
+import type { Campaign, CampaignMatchMode, CampaignWriteResult } from '@siyahtus/types';
+import { CampaignRuleEditor } from './CampaignRuleEditor.js';
+import {
+  conditionsFromDrafts,
+  draftProblem,
+  draftsFromConditions,
+  type RuleDraft,
+} from './campaign-rules.js';
 
 /** An ISO instant as the `YYYY-MM-DDTHH:mm` a `datetime-local` input wants. */
 function toDateTimeLocal(iso: string | null): string {
@@ -51,24 +58,32 @@ export function CampaignBuilder({
         : api.post<CampaignWriteResult>('/campaigns', body),
   });
 
+  // The trigger is a list of rows, not a string, so it lives beside the form.
+  const [initialRules] = useState(() => draftsFromConditions(campaign?.conditions));
+  const [rules, setRules] = useState<{ match: CampaignMatchMode; drafts: RuleDraft[] }>(
+    initialRules,
+  );
+  const rulesChanged =
+    JSON.stringify(conditionsFromDrafts(rules.match, rules.drafts)) !==
+    JSON.stringify(conditionsFromDrafts(initialRules.match, initialRules.drafts));
+  const rulesReady = rules.drafts.every((draft) => draftProblem(draft) === null);
+
   const form = useForm({
     initial: {
       name: campaign?.name ?? '',
-      url_contains: campaign?.conditions.url_contains ?? '',
       message: campaign?.content.message ?? '',
       starts_at: toDateTimeLocal(campaign?.starts_at ?? null),
       ends_at: toDateTimeLocal(campaign?.ends_at ?? null),
     },
     validators: {
       name: required(t('campaigns.builder.nameRequired')),
-      url_contains: required(t('campaigns.builder.triggerRequired')),
       message: required(t('campaigns.builder.messageRequired')),
     },
     onSubmit: async (values, { setFieldError, setSubmitError }) => {
       try {
         const saved = await save.mutateAsync({
           name: values.name,
-          conditions: { url_contains: values.url_contains.trim() },
+          conditions: conditionsFromDrafts(rules.match, rules.drafts),
           content: { message: values.message.trim() },
           starts_at: fromDateTimeLocal(values.starts_at),
           ends_at: fromDateTimeLocal(values.ends_at),
@@ -95,13 +110,12 @@ export function CampaignBuilder({
   });
 
   const close = useCloseGuard({
-    isDirty: form.isDirty,
+    isDirty: form.isDirty || rulesChanged,
     message: t('campaigns.builder.discardConfirm'),
     onClose,
   });
 
   const nameError = form.errorFor('name');
-  const triggerError = form.errorFor('url_contains');
   const messageError = form.errorFor('message');
   const endsError = form.errorFor('ends_at');
 
@@ -111,6 +125,7 @@ export function CampaignBuilder({
       title={campaign ? t('campaigns.builder.editTitle') : t('campaigns.builder.newTitle')}
       description={t('campaigns.builder.description')}
       align="top"
+      className="max-h-[80vh] max-w-[34rem] overflow-y-auto"
     >
       <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-3">
         {form.submitError && (
@@ -131,22 +146,7 @@ export function CampaignBuilder({
           />
         </Field>
 
-        <Field
-          label={t('campaigns.builder.triggerLabel')}
-          htmlFor="campaign-trigger"
-          hint={t('campaigns.builder.triggerHint')}
-          error={triggerError}
-        >
-          <input
-            id="campaign-trigger"
-            value={form.values.url_contains}
-            onChange={(event) => form.setValue('url_contains', event.target.value)}
-            onBlur={() => form.blur('url_contains')}
-            aria-invalid={triggerError ? true : undefined}
-            placeholder="/pricing"
-            className="w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
-          />
-        </Field>
+        <CampaignRuleEditor match={rules.match} drafts={rules.drafts} onChange={setRules} />
 
         <Field
           label={t('campaigns.builder.messageLabel')}
@@ -198,7 +198,7 @@ export function CampaignBuilder({
           </button>
           <button
             type="submit"
-            disabled={!form.canSubmit}
+            disabled={!form.canSubmit || !rulesReady}
             className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             {form.isSubmitting

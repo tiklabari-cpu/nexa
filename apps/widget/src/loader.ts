@@ -65,6 +65,7 @@ const ALLOWED_INBOUND = new Set([
   'siyahtus:close',
   'siyahtus:logged-out',
   'siyahtus:unread',
+  'siyahtus:campaign-tracking',
 ]);
 
 /**
@@ -302,6 +303,12 @@ export function boot(
       win.dispatchEvent(new CustomEvent('siyahtus:unread', { detail: { count } }));
     }
 
+    // The workspace has a campaign running: report page changes and exit intent.
+    stopWatching ??=
+      data.type === 'siyahtus:campaign-tracking'
+        ? watchVisit(win, (message) => frame.contentWindow?.postMessage(message, widgetOrigin))
+        : null;
+
     if (data.type === 'siyahtus:logged-out') {
       // The widget has forgotten its visitor (tm 287.3): answer the host page,
       // then open a fresh document — the old one still holds the transcript
@@ -321,6 +328,7 @@ export function boot(
   };
 
   win.addEventListener('message', onMessage);
+  let stopWatching: (() => void) | null = null;
 
   const post = (type: string): void => {
     frame.contentWindow?.postMessage({ type }, widgetOrigin);
@@ -330,6 +338,7 @@ export function boot(
 
   const destroy = (): void => {
     win.removeEventListener('message', onMessage);
+    stopWatching?.();
     frame.remove();
     delete config.open;
     delete config.close;
@@ -381,6 +390,85 @@ function buildFrameUrl(
   if (config.mobileFullscreen === false) url.searchParams.set('mobile_full', '0');
   if (config.poweredBy === false) url.searchParams.set('powered_by', '0');
   return url.toString();
+}
+
+/** A page change settles this long before it is reported (a router may push twice in a row). */
+export const PAGE_DEBOUNCE_MS = 300;
+/** An upward scroll this far inside `EXIT_SCROLL_WINDOW_MS` is a phone's way of leaving. */
+const EXIT_SCROLL_DISTANCE = 150;
+const EXIT_SCROLL_WINDOW_MS = 150;
+
+/**
+ * What only the host page can see for a campaign's targeting (EN-03 · tm 352.2):
+ * a single-page site changing page without a reload (`pushState`,
+ * `replaceState`, `popstate`), and the visitor heading for the way out — the
+ * pointer leaving through the top edge, or on a phone a fast scroll to the top.
+ * Both go to the widget frame as messages (`siyahtus:page`,
+ * `siyahtus:exit-intent`); the frame decides what they mean.
+ *
+ * Started only when the widget says the workspace has a campaign running
+ * (`siyahtus:campaign-tracking`, from the token mint), so a page whose
+ * workspace has none keeps its `history` untouched. Returns the stop function,
+ * which gives `history` back if nobody has wrapped it since.
+ */
+export function watchVisit(
+  win: Window,
+  send: (message: Record<string, unknown>) => void,
+): () => void {
+  const history = win.history;
+  let reported = hostPageUrl(win).url;
+  let timer: number | undefined;
+
+  const changed = (): void => {
+    win.clearTimeout(timer);
+    timer = win.setTimeout(() => {
+      const { url } = hostPageUrl(win);
+      if (url === reported) return;
+      reported = url;
+      send({ type: 'siyahtus:page', url });
+    }, PAGE_DEBOUNCE_MS);
+  };
+  // The page's own pushState / replaceState, each followed by a look at the address.
+  const names = ['pushState', 'replaceState'] as const;
+  const originals = names.map((name) => history[name]);
+  const wrapped = names.map((name, index) => {
+    const original = originals[index]!;
+    const watched = function (this: History, ...args: Parameters<History['pushState']>): void {
+      original.apply(this, args);
+      changed();
+    };
+    history[name] = watched;
+    return watched;
+  });
+  win.addEventListener('popstate', changed);
+
+  const exit = (): void => send({ type: 'siyahtus:exit-intent' });
+  const onMouseOut = (event: MouseEvent): void => {
+    if (!event.relatedTarget && event.clientY <= 0) exit();
+  };
+  let sample = { y: win.scrollY, t: Date.now() };
+  const onScroll = (): void => {
+    const now = Date.now();
+    const y = win.scrollY;
+    if (now - sample.t > EXIT_SCROLL_WINDOW_MS) {
+      sample = { y, t: now };
+    } else if (sample.y - y >= EXIT_SCROLL_DISTANCE && win.innerWidth <= MOBILE_MAX_WIDTH) {
+      sample = { y, t: now };
+      exit();
+    }
+  };
+  win.document.addEventListener('mouseout', onMouseOut);
+  win.addEventListener('scroll', onScroll, { passive: true });
+
+  return () => {
+    win.clearTimeout(timer);
+    names.forEach((name, index) => {
+      if (history[name] === wrapped[index]) history[name] = originals[index]!;
+    });
+    win.removeEventListener('popstate', changed);
+    win.document.removeEventListener('mouseout', onMouseOut);
+    win.removeEventListener('scroll', onScroll);
+  };
 }
 
 /**

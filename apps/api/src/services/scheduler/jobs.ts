@@ -602,6 +602,7 @@ export function buildSchedulerJobs({
             replied_here: report.totals.repliedHere,
             transferred: report.totals.transferred,
             queued: report.totals.queued,
+            unclaimed: report.totals.unclaimed,
             marked_inactive: report.totals.markedInactive,
             cleared_inactive: report.totals.clearedInactive,
           },

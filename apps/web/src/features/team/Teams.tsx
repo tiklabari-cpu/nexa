@@ -19,6 +19,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   GROUP_PRIORITIES,
   type AfterHoursMode,
+  type GroupAssignmentMode,
   type GroupPriority,
   type QueueTopicRole,
 } from '@siyahtus/types';
@@ -39,6 +40,8 @@ export interface Group {
   /** The topic this team's queue serves (AU-01); null for an ordinary team. */
   topic_role: QueueTopicRole | null;
   after_hours_mode: AfterHoursMode;
+  /** How its chats reach its agents (WG-07); absent from a server older than tm 346. */
+  assignment_mode?: GroupAssignmentMode;
   /** Skills an agent needs — every one — to join and be given its chats. */
   required_expertise_ids: number[];
   agents: Array<{ agent_id: string; priority: GroupPriority; lead?: boolean }>;

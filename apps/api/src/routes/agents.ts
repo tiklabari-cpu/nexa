@@ -25,6 +25,7 @@ import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import {
   AFTER_HOURS_MODES,
+  GROUP_ASSIGNMENT_MODES,
   AGENT_ROLES,
   DEFAULT_WORK_SCHEDULE,
   GROUP_PRIORITIES,
@@ -95,6 +96,7 @@ const groupBody = z.object({
   language_code: groupLanguageCode.optional(),
   topic_role: z.enum(QUEUE_TOPIC_ROLES).nullable().optional(),
   after_hours_mode: z.enum(AFTER_HOURS_MODES).optional(),
+  assignment_mode: z.enum(GROUP_ASSIGNMENT_MODES).optional(),
   required_expertise_ids: z
     .array(z.coerce.bigint().positive().lte(9223372036854775807n))
     .max(MAX_GROUP_REQUIRED_EXPERTISE)
@@ -119,6 +121,7 @@ const membershipBody = z.object({
 const GROUP_BODY_MESSAGE =
   'name is required (1–120 characters); language_code is a two-letter code, optionally with a region (e.g. en, en-GB); ' +
   `topic_role is one of ${QUEUE_TOPIC_ROLES.join(', ')} or null; after_hours_mode is one of ${AFTER_HOURS_MODES.join(', ')}; ` +
+  `assignment_mode is one of ${GROUP_ASSIGNMENT_MODES.join(', ')}; ` +
   `required_expertise_ids is at most ${MAX_GROUP_REQUIRED_EXPERTISE} expertise-area ids.`;
 
 function parseGroupBody(raw: unknown): z.infer<typeof groupBody> {
@@ -171,6 +174,7 @@ function serialiseGroup(group: GroupWithAgents, accepting: ReadonlyMap<bigint, n
     language_code: group.languageCode,
     topic_role: group.topicRole,
     after_hours_mode: group.afterHoursMode,
+    assignment_mode: group.assignmentMode,
     required_expertise_ids: group.requiredExpertise.map((row) => Number(row.expertiseId)),
     accepting_count: accepting.get(group.id) ?? 0,
     agents: group.agents.map((a) => ({
@@ -186,6 +190,7 @@ function groupQueueSettings(body: Partial<z.infer<typeof groupBody>>): GroupQueu
   return {
     ...(body.topic_role !== undefined ? { topicRole: body.topic_role } : {}),
     ...(body.after_hours_mode !== undefined ? { afterHoursMode: body.after_hours_mode } : {}),
+    ...(body.assignment_mode !== undefined ? { assignmentMode: body.assignment_mode } : {}),
     ...(body.required_expertise_ids !== undefined
       ? { requiredExpertiseIds: body.required_expertise_ids }
       : {}),

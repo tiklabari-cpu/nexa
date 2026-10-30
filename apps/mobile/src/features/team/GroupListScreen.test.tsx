@@ -13,6 +13,7 @@ function group(overrides: Partial<Group> & { id: number }): Group {
     language_code: 'en',
     topic_role: null,
     after_hours_mode: 'queue',
+    assignment_mode: 'auto',
     required_expertise_ids: [],
     accepting_count: 0,
     agents: [],

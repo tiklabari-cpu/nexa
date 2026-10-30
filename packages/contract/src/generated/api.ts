@@ -1479,6 +1479,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/chats/{chatId}/claim': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Take a conversation waiting in a manual team's queue
+     * @description "Take" in the Queued view (WG-07). The conversation's open connection must be waiting in the queue of a team whose `assignment_mode` is `manual`, and the caller must be a member of that team holding every area of expertise it (and the connection) requires. The first caller has it — a compare-and-set on the unassigned connection — and every later one receives `409 chat_claim_refused` with `details.reason: claimed`. A caller at their concurrent chat limit is refused with `details.reason: limit`; a conversation no longer waiting in such a queue (assigned, closed, moved to an automatic team) with `not_waiting`. The caller's routing status is not asked: choosing a conversation is the caller's own act. The taken connection leaves the queue (`queue_entries` outcome `assigned`), its assignment moment is written; `incoming_chat` tells the caller and `chat_transferred` (reason `manual`, `outcome: assigned`) the team, whose Queued view drops the row. A bot token is 403.
+     */
+    post: operations['claimChat'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/chats/{chatId}/return-to-ai': {
     parameters: {
       query?: never;
@@ -20616,6 +20636,14 @@ export interface components {
       /** @default queue */
       after_hours_mode: components['schemas']['AfterHoursMode'];
       /**
+       * @description How the team's conversations reach its agents (WG-07). Omitted on
+       *     create: `auto`. The `responsible_gambling` team is never
+       *     `manual` — naming it there, or giving the role to a manual team,
+       *     is a 400 `validation` with `details.reason: assignment_mode`.
+       * @default auto
+       */
+      assignment_mode: components['schemas']['GroupAssignmentMode'];
+      /**
        * @description The complete set of expertise areas (`Expertise.id`) an agent must
        *     hold — every one of them — to be given this team's conversations
        *     and to join it (AU-01). Replaces the current set; `[]` clears it. An
@@ -20644,6 +20672,20 @@ export interface components {
      * @enum {string}
      */
     AfterHoursMode: 'queue' | 'ticket';
+    /**
+     * @description How a team's conversations reach its agents (WG-07 · `@siyahtus/types`
+     *     `GROUP_ASSIGNMENT_MODES`): `auto` — routing picks the agent (tier,
+     *     load, longest idle); `manual` — routing picks nobody: the
+     *     conversation waits in the team's queue, every member is told
+     *     (`incoming_chat`), and the first to take it
+     *     (`POST /chats/{chatId}/claim`) has it, within their concurrent limit.
+     *     With the workspace's unanswered window set, a conversation nobody has
+     *     taken for that long is reported to the team's leads
+     *     (`chat_unanswered_alert`, reason `unclaimed`) instead of being
+     *     passed on.
+     * @enum {string}
+     */
+    GroupAssignmentMode: 'auto' | 'manual';
     /**
      * @description How pressing a connection is (ADR-08a · AI-12; `@siyahtus/types`
      *     `THREAD_PRIORITIES`): `urgent` — self-harm, a suspected minor, a
@@ -20743,6 +20785,7 @@ export interface components {
       /** @description The topic this team's queue is for; null for an ordinary team. */
       topic_role: components['schemas']['QueueTopicRole'] | null;
       after_hours_mode: components['schemas']['AfterHoursMode'];
+      assignment_mode: components['schemas']['GroupAssignmentMode'];
       /**
        * @description Expertise areas an agent must hold — all of them — to be given this
        *     team's conversations, in ascending id order. Empty: none.
@@ -22737,6 +22780,7 @@ export interface components {
       | 'brand_not_found'
       | 'challenge_required'
       | 'chat_anonymized'
+      | 'chat_claim_refused'
       | 'chat_inactive'
       | 'customer_banned'
       | 'greeting_not_found'
@@ -25478,6 +25522,40 @@ export interface operations {
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       /** @description The chat is closed, or another supervisor took it over first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  claimChat: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Taken — the conversation, now the caller's */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Chat'];
+        };
+      };
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description Another agent took it first, the caller is at their limit, or it no longer waits */
       409: {
         headers: {
           [name: string]: unknown;

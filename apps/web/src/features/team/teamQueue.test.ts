@@ -67,9 +67,15 @@ describe('queue settings body', () => {
       queueSettingsBody(finance, {
         topic_role: '',
         after_hours_mode: 'ticket',
+        assignment_mode: 'manual',
         required_expertise: '3',
       }),
-    ).toEqual({ topic_role: null, after_hours_mode: 'ticket', required_expertise_ids: [3] });
+    ).toEqual({
+      topic_role: null,
+      after_hours_mode: 'ticket',
+      assignment_mode: 'manual',
+      required_expertise_ids: [3],
+    });
   });
 
   it('compares the required skills as a set, whatever order the server listed them', () => {
@@ -85,6 +91,7 @@ describe('queue settings body', () => {
       queueSettingsBody(null, {
         topic_role: 'responsible_gambling',
         after_hours_mode: 'queue',
+        assignment_mode: 'auto',
         required_expertise: '4',
       }),
     ).toEqual({ topic_role: 'responsible_gambling', required_expertise_ids: [4] });

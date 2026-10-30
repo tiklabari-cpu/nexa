@@ -148,6 +148,13 @@ export const team: Messages = {
   'team.teams.editor.queue.topicLocked':
     'Sorumlu oyun ekibinin konusu değişmez — yalnızca adı değiştirilebilir.',
   'team.teams.editor.queue.afterHoursLabel': 'Mesai dışında',
+  'team.teams.editor.queue.assignmentLabel': 'Atama',
+  'team.teams.editor.queue.assignmentHint':
+    'Manuel: yeni sohbet kimseye atanmaz. Ekipteki herkese bildirilir; Kuyrukta görünümünden ilk alan alır.',
+  'team.teams.editor.queue.assignmentLocked':
+    'Sorumlu oyun sohbetleri her zaman otomatik atanır; kimse seçilmeyi beklemez.',
+  'team.teams.editor.queue.assignmentRefused':
+    'Sorumlu oyun ekibi manuel atama kullanamaz. Otomatiği seçin.',
   'team.teams.editor.queue.skillsLabel': 'Gerekli yetenekler',
   'team.teams.editor.queue.skillsHint':
     'Bir temsilcinin bu ekibe katılması ve sohbetlerini alması için işaretli yeteneklerin hepsine sahip olması gerekir.',
@@ -168,6 +175,8 @@ export const team: Messages = {
   'team.queue.role.complaint': 'Şikâyet',
   'team.queue.afterHours.queue': 'Sıradaki temsilciyi kuyrukta bekler',
   'team.queue.afterHours.ticket': 'E-postayla yanıtlanan bir talebe dönüşür',
+  'team.queue.assignment.auto': 'Otomatik — sohbet sıradaki boş temsilciye gider',
+  'team.queue.assignment.manual': 'Manuel — temsilciler sohbeti kuyruktan alır',
 
   // iGaming kuyruk şablonu (AU-01 · K14) — QueueTemplateButton.tsx
   'team.queueTemplate.button': 'iGaming kuyruk şablonunu kur',

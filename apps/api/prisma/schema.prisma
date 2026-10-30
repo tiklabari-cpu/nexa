@@ -958,6 +958,11 @@ model Group {
   /// What the team's queue does when nobody is on shift: one of
   /// `AFTER_HOURS_MODES`, enforced by `groups_after_hours_mode_check`.
   afterHoursMode String   @default("queue") @map("after_hours_mode")
+  /// How the team's conversations reach its agents (WG-07 · tm 346): one of
+  /// `GROUP_ASSIGNMENT_MODES`, enforced by `groups_assignment_mode_check`;
+  /// never `manual` on the Responsible Gambling team
+  /// (`groups_rg_assignment_mode_check`).
+  assignmentMode String   @default("auto") @map("assignment_mode")
 
   license           License           @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   agents            GroupAgent[]
@@ -1222,6 +1227,10 @@ model Thread {
   /// answer (reason `agent_unresponsive`) — capped by the sweep, so it cannot
   /// bounce between silent agents forever. CHECK `>= 0` in the migration.
   unresponsiveTransfers Int  @default(0) @map("unresponsive_transfers") @db.SmallInt
+  /// When the team's leads were told nobody took the connection from a manual
+  /// team's queue (WG-07 · tm 346, reason `unclaimed`). Once per stay: the
+  /// sweep asks again only when it is older than `queued_at`.
+  unclaimedAlertedAt DateTime? @map("unclaimed_alerted_at") @db.Timestamptz(6)
 
   chat            Chat             @relation(fields: [chatId], references: [id], onDelete: Cascade)
   tags            ThreadTag[]

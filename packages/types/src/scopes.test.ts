@@ -131,6 +131,9 @@ describe('error taxonomy', () => {
     // Supervisor takeover (FR-MOD-08.6.3): the 409 a second, concurrent
     // supervisor gets when they lose the race to seize a chat.
     'takeover_conflict',
+    // Manual assignment (WG-07 · tm 346): "Take" refused — taken first, at
+    // the caller's limit, or no longer waiting.
+    'chat_claim_refused',
     // The sandbox workspace (FR-MOD-11.5 · 11.5-f): the 409 for asking a
     // licence that already has one for a second.
     'sandbox_exists',

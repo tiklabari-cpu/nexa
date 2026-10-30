@@ -156,6 +156,13 @@ export const team: Messages = {
   'team.teams.editor.queue.topicLocked':
     'The responsible gambling team keeps its topic — it can only be renamed.',
   'team.teams.editor.queue.afterHoursLabel': 'Out of hours',
+  'team.teams.editor.queue.assignmentLabel': 'Assignment',
+  'team.teams.editor.queue.assignmentHint':
+    'Manual: nobody is given a new chat. Every member is told, and the first to take it from the Queued view has it.',
+  'team.teams.editor.queue.assignmentLocked':
+    'Responsible gambling chats are always assigned automatically, so nobody waits to be chosen.',
+  'team.teams.editor.queue.assignmentRefused':
+    "The responsible gambling team can't use manual assignment. Choose automatic.",
   'team.teams.editor.queue.skillsLabel': 'Required skills',
   'team.teams.editor.queue.skillsHint':
     'An agent needs every ticked skill to join this team and to be given its conversations.',
@@ -175,6 +182,8 @@ export const team: Messages = {
   'team.queue.role.complaint': 'Complaints',
   'team.queue.afterHours.queue': 'Wait in the queue for the next agent',
   'team.queue.afterHours.ticket': 'Become a ticket answered by email',
+  'team.queue.assignment.auto': 'Automatic — the next free agent gets the chat',
+  'team.queue.assignment.manual': 'Manual — agents take chats from the queue',
 
   // The iGaming queue template (AU-01 · K14) — QueueTemplateButton.tsx
   'team.queueTemplate.button': 'Set up iGaming queues',

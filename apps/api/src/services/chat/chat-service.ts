@@ -123,7 +123,7 @@ import {
 } from './ai-mode.js';
 import { opensAiFirst } from './ai-first.js';
 import { aiStalled } from './ai-stall.js';
-import { LAST_ACTIVITY_SQL, unansweredSql } from './chat-inactivity.js';
+import { LAST_ACTIVITY_SQL, unansweredSql, unclaimedSql } from './chat-inactivity.js';
 import { contactRequestSql, ruleIsOff, type ContactRequestRule } from './ask-email.js';
 import { publishTrafficChange } from '../traffic/traffic-events.js';
 import { SupervisionService } from '../traffic/supervision-service.js';
@@ -3799,6 +3799,92 @@ export class ChatService {
   }
 
   /**
+   * "Take" a conversation waiting in a manual team's queue (WG-07 · tm 346) —
+   * `POST /chats/{chatId}/claim`. The first teammate to ask has it; the
+   * compare-and-set, the concurrent limit and who may take from the team are
+   * `RoutingService.claim`'s, inside this transaction. Every refusal is a 409
+   * `chat_claim_refused` naming why (`details.reason`): `claimed` — another
+   * agent took it first; `limit` — the caller is at their concurrent limit,
+   * and the write that took it is rolled back with the error; `not_waiting` —
+   * it is not waiting in a manual team's queue (assigned, closed, an
+   * automatic team's, no team). Someone who is not a member of the team, or
+   * lacks its training, gets the 404 an unseen chat gets: it is not theirs to
+   * take (NFR-S5).
+   *
+   * No audit entry and no transcript line: taking a conversation offered to
+   * the team is routing done by hand, recorded as the drain records its own —
+   * the assignment, `assigned_at` and the queue stay. After the commit,
+   * `incoming_chat` to the caller and `chat_transferred` (reason `manual`,
+   * `outcome: assigned`) to the team, whose Queued view drops the row, and
+   * the board.
+   */
+  async claim(tenant: TenantContext, principal: Principal, chatId: string): Promise<ChatDetail> {
+    if (principal.kind !== 'agent') {
+      throw ApiError.authorization('Only a signed-in teammate can take a chat.');
+    }
+    const agentId = actorOf(principal);
+    const refused = (reason: 'claimed' | 'limit' | 'not_waiting', message: string) =>
+      new ApiError('chat_claim_refused', message, { details: { reason } });
+
+    const result = await withTenant(this.db, tenant, async (tx) => {
+      const visibility = await resolveVisibility(tx, principal, 'write');
+      const chat = await this.#loadVisibleChat(tx, visibility, chatId);
+      const thread = chat.threads.find((t) => t.active);
+      if (!chat.active || !thread) {
+        throw refused('not_waiting', 'This conversation is no longer waiting to be taken.');
+      }
+
+      const outcome = await this.routing.claim(tx, tenant.licenseId, thread.id, agentId);
+      switch (outcome.outcome) {
+        case 'claimed':
+          break;
+        case 'claimed_by_other':
+          throw refused('claimed', 'Another agent took this conversation first.');
+        case 'limit':
+          throw refused('limit', 'You are at your concurrent chat limit. Close a chat first.');
+        case 'not_waiting':
+          throw refused('not_waiting', 'This conversation is no longer waiting to be taken.');
+        case 'not_member':
+          throw ApiError.notFound('Chat not found.');
+      }
+
+      const reloaded = await tx.chat.findUniqueOrThrow({
+        where: { id: chat.id },
+        include: chatInclude,
+      });
+      const before = this.#audienceFor(chat);
+      const after = this.#audienceFor(reloaded);
+      return {
+        detail: serialiseChat(reloaded),
+        threadId: thread.id,
+        groupId: outcome.groupId,
+        audience: {
+          groupIds: [...new Set([...before.groupIds, ...after.groupIds])],
+          agentIds: [...new Set([...before.agentIds, ...after.agentIds])],
+          customerId: chat.customerId,
+        },
+      };
+    });
+
+    await this.#announceHandover(tenant, {
+      chatId,
+      threadId: result.threadId,
+      assigneeId: agentId,
+      customerId: result.audience.customerId,
+    });
+    await this.publisher?.publish(tenant, 'chat_transferred', result.audience, {
+      chat_id: chatId,
+      thread_id: result.threadId,
+      requester_id: agentId,
+      reason: 'manual',
+      transferred_to: { group_ids: [Number(result.groupId)], agent_ids: [agentId] },
+      outcome: 'assigned',
+      assignee_id: agentId,
+    } satisfies ChatTransferredPush);
+    return result.detail;
+  }
+
+  /**
    * Give a chat's open connection back to the AI (tm 293.3 · AI-11 §6) —
    * `POST /chats/{chatId}/return-to-ai`. The AI answers the visitor's next
    * message; `note` reaches it with the conversation (the agents-only line,
@@ -4383,6 +4469,54 @@ export class ChatService {
       alert: result.alert?.reason ?? null,
       paused: result.paused,
     };
+  }
+
+  /**
+   * Tell a manual team's leads that a conversation in its queue has waited
+   * the workspace's unanswered window with nobody taking it (WG-07 · tm 346)
+   * — the inactivity sweep's step for a team that has no transfer.
+   *
+   * One statement marks it told (`threads.unclaimed_alerted_at`) only while
+   * it still answers `unclaimedSql`: a "Take" that committed first spares it,
+   * and a second pass in the same stay finds it told. True when this call
+   * told someone. Nothing moves: the conversation keeps its place.
+   */
+  async alertUnclaimed(
+    tenant: TenantContext,
+    ref: { chatId: string; threadId: string },
+    cutoff: Date,
+  ): Promise<boolean> {
+    const result = await withTenant(this.db, tenant, async (tx) => {
+      const [row] = await tx.$queryRaw<
+        Array<{ queue_group_id: bigint; queue_position: number | null }>
+      >`
+        UPDATE threads t
+           SET unclaimed_alerted_at = now()
+         WHERE t.id = ${ref.threadId} AND t.chat_id = ${ref.chatId} AND ${unclaimedSql(cutoff)}
+        RETURNING t.queue_group_id, t.queue_position`;
+      if (!row) return null;
+      const leads = await teamLeads(tx, tenant.licenseId, row.queue_group_id);
+      const alert: ChatUnansweredAlertPush = {
+        chat_id: ref.chatId,
+        thread_id: ref.threadId,
+        group_id: Number(row.queue_group_id),
+        agent_id: null,
+        reason: 'unclaimed',
+        transfers: 0,
+        queue_position: row.queue_position,
+      };
+      return { leads, alert };
+    });
+    if (!result) return false;
+    if (result.leads.length > 0) {
+      await this.publisher?.publish(
+        tenant,
+        'chat_unanswered_alert',
+        { agentIds: result.leads },
+        result.alert,
+      );
+    }
+    return true;
   }
 
   /**

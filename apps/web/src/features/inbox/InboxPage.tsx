@@ -69,9 +69,10 @@ import {
   toggleTicketSelection,
 } from './ticket-selection.js';
 import { ThreadHeader } from './ThreadHeader.js';
-import { TEAMS_KEY, type TransferNotice, type TransferTeam } from './transfer.js';
+import { TEAMS_KEY, claimableTeamIds, type TransferNotice, type TransferTeam } from './transfer.js';
 import { canTakeOver, ledTeamIds } from './takeover.js';
 import { TeamRowActions } from './TeamRowActions.js';
+import { ClaimRowAction } from './ClaimRowAction.js';
 import { TRAFFIC_TABS, filterByTrafficTab, trafficTabCounts } from './traffic.js';
 import { QueueTeamTabs } from './QueueTeamTabs.js';
 import {
@@ -347,6 +348,8 @@ export function InboxPage(): ReactElement {
     ledTeams,
     teamsQuery.data?.items ?? [],
   );
+  // Manual teams the agent belongs to: their waiting rows offer Take (WG-07).
+  const claimableTeams = claimableTeamIds(teamsQuery.data?.items ?? [], myAccountId);
   const chatViews = leadsTeam ? VIEWS : VIEWS.filter((item) => item.id !== 'team');
   const counts = useViewCounts(activeChannel, leadsTeam);
   // How pressing (AI-12 · tm 307.3): the URL's job and the server's, like the
@@ -1005,6 +1008,18 @@ export function InboxPage(): ReactElement {
                                 </span>
                               )}
                             </button>
+                            {view === 'queued' &&
+                              item.active &&
+                              item.queue_group_id != null &&
+                              claimableTeams.has(item.queue_group_id) && (
+                                <ClaimRowAction
+                                  chatId={item.id}
+                                  customerName={
+                                    item.customer_name ?? t('inbox.list.item.visitorFallback')
+                                  }
+                                  onOpen={setSelectedId}
+                                />
+                              )}
                             {view === 'team' && (
                               <TeamRowActions
                                 chatId={item.id}

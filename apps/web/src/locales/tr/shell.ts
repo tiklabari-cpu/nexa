@@ -29,6 +29,8 @@ export const shell: Messages = {
     'Yeni bir sohbet {count} ajan tarafından yanıtsız bırakıldı. Kararınız için ekibin kuyruğunun başında bekliyor.',
   'shell.presence.alert.transferLimit.other':
     'Yeni bir sohbet art arda {count} ajan tarafından yanıtsız bırakıldı. Kararınız için ekibin kuyruğunun başında bekliyor.',
+  'shell.presence.alert.unclaimed':
+    'Manuel atamalı bir ekibin kuyruğundaki sohbeti kimse almadı. Hâlâ orada bekliyor.',
   'shell.presence.alert.someone': 'Bir ajan',
   'shell.presence.alert.open': 'Sohbeti aç',
   'shell.modules': 'Modüller',

@@ -146,7 +146,9 @@ function AlertNotice({ alert }: { alert: UnansweredAlert }): ReactElement {
       <p>
         {alert.reason === 'transfer_limit'
           ? t('shell.presence.alert.transferLimit', { count: alert.transfers })
-          : t('shell.presence.alert.noAgent', { agent })}
+          : alert.reason === 'unclaimed'
+            ? t('shell.presence.alert.unclaimed')
+            : t('shell.presence.alert.noAgent', { agent })}
       </p>
     </Banner>
   );

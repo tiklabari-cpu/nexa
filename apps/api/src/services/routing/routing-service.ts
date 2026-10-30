@@ -14,6 +14,12 @@
  *   6. nobody available → fallback team (never for the Responsible Gambling
  *      team); still nobody → that team's queue
  *
+ * A team in manual assignment mode (WG-07 · tm 346, `groups.assignment_mode`)
+ * skips steps 2–6: nobody is chosen, nothing overflows, the conversation
+ * waits in the team's queue and the drain leaves that queue alone. Its
+ * members take from it (`claim`), first come first served, each within their
+ * concurrent limit.
+ *
  * Steps 3–5 are where fairness lives. Priority alone would hammer the primary
  * agent; least-loaded alone would ignore the priority the workspace configured;
  * without the tie-break, `ORDER BY` returns rows in whatever order the planner
@@ -148,7 +154,18 @@ interface TeamRules {
   groupId: bigint;
   topicRole: string | null;
   expertiseIds: bigint[];
+  /** Manual assignment (WG-07): routing gives its conversations to nobody. */
+  manual: boolean;
 }
+
+/**
+ * What a "Take" came to (`claim`, WG-07): the connection is the caller's now,
+ * or why not — another agent took it first, the caller is at their limit, it
+ * does not wait in a manual team's queue, or the caller cannot take from it.
+ */
+export type ClaimOutcome =
+  | { outcome: 'claimed'; groupId: bigint; chatId: string }
+  | { outcome: 'claimed_by_other' | 'limit' | 'not_waiting' | 'not_member' };
 
 /** What a hand-off to a team came to (`assignWithinGroup`). */
 export type TeamHandOff =
@@ -232,12 +249,16 @@ export class RoutingService {
     const { groupId, requiredExpertiseIds } = selection;
     const team = await this.#team(tx, licenseId, groupId);
 
-    const assignee = await this.#claimFromTeam(
-      tx,
-      licenseId,
-      groupId,
-      allOf(requiredExpertiseIds, team.expertiseIds),
-    );
+    // A manual team's members choose (WG-07): nobody is given it, nothing
+    // overflows, it waits in the team's queue for the first to take it.
+    const assignee = team.manual
+      ? null
+      : await this.#claimFromTeam(
+          tx,
+          licenseId,
+          groupId,
+          allOf(requiredExpertiseIds, team.expertiseIds),
+        );
     if (assignee) {
       return {
         groupIds: [groupId],
@@ -254,20 +275,23 @@ export class RoutingService {
     // A Responsible Gambling conversation has no fallback (ADR-08a §2.6): it
     // waits for the team's own trained agents rather than overflow to a desk
     // that is not trained for it.
-    if (team.topicRole !== RESPONSIBLE_GAMBLING_ROLE) {
+    if (team.topicRole !== RESPONSIBLE_GAMBLING_ROLE && !team.manual) {
       const fallbackGroupId = await this.#fallbackGroup(tx, licenseId);
       if (fallbackGroupId !== null && fallbackGroupId !== groupId) {
         // The expertise requirement follows the chat into the fallback team: a
         // billing question overflowing to another desk still needs a billing
         // agent, not just any free one — and the fallback team's own
-        // requirement holds there too.
+        // requirement holds there too. A manual fallback team gives it to
+        // nobody either: it waits in the team routing chose.
         const fallback = await this.#team(tx, licenseId, fallbackGroupId);
-        const fallbackAssignee = await this.#claimFromTeam(
-          tx,
-          licenseId,
-          fallbackGroupId,
-          allOf(requiredExpertiseIds, fallback.expertiseIds),
-        );
+        const fallbackAssignee = fallback.manual
+          ? null
+          : await this.#claimFromTeam(
+              tx,
+              licenseId,
+              fallbackGroupId,
+              allOf(requiredExpertiseIds, fallback.expertiseIds),
+            );
         if (fallbackAssignee) {
           return {
             groupIds: [fallbackGroupId],
@@ -331,6 +355,9 @@ export class RoutingService {
     const selection = await this.#selectGroup(tx, licenseId, context);
     if (selection) {
       const team = await this.#team(tx, licenseId, selection.groupId);
+      // A manual team's conversations are taken, never given (WG-07) — not
+      // even back to the agent who had the member earlier that day.
+      if (team.manual) return false;
       if (team.topicRole === RESPONSIBLE_GAMBLING_ROLE) {
         const qualified = await this.#candidates(
           tx,
@@ -480,16 +507,19 @@ export class RoutingService {
     await leaveQueue(tx, threadId, 'transferred', at);
 
     const team = await this.#team(tx, licenseId, groupId);
-    const assignee = options.queueOnly
-      ? null
-      : await this.#claimFromTeam(
-          tx,
-          licenseId,
-          groupId,
-          allOf(team.expertiseIds, requiredExpertiseId !== null ? [requiredExpertiseId] : []),
-          options.exclude,
-          options.prefer ?? null,
-        );
+    // A manual team is handed the conversation, not one of its members
+    // (WG-07): it waits in the team's queue for the first to take it.
+    const assignee =
+      options.queueOnly || team.manual
+        ? null
+        : await this.#claimFromTeam(
+            tx,
+            licenseId,
+            groupId,
+            allOf(team.expertiseIds, requiredExpertiseId !== null ? [requiredExpertiseId] : []),
+            options.exclude,
+            options.prefer ?? null,
+          );
     if (assignee) {
       await tx.thread.update({
         where: { id: threadId },
@@ -527,6 +557,120 @@ export class RoutingService {
     await enterQueue(tx, { licenseId, threadId, groupId, enteredAt: at });
     for (const team of teams) await this.#renumber(tx, licenseId, team);
     return { outcome: 'queued', assigneeId: null };
+  }
+
+  /**
+   * "Take" a connection waiting in a manual team's queue (WG-07 · tm 346).
+   *
+   * Compare-and-set, so two agents taking the same conversation at once get
+   * one winner: the conditional `UPDATE … WHERE assignee_id IS NULL` takes the
+   * row, and the second one blocks on it, re-reads the committed row, matches
+   * nothing and answers `claimed_by_other`. Then, in the order the other
+   * writers take them — the connection's row, the agent's membership row, the
+   * team's queue lock (`assignWithinGroup`, the drain) — the caller's load is
+   * counted with their membership row held, so two conversations taken at once
+   * cannot both have the caller's last free slot. `limit` comes back after the
+   * write: the caller must roll it back (`ChatService.claim` throws).
+   *
+   * Who may: a member of the team the connection waits in, not suspended, not
+   * awaiting approval, holding every area the team and the connection require
+   * — the pool the team would be routed from, minus the routing status:
+   * choosing a conversation is the agent's own act.
+   *
+   * Writes, in the caller's transaction: the assignee (the trigger
+   * `threads_assigned_at` stamps the moment), the connection out of the queue,
+   * its stay closed (`queue_entries` outcome `assigned`), `last_assigned_at`,
+   * the agent present on the chat, and the team's queue renumbered.
+   */
+  async claim(
+    tx: TenantClient,
+    licenseId: bigint,
+    threadId: string,
+    agentId: string,
+  ): Promise<ClaimOutcome> {
+    const [waiting] = await tx.$queryRaw<
+      Array<{ queue_group_id: bigint | null; required_expertise_id: bigint | null }>
+    >`
+      SELECT queue_group_id, required_expertise_id
+      FROM threads
+      WHERE id = ${threadId} AND license_id = ${licenseId}
+        AND active AND assignee_id IS NULL AND queue_position IS NOT NULL
+    `;
+    if (!waiting) return { outcome: 'claimed_by_other' };
+    if (waiting.queue_group_id === null) return { outcome: 'not_waiting' };
+    const groupId = waiting.queue_group_id;
+    const team = await this.#team(tx, licenseId, groupId);
+    if (!team.manual) return { outcome: 'not_waiting' };
+
+    const required = allOf(
+      team.expertiseIds,
+      waiting.required_expertise_id !== null ? [waiting.required_expertise_id] : [],
+    );
+    const trained =
+      required.length > 0
+        ? Prisma.sql`
+          AND (
+            SELECT COUNT(DISTINCT ae.expertise_id)
+            FROM agent_expertise ae
+            WHERE ae.license_id = ga.license_id AND ae.agent_id = ga.agent_id
+              AND ae.expertise_id IN (${Prisma.join(required)})
+          ) = ${required.length}`
+        : Prisma.empty;
+    const member = await tx.$queryRaw<Array<{ ok: number }>>`
+      SELECT 1 AS ok
+      FROM group_agents ga
+      JOIN agent_memberships m ON m.license_id = ga.license_id AND m.agent_id = ga.agent_id
+      WHERE ga.license_id = ${licenseId} AND ga.group_id = ${groupId}
+        AND ga.agent_id = ${agentId}::uuid
+        AND NOT m.suspended AND NOT m.awaiting_approval
+        ${trained}
+    `;
+    if (member.length === 0) return { outcome: 'not_member' };
+
+    // The compare-and-set: whoever's write lands second matches no row.
+    const [taken] = await tx.$queryRaw<Array<{ chat_id: string }>>`
+      UPDATE threads
+      SET assignee_id = ${agentId}::uuid, group_id = ${groupId},
+          queue_position = NULL, queued_at = NULL, queue_group_id = NULL
+      WHERE id = ${threadId} AND license_id = ${licenseId}
+        AND active AND assignee_id IS NULL AND queue_position IS NOT NULL
+        AND queue_group_id = ${groupId}
+      RETURNING chat_id
+    `;
+    if (!taken) return { outcome: 'claimed_by_other' };
+
+    // The load, with the membership row held (the row `#claim` holds) and
+    // counted in a statement of its own: under READ COMMITTED it reads after
+    // the lock, so a conversation another transaction gave this agent and
+    // committed while we waited is in it. So is the one just taken here —
+    // "at most the limit" is the test.
+    const [membership] = await tx.$queryRaw<Array<{ limit: number }>>`
+      SELECT concurrent_chats_limit AS "limit"
+      FROM agent_memberships
+      WHERE license_id = ${licenseId} AND agent_id = ${agentId}::uuid
+      FOR UPDATE
+    `;
+    const [load] = await tx.$queryRaw<Array<{ open: number }>>`
+      SELECT COUNT(*)::int AS open
+      FROM threads
+      WHERE license_id = ${licenseId} AND assignee_id = ${agentId}::uuid AND active
+        AND inactive_since IS NULL
+    `;
+    if (!membership || (load?.open ?? 0) > membership.limit) return { outcome: 'limit' };
+
+    await this.#lockTeam(tx, licenseId, groupId, true);
+    await leaveQueue(tx, threadId, 'assigned');
+    await tx.agentMembership.update({
+      where: { licenseId_agentId: { licenseId, agentId } },
+      data: { lastAssignedAt: new Date() },
+    });
+    await tx.chatUser.upsert({
+      where: { chatId_userId: { chatId: taken.chat_id, userId: agentId } },
+      create: { chatId: taken.chat_id, userId: agentId, userType: 'agent', present: true },
+      update: { present: true },
+    });
+    await this.#renumber(tx, licenseId, groupId);
+    return { outcome: 'claimed', groupId, chatId: taken.chat_id };
   }
 
   /**
@@ -583,6 +727,8 @@ export class RoutingService {
   ): Promise<DrainedAssignment[]> {
     const team = await this.#team(tx, licenseId, groupId);
     const assigned: DrainedAssignment[] = [];
+    // A manual team's queue is taken from, never handed out (WG-07).
+    if (team.manual) return assigned;
     // Waiting for an expertise nobody free holds: passed over, not given away.
     const passed: string[] = [];
 
@@ -752,12 +898,16 @@ export class RoutingService {
     return row?.locked === true;
   }
 
-  /** A team's topic and required expertise (`TeamRules`); a deleted team requires nothing. */
+  /**
+   * A team's topic, required expertise and assignment mode (`TeamRules`); a
+   * deleted team requires nothing and is automatic.
+   */
   async #team(tx: TenantClient, licenseId: bigint, groupId: bigint): Promise<TeamRules> {
     const row = await tx.group.findUnique({
       where: { licenseId_id: { licenseId, id: groupId } },
       select: {
         topicRole: true,
+        assignmentMode: true,
         requiredExpertise: { select: { expertiseId: true }, orderBy: { expertiseId: 'asc' } },
       },
     });
@@ -765,6 +915,7 @@ export class RoutingService {
       groupId,
       topicRole: row?.topicRole ?? null,
       expertiseIds: row?.requiredExpertise.map((r) => r.expertiseId) ?? [],
+      manual: row?.assignmentMode === 'manual',
     };
   }
 

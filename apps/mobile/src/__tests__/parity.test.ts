@@ -1095,7 +1095,10 @@ describe('module parity matrix — what is still owed', () => {
       // 349 -> 350 with `POST /customer/chat/transcript` (tm 345) — the
       // widget's "E-mail me the transcript" (WG-06), a visitor surface; the
       // agent app has nothing to add, and nothing here re-scopes.
-      contractEndpoints: 350,
+      // 350 -> 351 with `POST /chats/{chatId}/claim` (tm 346) — "Take" from a
+      // manual team's queue (WG-07), in the web Queued view; the app has no
+      // queue tabs yet, and the chat write scopes it uses are unchanged.
+      contractEndpoints: 351,
       scopeBoundaries: 1,
     });
   });

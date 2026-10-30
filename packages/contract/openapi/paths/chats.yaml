@@ -580,6 +580,44 @@ takeover:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
 
+claim:
+  post:
+    tags: [Chats]
+    operationId: claimChat
+    summary: Take a conversation waiting in a manual team's queue
+    description: >-
+      "Take" in the Queued view (WG-07). The conversation's open connection
+      must be waiting in the queue of a team whose `assignment_mode` is
+      `manual`, and the caller must be a member of that team holding every
+      area of expertise it (and the connection) requires. The first caller
+      has it — a compare-and-set on the unassigned connection — and every
+      later one receives `409 chat_claim_refused` with `details.reason:
+      claimed`. A caller at their concurrent chat limit is refused with
+      `details.reason: limit`; a conversation no longer waiting in such a
+      queue (assigned, closed, moved to an automatic team) with
+      `not_waiting`. The caller's routing status is not asked: choosing a
+      conversation is the caller's own act. The taken connection leaves the
+      queue (`queue_entries` outcome `assigned`), its assignment moment is
+      written; `incoming_chat` tells the caller and `chat_transferred`
+      (reason `manual`, `outcome: assigned`) the team, whose Queued view drops
+      the row.
+      A bot token is 403.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+    responses:
+      "200":
+        description: Taken — the conversation, now the caller's
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Chat" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: Another agent took it first, the caller is at their limit, or it no longer waits
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+
 returnToAi:
   post:
     tags: [Chats]

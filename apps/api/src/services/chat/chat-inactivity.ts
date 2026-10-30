@@ -62,8 +62,13 @@
  * starts its own wait from the new agent (`assigned_at`), and the one event
  * the ask wrote is not asked for twice.
  *
- * Still to come on this sweep: a team in manual assignment mode (WG-07 ·
- * tm 346) turns the transfer into a "nobody took it" notice.
+ * A team in manual assignment mode (WG-07 · tm 346) has no transfer: nobody
+ * is given its conversations, so nobody is passed over. The same window is
+ * how long one may wait in its queue without anyone taking it; then the
+ * team's leads are told (`chat_unanswered_alert`, reason `unclaimed`) once per
+ * stay (`threads.unclaimed_alerted_at`, `ChatService.alertUnclaimed`), and the
+ * conversation stays where it is. A connection someone took and has not
+ * answered stays with them too.
  */
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { type TenantClient, type TenantContext, withTenant } from '../../lib/tenant.js';
@@ -89,6 +94,32 @@ export function unansweredSql(cutoff: Date): Prisma.Sql {
     AND t.first_response_at IS NULL
     AND t.assigned_at < ${cutoff}
     AND t.ai_mode IS DISTINCT FROM 'ai'
+    AND NOT EXISTS (
+      SELECT 1 FROM groups g
+       WHERE g.license_id = t.license_id AND g.id = t.group_id AND g.assignment_mode = 'manual'
+    )
+  )`;
+}
+
+/**
+ * The predicate over a `threads` row aliased `t`: it has waited in a manual
+ * team's queue (WG-07 · tm 346) since before `cutoff` with nobody taking it,
+ * and the team's leads have not been told during this stay
+ * (`unclaimed_alerted_at` older than `queued_at`, or never). One spelling, read
+ * by the listing and by the write that marks it told.
+ */
+export function unclaimedSql(cutoff: Date): Prisma.Sql {
+  return Prisma.sql`(
+    t.active
+    AND t.assignee_id IS NULL
+    AND t.queue_position IS NOT NULL
+    AND t.queued_at < ${cutoff}
+    AND (t.unclaimed_alerted_at IS NULL OR t.unclaimed_alerted_at < t.queued_at)
+    AND EXISTS (
+      SELECT 1 FROM groups g
+       WHERE g.license_id = t.license_id AND g.id = t.queue_group_id
+         AND g.assignment_mode = 'manual'
+    )
   )`;
 }
 
@@ -141,6 +172,8 @@ export interface TenantInactivityResult {
   transferred: number;
   /** Of those, the ones put at the front of the team's queue. */
   queued: number;
+  /** Manual teams' waiting connections whose leads were told nobody took them (WG-07). */
+  unclaimed: number;
   /** Connections marked inactive this pass. */
   markedInactive: number;
   /** Connections whose mark this pass took back (the window turned off or grew). */
@@ -157,6 +190,7 @@ export interface ChatInactivityReport {
     repliedHere: number;
     transferred: number;
     queued: number;
+    unclaimed: number;
     markedInactive: number;
     clearedInactive: number;
   };
@@ -200,6 +234,7 @@ export class ChatInactivitySweeper {
         repliedHere: sum('repliedHere'),
         transferred: sum('transferred'),
         queued: sum('queued'),
+        unclaimed: sum('unclaimed'),
         markedInactive: sum('markedInactive'),
         clearedInactive: sum('clearedInactive'),
       },
@@ -253,6 +288,29 @@ export class ChatInactivitySweeper {
       else if (outcome?.outcome === 'queued') queued += 1;
     }
 
+    // A manual team's queue, under the same window (WG-07): told, not moved.
+    let unclaimed = 0;
+    if (transferCutoff !== null) {
+      const waiting = await withTenant(
+        this.#db,
+        context,
+        (tx) =>
+          tx.$queryRaw<Array<{ chat_id: string; thread_id: string }>>`
+          SELECT t.chat_id, t.id AS thread_id
+            FROM threads t
+           WHERE t.license_id = ${tenant.license_id} AND ${unclaimedSql(transferCutoff)}
+           ORDER BY t.queued_at ASC, t.id ASC`,
+      );
+      for (const row of waiting) {
+        const told = await this.#chats.alertUnclaimed(
+          context,
+          { chatId: row.chat_id, threadId: row.thread_id },
+          transferCutoff,
+        );
+        if (told) unclaimed += 1;
+      }
+    }
+
     // After the transfers: a connection passed on just now has an event, so
     // it is not quiet, whatever the windows.
     const inactiveSeconds = settings.inactiveAfterSeconds;
@@ -268,6 +326,7 @@ export class ChatInactivitySweeper {
       unanswered: candidates.length,
       transferred,
       queued,
+      unclaimed,
       markedInactive: inactivity.marked,
       clearedInactive: inactivity.cleared,
     };

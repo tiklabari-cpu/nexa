@@ -187,6 +187,7 @@ describe('buildSchedulerJobs', () => {
         replied_here: 0,
         transferred: 0,
         queued: 0,
+        unclaimed: 0,
         marked_inactive: 0,
         cleared_inactive: 0,
       });

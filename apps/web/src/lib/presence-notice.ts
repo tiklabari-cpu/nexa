@@ -40,8 +40,8 @@ export interface UnansweredAlert {
   id: string;
   chatId: string;
   groupId: number;
-  /** The agent who did not answer. */
-  agentId: string;
+  /** The agent who did not answer; null when nobody had it (`unclaimed`, WG-07). */
+  agentId: string | null;
   reason: UnansweredAlertReason;
   transfers: number;
   queuePosition: number | null;

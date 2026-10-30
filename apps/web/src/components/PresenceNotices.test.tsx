@@ -169,6 +169,22 @@ describe('PresenceNotices', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
+  it('tells a lead nobody took a manual team’s chat, naming no agent (WG-07)', () => {
+    act(() =>
+      noteUnansweredAlert({
+        ...ALERT,
+        id: 'thread-u:0',
+        reason: 'unclaimed',
+        agentId: null,
+        transfers: 0,
+      }),
+    );
+    renderNotices();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'A chat has waited in a manual team’s queue and nobody has taken it.',
+    );
+  });
+
   it('counts the agents a chat went past, shows the same alert once, and keeps the newest few', async () => {
     act(() => {
       noteUnansweredAlert({ ...ALERT, id: 'thread-1:3', reason: 'transfer_limit', transfers: 3 });

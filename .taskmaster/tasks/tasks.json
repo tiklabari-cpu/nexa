@@ -14965,7 +14965,7 @@
           "330"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-30T14:06:52.080Z",
+        "updatedAt": "2026-10-30T16:21:10.423Z",
         "subtasks": [
           {
             "id": 1,
@@ -14973,11 +14973,11 @@
             "description": "Çok koşullu hedefleme çekirdeği: v2 tipler + dönüşüm migration + kural motoru + /customer/visit + istemci koşullu teslim",
             "details": "types/contract CampaignConditions v2 + eski {url_contains} dönüşümü + veri dönüştürme migration'ı + visits.variables + sunucu kural motoru + POST /customer/visit (oran sınırı, debounce) + istemci kuralları için \"bekleyen koşul\" ve \"gösterildi\" teslim damgası + KURALLAR'ın sunucu tarafı. Ayrıntı ve kabul maddeleri: üst görev #352 details (tek kaynak).",
             "testStrategy": "Entegrasyon (her alan/operatör, all/any, eski kampanya); `pnpm test:gate`.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "352",
             "priority": "medium",
-            "updatedAt": "2026-10-30T14:06:52.080Z"
+            "updatedAt": "2026-10-30T16:21:10.423Z"
           },
           {
             "id": 2,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-30T14:06:52.081Z",
+      "lastModified": "2026-10-30T16:21:10.424Z",
       "taskCount": 390,
       "completedCount": 351,
       "tags": [

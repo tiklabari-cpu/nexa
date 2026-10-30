@@ -14881,12 +14881,12 @@
         "description": "Atama her zaman otomatik; bazı ekipler (ör. Bonus) \"ilk alan alır\" çalışmak istiyor. Elle alma yalnız takeover ile var. Kaynak: WG-07.",
         "details": "KAYNAK: SiyahTus-Analiz 03-eklenebilecekler.md / 04-gerekceler-ve-sorular.md (Karar kaydı K1–K27 ve \"Kararların maddelere etkisi\" madde içi varsayılanların önüne geçer) / 05-uygulama-rehberi.md — maddeler: WG-07. Eşleme: SiyahTus-Analiz/07-gorev-plani.md.\nTERİM EŞLEMESİ (K1=A): ekranda \"Thread ID\" = nexa Chat (kod/DB/API alanı chat_id, günlük kapsayıcı); ekranda \"Chat ID\" = nexa Thread (kod alanı thread_id, tek bağlantı). Kod adları değişmez; çeviri yalnız sunum katmanında.\nSIRA (contract-first): OpenAPI (packages/contract) → pnpm contract:generate (@siyahtus/types) → Prisma migration (genişlet → taşı → daralt; CONCURRENTLY kendi dosyasında tek ifade) → API servis + birim test → RTM → web/widget/mobil → entegrasyon/E2E.\nPROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → close); CONVENTIONS.md §1 (DoD), §2 (git), §3 (HANDOFF), §5, §6.3 (migration), §7 (test başlığında gereksinim etiketi); CLAUDE.md sınırları (production/DNS/TLS/gerçek secret/kart/ödeme YOK; dış servisler mock).\nNOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.\nDALGA: Dalga 6 — widget, engage, helpdesk, raporlar, kanallar, faturalama, GV.\n\nEFOR: high — karar önceden verilmiş, kalıp depoda var; xhigh gerekçesi yeterli değil (2026-10-14 gözden geçirme).\nKOD: routing-service.ts route :114-171, drainQueue :179-241; DetailsPanel takeover; Group schema:698-711; agents.ts:1006-1040.\nprisma: groups.assignment_mode TEXT DEFAULT 'auto' CHECK auto|manual.\ncontract/types: PATCH /groups/{groupId} assignment_mode; GroupAssignmentMode; POST /chats/{id}/claim (ya da takeover'ın kuyruk kullanımı).\napi: manuel ekipte route/drainQueue ajan seçmez, ekip kuyruğuna koyar (AU-01 #305); claim CAS (assignee_id IS NULL koşullu update), kaybeden \"başka bir ajan aldı\"; eşzamanlı limit kontrolü; topic_role responsible_gambling ekip manuel yapılamaz (400); assigned_at yazılır (#340); queue_entries kapanır (#291).\nRTM: kuyruğa giren sohbet ekip üyelerine incoming_chat (mevcut eylemler).\nweb: ekip editöründe mod seçici, Inbox \"Kuyrukta\" görünümünde \"Al\", sesli bildirim (IN-10 #367 sonrası tercihlerle).\nWG-03 (#340) manuel ekipte \"X dk kimse almadı → Ekip Lideri uyarısı\".\n\nKABUL KRİTERLERİ:\n- Manuel ekibe gelen sohbet kimseye atanmaz, ekipteki çevrimiçi ajanlara bildirim gider.\n- İki ajanın eşzamanlı \"Al\"ında yalnız biri atanır.\n- Sorumlu Oyun ekibi manuel yapılamaz.\n- Limiti dolu ajan alamaz.\n\nKULLANILAN VARSAYIMLAR:\n- 05 WG-07 karar 1: Sorumlu Oyun manuel olamaz.",
         "testStrategy": "Entegrasyon (eşzamanlı Al, limit, RG reddi), e2e; `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "305"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-30T05:25:02.649Z",
+        "updatedAt": "2026-10-30T08:08:17.546Z",
         "subtasks": []
       },
       {
@@ -16146,9 +16146,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-30T05:25:02.649Z",
+      "lastModified": "2026-10-30T08:08:17.547Z",
       "taskCount": 390,
-      "completedCount": 347,
+      "completedCount": 348,
       "tags": [
         "master"
       ]

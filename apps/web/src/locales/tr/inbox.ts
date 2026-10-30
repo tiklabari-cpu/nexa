@@ -259,6 +259,8 @@ export const inbox: Messages = {
   'inbox.transcript.editCancel': 'Vazgeç',
   'inbox.transcript.editSaving': 'Kaydediliyor…',
   'inbox.transcript.edited': 'düzenlendi',
+  'inbox.transcript.campaignCard': 'Kampanya kartı',
+  'inbox.transcript.cardPressed': '“{label}” butonuna bastı',
   'inbox.transcript.editFailed': 'Düzeltme kaydedilemedi.',
   // Sunucunun mesajdan gizlediği değerler (tm 300.2 · AI-26)
   'inbox.transcript.sensitiveHidden': 'Hassas veri gizlendi ({types})',

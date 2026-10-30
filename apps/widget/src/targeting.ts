@@ -15,7 +15,7 @@
  * nothing but types: a value from the shared barrel would become a chunk both
  * halves load.
  */
-import type { CampaignRule, CampaignShowWhen } from '@siyahtus/types';
+import type { CampaignRule, CampaignShowWhen, RichCard } from '@siyahtus/types';
 
 /** Variables the server accepts: at most 20 keys of at most 100 characters. */
 const MAX_VARIABLES = 20;
@@ -27,6 +27,8 @@ const MIN_GAP_MS = 2_000;
 export interface CampaignCard {
   id: string;
   message: string;
+  /** The campaign's card (EN-02), drawn in place of `message`. */
+  rich?: RichCard | undefined;
   /** The browser-side rules it waits for; null for a card shown at once. */
   when: CampaignShowWhen | null;
   /** The rules hold (always, with no `when`): the card may be drawn. */
@@ -60,7 +62,12 @@ export interface Targeting {
   variables(raw: Record<string, unknown>): void;
   /** What a poll offers: a card with `show_when` is held, a waiting one that is not offered goes. */
   offer(
-    campaign: { id: string; message: string; show_when?: CampaignShowWhen | null } | null,
+    campaign: {
+      id: string;
+      message: string;
+      card?: RichCard;
+      show_when?: CampaignShowWhen | null;
+    } | null,
   ): void;
   /** A card that waited is on screen now: the send counts as displayed. */
   shown(): void;
@@ -180,6 +187,7 @@ export function createTargeting(host: TargetingHost, win: Window): Targeting {
       slot.campaign = {
         id: campaign.id,
         message: campaign.message,
+        rich: campaign.card,
         when,
         ready: false,
         shown: false,

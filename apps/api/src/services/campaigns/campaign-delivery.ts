@@ -48,7 +48,12 @@
  * blockers. Oldest first because the alternative — newest first — lets a busy
  * workspace's fresh campaigns starve the ones already owed.
  */
-import type { CampaignContent, CampaignShowWhen } from '@siyahtus/types';
+import {
+  readRichCard,
+  type CampaignContent,
+  type CampaignShowWhen,
+  type RichCard,
+} from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { trialState } from '../billing/metering.js';
 import {
@@ -62,6 +67,7 @@ import {
   resolveCampaignStatus,
   type VisitorContext,
 } from './campaign-matching.js';
+import { campaignText } from './campaign-service.js';
 import { loadVisitorContext } from './campaign-trigger.js';
 
 /**
@@ -97,7 +103,10 @@ export interface DeliverableCampaign {
   sendId: string;
   /** The campaign — the widget's dismissal key, and what 03.3.2's card is about. */
   campaignId: string;
+  /** The message — for a card campaign its plain text, what a widget without cards shows. */
   message: string;
+  /** The card to draw, for a card campaign (EN-02). */
+  card?: RichCard;
 }
 
 /**
@@ -125,7 +134,7 @@ export function pickDeliverableSend(
   now: Date,
 ): DeliverableCampaign | null {
   for (const send of candidates) {
-    const message = (send.campaign.content as CampaignContent | null)?.message?.trim();
+    const message = campaignText(send.campaign.content);
     // A campaign with no message cannot be created or activated, so this is a
     // row that was switched off and emptied, or one from before the rule. Skip
     // rather than deliver an empty card.
@@ -133,7 +142,14 @@ export function pickDeliverableSend(
 
     if (resolveCampaignStatus(send.campaign, now) !== 'ongoing') continue;
 
-    return { sendId: send.id, campaignId: send.campaign.id, message };
+    const content = send.campaign.content as CampaignContent;
+    const card = content.type === 'card' ? readRichCard(content.card) : null;
+    return {
+      sendId: send.id,
+      campaignId: send.campaign.id,
+      message,
+      ...(card ? { card } : {}),
+    };
   }
   return null;
 }
@@ -217,7 +233,12 @@ export async function deliverPendingCampaign(
   input: { customerId: string; hasOpenChat: boolean; bannedAt: Date | null },
   now: Date,
   readSuppression: PromoSuppressionReader = promoSuppressionOf,
-): Promise<{ id: string; message: string; show_when?: CampaignShowWhen } | null> {
+): Promise<{
+  id: string;
+  message: string;
+  card?: RichCard;
+  show_when?: CampaignShowWhen;
+} | null> {
   if (input.hasOpenChat) return null;
   // A banned visitor cannot open a conversation (`chat-service` refuses on
   // `banned_at`), so inviting them into one would burn the send on a promise
@@ -312,7 +333,7 @@ export async function deliverPendingCampaign(
   // it showed it (`markCampaignShown`) — otherwise every visitor who never
   // reached the exit intent would count as one who saw the message.
   if (showWhen) {
-    return { id: deliverable.campaignId, message: deliverable.message, show_when: showWhen };
+    return { ...offered(deliverable), show_when: showWhen };
   }
 
   // The stamp *is* the claim. `delivered_at: null` in the predicate makes it a
@@ -326,7 +347,82 @@ export async function deliverPendingCampaign(
   });
   if (stamped.count !== 1) return null;
 
-  return { id: deliverable.campaignId, message: deliverable.message };
+  return offered(deliverable);
+}
+
+/** What the poll hands the widget: the campaign, its text and — for a card campaign — the card. */
+function offered(deliverable: DeliverableCampaign): {
+  id: string;
+  message: string;
+  card?: RichCard;
+} {
+  return {
+    id: deliverable.campaignId,
+    message: deliverable.message,
+    ...(deliverable.card ? { card: deliverable.card } : {}),
+  };
+}
+
+/** A campaign card this visitor was offered, and the send that offered it. */
+export interface OfferedCampaignCard {
+  sendId: string;
+  card: RichCard;
+}
+
+/**
+ * The card of a campaign this visitor was sent (EN-02 · tm 353), or null when
+ * they have no send of it, it was held back for a risk flag, or the campaign
+ * shows no card (any more). What a button press is checked against: a visitor
+ * can only press the buttons of a card they could have been shown — and only
+ * as the campaign says them now, not as a request claims.
+ */
+export async function offeredCampaignCard(
+  tx: TenantClient,
+  tenant: TenantContext,
+  input: { customerId: string; campaignId: string },
+): Promise<OfferedCampaignCard | null> {
+  const send = await tx.campaignSend.findFirst({
+    where: {
+      licenseId: tenant.licenseId,
+      customerId: input.customerId,
+      campaignId: input.campaignId,
+      suppressedAt: null,
+    },
+    select: { id: true, campaign: { select: { content: true } } },
+  });
+  if (!send) return null;
+  const content = send.campaign.content as CampaignContent | null;
+  const card = content?.type === 'card' ? readRichCard(content.card) : null;
+  return card ? { sendId: send.id, card } : null;
+}
+
+/** The send counts as clicked from now — once: a second press changes nothing. */
+export async function stampCampaignClicked(
+  tx: TenantClient,
+  sendId: string,
+  now: Date,
+): Promise<void> {
+  await tx.campaignSend.updateMany({
+    where: { id: sendId, clickedAt: null },
+    data: { clickedAt: now },
+  });
+}
+
+/**
+ * A press of a campaign card's `open_url` / `copy_coupon` button
+ * (`POST /customer/campaigns/{id}/clicked`). False — the route's 404 — when
+ * there is no such card for this visitor, or no button `button` on it.
+ */
+export async function markCampaignClicked(
+  tx: TenantClient,
+  tenant: TenantContext,
+  input: { customerId: string; campaignId: string; button: number },
+  now: Date,
+): Promise<boolean> {
+  const offered = await offeredCampaignCard(tx, tenant, input);
+  if (!offered?.card.buttons[input.button]) return false;
+  await stampCampaignClicked(tx, offered.sendId, now);
+  return true;
 }
 
 /**

@@ -11,13 +11,19 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
+  CAMPAIGN_CONTENT_TYPES,
   CAMPAIGN_MATCH_MODES,
+  CAMPAIGN_MESSAGE_MAX,
   CAMPAIGN_RULE_FIELDS,
   CAMPAIGN_RULE_OPS,
   CAMPAIGN_RULE_TEXT_MAX,
   CAMPAIGN_RULES_MAX,
   SESSION_VARIABLE_MAX_LENGTH,
+  isCardUploadPath,
+  type CampaignContent,
+  type RichCard,
 } from '@siyahtus/types';
+import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import type { TenantContext } from '../lib/tenant.js';
 import {
@@ -26,6 +32,8 @@ import {
   type CampaignPatch,
 } from '../services/campaigns/campaign-service.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
+import { assertUploadedAttachment } from '../services/storage/attachment.js';
+import { createObjectStore } from '../services/storage/object-store.js';
 import { publishTrafficChange } from '../services/traffic/traffic-events.js';
 
 const listQuery = z.object({
@@ -53,7 +61,16 @@ const conditionsSchema = z
     url_contains: z.string().trim().max(2048).optional(),
   })
   .strict();
-const contentSchema = z.object({ message: z.string().trim().min(1).max(2000).optional() }).strict();
+// The card's shape and limits are the service's (`richCardProblems`), so the
+// 400 names the button at fault in the same words the builder shows (EN-02).
+const contentSchema = z
+  .object({
+    type: z.enum(CAMPAIGN_CONTENT_TYPES).optional(),
+    message: z.string().trim().min(1).max(CAMPAIGN_MESSAGE_MAX).optional(),
+    card: z.custom<RichCard>().optional(),
+    fallback_text: z.string().trim().min(1).max(CAMPAIGN_MESSAGE_MAX).optional(),
+  })
+  .strict();
 
 const createBody = z.object({
   name: z.string().trim().min(1).max(120),
@@ -90,9 +107,24 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   return result.data;
 }
 
-export default async function campaignRoutes(app: FastifyInstance): Promise<void> {
+export default async function campaignRoutes(
+  app: FastifyInstance,
+  { env }: { env: Env },
+): Promise<void> {
   const campaigns = new CampaignService();
   const publisher = new RealtimePublisher(app.redis, app.log);
+  const store = createObjectStore(env.STORAGE_PROVIDER, env.storage);
+
+  /**
+   * A card's image given as an upload path must be a file this workspace
+   * uploaded (EN-02) — the check a chat attachment gets — so a card cannot
+   * point a visitor's widget at another workspace's file.
+   */
+  async function assertCardImage(tenant: TenantContext, content: CampaignContent | undefined) {
+    const image = (content?.card as { image?: { url?: unknown } } | undefined)?.image;
+    const url = typeof image?.url === 'string' ? image.url.trim() : '';
+    if (isCardUploadPath(url)) await assertUploadedAttachment(store, tenant.licenseId, url);
+  }
 
   /**
    * Tell the real-time board that a fire just moved people into `invited`
@@ -125,6 +157,7 @@ export default async function campaignRoutes(app: FastifyInstance): Promise<void
   app.post('/campaigns', { config: { scopes: ['customers:rw'] } }, async (request, reply) => {
     const body = parse(createBody, request.body);
     const tenant = request.tenant();
+    await assertCardImage(tenant, body.content);
     const input: CampaignInput = {
       name: body.name,
       active: body.active,
@@ -150,6 +183,7 @@ export default async function campaignRoutes(app: FastifyInstance): Promise<void
       const id = parse(campaignIdSchema, request.params.campaignId);
       const body = parse(updateBody, request.body);
       const tenant = request.tenant();
+      await assertCardImage(tenant, body.content);
       // Absent keys stay undefined (leave the field alone); an explicit null on a
       // schedule field clears it. The service reads that distinction.
       const patch: CampaignPatch = {

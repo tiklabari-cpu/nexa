@@ -123,6 +123,7 @@ import {
 } from './ai-mode.js';
 import { opensAiFirst } from './ai-first.js';
 import { aiStalled } from './ai-stall.js';
+import { checkedConversationCard } from './conversation-card.js';
 import { LAST_ACTIVITY_SQL, unansweredSql, unclaimedSql } from './chat-inactivity.js';
 import { contactRequestSql, ruleIsOff, type ContactRequestRule } from './ask-email.js';
 import { publishTrafficChange } from '../traffic/traffic-events.js';
@@ -4994,6 +4995,20 @@ export class ChatService {
       input: NewEventInput;
     },
   ): Promise<SerialisedEvent> {
+    // A card in a conversation (EN-02 · tm 353): checked here, the one place
+    // every event is appended, so the rule — quick replies and trusted links,
+    // never a coupon — holds whoever sends it. Before any write: a refused
+    // card leaves the conversation as it was.
+    const card =
+      input.input.type === 'rich_message'
+        ? await checkedConversationCard(
+            tx,
+            input.licenseId,
+            input.input.properties?.['card'],
+            input.input.text,
+          )
+        : null;
+
     // The conversation just moved, so the inbox list's sort key moves with it
     // (FR-MOD-02.2.2 — "RTM'de yukarı taşınır"). Written here rather than at the
     // six call sites because this is the one place an event is ever appended:
@@ -5041,6 +5056,10 @@ export class ChatService {
     // masking badge's key is the server's for the same reason.
     const { [SENSITIVE_TYPES_PROPERTY]: _claimed, ...supplied } = input.input.properties ?? {};
     const properties = stripEditMarkers(supplied);
+    // A card button's press (EN-02) is the server's to record, on the player's
+    // own message (`card-postback.ts`); nobody else may claim one.
+    if (input.authorType !== 'customer') delete properties['postback'];
+    if (card) properties['card'] = card.card;
 
     // The last line before the text comes to rest (tm 300.2 · AI-26 · K12):
     // whoever wrote it, masked under their author's policy. The write paths
@@ -5048,8 +5067,9 @@ export class ChatService {
     // reply, an automation, a future caller — because every event is appended
     // here. A system line is the server's own words and is left as written.
     const author = sensitiveAuthorOf(input.authorType);
-    const masked = author ? maskForWrite(input.input.text, author) : null;
-    const text = masked ? masked.text : input.input.text;
+    const written = card ? card.text : input.input.text;
+    const masked = author ? maskForWrite(written, author) : null;
+    const text = masked ? masked.text : written;
     const types = new Set([...(input.input.sensitiveTypes ?? []), ...(masked?.types ?? [])]);
     if (types.size > 0) {
       properties[SENSITIVE_TYPES_PROPERTY] = SENSITIVE_TYPES.filter((type) => types.has(type));

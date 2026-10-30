@@ -70,7 +70,8 @@ events:
       all, rather than accepted and downgraded silently.
 
       A message must carry text, an `attachment_url`, or both — an attachment may
-      stand alone (FR-MOD-11.4). The attachment must be a file this workspace
+      stand alone (FR-MOD-11.4). A `postback` (a card's `send_message`
+      button, EN-02) is a message too: its text is the button's label. The attachment must be a file this workspace
       uploaded through `/uploads`; any other value is refused.
 
       **Pre-chat requirements (WG-01).** A message that would *open* a
@@ -166,6 +167,8 @@ events:
                   opening message was answered `403 challenge_required`.
                   Verified only when the message opens a conversation and is
                   flagged; otherwise ignored.
+              postback:
+                $ref: "../openapi.yaml#/components/schemas/CardPostbackInput"
     responses:
       "200":
         description: Idempotent replay — the original event, no new message
@@ -320,6 +323,45 @@ campaignShown:
     responses:
       "204":
         description: Counted as displayed (or already was).
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+campaignClicked:
+  post:
+    tags: [Customer]
+    operationId: markCustomerCampaignClicked
+    summary: The visitor pressed a button on a campaign card
+    description: |
+      For a card's `open_url` and `copy_coupon` buttons (EN-02), which
+      write nothing into a conversation: the send's `clicked_at` is
+      stamped, once. A `send_message` button needs no call of its own — its
+      message (`postback` on `POST /customer/chat/events`) stamps it.
+
+      404 when this visitor has no send of that campaign, it was held back
+      for a risk flag, or the campaign shows no card with that button.
+    parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [button]
+            properties:
+              button:
+                type: integer
+                minimum: 0
+                maximum: 4
+                description: The button's position on the card, from 0.
+    responses:
+      "204":
+        description: Counted (or already was).
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }

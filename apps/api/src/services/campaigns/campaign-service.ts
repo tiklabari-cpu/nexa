@@ -22,9 +22,14 @@
  */
 import type { Prisma } from '@prisma/client';
 import {
+  CAMPAIGN_MESSAGE_MAX,
   CAMPAIGN_RULES_MAX,
   campaignRuleProblem,
+  describeRichCardProblem,
   normalizeCampaignConditions,
+  normalizeRichCard,
+  richCardFallbackText,
+  richCardProblems,
   type Campaign,
   type CampaignConditions,
   type CampaignContent,
@@ -205,8 +210,7 @@ export class CampaignService {
     if (!hasTrigger(conditions)) {
       throw ApiError.validation('conditions: a campaign needs a trigger.');
     }
-    const message = input.content.message?.trim();
-    if (!message) throw ApiError.validation('content: a campaign needs a message.');
+    const content = checkedCampaignContent(input.content);
 
     const startsAt = input.startsAt ?? null;
     const endsAt = input.endsAt ?? null;
@@ -219,7 +223,7 @@ export class CampaignService {
         name,
         status,
         conditions: conditions as Prisma.InputJsonValue,
-        content: { message } satisfies CampaignContent as Prisma.InputJsonValue,
+        content: content as Prisma.InputJsonValue,
         startsAt,
         endsAt,
         recurring: input.recurring ?? false,
@@ -265,10 +269,13 @@ export class CampaignService {
     const patchedConditions =
       patch.conditions !== undefined ? checkedConditions(patch.conditions) : undefined;
     const resultingConditions = patchedConditions ?? storedConditions(existing.conditions);
-    const resultingMessage =
-      patch.content?.message !== undefined
-        ? patch.content.message?.trim()
-        : (existing.content as CampaignContent | null)?.message;
+    // A content patch replaces the content whole — switching a campaign to a
+    // card drops its message, and back (EN-02). An empty one changes nothing.
+    const patchedContent =
+      patch.content !== undefined && Object.keys(patch.content).length > 0
+        ? checkedCampaignContent(patch.content)
+        : undefined;
+    const resultingMessage = campaignText(patchedContent ?? existing.content);
 
     // A campaign that stays (or becomes) active must still be able to target and
     // speak — an edit cannot strip that out from under a running campaign.
@@ -291,10 +298,8 @@ export class CampaignService {
     if (patchedConditions !== undefined) {
       data.conditions = patchedConditions as Prisma.InputJsonValue;
     }
-    if (patch.content !== undefined) {
-      data.content = {
-        message: resultingMessage,
-      } satisfies CampaignContent as Prisma.InputJsonValue;
+    if (patchedContent !== undefined) {
+      data.content = patchedContent as Prisma.InputJsonValue;
     }
     if (patch.startsAt !== undefined) data.startsAt = patch.startsAt;
     if (patch.endsAt !== undefined) data.endsAt = patch.endsAt;
@@ -466,6 +471,63 @@ export class CampaignService {
       performance: campaignPerformance(row.sends),
     };
   }
+}
+
+/**
+ * What a campaign says in plain text: its message, or its card's plain twin
+ * (EN-02). Undefined for content with neither — a row switched off and
+ * emptied, or one from before the rule.
+ */
+export function campaignText(content: unknown): string | undefined {
+  if (typeof content !== 'object' || content === null) return undefined;
+  const { type, message, fallback_text: fallback } = content as CampaignContent;
+  const text = type === 'card' ? fallback : message;
+  return typeof text === 'string' && text.trim() ? text.trim() : undefined;
+}
+
+/**
+ * Content as submitted, checked and put in the stored shape (EN-02 · tm 353).
+ *
+ * A text campaign — `type: 'text'` or none, the shape every campaign had
+ * before cards — is stored as `{ message }` exactly as before, so an old
+ * campaign and a new text one read back the same. A card is checked under the
+ * campaign rules (`richCardProblems`: https links only, nothing cut short —
+ * the 400 names the first field at fault and `details.fields` lists them
+ * all) and stored with its `fallback_text`, written from the card when the
+ * author gave none. The other type's fields are refused rather than kept: a
+ * card campaign carrying a stale `message` would say two different things.
+ */
+export function checkedCampaignContent(content: CampaignContent): CampaignContent {
+  const type = content.type ?? 'text';
+  if (type === 'text') {
+    if (content.card !== undefined || content.fallback_text !== undefined) {
+      throw ApiError.validation('content.card: only a campaign of type card has one.');
+    }
+    const message = content.message?.trim();
+    if (!message) throw ApiError.validation('content: a campaign needs a message.');
+    return { message };
+  }
+  if (content.message !== undefined) {
+    throw ApiError.validation('content.message: a card campaign says it as fallback_text.');
+  }
+  const card = normalizeRichCard(content.card);
+  const problems = richCardProblems(card, { source: 'campaign' });
+  if (problems.length > 0 || !card) {
+    const sentences = problems.map((problem) => `content.card.${describeRichCardProblem(problem)}`);
+    throw ApiError.validation(sentences[0] ?? 'content.card: a card campaign needs a card.', {
+      fields: problems.map((problem, index) => ({
+        field: `content.card.${problem.field}`,
+        message: sentences[index]!,
+      })),
+    });
+  }
+  const fallback = content.fallback_text?.trim() || richCardFallbackText(card);
+  if (fallback.length > CAMPAIGN_MESSAGE_MAX) {
+    throw ApiError.validation(
+      `content.fallback_text: the card's plain text is longer than ${CAMPAIGN_MESSAGE_MAX} characters — write a shorter one.`,
+    );
+  }
+  return { type: 'card', card, fallback_text: fallback };
 }
 
 /**

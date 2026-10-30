@@ -342,6 +342,126 @@ describe('CampaignBuilder rules (EN-03 · tm 352.2)', () => {
   });
 });
 
+describe('CampaignBuilder card (EN-02 · tm 353)', () => {
+  async function openCard(): Promise<void> {
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: 'New campaign' }));
+    await userEvent.type(screen.getByLabelText('Name'), 'Deposit help');
+    await userEvent.type(screen.getByLabelText('Rule 1 value'), '/deposit');
+    await userEvent.click(screen.getByLabelText('Card'));
+  }
+
+  it('builds a title, an image and three buttons, previews it, and saves exactly that (FR-MOD-03.3.2)', async () => {
+    api.post.mockResolvedValue({ ...campaign('ongoing', 'Deposit help'), matched: 0 });
+    await openCard();
+    await userEvent.type(screen.getByLabelText('Card title (optional)'), 'Deposit trouble?');
+    await userEvent.type(screen.getByLabelText('Card text'), 'We can help.');
+    await userEvent.type(
+      screen.getByLabelText('Image address (optional)'),
+      'https://cdn.test/a.png',
+    );
+    await userEvent.type(screen.getByLabelText('Image description'), 'Coins');
+    await userEvent.type(screen.getByLabelText('Button 1 label'), 'Get help');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add a button' }));
+    await userEvent.type(screen.getByLabelText('Button 2 label'), 'Rules');
+    await userEvent.selectOptions(screen.getByLabelText('Button 2 does'), 'open_url');
+    await userEvent.type(screen.getByLabelText('Button 2 link'), 'https://casino.test/rules');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add a button' }));
+    await userEvent.type(screen.getByLabelText('Button 3 label'), 'Copy code');
+    await userEvent.selectOptions(screen.getByLabelText('Button 3 does'), 'copy_coupon');
+    await userEvent.type(screen.getByLabelText('Button 3 coupon code'), 'WELCOME50');
+
+    const preview = screen.getByRole('region', { name: 'Preview' });
+    expect(within(preview).getByText('Deposit trouble?')).toBeInTheDocument();
+    expect(within(preview).getByRole('img', { name: 'Coins' })).toBeInTheDocument();
+    expect(within(preview).getByText('Copies WELCOME50')).toBeInTheDocument();
+    await userEvent.click(within(preview).getByRole('button', { name: 'Mobile' }));
+    expect(within(preview).getByRole('button', { name: 'Mobile' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create campaign' }));
+    expect(api.post).toHaveBeenCalledWith(
+      '/campaigns',
+      expect.objectContaining({
+        content: {
+          type: 'card',
+          card: {
+            title: 'Deposit trouble?',
+            body: 'We can help.',
+            image: { url: 'https://cdn.test/a.png', alt: 'Coins' },
+            buttons: [
+              { label: 'Get help', style: 'primary', action: { type: 'send_message' } },
+              {
+                label: 'Rules',
+                style: 'default',
+                action: { type: 'open_url', url: 'https://casino.test/rules' },
+              },
+              {
+                label: 'Copy code',
+                style: 'default',
+                action: { type: 'copy_coupon', code: 'WELCOME50' },
+              },
+            ],
+          },
+        },
+      }),
+    );
+  });
+
+  it('keeps Create off for a javascript: link or a long label, counting rather than cutting', async () => {
+    await openCard();
+    await userEvent.type(screen.getByLabelText('Card text'), 'Hi');
+    await userEvent.type(screen.getByLabelText('Button 1 label'), 'Go');
+    const create = screen.getByRole('button', { name: 'Create campaign' });
+    expect(create).toBeEnabled();
+
+    await userEvent.selectOptions(screen.getByLabelText('Button 1 does'), 'open_url');
+    await userEvent.type(screen.getByLabelText('Button 1 link'), 'javascript:alert(1)');
+    await userEvent.tab();
+    expect(await screen.findByText('Use an https:// address.')).toBeInTheDocument();
+    expect(create).toBeDisabled();
+
+    // Switching the action starts it empty: the bad link is not carried into a coupon.
+    await userEvent.selectOptions(screen.getByLabelText('Button 1 does'), 'copy_coupon');
+    expect(screen.getByLabelText('Button 1 coupon code')).toHaveValue('');
+
+    await userEvent.selectOptions(screen.getByLabelText('Button 1 does'), 'send_message');
+    await userEvent.type(screen.getByLabelText('Button 1 label'), ' it is really long');
+    expect(screen.getByLabelText('Button 1 label')).toHaveValue('Go it is really long');
+    expect(screen.getByText('20/20')).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Button 1 label'), '!');
+    expect(screen.getByText('21/20')).toBeInTheDocument();
+    expect(create).toBeDisabled();
+  });
+
+  it('opens a saved card campaign on the card, and a text one on its message', async () => {
+    api.get.mockResolvedValue({
+      items: [
+        campaign('ongoing', 'Carded', {
+          content: {
+            type: 'card',
+            card: {
+              body: 'Saved body',
+              buttons: [{ label: 'Help', style: 'default', action: { type: 'send_message' } }],
+            },
+            fallback_text: 'Saved body\n1. Help',
+          },
+        }),
+      ],
+      total: 1,
+    });
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    expect(screen.getByLabelText('Card')).toBeChecked();
+    expect(screen.getByLabelText('Card text')).toHaveValue('Saved body');
+    expect(screen.getByLabelText('Button 1 label')).toHaveValue('Help');
+  });
+});
+
 describe('CampaignsPage localisation (NFR-I18N2)', () => {
   afterEach(() => {
     resetLocale();

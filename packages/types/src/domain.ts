@@ -4,6 +4,7 @@
  */
 
 import type { CampaignMatchMode, CampaignRule } from './campaign-conditions.js';
+import type { RichCard } from './rich-card.js';
 
 // --- Identity & tenancy -----------------------------------------------------
 
@@ -597,9 +598,26 @@ export interface CampaignConditions {
   url_contains?: string;
 }
 
-/** What the campaign delivers to a matching visitor (FR-MOD-03.3.2). */
+/** A campaign says a line of text, or shows a card (EN-02 · tm 353). */
+export const CAMPAIGN_CONTENT_TYPES = ['text', 'card'] as const;
+export type CampaignContentType = (typeof CAMPAIGN_CONTENT_TYPES)[number];
+
+/** A campaign's message, or its card's plain text, at most. */
+export const CAMPAIGN_MESSAGE_MAX = 2000;
+
+/**
+ * What the campaign delivers to a matching visitor (FR-MOD-03.3.2).
+ *
+ * `text` — and an absent `type`, every campaign saved before cards — says
+ * `message`. A `card` shows `card` (EN-02), and `fallback_text` is its plain
+ * twin: what a channel or a widget that cannot draw a card shows instead,
+ * always stored (`richCardFallbackText` when the author wrote none).
+ */
 export interface CampaignContent {
+  type?: CampaignContentType;
   message?: string;
+  card?: RichCard;
+  fallback_text?: string;
 }
 
 /** Displayed / Chats / Conversion — the campaign card's numbers (FR-MOD-03.3.3). */

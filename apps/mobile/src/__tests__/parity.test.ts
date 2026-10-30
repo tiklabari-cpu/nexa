@@ -1107,7 +1107,10 @@ describe('module parity matrix — what is still owed', () => {
       // 354 -> 356 with `POST /customer/visit` and
       // `POST /customer/campaigns/{campaignId}/shown` (tm 352.1) — campaign
       // targeting from the widget (EN-03), a visitor surface; nothing for the agent app.
-      contractEndpoints: 356,
+      // 356 -> 357 with `POST /customer/campaigns/{campaignId}/clicked` (tm 353) — a
+      // campaign card's link or coupon button pressed in the widget (EN-02), a visitor
+      // surface; nothing for the agent app.
+      contractEndpoints: 357,
       scopeBoundaries: 1,
     });
   });

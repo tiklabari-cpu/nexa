@@ -44,6 +44,27 @@ describe('pickDeliverableSend', () => {
     });
   });
 
+  it('carries a card campaign as its plain text plus the card; a card that no longer reads is skipped (EN-02)', () => {
+    const card = {
+      body: 'Stuck?',
+      buttons: [{ label: 'Help', style: 'default', action: { type: 'send_message' } }],
+    };
+    const picked = pickDeliverableSend(
+      [send('a', { content: { type: 'card', card, fallback_text: 'Stuck?\n1. Help' } })],
+      NOW,
+    );
+    expect(picked).toEqual({
+      sendId: 'send-a',
+      campaignId: 'campaign-a',
+      message: 'Stuck?\n1. Help',
+      card,
+    });
+    // A card campaign speaks through fallback_text: a stray message is not it.
+    expect(
+      pickDeliverableSend([send('b', { content: { type: 'card', message: 'old' } })], NOW),
+    ).toBeNull();
+  });
+
   it('trims the stored message', () => {
     const picked = pickDeliverableSend([send('a', { content: { message: '  hello  ' } })], NOW);
     expect(picked?.message).toBe('hello');

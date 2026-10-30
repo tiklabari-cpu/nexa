@@ -10,7 +10,9 @@ import {
 import {
   isEditableEventType,
   isWithinEditWindow,
+  readCardPostback,
   readEditedAt,
+  readRichCard,
   readSensitiveTypes,
 } from '@siyahtus/types';
 import type { ChatEvent } from './types.js';
@@ -27,6 +29,7 @@ import { Dropdown } from '../../components/ui/index.js';
 import { suggestionSubjectOf, type SuggestionSubject } from '../playbook/ai-suggestions.js';
 import { handoffCardIdOf } from './handoffCard.js';
 import { AttachmentView } from './Attachment.js';
+import { RichCardView } from '../campaigns/RichCardView.js';
 import { renderRichText } from './richText.js';
 import { getLocale, useTranslate } from '../../lib/i18n.js';
 
@@ -490,6 +493,10 @@ function Bubble({
   // What the server masked out of this message (tm 300.2 · AI-26) — the reader
   // sees asterisks and is told why, rather than guessing at a garbled message.
   const sensitive = readSensitiveTypes(event.properties);
+  // A card from the team (EN-02 · tm 353), and the card button a player's
+  // message was sent by: drawn read only, the pressed button marked.
+  const richCard = event.type === 'rich_message' ? readRichCard(event.properties?.['card']) : null;
+  const postback = event.author_type === 'customer' ? readCardPostback(event.properties) : null;
   const t = useTranslate();
   const [draft, setDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -569,6 +576,14 @@ function Bubble({
               {t('inbox.transcript.noteLabel')}
             </span>
           )}
+          {postback?.source === 'campaign' && (
+            <div className="flex flex-col gap-1" data-testid="campaign-card">
+              <span className="text-2xs font-medium text-content-tertiary">
+                {t('inbox.transcript.campaignCard')}
+              </span>
+              <RichCardView card={postback.card} pressed={postback.button} className="w-64" />
+            </div>
+          )}
           <div
             className={`rounded-lg px-3 py-2 text-sm ${bubbleClasses({ isNote, isMine, event })} ${
               pending ? 'opacity-60' : ''
@@ -619,10 +634,14 @@ function Bubble({
                   (FR-MOD-02.3.5 decision, `#### K02.3.5`): their literal asterisks
                   read back exactly as typed rather than being reinterpreted as an
                   agent's formatting. */}
-                {event.text && (
-                  <span className="whitespace-pre-wrap break-words">
-                    {event.author_type === 'customer' ? event.text : renderRichText(event.text)}
-                  </span>
+                {richCard ? (
+                  <RichCardView card={richCard} className="w-64" />
+                ) : (
+                  event.text && (
+                    <span className="whitespace-pre-wrap break-words">
+                      {event.author_type === 'customer' ? event.text : renderRichText(event.text)}
+                    </span>
+                  )
                 )}
                 {event.attachment_url && (
                   <div className={event.text ? 'mt-2' : ''}>
@@ -646,6 +665,7 @@ function Bubble({
                 wording changed (FR-MOD-02.3.7). Shown on every side of the
                 conversation, not only the author's. */}
               {editedAt !== null && ` · ${t('inbox.transcript.edited')}`}
+              {postback && ` · ${t('inbox.transcript.cardPressed', { label: postback.label })}`}
             </span>
             {sensitive.length > 0 && (
               <span className="rounded-sm border border-border px-1.5 font-medium text-content-secondary">

@@ -302,6 +302,8 @@ paths:
     $ref: "./paths/customer-chat.yaml#/visit"
   /customer/campaigns/{campaignId}/shown:
     $ref: "./paths/customer-chat.yaml#/campaignShown"
+  /customer/campaigns/{campaignId}/clicked:
+    $ref: "./paths/customer-chat.yaml#/campaignClicked"
   /customer/kb/search:
     $ref: "./paths/customer-kb.yaml#/search"
   /customer/kb/articles/{slug}:
@@ -1921,6 +1923,12 @@ components:
             secret is a `system_message` addressed to `all` with
             `system_event: sensitive_data_warning`, once per chat per type; its
             `sensitive_types` are the types it is the first warning for.
+
+            A `rich_message` carries its card as `card` (`RichCard`, EN-02)
+            and its plain text as `text`. A player's message sent by a card
+            button carries `postback` (`CardPostback`), which only the
+            server writes — it is stripped from a caller-supplied
+            `properties` too.
         created_at: { type: string, format: date-time }
 
     EventEdit:
@@ -1953,6 +1961,14 @@ components:
         properties:
           type: object
           additionalProperties: true
+          description: |
+            A `rich_message` (EN-02) needs `properties.card` (`RichCard`).
+            In a conversation a card may only `send_message` or `open_url`
+            to one of the workspace's trusted domains — no `copy_coupon` —
+            whoever sends it (an agent, a bot, the AI); anything else is a 400
+            naming the button. Its `text` defaults to the card's plain text
+            (title, body, the buttons numbered), what a channel that cannot
+            draw a card sends.
         idempotency_key:
           type: string
           maxLength: 128
@@ -10674,9 +10690,110 @@ components:
 
     CampaignContent:
       type: object
-      description: What the campaign delivers to a matching visitor.
+      description: |
+        What the campaign delivers to a matching visitor: a line of text
+        (`type: text`, or no `type` — every campaign saved before cards) or
+        a card (`type: card`, EN-02).
+
+        A card campaign needs `card`; `fallback_text` is its plain twin —
+        what a widget or channel that cannot draw a card shows — and is always
+        answered: written from the card (title, body, the buttons numbered)
+        when the request leaves it out. A text campaign needs `message`.
+        Switching a campaign's type drops the other type's fields.
       properties:
+        type:
+          type: string
+          enum: [text, card]
         message: { type: string, minLength: 1, maxLength: 2000 }
+        card: { $ref: "#/components/schemas/RichCard" }
+        fallback_text: { type: string, minLength: 1, maxLength: 2000 }
+
+    RichCard:
+      type: object
+      description: |
+        A card (EN-02): an optional title and image, a body, up to five
+        buttons. Limits are refused, never cut: a label of 21 characters is a
+        400 naming the button. In a conversation (`rich_message`) a card may
+        only `send_message` or `open_url` to one of the workspace's trusted
+        domains; `copy_coupon` is a campaign's alone.
+      required: [body, buttons]
+      properties:
+        title: { type: string, maxLength: 80 }
+        body: { type: string, minLength: 1, maxLength: 220 }
+        image:
+          type: object
+          required: [url, alt]
+          properties:
+            url:
+              type: string
+              maxLength: 2048
+              description: An `https:` address, or a `file_url` this workspace got from `/uploads`.
+            alt:
+              type: string
+              minLength: 1
+              maxLength: 150
+              description: What a screen reader says instead. Required.
+        buttons:
+          type: array
+          maxItems: 5
+          items: { $ref: "#/components/schemas/CardButton" }
+
+    CardButton:
+      type: object
+      required: [label, action]
+      properties:
+        label: { type: string, minLength: 1, maxLength: 20 }
+        style:
+          type: string
+          enum: [default, primary]
+          default: default
+        action:
+          type: object
+          required: [type]
+          description: |
+            `send_message` puts the label into the conversation as the
+            player's message; `open_url` opens `url` (`https:` only — a
+            `javascript:` or `http:` address is a 400) in a new tab;
+            `copy_coupon` copies `code`. Only the field of the action's
+            type is kept.
+          properties:
+            type:
+              type: string
+              enum: [send_message, open_url, copy_coupon]
+            url: { type: string, maxLength: 2048 }
+            code: { type: string, minLength: 1, maxLength: 40 }
+
+    CardPostbackInput:
+      type: object
+      description: |
+        A card's `send_message` button was pressed (EN-02): the message is
+        the button's label — `text`, if sent, must be exactly that — and it
+        is recorded with `properties.postback` (`CardPostback`). Exactly one
+        of `campaign_id` (a campaign card this visitor was offered; it
+        counts as clicked) or `event_id` (a `rich_message` in this visitor's
+        open conversation). A button that does not exist or does not send a
+        message is a 400.
+      required: [button]
+      properties:
+        campaign_id: { type: string, format: uuid }
+        event_id: { type: string }
+        button: { type: integer, minimum: 0, maximum: 4 }
+
+    CardPostback:
+      type: object
+      description: |
+        `properties.postback` on a player's message that a card button sent
+        (EN-02): which button, its label, and the campaign — with its card as
+        it was, so the Inbox can show what was pressed — or the
+        `rich_message` event it was on.
+      required: [source, button, label]
+      properties:
+        source: { type: string, enum: [campaign, event] }
+        campaign_id: { type: string, format: uuid }
+        event_id: { type: string }
+        button: { type: integer }
+        label: { type: string }
+        card: { $ref: "#/components/schemas/RichCard" }
 
     CampaignPerformance:
       type: object
@@ -15000,7 +15117,18 @@ components:
                 named it for their own list, not for the visitor.
             message:
               type: string
-              description: The message the campaign's author wrote.
+              description: |
+                The message the campaign's author wrote — for a card campaign,
+                the card's plain text (`fallback_text`), which a widget that
+                predates cards shows.
+            card:
+              allOf:
+                - $ref: "#/components/schemas/RichCard"
+              description: |
+                The card to draw (EN-02), when the campaign is one. Its
+                `send_message` buttons post the label with `postback`
+                (`campaign_id`); the others report
+                `POST /customer/campaigns/{campaignId}/clicked`.
             show_when:
               allOf:
                 - $ref: "#/components/schemas/CampaignShowWhen"

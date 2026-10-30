@@ -17,6 +17,7 @@ import {
   type ChallengeRequiredDetails,
   type ChallengeReason,
   type CampaignShowWhen,
+  type RichCard,
 } from '@siyahtus/types';
 
 /**
@@ -118,7 +119,13 @@ export interface WidgetState {
    * Then it is offered on every poll while the page still applies, and counts as
    * delivered when the widget reports it shown (`campaignShown`).
    */
-  campaign: { id: string; message: string; show_when?: CampaignShowWhen | null } | null;
+  campaign: {
+    id: string;
+    message: string;
+    /** The card to draw (EN-02); `message` is then its plain text. */
+    card?: RichCard;
+    show_when?: CampaignShowWhen | null;
+  } | null;
   events: WidgetEvent[];
   /**
    * Who has the open connection (tm 308 · AI-29): "Talk to an agent" shows
@@ -521,6 +528,8 @@ export class WidgetApi {
       attachment_url?: string;
       /** Pre-chat form answers: contact custom-field id → value (FR-MOD-08.7.7). */
       custom_fields?: Record<string, string>;
+      /** A card's "send a message" button (EN-02): `text` is its label. */
+      postback?: { campaign_id?: string; event_id?: string; button: number };
     } = {},
   ): Promise<{ chat_id: string; event: WidgetEvent | null }> {
     // One key for every round: a retry behind a check must not post twice.

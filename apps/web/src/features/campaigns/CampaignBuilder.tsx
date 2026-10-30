@@ -3,7 +3,9 @@
  *
  * A trigger and a message are both required — Submit stays disabled until they
  * are given, the same rule the server enforces (a campaign that could not target
- * or say anything is not saved). Scheduling is optional: leave the dates empty
+ * or say anything is not saved). The message is a line of text or a card
+ * (EN-02 · `CampaignCardEditor`): a title, an image, a body and up to five
+ * buttons, checked by the same function the API runs. Scheduling is optional: leave the dates empty
  * and the campaign runs now; set a start in the future and it saves as scheduled.
  * Saving a running campaign fires it at the matching visitors, so the success
  * toast reports how many it reached.
@@ -15,7 +17,15 @@ import { ApiClientError, errorMessageKey, type ApiClient } from '../../lib/api-c
 import { FieldError, required, useForm } from '../../lib/form.js';
 import { useCloseGuard } from '../../lib/dirty-guard.js';
 import { useTranslate } from '../../lib/i18n.js';
-import type { Campaign, CampaignMatchMode, CampaignWriteResult } from '@siyahtus/types';
+import {
+  normalizeRichCard,
+  type Campaign,
+  type CampaignContentType,
+  type CampaignMatchMode,
+  type CampaignWriteResult,
+  type RichCard,
+} from '@siyahtus/types';
+import { CampaignCardEditor, blankCard, cardProblems } from './CampaignCardEditor.js';
 import { CampaignRuleEditor } from './CampaignRuleEditor.js';
 import {
   conditionsFromDrafts,
@@ -68,6 +78,20 @@ export function CampaignBuilder({
     JSON.stringify(conditionsFromDrafts(initialRules.match, initialRules.drafts));
   const rulesReady = rules.drafts.every((draft) => draftProblem(draft) === null);
 
+  // Text or a card (EN-02), beside the form like the rules: a card is a tree.
+  const initialKind: CampaignContentType = campaign?.content.type === 'card' ? 'card' : 'text';
+  const [kind, setKind] = useState<CampaignContentType>(initialKind);
+  const [initialCard] = useState<RichCard>(() => {
+    const saved = campaign?.content.card;
+    return saved
+      ? { ...saved, title: saved.title ?? '', image: saved.image ?? { url: '', alt: '' } }
+      : blankCard();
+  });
+  const [card, setCard] = useState<RichCard>(initialCard);
+  const contentChanged =
+    kind !== initialKind || JSON.stringify(card) !== JSON.stringify(initialCard);
+  const cardReady = kind === 'text' || cardProblems(card).length === 0;
+
   const form = useForm({
     initial: {
       name: campaign?.name ?? '',
@@ -77,14 +101,17 @@ export function CampaignBuilder({
     },
     validators: {
       name: required(t('campaigns.builder.nameRequired')),
-      message: required(t('campaigns.builder.messageRequired')),
+      ...(kind === 'text' ? { message: required(t('campaigns.builder.messageRequired')) } : {}),
     },
     onSubmit: async (values, { setFieldError, setSubmitError }) => {
       try {
         const saved = await save.mutateAsync({
           name: values.name,
           conditions: conditionsFromDrafts(rules.match, rules.drafts),
-          content: { message: values.message.trim() },
+          content:
+            kind === 'card'
+              ? { type: 'card', card: normalizeRichCard(card) }
+              : { message: values.message.trim() },
           starts_at: fromDateTimeLocal(values.starts_at),
           ends_at: fromDateTimeLocal(values.ends_at),
         });
@@ -110,7 +137,7 @@ export function CampaignBuilder({
   });
 
   const close = useCloseGuard({
-    isDirty: form.isDirty || rulesChanged,
+    isDirty: form.isDirty || rulesChanged || contentChanged,
     message: t('campaigns.builder.discardConfirm'),
     onClose,
   });
@@ -148,22 +175,46 @@ export function CampaignBuilder({
 
         <CampaignRuleEditor match={rules.match} drafts={rules.drafts} onChange={setRules} />
 
-        <Field
-          label={t('campaigns.builder.messageLabel')}
-          htmlFor="campaign-message"
-          error={messageError}
-        >
-          <textarea
-            id="campaign-message"
-            rows={3}
-            value={form.values.message}
-            onChange={(event) => form.setValue('message', event.target.value)}
-            onBlur={() => form.blur('message')}
-            aria-invalid={messageError ? true : undefined}
-            placeholder={t('campaigns.builder.messagePlaceholder')}
-            className="w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
-          />
-        </Field>
+        <fieldset className="flex flex-col gap-1">
+          <legend className="mb-1 text-sm font-medium">
+            {t('campaigns.builder.contentLabel')}
+          </legend>
+          <div className="flex gap-4 text-sm">
+            {(['text', 'card'] as const).map((option) => (
+              <label key={option} className="flex items-center gap-1.5">
+                <input
+                  type="radio"
+                  name="campaign-content-type"
+                  value={option}
+                  checked={kind === option}
+                  onChange={() => setKind(option)}
+                />
+                {t(`campaigns.builder.content.${option}`)}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        {kind === 'card' ? (
+          <CampaignCardEditor card={card} onChange={setCard} />
+        ) : (
+          <Field
+            label={t('campaigns.builder.messageLabel')}
+            htmlFor="campaign-message"
+            error={messageError}
+          >
+            <textarea
+              id="campaign-message"
+              rows={3}
+              value={form.values.message}
+              onChange={(event) => form.setValue('message', event.target.value)}
+              onBlur={() => form.blur('message')}
+              aria-invalid={messageError ? true : undefined}
+              placeholder={t('campaigns.builder.messagePlaceholder')}
+              className="w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+            />
+          </Field>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <Field label={t('campaigns.builder.startsLabel')} htmlFor="campaign-starts">
@@ -198,7 +249,7 @@ export function CampaignBuilder({
           </button>
           <button
             type="submit"
-            disabled={!form.canSubmit || !rulesReady}
+            disabled={!form.canSubmit || !rulesReady || !cardReady}
             className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             {form.isSubmitting

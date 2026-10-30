@@ -27,6 +27,7 @@ const WIDGET_SOURCE = resolve(import.meta.dirname, 'src/widget.ts');
 export const LAZY_CHUNKS = [
   { name: 'help', source: 'src/help.ts', importCall: "import('./help.js')" },
   { name: 'targeting', source: 'src/targeting.ts', importCall: "import('./targeting.js')" },
+  { name: 'card', source: 'src/card.ts', importCall: "import('./card.js')" },
 ] as const;
 
 /** Vite plugin: the lazy modules emitted as chunks and addressed by URL, build only. */

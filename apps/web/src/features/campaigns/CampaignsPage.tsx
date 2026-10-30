@@ -9,6 +9,10 @@
  *
  * Creating and toggling are `customers:rw`; an agent with only `customers:ro`
  * sees the list and its numbers but not the controls that change them.
+ *
+ * A row can be copied (a switched-off twin) or deleted — an archive, behind a
+ * confirmation, whose history stays in the Report view; "From a template" opens
+ * the Turkish iGaming gallery (EN-05).
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
@@ -17,12 +21,16 @@ import { EmptyState } from '../../components/EmptyState.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { Banner } from '../../components/ui/index.js';
+import { useConfirm } from '../../components/ui/ConfirmDialog.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount, formatDate, formatRate } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { CustomersTabs } from '../customers/CustomersTabs.js';
 import { CampaignBuilder } from './CampaignBuilder.js';
+import { CampaignsReportView } from './CampaignsReportView.js';
+import { CampaignTemplateGallery } from './CampaignTemplateGallery.js';
+import { templateDraft, type CampaignDraft } from './templates.js';
 import {
   CAMPAIGN_TABS,
   campaignCounts,
@@ -80,6 +88,18 @@ export function CampaignsPage(): ReactElement {
   // `null` closed, `'new'` the create form, a campaign the edit form.
   const [editing, setEditing] = useState<Campaign | 'new' | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // The list, or the report over the same campaigns (EN-05).
+  const [view, setView] = useState<'list' | 'report'>('list');
+  const [gallery, setGallery] = useState(false);
+  const [draft, setDraft] = useState<CampaignDraft | null>(null);
+  const { confirm, dialog } = useConfirm();
+
+  // The report is a `reports_read` surface: the tab shows only to those who may read it.
+  const groups = useQuery({
+    queryKey: ['reports', 'groups'],
+    queryFn: () => api.get<{ groups: Array<{ id: string }> }>('/reports/groups'),
+  });
+  const canReport = (groups.data?.groups ?? []).some((group) => group.id === 'campaigns');
 
   const query = useQuery({
     queryKey: ['campaigns'],
@@ -113,6 +133,35 @@ export function CampaignsPage(): ReactElement {
     },
   });
 
+  const copy = useMutation({
+    mutationFn: (campaign: Campaign) =>
+      api.post<CampaignWriteResult>(`/campaigns/${campaign.id}/duplicate`, {
+        name: t('campaigns.page.copyName', { name: campaign.name }).slice(0, 120),
+      }),
+    onSuccess: (copied) => {
+      invalidate();
+      setNotice(t('campaigns.page.notice.copied', { name: copied.name }));
+    },
+  });
+
+  const archive = useMutation({
+    mutationFn: (campaign: Campaign) => api.delete<void>(`/campaigns/${campaign.id}`),
+    onSuccess: (_result, campaign) => {
+      invalidate();
+      void queryClient.invalidateQueries({ queryKey: ['campaign-report'] });
+      setNotice(t('campaigns.page.notice.deleted', { name: campaign.name }));
+    },
+  });
+
+  const askDelete = (campaign: Campaign): void =>
+    confirm({
+      title: t('campaigns.page.delete.title', { name: campaign.name }),
+      description: t('campaigns.page.delete.description'),
+      confirmLabel: t('campaigns.page.delete.confirm'),
+      failureTitle: t('campaigns.page.delete.failed', { name: campaign.name }),
+      onConfirm: () => archive.mutateAsync(campaign),
+    });
+
   return (
     <Page
       title={t('campaigns.page.title')}
@@ -127,74 +176,62 @@ export function CampaignsPage(): ReactElement {
         </div>
       )}
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <nav aria-label={t('campaigns.page.statusAriaLabel')} className="flex flex-wrap gap-1">
-          {CAMPAIGN_TABS.map((tab) => {
-            const active = filter === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                aria-pressed={active}
-                onClick={() => setFilter(tab.id)}
-                className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
-                  active
-                    ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
-                    : 'text-content-secondary hover:bg-surface-2'
-                }`}
-              >
-                {t(TAB_LABEL_KEY[tab.id])}
-                <span className="ml-1.5 text-2xs text-content-tertiary">{counts[tab.id]}</span>
-              </button>
-            );
-          })}
+      {canReport && (
+        <nav aria-label={t('campaigns.page.viewAriaLabel')} className="mb-3 flex gap-1">
+          {(['list', 'report'] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={view === option}
+              onClick={() => setView(option)}
+              className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                view === option
+                  ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
+                  : 'text-content-secondary hover:bg-surface-2'
+              }`}
+            >
+              {t(`campaigns.page.view.${option}`)}
+            </button>
+          ))}
         </nav>
-
-        {canWrite && (
-          <button
-            type="button"
-            onClick={() => setEditing('new')}
-            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white"
-          >
-            {t('campaigns.page.new')}
-          </button>
-        )}
-      </div>
-
-      {toggle.isError && (
-        <div className="mb-3">
-          <ErrorNotice
-            message={`${t(
-              toggle.variables?.active
-                ? 'campaigns.page.toggleOnError'
-                : 'campaigns.page.toggleOffError',
-              { name: campaigns.find((c) => c.id === toggle.variables?.id)?.name ?? '' },
-            )} ${t(errorMessageKey(toggle.error))}`}
-          />
-        </div>
       )}
 
-      {query.error ? (
-        <ErrorNotice message={t('campaigns.page.loadError')} />
-      ) : query.isPending ? (
-        <Card>
-          <ListSkeleton />
-        </Card>
-      ) : visible.length === 0 ? (
-        <Card>
-          <EmptyState
-            title={
-              filter === 'all'
-                ? t('campaigns.page.empty.allTitle')
-                : t('campaigns.page.empty.filteredTitle', { status: t(TAB_LABEL_KEY[filter]) })
-            }
-            description={t(
-              canWrite
-                ? 'campaigns.page.empty.writeDescription'
-                : 'campaigns.page.empty.readDescription',
-            )}
-            action={
-              canWrite && filter === 'all' ? (
+      {view === 'report' && canReport ? (
+        <CampaignsReportView />
+      ) : (
+        <>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <nav aria-label={t('campaigns.page.statusAriaLabel')} className="flex flex-wrap gap-1">
+              {CAMPAIGN_TABS.map((tab) => {
+                const active = filter === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setFilter(tab.id)}
+                    className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                      active
+                        ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
+                        : 'text-content-secondary hover:bg-surface-2'
+                    }`}
+                  >
+                    {t(TAB_LABEL_KEY[tab.id])}
+                    <span className="ml-1.5 text-2xs text-content-tertiary">{counts[tab.id]}</span>
+                  </button>
+                );
+              })}
+            </nav>
+
+            {canWrite && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setGallery(true)}
+                  className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-content-secondary hover:bg-surface-2"
+                >
+                  {t('campaigns.page.fromTemplate')}
+                </button>
                 <button
                   type="button"
                   onClick={() => setEditing('new')}
@@ -202,35 +239,110 @@ export function CampaignsPage(): ReactElement {
                 >
                   {t('campaigns.page.new')}
                 </button>
-              ) : undefined
-            }
-          />
-        </Card>
-      ) : (
-        <ul className="grid gap-3">
-          {visible.map((campaign) => (
-            <li key={campaign.id}>
-              <CampaignCard
-                campaign={campaign}
-                canWrite={canWrite}
-                busy={toggle.isPending}
-                onEdit={() => setEditing(campaign)}
-                onToggle={() =>
-                  toggle.mutate({ id: campaign.id, active: !isCampaignActive(campaign) })
+              </div>
+            )}
+          </div>
+
+          {(copy.isError || archive.isError) && (
+            <div className="mb-3">
+              <ErrorNotice
+                message={t(errorMessageKey(copy.isError ? copy.error : archive.error))}
+              />
+            </div>
+          )}
+
+          {toggle.isError && (
+            <div className="mb-3">
+              <ErrorNotice
+                message={`${t(
+                  toggle.variables?.active
+                    ? 'campaigns.page.toggleOnError'
+                    : 'campaigns.page.toggleOffError',
+                  { name: campaigns.find((c) => c.id === toggle.variables?.id)?.name ?? '' },
+                )} ${t(errorMessageKey(toggle.error))}`}
+              />
+            </div>
+          )}
+
+          {query.error ? (
+            <ErrorNotice message={t('campaigns.page.loadError')} />
+          ) : query.isPending ? (
+            <Card>
+              <ListSkeleton />
+            </Card>
+          ) : visible.length === 0 ? (
+            <Card>
+              <EmptyState
+                title={
+                  filter === 'all'
+                    ? t('campaigns.page.empty.allTitle')
+                    : t('campaigns.page.empty.filteredTitle', { status: t(TAB_LABEL_KEY[filter]) })
+                }
+                description={t(
+                  canWrite
+                    ? 'campaigns.page.empty.writeDescription'
+                    : 'campaigns.page.empty.readDescription',
+                )}
+                action={
+                  canWrite && filter === 'all' ? (
+                    <button
+                      type="button"
+                      onClick={() => setEditing('new')}
+                      className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white"
+                    >
+                      {t('campaigns.page.new')}
+                    </button>
+                  ) : undefined
                 }
               />
-            </li>
-          ))}
-        </ul>
+            </Card>
+          ) : (
+            <ul className="grid gap-3">
+              {visible.map((campaign) => (
+                <li key={campaign.id}>
+                  <CampaignCard
+                    campaign={campaign}
+                    canWrite={canWrite}
+                    busy={toggle.isPending}
+                    onEdit={() => setEditing(campaign)}
+                    onCopy={() => copy.mutate(campaign)}
+                    onDelete={() => askDelete(campaign)}
+                    onToggle={() =>
+                      toggle.mutate({ id: campaign.id, active: !isCampaignActive(campaign) })
+                    }
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+
+      {dialog}
+
+      {gallery && canWrite && (
+        <CampaignTemplateGallery
+          onClose={() => setGallery(false)}
+          onPick={(template) => {
+            setGallery(false);
+            setDraft(templateDraft(template, (key) => t(key)));
+            setEditing('new');
+          }}
+        />
       )}
 
       {editing && canWrite && (
         <CampaignBuilder
           campaign={editing === 'new' ? null : editing}
+          draft={editing === 'new' ? draft : null}
           api={api}
-          onClose={() => setEditing(null)}
+          onClose={() => {
+            setEditing(null);
+            setDraft(null);
+          }}
           onSaved={({ campaign, reached }) => {
             setEditing(null);
+            setDraft(null);
             invalidate();
             if (reached > 0) {
               setNotice(
@@ -253,12 +365,16 @@ function CampaignCard({
   canWrite,
   busy,
   onEdit,
+  onCopy,
+  onDelete,
   onToggle,
 }: {
   campaign: Campaign;
   canWrite: boolean;
   busy: boolean;
   onEdit: () => void;
+  onCopy: () => void;
+  onDelete: () => void;
   onToggle: () => void;
 }): ReactElement {
   const t = useTranslate();
@@ -309,6 +425,23 @@ function CampaignCard({
               className="rounded-md border border-border px-2 py-1 text-2xs font-medium text-content-secondary hover:bg-surface-2"
             >
               {t('campaigns.page.edit')}
+            </button>
+            <button
+              type="button"
+              onClick={onCopy}
+              disabled={busy}
+              aria-label={t('campaigns.page.copyNamed', { name: campaign.name })}
+              className="rounded-md border border-border px-2 py-1 text-2xs font-medium text-content-secondary hover:bg-surface-2 disabled:opacity-40"
+            >
+              {t('campaigns.page.copy')}
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              aria-label={t('campaigns.page.deleteNamed', { name: campaign.name })}
+              className="rounded-md border border-border px-2 py-1 text-2xs font-medium text-danger hover:bg-danger/10"
+            >
+              {t('campaigns.page.delete')}
             </button>
             <button
               type="button"

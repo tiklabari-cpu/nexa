@@ -419,6 +419,97 @@ export const customers: Messages = {
   'campaigns.builder.saving': 'Saving…',
   'campaigns.builder.saveChanges': 'Save changes',
   'campaigns.builder.create': 'Create campaign',
+  'campaigns.page.viewAriaLabel': 'Campaigns view',
+  'campaigns.page.view.list': 'Campaigns',
+  'campaigns.page.view.report': 'Report',
+  'campaigns.page.fromTemplate': 'From a template',
+  'campaigns.page.copy': 'Copy',
+  'campaigns.page.copyNamed': 'Copy “{name}”',
+  'campaigns.page.copyName': '{name} (copy)',
+  'campaigns.page.delete': 'Delete',
+  'campaigns.page.deleteNamed': 'Delete “{name}”',
+  'campaigns.page.delete.title': 'Delete “{name}”?',
+  'campaigns.page.delete.description':
+    'It leaves the list and stops reaching visitors, and it cannot be turned back on — you can still copy it. Its history stays in the report.',
+  'campaigns.page.delete.confirm': 'Delete',
+  'campaigns.page.delete.failed': "“{name}” couldn't be deleted.",
+  'campaigns.page.notice.copied':
+    '“{name}” was created, switched off. Turn it on when it is ready.',
+  'campaigns.page.notice.deleted': '“{name}” was deleted. Its history stays in the report.',
+  'campaigns.gallery.title': 'Start from a template',
+  'campaigns.gallery.description':
+    'Pick one, then change anything you like. Nothing is saved or sent until you create the campaign.',
+  'campaigns.gallery.category.greet': 'Greet',
+  'campaigns.gallery.category.help': 'Help',
+  'campaigns.gallery.category.promotion': 'Promotion',
+  'campaigns.gallery.promotionNote':
+    'A promotion: not shown to risk-flagged players. A responsible-play line comes ready at the end.',
+  'campaigns.gallery.use': 'Use',
+  'campaigns.gallery.useNamed': 'Use the “{name}” template',
+  'campaigns.template.welcome_new.name': 'Welcome (new visitor)',
+  'campaigns.template.welcome_new.description':
+    'Greets a first-time visitor after 10 seconds on a page.',
+  'campaigns.template.welcome_new.message':
+    'Hello and welcome! If anything is unclear, just write here and I will help.',
+  'campaigns.template.welcome_back.name': 'Welcome back',
+  'campaigns.template.welcome_back.description': 'Greets a returning visitor after 10 seconds.',
+  'campaigns.template.welcome_back.message': 'Welcome back! How can I help you today?',
+  'campaigns.template.deposit_help.name': 'Deposit help',
+  'campaigns.template.deposit_help.description':
+    'Offers help to a visitor who stays 30 seconds on the deposit page.',
+  'campaigns.template.deposit_help.message':
+    'Stuck on a deposit? Write here and we will pick the right method together.',
+  'campaigns.template.withdraw_help.name': 'Withdrawal help',
+  'campaigns.template.withdraw_help.description':
+    'Offers help to a visitor waiting on the withdrawal page.',
+  'campaigns.template.withdraw_help.message':
+    'Do you have a question about your withdrawal? I can help.',
+  'campaigns.template.login_help.name': 'Login trouble',
+  'campaigns.template.login_help.description':
+    'Offers help to a visitor waiting on the login page.',
+  'campaigns.template.login_help.message':
+    "Can't get into your account? Write here and we will look at it together.",
+  'campaigns.template.exit_intent.name': 'Exit intent: any questions?',
+  'campaigns.template.exit_intent.description':
+    'Shows a one-button card to a visitor about to leave the page.',
+  'campaigns.template.exit_intent.cardTitle': 'Before you go',
+  'campaigns.template.exit_intent.cardBody':
+    'Is there something we can answer for you? It only takes a moment.',
+  'campaigns.template.exit_intent.cardButton': 'Yes, I have a question',
+  'campaigns.template.welcome_bonus_terms.name': 'Welcome bonus terms',
+  'campaigns.template.welcome_bonus_terms.description':
+    'Reminds a visitor on the bonus page that the terms are one message away.',
+  'campaigns.template.welcome_bonus_terms.message':
+    'Want to know the wagering and time terms of the welcome bonus? Write here and I will explain. 18+ only; remember to set your limits.',
+  'campaigns.template.cashback_terms.name': 'Cashback terms',
+  'campaigns.template.cashback_terms.description':
+    'Offers to go through the terms with a visitor on the promotions page.',
+  'campaigns.template.cashback_terms.message':
+    'Shall we go through the terms of this promotion together? Write here. Play for fun and set your limits.',
+  'campaigns.report.title': 'Campaign report',
+  'campaigns.report.rangeLabel': 'Period',
+  'campaigns.report.lastDays': 'Last {days} days',
+  'campaigns.report.campaignLabel': 'Campaign',
+  'campaigns.report.allCampaigns': 'All campaigns',
+  'campaigns.report.archivedName': '{name} (deleted)',
+  'campaigns.report.archived': 'Deleted',
+  'campaigns.report.export': 'Export CSV',
+  'campaigns.report.exporting': 'Exporting…',
+  'campaigns.report.loadError':
+    'Could not load the campaign report. Check that the API is reachable and try again.',
+  'campaigns.report.emptyTitle': 'No campaign activity',
+  'campaigns.report.emptyDescription': 'No campaign reached a visitor in this period.',
+  'campaigns.report.col.campaign': 'Campaign',
+  'campaigns.report.col.day': 'Day',
+  'campaigns.report.col.displayed': 'Displayed',
+  'campaigns.report.col.clicks': 'Clicks',
+  'campaigns.report.col.chats': 'Chats',
+  'campaigns.report.col.conversion': 'Conversion',
+  'campaigns.report.col.suppressed': 'Not shown (risk)',
+  'campaigns.report.byCampaignCaption': 'Campaign figures for the period',
+  'campaigns.report.byDayCaption': 'Campaign figures by day',
+  'campaigns.report.dayNote':
+    'A day is the day the visitor matched the campaign (UTC); what they did afterwards counts on that day.',
 
   // Goals — GoalsPage.tsx
   'goals.page.description': 'Define the pages a visitor reaching them counts as a conversion.',

@@ -357,6 +357,8 @@ paths:
     $ref: "./paths/campaigns.yaml#/campaigns"
   /campaigns/{campaignId}:
     $ref: "./paths/campaigns.yaml#/campaign"
+  /campaigns/{campaignId}/duplicate:
+    $ref: "./paths/campaigns.yaml#/campaignDuplicate"
 
   /goals:
     $ref: "./paths/goals.yaml#/goals"
@@ -820,6 +822,8 @@ paths:
     $ref: "./paths/reports.yaml#/sales"
   /reports/goals:
     $ref: "./paths/reports.yaml#/goals"
+  /reports/campaigns:
+    $ref: "./paths/reports.yaml#/campaigns"
   /reports/staffing-forecast:
     $ref: "./paths/reports.yaml#/staffingForecast"
   /reports/groups:
@@ -10990,6 +10994,76 @@ components:
           allOf:
             - $ref: "#/components/schemas/BenchmarkWindow"
             - $ref: "#/components/schemas/GoalFunnel"
+
+    CampaignReportCounts:
+      type: object
+      description: |
+        A campaign's funnel over the sends in a window (EN-05), counted the way
+        the campaign card counts it: `conversion`, `chats` and `clicks` are
+        subsets of `displayed`; `suppressed` sends were never shown.
+      required: [displayed, clicks, chats, conversion, suppressed]
+      properties:
+        displayed: { type: integer, description: Visitors the message was delivered to. }
+        clicks: { type: integer, description: "Of those, how many pressed a button on the card." }
+        chats: { type: integer, description: "Of those, how many opened a conversation." }
+        conversion: { type: integer, description: "Of those, how many reached a goal." }
+        suppressed:
+          type: integer
+          description: Matched visitors a risk flag kept the message from (EN-01).
+
+    CampaignsReport:
+      type: object
+      description: |
+        The `/reports/campaigns` payload (EN-05): per-campaign totals, a
+        day-by-campaign series and the benchmark window.
+      required: [range, totals, campaigns, by_day, previous_period]
+      properties:
+        range:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+        totals: { $ref: "#/components/schemas/CampaignReportCounts" }
+        campaigns:
+          type: array
+          description: |
+            One row per campaign in scope, most displayed first. Without a
+            `campaign_id` filter that is every campaign that is not archived,
+            plus archived ones with sends in the window; with one, exactly the
+            campaigns named (a campaign nobody saw is a reportable result).
+            `totals` is the sum of these rows.
+          items:
+            allOf:
+              - $ref: "#/components/schemas/CampaignReportCounts"
+              - type: object
+                required: [campaign_id, name, archived]
+                properties:
+                  campaign_id: { type: string, format: uuid }
+                  name: { type: string }
+                  archived: { type: boolean }
+        by_day:
+          type: array
+          description: |
+            One row per UTC day and campaign that has sends, oldest day first.
+            A send belongs to the day it was written — the day the visitor
+            matched — and carries its later outcome (delivered, clicked, chat,
+            conversion) with it, so a day's row is a cohort and the funnel
+            inside it is always nested. Sums to `totals`.
+          items:
+            allOf:
+              - $ref: "#/components/schemas/CampaignReportCounts"
+              - type: object
+                required: [date, campaign_id, name]
+                properties:
+                  date: { type: string, format: date }
+                  campaign_id: { type: string, format: uuid }
+                  name: { type: string }
+        previous_period:
+          description: The same totals measured over the benchmark window.
+          allOf:
+            - $ref: "#/components/schemas/BenchmarkWindow"
+            - $ref: "#/components/schemas/CampaignReportCounts"
 
     TicketRuleConditions:
       type: object

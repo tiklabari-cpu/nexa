@@ -15,7 +15,7 @@ import type * as AuthStore from '../../lib/auth-store.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api, auth } = vi.hoisted(() => ({
-  api: { get: vi.fn(), post: vi.fn(), patch: vi.fn() },
+  api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn(), getFile: vi.fn() },
   auth: { scopes: [] as string[] },
 }));
 
@@ -73,6 +73,8 @@ beforeEach(() => {
   api.get.mockReset();
   api.post.mockReset();
   api.patch.mockReset();
+  api.delete.mockReset();
+  api.getFile.mockReset();
   api.get.mockResolvedValue(LIST);
   auth.scopes = ['customers:rw'];
 });
@@ -511,3 +513,237 @@ describe('CampaignsPage localisation (NFR-I18N2)', () => {
     expect(screen.queryByText('6%')).not.toBeInTheDocument();
   });
 });
+
+// Delete (an archive), copy, the template gallery and the report (EN-05 · tm 354).
+describe('CampaignsPage — delete, copy, templates and report (EN-05)', () => {
+  const REPORT = {
+    range: { from: '2026-10-01T00:00:00.000Z', to: '2026-10-31T00:00:00.000Z' },
+    totals: { displayed: 4, clicks: 2, chats: 2, conversion: 1, suppressed: 1 },
+    campaigns: [
+      {
+        campaign_id: 'c-Running',
+        name: 'Running',
+        archived: false,
+        displayed: 3,
+        clicks: 1,
+        chats: 2,
+        conversion: 1,
+        suppressed: 1,
+      },
+      {
+        campaign_id: 'c-Old',
+        name: 'Old promo',
+        archived: true,
+        displayed: 1,
+        clicks: 1,
+        chats: 0,
+        conversion: 0,
+        suppressed: 0,
+      },
+    ],
+    by_day: [
+      {
+        date: '2026-10-10',
+        campaign_id: 'c-Running',
+        name: 'Running',
+        displayed: 3,
+        clicks: 1,
+        chats: 2,
+        conversion: 1,
+        suppressed: 1,
+      },
+    ],
+    previous_period: {
+      baseline: 'previous_period',
+      range: { from: '2026-09-01T00:00:00.000Z', to: '2026-10-01T00:00:00.000Z' },
+      displayed: 0,
+      clicks: 0,
+      chats: 0,
+      conversion: 0,
+      suppressed: 0,
+    },
+  };
+
+  /** The list, the report groups (campaigns present or not) and the report. */
+  function serve(opts: { reports: boolean }): void {
+    api.get.mockImplementation((path: string) => {
+      if (path === '/campaigns') return Promise.resolve(LIST);
+      if (path === '/reports/groups') {
+        return Promise.resolve({ groups: opts.reports ? [{ id: 'campaigns' }] : [] });
+      }
+      if (path.startsWith('/reports/campaigns')) return Promise.resolve(REPORT);
+      return Promise.reject(new Error(`unexpected GET ${path}`));
+    });
+  }
+
+  it('copies a campaign into a switched-off twin (EN-05)', async () => {
+    serve({ reports: false });
+    api.post.mockResolvedValue({ ...campaign('inactive', 'Running (copy)'), matched: 0 });
+    renderPage();
+    const card = (await screen.findByText('Running')).closest('div.rounded-lg') as HTMLElement;
+
+    await userEvent.click(within(card).getByRole('button', { name: 'Copy “Running”' }));
+
+    expect(api.post).toHaveBeenCalledWith('/campaigns/c-Running/duplicate', {
+      name: 'Running (copy)',
+    });
+    expect(
+      await screen.findByText(
+        '“Running (copy)” was created, switched off. Turn it on when it is ready.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('asks before deleting, and only then archives (EN-05)', async () => {
+    serve({ reports: false });
+    api.delete.mockResolvedValue(undefined);
+    renderPage();
+    const card = (await screen.findByText('Running')).closest('div.rounded-lg') as HTMLElement;
+
+    await userEvent.click(within(card).getByRole('button', { name: 'Delete “Running”' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Delete “Running”?')).toBeInTheDocument();
+    expect(api.delete).not.toHaveBeenCalled();
+
+    // Cancel changes nothing.
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(api.delete).not.toHaveBeenCalled();
+
+    await userEvent.click(within(card).getByRole('button', { name: 'Delete “Running”' }));
+    await userEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' }),
+    );
+    await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/campaigns/c-Running'));
+    expect(
+      await screen.findByText('“Running” was deleted. Its history stays in the report.'),
+    ).toBeInTheDocument();
+  });
+
+  it('opens a template as an editable draft that saves nothing until Create (EN-05)', async () => {
+    serve({ reports: false });
+    api.post.mockResolvedValue({ ...campaign('ongoing', 'Deposit help'), matched: 0 });
+    renderPage();
+    await screen.findByText('Running');
+
+    await userEvent.click(screen.getByRole('button', { name: 'From a template' }));
+    const gallery = await screen.findByRole('dialog');
+    expect(within(gallery).getByText('Greet')).toBeInTheDocument();
+    expect(within(gallery).getByText('Help')).toBeInTheDocument();
+    expect(within(gallery).getByText('Promotion')).toBeInTheDocument();
+    // A promotion says it is held back from risk-flagged players.
+    expect(
+      within(gallery).getAllByText(/not shown to risk-flagged players/i).length,
+    ).toBeGreaterThan(0);
+
+    await userEvent.click(
+      within(gallery).getByRole('button', { name: 'Use the “Deposit help” template' }),
+    );
+
+    // The builder is open on the template: nothing was saved yet.
+    expect(api.post).not.toHaveBeenCalled();
+    const name = await screen.findByLabelText('Name');
+    expect(name).toHaveValue('Deposit help');
+    expect(screen.getByLabelText('Message')).toHaveValue(
+      'Stuck on a deposit? Write here and we will pick the right method together.',
+    );
+
+    // Editable: change the name, then Create posts the edited draft.
+    await userEvent.clear(name);
+    await userEvent.type(name, 'My deposit nudge');
+    await userEvent.click(screen.getByRole('button', { name: 'Create campaign' }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    const [path, body] = api.post.mock.calls[0] as [string, Record<string, any>];
+    expect(path).toBe('/campaigns');
+    expect(body['name']).toBe('My deposit nudge');
+    expect(body['conditions']).toEqual({
+      match: 'all',
+      rules: [
+        { field: 'current_url', op: 'contains', value: '/yatirim' },
+        { field: 'time_on_page', op: 'gte', value: 30 },
+      ],
+    });
+    expect(body['content']).toEqual({
+      message: 'Stuck on a deposit? Write here and we will pick the right method together.',
+    });
+  });
+
+  it('opens a card template with its button (EN-05)', async () => {
+    serve({ reports: false });
+    renderPage();
+    await screen.findByText('Running');
+    await userEvent.click(screen.getByRole('button', { name: 'From a template' }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Use the “Exit intent: any questions?” template' }),
+    );
+
+    expect(await screen.findByLabelText('Card title (optional)')).toHaveValue('Before you go');
+    expect(screen.getByLabelText('Button 1 label')).toHaveValue('Yes, I have a question');
+  });
+
+  it('offers the report only to someone who may read it, and shows its numbers (EN-05)', async () => {
+    serve({ reports: false });
+    const { unmount } = renderPageWithUnmount();
+    await screen.findByText('Running');
+    expect(screen.queryByRole('button', { name: 'Report' })).not.toBeInTheDocument();
+    unmount();
+
+    serve({ reports: true });
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: 'Report' }));
+
+    const totals = await screen.findByTestId('campaign-report-totals');
+    expect(within(totals).getByText('Displayed').parentElement).toHaveTextContent('4');
+    expect(within(totals).getByText('Conversion').parentElement).toHaveTextContent('25%');
+    expect(screen.getByText('Old promo')).toBeInTheDocument();
+    expect(screen.getByText('Deleted')).toBeInTheDocument();
+    const reportCall = api.get.mock.calls
+      .map(([path]) => path as string)
+      .find((path) => path.startsWith('/reports/campaigns'));
+    expect(reportCall).toMatch(/^\/reports\/campaigns\?from=.+&to=.+$/);
+  });
+
+  it('narrows the report and the CSV to one campaign (EN-05 · ADR-09)', async () => {
+    serve({ reports: true });
+    api.getFile.mockResolvedValue({ blob: new Blob(['x']), filename: 'siyahtus-campaigns.csv' });
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    URL.revokeObjectURL = vi.fn();
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: 'Report' }));
+    await screen.findByTestId('campaign-report-totals');
+
+    await userEvent.selectOptions(screen.getByLabelText('Campaign'), 'c-Old');
+    await waitFor(() =>
+      expect(api.get.mock.calls.some(([path]) => String(path).endsWith('&campaign_id=c-Old'))).toBe(
+        true,
+      ),
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
+    await waitFor(() => expect(api.getFile).toHaveBeenCalledTimes(1));
+    const file = String(api.getFile.mock.calls[0]![0]);
+    expect(file).toMatch(
+      /^\/reports\/export\?group=campaigns&from=.+&to=.+&campaign_id=c-Old&format=csv$/,
+    );
+  });
+
+  it('hides copy, delete and the gallery from a read-only agent (EN-05)', async () => {
+    serve({ reports: false });
+    auth.scopes = ['customers:ro'];
+    renderPage();
+    await screen.findByText('Running');
+    expect(screen.queryByRole('button', { name: /^Copy/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Delete/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'From a template' })).not.toBeInTheDocument();
+  });
+});
+
+function renderPageWithUnmount(): { unmount: () => void } {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <CampaignsPage />
+      </QueryClientProvider>
+    </MemoryRouter>,
+  );
+}

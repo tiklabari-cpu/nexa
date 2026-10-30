@@ -23,6 +23,9 @@ campaigns:
       The bucket is re-derived from each campaign's schedule as the list is
       read, so one whose start time has passed appears under `ongoing` rather
       than staying where its last save left it.
+
+      Archived campaigns (`DELETE /campaigns/{campaignId}`) are not listed in any
+      bucket; their history stays in `GET /reports/campaigns`.
     parameters:
       - name: status
         in: query
@@ -125,6 +128,66 @@ campaign:
     responses:
       "200":
         description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CampaignWriteResult" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Customers]
+    operationId: archiveCampaign
+    summary: Delete (archive) a campaign
+    description: |
+      A soft delete (EN-05). The campaign leaves the list, never fires again and
+      is never delivered again — a send it had queued but the visitor's widget
+      had not yet shown is dropped with it — and it cannot be switched back on
+      (an edit to an archived campaign is a 404; make a copy instead, see
+      `POST /campaigns/{campaignId}/duplicate`, which accepts an archived
+      source). Its sends are kept, so `GET /reports/campaigns` still reports
+      the history, and a customer erasure still removes them.
+
+      Archiving an already-archived or unknown campaign is a 404.
+    responses:
+      "204": { description: Archived }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+campaignDuplicate:
+  parameters:
+    - name: campaignId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Customers]
+    operationId: duplicateCampaign
+    summary: Copy a campaign
+    description: |
+      Creates a new campaign with the source's trigger, content, schedule and
+      recurrence — **inactive**, so nothing is sent until its owner switches it
+      on, and with no sends of its own (the copy starts a fresh report). The
+      source may be archived: a copy is the only way back from an archive.
+
+      `name` defaults to the source's name followed by ` (copy)`, cut to 120
+      characters.
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+    responses:
+      "201":
+        description: The copy
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/CampaignWriteResult" }

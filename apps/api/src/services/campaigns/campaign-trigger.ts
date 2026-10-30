@@ -187,6 +187,7 @@ export async function fireCampaignsAtVisitor(
       // `resolveCampaignStatus`, and pinned by its unit test — so reading those
       // rows would be work with no possible outcome.
       status: { in: ['ongoing', 'scheduled'] },
+      archivedAt: null,
     },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     take: RUNNING_CAMPAIGN_LIMIT,
@@ -297,7 +298,11 @@ export async function hasRunningCampaign(
   now: Date,
 ): Promise<boolean> {
   const campaigns = await tx.campaign.findMany({
-    where: { licenseId: tenant.licenseId, status: { in: ['ongoing', 'scheduled'] } },
+    where: {
+      licenseId: tenant.licenseId,
+      status: { in: ['ongoing', 'scheduled'] },
+      archivedAt: null,
+    },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     take: RUNNING_CAMPAIGN_LIMIT,
     select: { status: true, startsAt: true, endsAt: true },

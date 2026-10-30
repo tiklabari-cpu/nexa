@@ -239,6 +239,25 @@ describe('resolveCampaignStatus', () => {
       expect(resolveCampaignStatus({ status: 'inactive', ...schedule }, now)).toBe('inactive');
     }
   });
+
+  it('reads an archived campaign as inactive whatever its stored word says (EN-05)', () => {
+    // Belt and braces for the delivery path: archiving writes `inactive`, but a
+    // row that somehow still says `ongoing` must not deliver once archived.
+    for (const status of ['ongoing', 'scheduled', 'inactive']) {
+      expect(
+        resolveCampaignStatus(
+          { status, startsAt: hourBefore, endsAt: hourAfter, archivedAt: hourBefore },
+          now,
+        ),
+      ).toBe('inactive');
+    }
+    expect(
+      resolveCampaignStatus(
+        { status: 'ongoing', startsAt: hourBefore, endsAt: hourAfter, archivedAt: null },
+        now,
+      ),
+    ).toBe('ongoing');
+  });
 });
 
 describe('campaignPerformance', () => {

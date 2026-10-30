@@ -688,6 +688,20 @@ export const settings: Messages = {
     'Yanıt veren bir AI ajanı ve sohbet kabul eden temsilci yoksa widget bunun yerine mesaj bırakma formunu gösterir.',
   'settings.widgetCustomization.availability.agents_onlyWhat2':
     'Form ad, e-posta ve mesajı (varsa talep sorularınızla birlikte) sorar ve bir talep oluşturur.',
+  'settings.widgetCustomization.launcherLegend': 'Sohbet balonu',
+  'settings.widgetCustomization.launcherHint':
+    'Yuvarlak sohbet düğmesinin sitenizde ne zaman çizileceği. Sonraki sayfa yüklemesinde geçerli olur, yeni kod eklemek gerekmez.',
+  'settings.widgetCustomization.launcher.always': 'Her zaman görünür',
+  'settings.widgetCustomization.launcher.until_opened': 'Siteniz açana kadar gizli',
+  'settings.widgetCustomization.launcher.never': 'Hiç görünmez',
+  'settings.widgetCustomization.launcherOwnButton':
+    'Kendi “Canlı destek” düğmenizin sohbeti şu çağrıyla açmasını sağlayın:',
+  'settings.widgetCustomization.launcherNeverRisk':
+    'Risk: balon yokken oyuncular desteğe yalnızca sizin düğmenizden ulaşır. Bu düğme bozulur ya da kaldırılırsa sohbet hiç açılamaz.',
+  'settings.widgetCustomization.showLogoLabel': 'Marka logosunu göster',
+  'settings.widgetCustomization.showLogoHint':
+    'Ayarlar › Markalar’daki logoyu sohbet penceresinin başında gösterir. Yalnızca güvenli (https) adresteki logo gösterilir.',
+  'settings.widgetCustomization.previewLogo': 'LOGO',
   'settings.widgetCustomization.entitlementError':
     'SiyahTuş rozetini kaldırmak bir Enterprise özelliğidir. Gizlemek için planı yükseltin.',
   'settings.widgetCustomization.previewLabel': 'Önizleme',

@@ -51,6 +51,8 @@ export default defineConfig(({ mode }) => {
           emptyOutDir: false,
           target: 'es2020',
           minify: 'terser',
+          // A second compress pass folds what the first one exposed (WG-10: the budget had 161 B left).
+          terserOptions: { compress: { passes: 2 } },
           sourcemap,
           rollupOptions: {
             input: {

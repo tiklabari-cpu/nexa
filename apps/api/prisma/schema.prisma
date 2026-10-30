@@ -3944,6 +3944,11 @@ model WidgetSettings {
   /// When a visitor may start a chat (WG-09): `always` or `agents_only` —
   /// `widget_settings_availability_mode_check`.
   availabilityMode String   @default("always") @map("availability_mode")
+  /// When the launcher is drawn (WG-10): `always`, `until_opened` or `never` —
+  /// `widget_settings_launcher_visibility_check`.
+  launcherVisibility String @default("always") @map("launcher_visibility")
+  /// Show the brand's logo in the panel header (WG-10).
+  showLogo         Boolean  @default(false) @map("show_logo")
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)

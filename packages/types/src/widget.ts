@@ -24,6 +24,29 @@ export type WidgetTheme = 'auto' | 'light' | 'dark';
 export const WIDGET_THEMES: readonly WidgetTheme[] = ['auto', 'light', 'dark'];
 
 /**
+ * When the launcher (the chat bubble) is drawn (WG-10).
+ *
+ *   always       the bubble is there from the first paint — what every install did before.
+ *   until_opened the bubble stays away until the host page opens the panel itself
+ *                (`siyahtus('open')`); from then on it is shown like `always`.
+ *   never        no bubble at all; the panel opens only through the page's own button
+ *                (`siyahtus('open')`) and closes with its own ×.
+ *
+ * `never` is a real risk: if the page's button breaks, the visitor has no way to
+ * reach support — the settings screen says so.
+ */
+export type WidgetLauncherVisibility = 'always' | 'until_opened' | 'never';
+export const WIDGET_LAUNCHER_VISIBILITIES: readonly WidgetLauncherVisibility[] = [
+  'always',
+  'until_opened',
+  'never',
+];
+
+export function isWidgetLauncherVisibility(value: unknown): value is WidgetLauncherVisibility {
+  return (WIDGET_LAUNCHER_VISIBILITIES as readonly unknown[]).includes(value);
+}
+
+/**
  * The languages the widget UI ships in (WG-02, K25: eight, no more). Mirrors the
  * catalogue keys in `apps/widget/src/locales/index.ts` — a widget test holds
  * the two lists together — and is what the `widget_settings` CHECKs, the
@@ -78,6 +101,14 @@ export interface WidgetAppearance {
   language: WidgetLanguage;
   /** What `auto` falls back to when the browser speaks none of the eight. */
   fallback_language: WidgetUiLocale;
+  /**
+   * When the launcher is drawn (WG-10). Server-delivered only, like the
+   * language: it is never baked into the install snippet, so changing it needs
+   * no re-install.
+   */
+  launcher_visibility: WidgetLauncherVisibility;
+  /** Show the brand's logo in the panel header (WG-10), when the brand has one. */
+  show_logo: boolean;
 }
 
 /** Upper bounds for the welcome message, shared by the API, the DB and the form. */
@@ -97,6 +128,14 @@ export interface WidgetTokenAppearance extends WidgetAppearance {
    * pilot has no brand page to point at yet).
    */
   powered_by_url: string | null;
+  /**
+   * The brand's logo for the panel header (WG-10), or null — either none is
+   * set, `show_logo` is off, or the stored address is not one the widget may
+   * load (`brandLogoUrl`). Read from the brand's record at every mint.
+   */
+  logo_url: string | null;
+  /** The brand's name: the logo's alternative text. Null with `logo_url`. */
+  brand_name: string | null;
 }
 
 /**
@@ -123,6 +162,10 @@ export const DEFAULT_WIDGET_APPEARANCE: WidgetAppearance = {
   // New workspaces fall back to Turkish (04 default); rows that existed before
   // WG-02 keep the column default `en` and so read exactly as they used to.
   fallback_language: 'tr',
+  launcher_visibility: 'always',
+  // Opt-in: a brand that already had a logo on file must not suddenly wear it
+  // in the widget the day this ships.
+  show_logo: false,
 };
 
 /**
@@ -171,7 +214,38 @@ export function normalizeWidgetAppearance(
     fallback_language: isWidgetUiLocale(raw.fallback_language)
       ? raw.fallback_language
       : DEFAULT_WIDGET_APPEARANCE.fallback_language,
+    launcher_visibility: isWidgetLauncherVisibility(raw.launcher_visibility)
+      ? raw.launcher_visibility
+      : DEFAULT_WIDGET_APPEARANCE.launcher_visibility,
+    show_logo:
+      typeof raw.show_logo === 'boolean' ? raw.show_logo : DEFAULT_WIDGET_APPEARANCE.show_logo,
   };
+}
+
+/** The longest logo address the widget will follow; the brand column allows 2048. */
+export const WIDGET_LOGO_URL_MAX = 2048;
+
+/**
+ * The address the widget may load a brand logo from (WG-10), or null.
+ *
+ * The widget document is served under a strict CSP and the logo is an image
+ * fetched from wherever the workspace pointed it, so only an `https:` URL
+ * without credentials passes. A path under the API's own `/uploads/` is
+ * refused too: that route answers a session, which an `<img>` in the visitor's
+ * frame does not have, so it would only ever draw a broken image. `http:`,
+ * `data:`, `javascript:` and protocol-relative addresses never parse as https.
+ */
+export function brandLogoUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const raw = value.trim();
+  if (raw === '' || raw.length > WIDGET_LOGO_URL_MAX) return null;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:' || url.username !== '' || url.password !== '') return null;
+    return url.href;
+  } catch {
+    return null;
+  }
 }
 
 /**

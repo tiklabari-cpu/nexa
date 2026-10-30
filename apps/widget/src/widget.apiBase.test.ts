@@ -27,11 +27,13 @@ function mountWidget(query: string): HTMLElement {
 
 async function firstCallAfterOpening(root: HTMLElement): Promise<string> {
   root.querySelector<HTMLButtonElement>('.nx-launcher')!.click();
-  for (let i = 0; i < 50 && calls.length === 0; i += 1) {
+  // The launcher lookup (WG-10) goes out at mount and is not what this is about.
+  const minted = (): string | undefined => calls.find((url) => url.includes('/customer/token'));
+  for (let i = 0; i < 50 && minted() === undefined; i += 1) {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
-  expect(calls.length, 'opening the widget made no request').toBeGreaterThan(0);
-  return calls[0]!;
+  expect(minted(), 'opening the widget made no request').toBeDefined();
+  return minted()!;
 }
 
 beforeEach(() => {

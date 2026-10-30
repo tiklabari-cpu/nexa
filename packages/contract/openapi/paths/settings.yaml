@@ -1787,6 +1787,17 @@ widgetSettings:
                   chats, the widget offers the offline form instead (name,
                   e-mail and message, plus any ticket/prospect questions). An
                   AI that would answer keeps the chat open in either mode.
+              launcher_visibility:
+                type: string
+                enum: [always, until_opened, never]
+                description: |
+                  When the chat bubble is drawn (WG-10). `until_opened` hides it
+                  until the host page calls `siyahtus('open')`; `never` hides it
+                  for good — if the page's own button breaks, visitors cannot
+                  reach support.
+              show_logo:
+                type: boolean
+                description: Show the brand's logo in the panel header (WG-10).
     responses:
       "200":
         description: Updated

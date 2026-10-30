@@ -1251,3 +1251,50 @@ customerToken:
               drop it.
             schema: { type: string }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+customerLauncher:
+  get:
+    tags: [Auth]
+    operationId: getCustomerLauncher
+    summary: How the widget's launcher is drawn (before any token is minted)
+    description: |
+      Called by the widget on load, ahead of `POST /customer/token`
+      (WG-10 · tm 347). The mint carries `launcher_visibility` too, but a
+      first-time visitor is not minted for until they open the panel — a mint
+      opens a customer record, and every page view of every site would make
+      one — while the bubble must be right, or absent, from the first paint.
+      So this answers that one question and nothing else: no customer is
+      created and no cookie is set.
+
+      The embedding page's origin is checked against the organization's trusted
+      domains exactly as the mint checks it (`host_origin` is optional the same
+      way). The brand is the website registered for that host, else the
+      licence default. A workspace that never saved the setting reads
+      `always`.
+    security: []
+    parameters:
+      - name: organization_id
+        in: query
+        required: true
+        schema: { type: string, format: uuid }
+      - name: host_origin
+        in: query
+        required: false
+        schema: { type: string, maxLength: 2048 }
+        description: Origin of the page the widget is embedded in.
+    responses:
+      "200":
+        description: The launcher mode for this brand
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [launcher_visibility]
+              properties:
+                launcher_visibility:
+                  type: string
+                  enum: [always, until_opened, never]
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "403":
+        description: "`authorization` — the origin is not a trusted domain."
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

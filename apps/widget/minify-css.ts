@@ -28,7 +28,11 @@ export function minifyCss(css: string): string {
       line
         .replace(/[ \t]+/g, ' ')
         .trim()
-        .replace(/ ?([{};,]) ?/g, '$1'),
+        .replace(/ ?([{};,]) ?/g, '$1')
+        // A declaration's colon never needs the space after it; a selector's never has one.
+        .replace(/(^|[{;])([a-z-]+): /g, '$1$2:')
+        // The last declaration of a rule needs no semicolon.
+        .replace(/;}/g, '}'),
     )
     .join('\n');
 }

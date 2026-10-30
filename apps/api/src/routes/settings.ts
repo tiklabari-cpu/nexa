@@ -35,6 +35,7 @@ import {
   SALES_TRACKER_ATTRIBUTION_WINDOW_MIN_DAYS,
   SALES_TRACKER_CURRENCIES,
   WIDGET_AVAILABILITY_MODES,
+  WIDGET_LAUNCHER_VISIBILITIES,
   WIDGET_COLOR_PATTERN,
   WIDGET_POSITIONS,
   WIDGET_THEMES,
@@ -708,6 +709,11 @@ const updateWidgetBody = z
     // The widget's language (WG-02) and what `auto` falls back to.
     language: z.enum(['auto', ...WIDGET_UI_LOCALES] as [string, ...string[]]).optional(),
     fallback_language: z.enum(WIDGET_UI_LOCALES as unknown as [string, ...string[]]).optional(),
+    // When the launcher is drawn, and whether the brand's logo heads the panel (WG-10).
+    launcher_visibility: z
+      .enum(WIDGET_LAUNCHER_VISIBILITIES as unknown as [string, ...string[]])
+      .optional(),
+    show_logo: z.boolean().optional(),
     // When a visitor may start a chat (WG-09).
     availability_mode: z
       .enum(WIDGET_AVAILABILITY_MODES as unknown as [string, ...string[]])
@@ -3077,6 +3083,10 @@ export default async function settingsRoutes(
         ...(body.availability_mode !== undefined
           ? { availabilityMode: body.availability_mode }
           : {}),
+        ...(body.launcher_visibility !== undefined
+          ? { launcherVisibility: body.launcher_visibility }
+          : {}),
+        ...(body.show_logo !== undefined ? { showLogo: body.show_logo } : {}),
       };
 
       // Upsert because signup leaves no row: a workspace customising the widget
@@ -3945,6 +3955,8 @@ function serialiseWidget(
     language: string;
     fallbackLanguage: string;
     availabilityMode: string;
+    launcherVisibility: string;
+    showLogo: boolean;
     updatedAt: Date;
   } | null,
   brandId: string,
@@ -3962,6 +3974,8 @@ function serialiseWidget(
     language: row?.language ?? DEFAULT_WIDGET_APPEARANCE.language,
     fallback_language: row?.fallbackLanguage ?? DEFAULT_WIDGET_APPEARANCE.fallback_language,
     availability_mode: row?.availabilityMode ?? DEFAULT_WIDGET_AVAILABILITY_MODE,
+    launcher_visibility: row?.launcherVisibility ?? DEFAULT_WIDGET_APPEARANCE.launcher_visibility,
+    show_logo: row?.showLogo ?? DEFAULT_WIDGET_APPEARANCE.show_logo,
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
 }

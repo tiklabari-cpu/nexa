@@ -21,6 +21,9 @@ let css = '';
 let selectors: string[] = [];
 
 beforeAll(() => {
+  // The launcher is not drawn until its mode is known (WG-10); this browser
+  // has been here before and remembers it.
+  window.localStorage.setItem('siyahtus.launcher.org-1', 'always');
   window.history.replaceState({}, '', '/widget.html?organization_id=org-1');
   const root = document.createElement('div');
   root.id = 'siyahtus-widget-root';

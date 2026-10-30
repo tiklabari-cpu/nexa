@@ -64,6 +64,7 @@ const ALLOWED_INBOUND = new Set([
   'siyahtus:open',
   'siyahtus:close',
   'siyahtus:logged-out',
+  'siyahtus:unread',
 ]);
 
 /**
@@ -265,6 +266,7 @@ export function boot(
       height?: unknown;
       width?: unknown;
       rtl?: unknown;
+      count?: unknown;
     };
     if (typeof data?.type !== 'string' || !ALLOWED_INBOUND.has(data.type)) return;
 
@@ -289,8 +291,15 @@ export function boot(
     if (data.type === 'siyahtus:resize') {
       const height = clampDimension(data.height, 84, MAX_FRAME.height);
       const width = clampDimension(data.width, 84, MAX_FRAME.width);
-      if (height) wantHeight = height;
-      if (width) wantWidth = width;
+      if (height !== null) wantHeight = height;
+      if (width !== null) wantWidth = width;
+    }
+
+    // The unread count, for a page that draws its own button (WG-10): the number
+    // and nothing else, as a DOM event on the host's window.
+    if (data.type === 'siyahtus:unread' && typeof data.count === 'number') {
+      const count = Math.max(0, Math.min(999, Math.trunc(data.count)));
+      win.dispatchEvent(new CustomEvent('siyahtus:unread', { detail: { count } }));
     }
 
     if (data.type === 'siyahtus:logged-out') {
@@ -401,6 +410,9 @@ function hostPageUrl(win: Window): { origin: string; url: string; referrer: stri
 
 function clampDimension(value: unknown, min: number, max: number): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  // Zero is the widget saying "nothing to draw" (no launcher, panel closed): the
+  // frame gives the corner of the host page back instead of sitting over it.
+  if (value === 0) return 0;
   return Math.min(max, Math.max(min, Math.round(value)));
 }
 

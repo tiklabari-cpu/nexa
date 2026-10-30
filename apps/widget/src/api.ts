@@ -12,6 +12,7 @@ import {
   type PrechatConfig,
   type WidgetFormField,
   type WidgetAppearance,
+  type WidgetLauncherVisibility,
   type WidgetTokenAppearance,
   type ChallengeRequiredDetails,
   type ChallengeReason,
@@ -34,7 +35,9 @@ const MAX_CHALLENGE_ROUNDS = 3;
  * footer text without links rather than guessing an address.
  */
 export type MintedAppearance = WidgetAppearance &
-  Partial<Pick<WidgetTokenAppearance, 'privacy_policy_url' | 'powered_by_url'>>;
+  Partial<
+    Pick<WidgetTokenAppearance, 'privacy_policy_url' | 'powered_by_url' | 'logo_url' | 'brand_name'>
+  >;
 
 /** A brand's own widget texts for one language, off a token mint (WG-05). */
 export interface MintedPhrases {
@@ -315,6 +318,25 @@ export class WidgetApi {
    * un-keyed id and sends it, without a token, for the one trade the server
    * allows during the transition.
    */
+  /**
+   * How the launcher is drawn (WG-10), asked before any mint: a first-time
+   * visitor is not minted for until they open the panel, yet the bubble has to
+   * be right from the first paint. Null on any failure — the caller keeps what
+   * it had. Remembered for the next page load, which draws from it at once.
+   */
+  async launcher(): Promise<WidgetLauncherVisibility | null> {
+    try {
+      const query = new URLSearchParams({ organization_id: this.organizationId });
+      if (this.hostOrigin) query.set('host_origin', this.hostOrigin);
+      const response = await fetch(`${this.baseUrl}/customer/launcher?${query}`);
+      // A refusal is an error envelope: no `launcher_visibility` in it, so null.
+      const body = (await response.json()) as { launcher_visibility?: unknown };
+      return rememberLauncher(this.organizationId, body.launcher_visibility);
+    } catch {
+      return null;
+    }
+  }
+
   async connect(): Promise<WidgetState> {
     // Signed out (`forget`): the next visitor gets a fresh instance in a
     // fresh document — this one must not mint for them, not even on a 401.
@@ -397,7 +419,10 @@ export class WidgetApi {
     };
     this.#token = token;
     this.#rtmUrl = typeof rtm_url === 'string' && rtm_url !== '' ? rtm_url : null;
-    if (widget) this.#appearance = widget;
+    if (widget) {
+      this.#appearance = widget;
+      rememberLauncher(this.organizationId, widget.launcher_visibility);
+    }
     if (typeof file_sharing_enabled === 'boolean') this.#fileSharingEnabled = file_sharing_enabled;
     this.#prechat = normalizePrechatConfig(prechat);
     this.#preChatForm = Array.isArray(pre_chat_form) ? pre_chat_form : [];
@@ -748,6 +773,28 @@ export function storageKeys(organizationId: string): { memberToken: string; cust
     memberToken: `${MEMBER_TOKEN_PREFIX}${organization}`,
     customerId: `${CUSTOMER_ID_PREFIX}${organization}`,
   };
+}
+
+const LAUNCHER_PREFIX = 'siyahtus.launcher.';
+
+/** A launcher mode off the wire or out of storage, else null. */
+export function parseLauncher(value: unknown): WidgetLauncherVisibility | null {
+  return value === 'always' || value === 'until_opened' || value === 'never' ? value : null;
+}
+
+/** The mode this browser last learned for `organizationId` (WG-10), for the first paint. */
+export function cachedLauncher(organizationId: string): WidgetLauncherVisibility | null {
+  return parseLauncher(safeGetItem(LAUNCHER_PREFIX + organizationId.toLowerCase()));
+}
+
+/** Keep `value` for the next page load when it is a mode; returns it, or null. */
+export function rememberLauncher(
+  organizationId: string,
+  value: unknown,
+): WidgetLauncherVisibility | null {
+  const mode = parseLauncher(value);
+  if (mode) safeSetItem(LAUNCHER_PREFIX + organizationId.toLowerCase(), mode);
+  return mode;
 }
 
 /**

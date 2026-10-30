@@ -32,6 +32,7 @@ import {
   type WidgetLanguage,
   type WidgetPosition,
   type WidgetUiLocale,
+  type WidgetLauncherVisibility,
   type WidgetTheme,
 } from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
@@ -185,6 +186,18 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
                   onChange={(next) => set('mobile_fullscreen', next)}
                 />
 
+                <LauncherControl
+                  value={value.launcher_visibility}
+                  onChange={(next) => set('launcher_visibility', next)}
+                />
+
+                <ToggleControl
+                  label={t('settings.widgetCustomization.showLogoLabel')}
+                  hint={t('settings.widgetCustomization.showLogoHint')}
+                  checked={value.show_logo}
+                  onChange={(next) => set('show_logo', next)}
+                />
+
                 <ToggleControl
                   label={t('settings.widgetCustomization.poweredByLabel')}
                   hint={t('settings.widgetCustomization.poweredByHint')}
@@ -243,6 +256,7 @@ export const LANGUAGE_NAMES: Record<WidgetUiLocale, string> = {
 
 const POSITIONS: readonly WidgetPosition[] = ['bottom-right', 'bottom-left'];
 const THEMES: readonly WidgetTheme[] = ['auto', 'light', 'dark'];
+const LAUNCHER_MODES: readonly WidgetLauncherVisibility[] = ['always', 'until_opened', 'never'];
 
 // --- Controls ----------------------------------------------------------------
 
@@ -335,6 +349,51 @@ function ChoiceControl<T extends string>({
       </div>
       <span className="text-2xs text-content-tertiary">{hint}</span>
     </fieldset>
+  );
+}
+
+/**
+ * When the chat bubble is drawn (WG-10). The two hidden modes hand the opening
+ * to the site's own button, so they say how to wire it — and `never` says what
+ * happens when that button breaks, because then nobody can reach support.
+ */
+function LauncherControl({
+  value,
+  onChange,
+}: {
+  value: WidgetLauncherVisibility;
+  onChange: (next: WidgetLauncherVisibility) => void;
+}): ReactElement {
+  const t = useTranslate();
+  return (
+    <div className="flex flex-col gap-2">
+      <ChoiceControl
+        legend={t('settings.widgetCustomization.launcherLegend')}
+        hint={t('settings.widgetCustomization.launcherHint')}
+        name="widget-launcher"
+        value={value}
+        options={LAUNCHER_MODES.map((option) => ({
+          value: option,
+          label: t(`settings.widgetCustomization.launcher.${option}`),
+        }))}
+        onChange={onChange}
+      />
+      {value !== 'always' && (
+        <p className="text-2xs text-content-secondary" data-testid="launcher-own-button">
+          {t('settings.widgetCustomization.launcherOwnButton')}{' '}
+          <code className="rounded bg-surface-2 px-1">siyahtus('open')</code>
+        </p>
+      )}
+      {value === 'never' && (
+        <p
+          role="note"
+          className="rounded-md border border-warning px-2.5 py-1.5 text-2xs text-warning"
+          data-testid="launcher-never-risk"
+        >
+          {t('settings.widgetCustomization.launcherNeverRisk')}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -604,6 +663,15 @@ function WidgetPreview({ appearance }: { appearance: WidgetAppearance }): ReactE
             >
               S
             </span>
+            {appearance.show_logo && (
+              <span
+                className="flex h-5 items-center rounded bg-white/25 px-1 text-[9px] font-semibold"
+                data-testid="preview-logo"
+                aria-hidden="true"
+              >
+                {t('settings.widgetCustomization.previewLogo')}
+              </span>
+            )}
             <span className="text-xs font-semibold">
               {t('settings.widgetCustomization.previewChatWithUs')}
             </span>
@@ -629,16 +697,18 @@ function WidgetPreview({ appearance }: { appearance: WidgetAppearance }): ReactE
           )}
         </div>
 
-        {/* The launcher, in its chosen corner */}
-        <button
-          type="button"
-          tabIndex={-1}
-          aria-hidden="true"
-          className={`absolute bottom-3 flex h-11 w-11 items-center justify-center rounded-full text-white shadow-lg ${left ? 'left-3' : 'right-3'}`}
-          style={{ background: appearance.primary_color }}
-        >
-          <span className="text-lg leading-none">💬</span>
-        </button>
+        {/* The launcher, in its chosen corner — absent while the site opens the panel itself */}
+        {appearance.launcher_visibility === 'always' && (
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-hidden="true"
+            className={`absolute bottom-3 flex h-11 w-11 items-center justify-center rounded-full text-white shadow-lg ${left ? 'left-3' : 'right-3'}`}
+            style={{ background: appearance.primary_color }}
+          >
+            <span className="text-lg leading-none">💬</span>
+          </button>
+        )}
       </div>
       <p className="text-2xs text-content-tertiary">
         {t('settings.widgetCustomization.previewLanguageNote')}

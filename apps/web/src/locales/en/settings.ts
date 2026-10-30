@@ -693,6 +693,20 @@ export const settings: Messages = {
     'With no AI agent answering and no agent accepting chats, the widget shows a leave-a-message form instead.',
   'settings.widgetCustomization.availability.agents_onlyWhat2':
     'The form asks for name, e-mail and message, plus your ticket questions, and creates a ticket.',
+  'settings.widgetCustomization.launcherLegend': 'Chat bubble',
+  'settings.widgetCustomization.launcherHint':
+    'When the round chat button is drawn on your site. Takes effect on the next page load, no new snippet needed.',
+  'settings.widgetCustomization.launcher.always': 'Always visible',
+  'settings.widgetCustomization.launcher.until_opened': 'Hidden until your site opens it',
+  'settings.widgetCustomization.launcher.never': 'Never visible',
+  'settings.widgetCustomization.launcherOwnButton':
+    'Wire your own “Live support” button to open the chat with',
+  'settings.widgetCustomization.launcherNeverRisk':
+    'Risk: with no bubble, players can reach support only through your own button. If that button breaks or is removed, they cannot open a chat at all.',
+  'settings.widgetCustomization.showLogoLabel': 'Show the brand logo',
+  'settings.widgetCustomization.showLogoHint':
+    'Shows the logo from Settings › Brands at the top of the chat window. Only a logo on a secure (https) address is shown.',
+  'settings.widgetCustomization.previewLogo': 'LOGO',
   'settings.widgetCustomization.entitlementError':
     'Removing the SiyahTuş badge is an Enterprise feature. Upgrade the plan to hide it.',
   'settings.widgetCustomization.previewLabel': 'Preview',

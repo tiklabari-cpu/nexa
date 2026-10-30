@@ -19,6 +19,7 @@ import {
   servesRegion,
   type WidgetFormField,
   type Region,
+  brandLogoUrl,
   type WidgetAppearance,
   type WidgetTokenAppearance,
   type WidgetPhraseKey,
@@ -210,6 +211,12 @@ function enrollmentProvenance(proof: EnrollmentProof): { metadata?: Record<strin
 const reauthenticateBody = z.object({
   password: passwordSchema.optional(),
   code: z.string().trim().min(1).max(64).optional(),
+});
+
+/** `GET /customer/launcher`: which workspace, and the embedding page's origin as the mint takes it. */
+const customerLauncherQuery = z.object({
+  organization_id: z.string().uuid(),
+  host_origin: z.string().max(2048).optional(),
 });
 
 const customerTokenBody = z.object({
@@ -2021,6 +2028,52 @@ export default async function authRoutes(
   //
   // Public and stateless — no database, nothing revoked, always 204 — so it
   // needs no origin check: a page can only ever make its own partition forget.
+  // How the launcher is to be drawn (WG-10), asked before any token is minted.
+  //
+  // The mint carries `launcher_visibility` too, but a first-time visitor is not
+  // minted for until they open the panel (a mint opens a customer record, and
+  // every page view of every site would make one) — yet the bubble has to be
+  // right, or absent, from the first paint. So this answers that one question
+  // and nothing else: no customer is created, no cookie is set, the origin is
+  // checked against the trusted domains exactly as the mint does it. A widget
+  // that cannot get an answer keeps its last one, else draws the bubble.
+  app.get(
+    '/customer/launcher',
+    { config: { public: true, publicConfigRateLimit: true } },
+    async (request, reply) => {
+      const query = parse(customerLauncherQuery, request.query);
+      const host = originHost(query.host_origin) ?? originHost(request.headers.origin);
+      if (!host) {
+        throw ApiError.authorization('A valid embedding origin is required.');
+      }
+      const isChatPage = selfHost !== null && host === selfHost;
+      const matches = await app.db.$queryRaw<
+        Array<{ license_id: bigint; organization_id: string }>
+      >(
+        isChatPage
+          ? Prisma.sql`SELECT * FROM auth_resolve_organization_license(${query.organization_id}::uuid)`
+          : Prisma.sql`SELECT * FROM auth_resolve_widget_origin(${query.organization_id}::uuid, ${host})`,
+      );
+      const match = matches[0];
+      if (!match) {
+        throw ApiError.authorization('This origin is not a trusted domain for the organization.');
+      }
+      const tenant = { licenseId: match.license_id, organizationId: match.organization_id };
+      const launcherVisibility = await withTenant(app.db, tenant, async (tx) => {
+        const brandId = await resolveWidgetBrandId(tx, host, isChatPage);
+        const row = await tx.widgetSettings.findFirst({
+          where: brandId ? { brandId } : {},
+          select: { launcherVisibility: true },
+        });
+        return normalizeWidgetAppearance({
+          launcher_visibility: row?.launcherVisibility as WidgetAppearance['launcher_visibility'],
+        }).launcher_visibility;
+      });
+      reply.header('Cache-Control', 'no-store');
+      return reply.send({ launcher_visibility: launcherVisibility });
+    },
+  );
+
   app.delete('/customer/token', { config: { public: true } }, async (request, reply) => {
     const expired = cookieNames(request.headers.cookie)
       .filter(isMemberTokenCookieName)
@@ -2095,7 +2148,18 @@ async function widgetAppearance(
       // resolved (a failed lookup) reads the licence's first row, as before.
       const row = await tx.widgetSettings.findFirst(brandId ? { where: { brandId } } : undefined);
       if (!row) return null;
+      // The brand's logo, only when the brand asked for it and only an address
+      // the widget may load (WG-10). The same brand row the settings above came
+      // from; a licence without a default brand has no logo to show.
+      const brand = row.showLogo
+        ? await tx.brand.findFirst({
+            where: brandId ? { id: brandId } : { isDefault: true },
+            select: { name: true, logoUrl: true },
+          })
+        : null;
+      const logoUrl = brandLogoUrl(brand?.logoUrl);
       return {
+        logo: logoUrl && brand ? { logo_url: logoUrl, brand_name: brand.name } : null,
         primary_color: row.primaryColor,
         position: row.position as WidgetAppearance['position'],
         theme: row.theme as WidgetAppearance['theme'],
@@ -2105,12 +2169,19 @@ async function widgetAppearance(
         welcome_text: row.welcomeText,
         language: row.language as WidgetAppearance['language'],
         fallback_language: row.fallbackLanguage as WidgetAppearance['fallback_language'],
+        launcher_visibility: row.launcherVisibility as WidgetAppearance['launcher_visibility'],
+        show_logo: row.showLogo,
       };
     });
-    return { ...normalizeWidgetAppearance(appearance), ...links };
+    return {
+      ...normalizeWidgetAppearance(appearance),
+      ...links,
+      logo_url: appearance?.logo?.logo_url ?? null,
+      brand_name: appearance?.logo?.brand_name ?? null,
+    };
   } catch (error) {
     request.log.warn({ err: error }, 'failed to read widget appearance');
-    return { ...normalizeWidgetAppearance(null), ...links };
+    return { ...normalizeWidgetAppearance(null), ...links, logo_url: null, brand_name: null };
   }
 }
 

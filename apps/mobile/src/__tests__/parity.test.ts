@@ -1098,7 +1098,10 @@ describe('module parity matrix — what is still owed', () => {
       // 350 -> 351 with `POST /chats/{chatId}/claim` (tm 346) — "Take" from a
       // manual team's queue (WG-07), in the web Queued view; the app has no
       // queue tabs yet, and the chat write scopes it uses are unchanged.
-      contractEndpoints: 351,
+      // 351 -> 352 with `GET /customer/launcher` (tm 347) — the widget's bubble
+      // mode before any mint (WG-10), a visitor surface; the agent app has
+      // nothing to add, and nothing here re-scopes.
+      contractEndpoints: 352,
       scopeBoundaries: 1,
     });
   });

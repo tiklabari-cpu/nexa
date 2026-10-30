@@ -20,14 +20,18 @@ const PLACEHOLDER = 'https://siyahtus.example';
 const PILOT = { PILOT_MODE: 'true', PILOT_CONTACT_EMAIL: 'pilot-contact@example.test' };
 
 const APPEARANCE_KEYS = [
+  'brand_name',
   'fallback_language',
   'language',
+  'launcher_visibility',
+  'logo_url',
   'mobile_fullscreen',
   'position',
   'powered_by',
   'powered_by_url',
   'primary_color',
   'privacy_policy_url',
+  'show_logo',
   'theme',
   'welcome_text',
   'welcome_title',
@@ -69,7 +73,7 @@ describe('POST /customer/token: widget footer links (FR-MOD-11.5)', () => {
     await Promise.all([ordinary, withPolicy, pilot].map((s) => clearRateLimits(s.app)));
   });
 
-  it('carries exactly the eleven appearance fields the contract names', async () => {
+  it('carries exactly the fifteen appearance fields the contract names', async () => {
     const widget = await widgetOf(ordinary);
 
     expect(Object.keys(widget).sort()).toEqual(APPEARANCE_KEYS);

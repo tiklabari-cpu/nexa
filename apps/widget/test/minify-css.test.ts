@@ -51,12 +51,17 @@ describe('the widget stylesheet minifier', () => {
     expect(minified.length).toBeLessThan(css!.length * 0.8);
   });
 
+  it('drops the space after a declaration colon and the last semicolon, but not a selector colon or a string', () => {
+    expect(minifyCss('a:hover { color: red; margin: 0; }')).toBe('a:hover{color:red;margin:0}');
+    expect(minifyCss('.x::after { content: "a: b"; }')).toBe('.x::after{content:"a: b"}');
+  });
+
   it('keeps the spaces a parser needs: combinators and calc() arithmetic', () => {
     expect(minifyCss('.a :focus { width: calc(100% - 2px); }')).toBe(
-      '.a :focus{width: calc(100% - 2px);}',
+      '.a :focus{width:calc(100% - 2px)}',
     );
     expect(minifyCss('.a + .b ~ .c > .d { margin: 0 auto; }')).toBe(
-      '.a + .b ~ .c > .d{margin: 0 auto;}',
+      '.a + .b ~ .c > .d{margin:0 auto}',
     );
   });
 });

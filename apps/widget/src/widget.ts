@@ -25,7 +25,9 @@ import {
   type WidgetFormField,
 } from '@siyahtus/types';
 import {
+  cachedLauncher,
   isReturningVisitor,
+  parseLauncher,
   WidgetApi,
   WidgetApiError,
   type ChallengeHandler,
@@ -166,6 +168,9 @@ interface Appearance {
   /** The workspace's welcome message (owner, 2026-10-13). Server-supplied. */
   welcomeTitle: string | null;
   welcomeText: string | null;
+  /** The brand's logo for the panel header and its alt text (WG-10). Server-supplied. */
+  logoUrl: string | null;
+  brandName: string | null;
 }
 
 const DEFAULT_APPEARANCE: Appearance = {
@@ -180,6 +185,8 @@ const DEFAULT_APPEARANCE: Appearance = {
   poweredByUrl: null,
   welcomeTitle: null,
   welcomeText: null,
+  logoUrl: null,
+  brandName: null,
 };
 
 /** A `#rrggbb` colour — the one shape allowed to reach the `--nx-brand` var. */
@@ -552,9 +559,41 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     rootEl.classList.toggle('nx-mobile-full', appearance.mobileFullscreen);
     renderFooter(doc, ui, appearance, t);
     renderWelcome(doc, ui, appearance, t);
+    ui.logo.hidden = !appearance.logoUrl;
+    if (appearance.logoUrl) {
+      ui.logo.src = appearance.logoUrl;
+      ui.logo.alt = appearance.brandName ?? '';
+    }
   }
 
   applyAppearance();
+
+  // --- Launcher visibility (WG-10) -----------------------------------------
+
+  // Null = not known yet (a first-time visitor is not minted for): the bubble
+  // stays away until the mode is, so it never flashes up and vanishes. What
+  // this browser learned last time draws it at once.
+  let launcherMode = cachedLauncher(config.organizationId);
+  // `until_opened`: the host page opened the panel, so the bubble is shown.
+  let launcherRevealed = false;
+  let postedUnread = 0;
+
+  function launcherShown(): boolean {
+    return (
+      !config.chatPage &&
+      (launcherMode === 'always' || (launcherMode === 'until_opened' && launcherRevealed))
+    );
+  }
+
+  ui.launcher.hidden = !launcherShown();
+
+  function setLauncherMode(mode: typeof launcherMode): void {
+    if (!mode || mode === launcherMode) return;
+    launcherMode = mode;
+    ui.launcher.hidden = !launcherShown();
+    renderCard();
+    resize();
+  }
 
   // --- Language (WG-02) ----------------------------------------------------
 
@@ -570,6 +609,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       ui.close.hidden = true;
       ui.panel.hidden = false;
     } else {
+      ui.launcher.hidden = !launcherShown();
       ui.panel.hidden = !state.open;
     }
   }
@@ -1258,7 +1298,9 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       ? PANEL
       : state.greetingOpen || previewEvent !== null
         ? GREETING
-        : { width: LAUNCHER_SIZE, height: LAUNCHER_SIZE };
+        : launcherShown()
+          ? { width: LAUNCHER_SIZE, height: LAUNCHER_SIZE }
+          : { width: 0, height: 0 };
     postToHost(win, {
       type: 'siyahtus:resize',
       width: size.width,
@@ -1302,6 +1344,11 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     // attention pulse too, since it has no number to show. Reduced-motion is
     // honoured globally by the stylesheet's last rule.
     ui.launcher.classList.toggle('nx-attention', !state.open && (unread > 0 || state.greetingOpen));
+    // The page may draw its own badge when ours is not on screen (WG-10).
+    if (unread !== postedUnread) {
+      postedUnread = unread;
+      postToHost(win, { type: 'siyahtus:unread', count: unread });
+    }
   }
 
   /**
@@ -1330,7 +1377,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       const seen = previewSeen;
       const fresh = seen ? unread.filter((event) => !seen.has(event.id)) : [];
       const newest = fresh[fresh.length - 1];
-      if (newest) showPreview(newest);
+      if (newest && launcherShown()) showPreview(newest);
     }
     if (state.connected) {
       previewSeen ??= new Set();
@@ -1379,6 +1426,10 @@ export function mount(doc: Document = document, win: Window = window): () => voi
   }
 
   function setOpen(open: boolean): void {
+    if (open && !launcherRevealed) {
+      launcherRevealed = true;
+      ui.launcher.hidden = !launcherShown();
+    }
     state.open = open;
     ui.panel.hidden = !open;
     // The conversation itself is on screen now; its preview has done its job.
@@ -1445,6 +1496,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
   let greetingDue = false;
 
   function activeCard(): { kind: 'campaign' | 'greeting'; message: string } | null {
+    if (!launcherShown()) return null;
     if (state.campaign && !campaignDismissed(win, state.campaign.id)) {
       return { kind: 'campaign', message: state.campaign.message };
     }
@@ -1803,6 +1855,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
         adoptMintedLanguage(api.appearance.language, api.appearance.fallback_language);
         appearance = appearanceFromApi(api.appearance);
         applyAppearance();
+        setLauncherMode(parseLauncher(api.appearance.launcher_visibility));
       }
       // …and the pre-chat form (FR-MOD-08.7.7). Rendered here rather than at build
       // time because it is per-workspace and only known once the token is minted;
@@ -2747,14 +2800,10 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       if (data?.type === 'siyahtus:command' && data.command === 'trackSale')
         void trackSale(data.payload);
       // Only from the page the widget is embedded in: another frame on that page
-      // can reach this one too, and must not sign its visitor out.
-      if (
-        data?.type === 'siyahtus:command' &&
-        data.command === 'logout' &&
-        event.source === win.parent &&
-        !config.chatPage
-      ) {
-        void logout();
+      // can reach this one too, and must not sign its visitor out or open it.
+      if (data?.type === 'siyahtus:command' && event.source === win.parent && !config.chatPage) {
+        if (data.command === 'logout') void logout();
+        if (data.command === 'open') setOpen(true);
       }
     },
     { signal },
@@ -2772,6 +2821,9 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     void connect();
   } else {
     postToHost(win, { type: 'siyahtus:ready', rtl: isRtlLocale(locale) });
+    // No bubble yet (or none at all): give the host page its corner back at once.
+    if (!launcherShown()) resize();
+    void api.launcher().then((mode) => setLauncherMode(mode ?? launcherMode ?? 'always'));
     // The proactive nudge, once the visitor has been here a while. A campaign
     // is not held back by this: it is addressed to this visitor and arrives
     // with a poll, which `renderCard` picks up whenever it lands.
@@ -3011,6 +3063,8 @@ interface Ui {
   send: HTMLButtonElement;
   close: HTMLButtonElement;
   avatar: HTMLElement;
+  /** The brand's logo at the head of the panel (WG-10). */
+  logo: HTMLImageElement;
   /** Stand-in for the avatar until an agent or persona is named. */
   team: HTMLElement;
   title: HTMLElement;
@@ -3132,6 +3186,10 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
 
   const header = doc.createElement('header');
   header.className = 'nx-header';
+  const logo = doc.createElement('img');
+  logo.className = 'nx-logo';
+  logo.hidden = true;
+  logo.onerror = () => (logo.hidden = true);
   const identity = doc.createElement('div');
   identity.className = 'nx-identity';
   const avatar = doc.createElement('span');
@@ -3267,7 +3325,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   close.className = 'nx-close';
   close.setAttribute('aria-label', t('launcher.close'));
   close.textContent = '×';
-  header.append(identity, menuWrap, close);
+  header.append(logo, identity, menuWrap, close);
 
   const transcript = doc.createElement('div');
   transcript.className = 'nx-transcript';
@@ -3801,6 +3859,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     send,
     close,
     avatar,
+    logo,
     team,
     title,
     menuWrap,
@@ -4463,6 +4522,8 @@ function readAppearance(params: URLSearchParams): Appearance {
     // The welcome message is never in the snippet: the server sends it.
     welcomeTitle: DEFAULT_APPEARANCE.welcomeTitle,
     welcomeText: DEFAULT_APPEARANCE.welcomeText,
+    logoUrl: null,
+    brandName: null,
   };
 }
 
@@ -4480,6 +4541,8 @@ function appearanceFromApi(a: MintedAppearance): Appearance {
     poweredByUrl: webUrl(a.powered_by_url),
     welcomeTitle: welcomeString(a.welcome_title),
     welcomeText: welcomeString(a.welcome_text),
+    logoUrl: welcomeString(a.logo_url),
+    brandName: welcomeString(a.brand_name),
   };
 }
 
@@ -4889,6 +4952,7 @@ button { -webkit-tap-highlight-color: transparent; }
   padding: 18px 12px 18px 20px;
   background: var(--nx-brand); color: var(--nx-on-brand);
 }
+.nx-logo { flex: none; height: 28px; max-width: 96px; object-fit: contain; }
 .nx-identity { flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0; }
 /* Avatars after the reference's header trio: a soft tint per person (picked
    from the name, so the header and the preview card agree), a white ring that

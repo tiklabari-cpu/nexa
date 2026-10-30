@@ -214,6 +214,8 @@ paths:
     $ref: "./paths/auth.yaml#/personalAccessToken"
   /customer/token:
     $ref: "./paths/auth.yaml#/customerToken"
+  /customer/launcher:
+    $ref: "./paths/auth.yaml#/customerLauncher"
 
   /chats:
     $ref: "./paths/chats.yaml#/chats"
@@ -9295,6 +9297,8 @@ components:
           language,
           fallback_language,
           availability_mode,
+          launcher_visibility,
+          show_logo,
           updated_at,
         ]
       properties:
@@ -9355,6 +9359,21 @@ components:
             only while someone answers — `agents_only` offers the offline form
             when no AI would answer and nobody accepts chats. Server-side; the
             widget reads the outcome as `CustomerChatState.can_start_chat`.
+        launcher_visibility:
+          type: string
+          enum: [always, until_opened, never]
+          description: |
+            When the chat bubble is drawn (WG-10): `always` (default);
+            `until_opened` — hidden until the host page opens the panel with
+            `siyahtus('open')`, shown from then on; `never` — no bubble, the
+            panel opens only through the page's own button. Delivered with the
+            token mint, never baked into the install snippet.
+        show_logo:
+          type: boolean
+          description: >-
+            Show the brand's logo (Settings › Brands) in the panel header
+            (WG-10). Off by default; has no effect while the brand has no
+            `https` logo address.
         updated_at: { type: string, format: date-time, nullable: true }
 
     PrechatFieldRule:
@@ -9486,8 +9505,12 @@ components:
           welcome_text,
           language,
           fallback_language,
+          launcher_visibility,
+          show_logo,
           privacy_policy_url,
           powered_by_url,
+          logo_url,
+          brand_name,
         ]
       properties:
         primary_color:
@@ -9529,6 +9552,25 @@ components:
           type: string
           enum: [en, tr, de, fr, es, it, pt, ar]
           description: What `auto` falls back to when the browser speaks none of the eight.
+        launcher_visibility:
+          type: string
+          enum: [always, until_opened, never]
+          description: When the chat bubble is drawn (WG-10); see `WidgetSettings`.
+        show_logo:
+          type: boolean
+          description: Whether the brand's logo heads the panel (WG-10).
+        logo_url:
+          type: string
+          format: uri
+          nullable: true
+          description: >-
+            The brand's logo for the panel header (WG-10), or null — none is
+            set, `show_logo` is off, or the stored address is not an `https`
+            URL the widget may load.
+        brand_name:
+          type: string
+          nullable: true
+          description: The brand's name, the logo's alternative text. Null with `logo_url`.
         privacy_policy_url:
           type: string
           format: uri

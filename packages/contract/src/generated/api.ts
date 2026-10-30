@@ -1194,6 +1194,38 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/customer/launcher': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * How the widget's launcher is drawn (before any token is minted)
+     * @description Called by the widget on load, ahead of `POST /customer/token`
+     *     (WG-10 · tm 347). The mint carries `launcher_visibility` too, but a
+     *     first-time visitor is not minted for until they open the panel — a mint
+     *     opens a customer record, and every page view of every site would make
+     *     one — while the bubble must be right, or absent, from the first paint.
+     *     So this answers that one question and nothing else: no customer is
+     *     created and no cookie is set.
+     *
+     *     The embedding page's origin is checked against the organization's trusted
+     *     domains exactly as the mint checks it (`host_origin` is optional the same
+     *     way). The brand is the website registered for that host, else the
+     *     licence default. A workspace that never saved the setting reads
+     *     `always`.
+     */
+    get: operations['getCustomerLauncher'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/chats': {
     parameters: {
       query?: never;
@@ -18445,6 +18477,17 @@ export interface components {
        * @enum {string}
        */
       availability_mode: 'always' | 'agents_only';
+      /**
+       * @description When the chat bubble is drawn (WG-10): `always` (default);
+       *     `until_opened` — hidden until the host page opens the panel with
+       *     `siyahtus('open')`, shown from then on; `never` — no bubble, the
+       *     panel opens only through the page's own button. Delivered with the
+       *     token mint, never baked into the install snippet.
+       * @enum {string}
+       */
+      launcher_visibility: 'always' | 'until_opened' | 'never';
+      /** @description Show the brand's logo (Settings › Brands) in the panel header (WG-10). Off by default; has no effect while the brand has no `https` logo address. */
+      show_logo: boolean;
       /** Format: date-time */
       updated_at: string | null;
     };
@@ -18568,6 +18611,20 @@ export interface components {
        * @enum {string}
        */
       fallback_language: 'en' | 'tr' | 'de' | 'fr' | 'es' | 'it' | 'pt' | 'ar';
+      /**
+       * @description When the chat bubble is drawn (WG-10); see `WidgetSettings`.
+       * @enum {string}
+       */
+      launcher_visibility: 'always' | 'until_opened' | 'never';
+      /** @description Whether the brand's logo heads the panel (WG-10). */
+      show_logo: boolean;
+      /**
+       * Format: uri
+       * @description The brand's logo for the panel header (WG-10), or null — none is set, `show_logo` is off, or the stored address is not an `https` URL the widget may load.
+       */
+      logo_url: string | null;
+      /** @description The brand's name, the logo's alternative text. Null with `logo_url`. */
+      brand_name: string | null;
       /**
        * Format: uri
        * @description The deployment's privacy policy (`PRIVACY_POLICY_URL`). The widget links it from its footer; null when the deployment publishes none.
@@ -25020,6 +25077,42 @@ export interface operations {
            *     drop it.
            */
           'Set-Cookie'?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getCustomerLauncher: {
+    parameters: {
+      query: {
+        organization_id: string;
+        /** @description Origin of the page the widget is embedded in. */
+        host_origin?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The launcher mode for this brand */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @enum {string} */
+            launcher_visibility: 'always' | 'until_opened' | 'never';
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      /** @description `authorization` — the origin is not a trusted domain. */
+      403: {
+        headers: {
           [name: string]: unknown;
         };
         content?: never;
@@ -36537,6 +36630,16 @@ export interface operations {
            * @enum {string}
            */
           availability_mode?: 'always' | 'agents_only';
+          /**
+           * @description When the chat bubble is drawn (WG-10). `until_opened` hides it
+           *     until the host page calls `siyahtus('open')`; `never` hides it
+           *     for good — if the page's own button breaks, visitors cannot
+           *     reach support.
+           * @enum {string}
+           */
+          launcher_visibility?: 'always' | 'until_opened' | 'never';
+          /** @description Show the brand's logo in the panel header (WG-10). */
+          show_logo?: boolean;
         };
       };
     };

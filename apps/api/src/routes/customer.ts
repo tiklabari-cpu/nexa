@@ -57,7 +57,11 @@ import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { CustomerService } from '../services/customers/customer-service.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 import { TicketService } from '../services/tickets/ticket-service.js';
-import { deliverPendingCampaign } from '../services/campaigns/campaign-delivery.js';
+import {
+  deliverPendingCampaign,
+  stampCampaignClicked,
+} from '../services/campaigns/campaign-delivery.js';
+import { resolveCardPostback } from '../services/campaigns/card-postback.js';
 import { markCampaignEngaged } from '../services/campaigns/campaign-engagement.js';
 import { fireCampaignsAtVisitor } from '../services/campaigns/campaign-trigger.js';
 import { createGoalConversionRecorder } from '../services/goals/goal-triggers.js';
@@ -146,14 +150,30 @@ const startSchema = z
      * message opens a conversation and is flagged; otherwise ignored.
      */
     challenge_token: z.string().min(1).max(CAPTCHA_TOKEN_MAX_LENGTH).optional(),
+    /**
+     * A card's `send_message` button (EN-02 · tm 353): the message is the
+     * button's label, read from the card (`card-postback.ts`).
+     */
+    postback: z
+      .object({
+        campaign_id: z.string().uuid().optional(),
+        event_id: z.string().min(1).max(40).optional(),
+        button: z.number().int().min(0).max(4),
+      })
+      .strict()
+      .refine((postback) => Boolean(postback.campaign_id) !== Boolean(postback.event_id), {
+        message: 'exactly one of campaign_id or event_id',
+      })
+      .optional(),
   })
   // `.strict()` for the reason `campaigns.ts` gives for its conditions: a typo
   // in a key the visitor's context rides on (`referer`, `custom_field`) must be
   // a 400 rather than a message that silently arrives stripped of it.
   .strict()
-  .refine((body) => Boolean(body.text?.trim()) || Boolean(body.attachment_url), {
-    message: 'A message must have text or an attachment.',
-  });
+  .refine(
+    (body) => Boolean(body.text?.trim()) || Boolean(body.attachment_url) || Boolean(body.postback),
+    { message: 'A message must have text or an attachment.' },
+  );
 
 const rateSchema = z.object({
   value: z.enum(['good', 'bad']),
@@ -1185,7 +1205,18 @@ export default async function customerRoutes(
       // the AI, so a raw secret never reaches the database, a log or a model.
       // Mask once, at the very start. The types go with the event; the masked
       // text no longer shows them, and they are what the player is warned about.
-      const masked = maskForWrite(body.text, 'customer');
+      // A card button's press (EN-02): the text is the button's label as the
+      // card says it, and the message carries which button it was. Checked
+      // before anything is written, like every refusal below.
+      const pressed = body.postback
+        ? await request.withTenant((tx) =>
+            resolveCardPostback(tx, tenant, principal.customerId, body.postback!),
+          )
+        : null;
+      if (pressed && body.text !== undefined && body.text !== pressed.label) {
+        throw ApiError.validation("postback: text must be the button's label.");
+      }
+      const masked = maskForWrite(pressed ? pressed.label : body.text, 'customer');
       const maskedText = masked.text;
 
       // An attachment must be a file this workspace uploaded through `/uploads`
@@ -1465,6 +1496,7 @@ export default async function customerRoutes(
           ...(body.attachment_url ? { attachmentUrl: body.attachment_url } : {}),
           recipients: 'all',
           ...(body.idempotency_key ? { idempotencyKey: body.idempotency_key } : {}),
+          ...(pressed ? { properties: { postback: pressed.postback } } : {}),
         },
         ...(body.url || topicGroupId !== undefined
           ? {
@@ -1496,6 +1528,17 @@ export default async function customerRoutes(
       // From here every line names the day's chat and the connection this
       // message landed in (ID-08).
       bindChatLogContext(request, { chatId, threadId: result.event.thread_id });
+
+      // The campaign card's button counts as clicked (EN-02) — after the
+      // message is in, best-effort like the engagement below: losing it costs
+      // a report number, not the message.
+      if (pressed?.sendId && !result.replayed) {
+        try {
+          await request.withTenant((tx) => stampCampaignClicked(tx, pressed.sendId!, new Date()));
+        } catch (error) {
+          request.log.warn({ err: error }, 'could not record the campaign card click');
+        }
+      }
 
       // A replay is the same message arriving twice and wrote no job; answering
       // or notifying again would do both twice for one question.

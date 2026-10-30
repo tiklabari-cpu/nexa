@@ -38,6 +38,8 @@ import {
 } from './api.js';
 import { buildChallengeParts, drawChallenge, type ChallengeParts } from './challenge.js';
 import { insertEmojiAtCaret, WIDGET_EMOJI_CATEGORIES } from './emoji.js';
+import type * as CardChunk from './card.js';
+import type { CardSource } from './card.js';
 import type { HelpView } from './help.js';
 import { appendRichText } from './rich-text.js';
 import { WidgetSocket } from './socket.js';
@@ -712,7 +714,15 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     // Append only what is new: rebuilding the list would lose scroll position
     // and restart CSS animations on messages already on screen.
     for (const event of state.events.slice(renderedCount)) {
-      ui.transcript.append(renderBubble(doc, event, api, attachmentCache, t, locale));
+      const row = renderBubble(doc, event, api, attachmentCache, t, locale);
+      ui.transcript.append(row);
+      // A card from the team (EN-02): its plain text until the chunk draws it.
+      const rich = event.type === 'rich_message' && event.properties?.['card'];
+      if (rich) {
+        drawRich(rich as NonNullable<CampaignCard['rich']>, { event_id: event.id }, (drawn) =>
+          row.querySelector('.nx-bubble')?.replaceChildren(drawn),
+        );
+      }
       // The player's answer to the e-mail card, here or from another tab: the
       // card above it stops asking.
       if (event.properties?.['system_event'] === ASK_EMAIL_ANSWERED_SYSTEM_EVENT) {
@@ -1518,6 +1528,41 @@ export function mount(doc: Document = document, win: Window = window): () => voi
   /** False until the visitor has been on the page for `GREETING_DELAY_MS`. */
   let greetingDue = false;
 
+  // --- Rich cards (EN-02 · tm 353): a chunk of their own (`card.ts`) --------
+  let cards: Promise<typeof CardChunk> | null = null;
+  /** A card button's postback, sent with the next message while that is still its label. */
+  let pressed: { label: string; postback: CardSource & { button: number } } | null = null;
+
+  function drawRich(
+    rich: NonNullable<CampaignCard['rich']>,
+    source: CardSource,
+    put: (drawn: HTMLElement) => void,
+  ): void {
+    // The build hands this over as a chunk URL, without Vite's preload helper (lazy-chunks.ts).
+    cards ??= import('./card.js');
+    // A chunk that would not load leaves the plain text (`String`: a no-op).
+    cards.then(
+      ({ cardElement }) => put(cardElement(doc, rich, source, { locale, api, press: pressCard })),
+      String,
+    );
+  }
+
+  /**
+   * A card's "send a message" button: the label goes out as the visitor's own
+   * message, carrying which button it was — opening the panel first, through
+   * the pre-chat form when one is due (the label waits in its message box).
+   */
+  function pressCard(label: string, postback: CardSource & { button: number }): void {
+    pressed = { label, postback };
+    ui.input.value = label;
+    if (!state.open) {
+      if (prechatActive()) state.prechat = true;
+      setOpen(true);
+    }
+    if (state.prechat) ui.prechatMessage.value = label;
+    else void send();
+  }
+
   // --- Campaign targeting: the browser's half of the rules (EN-03 · tm 352.2) -----
   /** Loaded only for a workspace with a campaign running (`targeting.ts`, a chunk of its own). */
   let targeting: Promise<Targeting> | null = null;
@@ -1557,6 +1602,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       state.campaign = {
         id: offer.id,
         message: offer.message,
+        rich: offer.card,
         when: null,
         ready: true,
         shown: false,
@@ -1576,10 +1622,14 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     });
   }
 
-  function activeCard(): { kind: 'campaign' | 'greeting'; message: string } | null {
+  function activeCard(): {
+    kind: 'campaign' | 'greeting';
+    message: string;
+    rich?: CampaignCard['rich'];
+  } | null {
     if (!launcherShown()) return null;
     if (state.campaign?.ready && !campaignDismissed(win, state.campaign.id)) {
-      return { kind: 'campaign', message: state.campaign.message };
+      return { kind: 'campaign', message: state.campaign.message, rich: state.campaign.rich };
     }
     if (greetingDue && !greetingDismissed(win)) {
       return { kind: 'greeting', message: t('greeting.msg') };
@@ -1614,6 +1664,17 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     }
     ui.greeting.dataset['kind'] = card.kind;
     ui.greetMsg.textContent = card.message;
+    // A campaign's card (EN-02), drawn by its chunk over the plain text — which
+    // stays if the chunk fails. The chunk keeps one element per card and a
+    // loaded chunk answers within this task, so a poll redrawing it is not seen.
+    const rich = card.rich;
+    if (rich) {
+      drawRich(rich, { campaign_id: state.campaign!.id }, (drawn) => {
+        if (state.campaign?.rich !== rich) return;
+        ui.greetMsg.replaceChildren(drawn);
+        resize();
+      });
+    }
     if (!state.greetingOpen) {
       state.greetingOpen = true;
       ui.greeting.hidden = false;
@@ -2184,6 +2245,9 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     const details = state.pendingDetails;
     const customFields = state.pendingCustomFields;
     const referrer = hostReferrer(win);
+    // A card button's press rides only the message that still says its label.
+    const press = pressed?.label === text ? pressed : null;
+    pressed = null;
     try {
       const result = await api.send(text, {
         url: hostPageUrl(win),
@@ -2197,6 +2261,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
         locale,
         ...(details ?? {}),
         ...(customFields ? { custom_fields: customFields } : {}),
+        ...(press ? { postback: press.postback } : {}),
       });
       state.chatId = result.chat_id;
       state.pendingDetails = null;
@@ -3927,7 +3992,8 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   greeting.hidden = true;
   greeting.setAttribute('role', 'dialog');
   greeting.setAttribute('aria-label', t('greeting.label'));
-  const greetMsg = doc.createElement('p');
+  // A div: a campaign's card (EN-02) is drawn inside it.
+  const greetMsg = doc.createElement('div');
   greetMsg.className = 'nx-greet-msg';
   greetMsg.textContent = t('greeting.msg');
   const greetActions = doc.createElement('div');

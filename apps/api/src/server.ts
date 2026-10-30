@@ -668,7 +668,7 @@ export async function buildServer({
       await api.register(customerDirectoryRoutes);
       await api.register(memberRecognitionRoutes);
       await api.register(trafficRoutes);
-      await api.register(campaignRoutes);
+      await api.register(campaignRoutes, { env });
       await api.register(goalRoutes);
       await api.register(ticketRoutes, { env, automations, pilotMode: env.PILOT_MODE });
       await api.register(ticketRuleRoutes);

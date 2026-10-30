@@ -18,6 +18,10 @@
  * `SESSION_VARIABLE_MAX_LENGTH` characters), card-masked before they are
  * written, read by `custom_var` rules and nothing else — no API returns them
  * and the AI never sees them (EN-03 karar 2).
+ *
+ * `POST /customer/campaigns/{id}/clicked` (EN-02 · tm 353) is a card's
+ * `open_url` or `copy_coupon` button: the send counts as clicked. A
+ * `send_message` button counts through its message instead.
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -28,9 +32,11 @@ import {
 } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { maskCardNumbers } from '../lib/cc-mask.js';
-import { markCampaignShown } from '../services/campaigns/campaign-delivery.js';
+import { markCampaignClicked, markCampaignShown } from '../services/campaigns/campaign-delivery.js';
 import { fireCampaignsAtVisitor } from '../services/campaigns/campaign-trigger.js';
 import { CustomerService } from '../services/customers/customer-service.js';
+
+const clickedBody = z.object({ button: z.number().int().min(0).max(4) }).strict();
 
 const variableValue = z.union([
   z.string().max(SESSION_VARIABLE_MAX_LENGTH),
@@ -138,6 +144,31 @@ export default async function customerVisitRoutes(app: FastifyInstance): Promise
       const tenant = request.tenant();
       const found = await request.withTenant((tx) =>
         markCampaignShown(tx, tenant, { customerId: principal.customerId, campaignId }, new Date()),
+      );
+      if (!found) throw ApiError.notFound('Campaign not found.');
+      return reply.code(204).send();
+    },
+  );
+
+  app.post(
+    '/customer/campaigns/:campaignId/clicked',
+    { config: customerOnly },
+    async (request, reply) => {
+      const principal = request.requirePrincipal();
+      if (principal.kind !== 'customer') throw ApiError.notFound('Resource not found.');
+      const campaignId = parse(
+        campaignIdParam,
+        (request.params as { campaignId?: unknown }).campaignId,
+      );
+      const { button } = parse(clickedBody, request.body);
+      const tenant = request.tenant();
+      const found = await request.withTenant((tx) =>
+        markCampaignClicked(
+          tx,
+          tenant,
+          { customerId: principal.customerId, campaignId, button },
+          new Date(),
+        ),
       );
       if (!found) throw ApiError.notFound('Campaign not found.');
       return reply.code(204).send();

@@ -2192,7 +2192,8 @@ export interface paths {
      *     all, rather than accepted and downgraded silently.
      *
      *     A message must carry text, an `attachment_url`, or both — an attachment may
-     *     stand alone (FR-MOD-11.4). The attachment must be a file this workspace
+     *     stand alone (FR-MOD-11.4). A `postback` (a card's `send_message`
+     *     button, EN-02) is a message too: its text is the button's label. The attachment must be a file this workspace
      *     uploaded through `/uploads`; any other value is refused.
      *
      *     **Pre-chat requirements (WG-01).** A message that would *open* a
@@ -2631,6 +2632,32 @@ export interface paths {
      *     for a risk flag.
      */
     post: operations['markCustomerCampaignShown'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/customer/campaigns/{campaignId}/clicked': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * The visitor pressed a button on a campaign card
+     * @description For a card's `open_url` and `copy_coupon` buttons (EN-02), which
+     *     write nothing into a conversation: the send's `clicked_at` is
+     *     stamped, once. A `send_message` button needs no call of its own — its
+     *     message (`postback` on `POST /customer/chat/events`) stamps it.
+     *
+     *     404 when this visitor has no send of that campaign, it was held back
+     *     for a risk flag, or the campaign shows no card with that button.
+     */
+    post: operations['markCustomerCampaignClicked'];
     delete?: never;
     options?: never;
     head?: never;
@@ -13129,6 +13156,12 @@ export interface components {
        *     secret is a `system_message` addressed to `all` with
        *     `system_event: sensitive_data_warning`, once per chat per type; its
        *     `sensitive_types` are the types it is the first warning for.
+       *
+       *     A `rich_message` carries its card as `card` (`RichCard`, EN-02)
+       *     and its plain text as `text`. A player's message sent by a card
+       *     button carries `postback` (`CardPostback`), which only the
+       *     server writes — it is stripped from a caller-supplied
+       *     `properties` too.
        */
       properties?: {
         [key: string]: unknown;
@@ -13158,6 +13191,15 @@ export interface components {
       recipients: 'all' | 'agents';
       /** Format: uri */
       attachment_url?: string;
+      /**
+       * @description A `rich_message` (EN-02) needs `properties.card` (`RichCard`).
+       *     In a conversation a card may only `send_message` or `open_url`
+       *     to one of the workspace's trusted domains — no `copy_coupon` —
+       *     whoever sends it (an agent, a bot, the AI); anything else is a 400
+       *     naming the button. Its `text` defaults to the card's plain text
+       *     (title, body, the buttons numbered), what a channel that cannot
+       *     draw a card sends.
+       */
       properties?: {
         [key: string]: unknown;
       };
@@ -19560,9 +19602,93 @@ export interface components {
       match: 'all' | 'any';
       rules: components['schemas']['CampaignRule'][];
     };
-    /** @description What the campaign delivers to a matching visitor. */
+    /**
+     * @description What the campaign delivers to a matching visitor: a line of text
+     *     (`type: text`, or no `type` — every campaign saved before cards) or
+     *     a card (`type: card`, EN-02).
+     *
+     *     A card campaign needs `card`; `fallback_text` is its plain twin —
+     *     what a widget or channel that cannot draw a card shows — and is always
+     *     answered: written from the card (title, body, the buttons numbered)
+     *     when the request leaves it out. A text campaign needs `message`.
+     *     Switching a campaign's type drops the other type's fields.
+     */
     CampaignContent: {
+      /** @enum {string} */
+      type?: 'text' | 'card';
       message?: string;
+      card?: components['schemas']['RichCard'];
+      fallback_text?: string;
+    };
+    /**
+     * @description A card (EN-02): an optional title and image, a body, up to five
+     *     buttons. Limits are refused, never cut: a label of 21 characters is a
+     *     400 naming the button. In a conversation (`rich_message`) a card may
+     *     only `send_message` or `open_url` to one of the workspace's trusted
+     *     domains; `copy_coupon` is a campaign's alone.
+     */
+    RichCard: {
+      title?: string;
+      body: string;
+      image?: {
+        /** @description An `https:` address, or a `file_url` this workspace got from `/uploads`. */
+        url: string;
+        /** @description What a screen reader says instead. Required. */
+        alt: string;
+      };
+      buttons: components['schemas']['CardButton'][];
+    };
+    CardButton: {
+      label: string;
+      /**
+       * @default default
+       * @enum {string}
+       */
+      style: 'default' | 'primary';
+      /**
+       * @description `send_message` puts the label into the conversation as the
+       *     player's message; `open_url` opens `url` (`https:` only — a
+       *     `javascript:` or `http:` address is a 400) in a new tab;
+       *     `copy_coupon` copies `code`. Only the field of the action's
+       *     type is kept.
+       */
+      action: {
+        /** @enum {string} */
+        type: 'send_message' | 'open_url' | 'copy_coupon';
+        url?: string;
+        code?: string;
+      };
+    };
+    /**
+     * @description A card's `send_message` button was pressed (EN-02): the message is
+     *     the button's label — `text`, if sent, must be exactly that — and it
+     *     is recorded with `properties.postback` (`CardPostback`). Exactly one
+     *     of `campaign_id` (a campaign card this visitor was offered; it
+     *     counts as clicked) or `event_id` (a `rich_message` in this visitor's
+     *     open conversation). A button that does not exist or does not send a
+     *     message is a 400.
+     */
+    CardPostbackInput: {
+      /** Format: uuid */
+      campaign_id?: string;
+      event_id?: string;
+      button: number;
+    };
+    /**
+     * @description `properties.postback` on a player's message that a card button sent
+     *     (EN-02): which button, its label, and the campaign — with its card as
+     *     it was, so the Inbox can show what was pressed — or the
+     *     `rich_message` event it was on.
+     */
+    CardPostback: {
+      /** @enum {string} */
+      source: 'campaign' | 'event';
+      /** Format: uuid */
+      campaign_id?: string;
+      event_id?: string;
+      button: number;
+      label: string;
+      card?: components['schemas']['RichCard'];
     };
     /** @description The campaign card's numbers (FR-MOD-03.3.3), counted from its sends. */
     CampaignPerformance: {
@@ -22912,10 +23038,21 @@ export interface components {
          * @description The campaign. Stable per visitor, so the widget can key a dismissal on it. Its internal name is not included — the owner named it for their own list, not for the visitor.
          */
         id: string;
-        /** @description The message the campaign's author wrote. */
+        /**
+         * @description The message the campaign's author wrote — for a card campaign,
+         *     the card's plain text (`fallback_text`), which a widget that
+         *     predates cards shows.
+         */
         message: string;
         /**
-         * @description Null for a campaign the widget shows now. Otherwise the
+         * @description The card to draw (EN-02), when the campaign is one. Its
+         *     `send_message` buttons post the label with `postback`
+         *     (`campaign_id`); the others report
+         *     `POST /customer/campaigns/{campaignId}/clicked`.
+         */
+        card?: components['schemas']['RichCard'];
+        /**
+         * @description Absent for a campaign the widget shows now. Otherwise the
          *     browser-side rules the card waits for (EN-03): the send is
          *     **not** stamped on this poll — it is offered on every poll
          *     while the server-side rules still hold (a visitor who
@@ -26747,6 +26884,7 @@ export interface operations {
            *     flagged; otherwise ignored.
            */
           challenge_token?: string;
+          postback?: components['schemas']['CardPostbackInput'];
         };
       };
     };
@@ -27275,6 +27413,37 @@ export interface operations {
     requestBody?: never;
     responses: {
       /** @description Counted as displayed (or already was). */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  markCustomerCampaignClicked: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        campaignId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description The button's position on the card, from 0. */
+          button: number;
+        };
+      };
+    };
+    responses: {
+      /** @description Counted (or already was). */
       204: {
         headers: {
           [name: string]: unknown;

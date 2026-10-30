@@ -275,6 +275,8 @@ export const inbox: Messages = {
   'inbox.transcript.editCancel': 'Cancel',
   'inbox.transcript.editSaving': 'Saving…',
   'inbox.transcript.edited': 'edited',
+  'inbox.transcript.campaignCard': 'Campaign card',
+  'inbox.transcript.cardPressed': 'pressed “{label}”',
   'inbox.transcript.editFailed': 'The correction was not saved.',
   // What the server masked out of a message (tm 300.2 · AI-26)
   'inbox.transcript.sensitiveHidden': 'Sensitive data hidden ({types})',

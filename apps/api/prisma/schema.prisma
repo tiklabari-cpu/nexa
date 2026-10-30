@@ -1982,6 +1982,8 @@ model CampaignSend {
   suppressedAt DateTime? @map("suppressed_at") @db.Timestamptz(6)
   /// The flag type that did it (`RISK_FLAG_TYPES`, by CHECK); with `suppressedAt`.
   suppressedReason String? @map("suppressed_reason")
+  /// When the visitor first pressed a button on the campaign's card (EN-02 · tm 353).
+  clickedAt   DateTime? @map("clicked_at") @db.Timestamptz(6)
 
   license  License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)

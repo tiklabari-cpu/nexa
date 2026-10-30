@@ -11,6 +11,11 @@
  * campaign — a send queued for them before the flag is held back when the
  * flag lands, the card counts it as "Not shown due to risk", and the inbox
  * says "Promotions blocked".
+ *
+ * EN-03 (tm 352): a trigger of several rules — built row by row, listed with
+ * what it waits for — and the browser half end to end: a card that waits for
+ * the visitor to head for the exit is held by the real widget, shown when the
+ * loader sees the pointer leave through the top edge, and counted as shown then.
  */
 import {
   API_BASE,
@@ -20,6 +25,7 @@ import {
   tenantSubdomain,
   test,
   visitorSends,
+  widgetFrame,
 } from './fixtures.js';
 
 test.describe('campaigns', () => {
@@ -38,7 +44,7 @@ test.describe('campaigns', () => {
     await expect(dialog).toBeVisible();
 
     await dialog.getByLabel('Name').fill(name);
-    await dialog.getByLabel('Trigger — page URL contains').fill('/pricing');
+    await dialog.getByLabel('Rule 1 value').fill('/pricing');
     await dialog.getByLabel('Message').fill('Questions about pricing? Happy to help.');
     await dialog.getByRole('button', { name: 'Create campaign' }).click();
 
@@ -136,5 +142,117 @@ test.describe('campaigns', () => {
     } finally {
       await context.close();
     }
+  });
+
+  test('builds a two-rule campaign row by row and lists what it waits for (EN-03)', async ({
+    agentPage,
+  }) => {
+    const name = `Exit offer ${Date.now()}`;
+
+    await agentPage.goto('/app/customers/campaigns');
+    await agentPage.getByRole('button', { name: 'New campaign' }).click();
+    const dialog = agentPage.getByRole('dialog', { name: 'New campaign' });
+
+    await dialog.getByLabel('Name').fill(name);
+    await dialog.getByLabel('Rule 1 value').fill('/deposit');
+    await dialog.getByRole('button', { name: 'Add rule' }).click();
+    await dialog.getByLabel('Rule 2 field').selectOption({ label: 'Exit intent' });
+    // Two rules to join: the choice appears with the second one.
+    await dialog.getByLabel('Reach visitors when').selectOption('any');
+    await dialog.getByLabel('Message').fill('Wait, there is a bonus waiting.');
+    await dialog.getByRole('button', { name: 'Create campaign' }).click();
+
+    const card = agentPage.getByRole('listitem').filter({ hasText: name });
+    await expect(card).toBeVisible();
+    await expect(card).toContainText('When any of these holds:');
+    await expect(card).toContainText(
+      'Current page URL contains /deposit · The visitor is about to leave the page',
+    );
+
+    // Edited again, the rows come back as they were saved.
+    await card.getByRole('button', { name: 'Edit' }).click();
+    const editor = agentPage.getByRole('dialog', { name: 'Edit campaign' });
+    await expect(editor.getByLabel('Rule 1 value')).toHaveValue('/deposit');
+    await expect(editor.getByLabel('Rule 2 field')).toHaveValue('exit_intent');
+    await expect(editor.getByLabel('Reach visitors when')).toHaveValue('any');
+    await editor.getByRole('button', { name: 'Cancel' }).click();
+
+    await card.getByRole('button', { name: 'Turn off' }).click();
+    await expect(card.getByRole('button', { name: 'Turn on' })).toBeVisible();
+  });
+
+  test('a card that waits for the exit is held, shown when the pointer leaves the top edge, and counted then (EN-03)', async ({
+    agentPage,
+    browser,
+    organizationId,
+    request,
+  }) => {
+    test.setTimeout(120_000);
+    const run = Date.now().toString().slice(-6);
+    const token = await ownerAccessToken(request);
+    const headers = { authorization: `Bearer ${token}` };
+    const message = `Wait, a bonus for you ${run}`;
+
+    // Running before the visitor arrives, so the mint says a campaign runs and
+    // the loader starts watching the page.
+    const created = await request.post(`${API_BASE}/campaigns`, {
+      headers,
+      data: {
+        name: `Exit ${run}`,
+        conditions: {
+          match: 'all',
+          rules: [
+            { field: 'current_url', op: 'contains', value: `exit-${run}` },
+            { field: 'exit_intent', op: 'equals', value: true },
+          ],
+        },
+        content: { message },
+      },
+    });
+    expect(created.ok(), `campaigns: ${created.status()} ${await created.text()}`).toBe(true);
+    const campaignId = ((await created.json()) as { id: string }).id;
+
+    const context = await browser.newContext();
+    try {
+      const visitor = await context.newPage();
+      const minted = visitor.waitForResponse(
+        (response) => response.url().endsWith('/customer/chat') && response.ok(),
+      );
+      await openWidget(visitor, organizationId, { host: tenantSubdomain(`exit-${run}`).origin });
+      await minted;
+      const frame = widgetFrame(visitor);
+      // The panel closed: the card has the launcher's corner to itself.
+      await frame.locator('.nx-close').click();
+
+      const greeting = frame.locator('.nx-greeting');
+      const shown = visitor.waitForResponse(
+        (response) =>
+          /\/customer\/campaigns\/[^/]+\/shown$/.test(response.url()) &&
+          response.request().method() === 'POST',
+      );
+      await expect(greeting).toBeHidden();
+
+      // Pointer out through the top edge — repeated, because it counts only once
+      // the widget holds the card (the mint's poll hands it over a moment after).
+      await expect(async () => {
+        await visitor.evaluate(() => {
+          document.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, clientY: 0 }));
+        });
+        await expect(greeting).toBeVisible({ timeout: 1_500 });
+      }).toPass({ timeout: 30_000 });
+      await expect(greeting).toContainText(message);
+      expect((await shown).status()).toBe(204);
+    } finally {
+      await context.close();
+      await request.patch(`${API_BASE}/campaigns/${campaignId}`, {
+        headers,
+        data: { active: false },
+      });
+    }
+
+    // The card counts it as displayed — and only now.
+    await agentPage.goto('/app/customers/campaigns');
+    const card = agentPage.getByRole('listitem').filter({ hasText: `Exit ${run}` });
+    await expect(card.getByText('Displayed').locator('..')).toContainText('1');
   });
 });

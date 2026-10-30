@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { defineConfig } from 'vitest/config';
-import { helpChunk } from './help-chunk';
+import { lazyChunks } from './lazy-chunks';
 import { minifyWidgetCss } from './minify-css';
 
 /**
@@ -32,7 +32,7 @@ export default defineConfig(({ mode }) => {
       : {}),
     // The app pass ships the stylesheet without its comments and indentation (tm 320.1),
     // and the Help tab as a chunk fetched on its first open (WG-12).
-    plugins: isLoader ? [] : [minifyWidgetCss(), helpChunk()],
+    plugins: isLoader ? [] : [minifyWidgetCss(), lazyChunks()],
     build: isLoader
       ? {
           outDir: 'dist',

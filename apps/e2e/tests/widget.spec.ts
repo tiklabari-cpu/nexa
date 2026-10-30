@@ -464,7 +464,7 @@ test.describe('campaign card', () => {
       await agentPage.getByRole('button', { name: 'New campaign' }).click();
       const dialog = agentPage.getByRole('dialog', { name: 'New campaign' });
       await dialog.getByLabel('Name').fill(name);
-      await dialog.getByLabel('Trigger — page URL contains').fill(site.hostname);
+      await dialog.getByLabel('Rule 1 value').fill(site.hostname);
       await dialog.getByLabel('Message').fill(message);
       await dialog.getByRole('button', { name: 'Create campaign' }).click();
       await expect(agentPage.getByRole('listitem').filter({ hasText: name })).toBeVisible();
@@ -511,7 +511,7 @@ test.describe('campaign card', () => {
     await agentPage.getByRole('button', { name: 'New campaign' }).click();
     const dialog = agentPage.getByRole('dialog', { name: 'New campaign' });
     await dialog.getByLabel('Name').fill(name);
-    await dialog.getByLabel('Trigger — page URL contains').fill(site.hostname);
+    await dialog.getByLabel('Rule 1 value').fill(site.hostname);
     await dialog.getByLabel('Message').fill(message);
     await dialog.getByRole('button', { name: 'Create campaign' }).click();
     await expect(agentPage.getByRole('listitem').filter({ hasText: name })).toBeVisible();

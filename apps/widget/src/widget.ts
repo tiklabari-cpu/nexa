@@ -41,6 +41,7 @@ import { insertEmojiAtCaret, WIDGET_EMOJI_CATEGORIES } from './emoji.js';
 import type { HelpView } from './help.js';
 import { appendRichText } from './rich-text.js';
 import { WidgetSocket } from './socket.js';
+import type { CampaignCard, Targeting } from './targeting.js';
 import {
   browserLanguages,
   createTranslator,
@@ -257,8 +258,10 @@ interface State {
    * own poll — not a second card system, the same slot `greetingOpen` occupies.
    * Cleared once shown and either dismissed or acted on; never overwritten by a
    * later poll while one is already waiting to be seen (see `renderCard`).
+   * One with `when` (EN-03) is held back until the browser-side rules hold
+   * (`ready`), and reports itself once it is actually drawn (`shown`).
    */
-  campaign: { id: string; message: string } | null;
+  campaign: CampaignCard | null;
   /** The pre-chat form is showing instead of the composer. */
   prechat: boolean;
   /** Pre-chat details to attach to the first message the visitor sends. */
@@ -417,6 +420,8 @@ export function mount(doc: Document = document, win: Window = window): () => voi
   const api = new WidgetApi(config.apiBaseUrl, config.organizationId, config.hostOrigin);
   // So the mint can pick the custom texts of the language shown (WG-05).
   api.localeHints = { ...(config.language ? { language: config.language } : {}), browser };
+  // When the visitor reached this page: the clock a campaign's "seconds on the page" counts.
+  const loadedAt = Date.now();
   const hostUrl = hostPageUrl(win);
   const hostFrom = hostReferrer(win);
   api.pageHints = {
@@ -1455,8 +1460,14 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     // A campaign card the visitor opened into needs no dismissal record: the
     // send is already stamped delivered server-side (at-most-once), so the
     // same campaign can never be offered again regardless of what the widget
-    // remembers locally.
-    if (open) state.campaign = null;
+    // remembers locally. One that still waited for the browser (EN-03) was
+    // never stamped, so it is remembered or the next poll would bring it back.
+    if (open) {
+      if (state.campaign?.when && !state.campaign.shown) {
+        rememberCampaignDismissed(win, state.campaign.id);
+      }
+      state.campaign = null;
+    }
 
     // Opening marks the transcript read and drops the badge; closing starts
     // counting again from the message that was last on screen.
@@ -1507,9 +1518,67 @@ export function mount(doc: Document = document, win: Window = window): () => voi
   /** False until the visitor has been on the page for `GREETING_DELAY_MS`. */
   let greetingDue = false;
 
+  // --- Campaign targeting: the browser's half of the rules (EN-03 · tm 352.2) -----
+  /** Loaded only for a workspace with a campaign running (`targeting.ts`, a chunk of its own). */
+  let targeting: Promise<Targeting> | null = null;
+  /** The site's variables, merged across `siyahtus('setSessionVariables')` calls. */
+  let sessionVariables: Record<string, unknown> = {};
+
+  function withTargeting(use: (loaded: Targeting) => void): void {
+    // The build hands this over as a chunk URL, without Vite's preload helper (lazy-chunks.ts).
+    targeting ??= import('./targeting.js').then(({ createTargeting }) =>
+      createTargeting(
+        {
+          url: hostUrl ?? '',
+          since: loadedAt,
+          slot: state,
+          api,
+          dismissed: (id) => campaignDismissed(win, id),
+          render: renderCard,
+          refresh: () => void refresh(),
+        },
+        win,
+      ),
+    );
+    targeting.then(use, () => {
+      targeting = null;
+    });
+  }
+
+  /**
+   * Take what a poll offers. A card with no `show_when` is shown at once, as it
+   * always was; one with it — and the question of whether a waiting one still
+   * applies — is the chunk's business. One already waiting to be seen is not
+   * replaced: a card mid-read swapped for a new one is worse than the new one
+   * coming later.
+   */
+  function adoptCampaign(offer: WidgetState['campaign']): void {
+    if (offer && !offer.show_when && !state.campaign) {
+      state.campaign = {
+        id: offer.id,
+        message: offer.message,
+        when: null,
+        ready: true,
+        shown: false,
+      };
+    } else if (offer?.show_when || state.campaign?.when) {
+      withTargeting((loaded) => loaded.offer(offer));
+    }
+  }
+
+  /** The mint found a campaign running: tell the page to report where the visitor goes. */
+  function startTargeting(): void {
+    if (!api.campaignTracking || config.chatPage) return;
+    postToHost(win, { type: 'siyahtus:campaign-tracking' });
+    withTargeting((loaded) => {
+      loaded.track();
+      loaded.variables(sessionVariables);
+    });
+  }
+
   function activeCard(): { kind: 'campaign' | 'greeting'; message: string } | null {
     if (!launcherShown()) return null;
-    if (state.campaign && !campaignDismissed(win, state.campaign.id)) {
+    if (state.campaign?.ready && !campaignDismissed(win, state.campaign.id)) {
       return { kind: 'campaign', message: state.campaign.message };
     }
     if (greetingDue && !greetingDismissed(win)) {
@@ -1538,6 +1607,11 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       return;
     }
     shownCardKind = card.kind;
+    // The moment a card that waited for the browser is really on screen, and no
+    // earlier, it counts as displayed (EN-03).
+    if (card.kind === 'campaign' && state.campaign?.when && !state.campaign.shown) {
+      withTargeting((loaded) => loaded.shown());
+    }
     ui.greeting.dataset['kind'] = card.kind;
     ui.greetMsg.textContent = card.message;
     if (!state.greetingOpen) {
@@ -1888,6 +1962,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       state.prospectFields = api.prospectForm;
       renderOfflineFields();
       state.connected = true;
+      startTargeting();
       applyAvailability(snapshot);
       state.chatId = snapshot.chat?.id ?? null;
       state.threadId = snapshot.chat?.thread_id ?? null;
@@ -1901,12 +1976,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       state.agentTyping = snapshot.agent_typing ?? false;
       noteOwner(snapshot);
       state.fileSharingEnabled = api.fileSharingEnabled;
-      // Never overwrite a campaign already waiting to be seen — the server
-      // will not offer this one again either way (at-most-once), so there is
-      // nothing to gain by replacing it and a card mid-read with a new one.
-      if (snapshot.campaign && !state.campaign) {
-        state.campaign = { id: snapshot.campaign.id, message: snapshot.campaign.message };
-      }
+      adoptCampaign(snapshot.campaign);
       state.error = null;
       // A returning visitor already in a conversation skips the pre-chat form;
       // one without raises it now, if the panel opened before the mint did. A
@@ -2246,11 +2316,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       state.agent = toAgent(snapshot.agent);
       state.agentTyping = snapshot.agent_typing ?? false;
       noteOwner(snapshot);
-      // Same rule as `mint`: a campaign already waiting to be seen is not
-      // replaced by whatever the next poll offers.
-      if (snapshot.campaign && !state.campaign) {
-        state.campaign = { id: snapshot.campaign.id, message: snapshot.campaign.message };
-      }
+      adoptCampaign(snapshot.campaign);
       rerenderTranscript();
       renderStatus();
       renderHeader();
@@ -2614,7 +2680,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
 
   async function toggleHelp(): Promise<void> {
     if (helpView) return helpView.close();
-    // The build hands this over as a chunk URL, without Vite's preload helper (help-chunk.ts).
+    // The build hands this over as a chunk URL, without Vite's preload helper (lazy-chunks.ts).
     const { openHelp } = await import('./help.js');
     ui.help.setAttribute('aria-pressed', 'true');
     helpView = openHelp({
@@ -2837,7 +2903,12 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     (event: MessageEvent) => {
       // The host page is cross-origin and untrusted: accept only the known
       // commands it may issue, and ignore anything else without replying.
-      const data = event.data as { type?: unknown; command?: unknown; payload?: unknown };
+      const data = event.data as {
+        type?: unknown;
+        command?: unknown;
+        payload?: unknown;
+        url?: unknown;
+      };
       if (data?.type === 'siyahtus:host-open') setOpen(true);
       if (data?.type === 'siyahtus:host-close') setOpen(false);
       if (data?.type === 'siyahtus:command' && data.command === 'trackSale')
@@ -2847,6 +2918,20 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       if (data?.type === 'siyahtus:command' && event.source === win.parent && !config.chatPage) {
         if (data.command === 'logout') void logout();
         if (data.command === 'open') setOpen(true);
+        const variables = data.payload;
+        if (data.command === 'setSessionVariables' && typeof variables === 'object' && variables) {
+          sessionVariables = { ...sessionVariables, ...variables };
+          if (api.campaignTracking) withTargeting((loaded) => loaded.variables(sessionVariables));
+        }
+      }
+      // The page the visitor moved to and the moment they went for the exit, as the
+      // loader saw them (EN-03) — from the embedding page only, like the commands.
+      if (event.source === win.parent && !config.chatPage) {
+        const page = data?.url;
+        if (data?.type === 'siyahtus:page' && typeof page === 'string') {
+          withTargeting((loaded) => loaded.page(page));
+        }
+        if (data?.type === 'siyahtus:exit-intent') withTargeting((loaded) => loaded.exit());
       }
     },
     { signal },
@@ -2895,6 +2980,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       if (timer != null) clearTimeout(timer);
     }
     win.clearTimeout(greetingTimer);
+    void targeting?.then((loaded) => loaded.stop());
     pollTimer = null;
     polling = false;
     socket?.close();

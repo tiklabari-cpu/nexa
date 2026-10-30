@@ -361,22 +361,6 @@ const INDIRECT = [
  */
 const TRACKED = [
   {
-    op: 'POST /customer/visit',
-    owner: 'tm 352.2',
-    reason:
-      'campaign targeting (EN-03 · tm 352.1): the page a single-page site moved to and the ' +
-      "site's session variables — the widget's loader reports them (pushState/popstate, " +
-      "siyahtus('setSessionVariables')), which CMC-CLIENT (tm 352.2) adds.",
-  },
-  {
-    op: 'POST /customer/campaigns/{campaignId}/shown',
-    owner: 'tm 352.2',
-    reason:
-      'a campaign card that waited for exit intent / time on the page counts as displayed ' +
-      'when the widget shows it (EN-03 · tm 352.1); the widget holds and reports the card ' +
-      'in CMC-CLIENT (tm 352.2).',
-  },
-  {
     op: 'GET /chats/{chatId}/ai-digests',
     owner: 'tm 331',
     reason:

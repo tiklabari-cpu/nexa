@@ -30,12 +30,24 @@ import {
   filterCampaigns,
   isCampaignActive,
 } from './campaigns.js';
+import { normalizeCampaignConditions } from '@siyahtus/types';
 import type {
   Campaign,
+  CampaignRule,
   CampaignStatus,
   CampaignStatusFilter,
   CampaignWriteResult,
 } from '@siyahtus/types';
+
+/** One rule in a few words, for the card: "Country is TR", "Time on page is at least 30". */
+function ruleText(rule: CampaignRule, t: ReturnType<typeof useTranslate>): string {
+  if (rule.field === 'exit_intent') return t('campaigns.rule.exitIntentText');
+  const field = t(`campaigns.rule.field.${rule.field}`);
+  const name = rule.key ? ` “${rule.key}”` : '';
+  const value =
+    rule.field === 'visitor_type' ? t(`campaigns.rule.visitor.${rule.value}`) : String(rule.value);
+  return `${field}${name} ${t(`campaigns.rule.op.${rule.op}`)} ${value}`;
+}
 
 const STATUS_TONE: Record<CampaignStatus, StatusTone> = {
   ongoing: 'success',
@@ -252,6 +264,7 @@ function CampaignCard({
   const t = useTranslate();
   const active = isCampaignActive(campaign);
   const { displayed, chats, conversion, suppressed } = campaign.performance;
+  const rules = normalizeCampaignConditions(campaign.conditions);
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4 shadow-xs">
@@ -265,10 +278,16 @@ function CampaignCard({
             />
           </div>
           <p className="mt-1 truncate text-xs text-content-secondary">
-            {t('campaigns.page.whenUrlContains')}{' '}
-            <code className="rounded-sm bg-inset px-1 py-0.5 text-2xs">
-              {campaign.conditions.url_contains ?? '—'}
-            </code>
+            {t(
+              rules.rules.length > 1 ? `campaigns.page.when.${rules.match}` : 'campaigns.page.when',
+            )}{' '}
+            {rules.rules.length === 0 ? (
+              '—'
+            ) : (
+              <code className="rounded-sm bg-inset px-1 py-0.5 text-2xs">
+                {rules.rules.map((rule) => ruleText(rule, t)).join(' · ')}
+              </code>
+            )}
           </p>
           {(campaign.starts_at || campaign.ends_at) && (
             <p className="mt-0.5 text-2xs text-content-tertiary">

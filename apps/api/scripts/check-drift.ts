@@ -166,6 +166,13 @@ const KNOWN_UNMODELLABLE = [
     reason:
       'partial expression trigram index on a partitioned table — Prisma cannot express an expression index or a WHERE predicate',
   },
+  {
+    // Created `USING gin (kb_article_search_document(title, body))`
+    // CONCURRENTLY in 20261201090100_kb_articles_search_index — the widget's
+    // Help search (WG-12, tm 348). Named for the same reason as the one above.
+    pattern: /CREATE INDEX "kb_articles_search_idx" ON "public"\."kb_articles"/,
+    reason: 'expression full-text index — Prisma cannot express an expression index',
+  },
 ];
 
 async function main(): Promise<void> {

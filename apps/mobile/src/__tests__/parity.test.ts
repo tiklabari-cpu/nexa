@@ -1101,7 +1101,10 @@ describe('module parity matrix — what is still owed', () => {
       // 351 -> 352 with `GET /customer/launcher` (tm 347) — the widget's bubble
       // mode before any mint (WG-10), a visitor surface; the agent app has
       // nothing to add, and nothing here re-scopes.
-      contractEndpoints: 352,
+      // 352 -> 354 with `GET /customer/kb/search` and `GET /customer/kb/articles/{slug}`
+      // (tm 348) — the widget's Help tab (WG-12), a visitor surface read with the
+      // customer token; the agent app has nothing to add, and nothing here re-scopes.
+      contractEndpoints: 354,
       scopeBoundaries: 1,
     });
   });

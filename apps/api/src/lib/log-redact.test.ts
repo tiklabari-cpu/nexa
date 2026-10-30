@@ -107,6 +107,13 @@ describe('logSafeUrl', () => {
     expect(logSafeUrl('/invitations?to=someone@example.test')).toBe('/invitations?to=[redacted]');
   });
 
+  it("masks the widget Help search's query, and only that key (WG-12)", () => {
+    expect(logSafeUrl('/api/v1/customer/kb/search?q=papara%20yat%C4%B1r%C4%B1m&limit=10')).toBe(
+      '/api/v1/customer/kb/search?q=[redacted]&limit=10',
+    );
+    expect(logSafeUrl('/x?seq=4&q=a')).toBe('/x?seq=4&q=[redacted]');
+  });
+
   it('leaves a plain path alone', () => {
     expect(logSafeUrl('/api/v1/chats/c1234567890a')).toBe('/api/v1/chats/c1234567890a');
   });

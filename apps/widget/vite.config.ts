@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
 import { defineConfig } from 'vitest/config';
+import { helpChunk } from './help-chunk';
 import { minifyWidgetCss } from './minify-css';
 
 /**
@@ -29,8 +30,9 @@ export default defineConfig(({ mode }) => {
     ...(process.env['SIYAHTUS_VITE_CACHE_DIR']
       ? { cacheDir: process.env['SIYAHTUS_VITE_CACHE_DIR'] }
       : {}),
-    // The app pass ships the stylesheet without its comments and indentation (tm 320.1).
-    plugins: isLoader ? [] : [minifyWidgetCss()],
+    // The app pass ships the stylesheet without its comments and indentation (tm 320.1),
+    // and the Help tab as a chunk fetched on its first open (WG-12).
+    plugins: isLoader ? [] : [minifyWidgetCss(), helpChunk()],
     build: isLoader
       ? {
           outDir: 'dist',
@@ -53,6 +55,9 @@ export default defineConfig(({ mode }) => {
           minify: 'terser',
           // A second compress pass folds what the first one exposed (WG-10: the budget had 161 B left).
           terserOptions: { compress: { passes: 2 } },
+          // One chunk per page plus the Help tab's, fetched by URL (help-chunk.ts): nothing
+          // to preload, so no `modulepreload` polyfill on every page (≈0.2 KB, WG-12).
+          modulePreload: false,
           sourcemap,
           rollupOptions: {
             input: {

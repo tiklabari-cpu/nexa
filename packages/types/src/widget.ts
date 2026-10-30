@@ -109,6 +109,12 @@ export interface WidgetAppearance {
   launcher_visibility: WidgetLauncherVisibility;
   /** Show the brand's logo in the panel header (WG-10), when the brand has one. */
   show_logo: boolean;
+  /**
+   * The "Help" tab (WG-12): the visitor searches the workspace's published
+   * knowledge base articles inside the widget, before or instead of a chat.
+   * Server-delivered only, off until the workspace turns it on.
+   */
+  help_enabled: boolean;
 }
 
 /** Upper bounds for the welcome message, shared by the API, the DB and the form. */
@@ -166,6 +172,9 @@ export const DEFAULT_WIDGET_APPEARANCE: WidgetAppearance = {
   // Opt-in: a brand that already had a logo on file must not suddenly wear it
   // in the widget the day this ships.
   show_logo: false,
+  // Opt-in too: a published article is reader-facing, but a workspace decides
+  // when its players start reading them inside the widget (WG-12).
+  help_enabled: false,
 };
 
 /**
@@ -219,6 +228,10 @@ export function normalizeWidgetAppearance(
       : DEFAULT_WIDGET_APPEARANCE.launcher_visibility,
     show_logo:
       typeof raw.show_logo === 'boolean' ? raw.show_logo : DEFAULT_WIDGET_APPEARANCE.show_logo,
+    help_enabled:
+      typeof raw.help_enabled === 'boolean'
+        ? raw.help_enabled
+        : DEFAULT_WIDGET_APPEARANCE.help_enabled,
   };
 }
 

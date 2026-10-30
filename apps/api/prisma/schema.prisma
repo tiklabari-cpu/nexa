@@ -3949,6 +3949,8 @@ model WidgetSettings {
   launcherVisibility String @default("always") @map("launcher_visibility")
   /// Show the brand's logo in the panel header (WG-10).
   showLogo         Boolean  @default(false) @map("show_logo")
+  /// The widget's "Help" tab: search of published KB articles (WG-12).
+  helpEnabled      Boolean  @default(false) @map("help_enabled")
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)

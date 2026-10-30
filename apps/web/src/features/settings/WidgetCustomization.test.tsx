@@ -209,6 +209,17 @@ describe('WidgetCustomization', () => {
     expect(putBodies[0]).toEqual({ show_logo: true });
   });
 
+  it('saves the Help tab switch, off until turned on (WG-12)', async () => {
+    renderWidget();
+    const toggle = await screen.findByRole('checkbox', { name: /Show the Help tab/ });
+    expect(toggle).not.toBeChecked();
+
+    await userEvent.click(toggle);
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(putBodies).toHaveLength(1));
+    expect(putBodies[0]).toEqual({ help_enabled: true });
+  });
+
   it('says a language in the install snippet beats the panel setting (WG-02)', async () => {
     renderWidget();
     expect(await screen.findByText(/install snippet \(data-language\) overrides/)).toBeVisible();

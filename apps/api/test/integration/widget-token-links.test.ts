@@ -22,6 +22,7 @@ const PILOT = { PILOT_MODE: 'true', PILOT_CONTACT_EMAIL: 'pilot-contact@example.
 const APPEARANCE_KEYS = [
   'brand_name',
   'fallback_language',
+  'help_enabled',
   'language',
   'launcher_visibility',
   'logo_url',

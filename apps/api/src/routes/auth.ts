@@ -2171,6 +2171,7 @@ async function widgetAppearance(
         fallback_language: row.fallbackLanguage as WidgetAppearance['fallback_language'],
         launcher_visibility: row.launcherVisibility as WidgetAppearance['launcher_visibility'],
         show_logo: row.showLogo,
+        help_enabled: row.helpEnabled,
       };
     });
     return {

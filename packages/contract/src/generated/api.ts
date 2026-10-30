@@ -19414,7 +19414,8 @@ export interface components {
     /**
      * @description The trigger predicate (FR-MOD-03.3.2). Every key set must hold for a
      *     visitor to match. `url_contains` — the one condition v1 ships — targets
-     *     the page they are on; an empty predicate matches nobody, so a campaign
+     *     the page they are on now, the last page of their visit and not an
+     *     earlier one; an empty predicate matches nobody, so a campaign
      *     with no trigger is rejected rather than sent to everyone.
      */
     CampaignConditions: {
@@ -24975,6 +24976,21 @@ export interface operations {
            *     `https://shop.example`. Falls back to the `Origin` header.
            */
           host_origin?: string;
+          /**
+           * @description The page the visitor is on, as the loader read it (EN-04).
+           *     Recorded as a page view of the visitor's visit and offered to
+           *     the running campaigns, so a visitor who has not written yet
+           *     is still matched on the page they are on. Ignored unless it
+           *     is an http(s) address on the host `host_origin` names; cut to
+           *     2048 characters; never a reason to refuse the token.
+           */
+          host_url?: string;
+          /**
+           * @description Where the visitor came from before `host_url` (EN-04), kept
+           *     as the visit's origin only when this page view opens the
+           *     visit. Cut to 2048 characters.
+           */
+          host_referrer?: string;
           /**
            * @description The human check's answer (tm 339.2), sent only after this
            *     endpoint answered `403 challenge_required`. Verified only

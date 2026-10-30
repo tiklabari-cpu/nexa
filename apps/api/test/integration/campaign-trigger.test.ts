@@ -197,19 +197,120 @@ describe('campaign triggering on arrival', () => {
     expect(await sendsFor(elsewhere.id)).toEqual([]);
   });
 
-  it('matches on any page of the visit, not only the one just reported', async () => {
-    // Same reading as the create-time engine: the visit is the unit, so someone
-    // who passed /pricing and then wrote in from /blog is still who the
-    // campaign was aimed at.
+  it('EN-04 · matches the page the visitor is on now, not one they passed', async () => {
+    // "The page they are on" is the last page of the visit. Someone who passed
+    // /pricing and is now on /blog is not on /pricing: the campaign aimed at
+    // that page must not fire for the move, only for being there.
     const campaign = await createCampaign({ name: 'Nudge', content: { message: 'Hi' } });
     const shopper = await freshVisitor(fx.a, 'Wandering');
     const token = await widgetToken(fx.a, shopper);
 
     await writeInFrom(token, PRICING_PAGE);
+    // The send for being on /pricing is cleared so what follows is the move.
     await owner.campaignSend.deleteMany({ where: { customerId: shopper } });
     await writeInFrom(token, BLOG_PAGE, 'One more thing');
+    expect(await sendsFor(campaign.id)).toEqual([]);
 
+    await writeInFrom(token, PRICING_PAGE, 'Back on pricing');
     expect(await sendsFor(campaign.id)).toHaveLength(1);
+  });
+
+  // --- A visitor who has not written (EN-04) --------------------------------
+
+  describe('at mint', () => {
+    const mintOn = (hostUrl: string | undefined, extra: Record<string, unknown> = {}) =>
+      server.post(
+        '/customer/token',
+        {
+          organization_id: fx.a.organizationId,
+          host_origin: `https://${fx.a.trustedDomain}`,
+          ...(hostUrl ? { host_url: hostUrl } : {}),
+          ...extra,
+        },
+        { origin: `https://${fx.a.trustedDomain}` },
+      );
+    const pageOf = (path: string) => `https://${fx.a.trustedDomain}${path}`;
+
+    it('records the page the widget opened on and fires the campaign aimed at it', async () => {
+      const campaign = await createCampaign({ name: 'Nudge', content: { message: 'Hi' } });
+
+      const response = await mintOn(pageOf('/pricing?plan=pro'), {
+        host_referrer: 'https://search.example/results',
+      });
+      expect(response.statusCode).toBe(200);
+      const { customer_id: customerId, token } = response.json() as {
+        customer_id: string;
+        token: string;
+      };
+
+      // A visitor who never wrote: the page is on a visit, the campaign is owed.
+      const visits = await owner.visit.findMany({ where: { customerId } });
+      expect(visits).toHaveLength(1);
+      expect(visits[0]?.cameFrom).toBe('https://search.example/results');
+      expect((visits[0]?.pages as { url: string }[]).map((page) => page.url)).toEqual([
+        pageOf('/pricing?plan=pro'),
+      ]);
+      expect(await sendsFor(campaign.id)).toEqual([
+        { customerId, deliveredAt: null, engaged: false },
+      ]);
+      expect((await poll(token)).campaign?.message).toBe('Hi');
+    });
+
+    it('does not fire a campaign aimed at another page', async () => {
+      const campaign = await createCampaign({ name: 'Nudge', content: { message: 'Hi' } });
+
+      const response = await mintOn(pageOf('/blog'));
+      expect(response.statusCode).toBe(200);
+
+      expect(await sendsFor(campaign.id)).toEqual([]);
+      expect(await owner.visit.count()).toBe(1);
+    });
+
+    it('keeps one visit, one page and one send across reloads and then a message', async () => {
+      const campaign = await createCampaign({ name: 'Nudge', content: { message: 'Hi' } });
+      const first = await mintOn(pageOf('/pricing'));
+      const { customer_id: customerId, member_token: memberToken } = first.json() as {
+        customer_id: string;
+        member_token: string;
+      };
+
+      // The reload: the same visitor (member token), the same page.
+      const again = await mintOn(pageOf('/pricing'), { member_token: memberToken });
+      expect((again.json() as { customer_id: string }).customer_id).toBe(customerId);
+      await writeInFrom((again.json() as { token: string }).token, pageOf('/pricing'));
+
+      const visits = await owner.visit.findMany({ where: { customerId } });
+      expect(visits).toHaveLength(1);
+      expect(visits[0]?.pages).toHaveLength(1);
+      expect(await sendsFor(campaign.id)).toHaveLength(1);
+    });
+
+    it('ignores a page on another host, a non-web address and a missing page', async () => {
+      const campaign = await createCampaign({ name: 'Nudge', content: { message: 'Hi' } });
+
+      for (const hostUrl of [
+        'https://elsewhere.example/pricing',
+        'javascript:alert("/pricing")',
+        'not a url /pricing',
+        undefined,
+      ]) {
+        const response = await mintOn(hostUrl);
+        // Never a reason to refuse the token.
+        expect(response.statusCode).toBe(200);
+      }
+
+      expect(await owner.visit.count()).toBe(0);
+      expect(await sendsFor(campaign.id)).toEqual([]);
+    });
+
+    it('cuts an over-long page instead of refusing the token', async () => {
+      const response = await mintOn(pageOf(`/pricing/${'a'.repeat(5000)}`));
+      expect(response.statusCode).toBe(200);
+
+      const visit = await owner.visit.findFirst();
+      const [page] = visit?.pages as { url: string }[];
+      expect(page?.url.length).toBeLessThanOrEqual(2048);
+    });
   });
 
   // --- Idempotency: the hot path's own requirement --------------------------

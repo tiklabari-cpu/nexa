@@ -8,6 +8,7 @@ import {
   resolveCampaignStatus,
   visitedPagesOf,
   visitorPageUrls,
+  visitorPagesOf,
 } from './campaign-matching.js';
 
 describe('visitorPageUrls', () => {
@@ -67,24 +68,63 @@ describe('hasTrigger', () => {
   });
 });
 
+describe('visitorPagesOf', () => {
+  it('reads the last page as the current one and keeps the whole session', () => {
+    expect(visitorPagesOf(['/withdraw', '/casino'])).toEqual({
+      currentUrl: '/casino',
+      sessionUrls: ['/withdraw', '/casino'],
+    });
+  });
+
+  it('has no current page for a visitor with no readable page', () => {
+    expect(visitorPagesOf([])).toEqual({ currentUrl: null, sessionUrls: [] });
+    // An unreadable last entry is skipped by `visitorPageUrls`, so the visitor
+    // is on the last page that could be read rather than nowhere.
+    expect(visitorPagesOf(visitorPageUrls([{ url: '/a' }, { url: 7 }])).currentUrl).toBe('/a');
+  });
+});
+
 describe('matchesConditions', () => {
+  const on = (...urls: string[]) => visitorPagesOf(urls);
+
   it('matches when the visitor is on a page containing the needle (case-insensitive)', () => {
-    expect(matchesConditions({ url_contains: '/Pricing' }, ['https://shop.example/pricing'])).toBe(
-      true,
+    expect(
+      matchesConditions({ url_contains: '/Pricing' }, on('https://shop.example/pricing')),
+    ).toBe(true);
+  });
+
+  it('does not match when the current page does not contain the needle', () => {
+    expect(matchesConditions({ url_contains: '/pricing' }, on('https://shop.example/blog'))).toBe(
+      false,
     );
   });
 
-  it('does not match when no page contains the needle', () => {
-    expect(matchesConditions({ url_contains: '/pricing' }, ['https://shop.example/blog'])).toBe(
-      false,
-    );
+  it('EN-04 · looks at the current page only: /withdraw then /casino is not on /withdraw', () => {
+    const conditions = { url_contains: 'withdraw' };
+    expect(
+      matchesConditions(
+        conditions,
+        on('https://shop.example/withdraw', 'https://shop.example/casino'),
+      ),
+    ).toBe(false);
+    expect(
+      matchesConditions(
+        conditions,
+        on('https://shop.example/casino', 'https://shop.example/withdraw'),
+      ),
+    ).toBe(true);
+    expect(matchesConditions(conditions, on('https://shop.example/withdraw'))).toBe(true);
+  });
+
+  it('does not match a visitor with no known page', () => {
+    expect(matchesConditions({ url_contains: '/pricing' }, on())).toBe(false);
   });
 
   it('matches nobody when there is no trigger', () => {
     // The rule that keeps "trigger required" honest: an empty predicate is not
     // "everyone", it is "not ready".
-    expect(matchesConditions({}, ['https://shop.example/pricing'])).toBe(false);
-    expect(matchesConditions({ url_contains: '' }, ['https://shop.example/pricing'])).toBe(false);
+    expect(matchesConditions({}, on('https://shop.example/pricing'))).toBe(false);
+    expect(matchesConditions({ url_contains: '' }, on('https://shop.example/pricing'))).toBe(false);
   });
 });
 

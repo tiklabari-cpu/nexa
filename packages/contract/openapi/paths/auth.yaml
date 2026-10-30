@@ -1056,6 +1056,21 @@ customerToken:
                 description: |
                   Origin of the page the widget is embedded in, e.g.
                   `https://shop.example`. Falls back to the `Origin` header.
+              host_url:
+                type: string
+                description: |
+                  The page the visitor is on, as the loader read it (EN-04).
+                  Recorded as a page view of the visitor's visit and offered to
+                  the running campaigns, so a visitor who has not written yet
+                  is still matched on the page they are on. Ignored unless it
+                  is an http(s) address on the host `host_origin` names; cut to
+                  2048 characters; never a reason to refuse the token.
+              host_referrer:
+                type: string
+                description: |
+                  Where the visitor came from before `host_url` (EN-04), kept
+                  as the visit's origin only when this page view opens the
+                  visit. Cut to 2048 characters.
               challenge_token:
                 type: string
                 maxLength: 2048

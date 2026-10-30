@@ -39,6 +39,7 @@ import {
   matchesConditions,
   resolveCampaignStatus,
   visitorPageUrls,
+  visitorPagesOf,
 } from './campaign-matching.js';
 
 /** How recent a visit has to be for a visitor to count as "on the site now". */
@@ -336,7 +337,7 @@ export class CampaignService {
     for (const visit of visits) {
       if (seen.has(visit.customerId)) continue;
       seen.add(visit.customerId);
-      if (matchesConditions(conditions, visitorPageUrls(visit.pages))) {
+      if (matchesConditions(conditions, visitorPagesOf(visitorPageUrls(visit.pages)))) {
         matched.push(visit.customerId);
       }
     }

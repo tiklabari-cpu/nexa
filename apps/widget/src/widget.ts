@@ -417,6 +417,12 @@ export function mount(doc: Document = document, win: Window = window): () => voi
   const api = new WidgetApi(config.apiBaseUrl, config.organizationId, config.hostOrigin);
   // So the mint can pick the custom texts of the language shown (WG-05).
   api.localeHints = { ...(config.language ? { language: config.language } : {}), browser };
+  const hostUrl = hostPageUrl(win);
+  const hostFrom = hostReferrer(win);
+  api.pageHints = {
+    ...(hostUrl ? { host_url: hostUrl.slice(0, 2048) } : {}),
+    ...(hostFrom ? { host_referrer: hostFrom.slice(0, 2048) } : {}),
+  };
 
   // --- Human check (tm 339.3 · GV-01) ----------------------------------------
   // At most one at a time: a second request behind the same check waits on it.

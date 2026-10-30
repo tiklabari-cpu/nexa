@@ -37,7 +37,8 @@ import type { Mailer } from '../services/mail/mailer.js';
 import { isMailCapError } from '../services/mail/mail-error.js';
 import { isIpBanned } from '../lib/banned-ip.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
-import { fillEmptyCountry } from '../services/customers/customer-service.js';
+import { CustomerService, fillEmptyCountry } from '../services/customers/customer-service.js';
+import { fireCampaignsAtVisitor } from '../services/campaigns/campaign-trigger.js';
 import {
   writeAuditEntry,
   type AuditContext,
@@ -265,7 +266,37 @@ const customerTokenBody = z.object({
    */
   language: z.string().max(35).optional(),
   browser_languages: z.array(z.string().max(35)).max(10).optional(),
+  /**
+   * The page the visitor is on and where they came from (EN-04), as the loader
+   * read them. Cut rather than refused when over-long: they are a hint for the
+   * campaign trigger, never a reason to deny a token.
+   */
+  host_url: z
+    .string()
+    .transform((value) => value.slice(0, 2048))
+    .optional(),
+  host_referrer: z
+    .string()
+    .transform((value) => value.slice(0, 2048))
+    .optional(),
 });
+
+/**
+ * The embedding page's address, when it can be believed: an http(s) URL on the
+ * host the token request already proved (`host`, from `host_origin`). Anything
+ * else — another site's address, a `javascript:` URL, garbage — is dropped, so
+ * a hand-rolled request cannot write arbitrary text into a visit's pages.
+ */
+function pageOnHost(value: string | undefined, host: string): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    return url.hostname.toLowerCase() === host ? value : null;
+  } catch {
+    return null;
+  }
+}
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
@@ -296,6 +327,7 @@ export default async function authRoutes(
     auditChainSecret: env.AUDIT_CHAIN_SECRET,
   });
   const twoFactor = new TwoFactorService(app.db);
+  const customerDirectory = new CustomerService();
 
   // Before any route is served: a workspace opened before this deployment's
   // address was known gains its console callback here, or `/auth/authorize`
@@ -1915,6 +1947,33 @@ export default async function authRoutes(
         );
       } catch (error) {
         request.log.warn({ err: error }, 'could not record the visitor country');
+      }
+    }
+
+    // The page they opened the widget on (EN-04), recorded as a page view of
+    // their visit and offered to the running campaigns — a visitor who has not
+    // written a word is otherwise on no page the engine knows, and a "current
+    // page" trigger could never match them. The same two calls the first
+    // message makes (`routes/customer.ts`), in one transaction for the same
+    // reason; a reload costs a read (a repeated page is not written again).
+    // Best-effort: this must never cost a visitor their token.
+    const pageUrl = pageOnHost(body.host_url, host);
+    if (pageUrl) {
+      try {
+        await withTenant(app.db, tenant, async (tx) => {
+          const pageUrls = await customerDirectory.recordPageView(tx, tenant, {
+            customerId,
+            url: pageUrl,
+            referrer: body.host_referrer,
+            userAgent: request.headers['user-agent'],
+            ip: request.ip,
+            // Already asked above, for the country: not looked up twice.
+            locate: () => location,
+          });
+          await fireCampaignsAtVisitor(tx, tenant, { customerId, pageUrls }, new Date());
+        });
+      } catch (error) {
+        request.log.warn({ err: error }, 'could not record the page view at mint');
       }
     }
 

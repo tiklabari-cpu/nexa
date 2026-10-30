@@ -65,19 +65,48 @@ export function hasTrigger(conditions: CampaignConditions): boolean {
 }
 
 /**
+ * Where a visitor is, and where they have been this session (EN-04).
+ *
+ * `currentUrl` is the last entry of the visit's `pages`, the page they are on
+ * now; `sessionUrls` is every readable entry in order, that one included. A
+ * trigger about "the page they are on" reads the first, never the second — a
+ * visitor who passed `/withdraw` and is now on `/casino` is on `/casino`.
+ * "Any page this session" is its own rule (EN-03), which is what the second
+ * field is kept for.
+ */
+export interface VisitorPages {
+  currentUrl: string | null;
+  sessionUrls: readonly string[];
+}
+
+/**
+ * The pages of a visit, as the trigger engine reads them: `urls` in the order
+ * the visitor reached them, as `visitorPageUrls` hands them back. The current
+ * page is the last readable one, so an entry the sanitiser dropped does not
+ * leave the visitor "nowhere".
+ */
+export function visitorPagesOf(urls: readonly string[]): VisitorPages {
+  return { currentUrl: urls.at(-1) ?? null, sessionUrls: urls };
+}
+
+/**
  * Does a visitor on these pages match the campaign's trigger?
  *
  * Every condition that is set must hold (AND). A predicate with nothing set
  * matches nobody — a campaign with no trigger is not "send to everyone", it is
  * not ready to send — which is what keeps the "trigger required" rule honest
  * even for a row that somehow reached the engine without one.
+ *
+ * `url_contains` looks at the current page only (EN-04). Until then it looked at
+ * every page of the session, which contradicted what the builder and the type
+ * both say.
  */
-export function matchesConditions(conditions: CampaignConditions, pageUrls: string[]): boolean {
+export function matchesConditions(conditions: CampaignConditions, pages: VisitorPages): boolean {
   const checks: boolean[] = [];
 
   const urlNeedle = conditions.url_contains?.trim().toLowerCase();
   if (urlNeedle) {
-    checks.push(pageUrls.some((url) => url.toLowerCase().includes(urlNeedle)));
+    checks.push(pages.currentUrl?.toLowerCase().includes(urlNeedle) ?? false);
   }
 
   // Future condition kinds (geo, time-on-page, …) push their own check here.

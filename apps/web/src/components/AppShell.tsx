@@ -28,6 +28,7 @@ import { roleAtLeast } from '../features/team/RoleMenu.js';
 import { useRealtime } from '../features/inbox/useInbox.js';
 import { useNotifications } from '../features/notifications/useNotifications.js';
 import { CommandPalette } from './CommandPalette.js';
+import { ShortcutsHost } from './ShortcutsModal.js';
 import { NarrowScreenNotice, useNarrowScreenNotice } from './NarrowScreenNotice.js';
 import { MaintenancePage, NoticeBar } from './NoticeBar.js';
 import { ImpersonationBanner } from './ImpersonationBanner.js';
@@ -110,6 +111,8 @@ export function AppShell(): ReactElement {
           {/* Reachable from every module: ⌘K opens it, and it lives outside the
           scrolling area so it overlays whatever is on screen. */}
           <CommandPalette />
+          {/* The one key listener, and the "?" window it opens (IN-08). */}
+          <ShortcutsHost />
           <RealtimeOwner />
         </div>
       )}

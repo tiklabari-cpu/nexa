@@ -49,6 +49,9 @@ import {
 import { useFailedSends } from './failedSends.js';
 import { useRightPanel } from './rightPanel.js';
 import { usePanelTab } from './panelTab.js';
+import { adjacentChatId } from './chatNavigation.js';
+import { focusComposerOf } from './composerFocus.js';
+import { useShortcut } from '../../lib/shortcuts.js';
 import {
   canReadChannels,
   connectedChannelViews,
@@ -483,6 +486,35 @@ export function InboxPage(): ReactElement {
   // open conversation, which would yank the transcript out from under the agent.
   const trafficCounts = useMemo(() => trafficTabCounts(chats), [chats]);
   const visibleChats = useMemo(() => filterByTrafficTab(chats, trafficTab), [chats, trafficTab]);
+
+  // Alt+↓ / Alt+↑ (IN-08): the next and previous chat of the list on screen, the
+  // cursor landing in its composer. The Tickets grid and an archive search are
+  // other lists; the keys are left to the browser there.
+  const stepChat = (step: 1 | -1): void => {
+    const next = adjacentChatId(
+      visibleChats.map((item) => item.id),
+      selectedId,
+      step,
+    );
+    if (next === null) return;
+    if (next !== selectedId) setSelectedId(next);
+    focusComposerOf(next);
+  };
+  const walkable = !onTickets && !searchActive;
+  useShortcut('inbox.next-chat', walkable ? () => stepChat(1) : null);
+  useShortcut('inbox.prev-chat', walkable ? () => stepChat(-1) : null);
+  useShortcut(
+    'inbox.toggle-copilot',
+    selectedId && !onTickets
+      ? () => (panelTab.tab === 'copilot' ? panelTab.showDetails() : panelTab.showCopilot())
+      : null,
+  );
+  // The row a key press moved to has to be on screen.
+  useEffect(() => {
+    document
+      .querySelector('button[data-chat-row][aria-current="true"]')
+      ?.scrollIntoView?.({ block: 'nearest' });
+  }, [selectedId]);
 
   // Keep a selection valid as the list changes underneath — a chat can be
   // transferred away while it is open. Gated on the first page having landed so
@@ -944,6 +976,7 @@ export function InboxPage(): ReactElement {
                           <li key={item.id}>
                             <button
                               type="button"
+                              data-chat-row=""
                               onClick={() => setSelectedId(item.id)}
                               aria-current={selectedId === item.id ? 'true' : undefined}
                               className={`flex w-full flex-col gap-1 border-b border-border px-4 py-3 text-left transition-colors ${

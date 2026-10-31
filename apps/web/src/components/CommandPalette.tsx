@@ -51,6 +51,7 @@ import { useApiClient, useAuth, type CurrentAgent } from '../lib/auth-store.js';
 import { useDeployment } from '../lib/deployment.js';
 import { useSetRoutingStatus } from '../lib/routing-status.js';
 import { confirmLeave } from '../lib/dirty-guard.js';
+import { useShortcut } from '../lib/shortcuts.js';
 import { useTranslate, type TFunction } from '../lib/i18n.js';
 import { Banner } from './ui/index.js';
 import { EmptyState } from './EmptyState.js';
@@ -174,17 +175,12 @@ export function CommandPalette(): ReactElement | null {
 
   // ⌘K / Ctrl-K opens it from anywhere. Remembering what had focus lets us hand
   // it back on close, so the keyboard user is returned to where they were.
-  useEffect(() => {
-    const onKeyDown = (event: globalThis.KeyboardEvent): void => {
-      if ((event.metaKey || event.ctrlKey) && (event.key === 'k' || event.key === 'K')) {
-        event.preventDefault();
-        returnFocusRef.current = (document.activeElement as HTMLElement | null) ?? null;
-        setOpen(true);
-      }
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, []);
+  // The key itself is bound in the shortcut register (lib/shortcuts.ts), read by
+  // the shell's one listener (IN-08).
+  useShortcut('palette.open', () => {
+    returnFocusRef.current = (document.activeElement as HTMLElement | null) ?? null;
+    setOpen(true);
+  });
 
   useEffect(() => {
     if (open) {

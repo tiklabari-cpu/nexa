@@ -15321,7 +15321,7 @@
           "325"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-31T14:00:18.863Z",
+        "updatedAt": "2026-10-31T16:05:57.118Z",
         "subtasks": [
           {
             "id": 1,
@@ -15329,11 +15329,11 @@
             "description": "Rapor filtreleri API: tek filterClause tüm uçlarda + dışa aktarma/paylaşım/zamanlı + ekip kapsamı kesişimi",
             "details": "ReportFilter contract tüm rapor uçlarına; rangeQuery → reportQuery, report-csv.ts tek filterClause; export, paylaşım linki ve zamanlanmış rapor filters JSONB; YETKİ kesişimi sunucuda; migration (CONCURRENTLY ayrı dosya); \"tüm uçlar filtreyi uyguluyor\" testi zorunlu. Ayrıntı ve kabul maddeleri: üst görev #368 details (tek kaynak).",
             "testStrategy": "Entegrasyon (her uç, kesişim, boş kesişim); `pnpm test:gate`.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "368",
             "priority": "medium",
-            "updatedAt": "2026-10-31T14:00:18.863Z"
+            "updatedAt": "2026-10-31T16:05:57.118Z"
           },
           {
             "id": 2,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-31T14:00:18.864Z",
+      "lastModified": "2026-10-31T16:05:57.119Z",
       "taskCount": 390,
       "completedCount": 362,
       "tags": [

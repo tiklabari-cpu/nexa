@@ -158,8 +158,9 @@ describe('PermissionsMatrix (RL-02)', () => {
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('View reports — Team Lead')).toBeInTheDocument();
+    // The Ekip Lideri default is `team` since tm 368 (K7: their own teams).
     expect(within(dialog).getByTestId('high-risk-from-reports.view|team_lead')).toHaveTextContent(
-      'None',
+      'Team',
     );
     expect(within(dialog).getByTestId('high-risk-to-reports.view|team_lead')).toHaveTextContent(
       'All',

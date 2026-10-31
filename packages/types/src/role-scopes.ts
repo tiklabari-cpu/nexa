@@ -168,7 +168,9 @@ export const OWNER_SCOPES: Scope[] = ['billing_manage'];
 /**
  * A Team Lead's set (RL-01): a Team Member's, and what leading a team adds.
  *
- * Today it adds nothing, on purpose. Each thing a lead does that a member does
+ * One scope so far: `reports_read--groups` (RP-01 · tm 368), their teams' conversation
+ * reports — the server intersects every team filter with the teams they lead.
+ * Nothing else, on purpose. Each thing a lead does that a member does
  * not — watching and taking over their team's chats, their team's reports
  * (RL-03) — needs a server check bounded by the teams they lead
  * (`group_agents.is_lead`), and the scopes that would open those routes today
@@ -177,7 +179,7 @@ export const OWNER_SCOPES: Scope[] = ['billing_manage'];
  * that surface. The additions arrive with those checks, and the permission
  * matrix (RL-02) makes them a workspace's choice.
  */
-export const TEAM_LEAD_SCOPES: Scope[] = [...DEFAULT_AGENT_SCOPES];
+export const TEAM_LEAD_SCOPES: Scope[] = [...DEFAULT_AGENT_SCOPES, 'reports_read--groups'];
 
 /**
  * The scopes a session gets when the caller asks for none.

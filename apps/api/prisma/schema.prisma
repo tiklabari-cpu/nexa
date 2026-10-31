@@ -1267,6 +1267,9 @@ model Thread {
   /// built CONCURRENTLY in its own migration.
   @@index([licenseId, createdAt(sort: Desc), id(sort: Desc)])
   @@index([licenseId, closedAt(sort: Desc), id(sort: Desc)])
+  /// The report agent filter (RP-01 · tm 368): one agent's connections by date.
+  /// Built CONCURRENTLY in its own migration.
+  @@index([licenseId, assigneeId, createdAt])
   /// No GIN index on `agent_ids` / `risk_flags` (AR-02 · tm 336.1, PLAN §D350):
   /// `&&` is not leakproof, so under row level security it is never an index
   /// condition — the filters narrow the rows the date and team indexes read.
@@ -4949,6 +4952,9 @@ model ScheduledReport {
   /// list screen (07.9-sched-h) only — never the idempotency check, which reads
   /// `scheduled_report_runs`.
   lastRunAt        DateTime? @map("last_run_at") @db.Timestamptz(6)
+  /// The report filter every run applies (RP-01 · tm 368), a `ReportFilter`
+  /// (`@siyahtus/types`); `{}` = none. CHECK `scheduled_reports_filters_object`.
+  filters          Json      @default("{}")
 
   license License              @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   runs    ScheduledReportRun[]
@@ -5053,6 +5059,9 @@ model ReportShareLink {
   /// no FK, so the link survives the agent who minted it leaving.
   createdByAgentId String?   @map("created_by_agent_id") @db.Uuid
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// The report filter the link is frozen to (RP-01 · tm 368), a `ReportFilter`;
+  /// `{}` = none. CHECK `report_share_links_filters_object`.
+  filters          Json      @default("{}")
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 

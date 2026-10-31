@@ -41,6 +41,15 @@ import { type CsvCell } from '../../routes/reports-export.js';
 import { campaignReportCsv, campaignsBenchmark } from './campaign-report.js';
 import { reviewInsights, type ReviewInsight } from './review-insights.js';
 import { aiResolvedSql } from '../billing/ai-resolution.js';
+import {
+  accessTeamSql,
+  assertFilterable,
+  ratingFilterSql,
+  slaBreachFilterSql,
+  threadFilterSql,
+  ticketFilterSql,
+  type ThreadFilter,
+} from './report-filter.js';
 
 // ===========================================================================
 // Shared aggregation
@@ -111,6 +120,7 @@ export async function windowTotals(
   licenseId: bigint,
   from: Date,
   to: Date,
+  filter: ThreadFilter | null = null,
 ): Promise<WindowRow> {
   const [row] = await tx.$queryRaw<WindowRow[]>`
     SELECT
@@ -131,8 +141,14 @@ export async function windowTotals(
     FROM threads t
     WHERE t.license_id = ${licenseId}
       AND t.created_at >= ${from} AND t.created_at <= ${to}
+      AND ${threadFilterSql(filter)}
   `;
   return row ?? ZERO_WINDOW;
+}
+
+async function countRows(rows: Promise<Array<{ n: bigint }>>): Promise<number> {
+  const [row] = await rows;
+  return Number(row?.n ?? 0n);
 }
 
 /** Tickets created in a window (PRD §3.3 counts these toward "total cases"). */
@@ -141,8 +157,20 @@ export function ticketCount(
   licenseId: bigint,
   from: Date,
   to: Date,
+  filter: ThreadFilter | null = null,
 ): Promise<number> {
-  return tx.ticket.count({ where: { licenseId, createdAt: { gte: from, lte: to } } });
+  if (filter === null) {
+    return tx.ticket.count({ where: { licenseId, createdAt: { gte: from, lte: to } } });
+  }
+  // The same count, narrowed by the report filter (RP-01) — see ticketFilterSql.
+  return countRows(
+    tx.$queryRaw<Array<{ n: bigint }>>`
+      SELECT count(*) AS n FROM tickets tk
+      WHERE tk.license_id = ${licenseId}
+        AND tk.created_at >= ${from} AND tk.created_at <= ${to}
+        AND ${ticketFilterSql(filter)}
+    `,
+  );
 }
 
 /**
@@ -173,8 +201,20 @@ export function slaBreachCount(
   licenseId: bigint,
   from: Date,
   to: Date,
+  filter: ThreadFilter | null = null,
 ): Promise<number> {
-  return tx.slaBreach.count({ where: { licenseId, detectedAt: { gte: from, lte: to } } });
+  if (filter === null) {
+    return tx.slaBreach.count({ where: { licenseId, detectedAt: { gte: from, lte: to } } });
+  }
+  // A miss counts when its subject passes the report filter (RP-01).
+  return countRows(
+    tx.$queryRaw<Array<{ n: bigint }>>`
+      SELECT count(*) AS n FROM sla_breaches sb
+      WHERE sb.license_id = ${licenseId}
+        AND sb.detected_at >= ${from} AND sb.detected_at <= ${to}
+        AND ${slaBreachFilterSql(filter)}
+    `,
+  );
 }
 
 /**
@@ -569,6 +609,7 @@ export async function satisfactionCounts(
   licenseId: bigint,
   from: Date,
   to: Date,
+  filter: ThreadFilter | null = null,
 ): Promise<{ good: number; bad: number }> {
   const [row] = await tx.$queryRaw<Array<{ good: bigint; bad: bigint }>>`
     SELECT
@@ -577,6 +618,7 @@ export async function satisfactionCounts(
     FROM ratings
     WHERE license_id = ${licenseId}
       AND created_at >= ${from} AND created_at <= ${to}
+      AND ${ratingFilterSql(filter, 'ratings')}
   `;
   return { good: Number(row?.good ?? 0n), bad: Number(row?.bad ?? 0n) };
 }
@@ -624,6 +666,7 @@ export async function satisfactionByDay(
   licenseId: bigint,
   from: Date,
   to: Date,
+  filter: ThreadFilter | null = null,
 ): Promise<Array<{ date: string; good: number; bad: number }>> {
   const rows = await tx.$queryRaw<Array<{ date: string; good: bigint; bad: bigint }>>`
     SELECT to_char((created_at AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS date,
@@ -632,6 +675,7 @@ export async function satisfactionByDay(
     FROM ratings
     WHERE license_id = ${licenseId}
       AND created_at >= ${from} AND created_at <= ${to}
+      AND ${ratingFilterSql(filter, 'ratings')}
     GROUP BY 1
     ORDER BY 1
   `;
@@ -750,6 +794,7 @@ export async function breakdownByDay(
   licenseId: bigint,
   from: Date,
   to: Date,
+  filter: ThreadFilter | null = null,
 ): Promise<DaySplit[]> {
   const rows = await tx.$queryRaw<
     Array<{
@@ -766,6 +811,7 @@ export async function breakdownByDay(
     FROM threads t
     WHERE t.license_id = ${licenseId}
       AND t.created_at >= ${from} AND t.created_at <= ${to}
+      AND ${threadFilterSql(filter)}
     GROUP BY 1
     ORDER BY 1
   `;
@@ -803,6 +849,7 @@ export async function breakdownByHour(
   licenseId: bigint,
   from: Date,
   to: Date,
+  filter: ThreadFilter | null = null,
 ): Promise<HourSplit[]> {
   const rows = await tx.$queryRaw<
     Array<{
@@ -819,6 +866,7 @@ export async function breakdownByHour(
     FROM threads t
     WHERE t.license_id = ${licenseId}
       AND t.created_at >= ${from} AND t.created_at <= ${to}
+      AND ${threadFilterSql(filter)}
     GROUP BY 1
     ORDER BY 1
   `;
@@ -876,6 +924,7 @@ export async function breakdownByChannel(
   licenseId: bigint,
   from: Date,
   to: Date,
+  filter: ThreadFilter | null = null,
 ): Promise<ChannelSplit[]> {
   const rows = await tx.$queryRaw<
     Array<{
@@ -901,6 +950,7 @@ export async function breakdownByChannel(
     ) first_inbound ON TRUE
     WHERE t.license_id = ${licenseId}
       AND t.created_at >= ${from} AND t.created_at <= ${to}
+      AND ${threadFilterSql(filter)}
     GROUP BY first_inbound.channel_type
   `;
 
@@ -979,6 +1029,7 @@ export async function breakdownByTeam(
   licenseId: bigint,
   from: Date,
   to: Date,
+  filter: ThreadFilter | null = null,
 ): Promise<{ teams: TeamSplit[]; overlapping: boolean }> {
   const rows = await tx.$queryRaw<
     Array<{
@@ -995,10 +1046,11 @@ export async function breakdownByTeam(
       ${SPLIT_COUNTS}
     FROM threads t
     JOIN chats c ON c.id = t.chat_id AND c.license_id = t.license_id
-    LEFT JOIN chat_access ca ON ca.chat_id = c.id
+    LEFT JOIN chat_access ca ON ca.chat_id = c.id AND ${accessTeamSql(filter, 'ca')}
     LEFT JOIN groups g ON g.license_id = c.license_id AND g.id = ca.group_id
     WHERE t.license_id = ${licenseId}
       AND t.created_at >= ${from} AND t.created_at <= ${to}
+      AND ${threadFilterSql(filter)}
     GROUP BY ca.group_id, g.name
     ORDER BY chats DESC, name ASC NULLS LAST
   `;
@@ -1012,9 +1064,10 @@ export async function breakdownByTeam(
       SELECT 1
       FROM threads t
       JOIN chats c ON c.id = t.chat_id AND c.license_id = t.license_id
-      JOIN chat_access ca ON ca.chat_id = c.id
+      JOIN chat_access ca ON ca.chat_id = c.id AND ${accessTeamSql(filter, 'ca')}
       WHERE t.license_id = ${licenseId}
         AND t.created_at >= ${from} AND t.created_at <= ${to}
+      AND ${threadFilterSql(filter)}
       GROUP BY t.id
       HAVING count(*) > 1
     ) AS overlapping
@@ -1164,6 +1217,7 @@ export async function teamPerformanceByAgent(
   licenseId: bigint,
   from: Date,
   to: Date,
+  filter: ThreadFilter | null = null,
 ): Promise<AgentPerformanceRow[]> {
   const rows = await tx.$queryRaw<
     Array<{
@@ -1189,6 +1243,7 @@ export async function teamPerformanceByAgent(
     WHERE t.license_id = ${licenseId}
       AND t.assignee_id IS NOT NULL
       AND t.created_at >= ${from} AND t.created_at <= ${to}
+      AND ${threadFilterSql(filter)}
     GROUP BY t.assignee_id, a.name
     ORDER BY chats DESC
     LIMIT 20
@@ -1208,6 +1263,7 @@ export async function teamPerformanceByAgent(
     WHERE r.license_id = ${licenseId}
       AND t.assignee_id IS NOT NULL
       AND r.created_at >= ${from} AND r.created_at <= ${to}
+      AND ${threadFilterSql(filter)}
     GROUP BY t.assignee_id
   `;
   const ratingsByAgent = new Map(ratingRows.map((row) => [row.agent_id, row]));
@@ -1222,6 +1278,7 @@ export async function teamPerformanceByAgent(
       AND ${AI_HANDOFF_TRANSFER}
       AND e.created_at >= ${from} AND e.created_at <= ${to}
       AND t.assignee_id IS NOT NULL
+      AND ${threadFilterSql(filter)}
     GROUP BY t.assignee_id
   `;
   const transfersByAgent = new Map(
@@ -1474,6 +1531,9 @@ export async function buildGroupCsv(
   baseline?: BenchmarkBaseline,
   filters: GroupFilters = {},
 ): Promise<{ headers: string[]; rows: CsvCell[][] }> {
+  // A non-conversation group given a filter is a 400 here, the one door every
+  // export, share link and scheduled run comes through (RP-01).
+  assertFilterable(groupId, filters.thread ?? null);
   const table = await groupCsvTable(
     tx,
     licenseId,
@@ -1503,11 +1563,17 @@ export async function buildGroupCsv(
 }
 
 /**
- * Filters an export may carry beyond the window. Only the `campaigns` group
- * reads one today (EN-05); every other group ignores them.
+ * Filters an export may carry beyond the window: the campaigns (EN-05, the
+ * `campaigns` group only) and the report filter (RP-01).
  */
 export interface GroupFilters {
   campaignIds?: readonly string[];
+  /**
+   * The report filter (RP-01 · tm 368), already bounded to the caller's reach.
+   * Only the conversation groups take one (`REPORT_FILTERABLE_GROUPS`); any
+   * other group given a non-null filter is refused.
+   */
+  thread?: ThreadFilter | null;
 }
 
 /**
@@ -1617,20 +1683,21 @@ function groupBenchmark(
   window: { from: Date; to: Date },
   filters: GroupFilters = {},
 ): Promise<Record<string, unknown>> {
+  const thread = filters.thread ?? null;
   switch (groupId) {
     case 'overview':
-      return overviewBenchmark(tx, licenseId, window);
+      return overviewBenchmark(tx, licenseId, window, thread);
     // Both compare on the license's resolution split: the Breakdown's
     // dimensions and Team performance's agent rows are window-derived, so only
     // the split itself has a counterpart in the baseline window (see each
     // builder for the full reasoning).
     case 'breakdown':
     case 'team-performance':
-      return splitBenchmark(tx, licenseId, window);
+      return splitBenchmark(tx, licenseId, window, thread);
     case 'ai-agent':
       return aiAgentBenchmark(tx, licenseId, window);
     case 'reviews':
-      return reviewsBenchmark(tx, licenseId, window);
+      return reviewsBenchmark(tx, licenseId, window, thread);
     case 'cases':
       return casesBenchmark(tx, licenseId, window);
     case 'leads':
@@ -1665,11 +1732,12 @@ async function groupCsvTable(
   baseline: BenchmarkBaseline,
   filters: GroupFilters,
 ): Promise<{ headers: string[]; rows: CsvCell[][] }> {
+  const thread = filters.thread ?? null;
   switch (groupId) {
     case 'overview': {
-      const totals = await windowTotals(tx, licenseId, from, to);
-      const tickets = await ticketCount(tx, licenseId, from, to);
-      const satisfaction = await satisfactionCounts(tx, licenseId, from, to);
+      const totals = await windowTotals(tx, licenseId, from, to, thread);
+      const tickets = await ticketCount(tx, licenseId, from, to, thread);
+      const satisfaction = await satisfactionCounts(tx, licenseId, from, to, thread);
       const chats = Number(totals.total_chats);
       const closed = Number(totals.closed_chats);
       const automated = Number(totals.automated);
@@ -1712,10 +1780,10 @@ async function groupCsvTable(
       // transaction (see withTenant), which does not support concurrent
       // queries on the same client; the JSON route awaits these same four
       // helpers one at a time for the same reason.
-      const byDay = await breakdownByDay(tx, licenseId, from, to);
-      const byHour = await breakdownByHour(tx, licenseId, from, to);
-      const byTeam = await breakdownByTeam(tx, licenseId, from, to);
-      const byChannel = await breakdownByChannel(tx, licenseId, from, to);
+      const byDay = await breakdownByDay(tx, licenseId, from, to, thread);
+      const byHour = await breakdownByHour(tx, licenseId, from, to, thread);
+      const byTeam = await breakdownByTeam(tx, licenseId, from, to, thread);
+      const byChannel = await breakdownByChannel(tx, licenseId, from, to, thread);
       const row = (
         key: string,
         split: {
@@ -1765,10 +1833,10 @@ async function groupCsvTable(
       };
     }
     case 'reviews': {
-      const byDay = await satisfactionByDay(tx, licenseId, from, to);
-      const counts = await satisfactionCounts(tx, licenseId, from, to);
+      const byDay = await satisfactionByDay(tx, licenseId, from, to, thread);
+      const counts = await satisfactionCounts(tx, licenseId, from, to, thread);
       const window = benchmarkWindow(from, to, baseline);
-      const previous = await satisfactionCounts(tx, licenseId, window.from, window.to);
+      const previous = await satisfactionCounts(tx, licenseId, window.from, window.to, thread);
       return {
         headers: ['date', 'good', 'bad', 'responses', 'score'],
         rows: [
@@ -1823,7 +1891,7 @@ async function groupCsvTable(
     case 'team-performance': {
       // Same helper the /reports/team-performance route calls, so the download
       // can never disagree with the tab's per-agent rows.
-      const agentRows = await teamPerformanceByAgent(tx, licenseId, from, to);
+      const agentRows = await teamPerformanceByAgent(tx, licenseId, from, to, thread);
       return {
         headers: [
           'agent_id',
@@ -1934,15 +2002,18 @@ export async function overviewBenchmark(
   tx: TenantClient,
   licenseId: bigint,
   window: { from: Date; to: Date },
+  filter: ThreadFilter | null = null,
 ): Promise<Record<string, unknown>> {
   // Sequential, not Promise.all: `tx` is one connection inside a Prisma
   // interactive transaction (see withTenant), which does not support
   // concurrent queries on the same client.
-  const totals = await windowTotals(tx, licenseId, window.from, window.to);
-  const satisfaction = await satisfactionCounts(tx, licenseId, window.from, window.to);
-  const tickets = await ticketCount(tx, licenseId, window.from, window.to);
-  const achievedGoals = await achievedGoalCount(tx, licenseId, window.from, window.to);
-  const slaBreaches = await slaBreachCount(tx, licenseId, window.from, window.to);
+  const totals = await windowTotals(tx, licenseId, window.from, window.to, filter);
+  const satisfaction = await satisfactionCounts(tx, licenseId, window.from, window.to, filter);
+  const tickets = await ticketCount(tx, licenseId, window.from, window.to, filter);
+  // A goal is reached by a visitor: no filter can be credited with it (RP-01).
+  const achievedGoals =
+    filter === null ? await achievedGoalCount(tx, licenseId, window.from, window.to) : null;
+  const slaBreaches = await slaBreachCount(tx, licenseId, window.from, window.to, filter);
   const chats = Number(totals.total_chats);
   const automated = Number(totals.automated);
   // Same guard `buildOverviewReport` applies to the requested window's own
@@ -1982,8 +2053,9 @@ export async function splitBenchmark(
   tx: TenantClient,
   licenseId: bigint,
   window: { from: Date; to: Date },
+  filter: ThreadFilter | null = null,
 ): Promise<Record<string, unknown>> {
-  const totals = await windowTotals(tx, licenseId, window.from, window.to);
+  const totals = await windowTotals(tx, licenseId, window.from, window.to, filter);
   return {
     chats: Number(totals.total_chats),
     closed: Number(totals.closed_chats),
@@ -2035,8 +2107,11 @@ export async function reviewsBenchmark(
   tx: TenantClient,
   licenseId: bigint,
   window: { from: Date; to: Date },
+  filter: ThreadFilter | null = null,
 ): Promise<Record<string, unknown>> {
-  return { ...csatSummary(await satisfactionCounts(tx, licenseId, window.from, window.to)) };
+  return {
+    ...csatSummary(await satisfactionCounts(tx, licenseId, window.from, window.to, filter)),
+  };
 }
 
 /**

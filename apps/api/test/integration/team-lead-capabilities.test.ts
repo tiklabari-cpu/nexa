@@ -408,8 +408,12 @@ describe('Ekip Lideri capabilities (RL-03 · tm 326)', () => {
     // Support is a team they are in and do not lead; Billing one they are not in.
     expect(await total(`&team_id=${support}`, lead.auth)).toBe(0);
     expect(await total(`&team_id=${billing}`, lead.auth)).toBe(0);
-    // The workspace-wide reports are not theirs (`reports.view` `none`, #368).
+    // The workspace-wide reports are not theirs; the conversation reports are,
+    // bounded to the teams they lead (`reports.view` `team`, tm 368 —
+    // `report-filters.test.ts` holds the bound itself).
     expect((await server.get(`/reports/ai-agent?${window}`, lead.auth)).statusCode).toBe(403);
-    expect((await server.get(`/reports/overview?${window}`, lead.auth)).statusCode).toBe(403);
+    const overview = await server.get(`/reports/overview?${window}&group_id=${support}`, lead.auth);
+    expect(overview.statusCode).toBe(200);
+    expect((overview.json() as { filters: unknown }).filters).toEqual({ group_id: [] });
   });
 });

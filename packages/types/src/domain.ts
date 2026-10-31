@@ -5,6 +5,7 @@
 
 import type { CampaignMatchMode, CampaignRule } from './campaign-conditions.js';
 import type { RichCard } from './rich-card.js';
+import type { ReportFilter } from './report-filter.js';
 
 // --- Identity & tenancy -----------------------------------------------------
 
@@ -873,6 +874,8 @@ export interface ScheduledExport {
   /** `csv` — the only shape the scheduler produces today. */
   format: 'csv';
   recipients: string[];
+  /** The report filter every run applies (RP-01 · tm 368); `{}` when none. */
+  filters: ReportFilter;
   /** Whether the scheduler picks this definition up. Off keeps it configured, inert. */
   enabled: boolean;
   created_at: string;
@@ -949,6 +952,8 @@ export interface ReportShareLink {
   group: string;
   from: string;
   to: string;
+  /** The report filter the link is frozen to (RP-01 · tm 368); `{}` when none. */
+  filters: ReportFilter;
   /**
    * The last four characters of the token, so two rows can be told apart. Four
    * characters of a 256-bit secret narrow a guess by nothing worth measuring;
@@ -993,6 +998,8 @@ export interface SharedReport {
   label: string;
   from: string;
   to: string;
+  /** The report filter the link is frozen to; `{}` when none. */
+  filters: ReportFilter;
   /** When the figures were computed — a share link is read live, never cached. */
   generated_at: string;
   expires_at: string;

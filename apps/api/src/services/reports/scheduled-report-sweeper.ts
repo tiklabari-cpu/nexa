@@ -57,6 +57,7 @@ import { exportFilename, reportGroup, toCsv } from '../../routes/reports-export.
 import { deliver, isCapRefusal } from '../mail/delivery.js';
 import type { Mailer } from '../mail/mailer.js';
 import { buildGroupCsv } from './report-csv.js';
+import { storedReportFilter, toThreadFilter } from './report-filter.js';
 import { buildScheduledReportMail } from './scheduled-report-mail.js';
 import { isMailLocale, type MailLocale } from '../mail/templates/layout.js';
 import { periodFor, type ReportPeriod } from './scheduled-report-period.js';
@@ -143,6 +144,8 @@ interface DefinitionRow {
   groupId: string;
   frequency: string;
   recipients: string[];
+  /** The stored report filter (RP-01), a JSONB `ReportFilter`. */
+  filters: unknown;
 }
 
 export class ScheduledReportSweeper {
@@ -241,7 +244,7 @@ export class ScheduledReportSweeper {
     return withTenant(this.#db, context, async (tx) =>
       tx.scheduledReport.findMany({
         where: { licenseId: context.licenseId, enabled: true },
-        select: { id: true, groupId: true, frequency: true, recipients: true },
+        select: { id: true, groupId: true, frequency: true, recipients: true, filters: true },
         orderBy: { createdAt: 'asc' },
       }),
     );
@@ -302,7 +305,18 @@ export class ScheduledReportSweeper {
         context,
         async (tx) => {
           const [csvTable, organization, members] = await Promise.all([
-            buildGroupCsv(tx, context.licenseId, definition.groupId, period.from, period.to),
+            buildGroupCsv(
+              tx,
+              context.licenseId,
+              definition.groupId,
+              period.from,
+              period.to,
+              undefined,
+              {
+                // The definition's own report filter (RP-01), every run alike.
+                thread: toThreadFilter(storedReportFilter(definition.filters)),
+              },
+            ),
             tx.organization.findUnique({
               where: { id: context.organizationId },
               select: { name: true },

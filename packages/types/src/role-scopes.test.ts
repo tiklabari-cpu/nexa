@@ -119,7 +119,15 @@ describe('scopesWithinRole', () => {
   });
 
   it('takes the admin scopes off a Team Lead, so an admin made one keeps none of them (FR-00-01.E)', () => {
-    expect(scopesWithinRole('team_lead', defaultScopesForRole('admin'))).toEqual(TEAM_LEAD_SCOPES);
+    // What an admin holds that a lead may: the lead set but its team-bounded
+    // report scope (tm 368), which the admin set has no reason to carry —
+    // `reports_read` already reads every team.
+    expect(scopesWithinRole('team_lead', defaultScopesForRole('admin'))).toEqual(
+      TEAM_LEAD_SCOPES.filter((scope) => scope !== 'reports_read--groups'),
+    );
+    expect(scopesWithinRole('team_lead', defaultScopesForRole('admin'))).not.toContain(
+      'reports_read',
+    );
     expect(scopesWithinRole('team_lead', ['billing_manage', 'chats--all:rw'])).toEqual([]);
   });
 

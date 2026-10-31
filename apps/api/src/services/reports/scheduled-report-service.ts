@@ -28,6 +28,8 @@ import type {
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { reportGroup } from '../../routes/reports-export.js';
+import { isReportFilterableGroup, type ReportFilter } from '@siyahtus/types';
+import { refuseReportFilter, reportFilterJson, storedReportFilter } from './report-filter.js';
 
 export interface ScheduledExportInput {
   group: string;
@@ -35,6 +37,8 @@ export interface ScheduledExportInput {
   format: 'csv';
   recipients: string[];
   enabled?: boolean;
+  /** The report filter every run applies (RP-01), already normalised. */
+  filters?: ReportFilter;
   /** The agent defining the schedule, kept as a soft reference for the UI. */
   createdByAgentId?: string;
 }
@@ -46,6 +50,8 @@ export interface ScheduledExportPatch {
   format?: 'csv';
   recipients?: string[];
   enabled?: boolean;
+  /** Replaces the stored filter; `{}` clears it. */
+  filters?: ReportFilter;
 }
 
 interface ScheduledReportRow {
@@ -57,6 +63,7 @@ interface ScheduledReportRow {
   enabled: boolean;
   createdAt: Date;
   lastRunAt: Date | null;
+  filters: unknown;
 }
 
 interface ScheduledReportRunRow {
@@ -96,6 +103,8 @@ export class ScheduledReportService {
     const group = reportGroup(input.group);
     if (!group) throw ApiError.validation(`group: unknown report group: ${input.group}.`);
 
+    const filters = input.filters ?? {};
+    assertScheduleFilter(group.id, filters);
     const recipients = await resolveRecipients(tx, tenant, input.recipients);
 
     const created = await tx.scheduledReport.create({
@@ -106,6 +115,7 @@ export class ScheduledReportService {
         format: input.format,
         recipients,
         enabled: input.enabled ?? true,
+        filters: reportFilterJson(filters),
         ...(input.createdByAgentId ? { createdByAgentId: input.createdByAgentId } : {}),
       },
     });
@@ -157,6 +167,7 @@ export class ScheduledReportService {
       format?: string;
       recipients?: string[];
       enabled?: boolean;
+      filters?: Record<string, string[]>;
     } = {};
 
     if (patch.group !== undefined) {
@@ -170,6 +181,11 @@ export class ScheduledReportService {
       data.recipients = await resolveRecipients(tx, tenant, patch.recipients);
     }
     if (patch.enabled !== undefined) data.enabled = patch.enabled;
+    if (patch.filters !== undefined) data.filters = reportFilterJson(patch.filters);
+    const filters = patch.filters ?? storedReportFilter(existing.filters);
+    // The pair that will be stored, checked together: a conversation group's
+    // filter must not survive a move to a group that cannot take one (RP-01).
+    assertScheduleFilter(data.groupId ?? existing.groupId, filters);
 
     const updated = await tx.scheduledReport.update({ where: { id }, data });
     return toDto(updated);
@@ -309,6 +325,13 @@ function toRunDto(row: ScheduledReportRunRow): ScheduledExportRun {
   };
 }
 
+/** A non-empty filter only on a conversation group (RP-01), else the 400. */
+function assertScheduleFilter(group: string, filters: ReportFilter): void {
+  if (Object.keys(filters).length > 0 && !isReportFilterableGroup(group)) {
+    refuseReportFilter(group);
+  }
+}
+
 function toDto(row: ScheduledReportRow): ScheduledExport {
   return {
     id: row.id,
@@ -316,6 +339,7 @@ function toDto(row: ScheduledReportRow): ScheduledExport {
     frequency: row.frequency as ScheduledExportFrequency,
     format: row.format as 'csv',
     recipients: row.recipients,
+    filters: storedReportFilter(row.filters),
     enabled: row.enabled,
     created_at: row.createdAt.toISOString(),
     last_run_at: row.lastRunAt?.toISOString() ?? null,

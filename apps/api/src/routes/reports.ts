@@ -18,8 +18,11 @@ import {
   hasAnyScope,
   isWorkScheduleProblem,
   normalizeWorkSchedule,
+  isReportFilterableGroup,
   RATING_VALUES,
   type GoalFunnel,
+  type ReportFilter,
+  type Scope,
 } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { visibilitySql } from '../services/archive/archive-service.js';
@@ -102,6 +105,18 @@ import {
   SHARE_LINK_MAX_DAYS,
 } from '../services/reports/report-share.js';
 import { reviewInsights } from '../services/reports/review-insights.js';
+import {
+  normalizeReportFilter,
+  parseReportFilterQuery,
+  queryNamesReportFilter,
+  refuseReportFilter,
+  reportFilterBody,
+  resolveReportReach,
+  threadFilterSql,
+  toThreadFilter,
+  toWireFilter,
+  type ThreadFilter,
+} from '../services/reports/report-filter.js';
 import {
   aiMetricsReachOf,
   decodeAiMetricsCursor,
@@ -281,6 +296,8 @@ const shareLinkBody = z
     from: z.coerce.date().optional(),
     to: z.coerce.date().optional(),
     expires_in_days: z.coerce.number().int().min(1).max(SHARE_LINK_MAX_DAYS).optional(),
+    // The report filter the link is frozen to (RP-01); ids only.
+    filters: reportFilterBody.optional(),
   })
   .strict();
 
@@ -424,7 +441,45 @@ function assertReportRange(from: Date, to: Date): void {
  * that never asked for a benchmark, while the JSON reports carry the default
  * comparison for everyone.
  */
-function resolveReportQuery(query: unknown): {
+function resolveReportQuery(
+  query: unknown,
+  report: string,
+): {
+  from: Date;
+  to: Date;
+  baseline: BenchmarkBaseline;
+  requested: BenchmarkBaseline | undefined;
+} {
+  // A report counted from something other than conversations refuses the
+  // report filter rather than ignoring it (RP-01): unfiltered figures under a
+  // filtered heading would be the wrong number shown as the right one.
+  if (queryNamesReportFilter(query)) refuseReportFilter(report);
+  return resolveReportWindow(query);
+}
+
+/**
+ * The scopes that open a conversation report (RP-01 · tm 368): the workspace
+ * (`reports_read`) or the teams the caller leads (`reports_read--groups`,
+ * bounded by {@link resolveReportReach}).
+ */
+const CONVERSATION_REPORT_SCOPES: Scope[] = ['reports_read', 'reports_read--groups'];
+
+/**
+ * A conversation report's query: the window and baseline, plus the report
+ * filter as the caller asked for it — before {@link resolveReportReach} bounds
+ * it to what they may see.
+ */
+function resolveFilteredReportQuery(query: unknown): {
+  from: Date;
+  to: Date;
+  baseline: BenchmarkBaseline;
+  requested: BenchmarkBaseline | undefined;
+  filter: ReportFilter;
+} {
+  return { ...resolveReportWindow(query), filter: parseReportFilterQuery(query) };
+}
+
+function resolveReportWindow(query: unknown): {
   from: Date;
   to: Date;
   baseline: BenchmarkBaseline;
@@ -545,6 +600,7 @@ export async function buildOverviewReport(
   from: Date,
   to: Date,
   baseline: BenchmarkBaseline = DEFAULT_BENCHMARK_BASELINE,
+  filter: ThreadFilter | null = null,
 ): Promise<Record<string, unknown>> {
   const spanMs = to.getTime() - from.getTime();
   const windowHours = spanMs / 3_600_000;
@@ -552,8 +608,8 @@ export async function buildOverviewReport(
   // Sequential, not Promise.all: `tx` is one connection inside a Prisma
   // interactive transaction (see withTenant), which does not support
   // concurrent queries on the same client.
-  const totals = await windowTotals(tx, licenseId, from, to);
-  const satisfaction = await satisfactionCounts(tx, licenseId, from, to);
+  const totals = await windowTotals(tx, licenseId, from, to, filter);
+  const satisfaction = await satisfactionCounts(tx, licenseId, from, to, filter);
 
   const byAgent = await tx.$queryRaw<
     Array<{ agent_id: string; name: string | null; chats: bigint }>
@@ -564,6 +620,7 @@ export async function buildOverviewReport(
     WHERE t.license_id = ${licenseId}
       AND t.assignee_id IS NOT NULL
       AND t.created_at >= ${from} AND t.created_at <= ${to}
+      AND ${threadFilterSql(filter)}
     GROUP BY t.assignee_id, a.name
     ORDER BY chats DESC
     LIMIT 20
@@ -576,29 +633,36 @@ export async function buildOverviewReport(
     JOIN threads t ON t.id = tt.thread_id
     WHERE t.license_id = ${licenseId}
       AND t.created_at >= ${from} AND t.created_at <= ${to}
+      AND ${threadFilterSql(filter)}
     GROUP BY tg.name
     ORDER BY count DESC
     LIMIT 10
   `;
 
-  const queued = await tx.thread.count({
-    where: { licenseId, active: true, queuePosition: { not: null } },
-  });
+  // Waiting right now — no window, the same report filter (RP-01).
+  const [queuedRow] = await tx.$queryRaw<Array<{ n: bigint }>>`
+    SELECT count(*) AS n FROM threads t
+    WHERE t.license_id = ${licenseId} AND t.active AND t.queue_position IS NOT NULL
+      AND ${threadFilterSql(filter)}
+  `;
+  const queued = Number(queuedRow?.n ?? 0n);
 
   // "Total cases" is chats *plus* tickets (PRD §3.3). Counted here rather than
   // folded into the thread query above because the two have no join to share —
   // a ticket need not have come from a conversation at all.
-  const tickets = await ticketCount(tx, licenseId, from, to);
+  const tickets = await ticketCount(tx, licenseId, from, to, filter);
 
   // The funnel's converted stage (FR-MOD-13.3), counted the same way as
   // tickets above — a license- and time-scoped count on its own table.
-  const achievedGoals = await achievedGoalCount(tx, licenseId, from, to);
+  // Null under a report filter (RP-01): a goal is reached by a visitor, and
+  // no agent, team, tag or topic can be credited with it.
+  const achievedGoals = filter === null ? await achievedGoalCount(tx, licenseId, from, to) : null;
 
   // SLA misses in the window (FR-MOD-11.5 · 11.5-e), and whether targets are
   // in force today — the settings screen's own "not bought" vs "not set"
   // distinction, read here so the KPI card can tell a workspace that has
   // never configured SLA apart from one with a clean record.
-  const slaBreaches = await slaBreachCount(tx, licenseId, from, to);
+  const slaBreaches = await slaBreachCount(tx, licenseId, from, to, filter);
   const slaIsActive = await slaActive(tx, licenseId);
 
   const good = satisfaction.good;
@@ -629,6 +693,8 @@ export async function buildOverviewReport(
   return withBenchmark(
     {
       range: { from: from.toISOString(), to: to.toISOString() },
+      // The filter that ran, after the caller's team bound (RP-01).
+      ...(filter === null ? {} : { filters: toWireFilter(filter) }),
       totals: {
         chats: totalChats,
         tickets,
@@ -706,7 +772,7 @@ export async function buildOverviewReport(
     from,
     to,
     baseline,
-    (window) => overviewBenchmark(tx, licenseId, window),
+    (window) => overviewBenchmark(tx, licenseId, window, filter),
   );
 }
 
@@ -721,27 +787,28 @@ export async function buildBreakdownReport(
   from: Date,
   to: Date,
   baseline: BenchmarkBaseline = DEFAULT_BENCHMARK_BASELINE,
+  filter: ThreadFilter | null = null,
 ): Promise<Record<string, unknown>> {
   // The resolution split per UTC day — the same helper the CSV export uses, so
   // the tab and its download can never quote a different split for a day.
-  const byDay = await breakdownByDay(tx, licenseId, from, to);
+  const byDay = await breakdownByDay(tx, licenseId, from, to, filter);
 
   // The same split per UTC hour of day — a dense 0-23 axis, so the client
   // never has to fill in the hours nothing happened in.
-  const byHour = await breakdownByHour(tx, licenseId, from, to);
+  const byHour = await breakdownByHour(tx, licenseId, from, to, filter);
 
   // The same split per channel — the oldest inbound adapter message decides a
   // chat's channel, 'website' when it has none. The soft-FK join is locked on
   // license *and* chat id (see breakdownByChannel), so another tenant's
   // same-id row can never reclassify a chat here.
-  const byChannel = await breakdownByChannel(tx, licenseId, from, to);
+  const byChannel = await breakdownByChannel(tx, licenseId, from, to, filter);
 
   // The same split per team — the groups a chat is shared with through
   // chat_access. Fan-out is intentional (a chat open to two teams counts in
   // both) and `overlapping` declares it. The join is license-locked through
   // chats and groups (see breakdownByTeam), because chat_access has no
   // license column of its own and group ids repeat across licenses.
-  const byTeam = await breakdownByTeam(tx, licenseId, from, to);
+  const byTeam = await breakdownByTeam(tx, licenseId, from, to, filter);
 
   // The same split per assigned agent. An automated chat can still carry an
   // assignee (nobody replied), so it shows against the agent it sat with.
@@ -763,6 +830,7 @@ export async function buildBreakdownReport(
     WHERE t.license_id = ${licenseId}
       AND t.assignee_id IS NOT NULL
       AND t.created_at >= ${from} AND t.created_at <= ${to}
+      AND ${threadFilterSql(filter)}
     GROUP BY t.assignee_id, a.name
     ORDER BY chats DESC
     LIMIT 20
@@ -776,6 +844,8 @@ export async function buildBreakdownReport(
   return withBenchmark(
     {
       range: { from: from.toISOString(), to: to.toISOString() },
+      // The filter that ran, after the caller's team bound (RP-01).
+      ...(filter === null ? {} : { filters: toWireFilter(filter) }),
       by_day: byDay.map((row) => ({
         date: row.date,
         chats: row.chats,
@@ -825,7 +895,7 @@ export async function buildBreakdownReport(
     from,
     to,
     baseline,
-    (window) => splitBenchmark(tx, licenseId, window),
+    (window) => splitBenchmark(tx, licenseId, window, filter),
   );
 }
 
@@ -950,6 +1020,7 @@ async function trackedSalesBlock(
   licenseId: bigint,
   from: Date,
   to: Date,
+  filtered = false,
 ): Promise<EcommerceBlock> {
   // License-scoped table under RLS, so this license's row is the only one
   // `findFirst` can see — the same read `GET /settings/sales-tracker` does.
@@ -963,6 +1034,17 @@ async function trackedSalesBlock(
     };
   }
 
+  // Under a report filter (RP-01) the figures are null, the switch is not: a
+  // sale is reported by the merchant's page and credited to no agent, team,
+  // tag or topic, while "tracking is on" is still true.
+  if (filtered) {
+    return {
+      configured: true,
+      tracked_sales: null,
+      attributed_revenue_cents: null,
+      currency: settings.currency,
+    };
+  }
   const summary = await trackedSalesSummary(tx, licenseId, from, to);
   // The currency comes from the configuration rather than from the orders:
   // `amount_cents` values are only summable under one code, and the settings
@@ -981,12 +1063,13 @@ export async function buildReviewsReport(
   from: Date,
   to: Date,
   baseline: BenchmarkBaseline = DEFAULT_BENCHMARK_BASELINE,
+  filter: ThreadFilter | null = null,
 ): Promise<Record<string, unknown>> {
   // Sequential, not Promise.all: withTenant is one interactive transaction and
   // Prisma forbids concurrent queries on its client.
-  const counts = await satisfactionCounts(tx, licenseId, from, to);
-  const byDay = await satisfactionByDay(tx, licenseId, from, to);
-  const ecommerce = await trackedSalesBlock(tx, licenseId, from, to);
+  const counts = await satisfactionCounts(tx, licenseId, from, to, filter);
+  const byDay = await satisfactionByDay(tx, licenseId, from, to, filter);
+  const ecommerce = await trackedSalesBlock(tx, licenseId, from, to, filter !== null);
 
   // The baseline window's CSAT — measured here rather than left to
   // `withBenchmark`'s callback because the insights compare against it too, and
@@ -995,11 +1078,19 @@ export async function buildReviewsReport(
   // window arithmetic is still the shared helper's, so it cannot differ from
   // the one every other group benchmarks against.
   const previousWindow = benchmarkWindow(from, to, baseline);
-  const previous = await satisfactionCounts(tx, licenseId, previousWindow.from, previousWindow.to);
+  const previous = await satisfactionCounts(
+    tx,
+    licenseId,
+    previousWindow.from,
+    previousWindow.to,
+    filter,
+  );
 
   return withBenchmark(
     {
       range: { from: from.toISOString(), to: to.toISOString() },
+      // The filter that ran, after the caller's team bound (RP-01).
+      ...(filter === null ? {} : { filters: toWireFilter(filter) }),
       csat: csatSummary(counts),
       by_day: byDay.map((row) => ({ date: row.date, ...csatSummary(row) })),
       ecommerce,
@@ -1175,8 +1266,9 @@ export async function buildTeamPerformanceReport(
   from: Date,
   to: Date,
   baseline: BenchmarkBaseline = DEFAULT_BENCHMARK_BASELINE,
+  filter: ThreadFilter | null = null,
 ): Promise<Record<string, unknown>> {
-  const agents = await teamPerformanceByAgent(tx, licenseId, from, to);
+  const agents = await teamPerformanceByAgent(tx, licenseId, from, to, filter);
 
   // License-wide totals, not a baseline copy of the agent table. Which agents
   // the table holds is derived from the window (`LIMIT 20` over the agents with
@@ -1193,18 +1285,20 @@ export async function buildTeamPerformanceReport(
   // comparable by construction. Summing `agents` instead would compare a
   // 20-row, assigned-threads-only slice against a whole-license baseline and
   // report a drop that never happened.
-  const totals = await splitBenchmark(tx, licenseId, { from, to });
+  const totals = await splitBenchmark(tx, licenseId, { from, to }, filter);
 
   return withBenchmark(
     {
       range: { from: from.toISOString(), to: to.toISOString() },
+      // The filter that ran, after the caller's team bound (RP-01).
+      ...(filter === null ? {} : { filters: toWireFilter(filter) }),
       totals,
       agents,
     },
     from,
     to,
     baseline,
-    (window) => splitBenchmark(tx, licenseId, window),
+    (window) => splitBenchmark(tx, licenseId, window, filter),
   );
 }
 
@@ -1604,32 +1698,52 @@ export default async function reportRoutes(
   // registration, like `uploads.ts` builds its scanner.
   const payments = createPaymentProvider(env.STRIPE_PROVIDER);
 
-  app.get('/reports/overview', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
-    const { from, to, baseline } = resolveReportQuery(request.query);
-    const tenant = request.tenant();
+  app.get(
+    '/reports/overview',
+    { config: { scopes: CONVERSATION_REPORT_SCOPES } },
+    async (request, reply) => {
+      const { from, to, baseline, filter } = resolveFilteredReportQuery(request.query);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
 
-    const body = await request.withTenantRead((tx) =>
-      buildOverviewReport(tx, tenant.licenseId, from, to, baseline),
-    );
-    return reply.send(body);
-  });
+      const body = await request.withTenantRead(async (tx) =>
+        buildOverviewReport(
+          tx,
+          tenant.licenseId,
+          from,
+          to,
+          baseline,
+          await resolveReportReach(tx, principal, filter),
+        ),
+      );
+      return reply.send(body);
+    },
+  );
 
   app.get(
     '/reports/breakdown',
-    { config: { scopes: ['reports_read'] } },
+    { config: { scopes: CONVERSATION_REPORT_SCOPES } },
     async (request, reply) => {
-      const { from, to, baseline } = resolveReportQuery(request.query);
+      const { from, to, baseline, filter } = resolveFilteredReportQuery(request.query);
       const tenant = request.tenant();
+      const principal = request.requirePrincipal();
 
-      const body = await request.withTenantRead((tx) =>
-        buildBreakdownReport(tx, tenant.licenseId, from, to, baseline),
+      const body = await request.withTenantRead(async (tx) =>
+        buildBreakdownReport(
+          tx,
+          tenant.licenseId,
+          from,
+          to,
+          baseline,
+          await resolveReportReach(tx, principal, filter),
+        ),
       );
       return reply.send(body);
     },
   );
 
   app.get('/reports/ai-agent', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
-    const { from, to, baseline } = resolveReportQuery(request.query);
+    const { from, to, baseline } = resolveReportQuery(request.query, 'ai-agent');
     const tenant = request.tenant();
 
     const body = await request.withTenantRead((tx) =>
@@ -1644,7 +1758,7 @@ export default async function reportRoutes(
   // (`aiMetricsReachOf`) — `reports_read` reads every team, a Team Lead the
   // teams they lead (RL-02).
   app.get('/reports/ai-agent/breakdown', async (request, reply) => {
-    const { from, to } = resolveReportQuery(request.query);
+    const { from, to } = resolveReportQuery(request.query, 'ai-agent breakdown');
     const query = parse(aiMetricsBreakdownQuery, request.query);
     const tenant = request.tenant();
     const principal = request.requirePrincipal();
@@ -1664,7 +1778,7 @@ export default async function reportRoutes(
   });
 
   app.get('/reports/ai-agent/conversations', async (request, reply) => {
-    const { from, to } = resolveReportQuery(request.query);
+    const { from, to } = resolveReportQuery(request.query, 'ai-agent conversations');
     const query = parse(aiMetricsConversationsQuery, request.query);
     const cursor = query.cursor === undefined ? null : decodeAiMetricsCursor(query.cursor);
     if (query.cursor !== undefined && cursor === null) {
@@ -1689,15 +1803,27 @@ export default async function reportRoutes(
     return reply.send(body);
   });
 
-  app.get('/reports/reviews', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
-    const { from, to, baseline } = resolveReportQuery(request.query);
-    const tenant = request.tenant();
+  app.get(
+    '/reports/reviews',
+    { config: { scopes: CONVERSATION_REPORT_SCOPES } },
+    async (request, reply) => {
+      const { from, to, baseline, filter } = resolveFilteredReportQuery(request.query);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
 
-    const body = await request.withTenantRead((tx) =>
-      buildReviewsReport(tx, tenant.licenseId, from, to, baseline),
-    );
-    return reply.send(body);
-  });
+      const body = await request.withTenantRead(async (tx) =>
+        buildReviewsReport(
+          tx,
+          tenant.licenseId,
+          from,
+          to,
+          baseline,
+          await resolveReportReach(tx, principal, filter),
+        ),
+      );
+      return reply.send(body);
+    },
+  );
 
   // The comments players left with their ratings (WG-11 · tm 337), beside the
   // Reviews figures: newest first, a page at a time, inside the chat
@@ -1706,7 +1832,7 @@ export default async function reportRoutes(
     '/reports/reviews/comments',
     { config: { scopes: ['reports_read'] } },
     async (request, reply) => {
-      const { from, to } = resolveReportQuery(request.query);
+      const { from, to } = resolveReportQuery(request.query, 'reviews comments');
       const query = parse(reviewCommentsQuery, request.query);
       const tenant = request.tenant();
       const principal = request.requirePrincipal();
@@ -1731,7 +1857,7 @@ export default async function reportRoutes(
   // — a 200 state, not an error, so no new ApiError type. Same reports_read +
   // withTenantRead surface as the other tabs.
   app.get('/reports/topics', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
-    const { from, to, baseline } = resolveReportQuery(request.query);
+    const { from, to, baseline } = resolveReportQuery(request.query, 'topics');
     const tenant = request.tenant();
 
     // The baseline window is where each topic's previous volume — and so its
@@ -1767,7 +1893,7 @@ export default async function reportRoutes(
   // (tickets, FR-MOD-02.6) counted by day, current status and queue priority.
   // Same reports_read + withTenantRead surface as the other tabs.
   app.get('/reports/cases', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
-    const { from, to, baseline } = resolveReportQuery(request.query);
+    const { from, to, baseline } = resolveReportQuery(request.query, 'cases');
     const tenant = request.tenant();
 
     const body = await request.withTenantRead((tx) =>
@@ -1782,7 +1908,7 @@ export default async function reportRoutes(
   // buildLeadsReport / leadFirstTouch) — the isolation core of this report.
   // Same reports_read + withTenantRead surface as the other tabs.
   app.get('/reports/leads', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
-    const { from, to, baseline } = resolveReportQuery(request.query);
+    const { from, to, baseline } = resolveReportQuery(request.query, 'leads');
     const tenant = request.tenant();
 
     const body = await request.withTenantRead((tx) =>
@@ -1797,13 +1923,21 @@ export default async function reportRoutes(
   // reports_read + withTenantRead surface as the other tabs.
   app.get(
     '/reports/team-performance',
-    { config: { scopes: ['reports_read'] } },
+    { config: { scopes: CONVERSATION_REPORT_SCOPES } },
     async (request, reply) => {
-      const { from, to, baseline } = resolveReportQuery(request.query);
+      const { from, to, baseline, filter } = resolveFilteredReportQuery(request.query);
       const tenant = request.tenant();
+      const principal = request.requirePrincipal();
 
-      const body = await request.withTenantRead((tx) =>
-        buildTeamPerformanceReport(tx, tenant.licenseId, from, to, baseline),
+      const body = await request.withTenantRead(async (tx) =>
+        buildTeamPerformanceReport(
+          tx,
+          tenant.licenseId,
+          from,
+          to,
+          baseline,
+          await resolveReportReach(tx, principal, filter),
+        ),
       );
       return reply.send(body);
     },
@@ -1815,7 +1949,7 @@ export default async function reportRoutes(
   // tabs, so the endpoint's permission and range handling never need to change
   // once 13.5 fills the figures in.
   app.get('/reports/sales', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
-    const { from, to, baseline } = resolveReportQuery(request.query);
+    const { from, to, baseline } = resolveReportQuery(request.query, 'sales');
     const tenant = request.tenant();
 
     const body = await request.withTenantRead((tx) =>
@@ -1832,7 +1966,7 @@ export default async function reportRoutes(
   // every stage is measured against. Defining the goals themselves is a
   // different permission (`customers:rw`, see routes/goals.ts).
   app.get('/reports/goals', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
-    const { from, to, baseline } = resolveReportQuery(request.query);
+    const { from, to, baseline } = resolveReportQuery(request.query, 'goals');
     const tenant = request.tenant();
 
     const body = await request.withTenantRead((tx) =>
@@ -1850,7 +1984,7 @@ export default async function reportRoutes(
     '/reports/campaigns',
     { config: { scopes: ['reports_read'] } },
     async (request, reply) => {
-      const { from, to, baseline } = resolveReportQuery(request.query);
+      const { from, to, baseline } = resolveReportQuery(request.query, 'campaigns');
       const filter = parse(z.object({ campaign_id: campaignIdsParam }), request.query);
       const tenant = request.tenant();
 
@@ -1884,6 +2018,7 @@ export default async function reportRoutes(
     '/reports/staffing-forecast',
     { config: { scopes: ['reports_read'] } },
     async (request, reply) => {
+      if (queryNamesReportFilter(request.query)) refuseReportFilter('staffing-forecast');
       const parsed = rangeQuery.safeParse(request.query);
       if (!parsed.success) throw ApiError.validation('Invalid date range.');
       const { from, to } = resolveRange(parsed.data);
@@ -1950,12 +2085,23 @@ export default async function reportRoutes(
       throw ApiError.authorization(`This token cannot export the ${group.id} report.`);
     }
 
+    // The report filter (RP-01), bounded to the caller's reach exactly as the
+    // JSON report bounds it — so a filtered download is the filtered screen.
+    const requested = parseReportFilterQuery(request.query);
+    const principal = request.requirePrincipal();
     const tenant = request.tenant();
-    const table = await request.withTenantRead((tx) =>
-      buildGroupCsv(tx, tenant.licenseId, group.id, from, to, parsed.data.baseline, {
+    const table = await request.withTenantRead(async (tx) => {
+      // A team-bounded caller always runs a filter (their teams); a group that
+      // is not a conversation report cannot take one, and the group gate above
+      // has already refused them every such group.
+      const thread = isReportFilterableGroup(group.id)
+        ? await resolveReportReach(tx, principal, requested)
+        : toThreadFilter(requested);
+      return buildGroupCsv(tx, tenant.licenseId, group.id, from, to, parsed.data.baseline, {
         campaignIds: parsed.data.campaign_id,
-      }),
-    );
+        thread,
+      });
+    });
 
     // A report is a point-in-time snapshot; never let a shared cache serve a
     // stale one, and never let a browser sniff the bytes into something active.
@@ -2049,6 +2195,16 @@ export default async function reportRoutes(
       if (!hasAnyScope(scopesOf(principal), group.scopes)) {
         throw ApiError.authorization(`This token cannot share the ${group.id} report.`);
       }
+      // A link is read by whoever holds it, after its creator's teams have
+      // changed: a team-bounded reach (`reports_read--groups`) cannot be frozen
+      // into one, so only the workspace's own reports scope may mint (RP-01).
+      if (!hasAnyScope(scopesOf(principal), ['reports_read'])) {
+        throw ApiError.authorization('Sharing a report needs reports_read.');
+      }
+      const filters = normalizeReportFilter(body.filters ?? {});
+      if (Object.keys(filters).length > 0 && !isReportFilterableGroup(group.id)) {
+        refuseReportFilter(group.id);
+      }
 
       const tenant = request.tenant();
       const now = new Date();
@@ -2061,6 +2217,7 @@ export default async function reportRoutes(
             from,
             to,
             expiresInDays: body.expires_in_days ?? SHARE_LINK_DEFAULT_DAYS,
+            filters,
             // A soft reference for the management list. A bot token holding the
             // scope leaves it unset rather than borrowing someone's identity.
             ...(isAgent(principal) ? { createdByAgentId: principal.accountId } : {}),
@@ -2079,6 +2236,7 @@ export default async function reportRoutes(
             from: link.from,
             to: link.to,
             expires_at: link.expires_at,
+            filters: link.filters,
           },
         });
         return link;
@@ -2153,7 +2311,10 @@ export default async function reportRoutes(
     // an anonymous caller runs the same full-window aggregation the export
     // does, which is precisely the query NFR-P7 is about.
     const table = await withTenantRead(app.dbRead, link.tenant, (tx) =>
-      buildGroupCsv(tx, link.tenant.licenseId, group.id, link.from, link.to),
+      buildGroupCsv(tx, link.tenant.licenseId, group.id, link.from, link.to, undefined, {
+        // Frozen at mint: whoever opens the link reads exactly this filter.
+        thread: toThreadFilter(link.filters),
+      }),
     );
 
     // A shared report is a point-in-time snapshot behind a bearer token: never
@@ -2164,6 +2325,7 @@ export default async function reportRoutes(
       label: group.label,
       from: link.from.toISOString(),
       to: link.to.toISOString(),
+      filters: link.filters,
       generated_at: generatedAt.toISOString(),
       expires_at: link.expiresAt.toISOString(),
       headers: table.headers,

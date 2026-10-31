@@ -36,19 +36,27 @@ export interface ReportGroup {
 }
 
 /**
+ * The conversation groups' scopes (RP-01 · tm 368): the workspace's reports, or
+ * the teams the caller leads (`reports_read--groups`) — bounded by the server's
+ * team intersection (`resolveReportReach`). Every other group counts something a
+ * team cannot be credited with, so it stays `reports_read` alone.
+ */
+const CONVERSATION_GROUP_SCOPES: Scope[] = ['reports_read', 'reports_read--groups'];
+
+/**
  * The catalogue, in the order the Reports page shows its tabs. Each id is the
  * `group` an export is requested for and the tab the web client renders, so the
  * three surfaces (tabs, groups list, export) speak one vocabulary.
  */
 export const REPORT_GROUPS: readonly ReportGroup[] = [
-  { id: 'overview', label: 'Overview', scopes: ['reports_read'] },
-  { id: 'breakdown', label: 'Breakdown', scopes: ['reports_read'] },
+  { id: 'overview', label: 'Overview', scopes: CONVERSATION_GROUP_SCOPES },
+  { id: 'breakdown', label: 'Breakdown', scopes: CONVERSATION_GROUP_SCOPES },
   { id: 'ai-agent', label: 'AI Agent', scopes: ['reports_read'] },
-  { id: 'reviews', label: 'Reviews', scopes: ['reports_read'] },
+  { id: 'reviews', label: 'Reviews', scopes: CONVERSATION_GROUP_SCOPES },
   { id: 'topics', label: 'Chat topics', scopes: ['reports_read'] },
   { id: 'cases', label: 'Cases', scopes: ['reports_read'] },
   { id: 'leads', label: 'Leads', scopes: ['reports_read'] },
-  { id: 'team-performance', label: 'Team performance', scopes: ['reports_read'] },
+  { id: 'team-performance', label: 'Team performance', scopes: CONVERSATION_GROUP_SCOPES },
   { id: 'sales', label: 'Sales', scopes: ['reports_read'] },
   { id: 'goals', label: 'Goals', scopes: ['reports_read'] },
   { id: 'campaigns', label: 'Campaigns', scopes: ['reports_read'] },

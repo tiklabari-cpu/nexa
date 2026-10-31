@@ -32,6 +32,7 @@ import {
   type ScheduledExportInput,
   type ScheduledExportPatch,
 } from '../services/reports/scheduled-report-service.js';
+import { normalizeReportFilter, reportFilterBody } from '../services/reports/report-filter.js';
 
 /**
  * `.strict()` so a mistyped key is a 400 rather than a schedule that silently
@@ -51,6 +52,8 @@ const createBody = z
     // unbounded list would make one definition a mailing list.
     recipients: z.array(z.string().trim().email()).min(1).max(20),
     enabled: z.boolean().optional(),
+    // The report filter every run applies (RP-01); ids only.
+    filters: reportFilterBody.optional(),
   })
   .strict();
 
@@ -69,6 +72,7 @@ const updateBody = z
     format: createBody.shape.format,
     recipients: createBody.shape.recipients.optional(),
     enabled: createBody.shape.enabled,
+    filters: createBody.shape.filters,
   })
   .strict()
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
@@ -119,6 +123,7 @@ export default async function scheduledReportRoutes(app: FastifyInstance): Promi
         format: body.format ?? 'csv',
         recipients: body.recipients,
         ...(body.enabled === undefined ? {} : { enabled: body.enabled }),
+        ...(body.filters === undefined ? {} : { filters: normalizeReportFilter(body.filters) }),
         // A soft reference for the settings screen. A bot token may hold the
         // scope and leaves it unset rather than borrowing someone's identity.
         ...(isAgent(principal) ? { createdByAgentId: principal.accountId } : {}),
@@ -137,6 +142,8 @@ export default async function scheduledReportRoutes(app: FastifyInstance): Promi
             frequency: result.frequency,
             format: result.format,
             recipient_count: result.recipients.length,
+            // Ids only (RP-01, GV-05) — what the runs are narrowed to.
+            filters: result.filters,
           },
         });
         return result;
@@ -172,6 +179,7 @@ export default async function scheduledReportRoutes(app: FastifyInstance): Promi
         ...(body.format === undefined ? {} : { format: body.format }),
         ...(body.recipients === undefined ? {} : { recipients: body.recipients }),
         ...(body.enabled === undefined ? {} : { enabled: body.enabled }),
+        ...(body.filters === undefined ? {} : { filters: normalizeReportFilter(body.filters) }),
       };
 
       const updated = await request.withTenant(async (tx) => {

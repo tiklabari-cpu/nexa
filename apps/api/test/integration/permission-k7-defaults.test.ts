@@ -238,12 +238,15 @@ describe('the owner’s K7 defaults (RL-02 · tm 325.5)', () => {
   // =========================================================================
 
   describe('Ekip Lideri sees no other team’s figures', () => {
-    it('opens no workspace-wide report and no bill until the team level exists (#368) (FR-MOD-04.RBAC)', async () => {
+    it('opens their teams’ conversation reports, never a workspace-wide one or the bill (#368) (FR-MOD-04.RBAC)', async () => {
       const lead = await signIn(fx.a, (await member(fx.a, 'team_lead')).email);
       const mine = await me(lead);
-      expect(mine.capabilities['reports.view']).toBe('none');
+      // `team` since tm 368: the server bounds the report to the teams they lead.
+      expect(mine.capabilities['reports.view']).toBe('team');
+      expect(mine.scopes).toContain('reports_read--groups');
       expect(mine.scopes).not.toContain('reports_read');
-      expect(await status(lead, '/reports/overview')).toBe(403);
+      expect(await status(lead, '/reports/overview')).toBe(200);
+      expect(await status(lead, '/reports/cases')).toBe(403);
       expect(await status(lead, '/billing/subscription')).toBe(403);
     });
   });

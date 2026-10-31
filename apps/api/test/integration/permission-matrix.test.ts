@@ -267,7 +267,7 @@ describe('the permission matrix — store, cache and the Founder’s PUT (RL-02 
       ['locked', { role: 'admin', capability: 'settings.permissions', value: 'on' }],
       ['unknown_role', { role: 'viceowner', capability: 'reports.view', value: 'all' }],
       ['unknown_capability', { role: 'agent', capability: 'reports.export', value: 'on' }],
-      ['invalid_value', { role: 'agent', capability: 'reports.view', value: 'team' }],
+      ['invalid_value', { role: 'agent', capability: 'reports.view', value: 'own' }],
       ['duplicate_change', valid],
     ])(
       'refuses %s whole, naming the cell, and stores nothing (FR-MOD-04.RBAC)',
@@ -408,7 +408,7 @@ describe('the permission matrix — store, cache and the Founder’s PUT (RL-02 
           licenseId: fx.a.licenseId,
           role: 'agent',
           capability: 'reports.view',
-          value: 'team',
+          value: 'own',
         },
       });
       await member(fx.a, 'admin');

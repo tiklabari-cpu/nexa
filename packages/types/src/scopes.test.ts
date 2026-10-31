@@ -34,6 +34,9 @@ const SIYAHTUS_ADDED_SCOPES = [
   // it. Scheduled exports (PRD §5.3-Reports) add a mutation — which report leaves
   // the workspace, how often, to whom — that a read scope must not carry.
   'reports_manage',
+  // Team-bounded reports (RP-01): a Team Lead reads the conversation reports of
+  // the teams they lead, which `reports_read` (the whole workspace) cannot say.
+  'reports_read--groups',
   // The source platform has no erasure endpoint; NFR-C8 requires one (GDPR
   // Art. 17) and its own words make "erişim ≠ silme" the property to preserve,
   // so an irreversible delete does not ride on `customers:rw`.

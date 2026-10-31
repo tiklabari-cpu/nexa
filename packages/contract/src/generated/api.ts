@@ -8812,6 +8812,11 @@ export interface paths {
      *     A full replacement rather than a patch: the three fields are one policy,
      *     and reading back what you sent is what makes "no first-response target"
      *     expressible at all. Send `null` for a clock you do not want measured.
+     *     The three ticket fields (HD-05) are optional so a client written before
+     *     them does not erase them: left out, the stored value stays.
+     *
+     *     Saving moves the due moment of every ticket still waiting for its first
+     *     reply to the new target (its start stays the ticket's creation).
      *
      *     Setting a target does not re-evaluate history. Breaches are marked as
      *     clocks stop (a first reply lands, a case is closed) and by the sweep for
@@ -19516,7 +19521,13 @@ export interface components {
      *     and nothing here touches an invoice.
      */
     SlaPolicy: {
-      /** @description Minutes a customer may wait for the first agent reply, or null for no target. Null and zero are different answers, so the field is nullable rather than 0-as-off. */
+      /** @description Minutes a ticket may wait for an agent's first reply (HD-05), or null: a ticket's first response is not measured. Apart from the chat target on purpose — tickets do not inherit it. */
+      ticket_first_response_minutes: number | null;
+      /** @description Minutes a ticket may stay open, or null to measure tickets against `resolution_minutes` as before. */
+      ticket_resolution_minutes: number | null;
+      /** @description A priority's own ticket targets, over the two ticket-wide ones; a ticket's priority snaps to the nearest named level. Null when none is set. */
+      ticket_targets_by_priority: components['schemas']['SlaTicketTargetsByPriority'] | null;
+      /** @description Minutes a customer may wait for the first agent reply in a chat, or null for no target. Tickets are measured against `ticket_first_response_minutes` instead. Null and zero are different answers, so the field is nullable rather than 0-as-off. */
       first_response_minutes: number | null;
       /** @description Minutes a case may stay open before it counts as a miss, or null for no target. */
       resolution_minutes: number | null;
@@ -19529,6 +19540,44 @@ export interface components {
        * @description When the targets were last saved, or null if never.
        */
       updated_at: string | null;
+    };
+    /** @description One priority's ticket targets; a null falls back to the ticket-wide target. */
+    SlaTicketTarget: {
+      first_response_minutes: number | null;
+      resolution_minutes: number | null;
+    };
+    /** @description Ticket targets by named priority level (HD-05); a level left out has none of its own. */
+    SlaTicketTargetsByPriority: {
+      urgent?: components['schemas']['SlaTicketTarget'];
+      high?: components['schemas']['SlaTicketTarget'];
+      normal?: components['schemas']['SlaTicketTarget'];
+      low?: components['schemas']['SlaTicketTarget'];
+    };
+    /**
+     * @description The ticket's first-response clock (HD-05 · tm 360). Only an agent's
+     *     reply stops it — an internal note or a system line does not. Opened
+     *     from a chat, a ticket is outside it (the first reply happened in the
+     *     conversation, where it is measured).
+     */
+    TicketSla: {
+      /**
+       * Format: date-time
+       * @description When an agent first replied; null until then.
+       */
+      first_response_at: string | null;
+      /**
+       * Format: date-time
+       * @description From this moment a first reply is late. Null when the clock is not
+       *     running: answered, solved or closed, merged, opened from a chat, or
+       *     no target for the ticket's priority. With business hours on, only
+       *     open minutes count toward it.
+       */
+      first_response_due_at: string | null;
+      /**
+       * @description The miss was recorded, or the running clock is past its due moment.
+       *     Once recorded it stays — a later target change does not undo it.
+       */
+      first_response_breached: boolean;
     };
     /**
      * @description A workspace's sandbox, as its owner sees it (FR-MOD-11.5 · 11.5-f).
@@ -20826,6 +20875,7 @@ export interface components {
       last_message_at?: string | null;
       /** Format: date-time */
       created_at: string;
+      sla: components['schemas']['TicketSla'];
     };
     TicketDetail: components['schemas']['Ticket'] & {
       /**
@@ -22515,6 +22565,19 @@ export interface components {
      *     excluded from every bucket.
      */
     ReportsCases: {
+      /**
+       * @description Agents' first replies to the window's tickets (HD-05). Tickets opened
+       *     from a chat are left out — their first reply was in the
+       *     conversation. Minutes are calendar minutes from the ticket's
+       *     creation to the first agent reply; null when no ticket was answered.
+       *     `breached_count` counts the recorded first-response misses.
+       */
+      first_response: {
+        answered: number;
+        avg_minutes: number | null;
+        median_minutes: number | null;
+        breached_count: number;
+      };
       range: {
         /** Format: date-time */
         from: string;
@@ -27877,8 +27940,12 @@ export interface operations {
          *     is not its alphabetical one) and a ticket holds only `assignee_id`,
          *     while what is displayed and would be sorted on is the account's name.
          *     The `view` parameter already slices the collection by both.
+         *
+         *     `sla` (HD-05) orders by `sla.first_response_due_at` — `asc` puts the
+         *     ticket nearest its first-response target first; a ticket whose clock
+         *     is not running sorts last in both directions.
          */
-        sort?: 'last_message' | 'subject' | 'customer' | 'priority';
+        sort?: 'last_message' | 'subject' | 'customer' | 'priority' | 'sla';
         order?: 'asc' | 'desc';
         /** @description Opaque keyset cursor from the previous page. */
         page_id?: components['parameters']['PageId'];
@@ -37066,6 +37133,12 @@ export interface operations {
           first_response_minutes: number | null;
           /** @description Minutes allowed before the case is finished, or null. */
           resolution_minutes: number | null;
+          /** @description Minutes a ticket may wait for an agent's first reply, or null (not measured). Left out: the stored value stays. */
+          ticket_first_response_minutes?: number | null;
+          /** @description Minutes a ticket may stay open, or null for `resolution_minutes`. Left out: the stored value stays. */
+          ticket_resolution_minutes?: number | null;
+          /** @description A priority's own ticket targets, or null for none. Left out: the stored value stays. */
+          ticket_targets_by_priority?: components['schemas']['SlaTicketTargetsByPriority'] | null;
           /** @description Count only hours the workspace is open, from the agents' saved work schedules. With no saved schedule anywhere there is no calendar to subtract and the clocks run continuously. */
           business_hours_only: boolean;
         };

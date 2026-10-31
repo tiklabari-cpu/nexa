@@ -68,6 +68,25 @@ describe('TicketGrid', () => {
     );
   });
 
+  it('shows how long is left to the first response and sorts by it (HD-05)', async () => {
+    const due = new Date(Date.now() + 90.5 * 60_000).toISOString();
+    const { onSort } = renderGrid({
+      tickets: [
+        makeTicket({
+          id: 'TCK1',
+          sla: {
+            first_response_at: null,
+            first_response_due_at: due,
+            first_response_breached: false,
+          },
+        }),
+      ],
+    });
+    expect(screen.getByText('1 h 30 min left')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'First response' }));
+    expect(onSort).toHaveBeenCalledWith('sla');
+  });
+
   it('asks to sort by the column when its header is clicked', async () => {
     const { onSort } = renderGrid();
     await userEvent.click(screen.getByRole('button', { name: 'Subject' }));

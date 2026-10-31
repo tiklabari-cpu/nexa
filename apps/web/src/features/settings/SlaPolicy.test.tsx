@@ -152,8 +152,52 @@ describe('SlaPolicy', () => {
     expect(putBodies[0]).toEqual({
       first_response_minutes: 30,
       resolution_minutes: 480,
+      ticket_first_response_minutes: null,
+      ticket_resolution_minutes: null,
+      ticket_targets_by_priority: null,
       business_hours_only: true,
     });
+  });
+
+  it('saves the ticket targets apart from the chat ones, by priority too (HD-05)', async () => {
+    stubFetch({
+      ...DEFAULTS,
+      first_response_minutes: 30,
+      ticket_targets_by_priority: {
+        low: { first_response_minutes: 1440, resolution_minutes: null },
+      },
+    } as typeof DEFAULTS);
+    renderSlaPolicy();
+
+    // The saved priority target lands in its own row; the chat field is untouched.
+    expect(await screen.findByLabelText('Low: answer within (minutes)')).toHaveValue(1440);
+    expect(screen.getByLabelText('First response target (minutes)')).toHaveValue(30);
+    expect(screen.getByLabelText('Answer a ticket within (minutes)')).toHaveValue(null);
+
+    await userEvent.type(screen.getByLabelText('Answer a ticket within (minutes)'), '240');
+    await userEvent.type(screen.getByLabelText('Urgent: answer within (minutes)'), '60');
+    await userEvent.clear(screen.getByLabelText('Low: answer within (minutes)'));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(putBodies).toHaveLength(1));
+    expect(putBodies[0]).toMatchObject({
+      first_response_minutes: 30,
+      ticket_first_response_minutes: 240,
+      ticket_resolution_minutes: null,
+      // A level with both fields blank is left out.
+      ticket_targets_by_priority: {
+        urgent: { first_response_minutes: 60, resolution_minutes: null },
+      },
+    });
+  });
+
+  it('refuses a zero ticket target before it reaches the network', async () => {
+    renderSlaPolicy();
+    const field = await screen.findByLabelText('High: solve within (minutes)');
+    await userEvent.type(field, '0');
+    await userEvent.tab();
+    expect(screen.getByRole('alert')).toHaveTextContent(/whole number of minutes/);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   });
 
   it('saves a blank field as null, not zero', async () => {

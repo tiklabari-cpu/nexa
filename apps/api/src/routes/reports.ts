@@ -64,6 +64,7 @@ import {
   casesByDay,
   casesByPriority,
   casesByStatus,
+  casesFirstResponse,
   csatSummary,
   goalConversionsByGoal,
   goalFunnelCounts,
@@ -1032,6 +1033,7 @@ export async function buildCasesReport(
   const byDay = await casesByDay(tx, licenseId, from, to);
   const byStatus = await casesByStatus(tx, licenseId, from, to);
   const byPriority = await casesByPriority(tx, licenseId, from, to);
+  const firstResponse = await casesFirstResponse(tx, licenseId, from, to);
 
   return withBenchmark(
     {
@@ -1039,6 +1041,7 @@ export async function buildCasesReport(
       by_day: byDay,
       by_status: byStatus,
       by_priority: byPriority,
+      first_response: firstResponse,
     },
     from,
     to,

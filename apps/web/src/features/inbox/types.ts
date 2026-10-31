@@ -7,6 +7,7 @@ import type {
   TicketMessageAuthorType,
   TicketMessageDeliveryStatus,
   TicketMessageKind,
+  TicketSla,
 } from '@siyahtus/types';
 
 export interface ChatEvent {
@@ -224,6 +225,8 @@ export interface Ticket {
   related_ticket_id?: string | null;
   last_message_at: string | null;
   created_at: string;
+  /** The first-response clock (HD-05 · tm 360). */
+  sla?: TicketSla;
 }
 
 /** An agent watching a ticket without owning it (FR-MOD-13.6). */

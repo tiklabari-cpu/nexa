@@ -143,6 +143,7 @@ import {
   saveSlaPolicy,
   serialiseSlaPolicy,
 } from '../services/sla/sla-service.js';
+import { RUNNING_FIRST_RESPONSE, refreshFirstResponseDue } from '../services/tickets/ticket-sla.js';
 import {
   CANNED_VISIBILITIES,
   cannedVisibilityFilter,
@@ -988,10 +989,27 @@ const updateRetentionBody = z
  * conflated it with null would silently mark every conversation in the workspace
  * as breached from the moment it opened.
  */
+const slaMinutes = z.number().int().positive().max(SLA_MAX_TARGET_MINUTES).nullable();
+const slaTicketTarget = z
+  .object({ first_response_minutes: slaMinutes, resolution_minutes: slaMinutes })
+  .strict();
 const updateSlaBody = z.object({
-  first_response_minutes: z.number().int().positive().max(SLA_MAX_TARGET_MINUTES).nullable(),
-  resolution_minutes: z.number().int().positive().max(SLA_MAX_TARGET_MINUTES).nullable(),
+  first_response_minutes: slaMinutes,
+  resolution_minutes: slaMinutes,
   business_hours_only: z.boolean(),
+  // The ticket clocks (HD-05 · tm 360). Optional: left out, the stored value stays.
+  ticket_first_response_minutes: slaMinutes.optional(),
+  ticket_resolution_minutes: slaMinutes.optional(),
+  ticket_targets_by_priority: z
+    .object({
+      urgent: slaTicketTarget.optional(),
+      high: slaTicketTarget.optional(),
+      normal: slaTicketTarget.optional(),
+      low: slaTicketTarget.optional(),
+    })
+    .strict()
+    .nullable()
+    .optional(),
 });
 
 /**
@@ -2630,6 +2648,14 @@ export default async function settingsRoutes(
           firstResponseMinutes: body.first_response_minutes,
           resolutionMinutes: body.resolution_minutes,
           businessHoursOnly: body.business_hours_only,
+          ticketFirstResponseMinutes: body.ticket_first_response_minutes,
+          ticketResolutionMinutes: body.ticket_resolution_minutes,
+          ticketTargetsByPriority: body.ticket_targets_by_priority,
+        });
+        // Every ticket still waiting for its first reply is measured against
+        // the new target from now on — its start stays its creation (HD-05).
+        await refreshFirstResponseDue(tx, tenant, {
+          OR: [RUNNING_FIRST_RESPONSE, { firstResponseDueAt: { not: null } }],
         });
         // The values themselves, not just the field names: a target is a
         // commitment the workspace made, and "who changed it to what, and when"
@@ -2640,6 +2666,9 @@ export default async function settingsRoutes(
             first_response_minutes: row.firstResponseMinutes,
             resolution_minutes: row.resolutionMinutes,
             business_hours_only: row.businessHoursOnly,
+            ticket_first_response_minutes: row.ticketFirstResponseMinutes,
+            ticket_resolution_minutes: row.ticketResolutionMinutes,
+            ticket_targets_by_priority: row.ticketTargetsByPriority,
           },
         });
         return row;

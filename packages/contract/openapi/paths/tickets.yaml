@@ -59,9 +59,13 @@ tickets:
           is not its alphabetical one) and a ticket holds only `assignee_id`,
           while what is displayed and would be sorted on is the account's name.
           The `view` parameter already slices the collection by both.
+
+          `sla` (HD-05) orders by `sla.first_response_due_at` — `asc` puts the
+          ticket nearest its first-response target first; a ticket whose clock
+          is not running sorts last in both directions.
         schema:
           type: string
-          enum: [last_message, subject, customer, priority]
+          enum: [last_message, subject, customer, priority, sla]
           default: last_message
       - name: order
         in: query

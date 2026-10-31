@@ -9,7 +9,13 @@
  */
 import { describe, expect, it } from 'vitest';
 import { WORK_SCHEDULE_DAYS, type WorkScheduleSlot } from '@siyahtus/types';
-import { buildBusinessWeek, elapsedMinutes, isBreach, isOpenAt } from './business-hours.js';
+import {
+  buildBusinessWeek,
+  elapsedMinutes,
+  isBreach,
+  isOpenAt,
+  lateFrom,
+} from './business-hours.js';
 
 /** A weekday plan: the named days open for the given window, the rest off. */
 function plan(
@@ -186,5 +192,40 @@ describe('isBreach', () => {
     expect(isBreach(30, 29)).toBe(false);
     expect(isBreach(30, 30)).toBe(false);
     expect(isBreach(30, 31)).toBe(true);
+  });
+});
+
+describe('lateFrom (HD-05)', () => {
+  const week = buildBusinessWeek([plan(WEEKDAYS, '09:00', '18:00')], at(0, 12));
+
+  it('is the target plus one minute on a continuous clock, from the floored start', () => {
+    const from = new Date(at(0, 10).getTime() + 30_000);
+    const late = lateFrom(from, 60, null);
+    expect(late?.toISOString()).toBe(at(0, 11, 1).toISOString());
+    // The inverse of elapsedMinutes + isBreach, on both sides of the moment.
+    expect(isBreach(60, elapsedMinutes(from, new Date(late!.getTime() - 1), null))).toBe(false);
+    expect(isBreach(60, elapsedMinutes(from, late!, null))).toBe(true);
+  });
+
+  it('skips the night and the weekend with business hours on', () => {
+    // Friday 17:30 + 60 open minutes: 30 on Friday, 30 on Monday morning.
+    const from = at(4, 17, 30);
+    const late = lateFrom(from, 60, week);
+    expect(late?.toISOString()).toBe(at(7, 9, 31).toISOString());
+    expect(isBreach(60, elapsedMinutes(from, at(7, 9, 30), week))).toBe(false);
+    expect(isBreach(60, elapsedMinutes(from, late!, week))).toBe(true);
+  });
+
+  it('agrees with elapsedMinutes across a multi-week target', () => {
+    const from = at(2, 20, 15);
+    const target = 9 * 60 * 7; // seven working days
+    const late = lateFrom(from, target, week)!;
+    expect(elapsedMinutes(from, new Date(late.getTime() - 60_000), week)).toBe(target);
+    expect(elapsedMinutes(from, late, week)).toBe(target + 1);
+  });
+
+  it('is null for a calendar that is never open', () => {
+    const closed = buildBusinessWeek([plan([], '09:00', '18:00')], at(0, 12));
+    expect(lateFrom(at(0, 10), 60, closed)).toBeNull();
   });
 });

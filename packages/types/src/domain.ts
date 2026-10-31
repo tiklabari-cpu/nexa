@@ -222,8 +222,11 @@ export function nearestTicketPriorityBand(value: number): TicketPriorityBand {
  * Neither loss costs much: the ticket *views* (`unassigned`, `my_open`,
  * `solved`) already slice by exactly those two fields, and they do it across the
  * whole collection.
+ *
+ * `sla` (HD-05 · tm 360) orders by the stored first-response due moment, nearest
+ * first in `asc`; a ticket whose clock is not running sorts last either way.
  */
-export const TICKET_SORT_KEYS = ['last_message', 'subject', 'customer', 'priority'] as const;
+export const TICKET_SORT_KEYS = ['last_message', 'subject', 'customer', 'priority', 'sla'] as const;
 export type TicketSortKey = (typeof TICKET_SORT_KEYS)[number];
 
 /** Matches the server's default (`GET /tickets` — newest activity first). */

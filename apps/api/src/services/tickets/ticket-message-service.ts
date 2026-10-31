@@ -60,6 +60,7 @@ import { UUID_RE, type TenantClient, type TenantContext } from '../../lib/tenant
 import { writeAuditEntry, type AuditContext } from '../audit/audit-log.js';
 import { hasCapability, requireCapability } from '../auth/capability.js';
 import type { Principal } from '../auth/principal.js';
+import { evaluateSubject } from '../sla/sla-service.js';
 import type { ObjectStore } from '../storage/object-store.js';
 import { licenseOfKey } from '../storage/upload-url.js';
 import {
@@ -70,6 +71,7 @@ import {
   writeTicketChangeAudit,
   type TicketStatus,
 } from './ticket-service.js';
+import { refreshFirstResponseDue } from './ticket-sla.js';
 
 /** One entry of a ticket's thread, as `GET /tickets/{id}/messages` returns it. */
 export interface TicketMessageView {
@@ -370,6 +372,7 @@ export class TicketMessageService {
 
     const nextStatus: TicketStatus | undefined =
       input.setStatus ?? (kind === 'agent_reply' ? 'pending' : undefined);
+    const firstResponse = kind === 'agent_reply' && ticket.firstResponseAt === null;
     await tx.ticket.update({
       where: { id: ticket.id },
       data: {
@@ -378,12 +381,26 @@ export class TicketMessageService {
           ? {
               lastAgentMessageAt: now,
               // Never moved once set — the lock is what makes reading it safe.
-              ...(ticket.firstResponseAt === null ? { firstResponseAt: now } : {}),
+              // The first-response clock (HD-05) stops with it.
+              ...(firstResponse ? { firstResponseAt: now, firstResponseDueAt: null } : {}),
             }
           : {}),
         ...(nextStatus !== undefined && nextStatus !== ticket.status ? { status: nextStatus } : {}),
       },
     });
+    // Only an agent's reply stops the first-response clock — a note does not
+    // (HD-05 · tm 360). Measured from the creation against the target of the
+    // priority the ticket has now; a ticket opened from a chat is outside it.
+    if (firstResponse && ticket.sourceChatId === null) {
+      await evaluateSubject(tx, tenant, {
+        subjectType: 'ticket',
+        subjectId: ticket.id,
+        target: 'first_response',
+        startedAt: ticket.createdAt,
+        stoppedAt: now,
+        priority: ticket.priority,
+      });
+    }
 
     // The message, never its text (see `AUDIT_ACTIONS`).
     await writeAuditEntry(tx, audit, {
@@ -394,6 +411,11 @@ export class TicketMessageService {
     if (nextStatus !== undefined) {
       await writeTicketChangeAudit(tx, audit, ticket.id, ticket, { status: nextStatus });
       await stopResolutionClock(tx, tenant, ticket, nextStatus);
+      // A note that solves an unanswered ticket stops its clock (and the
+      // reverse resumes it); a reply has already stopped it for good.
+      if (!firstResponse && nextStatus !== ticket.status) {
+        await refreshFirstResponseDue(tx, tenant, { id: ticket.id });
+      }
     }
 
     const names = author.id ? await accountNames(tx, [author.id]) : new Map<string, string>();
@@ -620,6 +642,11 @@ export class TicketMessageService {
     });
     if (reopen) {
       await writeTicketChangeAudit(tx, audit, ticket.id, ticket, { status: 'open' });
+    }
+    // A solved ticket nobody answered resumes its first-response clock from its
+    // creation — reopening does not reset it (HD-05).
+    if (reopened && ticket.firstResponseAt === null) {
+      await refreshFirstResponseDue(tx, tenant, { id: ticket.id });
     }
 
     const customer = authorId

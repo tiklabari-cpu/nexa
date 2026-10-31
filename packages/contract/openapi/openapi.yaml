@@ -10426,16 +10426,51 @@ components:
         credit — that is a contract term, not something this repo can promise,
         and nothing here touches an invoice.
       required:
-        [first_response_minutes, resolution_minutes, business_hours_only, active, updated_at]
+        [
+          first_response_minutes,
+          resolution_minutes,
+          ticket_first_response_minutes,
+          ticket_resolution_minutes,
+          ticket_targets_by_priority,
+          business_hours_only,
+          active,
+          updated_at,
+        ]
       properties:
+        ticket_first_response_minutes:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 129600
+          description: >-
+            Minutes a ticket may wait for an agent's first reply (HD-05), or
+            null: a ticket's first response is not measured. Apart from the
+            chat target on purpose — tickets do not inherit it.
+        ticket_resolution_minutes:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 129600
+          description: >-
+            Minutes a ticket may stay open, or null to measure tickets against
+            `resolution_minutes` as before.
+        ticket_targets_by_priority:
+          allOf:
+            - $ref: "#/components/schemas/SlaTicketTargetsByPriority"
+          nullable: true
+          description: >-
+            A priority's own ticket targets, over the two ticket-wide ones; a
+            ticket's priority snaps to the nearest named level. Null when none
+            is set.
         first_response_minutes:
           type: integer
           nullable: true
           minimum: 1
           maximum: 129600
           description: >-
-            Minutes a customer may wait for the first agent reply, or null for
-            no target. Null and zero are different answers, so the field is
+            Minutes a customer may wait for the first agent reply in a chat, or
+            null for no target. Tickets are measured against
+            `ticket_first_response_minutes` instead. Null and zero are different answers, so the field is
             nullable rather than 0-as-off.
         resolution_minutes:
           type: integer
@@ -10465,6 +10500,53 @@ components:
           format: date-time
           nullable: true
           description: When the targets were last saved, or null if never.
+
+    SlaTicketTarget:
+      type: object
+      description: One priority's ticket targets; a null falls back to the ticket-wide target.
+      required: [first_response_minutes, resolution_minutes]
+      properties:
+        first_response_minutes: { type: integer, nullable: true, minimum: 1, maximum: 129600 }
+        resolution_minutes: { type: integer, nullable: true, minimum: 1, maximum: 129600 }
+
+    SlaTicketTargetsByPriority:
+      type: object
+      description: Ticket targets by named priority level (HD-05); a level left out has none of its own.
+      additionalProperties: false
+      properties:
+        urgent: { $ref: "#/components/schemas/SlaTicketTarget" }
+        high: { $ref: "#/components/schemas/SlaTicketTarget" }
+        normal: { $ref: "#/components/schemas/SlaTicketTarget" }
+        low: { $ref: "#/components/schemas/SlaTicketTarget" }
+
+    TicketSla:
+      type: object
+      description: |
+        The ticket's first-response clock (HD-05 · tm 360). Only an agent's
+        reply stops it — an internal note or a system line does not. Opened
+        from a chat, a ticket is outside it (the first reply happened in the
+        conversation, where it is measured).
+      required: [first_response_at, first_response_due_at, first_response_breached]
+      properties:
+        first_response_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When an agent first replied; null until then.
+        first_response_due_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            From this moment a first reply is late. Null when the clock is not
+            running: answered, solved or closed, merged, opened from a chat, or
+            no target for the ticket's priority. With business hours on, only
+            open minutes count toward it.
+        first_response_breached:
+          type: boolean
+          description: |
+            The miss was recorded, or the running clock is past its due moment.
+            Once recorded it stays — a later target change does not undo it.
 
     Sandbox:
       type: object
@@ -12073,7 +12155,7 @@ components:
 
     Ticket:
       type: object
-      required: [id, subject, status, priority, created_at]
+      required: [id, subject, status, priority, created_at, sla]
       properties:
         id: { type: string, maxLength: 12 }
         subject: { type: string }
@@ -12136,6 +12218,7 @@ components:
             answer opened this one instead of reopening that one. Null otherwise.
         last_message_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
+        sla: { $ref: "#/components/schemas/TicketSla" }
 
     TicketDetail:
       allOf:
@@ -14363,8 +14446,22 @@ components:
         (FR-MOD-13.6). Aggregate counts only — no ticket subject or customer
         identity is in this report. A merged ticket (`merged_into_id` set) is
         excluded from every bucket.
-      required: [range, previous_period, by_day, by_status, by_priority]
+      required: [range, previous_period, by_day, by_status, by_priority, first_response]
       properties:
+        first_response:
+          type: object
+          description: |
+            Agents' first replies to the window's tickets (HD-05). Tickets opened
+            from a chat are left out — their first reply was in the
+            conversation. Minutes are calendar minutes from the ticket's
+            creation to the first agent reply; null when no ticket was answered.
+            `breached_count` counts the recorded first-response misses.
+          required: [answered, avg_minutes, median_minutes, breached_count]
+          properties:
+            answered: { type: integer }
+            avg_minutes: { type: number, nullable: true }
+            median_minutes: { type: number, nullable: true }
+            breached_count: { type: integer }
         range:
           type: object
           required: [from, to]

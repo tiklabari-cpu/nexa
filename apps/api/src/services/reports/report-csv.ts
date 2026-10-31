@@ -413,6 +413,61 @@ export async function casesByPriority(
   return rows.map((row) => ({ priority: row.priority, count: Number(row.count) }));
 }
 
+export interface CaseFirstResponse {
+  answered: number;
+  avg_minutes: number | null;
+  median_minutes: number | null;
+  breached_count: number;
+}
+
+/**
+ * Agents' first replies to the tickets created in a window (FR-MOD-07.7 Cases ·
+ * HD-05): how many were answered, the mean and median calendar minutes from
+ * creation to the first `agent_reply`, and how many first-response misses are
+ * recorded against them. A ticket opened from a chat is left out — its first
+ * reply was in the conversation — and so is a merged one, as in
+ * {@link casesByDay}. Minutes are rounded to one decimal.
+ */
+export async function casesFirstResponse(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<CaseFirstResponse> {
+  const [times] = await tx.$queryRaw<
+    Array<{ answered: bigint; avg: number | null; median: number | null }>
+  >`
+    SELECT count(*) AS answered,
+      round(avg(minutes)::numeric, 1)::float8 AS avg,
+      round((percentile_cont(0.5) WITHIN GROUP (ORDER BY minutes))::numeric, 1)::float8 AS median
+    FROM (
+      SELECT extract(epoch FROM first_response_at - created_at)::float8 / 60 AS minutes
+      FROM tickets
+      WHERE license_id = ${licenseId}
+        AND created_at >= ${from} AND created_at <= ${to}
+        AND merged_into_id IS NULL
+        AND source_chat_id IS NULL
+        AND first_response_at IS NOT NULL
+    ) AS answered
+  `;
+  const [breaches] = await tx.$queryRaw<Array<{ count: bigint }>>`
+    SELECT count(*) AS count
+    FROM sla_breaches b
+    JOIN tickets t ON t.id = b.subject_id AND t.license_id = b.license_id
+    WHERE b.license_id = ${licenseId}
+      AND b.subject_type = 'ticket'
+      AND b.target = 'first_response'
+      AND t.created_at >= ${from} AND t.created_at <= ${to}
+      AND t.merged_into_id IS NULL
+  `;
+  return {
+    answered: Number(times?.answered ?? 0),
+    avg_minutes: times?.avg ?? null,
+    median_minutes: times?.median ?? null,
+    breached_count: Number(breaches?.count ?? 0),
+  };
+}
+
 interface LeadDayCount {
   date: string;
   count: number;

@@ -1049,6 +1049,22 @@ export const settings: Messages = {
   'settings.sla.firstResponseLabel': 'İlk yanıt hedefi (dakika)',
   'settings.sla.resolutionLabel': 'Çözüm hedefi (dakika)',
   'settings.sla.noTargetPlaceholder': 'Hedef yok',
+  // Sohbetler ve talepler ayrı (HD-05 · tm 360).
+  'settings.sla.chatsHeading': 'Sohbetler',
+  'settings.sla.ticketsHeading': 'Talepler',
+  'settings.sla.ticketsHint':
+    'Talep, açıldığı andan bir temsilci ilk kez yanıtlayana kadar ölçülür — iç not sayılmaz. Sohbetten açılan talepler dışarıda kalır. İlk yanıt boşsa talepler ölçülmez.',
+  'settings.sla.ticketFirstResponseLabel': 'Talebe yanıt süresi (dakika)',
+  'settings.sla.ticketResolutionLabel': 'Talebi çözme süresi (dakika)',
+  'settings.sla.notMeasuredPlaceholder': 'Ölçülmez',
+  'settings.sla.sameAsChatsPlaceholder': 'Sohbetlerle aynı',
+  'settings.sla.ticketDefaultPlaceholder': 'Talep varsayılanı',
+  'settings.sla.byPriorityCaption': 'Önceliğe göre (isteğe bağlı)',
+  'settings.sla.byPriority.priority': 'Öncelik',
+  'settings.sla.byPriority.firstResponse': 'Yanıt süresi',
+  'settings.sla.byPriority.resolution': 'Çözme süresi',
+  'settings.sla.byPriority.firstResponseFor': '{priority}: yanıt süresi (dakika)',
+  'settings.sla.byPriority.resolutionFor': '{priority}: çözme süresi (dakika)',
   'settings.sla.businessHoursLabel': 'Yalnızca mesai saatlerini say',
   'settings.sla.businessHoursHint':
     'Temsilcilerin kayıtlı çalışma programlarına göre ölçülür. Hiçbir yerde kayıtlı program yoksa, saatler kesintisiz işler.',

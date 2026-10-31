@@ -995,6 +995,22 @@ export const settings: Messages = {
   'settings.sla.firstResponseLabel': 'First response target (minutes)',
   'settings.sla.resolutionLabel': 'Resolution target (minutes)',
   'settings.sla.noTargetPlaceholder': 'No target',
+  // Chats and tickets apart (HD-05 · tm 360).
+  'settings.sla.chatsHeading': 'Chats',
+  'settings.sla.ticketsHeading': 'Tickets',
+  'settings.sla.ticketsHint':
+    'A ticket is measured from its creation until an agent first replies — an internal note does not count. Tickets opened from a chat are left out. Blank first response: tickets are not measured.',
+  'settings.sla.ticketFirstResponseLabel': 'Answer a ticket within (minutes)',
+  'settings.sla.ticketResolutionLabel': 'Solve a ticket within (minutes)',
+  'settings.sla.notMeasuredPlaceholder': 'Not measured',
+  'settings.sla.sameAsChatsPlaceholder': 'Same as chats',
+  'settings.sla.ticketDefaultPlaceholder': 'Ticket default',
+  'settings.sla.byPriorityCaption': 'By priority (optional)',
+  'settings.sla.byPriority.priority': 'Priority',
+  'settings.sla.byPriority.firstResponse': 'Answer within',
+  'settings.sla.byPriority.resolution': 'Solve within',
+  'settings.sla.byPriority.firstResponseFor': '{priority}: answer within (minutes)',
+  'settings.sla.byPriority.resolutionFor': '{priority}: solve within (minutes)',
   'settings.sla.businessHoursLabel': 'Count only business hours',
   'settings.sla.businessHoursHint':
     "Measured against the agents' saved work schedules. With no saved schedule anywhere, clocks run continuously.",

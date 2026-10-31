@@ -223,6 +223,16 @@ interface ReportsCases {
   by_day: Array<{ date: string; open: number; closed: number; total: number }>;
   by_status: Array<{ status: string; count: number }>;
   by_priority: Array<{ priority: number; count: number }>;
+  /**
+   * Agents' first replies to the window's tickets (HD-05 · tm 360); tickets
+   * opened from a chat are left out. Optional: an older server omits it.
+   */
+  first_response?: {
+    answered: number;
+    avg_minutes: number | null;
+    median_minutes: number | null;
+    breached_count: number;
+  };
 }
 
 /**
@@ -2028,6 +2038,9 @@ function TopicTrend({ trend }: { trend: number | null }): ReactElement {
  * (FR-MOD-13.6). Every card and table shares one series (`by_day`) with the
  * CSV/PDF export, so a download can never disagree with the tab beside it.
  */
+const minutesToSeconds = (minutes: number | null): number | null =>
+  minutes === null ? null : minutes * 60;
+
 function CasesTab(props: TabProps): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
@@ -2076,6 +2089,33 @@ function CasesTab(props: TabProps): ReactElement {
           />
         </KpiGrid>
       </Section>
+
+      {data.first_response && (
+        <Section
+          title={t('reports.cases.firstResponse.title')}
+          description={t('reports.cases.firstResponse.description')}
+        >
+          <KpiGrid>
+            <Kpi
+              label={t('reports.cases.firstResponse.avg')}
+              value={formatDuration(minutesToSeconds(data.first_response.avg_minutes))}
+            />
+            <Kpi
+              label={t('reports.cases.firstResponse.median')}
+              value={formatDuration(minutesToSeconds(data.first_response.median_minutes))}
+            />
+            <Kpi
+              label={t('reports.cases.firstResponse.answered')}
+              value={formatCount(data.first_response.answered)}
+            />
+            <Kpi
+              label={t('reports.cases.firstResponse.breached')}
+              value={formatCount(data.first_response.breached_count)}
+              {...(data.first_response.breached_count > 0 ? { tone: 'warn' as const } : {})}
+            />
+          </KpiGrid>
+        </Section>
+      )}
 
       <Section title={t('reports.common.byDay')} description={t('reports.cases.byDay.description')}>
         <Card>

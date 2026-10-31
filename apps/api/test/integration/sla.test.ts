@@ -57,6 +57,9 @@ const NO_REDIS = {
 interface SlaPolicyView {
   first_response_minutes: number | null;
   resolution_minutes: number | null;
+  ticket_first_response_minutes: number | null;
+  ticket_resolution_minutes: number | null;
+  ticket_targets_by_priority: Record<string, unknown> | null;
   business_hours_only: boolean;
   active: boolean;
   updated_at: string | null;
@@ -252,6 +255,9 @@ describe('SLA targets (FR-MOD-11.5 · 11.5-d)', () => {
     expect(response.json() as SlaPolicyView).toEqual({
       first_response_minutes: null,
       resolution_minutes: null,
+      ticket_first_response_minutes: null,
+      ticket_resolution_minutes: null,
+      ticket_targets_by_priority: null,
       business_hours_only: false,
       active: false,
       updated_at: null,
@@ -504,10 +510,10 @@ describe('SLA targets (FR-MOD-11.5 · 11.5-d)', () => {
     expect(await breaches(fx.a)).toHaveLength(1);
   });
 
-  it('does not run a first-response clock on a ticket', async () => {
-    // Deliberate: nothing in this repo records an agent *replying* to a ticket,
-    // so reporting an assignment or a status change as a "first response" would
-    // be a wrong number that looks right.
+  it('does not measure a ticket against the chat first-response target', async () => {
+    // Deliberate (HD-05): a ticket's first response has its own target, unset
+    // by default — borrowing the chat's would have marked every open queue as
+    // breached the day tickets got a clock (`ticket-first-response-sla.test.ts`).
     const now = new Date();
     await setPolicy(fx.a, { firstResponseMinutes: 5, resolutionMinutes: 60 });
     await seedTicket(fx.a, new Date(now.getTime() - 5 * HOUR));

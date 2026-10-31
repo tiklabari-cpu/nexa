@@ -38,11 +38,12 @@
 import { isMailLocale, type MailLocale } from '../mail/templates/layout.js';
 import { slaBreachMail } from '../mail/templates/messages.js';
 import { type PrismaClient } from '@prisma/client';
-import type { SlaSubjectType, SlaTarget } from '@siyahtus/types';
+import { shortestTicketSlaTarget, type SlaSubjectType, type SlaTarget } from '@siyahtus/types';
 import { type TenantContext, withTenant } from '../../lib/tenant.js';
 import { deliver } from '../mail/delivery.js';
 import type { Mailer } from '../mail/mailer.js';
-import { evaluate, readClock, type SlaClock } from './sla-service.js';
+import { RUNNING_FIRST_RESPONSE, refreshFirstResponseDue } from '../tickets/ticket-sla.js';
+import { evaluate, readClock, ticketPolicyFields, type SlaClock } from './sla-service.js';
 
 export interface TenantSweepResult {
   /** Stringified: a bigint cannot be JSON-serialised, and this report is JSON. */
@@ -79,6 +80,8 @@ interface Candidate {
   subjectId: string;
   target: SlaTarget;
   startedAt: Date;
+  /** A ticket's priority, which picks its target (HD-05). */
+  priority?: number;
 }
 
 /**
@@ -148,11 +151,34 @@ export class SlaSweeper {
     };
 
     const clock = await withTenant(this.#db, context, (tx) => readClock(tx, context, now));
+    await this.#refreshTicketDues(context, clock, now);
     if (!clock) return { ...base, measured: false, marked: 0, notified: 0, unannounced: 0 };
 
     const marked = await this.#markOverdue(context, clock, now);
     const { notified, unannounced } = await this.#notify(context, now);
     return { ...base, measured: true, marked, notified, unannounced };
+  }
+
+  /**
+   * Rewrite the stored first-response due moment of every ticket that has or
+   * should have one (HD-05 · tm 360), against the calendar as it stands now.
+   * The request paths set it as tickets change; this is what catches it up
+   * when something else moved — a work schedule edited, a downgrade (no clock:
+   * every stored moment is cleared), a daylight-saving change.
+   */
+  async #refreshTicketDues(
+    context: TenantContext,
+    clock: SlaClock | null,
+    now: Date,
+  ): Promise<void> {
+    await withTenant(this.#db, context, (tx) =>
+      refreshFirstResponseDue(
+        tx,
+        context,
+        { OR: [RUNNING_FIRST_RESPONSE, { firstResponseDueAt: { not: null } }] },
+        { clock, at: now },
+      ),
+    );
   }
 
   /** Judge every still-running clock that could possibly be late, and mark the ones that are. */
@@ -174,14 +200,19 @@ export class SlaSweeper {
    * Cases whose calendar age already reaches the target — the superset business
    * hours can only shrink.
    *
-   * Threads are read for both clocks and tickets only for resolution, which is
-   * the asymmetry `ticket-service.ts` explains: nothing in this repo records an
-   * agent *replying* to a ticket, so a ticket has no first-response clock to
-   * run. Merged tickets are excluded for the same reason they never appear in a
-   * list — they stopped being separate work.
+   * Threads and tickets are read for both clocks. A ticket's target depends on
+   * its priority (HD-05), so its cut-off is the shortest target any priority
+   * carries and `evaluate` judges each against its own. A ticket's first
+   * response is only waited for while it is open or pending, unmerged and not
+   * opened from a chat (`RUNNING_FIRST_RESPONSE`). Merged tickets are excluded
+   * for the same reason they never appear in a list — they stopped being
+   * separate work.
    */
   async #candidates(context: TenantContext, clock: SlaClock, now: Date): Promise<Candidate[]> {
     const { firstResponseMinutes, resolutionMinutes } = clock.policy;
+    const ticketFields = ticketPolicyFields(clock.policy);
+    const ticketFirstResponse = shortestTicketSlaTarget(ticketFields, 'first_response');
+    const ticketResolution = shortestTicketSlaTarget(ticketFields, 'resolution');
 
     return withTenant(this.#db, context, async (tx) => {
       const found: Candidate[] = [];
@@ -216,14 +247,17 @@ export class SlaSweeper {
             startedAt: row.createdAt,
           });
         }
+      }
 
+      if (ticketResolution !== null) {
+        const cutoff = new Date(now.getTime() - ticketResolution * 60_000);
         const tickets = await tx.ticket.findMany({
           where: {
             status: { in: ['open', 'pending'] },
             mergedIntoId: null,
             createdAt: { lt: cutoff },
           },
-          select: { id: true, createdAt: true },
+          select: { id: true, createdAt: true, priority: true },
         });
         for (const row of tickets) {
           found.push({
@@ -231,6 +265,24 @@ export class SlaSweeper {
             subjectId: row.id,
             target: 'resolution',
             startedAt: row.createdAt,
+            priority: row.priority,
+          });
+        }
+      }
+
+      if (ticketFirstResponse !== null) {
+        const cutoff = new Date(now.getTime() - ticketFirstResponse * 60_000);
+        const tickets = await tx.ticket.findMany({
+          where: { ...RUNNING_FIRST_RESPONSE, createdAt: { lt: cutoff } },
+          select: { id: true, createdAt: true, priority: true },
+        });
+        for (const row of tickets) {
+          found.push({
+            subjectType: 'ticket',
+            subjectId: row.id,
+            target: 'first_response',
+            startedAt: row.createdAt,
+            priority: row.priority,
           });
         }
       }

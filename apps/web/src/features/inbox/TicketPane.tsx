@@ -35,6 +35,7 @@ import {
   useUpdateTicket,
 } from './useTickets.js';
 import { TICKET_PRIORITIES, hasElevatedPriority, nearestPriority } from './ticket-priority.js';
+import { TicketSlaBadge } from './TicketSlaBadge.js';
 import { CustomFields } from '../custom-fields/CustomFields.js';
 import { TicketComposer } from './TicketComposer.js';
 import { TicketThread } from './TicketThread.js';
@@ -134,6 +135,7 @@ export function TicketList({
                 {ticket.customer_name ?? t('inbox.ticket.visitorFallback')}
               </span>
               <StatusDot tone={toneFor(ticket.status)} label={t(STATUS_LABEL_KEY[ticket.status])} />
+              <TicketSlaBadge sla={ticket.sla} />
             </span>
           </button>
         </div>
@@ -491,6 +493,9 @@ export function TicketDetailPane({
         {onBack && <BackToTickets onBack={onBack} />}
         <h2 className="flex-1 truncate text-sm font-semibold">{data.subject}</h2>
         <PriorityPill value={data.priority} t={t} />
+        <span className="text-xs">
+          <TicketSlaBadge sla={data.sla} />
+        </span>
         <IdRef id={data.id} className="text-2xs text-content-tertiary" />
         <StatusDot tone={toneFor(data.status)} label={t(STATUS_LABEL_KEY[data.status])} />
       </header>

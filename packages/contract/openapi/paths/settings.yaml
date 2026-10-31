@@ -1361,6 +1361,11 @@ slaPolicy:
       A full replacement rather than a patch: the three fields are one policy,
       and reading back what you sent is what makes "no first-response target"
       expressible at all. Send `null` for a clock you do not want measured.
+      The three ticket fields (HD-05) are optional so a client written before
+      them does not erase them: left out, the stored value stays.
+
+      Saving moves the due moment of every ticket still waiting for its first
+      reply to the new target (its start stays the ticket's creation).
 
       Setting a target does not re-evaluate history. Breaches are marked as
       clocks stop (a first reply lands, a case is closed) and by the sweep for
@@ -1393,6 +1398,29 @@ slaPolicy:
                 minimum: 1
                 maximum: 129600
                 description: Minutes allowed before the case is finished, or null.
+              ticket_first_response_minutes:
+                type: integer
+                nullable: true
+                minimum: 1
+                maximum: 129600
+                description: >-
+                  Minutes a ticket may wait for an agent's first reply, or null
+                  (not measured). Left out: the stored value stays.
+              ticket_resolution_minutes:
+                type: integer
+                nullable: true
+                minimum: 1
+                maximum: 129600
+                description: >-
+                  Minutes a ticket may stay open, or null for
+                  `resolution_minutes`. Left out: the stored value stays.
+              ticket_targets_by_priority:
+                allOf:
+                  - $ref: "../openapi.yaml#/components/schemas/SlaTicketTargetsByPriority"
+                nullable: true
+                description: >-
+                  A priority's own ticket targets, or null for none. Left out:
+                  the stored value stays.
               business_hours_only:
                 type: boolean
                 description: >-

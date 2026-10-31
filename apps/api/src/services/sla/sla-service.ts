@@ -34,12 +34,17 @@
  */
 import {
   SLA_MAX_TARGET_MINUTES,
+  SLA_PRIORITY_KEYS,
   normalizeWorkSchedule,
   isWorkScheduleProblem,
+  ticketSlaTargetMinutes,
   type SlaPolicy,
   type SlaSubjectType,
   type SlaTarget,
+  type SlaTicketPolicyFields,
+  type SlaTicketTargetsByPriority,
 } from '@siyahtus/types';
+import { Prisma } from '@prisma/client';
 import { ApiError } from '../../lib/api-error.js';
 import { hasEntitlement } from '../../lib/entitlements.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
@@ -54,15 +59,121 @@ import {
 export interface StoredSlaPolicy {
   firstResponseMinutes: number | null;
   resolutionMinutes: number | null;
+  /** The ticket clocks (HD-05 · tm 360) — see `ticketSlaTargetMinutes` for how they fall back. */
+  ticketFirstResponseMinutes: number | null;
+  ticketResolutionMinutes: number | null;
+  ticketTargetsByPriority: SlaTicketTargetsByPriority | null;
   businessHoursOnly: boolean;
   updatedAt: Date;
 }
 
-/** A full replacement — the three fields are one policy, so a patch has no meaning. */
+/**
+ * A full replacement — the three fields are one policy, so a patch has no
+ * meaning. The ticket fields are the exception (HD-05): `undefined` keeps what
+ * is stored, so a client written before them cannot erase them by omission.
+ */
 export interface SlaPolicyInput {
   firstResponseMinutes: number | null;
   resolutionMinutes: number | null;
   businessHoursOnly: boolean;
+  ticketFirstResponseMinutes?: number | null;
+  ticketResolutionMinutes?: number | null;
+  ticketTargetsByPriority?: SlaTicketTargetsByPriority | null;
+}
+
+/** The policy's ticket fields under the names `@siyahtus/types` reads them by. */
+export function ticketPolicyFields(policy: StoredSlaPolicy): SlaTicketPolicyFields {
+  return {
+    resolution_minutes: policy.resolutionMinutes,
+    ticket_first_response_minutes: policy.ticketFirstResponseMinutes,
+    ticket_resolution_minutes: policy.ticketResolutionMinutes,
+    ticket_targets_by_priority: policy.ticketTargetsByPriority,
+  };
+}
+
+/**
+ * The target one subject is measured against: a thread's is the chat field, a
+ * ticket's depends on its priority (HD-05).
+ */
+export function targetMinutesOf(
+  policy: StoredSlaPolicy,
+  subject: { subjectType: SlaSubjectType; target: SlaTarget; priority?: number },
+): number | null {
+  if (subject.subjectType === 'ticket') {
+    return ticketSlaTargetMinutes(
+      ticketPolicyFields(policy),
+      subject.priority ?? 0,
+      subject.target,
+    );
+  }
+  return subject.target === 'first_response'
+    ? policy.firstResponseMinutes
+    : policy.resolutionMinutes;
+}
+
+function hasAnyTarget(policy: StoredSlaPolicy): boolean {
+  if (
+    policy.firstResponseMinutes !== null ||
+    policy.resolutionMinutes !== null ||
+    policy.ticketFirstResponseMinutes !== null ||
+    policy.ticketResolutionMinutes !== null
+  ) {
+    return true;
+  }
+  return Object.values(policy.ticketTargetsByPriority ?? {}).some(
+    (entry) => entry.first_response_minutes !== null || entry.resolution_minutes !== null,
+  );
+}
+
+/**
+ * The stored JSON, read defensively: the CHECK guarantees only an object, so an
+ * entry this release cannot read is dropped rather than trusted.
+ */
+function readTargetsByPriority(value: unknown): SlaTicketTargetsByPriority | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const out: SlaTicketTargetsByPriority = {};
+  for (const key of SLA_PRIORITY_KEYS) {
+    const entry = (value as Record<string, unknown>)[key];
+    if (typeof entry !== 'object' || entry === null) continue;
+    const { first_response_minutes: first, resolution_minutes: resolution } = entry as Record<
+      string,
+      unknown
+    >;
+    out[key] = {
+      first_response_minutes: isTarget(first) ? first : null,
+      resolution_minutes: isTarget(resolution) ? resolution : null,
+    };
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+function isTarget(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value > 0 &&
+    value <= SLA_MAX_TARGET_MINUTES
+  );
+}
+
+function toStored(row: {
+  firstResponseMinutes: number | null;
+  resolutionMinutes: number | null;
+  ticketFirstResponseMinutes: number | null;
+  ticketResolutionMinutes: number | null;
+  ticketTargetsByPriority: unknown;
+  businessHoursOnly: boolean;
+  updatedAt: Date;
+}): StoredSlaPolicy {
+  return {
+    firstResponseMinutes: row.firstResponseMinutes,
+    resolutionMinutes: row.resolutionMinutes,
+    ticketFirstResponseMinutes: row.ticketFirstResponseMinutes,
+    ticketResolutionMinutes: row.ticketResolutionMinutes,
+    ticketTargetsByPriority: readTargetsByPriority(row.ticketTargetsByPriority),
+    businessHoursOnly: row.businessHoursOnly,
+    updatedAt: row.updatedAt,
+  };
 }
 
 /**
@@ -84,13 +195,7 @@ export async function readStoredPolicy(
   tenant: TenantContext,
 ): Promise<StoredSlaPolicy | null> {
   const row = await tx.slaPolicy.findUnique({ where: { licenseId: tenant.licenseId } });
-  if (!row) return null;
-  return {
-    firstResponseMinutes: row.firstResponseMinutes,
-    resolutionMinutes: row.resolutionMinutes,
-    businessHoursOnly: row.businessHoursOnly,
-    updatedAt: row.updatedAt,
-  };
+  return row ? toStored(row) : null;
 }
 
 /**
@@ -108,7 +213,7 @@ export async function readEffectivePolicy(
 ): Promise<StoredSlaPolicy | null> {
   const stored = await readStoredPolicy(tx, tenant);
   if (!stored) return null;
-  if (stored.firstResponseMinutes === null && stored.resolutionMinutes === null) return null;
+  if (!hasAnyTarget(stored)) return null;
   if (!(await hasEntitlement(tx, tenant, 'sla'))) return null;
   return stored;
 }
@@ -175,11 +280,40 @@ export async function saveSlaPolicy(
 ): Promise<StoredSlaPolicy> {
   assertTarget('first_response_minutes', input.firstResponseMinutes);
   assertTarget('resolution_minutes', input.resolutionMinutes);
+  if (input.ticketFirstResponseMinutes !== undefined) {
+    assertTarget('ticket_first_response_minutes', input.ticketFirstResponseMinutes);
+  }
+  if (input.ticketResolutionMinutes !== undefined) {
+    assertTarget('ticket_resolution_minutes', input.ticketResolutionMinutes);
+  }
+  for (const [key, entry] of Object.entries(input.ticketTargetsByPriority ?? {})) {
+    if (!(SLA_PRIORITY_KEYS as readonly string[]).includes(key)) {
+      throw ApiError.validation(`ticket_targets_by_priority: unknown priority "${key}".`);
+    }
+    assertTarget(
+      `ticket_targets_by_priority.${key}.first_response_minutes`,
+      entry.first_response_minutes,
+    );
+    assertTarget(`ticket_targets_by_priority.${key}.resolution_minutes`, entry.resolution_minutes);
+  }
 
   const data = {
     firstResponseMinutes: input.firstResponseMinutes,
     resolutionMinutes: input.resolutionMinutes,
     businessHoursOnly: input.businessHoursOnly,
+    ...(input.ticketFirstResponseMinutes !== undefined
+      ? { ticketFirstResponseMinutes: input.ticketFirstResponseMinutes }
+      : {}),
+    ...(input.ticketResolutionMinutes !== undefined
+      ? { ticketResolutionMinutes: input.ticketResolutionMinutes }
+      : {}),
+    ...(input.ticketTargetsByPriority !== undefined
+      ? {
+          ticketTargetsByPriority:
+            (compactTargets(input.ticketTargetsByPriority) as Prisma.InputJsonObject | null) ??
+            Prisma.DbNull,
+        }
+      : {}),
   };
   const row = await tx.slaPolicy.upsert({
     where: { licenseId: tenant.licenseId },
@@ -187,12 +321,24 @@ export async function saveSlaPolicy(
     update: data,
   });
 
-  return {
-    firstResponseMinutes: row.firstResponseMinutes,
-    resolutionMinutes: row.resolutionMinutes,
-    businessHoursOnly: row.businessHoursOnly,
-    updatedAt: row.updatedAt,
-  };
+  return toStored(row);
+}
+
+/** A priority with neither target set is the same as one left out; null when none is left. */
+function compactTargets(
+  targets: SlaTicketTargetsByPriority | null,
+): SlaTicketTargetsByPriority | null {
+  const out: SlaTicketTargetsByPriority = {};
+  for (const key of SLA_PRIORITY_KEYS) {
+    const entry = targets?.[key];
+    if (entry && (entry.first_response_minutes !== null || entry.resolution_minutes !== null)) {
+      out[key] = {
+        first_response_minutes: entry.first_response_minutes,
+        resolution_minutes: entry.resolution_minutes,
+      };
+    }
+  }
+  return Object.keys(out).length > 0 ? out : null;
 }
 
 function assertTarget(field: string, value: number | null): void {
@@ -266,12 +412,14 @@ export async function evaluate(
     startedAt: Date;
     /** When it stopped, or "now" for a clock still running. */
     stoppedAt: Date;
+    /**
+     * A ticket's priority as it stands now (HD-05): a change of priority
+     * changes the target, never the start.
+     */
+    priority?: number;
   },
 ): Promise<boolean> {
-  const targetMinutes =
-    subject.target === 'first_response'
-      ? clock.policy.firstResponseMinutes
-      : clock.policy.resolutionMinutes;
+  const targetMinutes = targetMinutesOf(clock.policy, subject);
   if (targetMinutes === null) return false;
 
   const elapsed = elapsedMinutes(subject.startedAt, subject.stoppedAt, clock.week);
@@ -305,6 +453,7 @@ export async function evaluateSubject(
     target: SlaTarget;
     startedAt: Date;
     stoppedAt: Date;
+    priority?: number;
   },
 ): Promise<boolean> {
   const clock = await readClock(tx, tenant, subject.stoppedAt);
@@ -314,16 +463,17 @@ export async function evaluateSubject(
 
 /** The API shape: stored values plus whether they are in force today. */
 export function serialiseSlaPolicy(stored: StoredSlaPolicy | null, entitled: boolean): SlaPolicy {
-  const firstResponse = stored?.firstResponseMinutes ?? null;
-  const resolution = stored?.resolutionMinutes ?? null;
   return {
-    first_response_minutes: firstResponse,
-    resolution_minutes: resolution,
+    first_response_minutes: stored?.firstResponseMinutes ?? null,
+    resolution_minutes: stored?.resolutionMinutes ?? null,
+    ticket_first_response_minutes: stored?.ticketFirstResponseMinutes ?? null,
+    ticket_resolution_minutes: stored?.ticketResolutionMinutes ?? null,
+    ticket_targets_by_priority: stored?.ticketTargetsByPriority ?? null,
     business_hours_only: stored?.businessHoursOnly ?? false,
     // "Bought it" and "asked for something" are both required for a target to
     // be measured, and a screen needs to tell the two failures apart — one is
     // an upsell, the other is an empty form.
-    active: entitled && (firstResponse !== null || resolution !== null),
+    active: entitled && stored !== null && hasAnyTarget(stored),
     updated_at: stored?.updatedAt.toISOString() ?? null,
   };
 }

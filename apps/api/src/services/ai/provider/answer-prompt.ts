@@ -79,6 +79,12 @@ export interface AnswerPromptInput {
    * `guidance.ts` `renderLayers`); prose for the model, never in the JSON line.
    */
   rules?: readonly string[];
+  /**
+   * Who asks: a player in a live chat (absent), or an agent asking Copilot
+   * (IN-09, tm 366.1) — the same passages and the same cited object, the
+   * question framed as a colleague's rather than a customer's.
+   */
+  reader?: 'agent';
 }
 
 /** The part of a turn's history the prompt carries. */
@@ -101,8 +107,15 @@ export function buildAnswerPrompt(
 
   const budget = grounding.answerLength ? ANSWER_BUDGETS[grounding.answerLength] : null;
   const lines = [
-    "You are this business's customer-support assistant, replying in a live chat.",
-    "Answer the customer's message using only the passages in the grounding below. Do not add facts they do not contain, and do not mention that you were given passages.",
+    ...(input.reader === 'agent'
+      ? [
+          "You are Copilot, the assistant of this business's support agents. An agent is asking you a question; your answer goes to the agent, never to a customer.",
+          "Answer the agent's question using only the passages in the grounding below. Do not add facts they do not contain.",
+        ]
+      : [
+          "You are this business's customer-support assistant, replying in a live chat.",
+          "Answer the customer's message using only the passages in the grounding below. Do not add facts they do not contain, and do not mention that you were given passages.",
+        ]),
     ...(input.rules ?? []),
     budget
       ? `Length (${grounding.answerLength}): at most ${budget.sentences} sentence(s) and ${budget.maxChars} characters, drawing on at most ${budget.passages} passage(s).`
@@ -110,7 +123,9 @@ export function buildAnswerPrompt(
     grounding.tone ? `Tone: ${grounding.tone}.` : 'Tone: plain; add no greeting.',
     grounding.answerIn
       ? `Reply in this language: ${grounding.answerIn}.`
-      : 'Reply in the language the customer wrote in.',
+      : input.reader === 'agent'
+        ? 'Reply in the language the question is written in.'
+        : 'Reply in the language the customer wrote in.',
     ...(input.cite
       ? [
           'Reply with one JSON object. reply: the answer, as plain text — no markdown, no links the passages do not contain. grounded: "full" when the passages answer the whole question, "partial" when they answer part of it, "none" when they do not answer it (reply is then empty). cited_ids: the ids of the passages the reply is drawn from.',

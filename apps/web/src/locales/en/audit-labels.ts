@@ -125,6 +125,7 @@ export const auditLabels: Messages = {
   'audit.action.partner_app.deleted': 'App deleted',
   'audit.action.partner_app.secret_rotated': 'App secret rotated',
   'audit.action.mcp.tool_called': 'AI tool called',
+  'audit.action.copilot.ask': 'Question asked of Copilot',
   'audit.action.data.retention_pruned': 'Old data removed by the retention policy',
   'audit.action.data.deleted': 'Data deleted',
   'audit.action.data.subject_erased': 'Customer data erased',

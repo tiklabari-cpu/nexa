@@ -34,6 +34,7 @@ import {
   writeConversationSummary,
   type ConversationSummary,
 } from '../services/ai/copilot-summary.js';
+import { ASK_QUESTION_MAX_CHARS, askCopilot } from '../services/ai/copilot-ask.js';
 import { LlmProviderError } from '../services/ai/provider/llm-error.js';
 import type { MeteredLlm } from '../services/ai/metered-llm.js';
 import { refuseUnembeddable, type KnowledgeService } from '../services/ai/knowledge-service.js';
@@ -63,6 +64,14 @@ const CHAT_WRITE = ['chats--all:rw', 'chats--access:rw'];
  */
 const BI_COPILOT = KB_READ;
 const BI_REPORTS = ['reports_read'];
+
+/**
+ * The drawer's question (IN-09, tm 366.1) is every agent's: the chat scopes
+ * every role holds (`chats--access:rw` is in the Team Member's default set),
+ * or the Copilot scope a bot token configured for knowledge carries. A report
+ * question still needs `reports_read`, checked inside — see BI_COPILOT above.
+ */
+const ASK = [...CHAT_WRITE, ...KB_READ];
 
 const uuid = z.string().uuid();
 const chatIdSchema = z.string().refine(isShortId, 'not a valid chat id');
@@ -122,6 +131,21 @@ const enhanceBody = z.object({
  */
 const biBody = z.object({
   question: z.string().trim().min(1).max(500),
+});
+
+/**
+ * 2 000 characters (IN-09): a question, or a short paste of what a player
+ * wrote. `context.route` is the page the drawer was opened on — logged,
+ * never stored; `context.chat_id` the conversation open in the inbox.
+ */
+const askBody = z.object({
+  question: z.string().trim().min(1).max(ASK_QUESTION_MAX_CHARS),
+  context: z
+    .object({
+      route: z.string().trim().max(200).optional(),
+      chat_id: chatIdSchema.optional(),
+    })
+    .optional(),
 });
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
@@ -500,6 +524,81 @@ export default async function copilotRoutes(
         copilot.answerBi(tx, tenant, body.question, now),
       );
       return reply.send(answer);
+    },
+  );
+
+  // --- Ask, from any screen (IN-09) -------------------------------------------
+
+  /**
+   * One question from Copilot's drawer: a report question or a knowledge
+   * question, told apart and answered by `askCopilot` (`copilot-ask.ts`).
+   *
+   * `aiBudget`: the sorting and the written answer are model calls, so a
+   * workspace past today's AI allowance is a 429 before anything is read.
+   * The question is not kept — one `copilot.ask` audit entry with its kind,
+   * no words (IN-09 question 2).
+   */
+  app.post(
+    '/copilot/ask',
+    { config: { scopes: ASK, aiInference: true, aiBudget: true } },
+    async (request, reply) => {
+      const body = parse(askBody, request.body);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
+
+      // Asked about a conversation: it must be one the caller can see (a 404
+      // otherwise, the same gate the assists use), and its brand narrows the
+      // knowledge searched, as a reply draft's does.
+      let chat: { id: string; brandId: string | null } | undefined;
+      const chatId = body.context?.chat_id;
+      if (chatId) {
+        await chats.get(tenant, principal, chatId);
+        const row = await request.withTenant((tx) =>
+          tx.chat.findUnique({ where: { id: chatId }, select: { brandId: true } }),
+        );
+        chat = { id: chatId, brandId: row?.brandId ?? null };
+      }
+
+      const answer = await askCopilot(
+        {
+          db: (fn) => request.withTenant(fn),
+          tenant,
+          knowledge,
+          llm,
+          answerBi: (tx, question, now) => copilot.answerBi(tx, tenant, question, now),
+          limits: { maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS, timeoutMs: env.LLM_TIMEOUT_MS },
+        },
+        {
+          question: body.question,
+          mayReadReports: hasAnyScope(scopesOf(principal), BI_REPORTS),
+          ...(chat ? { chat } : {}),
+          now: new Date(),
+        },
+      );
+
+      await request.withTenant((tx) =>
+        writeAuditEntry(tx, request.auditContext(), {
+          action: 'copilot.ask',
+          metadata: { kind: answer.kind, ...(answer.reason ? { reason: answer.reason } : {}) },
+        }),
+      );
+      request.log.info(
+        {
+          event: 'copilot.ask',
+          kind: answer.kind,
+          classified_by: answer.classifiedBy,
+          ...(answer.reason ? { reason: answer.reason } : {}),
+          ...(body.context?.route ? { route: body.context.route } : {}),
+        },
+        'copilot question answered',
+      );
+
+      return reply.send({
+        answer: answer.answer,
+        sources: answer.sources,
+        kind: answer.kind,
+        ...(answer.reason ? { reason: answer.reason } : {}),
+      });
     },
   );
 }

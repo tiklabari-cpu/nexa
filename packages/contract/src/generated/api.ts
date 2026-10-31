@@ -7131,6 +7131,65 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/copilot/ask': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Ask Copilot a knowledge or report question from any screen
+     * @description The Copilot drawer's one question (IN-09, tm 366.1): asked from any
+     *     page of the console — Reports, Settings, the archive — not only from a
+     *     chat. Every agent may ask; nothing here is sent to a player.
+     *
+     *     The question is first told apart: a **report** question (`kind: bi`) or
+     *     a **knowledge** question. The BI dictionary decides when it places a
+     *     report figure; otherwise the model is asked which of the two it is
+     *     (`tier: fast`; on the `mock` provider a fixed word rule answers, and so
+     *     it does when the model does not). The model only says which way to
+     *     answer — it never answers a report question.
+     *
+     *     - **Report** (`kind: bi`): answered the way `POST /copilot/bi` answers,
+     *       from the figures `GET /reports/overview` serves (ADR-09). Asking one
+     *       needs `reports_read`: without it `reason` is `not_permitted`, the
+     *       answer says so and no report is read. A question about a figure the
+     *       BI command does not know is `not_understood`; a known figure with
+     *       nothing in the window, `no_data`.
+     *     - **Knowledge**: searched in the workspace's one knowledge store, in
+     *       every source Copilot may use (`audiences` names `ai_agent` or
+     *       `copilot`, tm 309), and written up from the passages found as a
+     *       cited answer (the `knowledge_answer` object, ADR LLM §6a). `kind: kb`
+     *       with the sources it is drawn from — each with when a person last
+     *       reviewed it, so a stale source is visible. When nothing answers it
+     *       Copilot says it does not know: `kind: unknown`, `reason: no_answer`,
+     *       no sources — an answer is never invented.
+     *
+     *     With `context.chat_id` the question is asked about that conversation:
+     *     the chat must be one the caller can see (404 otherwise), and the
+     *     knowledge searched is the chat's brand's and every brand's, as a reply
+     *     draft's is. Without it every brand's sources are searched.
+     *     `context.route` is the page the drawer was opened on; it is logged,
+     *     never stored.
+     *
+     *     Not kept: the question and the answer live in the drawer for the
+     *     session only. The server writes one `copilot.ask` audit entry per
+     *     question with its `kind` and no words, and the model calls count
+     *     against today's AI allowance (tm 257.8): once that is used up the
+     *     response is a 429 with `error.details.reason: ai_daily_cap`, before
+     *     anything is read. When the model or the embedding provider does not
+     *     answer, a 503 — nothing to retry but the question.
+     */
+    post: operations['copilotAsk'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/palette/ai-query': {
     parameters: {
       query?: never;
@@ -34522,6 +34581,74 @@ export interface operations {
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
+    };
+  };
+  copilotAsk: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          question: string;
+          context?: {
+            /** @description The console path the drawer was opened on, e.g. `/reports`. */
+            route?: string;
+            /** @description The conversation open in the inbox, when there is one. */
+            chat_id?: string;
+          };
+        };
+      };
+    };
+    responses: {
+      /**
+       * @description Always 200 once the question was asked — a question Copilot cannot
+       *     answer is a `kind` and a `reason`, not a 4xx.
+       */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            answer: string;
+            /** @description The knowledge sources a `kb` answer is drawn from; empty otherwise. */
+            sources: {
+              /** Format: uuid */
+              id: string;
+              title: string;
+              /** Format: date-time */
+              reviewed_at: string;
+            }[];
+            /**
+             * @description `kb` — answered from the knowledge store. `bi` — a report
+             *     question, answered or refused (see `reason`). `unknown` —
+             *     nothing in the knowledge store answers it.
+             * @enum {string}
+             */
+            kind: 'kb' | 'bi' | 'unknown';
+            /**
+             * @description Present when there is no answer to show as one:
+             *     `not_permitted` — a report question asked without
+             *     `reports_read`; `not_understood` — a report question
+             *     about no figure Copilot knows; `no_data` — a known figure
+             *     with nothing to report in the window; `no_answer` — the
+             *     knowledge store does not answer it.
+             * @enum {string}
+             */
+            reason?: 'not_permitted' | 'not_understood' | 'no_data' | 'no_answer';
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequestsOrAiDailyCap'];
+      503: components['responses']['LlmUnavailable'];
     };
   };
   paletteAiQuery: {

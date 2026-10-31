@@ -252,6 +252,41 @@ export function resolveBiQuestion(question: string): BiResolution {
   return { metric: best.key, range, confidence: best.score };
 }
 
+/**
+ * Whether a question reads as one about the workspace's own report figures —
+ * Copilot's drawer (IN-09, tm 366.1) has to tell a report question from a
+ * knowledge question before it knows which way to answer.
+ *
+ * A question the dictionary above places is one. Past that, a count, an
+ * average or a rate asked about something Reports counts — chats, tickets,
+ * complaints, customers, agents, ratings, response times — is one too, though
+ * no figure is known for it ("bugün kaç çekim şikâyeti geldi?"): it is still a
+ * report question, and the honest answer is the BI command's "not a figure I
+ * can answer", behind `reports_read`. A count of anything else is not: "Papara
+ * ile kaç TL çekebilirim?" asks the knowledge base for a limit.
+ *
+ * The deterministic reading — the stub's answer to the model's classification
+ * call, and what is used when the model does not answer. Pure, like the rest.
+ */
+export function looksLikeReportQuestion(question: string): boolean {
+  const text = question.slice(0, MAX_QUESTION_LENGTH);
+  if (resolveBiQuestion(text).metric !== null) return true;
+  const folded = fold(text);
+  return REPORT_ASK.test(folded) && REPORT_SUBJECT.test(folded);
+}
+
+/** A count, an average or a rate being asked for. */
+const REPORT_ASK =
+  /\bkac\b|\bhow many\b|\bnumber of\b|\bortalama\b|\baverage\b|\borani\b|\brate\b/u;
+
+/**
+ * What Reports counts. Prefixes with a letter tail, for the Turkish suffixes
+ * ("sohbetler", "şikâyeti"). Folding keeps a dotless ı, so a word that has
+ * one is spelt both ways.
+ */
+const REPORT_SUBJECT =
+  /\b(?:sohbet|konusma|chat|ticket|talep|sikayet|complaint|musteri|customer|ajan|agent|degerlendirme|rating|yan[iı]t sure|response time)\p{L}*/u;
+
 /** The report field a metric is read from, e.g. `closed` → `totals.closed`. */
 export function biMetricSource(key: MetricKey): string {
   return BI_METRICS.find((metric) => metric.key === key)!.metricSource;

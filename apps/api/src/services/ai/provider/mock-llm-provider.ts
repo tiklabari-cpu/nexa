@@ -36,6 +36,8 @@
  * And so is the QA pre-score (tm 319.2): `mockQaPrescore` reads the context
  * `buildQaPrescorePrompt` wrote and passes every criterion but the guardrails
  * the decision trail says only warned, citing the AI's last message.
+ * And so is Copilot's question sorting (tm 366.1 · IN-09): `mockQuestionKind`
+ * reads the question `buildQuestionKindPrompt` wrote and applies the word rule.
  * The invalid, refused and cut-off replies a real model can give are not
  * produced here; tests inject a provider that gives them (§6a.6).
  *
@@ -75,6 +77,11 @@ import {
   QA_PRESCORE_RESPONSE_NAME,
   readQaPrescoreGrounding,
 } from '../../qa/prescore-prompt.js';
+import {
+  mockQuestionKind,
+  QUESTION_KIND_RESPONSE_NAME,
+  readQuestionKindGrounding,
+} from '../copilot-question-kind.js';
 import { exampleForSchema } from './json-schema.js';
 import type { LlmCompletion, LlmCompletionRequest, LlmProvider } from './llm-provider.js';
 
@@ -122,6 +129,18 @@ export class MockLlmProvider implements LlmProvider {
       }
       return {
         text: JSON.stringify(mockScenarioJudge(grounding)),
+        usage: { inputTokens: 0, outputTokens: 0 },
+      };
+    }
+    if (request.responseFormat?.name === QUESTION_KIND_RESPONSE_NAME) {
+      const grounding = readQuestionKindGrounding(request.system);
+      if (!grounding) {
+        throw new Error(
+          'A Copilot question request without the context buildQuestionKindPrompt writes.',
+        );
+      }
+      return {
+        text: JSON.stringify(mockQuestionKind(grounding)),
         usage: { inputTokens: 0, outputTokens: 0 },
       };
     }

@@ -593,6 +593,8 @@ paths:
     $ref: "./paths/copilot.yaml#/enhance"
   /copilot/bi:
     $ref: "./paths/copilot.yaml#/bi"
+  /copilot/ask:
+    $ref: "./paths/copilot.yaml#/ask"
 
   /palette/ai-query:
     $ref: "./paths/command-palette.yaml#/aiQuery"

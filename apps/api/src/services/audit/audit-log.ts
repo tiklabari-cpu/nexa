@@ -550,6 +550,10 @@ export const AUDIT_ACTIONS = [
   // name and the scope that authorised it — never the arguments (a search query
   // is user content) or the result.
   'mcp.tool_called',
+  // A question asked of Copilot's drawer (IN-09, tm 366.1): counted, never
+  // quoted — metadata carries the answer's kind (and why there was none), not
+  // the question or the answer, which live in the agent's browser only.
+  'copilot.ask',
   // Data lifecycle — a retention sweep hard-deleted expired data (NFR-C8). The
   // record is metadata (counts), not the data itself, so it is safe to retain.
   'data.retention_pruned',

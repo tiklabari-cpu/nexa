@@ -1120,7 +1120,10 @@ describe('module parity matrix — what is still owed', () => {
       // 360 -> 361 with `PUT /settings/canned-response-fallback` (tm 363) — the
       // saved-reply fallback phrase (IN-06), a Settings screen the handset does not
       // have; nothing here re-scopes.
-      contractEndpoints: 361,
+      // 361 -> 362 with `POST /copilot/ask` (tm 366.1) — the Copilot drawer's
+      // question from any screen (IN-09), drawn in the web console by tm 366.2; the
+      // handset has no Copilot drawer, and nothing here re-scopes.
+      contractEndpoints: 362,
       scopeBoundaries: 1,
     });
   });

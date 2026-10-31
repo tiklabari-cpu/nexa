@@ -33,7 +33,9 @@
  *  - in a text field, only what cannot be typed: a Ctrl/⌘ chord (global), and
  *    — when the field is the reply composer — the inbox and composer rows. A
  *    single character never reaches a handler from a field, so typing "?" in a
- *    reply writes a question mark.
+ *    reply writes a question mark. The Copilot row (`copilot`) is also heard
+ *    from the drawer's own question field, so the key that opened the drawer
+ *    closes it without leaving the keyboard.
  *
  * "?" is `event.key === '?'`, not "Shift+/": on a Turkish keyboard it is
  * Shift+*, and Shift is not part of that combination.
@@ -43,7 +45,7 @@
  */
 import { useEffect, useRef } from 'react';
 
-export type ShortcutScope = 'global' | 'inbox' | 'composer';
+export type ShortcutScope = 'global' | 'copilot' | 'inbox' | 'composer';
 
 export interface ShortcutDefinition {
   /** Stable name; also the handler's key. */
@@ -153,6 +155,12 @@ export const SHORTCUTS = defineShortcuts([
   },
   { id: 'shortcuts.open', combo: '?', scope: 'global', descriptionKey: 'shell.shortcuts.help' },
   {
+    id: 'copilot.toggle-drawer',
+    combo: 'Alt+Shift+C',
+    scope: 'copilot',
+    descriptionKey: 'shell.shortcuts.copilot',
+  },
+  {
     id: 'inbox.next-chat',
     combo: 'Alt+ArrowDown',
     scope: 'inbox',
@@ -163,12 +171,6 @@ export const SHORTCUTS = defineShortcuts([
     combo: 'Alt+ArrowUp',
     scope: 'inbox',
     descriptionKey: 'shell.shortcuts.prevChat',
-  },
-  {
-    id: 'inbox.toggle-copilot',
-    combo: 'Alt+Shift+C',
-    scope: 'inbox',
-    descriptionKey: 'shell.shortcuts.copilot',
   },
   {
     id: 'composer.add-tag',
@@ -242,10 +244,20 @@ function inComposerField(target: EventTarget | null): boolean {
   );
 }
 
+/** Marks the Copilot drawer's question field: it hears the `copilot` row too. */
+export const COPILOT_FIELD_ATTRIBUTE = 'data-shortcut-field';
+
+function inCopilotField(target: EventTarget | null): boolean {
+  return (
+    target instanceof Element && target.closest(`[${COPILOT_FIELD_ATTRIBUTE}="copilot"]`) !== null
+  );
+}
+
 function hears(row: ShortcutDefinition, target: EventTarget | null): boolean {
   if (!isTextField(target)) return true;
   const parsed = parseCombo(row.combo);
   if (row.scope === 'global') return parsed.mod && !parsed.alt;
+  if (row.scope === 'copilot') return inComposerField(target) || inCopilotField(target);
   return inComposerField(target);
 }
 

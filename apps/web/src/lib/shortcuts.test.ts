@@ -5,6 +5,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   COMPOSER_FIELD_ATTRIBUTE,
+  COPILOT_FIELD_ATTRIBUTE,
   SHORTCUTS,
   ShortcutError,
   canonicalCombo,
@@ -194,7 +195,7 @@ describe('who hears a key (IN-08)', () => {
 
   it('lets a Ctrl/⌘ chord through from a text field, but not an Alt one', () => {
     const palette = bind('palette.open');
-    const copilot = bind('inbox.toggle-copilot');
+    const copilot = bind('copilot.toggle-drawer');
     const [field] = mount(['input', { type: 'text' }]) as [HTMLElement];
     expect(dispatchShortcut(press({ key: 'k', code: 'KeyK', ctrlKey: true }, field))).toBe(
       'palette.open',
@@ -222,6 +223,22 @@ describe('who hears a key (IN-08)', () => {
     expect(dispatchShortcut(press({ key: 'ArrowDown', altKey: true }, other))).toBeNull();
     expect(next).toHaveBeenCalledTimes(1);
     expect(upload).toHaveBeenCalledTimes(1);
+  });
+
+  it('hears the Copilot row from the drawer field and the reply field, but not from other fields (IN-09)', () => {
+    const toggle = bind('copilot.toggle-drawer');
+    const [drawer, reply, other, body] = mount(
+      ['textarea', { [COPILOT_FIELD_ATTRIBUTE]: 'copilot' }],
+      ['textarea', { [COMPOSER_FIELD_ATTRIBUTE]: 'composer' }],
+      ['input', { type: 'text' }],
+      ['div', {}],
+    ) as [HTMLElement, HTMLElement, HTMLElement, HTMLElement];
+    const chord = { key: 'C', code: 'KeyC', altKey: true, shiftKey: true };
+    expect(dispatchShortcut(press(chord, drawer))).toBe('copilot.toggle-drawer');
+    expect(dispatchShortcut(press(chord, reply))).toBe('copilot.toggle-drawer');
+    expect(dispatchShortcut(press(chord, body))).toBe('copilot.toggle-drawer');
+    expect(dispatchShortcut(press(chord, other))).toBeNull();
+    expect(toggle).toHaveBeenCalledTimes(3);
   });
 
   it('refuses to bind a handler for a shortcut that is not in the table', () => {

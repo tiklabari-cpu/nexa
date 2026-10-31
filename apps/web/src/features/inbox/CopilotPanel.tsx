@@ -22,6 +22,7 @@ import { AI_DAILY_CAP_MESSAGE_KEY, ApiClientError, isAiDailyCap } from '../../li
 import { useDeployment } from '../../lib/deployment.js';
 import { formatCount, formatDate, formatRate } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
+import { BI_EXAMPLE_QUESTIONS, widenedBiQuestion } from '../copilot/biQuestions.js';
 import { offerDraft } from './copilotDraft.js';
 import {
   useCopilotBi,
@@ -59,47 +60,6 @@ const ENHANCE_MODE_LABEL_KEY: Record<EnhanceMode, string> = {
   formal: 'inbox.copilot.enhance.mode.formal',
   grammar: 'inbox.copilot.enhance.mode.grammar',
 };
-
-/**
- * Example questions for the `not_understood` empty state (FR-EK-B.1).
- *
- * `apps/web` is deliberately decoupled from `@siyahtus/ai-mock` (the same split
- * `templates.test.ts` documents for skill steps), so these are not imported —
- * each phrase is copied verbatim from a `BI_METRICS` entry in
- * `packages/ai-mock/src/bi-intent.ts`, so clicking one is guaranteed to
- * resolve to a real metric rather than a guess. Keep in sync by hand if that
- * dictionary changes.
- */
-const BI_EXAMPLE_QUESTIONS: readonly string[] = [
-  'How many chats started this week?',
-  'How many chats closed this week?',
-  'How many chats were resolved automatically today?',
-  "What's the customer satisfaction score this month?",
-];
-
-/**
- * One canonical phrase per Overview field a `metric`/`no_data` answer can
- * name — the same source as {@link BI_EXAMPLE_QUESTIONS} — for the `no_data`
- * "try a wider window" suggestion.
- */
-const BI_METRIC_PHRASE: Record<string, string> = {
-  'totals.chats': 'how many chats started',
-  'totals.closed': 'how many chats closed',
-  'totals.manual': 'how many chats resolved manually',
-  'totals.assisted': 'how many chats assisted',
-  'totals.automated': 'how many chats resolved automatically',
-  'satisfaction.score': 'customer satisfaction score',
-};
-
-/**
- * A fresh 30-day question for `metric` — never the original question text, so
- * a narrower window it may have named cannot linger in the new one.
- */
-function widenedBiQuestion(metric: string): string | null {
-  const phrase = BI_METRIC_PHRASE[metric];
-  if (!phrase) return null;
-  return `${phrase[0]!.toUpperCase()}${phrase.slice(1)} in the last 30 days?`;
-}
 
 export function CopilotPanel({
   chatId,

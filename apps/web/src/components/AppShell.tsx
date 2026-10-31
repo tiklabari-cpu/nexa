@@ -28,6 +28,7 @@ import { roleAtLeast } from '../features/team/RoleMenu.js';
 import { useRealtime } from '../features/inbox/useInbox.js';
 import { useNotifications } from '../features/notifications/useNotifications.js';
 import { CommandPalette } from './CommandPalette.js';
+import { CopilotDrawer } from './CopilotDrawer.js';
 import { ShortcutsHost } from './ShortcutsModal.js';
 import { NarrowScreenNotice, useNarrowScreenNotice } from './NarrowScreenNotice.js';
 import { MaintenancePage, NoticeBar } from './NoticeBar.js';
@@ -36,6 +37,11 @@ import { useNotice } from '../lib/notice.js';
 import { PresenceAvatars } from './PresenceAvatars.js';
 import { PresenceNotices } from './PresenceNotices.js';
 import { FOOTER, MODULES, isNavVisible, type NavDestination } from './navigation.js';
+import {
+  resetCopilotDrawer,
+  useCopilotDrawerStore,
+} from '../features/copilot/copilotDrawerStore.js';
+import { useShortcut } from '../lib/shortcuts.js';
 import { useSuggestionBadge } from '../features/playbook/useSuggestionBadge.js';
 import { Dropdown } from './ui/index.js';
 
@@ -54,6 +60,13 @@ export function AppShell(): ReactElement {
   // an open chat or a scroll position survive a turned tablet (tm 259.25 · O6).
   const [mounted, setMounted] = useState(!narrow.show);
   if (!narrow.show && !mounted) setMounted(true);
+
+  // The Copilot drawer (IN-09) opens from every screen: the key lives here, in
+  // the one component that is on every screen. Its conversation is dropped with
+  // the shell, so signing out leaves nothing behind for the next person.
+  const toggleCopilot = useCopilotDrawerStore((s) => s.toggle);
+  useShortcut('copilot.toggle-drawer', toggleCopilot);
+  useEffect(() => resetCopilotDrawer, []);
 
   // Past the notice, focus lands where the skip link would put it.
   const noticeWasShown = useRef(narrow.show);
@@ -107,6 +120,8 @@ export function AppShell(): ReactElement {
             >
               <Outlet />
             </main>
+            {/* Beside the page, not over it: it stays open across navigation. */}
+            <CopilotDrawer />
           </div>
           {/* Reachable from every module: ⌘K opens it, and it lives outside the
           scrolling area so it overlays whatever is on screen. */}

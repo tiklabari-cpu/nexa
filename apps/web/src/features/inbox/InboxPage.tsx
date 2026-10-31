@@ -48,6 +48,7 @@ import {
 } from './useInbox.js';
 import { useFailedSends } from './failedSends.js';
 import { useRightPanel } from './rightPanel.js';
+import { useCopilotDrawerStore } from '../copilot/copilotDrawerStore.js';
 import { usePanelTab } from './panelTab.js';
 import { adjacentChatId } from './chatNavigation.js';
 import { focusComposerOf } from './composerFocus.js';
@@ -503,12 +504,17 @@ export function InboxPage(): ReactElement {
   const walkable = !onTickets && !searchActive;
   useShortcut('inbox.next-chat', walkable ? () => stepChat(1) : null);
   useShortcut('inbox.prev-chat', walkable ? () => stepChat(-1) : null);
-  useShortcut(
-    'inbox.toggle-copilot',
-    selectedId && !onTickets
-      ? () => (panelTab.tab === 'copilot' ? panelTab.showDetails() : panelTab.showCopilot())
-      : null,
-  );
+  // The Copilot drawer (IN-09) sits beside whichever conversation is open here:
+  // its questions carry the chat, and its summary / draft act on it. The key
+  // that opens the drawer is the shell's; this page only says which chat it is
+  // beside, and takes the claim back when the page goes.
+  const drawerChatId = selectedId && !onTickets && chat.data ? selectedId : null;
+  const drawerCanDraft = chat.data?.active ?? false;
+  const setDrawerChat = useCopilotDrawerStore((s) => s.setChat);
+  useEffect(() => {
+    setDrawerChat(drawerChatId ? { id: drawerChatId, canDraft: drawerCanDraft } : null);
+  }, [drawerChatId, drawerCanDraft, setDrawerChat]);
+  useEffect(() => () => setDrawerChat(null), [setDrawerChat]);
   // The row a key press moved to has to be on screen.
   useEffect(() => {
     document

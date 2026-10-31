@@ -11,6 +11,7 @@ import {
   expect,
   test,
   API_BASE,
+  DEMO,
   NORTHWIND_OWNER,
   openWidget,
   ownerAccessToken,
@@ -387,6 +388,8 @@ test.describe('reports overview', () => {
       'Reviews',
       'Breakdown',
       'Staffing',
+      'Availability',
+      'Agent activity',
       'Missed chats',
       'Engagement',
       'Chat topics',
@@ -907,5 +910,49 @@ test.describe('reports — missed chats and engagement (RP-02 · tm 369.2)', () 
     await expect(grid).toBeVisible();
     await expect(grid.getByRole('row', { name: /^Tue/ }).getByRole('cell').nth(15)).toHaveText('4');
     await expect(agentPage.getByRole('note')).toContainText('not exact');
+  });
+});
+
+test.describe('reports — availability and agent activity (RP-03 · tm 370)', () => {
+  test('opens both person reports from the sidebar and the profile shows today', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/reports');
+    await expect(agentPage.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+
+    // Agent activity: today's strip for every member the owner may read — the
+    // owner among them — with the legend naming the dropped-connection state.
+    const activity = agentPage.waitForResponse(
+      (res) => res.url().includes('/reports/agent-activity') && res.ok(),
+    );
+    await agentPage.getByRole('tab', { name: 'Agent activity' }).click();
+    await activity;
+    const panel = agentPage.getByRole('tabpanel');
+    await expect(panel.getByRole('heading', { name: 'Agent activity' })).toBeVisible();
+    await expect(
+      panel.getByRole('table', { name: new RegExp(`^Day of ${DEMO.agentName}, times in `) }),
+    ).toBeAttached();
+    await expect(panel.getByText('No connection').first()).toBeVisible();
+    await expect(panel.getByLabel('Day')).not.toHaveValue('');
+
+    // Availability over the default 30 days.
+    const availability = agentPage.waitForResponse(
+      (res) => res.url().includes('/reports/availability') && res.ok(),
+    );
+    await agentPage.getByRole('tab', { name: 'Availability' }).click();
+    await availability;
+    await expect(
+      agentPage.getByRole('tabpanel').getByRole('heading', { name: 'Time by status' }),
+    ).toBeVisible();
+    await expect(
+      agentPage.getByRole('tabpanel').getByRole('table', { name: 'Time by status for each agent' }),
+    ).toBeAttached();
+
+    // The team profile's "Today’s activity".
+    await agentPage.goto('/app/team');
+    await agentPage.getByRole('button', { name: `Profile — ${DEMO.agentName}` }).click();
+    const dialog = agentPage.getByRole('dialog', { name: `Profile — ${DEMO.agentName}` });
+    await expect(dialog.getByRole('heading', { name: 'Today’s activity' })).toBeVisible();
+    await expect(dialog.getByText(/^Accepting chats for /)).toBeVisible();
   });
 });

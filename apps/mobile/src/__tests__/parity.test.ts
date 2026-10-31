@@ -1126,7 +1126,11 @@ describe('module parity matrix — what is still owed', () => {
       // 362 -> 364 with `GET /reports/missed` and `GET /reports/engagement` (tm 369.1)
       // — the missed-conversation and engagement reports (RP-02), two web Reports tabs
       // (tm 369.2); the handset has no Reports screen, and nothing here re-scopes.
-      contractEndpoints: 364,
+      // 364 -> 366 with `GET /reports/availability` and `GET /reports/agent-activity`
+      // (tm 370) — availability and the agent activity strip (RP-03), two web Reports
+      // tabs and the team profile's "Today's activity"; the handset has no Reports
+      // screen, and nothing here re-scopes.
+      contractEndpoints: 366,
       scopeBoundaries: 1,
     });
   });

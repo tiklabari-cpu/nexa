@@ -91,6 +91,7 @@ export async function setMembershipSuspension(
         licenseId: membership.licenseId,
         agentId: membership.agentId,
         status: suspended ? 'offline' : membership.routingStatus,
+        source: 'suspension',
       },
     });
   }

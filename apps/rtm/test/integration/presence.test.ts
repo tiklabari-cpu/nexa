@@ -139,6 +139,12 @@ describe('agent presence from sockets (tm 340.3)', () => {
     await untilOffline(fx.a, fx.a.agentAccountId);
     expect(Date.now() - closedAt).toBeGreaterThanOrEqual(TOLERANCE_MS);
     expect(await presenceRows(fx.a, fx.a.agentAccountId)).toEqual(['offline']);
+    // RP-03 · tm 370: the reports draw this row as "no connection", not a chosen offline.
+    const [row] = await db.agentPresenceEvent.findMany({
+      where: { licenseId: fx.a.licenseId, agentId: fx.a.agentAccountId },
+      select: { source: true },
+    });
+    expect(row?.source).toBe('disconnect');
 
     const push = await watcher.waitFor(
       (frame) =>

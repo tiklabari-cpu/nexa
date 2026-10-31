@@ -566,6 +566,95 @@ engagement:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+availability:
+  get:
+    tags: [Reports]
+    operationId: getReportsAvailability
+    summary: Chat availability — time per state per agent
+    description: |
+      How long agents spent accepting chats, not accepting, offline and
+      disconnected over the window (RP-03 · tm 370), read from the presence
+      log (`agent_presence_events`) with each agent's state as the window
+      opened. `disconnected` is an `offline` the RTM wrote after the agent's
+      last connection dropped and the tolerance ran out (`source:
+      disconnect`); `unknown` is the stretch before an agent's first recorded
+      change. `to` is clipped to now. At most 31 days.
+
+      `by_hour` is per local hour of day in the workspace's time zone
+      (`timezone`), summed over the window's days; `mean_accepting_agents` is
+      how many agents were accepting on average during that hour. `by_agent`
+      carries the saved work schedule's planned time (`planned_seconds`,
+      `null` without a plan) and the accepting time inside it.
+
+      Staff-monitoring data, bounded by person: `reports_read` reads every
+      member, `reports_read--groups` the members of the teams the caller leads
+      and the caller, any other agent only themselves (05 RP-03 decision 2).
+      Naming an agent or a team outside that reach is a 403. Takes the RP-01
+      person keys (`agent_id`, `group_id` = the team's members); `tag` and
+      `topic` are refused (400).
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/PresenceRangeFrom"
+      - $ref: "../openapi.yaml#/components/parameters/PresenceRangeTo"
+      - $ref: "../openapi.yaml#/components/parameters/PresenceAgent"
+      - $ref: "../openapi.yaml#/components/parameters/PresenceGroup"
+    responses:
+      "200":
+        description: Time per state for the agents the caller may read
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ReportsAvailability" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+agentActivity:
+  get:
+    tags: [Reports]
+    operationId: getReportsAgentActivity
+    summary: Agent activity — one day's agent × hour strip
+    description: |
+      Each agent's day as consecutive segments (`accepting`, `not_accepting`,
+      `offline`, `disconnected`, `unknown`) from the start of `date` in the
+      workspace's day boundary (zone and hour, ID-04) up to `as_of` — now, for
+      today — with the saved work schedule laid over it (`planned`, `null`
+      without a plan). A segment carries the `source` of the row that opened
+      it (`manual`, `disconnect`, `unresponsive`, `suspension`, `login`).
+      `date` defaults to today in the workspace; a day that has not begun is a
+      400.
+
+      Paged by agent in name order: `limit` (default 25, at most 100) and
+      `cursor` = the previous page's `next_cursor`. Same reach as
+      `GET /reports/availability`: an agent without a reports scope reads only
+      themselves, and asking for anyone else is a 403.
+    parameters:
+      - name: date
+        in: query
+        required: false
+        description: The workspace day, `YYYY-MM-DD`. Defaults to today.
+        schema: { type: string, format: date }
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      - name: cursor
+        in: query
+        required: false
+        description: The `next_cursor` of the previous page.
+        schema: { type: string, format: uuid }
+      - $ref: "../openapi.yaml#/components/parameters/PresenceAgent"
+      - $ref: "../openapi.yaml#/components/parameters/PresenceGroup"
+    responses:
+      "200":
+        description: One page of agents' day strips
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ReportsAgentActivity" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 sales:
   get:
     tags: [Reports]

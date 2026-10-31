@@ -139,7 +139,7 @@ function formatterFor(timeZone: string): Intl.DateTimeFormat | null {
  * Read off `Intl` rather than a table: the runtime already ships the tzdata, and
  * a hand-rolled offset would go stale the next time a country moves its clocks.
  */
-function zoneOffsetMinutes(timeZone: string, at: Date): number | null {
+export function zoneOffsetMinutes(timeZone: string, at: Date): number | null {
   const formatter = formatterFor(timeZone);
   if (!formatter) return null;
 

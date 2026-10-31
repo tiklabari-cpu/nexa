@@ -365,7 +365,7 @@ export class AgentPresence {
       });
       if (result.count === 0) return false;
       await tx.agentPresenceEvent.create({
-        data: { licenseId, agentId: target.agentId, status: 'offline' },
+        data: { licenseId, agentId: target.agentId, status: 'offline', source: 'disconnect' },
       });
       return true;
     });

@@ -14,6 +14,8 @@ export const reports: Messages = {
   'reports.tabs.breakdown': 'Dağılım',
   'reports.tabs.staffing': 'Personel Planlama',
   'reports.tabs.missed': 'Kaçan sohbetler',
+  'reports.tabs.availability': 'Uygunluk',
+  'reports.tabs.agentActivity': 'Ajan aktivitesi',
   'reports.tabs.engagement': 'Etkileşim',
   'reports.tabs.topics': 'Sohbet Konuları',
   'reports.tabs.cases': 'Talepler',
@@ -835,4 +837,52 @@ export const reports: Messages = {
   'reports.qa.error.role_required': 'Bunu yalnız bir yönetici yapabilir.',
   'reports.qa.error.thread_open': 'Bu konuşma hâlâ açık — kapandıktan sonra gönderin.',
   'reports.qa.error.thread_no_ai': 'AI bu konuşmaya katılmadı.',
+  // Uygunluk + Ajan aktivitesi (RP-03 · tm 370)
+  'reports.activity.state.accepting': 'Sohbet kabul ediyor',
+  'reports.activity.state.notAccepting': 'Kabul etmiyor',
+  'reports.activity.state.offline': 'Çevrimdışı',
+  'reports.activity.state.disconnected': 'Bağlantı yok',
+  'reports.activity.state.unknown': 'Kayıt yok',
+  'reports.activity.planned': 'Planlanan vardiya',
+  'reports.activity.stripCaption': '{name} adlı ajanın günü, saatler {timezone} diliminde',
+  'reports.activity.column.state': 'Durum',
+  'reports.activity.column.from': 'Başlangıç',
+  'reports.activity.column.to': 'Bitiş',
+  'reports.activity.column.duration': 'Süre',
+  'reports.activity.filterNote':
+    'Etiket ve konu filtreleri burada geçerli değil: bu rapor konuşmaları değil, kişileri sayar.',
+  'reports.activity.title': 'Ajan aktivitesi',
+  'reports.activity.description':
+    'Her ajanın günü saat saat, çalışma alanının saat diliminde ({timezone}). “Bağlantı yok”, tarayıcı kapandığında ya da bağlantı tolerans süresinden uzun koptuğunda görünür.',
+  'reports.activity.descriptionLoading': 'Her ajanın günü saat saat.',
+  'reports.activity.day': 'Gün',
+  'reports.activity.futureDay': 'Bu gün henüz başlamadı. Bugünü ya da daha önceki bir günü seçin.',
+  'reports.activity.error':
+    'Ajan aktivitesi yüklenemedi. API’ye ulaşılabildiğini kontrol edip yeniden deneyin.',
+  'reports.activity.more': 'Daha fazla ajan göster',
+  'reports.activity.today': 'Bugünkü aktivite',
+  'reports.activity.acceptingTotal': '{duration} sohbet kabul etti',
+  'reports.availability.tooLong.title': 'Daha kısa bir aralık seçin',
+  'reports.availability.tooLong.description':
+    'Uygunluk en fazla {days} günü kapsar. 7 ya da 30 günü veya özel bir aralığı seçin.',
+  'reports.availability.error':
+    'Uygunluk raporu yüklenemedi. API’ye ulaşılabildiğini kontrol edip yeniden deneyin.',
+  'reports.availability.summary.title': 'Duruma göre süre',
+  'reports.availability.summary.description':
+    'Ajanların bu aralıkta her durumda geçirdiği süre. Rapordaki ajan sayısı: {count}.',
+  'reports.availability.emptyTitle': 'Gösterilecek ajan yok',
+  'reports.availability.emptyDescription':
+    'Görebildiğiniz kimse bu filtreye uymuyor. Filtreyi temizleyin ya da başka bir ekip seçin.',
+  'reports.availability.byAgent.description':
+    'Her ajanın duruma göre süresi, kayıtlı çalışma planıyla birlikte.',
+  'reports.availability.byAgent.caption': 'Her ajan için duruma göre süre',
+  'reports.availability.column.acceptingInPlan': 'Vardiyada kabul',
+  'reports.availability.column.disconnects': 'Kopan bağlantılar',
+  'reports.availability.column.hour': 'Saat',
+  'reports.availability.column.meanAccepting': 'Kabul eden ajan (ortalama)',
+  'reports.availability.noPlan': 'Plan yok',
+  'reports.availability.byHour.title': 'Günün saatine göre',
+  'reports.availability.byHour.description':
+    'Günün her saati için duruma göre süre, aralık boyunca toplanmış, çalışma alanının saat diliminde ({timezone}).',
+  'reports.availability.byHour.caption': 'Günün saatine göre durum süreleri, {timezone}',
 };

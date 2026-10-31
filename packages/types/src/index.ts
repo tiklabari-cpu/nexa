@@ -99,3 +99,4 @@ export * from './campaign-conditions.js';
 export * from './rich-card.js';
 export * from './report-filter.js';
 export * from './missed-engagement.js';
+export * from './presence-activity.js';

@@ -4399,6 +4399,7 @@ export class ChatService {
               licenseId: tenant.licenseId,
               agentId: ref.agentId,
               status: 'not_accepting_chats',
+              source: 'unresponsive',
             },
           });
           paused = true;

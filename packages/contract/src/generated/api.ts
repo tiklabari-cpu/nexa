@@ -11191,6 +11191,77 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/reports/availability': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Chat availability — time per state per agent
+     * @description How long agents spent accepting chats, not accepting, offline and
+     *     disconnected over the window (RP-03 · tm 370), read from the presence
+     *     log (`agent_presence_events`) with each agent's state as the window
+     *     opened. `disconnected` is an `offline` the RTM wrote after the agent's
+     *     last connection dropped and the tolerance ran out (`source:
+     *     disconnect`); `unknown` is the stretch before an agent's first recorded
+     *     change. `to` is clipped to now. At most 31 days.
+     *
+     *     `by_hour` is per local hour of day in the workspace's time zone
+     *     (`timezone`), summed over the window's days; `mean_accepting_agents` is
+     *     how many agents were accepting on average during that hour. `by_agent`
+     *     carries the saved work schedule's planned time (`planned_seconds`,
+     *     `null` without a plan) and the accepting time inside it.
+     *
+     *     Staff-monitoring data, bounded by person: `reports_read` reads every
+     *     member, `reports_read--groups` the members of the teams the caller leads
+     *     and the caller, any other agent only themselves (05 RP-03 decision 2).
+     *     Naming an agent or a team outside that reach is a 403. Takes the RP-01
+     *     person keys (`agent_id`, `group_id` = the team's members); `tag` and
+     *     `topic` are refused (400).
+     */
+    get: operations['getReportsAvailability'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/agent-activity': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Agent activity — one day's agent × hour strip
+     * @description Each agent's day as consecutive segments (`accepting`, `not_accepting`,
+     *     `offline`, `disconnected`, `unknown`) from the start of `date` in the
+     *     workspace's day boundary (zone and hour, ID-04) up to `as_of` — now, for
+     *     today — with the saved work schedule laid over it (`planned`, `null`
+     *     without a plan). A segment carries the `source` of the row that opened
+     *     it (`manual`, `disconnect`, `unresponsive`, `suspension`, `login`).
+     *     `date` defaults to today in the workspace; a day that has not begun is a
+     *     400.
+     *
+     *     Paged by agent in name order: `limit` (default 25, at most 100) and
+     *     `cursor` = the previous page's `next_cursor`. Same reach as
+     *     `GET /reports/availability`: an agent without a reports scope reads only
+     *     themselves, and asking for anyone else is a 403.
+     */
+    get: operations['getReportsAgentActivity'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/reports/sales': {
     parameters: {
       query?: never;
@@ -23376,6 +23447,104 @@ export interface components {
         unknown: number;
       };
     };
+    /** @description Whole seconds per activity state (RP-03). */
+    ActivityStateSeconds: {
+      accepting_seconds: number;
+      not_accepting_seconds: number;
+      offline_seconds: number;
+      disconnected_seconds: number;
+      unknown_seconds: number;
+    };
+    /** @description The availability report (RP-03) — see `GET /reports/availability`. */
+    ReportsAvailability: {
+      range: {
+        /** Format: date-time */
+        from: string;
+        /**
+         * Format: date-time
+         * @description Clipped to now.
+         */
+        to: string;
+      };
+      /** @description The IANA zone `by_hour` is counted in — the workspace's (ID-04). */
+      timezone: string;
+      /** @description How many agents the report covers. */
+      agents: number;
+      totals: components['schemas']['ActivityStateSeconds'];
+      /** @description 24 rows, local hour of day 0-23, minutes summed over every agent and day. */
+      by_hour: {
+        hour: number;
+        accepting_minutes: number;
+        not_accepting_minutes: number;
+        offline_minutes: number;
+        disconnected_minutes: number;
+        unknown_minutes: number;
+        mean_accepting_agents: number;
+      }[];
+      /** @description One row per agent, in name order. */
+      by_agent: (components['schemas']['ActivityStateSeconds'] & {
+        /** Format: uuid */
+        agent_id: string;
+        name: string | null;
+        /** @description Stretches of `disconnected` in the window. */
+        disconnects: number;
+        /** @description Times the chat-inactivity sweep paused the agent (`source = unresponsive`). */
+        unresponsive_pauses: number;
+        /** @description Time the saved work schedule plans in the window; `null` without a plan. */
+        planned_seconds: number | null;
+        /** @description Accepting time inside the planned shifts. */
+        planned_accepting_seconds: number | null;
+      })[];
+    };
+    ActivitySegment: {
+      /** @enum {string} */
+      state: 'accepting' | 'not_accepting' | 'offline' | 'disconnected' | 'unknown';
+      /**
+       * @description What wrote the row that opened the segment; `null` for `unknown`.
+       * @enum {string|null}
+       */
+      source: 'manual' | 'disconnect' | 'unresponsive' | 'suspension' | 'login' | null;
+      /** Format: date-time */
+      from: string;
+      /** Format: date-time */
+      to: string;
+    };
+    /** @description The agent activity strip (RP-03) — see `GET /reports/agent-activity`. */
+    ReportsAgentActivity: {
+      /** Format: date */
+      date: string;
+      timezone: string;
+      /** @description The workspace day — its first instant and the next day's. */
+      range: {
+        /** Format: date-time */
+        from: string;
+        /** Format: date-time */
+        to: string;
+      };
+      /**
+       * Format: date-time
+       * @description Where the segments end — `range.to`, or now for today.
+       */
+      as_of: string;
+      agents: (components['schemas']['ActivityStateSeconds'] & {
+        /** Format: uuid */
+        agent_id: string;
+        name: string | null;
+        /** @description Consecutive, from `range.from` to `as_of`. */
+        segments: components['schemas']['ActivitySegment'][];
+        /** @description The saved work schedule's shifts on this day; `null` without a plan. */
+        planned:
+          | {
+              /** Format: date-time */
+              from: string;
+              /** Format: date-time */
+              to: string;
+            }[]
+          | null;
+      })[];
+      /** Format: uuid */
+      next_cursor: string | null;
+    };
     /**
      * @description Which conversations a report counts (RP-01). Every key is optional and a
      *     list; a missing key narrows nothing. Any-of within a key, all-of across
@@ -24418,6 +24587,20 @@ export interface components {
     AiMetricsVersion: string;
     /** @description Only the connections in this language. */
     AiMetricsLanguage: string;
+    /** @description Window start (inclusive), ISO 8601 with offset. */
+    PresenceRangeFrom: string;
+    /** @description Window end (exclusive), at most 31 days after `from`; clipped to now. */
+    PresenceRangeTo: string;
+    /**
+     * @description Only these agents (RP-03). Each must be within the caller's reach, else
+     *     403. Repeat the parameter for more than one.
+     */
+    PresenceAgent: string[];
+    /**
+     * @description Only the members of these teams. A `reports_read--groups` caller may
+     *     name only teams they lead, any other agent none (403).
+     */
+    PresenceGroup: string[];
     /**
      * @description Only the connections whose last assignee is one of these agents (RP-01).
      *     Account ids, never e-mail addresses (GV-05). Repeat the parameter for more than one.
@@ -41271,6 +41454,85 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ReportsEngagement'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getReportsAvailability: {
+    parameters: {
+      query: {
+        /** @description Window start (inclusive), ISO 8601 with offset. */
+        from: components['parameters']['PresenceRangeFrom'];
+        /** @description Window end (exclusive), at most 31 days after `from`; clipped to now. */
+        to: components['parameters']['PresenceRangeTo'];
+        /**
+         * @description Only these agents (RP-03). Each must be within the caller's reach, else
+         *     403. Repeat the parameter for more than one.
+         */
+        agent_id?: components['parameters']['PresenceAgent'];
+        /**
+         * @description Only the members of these teams. A `reports_read--groups` caller may
+         *     name only teams they lead, any other agent none (403).
+         */
+        group_id?: components['parameters']['PresenceGroup'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Time per state for the agents the caller may read */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReportsAvailability'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getReportsAgentActivity: {
+    parameters: {
+      query?: {
+        /** @description The workspace day, `YYYY-MM-DD`. Defaults to today. */
+        date?: string;
+        limit?: number;
+        /** @description The `next_cursor` of the previous page. */
+        cursor?: string;
+        /**
+         * @description Only these agents (RP-03). Each must be within the caller's reach, else
+         *     403. Repeat the parameter for more than one.
+         */
+        agent_id?: components['parameters']['PresenceAgent'];
+        /**
+         * @description Only the members of these teams. A `reports_read--groups` caller may
+         *     name only teams they lead, any other agent none (403).
+         */
+        group_id?: components['parameters']['PresenceGroup'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page of agents' day strips */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReportsAgentActivity'];
         };
       };
       400: components['responses']['BadRequest'];

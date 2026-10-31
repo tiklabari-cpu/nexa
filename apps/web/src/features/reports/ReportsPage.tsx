@@ -60,6 +60,7 @@ import { roleAtLeast } from '../team/RoleMenu.js';
 import { ReportFilterBar } from './ReportFilterBar.js';
 import { HourGrid } from './HourGrid.js';
 import { MissedHeatmap, type MissedHeatCell } from './MissedHeatmap.js';
+import { AgentActivityTab, AvailabilityTab } from './PresenceReports.js';
 import {
   parseReportFilter,
   reportFilterKey,
@@ -355,6 +356,8 @@ const TABS = [
   { id: 'staffing' },
   { id: 'missed' },
   { id: 'engagement' },
+  { id: 'availability' },
+  { id: 'agent-activity' },
   { id: 'topics' },
   { id: 'cases' },
   { id: 'leads' },
@@ -384,6 +387,14 @@ const GROUP_GATED_TABS = new Set<TabId>([
   'missed',
   'engagement',
 ]);
+
+/**
+ * Availability and Agent activity (RP-03 · tm 370) count people, not
+ * conversations, and the server decides whom each reader sees — everyone, the
+ * teams they lead, or only themselves — so these tabs open for every reader of
+ * this page rather than following the export catalogue (they have no export).
+ */
+const PERSON_TABS = new Set<TabId>(['availability', 'agent-activity']);
 
 /**
  * The sidebar's categories, in order, and the tabs each one holds — the
@@ -429,7 +440,10 @@ type CategoryId = 'performance' | 'automation' | 'team' | 'business';
 const TAB_CATEGORIES: ReadonlyArray<{ id: CategoryId; tabs: readonly TabId[] }> = [
   { id: 'performance', tabs: ['overview', 'breakdown', 'reviews', 'engagement'] },
   { id: 'automation', tabs: ['ai-agent', 'topics'] },
-  { id: 'team', tabs: ['staffing', 'missed', 'team-performance'] },
+  {
+    id: 'team',
+    tabs: ['staffing', 'availability', 'agent-activity', 'missed', 'team-performance'],
+  },
   { id: 'business', tabs: ['cases', 'leads', 'sales'] },
 ];
 
@@ -585,7 +599,10 @@ function ReportsPageBody({
   // conversation reports); the other tabs would be refused (403) at the server.
   const visibleTabs = new Set<TabId>(
     TABS.filter(
-      (tabDef) => (!scoped && !GROUP_GATED_TABS.has(tabDef.id)) || visibleGroupIds.has(tabDef.id),
+      (tabDef) =>
+        PERSON_TABS.has(tabDef.id) ||
+        (!scoped && !GROUP_GATED_TABS.has(tabDef.id)) ||
+        visibleGroupIds.has(tabDef.id),
     ).map((tabDef) => tabDef.id),
   );
 
@@ -851,7 +868,7 @@ function ReportsPageBody({
           <ReportFilterBar
             filter={filter}
             onChange={setFilter}
-            applies={takesReportFilter(tab)}
+            applies={takesReportFilter(tab) || PERSON_TABS.has(tab)}
             scoped={scoped}
             rangeKey={rangeKey}
             range={range}
@@ -880,6 +897,10 @@ function ReportsPageBody({
             <MissedTab rangeKey={rangeKey} range={range} baseline={baseline} filter={filter} />
           ) : tab === 'engagement' ? (
             <EngagementTab rangeKey={rangeKey} range={range} baseline={baseline} filter={filter} />
+          ) : tab === 'availability' && range ? (
+            <AvailabilityTab rangeKey={rangeKey} range={range} filter={filter} />
+          ) : tab === 'agent-activity' ? (
+            <AgentActivityTab filter={filter} />
           ) : tab === 'topics' ? (
             <TopicsTab rangeKey={rangeKey} range={range} baseline={baseline} filter={filter} />
           ) : tab === 'cases' ? (

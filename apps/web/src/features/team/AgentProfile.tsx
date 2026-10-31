@@ -37,6 +37,7 @@ import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatDateTime } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { agentReportsHref } from '../reports/report-filters.js';
+import { AgentDayActivity } from '../reports/PresenceReports.js';
 import type { Group } from './Teams.js';
 
 /** The bounds `PUT /agents/{agentId}/chat-limit` enforces, mirrored so a value
@@ -205,6 +206,11 @@ export function AgentProfile({ agent, teams, isSelf, canEdit }: AgentProfileProp
               {t('team.profile.saveError')}
             </p>
           )}
+
+          {/* Today's activity (RP-03 · tm 370): the person themselves, or anyone who
+              reads reports — the server decides whom (a Team Lead: their teams'
+              members), and a 403 renders nothing. */}
+          {(isSelf || canSeeReports) && <AgentDayActivity agentId={agent.id} />}
 
           <div className="mt-4 flex items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-3">

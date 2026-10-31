@@ -99,6 +99,14 @@ import {
   missedFigures,
 } from '../services/reports/missed-engagement.js';
 import {
+  agentActivityReport,
+  availabilityReport,
+  parseAgentActivityQuery,
+  parseAvailabilityQuery,
+  presenceLog,
+  resolveAgentReach,
+} from '../services/reports/presence-activity.js';
+import {
   accessReviewCredentialTable,
   accessReviewFilename,
   accessReviewMemberTable,
@@ -1394,17 +1402,9 @@ const SECONDS_PER_MINUTE = 60;
  */
 const STAFFING_MAX_RANGE_DAYS = REPORT_MAX_RANGE_DAYS;
 
-/**
- * The most presence rows one forecast will hold in memory.
- *
- * Deliberately a refusal rather than a `LIMIT`: truncating a *change* log
- * silently rewrites the coverage it implies (drop the tail and every agent's
- * last known status runs to the end of the window, over-reporting exactly the
- * availability that hides understaffing). A limit that changes the answer
- * without saying so is worse than an error. Set far above any real workspace's
- * year — 50 agents changing status six times a day for a year is ~110k rows.
- */
-const PRESENCE_ROW_LIMIT = 250_000;
+// The forecast's presence read is the shared `presenceLog` (RP-03 · tm 370),
+// with its row ceiling (`PRESENCE_LOG_ROW_LIMIT`) — a refusal rather than a
+// LIMIT, because truncating a change log silently rewrites the coverage it implies.
 
 /** A window this endpoint can actually compute over, or a 400 explaining why not. */
 function assertForecastRange(from: Date, to: Date): void {
@@ -1470,37 +1470,19 @@ async function presenceEvents(
   from: Date,
   to: Date,
 ): Promise<PresenceEvent[]> {
-  const rows = await tx.$queryRaw<Array<{ agent_id: string; status: string; changed_at: Date }>>`
-    WITH inside AS (
-      SELECT p.agent_id, p.status, p.changed_at
-      FROM agent_presence_events p
-      WHERE p.license_id = ${licenseId}
-        AND p.changed_at >= ${from} AND p.changed_at <= ${to}
-    ), opening AS (
-      SELECT DISTINCT ON (p.agent_id) p.agent_id, p.status, p.changed_at
-      FROM agent_presence_events p
-      WHERE p.license_id = ${licenseId} AND p.changed_at < ${from}
-      ORDER BY p.agent_id, p.changed_at DESC
-    )
-    SELECT agent_id::text AS agent_id, status, changed_at FROM inside
-    UNION ALL
-    SELECT agent_id::text AS agent_id, status, changed_at FROM opening
-    ORDER BY agent_id, changed_at
-    LIMIT ${PRESENCE_ROW_LIMIT + 1}
-  `;
-
-  if (rows.length > PRESENCE_ROW_LIMIT) {
-    // One row past the limit only proves there are more; see PRESENCE_ROW_LIMIT
-    // for why this is a refusal and not a trim.
-    throw ApiError.validation(
-      'The requested range holds too much presence history to forecast; narrow `from`/`to`.',
-    );
-  }
-
+  const rows = await presenceLog(
+    tx,
+    licenseId,
+    from,
+    // `presenceLog` reads [from, to); the forecast's window is inclusive of `to`.
+    new Date(to.getTime() + 1),
+    null,
+    'The requested range holds too much presence history to forecast; narrow `from`/`to`.',
+  );
   return rows.map((row) => ({
-    agentId: row.agent_id,
+    agentId: row.agentId,
     status: row.status,
-    changedAt: row.changed_at,
+    changedAt: row.changedAt,
   }));
 }
 
@@ -2050,6 +2032,46 @@ export default async function reportRoutes(
       return reply.send(body);
     },
   );
+
+  // Availability and agent activity (RP-03 · tm 370): staff-monitoring data,
+  // bounded by person rather than by conversation — `reports_read` reads every
+  // member, `reports_read--groups` the members of the teams the caller leads
+  // (and the caller), any other agent themselves only (05 RP-03 decision 2).
+  // So no route scope: the reach is decided per request by
+  // `resolveAgentReach`, and naming someone outside it is a 403.
+  app.get('/reports/availability', async (request, reply) => {
+    const { from, to, filter } = parseAvailabilityQuery(request.query);
+    const tenant = request.tenant();
+    const principal = request.requirePrincipal();
+    const body = await request.withTenantRead(async (tx) =>
+      availabilityReport(
+        tx,
+        tenant.licenseId,
+        await resolveAgentReach(tx, tenant.licenseId, principal, filter),
+        from,
+        to,
+        new Date(),
+      ),
+    );
+    return reply.send(body);
+  });
+
+  app.get('/reports/agent-activity', async (request, reply) => {
+    const { date, limit, cursor, filter } = parseAgentActivityQuery(request.query);
+    const tenant = request.tenant();
+    const principal = request.requirePrincipal();
+    const body = await request.withTenantRead(async (tx) =>
+      agentActivityReport(
+        tx,
+        tenant.licenseId,
+        await resolveAgentReach(tx, tenant.licenseId, principal, filter),
+        date,
+        { limit, cursor },
+        new Date(),
+      ),
+    );
+    return reply.send(body);
+  });
 
   // Sales (FR-MOD-07.7, v2 payload; FR-MOD-13.5 dependency): the honest
   // "not configured" skeleton until the Sales tracker wires a real source (see

@@ -828,6 +828,10 @@ paths:
     $ref: "./paths/reports.yaml#/missed"
   /reports/engagement:
     $ref: "./paths/reports.yaml#/engagement"
+  /reports/availability:
+    $ref: "./paths/reports.yaml#/availability"
+  /reports/agent-activity:
+    $ref: "./paths/reports.yaml#/agentActivity"
   /reports/sales:
     $ref: "./paths/reports.yaml#/sales"
   /reports/goals:
@@ -15179,6 +15183,153 @@ components:
                 channel: { type: integer }
                 unknown: { type: integer }
 
+    ActivityStateSeconds:
+      type: object
+      description: Whole seconds per activity state (RP-03).
+      required:
+        - accepting_seconds
+        - not_accepting_seconds
+        - offline_seconds
+        - disconnected_seconds
+        - unknown_seconds
+      properties:
+        accepting_seconds: { type: integer }
+        not_accepting_seconds: { type: integer }
+        offline_seconds: { type: integer }
+        disconnected_seconds: { type: integer }
+        unknown_seconds: { type: integer }
+
+    ReportsAvailability:
+      type: object
+      description: The availability report (RP-03) — see `GET /reports/availability`.
+      required: [range, timezone, agents, totals, by_hour, by_agent]
+      properties:
+        range:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time, description: Clipped to now. }
+        timezone:
+          type: string
+          description: The IANA zone `by_hour` is counted in — the workspace's (ID-04).
+        agents: { type: integer, description: How many agents the report covers. }
+        totals: { $ref: "#/components/schemas/ActivityStateSeconds" }
+        by_hour:
+          type: array
+          description: 24 rows, local hour of day 0-23, minutes summed over every agent and day.
+          items:
+            type: object
+            required:
+              - hour
+              - accepting_minutes
+              - not_accepting_minutes
+              - offline_minutes
+              - disconnected_minutes
+              - unknown_minutes
+              - mean_accepting_agents
+            properties:
+              hour: { type: integer, minimum: 0, maximum: 23 }
+              accepting_minutes: { type: number }
+              not_accepting_minutes: { type: number }
+              offline_minutes: { type: number }
+              disconnected_minutes: { type: number }
+              unknown_minutes: { type: number }
+              mean_accepting_agents: { type: number }
+        by_agent:
+          type: array
+          description: One row per agent, in name order.
+          items:
+            allOf:
+              - $ref: "#/components/schemas/ActivityStateSeconds"
+              - type: object
+                required:
+                  - agent_id
+                  - name
+                  - disconnects
+                  - unresponsive_pauses
+                  - planned_seconds
+                  - planned_accepting_seconds
+                properties:
+                  agent_id: { type: string, format: uuid }
+                  name: { type: string, nullable: true }
+                  disconnects:
+                    type: integer
+                    description: Stretches of `disconnected` in the window.
+                  unresponsive_pauses:
+                    type: integer
+                    description: Times the chat-inactivity sweep paused the agent (`source = unresponsive`).
+                  planned_seconds:
+                    type: integer
+                    nullable: true
+                    description: Time the saved work schedule plans in the window; `null` without a plan.
+                  planned_accepting_seconds:
+                    type: integer
+                    nullable: true
+                    description: Accepting time inside the planned shifts.
+
+    ActivitySegment:
+      type: object
+      required: [state, source, from, to]
+      properties:
+        state:
+          type: string
+          enum: [accepting, not_accepting, offline, disconnected, unknown]
+        source:
+          type: string
+          nullable: true
+          enum: [manual, disconnect, unresponsive, suspension, login, null]
+          description: What wrote the row that opened the segment; `null` for `unknown`.
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+
+    ReportsAgentActivity:
+      type: object
+      description: The agent activity strip (RP-03) — see `GET /reports/agent-activity`.
+      required: [date, timezone, range, as_of, agents, next_cursor]
+      properties:
+        date: { type: string, format: date }
+        timezone: { type: string }
+        range:
+          type: object
+          description: The workspace day — its first instant and the next day's.
+          required: [from, to]
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+        as_of:
+          type: string
+          format: date-time
+          description: Where the segments end — `range.to`, or now for today.
+        agents:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/ActivityStateSeconds"
+              - type: object
+                required: [agent_id, name, segments, planned]
+                properties:
+                  agent_id: { type: string, format: uuid }
+                  name: { type: string, nullable: true }
+                  segments:
+                    type: array
+                    description: Consecutive, from `range.from` to `as_of`.
+                    items: { $ref: "#/components/schemas/ActivitySegment" }
+                  planned:
+                    type: array
+                    nullable: true
+                    description: The saved work schedule's shifts on this day; `null` without a plan.
+                    items:
+                      type: object
+                      required: [from, to]
+                      properties:
+                        from: { type: string, format: date-time }
+                        to: { type: string, format: date-time }
+        next_cursor:
+          type: string
+          format: uuid
+          nullable: true
+
     ReportFilter:
       type: object
       additionalProperties: false
@@ -16249,6 +16400,44 @@ components:
       required: false
       description: Only the connections in this language.
       schema: { type: string, minLength: 2, maxLength: 16 }
+    PresenceRangeFrom:
+      name: from
+      in: query
+      required: true
+      description: Window start (inclusive), ISO 8601 with offset.
+      schema: { type: string, format: date-time }
+    PresenceRangeTo:
+      name: to
+      in: query
+      required: true
+      description: Window end (exclusive), at most 31 days after `from`; clipped to now.
+      schema: { type: string, format: date-time }
+    PresenceAgent:
+      name: agent_id
+      in: query
+      required: false
+      description: |
+        Only these agents (RP-03). Each must be within the caller's reach, else
+        403. Repeat the parameter for more than one.
+      style: form
+      explode: true
+      schema:
+        type: array
+        maxItems: 50
+        items: { type: string, format: uuid }
+    PresenceGroup:
+      name: group_id
+      in: query
+      required: false
+      description: |
+        Only the members of these teams. A `reports_read--groups` caller may
+        name only teams they lead, any other agent none (403).
+      style: form
+      explode: true
+      schema:
+        type: array
+        maxItems: 50
+        items: { type: string, pattern: "^[0-9]{1,18}$" }
     ReportFilterAgent:
       name: agent_id
       in: query

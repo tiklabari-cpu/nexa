@@ -153,7 +153,7 @@ describe('agent presence log (PRD §5.3-Vardiya)', () => {
     owner.agentPresenceEvent.findMany({
       where: { licenseId: fx.a.licenseId, agentId },
       orderBy: { changedAt: 'asc' },
-      select: { status: true, changedAt: true },
+      select: { status: true, source: true, changedAt: true },
     });
 
   // ==========================================================================
@@ -296,6 +296,12 @@ describe('agent presence log (PRD §5.3-Vardiya)', () => {
         'accepting_chats',
         'not_accepting_chats',
       ]);
+      // RP-03 · tm 370: the agent's own switch is `manual`.
+      expect((await eventsOf(fx.a.agentAccountId)).map((e) => e.source)).toEqual([
+        'manual',
+        'manual',
+        'manual',
+      ]);
     });
 
     it('stamps each event with the moment it happened', async () => {
@@ -324,9 +330,9 @@ describe('agent presence log (PRD §5.3-Vardiya)', () => {
       expect((await suspend(true)).statusCode).toBe(200);
       expect((await suspend(false)).statusCode).toBe(200);
 
-      expect((await eventsOf(fx.a.agentAccountId)).map((e) => e.status)).toEqual([
-        'offline',
-        'accepting_chats',
+      expect((await eventsOf(fx.a.agentAccountId)).map((e) => [e.status, e.source])).toEqual([
+        ['offline', 'suspension'],
+        ['accepting_chats', 'suspension'],
       ]);
       const membership = await owner.agentMembership.findUnique({
         where: { licenseId_agentId: { licenseId: fx.a.licenseId, agentId: fx.a.agentAccountId } },

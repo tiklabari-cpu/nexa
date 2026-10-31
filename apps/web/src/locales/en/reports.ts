@@ -28,6 +28,8 @@ export const reports: Messages = {
   'reports.tabs.breakdown': 'Breakdown',
   'reports.tabs.staffing': 'Staffing',
   'reports.tabs.missed': 'Missed chats',
+  'reports.tabs.availability': 'Availability',
+  'reports.tabs.agentActivity': 'Agent activity',
   'reports.tabs.engagement': 'Engagement',
   'reports.tabs.topics': 'Chat topics',
   'reports.tabs.cases': 'Cases',
@@ -846,4 +848,52 @@ export const reports: Messages = {
   'reports.qa.error.role_required': 'Only an administrator can do this.',
   'reports.qa.error.thread_open': 'This conversation is still open — send it once it has closed.',
   'reports.qa.error.thread_no_ai': 'The AI took no part in this conversation.',
+  // Availability + Agent activity (RP-03 · tm 370)
+  'reports.activity.state.accepting': 'Accepting chats',
+  'reports.activity.state.notAccepting': 'Not accepting',
+  'reports.activity.state.offline': 'Offline',
+  'reports.activity.state.disconnected': 'No connection',
+  'reports.activity.state.unknown': 'Not recorded',
+  'reports.activity.planned': 'Planned shift',
+  'reports.activity.stripCaption': 'Day of {name}, times in {timezone}',
+  'reports.activity.column.state': 'State',
+  'reports.activity.column.from': 'From',
+  'reports.activity.column.to': 'Until',
+  'reports.activity.column.duration': 'Duration',
+  'reports.activity.filterNote':
+    'Tag and topic filters do not apply here: this report counts people, not conversations.',
+  'reports.activity.title': 'Agent activity',
+  'reports.activity.description':
+    'Each agent’s day hour by hour, in the workspace time zone ({timezone}). “No connection” is when the browser was closed or the connection dropped for longer than the grace period.',
+  'reports.activity.descriptionLoading': 'Each agent’s day hour by hour.',
+  'reports.activity.day': 'Day',
+  'reports.activity.futureDay': 'That day has not started yet. Pick today or an earlier day.',
+  'reports.activity.error':
+    'Could not load the agent activity. Check that the API is reachable and try again.',
+  'reports.activity.more': 'Show more agents',
+  'reports.activity.today': 'Today’s activity',
+  'reports.activity.acceptingTotal': 'Accepting chats for {duration}',
+  'reports.availability.tooLong.title': 'Choose a shorter range',
+  'reports.availability.tooLong.description':
+    'Availability covers at most {days} days. Pick 7 or 30 days, or a custom range.',
+  'reports.availability.error':
+    'Could not load the availability report. Check that the API is reachable and try again.',
+  'reports.availability.summary.title': 'Time by status',
+  'reports.availability.summary.description':
+    'How long agents spent in each status in this range. Agents in this report: {count}.',
+  'reports.availability.emptyTitle': 'No agents to show',
+  'reports.availability.emptyDescription':
+    'Nobody you can see matches this filter. Clear the filter or pick another team.',
+  'reports.availability.byAgent.description':
+    'Each agent’s time by status, set against their saved work schedule.',
+  'reports.availability.byAgent.caption': 'Time by status for each agent',
+  'reports.availability.column.acceptingInPlan': 'Accepting during shift',
+  'reports.availability.column.disconnects': 'Dropped connections',
+  'reports.availability.column.hour': 'Hour',
+  'reports.availability.column.meanAccepting': 'Agents accepting (average)',
+  'reports.availability.noPlan': 'No schedule',
+  'reports.availability.byHour.title': 'By hour of day',
+  'reports.availability.byHour.description':
+    'Time by status for each hour of the day, added up over the range, in the workspace time zone ({timezone}).',
+  'reports.availability.byHour.caption': 'Time by status per hour of day, {timezone}',
 };

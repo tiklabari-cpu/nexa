@@ -118,6 +118,7 @@ export const auditLabels: Messages = {
   'audit.action.partner_app.deleted': 'Uygulama silindi',
   'audit.action.partner_app.secret_rotated': 'Uygulama sırrı yenilendi',
   'audit.action.mcp.tool_called': 'Yapay zekâ aracı çağrıldı',
+  'audit.action.copilot.ask': 'Copilot’a soru soruldu',
   'audit.action.data.retention_pruned': 'Eski veriler saklama politikasıyla silindi',
   'audit.action.data.deleted': 'Veri silindi',
   'audit.action.data.subject_erased': 'Müşteri verisi silindi',

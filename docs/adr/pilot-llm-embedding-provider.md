@@ -123,16 +123,18 @@ Skill adımları admin tarafından yazılır ve `@siyahtus/ai-mock` `validateSte
 
 Yalnız aşağıdaki çağrılarda. Listede olmayan her çağrı bugünkü gibi düz metin döner. Listeye yeni çağrı eklemek bu eki güncellemeyi gerektirir.
 
-| Çağrı                                    | Madde | Görev  | Çıktı (05'e göre, özet)                                                  | Model katmanı |
-| ---------------------------------------- | ----- | ------ | ------------------------------------------------------------------------ | ------------- |
-| Anlama / konu tespiti ve prosedür seçimi | AI-05 | tm 297 | aday prosedür(ler) + güven, `wants_human`, dil                           | `fast`        |
-| Slot (bilgi toplama) çıkarımı            | AI-04 | tm 295 | slot başına aday değer + `raw_text`                                      | `fast`        |
-| Dayanaklı yanıt yazımı (grounded/cited)  | AI-06 | tm 298 | `{ reply, grounded: 'full' \| 'partial' \| 'none', cited_ids: [] }`      | `default`     |
-| Davranış kuralı çelişki denetimi         | AI-07 | tm 299 | `{ conflicts: [{ rule_id, explanation, severity }], duplicates, vague }` | `fast`        |
-| Hakem (kilitli kurallara karşı taslak)   | AI-08 | tm 301 | `{ ok, violations: [{ rule_id, quote }] }`                               | `fast`        |
-| Çözülemeyen soru kümesinin başlığı       | AI-22 | tm 317 | ≤ 8 kelimelik başlık + önerilen eylem türü                               | `fast`        |
-| Öneri taslağı                            | AI-23 | tm 318 | `{ title, body, applies_to_intent, removed_specifics[] }`                | `fast`        |
-| QA ön puanı                              | AI-24 | tm 319 | `{ criteria: [{ key, value, evidence_event_ids[], rationale }], … }`     | `default`     |
+| Çağrı                                        | Madde | Görev  | Çıktı (05'e göre, özet)                                                                                                   | Model katmanı |
+| -------------------------------------------- | ----- | ------ | ------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| Anlama / konu tespiti ve prosedür seçimi     | AI-05 | tm 297 | aday prosedür(ler) + güven, `wants_human`, dil                                                                            | `fast`        |
+| Slot (bilgi toplama) çıkarımı                | AI-04 | tm 295 | slot başına aday değer + `raw_text`                                                                                       | `fast`        |
+| Dayanaklı yanıt yazımı (grounded/cited)      | AI-06 | tm 298 | `{ reply, grounded: 'full' \| 'partial' \| 'none', cited_ids: [] }`                                                       | `default`     |
+| Davranış kuralı çelişki denetimi             | AI-07 | tm 299 | `{ conflicts: [{ rule_id, explanation, severity }], duplicates, vague }`                                                  | `fast`        |
+| Hakem (kilitli kurallara karşı taslak)       | AI-08 | tm 301 | `{ ok, violations: [{ rule_id, quote }] }`                                                                                | `fast`        |
+| Çözülemeyen soru kümesinin başlığı           | AI-22 | tm 317 | ≤ 8 kelimelik başlık + önerilen eylem türü                                                                                | `fast`        |
+| Öneri taslağı                                | AI-23 | tm 318 | `{ title, body, applies_to_intent, removed_specifics[] }`                                                                 | `fast`        |
+| QA ön puanı                                  | AI-24 | tm 319 | `{ criteria: [{ key, value, evidence_event_ids[], rationale }], … }`                                                      | `default`     |
+| Copilot sorusunun türü (rapor / bilgi)       | IN-09 | tm 366 | `copilot_question_kind`: `{ kind: 'bi' \| 'kb' }` — yalnız BI sözlüğü yerleştiremediğinde; model cevapsızsa kelime kuralı | `fast`        |
+| Copilot bilgi cevabı (ajana, oyuncuya değil) | IN-09 | tm 366 | AI-06'nın aynı `knowledge_answer` nesnesi ve aynı taslak kapısı; istem ajan için çerçevelenir (`reader: 'agent'`)         | `default`     |
 
 Şemanın kesin biçimi çağrıyı yazan görevindir. Bu ek yalnız mekanizmayı ve sınırları sabitler. Katman sütunu 05'in söylediğidir: oyuncuya giden metin `default` ile yazılır, sınıflandırma, özet, hakem ve küme başlığı `fast` ile (05 AI-16 "Model katmanı"). QA ön puanını 05 AI-24 açıkça `default` + sıcaklık 0 ile ister.
 

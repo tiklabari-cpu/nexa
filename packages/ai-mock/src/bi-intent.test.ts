@@ -11,6 +11,7 @@ import {
   BI_CONFIDENCE_THRESHOLD,
   BI_METRICS,
   biMetricSource,
+  looksLikeReportQuestion,
   resolveBiQuestion,
   type MetricKey,
 } from './bi-intent.js';
@@ -211,5 +212,32 @@ describe('BI_METRICS', () => {
       const lengths = metric.phrases.map((phrase) => tokenize(phrase).length);
       expect(lengths).toEqual([...lengths].sort((a, b) => b - a));
     }
+  });
+});
+
+describe('looksLikeReportQuestion — report or knowledge (IN-09, tm 366.1)', () => {
+  it.each([
+    ['bu hafta kaç sohbet kapandı', 'a figure the dictionary knows'],
+    ['customer satisfaction last week', 'a figure the dictionary knows, no count word'],
+    ['bugün kaç çekim şikâyeti geldi?', 'a count of something Reports counts, no known figure'],
+    ['How many tickets were opened today?', 'English count'],
+    ['ortalama yanıt süresi ne', 'an average Reports measures'],
+    ['KAÇ MÜŞTERİ YAZDI', 'upper case folds'],
+  ])('reads %j as a report question (%s)', (question) => {
+    expect(looksLikeReportQuestion(question)).toBe(true);
+  });
+
+  it.each([
+    ['Papara çekim limiti ne kadar?', 'a limit, no count word'],
+    ['Papara ile kaç TL çekebilirim?', 'a count of money, not of anything Reports counts'],
+    ['how many days does a bank withdrawal take', 'a duration from the knowledge base'],
+    ['Bonus çevrim şartı nedir', 'a rule'],
+    ['', 'nothing'],
+  ])('reads %j as a knowledge question (%s)', (question) => {
+    expect(looksLikeReportQuestion(question)).toBe(false);
+  });
+
+  it('ignores anything past the length the contract accepts', () => {
+    expect(looksLikeReportQuestion(`${'x '.repeat(300)}kaç sohbet kapandı`)).toBe(false);
   });
 });

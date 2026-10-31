@@ -7,6 +7,7 @@
  */
 import { isErrorType, type ApiErrorBody, type ErrorType } from '@siyahtus/types';
 import { getLocale } from './i18n.js';
+import { noteServerDate } from './server-clock.js';
 
 export class ApiClientError extends Error {
   readonly type: ErrorType | 'network';
@@ -380,6 +381,8 @@ export class ApiClient {
 
     if (response.status === 204) return undefined as T;
 
+    // The API's clock, for counters that count up from a server timestamp (IN-03).
+    noteServerDate(response.headers.get('Date'));
     const requestId = response.headers.get('X-Request-Id') ?? '-';
     const payload = await response.json().catch(() => null);
 

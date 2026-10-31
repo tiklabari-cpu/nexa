@@ -31,6 +31,7 @@ export const common: Messages = {
   'common.errors.brand_not_found': 'We could not find that brand.',
   'common.errors.challenge_required': 'Please confirm you are a person to continue.',
   'common.errors.chat_anonymized': 'This conversation was anonymised and can no longer be opened.',
+  'common.errors.chat_claim_refused': 'You could not take this conversation.',
   'common.errors.chat_inactive': 'This conversation is no longer active.',
   'common.errors.customer_banned': 'This visitor is banned.',
   'common.errors.fallback_rule_exists':

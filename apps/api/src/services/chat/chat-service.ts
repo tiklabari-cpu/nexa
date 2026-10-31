@@ -22,6 +22,8 @@ import {
   AGENT_ROLES,
   buildEventId,
   composerStateKey,
+  waitingEffect,
+  WAITING_HANDOVER_REASONS,
   ASK_EMAIL_ANSWERED_SYSTEM_EVENT,
   ASK_EMAIL_SYSTEM_EVENT,
   askEmailText,
@@ -1798,6 +1800,15 @@ export class ChatService {
       change.to === 'human'
         ? await this.#routeHandover(tx, tenant, chat, threadId, change, targetGroupId)
         : null;
+    // The AI (or a rule bot) hands the player to a person who has not answered
+    // them: the wait starts now unless a message of theirs is still unanswered
+    // (IN-03 · tm 361). The system line below does not touch it.
+    if (change.to === 'human' && WAITING_HANDOVER_REASONS.includes(change.reason)) {
+      await tx.$executeRaw`
+        UPDATE threads SET awaiting_reply_since = COALESCE(awaiting_reply_since, now())
+        WHERE id = ${threadId}
+      `;
+    }
     const words = aiModeNoteText(change);
     const event = await this.#appendEvent(tx, {
       licenseId: tenant.licenseId,
@@ -2688,7 +2699,13 @@ export class ChatService {
     >`SELECT assignee_id, queue_position, queue_group_id FROM threads WHERE id = ${thread.id} FOR UPDATE`;
     await tx.thread.update({
       where: { id: thread.id },
-      data: { active: false, closedAt, queuePosition: null, queuedAt: null },
+      data: {
+        active: false,
+        closedAt,
+        queuePosition: null,
+        queuedAt: null,
+        awaitingReplySince: null,
+      },
     });
     await leaveQueue(tx, thread.id, close.queueOutcome, closedAt);
     // How the connection ended for the AI, for the day's later connections
@@ -5036,8 +5053,25 @@ export class ChatService {
     // lively again and counts against its agent's limit from here on. In the
     // same write as the counter, which the inactivity sweep's mark compares
     // against — so a mark and an event racing for the row cannot both win.
+    //
+    // The player's wait (IN-03 · tm 361) moves in the same write: a message
+    // from the player starts it (kept, if one is already running — the wait is
+    // since the first message nobody answered), a reply the player sees from an
+    // agent or a bot ends it, and everything else — an internal note, the
+    // "chat transferred" line — leaves it. `waitingEffect` is the rule; the
+    // inbox applies the same function to a pushed event.
+    const waiting = waitingEffect({
+      type: input.input.type,
+      author_type: input.authorType,
+      recipients: input.input.recipients,
+    });
     const updated = await tx.$queryRaw<Array<{ event_sequence: number }>>`
-      UPDATE threads SET event_sequence = event_sequence + 1, inactive_since = NULL
+      UPDATE threads SET event_sequence = event_sequence + 1, inactive_since = NULL,
+        awaiting_reply_since = CASE ${waiting}::text
+          WHEN 'start' THEN COALESCE(awaiting_reply_since, now())
+          WHEN 'clear' THEN NULL
+          ELSE awaiting_reply_since
+        END
       WHERE id = ${input.threadId}
       RETURNING event_sequence
     `;
@@ -5489,6 +5523,7 @@ async function summariseChats(
           : null,
       priority: threadPriorityFromRank(thread?.priority ?? 0),
       inactive: thread?.active === true && thread.inactiveSince !== null,
+      ...waitingOf(thread),
       unread_count: countUnread(lastEvents.get(chat.id), seenUpTo),
       connection_count: connectionCount(
         chat.localDay,
@@ -5982,6 +6017,10 @@ export interface ChatSummary {
   priority: ThreadPriority;
   /** The newest connection is open and inactive (WG-03, `threads.inactive_since`). */
   inactive: boolean;
+  /** Since when the player has waited for an answer (IN-03, `threads.awaiting_reply_since`); null: nobody waits. */
+  waiting_since: string | null;
+  /** When the newest connection joined its team's queue (`threads.queued_at`); null while it waits in none. */
+  queued_at: string | null;
   unread_count: number;
   /** How many connections `ChatDetail.connections` lists for the chat (ID-02). */
   connection_count: number;
@@ -6058,6 +6097,10 @@ export interface ChatDetail {
     priority_reason: string | null;
     /** Who answers the connection (`threads.ai_mode`, AI-11); null until anyone takes part. */
     ai_mode: AiConversationMode | null;
+    /** See {@link ChatSummary.waiting_since}. */
+    waiting_since: string | null;
+    /** See {@link ChatSummary.queued_at}. */
+    queued_at: string | null;
     /** Whether the AI answered in the connection — only on an agent's `get`. */
     ai_took_part?: boolean;
     /** The player's rating, as the caller may see it (`ratings.view`) — only on an agent's `get`. */
@@ -6114,6 +6157,10 @@ interface ThreadRow {
   active: boolean;
   assigneeId: string | null;
   queuePosition: number | null;
+  /** `threads.queued_at`: when it joined its team's queue (read only while queued). */
+  queuedAt: Date | null;
+  /** `threads.awaiting_reply_since` (IN-03). */
+  awaitingReplySince: Date | null;
   summary: string | null;
   createdAt: Date;
   closedAt: Date | null;
@@ -6172,11 +6219,29 @@ function serialiseChat(chat: ChatRow): ChatDetail {
           priority: threadPriorityFromRank(thread.priority),
           priority_reason: thread.priorityReason,
           ai_mode: thread.aiMode as AiConversationMode | null,
+          ...waitingOf(thread),
           tags: thread.tags.map((t) => t.tag.name).sort(),
         }
       : null,
     local_day: localDayOf(chat.localDay),
     connections: connectionsOf(chat),
+  };
+}
+
+/**
+ * The player's wait and the queue entry of a connection (IN-03 · tm 361). Both
+ * are read only while the connection is open: the close clears the wait, and a
+ * row that was assigned since keeps `queued_at` (§D297-2, as `queue_group_id`).
+ */
+function waitingOf(
+  thread:
+    Pick<ThreadRow, 'active' | 'awaitingReplySince' | 'queuePosition' | 'queuedAt'> | undefined,
+): { waiting_since: string | null; queued_at: string | null } {
+  const open = thread?.active === true;
+  return {
+    waiting_since: open ? (thread.awaitingReplySince?.toISOString() ?? null) : null,
+    queued_at:
+      open && thread.queuePosition !== null ? (thread.queuedAt?.toISOString() ?? null) : null,
   };
 }
 

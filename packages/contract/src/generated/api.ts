@@ -12959,6 +12959,22 @@ export interface components {
        *     shows the row dimmed. False for a closed or a lively one.
        */
       inactive?: boolean;
+      /**
+       * Format: date-time
+       * @description Since when the player has waited for an answer (IN-03): the first
+       *     player message nobody has answered, or the moment the AI handed
+       *     the player to a person. Cleared by an agent's or a bot's reply the
+       *     player sees and by the close; an internal note or a "chat
+       *     transferred" line leaves it. Null: nobody waits (and for a closed
+       *     chat). The one source of the inbox row's counter.
+       */
+      waiting_since?: string | null;
+      /**
+       * Format: date-time
+       * @description When the newest connection joined its team's queue; null while it
+       *     waits in none (`queue_position` null). The counter for a queued row.
+       */
+      queued_at?: string | null;
       unread_count?: number;
       /**
        * @description How many connections `Chat.connections` lists for this chat — the
@@ -13038,6 +13054,22 @@ export interface components {
        * @enum {string|null}
        */
       ai_mode?: 'ai' | 'human' | 'paused' | null;
+      /**
+       * Format: date-time
+       * @description Since when the player has waited for an answer (IN-03): the first
+       *     player message nobody has answered, or the moment the AI handed
+       *     the player to a person. Cleared by an agent's or a bot's reply the
+       *     player sees and by the close; an internal note or a "chat
+       *     transferred" line leaves it. Null: nobody waits (and for a closed
+       *     chat). The one source of the inbox row's counter.
+       */
+      waiting_since?: string | null;
+      /**
+       * Format: date-time
+       * @description When the newest connection joined its team's queue; null while it
+       *     waits in none (`queue_position` null). The counter for a queued row.
+       */
+      queued_at?: string | null;
       /**
        * @description How pressing the connection is (AI-12 · ADR-08a §2.3); `normal`
        *     until a hand-over or a route raises it. Never lowered.
@@ -18650,6 +18682,16 @@ export interface components {
       ask_email_after_seconds: number | null;
       /** @description Whether a connection waiting for a person while nobody is accepting chats asks the player for an e-mail at once. False unless turned on. */
       ask_email_when_offline: boolean;
+      /**
+       * Format: int32
+       * @description Seconds a player may wait before the inbox row turns to a warning (IN-03); null: the default, 120.
+       */
+      waiting_warn_seconds?: number | null;
+      /**
+       * Format: int32
+       * @description Seconds a player may wait before the inbox row turns to an alert (IN-03); null: the default, 300.
+       */
+      waiting_alert_seconds?: number | null;
       /**
        * Format: int32
        * @description How long a solved ticket waits for the player's answer by e-mail (HD-03): an answer within this many days of its last activity reopens it, a later one — or one to a closed ticket — opens a new ticket that names it (`related_ticket_id`). 30 unless set.
@@ -25786,6 +25828,17 @@ export interface operations {
              *     on, and gets quieter the larger the workspace.
              */
             total: number;
+            /**
+             * @description The seconds after which a row's waiting counter turns to a
+             *     warning and to an alert (IN-03): the workspace's setting
+             *     for the active brand (`/settings/chat-timeout`), else 120
+             *     and 300. Sent with the list because the settings endpoint
+             *     is the admins' and every agent's inbox draws the counter.
+             */
+            waiting_thresholds?: {
+              warn_seconds: number;
+              alert_seconds: number;
+            };
             next_page_id?: string;
           };
         };
@@ -37285,6 +37338,16 @@ export interface operations {
            * @description Seconds a connection may wait for a person's first reply before the player is asked for an e-mail (once; a player whose e-mail or username is known is told the answer will come here instead); null turns it off. Must be below `unanswered_transfer_seconds`, `inactive_after_seconds` and `chat_timeout_seconds` when those are on.
            */
           ask_email_after_seconds?: number | null;
+          /**
+           * Format: int32
+           * @description Seconds a player may wait before the inbox row turns to a warning (IN-03); null puts the default (120) back. Must be below `waiting_alert_seconds`. Left out, the stored value stays.
+           */
+          waiting_warn_seconds?: number | null;
+          /**
+           * Format: int32
+           * @description Seconds a player may wait before the inbox row turns to an alert (IN-03); null puts the default (300) back. Left out, the stored value stays.
+           */
+          waiting_alert_seconds?: number | null;
           /** @description Whether a connection waiting for a person while nobody is accepting chats asks at once. With an AI answering, it asks only after the AI hands over. Left out, the stored value stays. */
           ask_email_when_offline?: boolean;
           /**

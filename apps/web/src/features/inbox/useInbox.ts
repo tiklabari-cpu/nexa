@@ -18,6 +18,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   ROUTING_STATUSES,
+  waitingEffect,
   TICKET_MESSAGE_DELIVERY_STATUSES,
   UNANSWERED_ALERT_REASONS,
   type AdapterChannelType,
@@ -274,6 +275,9 @@ export function mergeChatHead(
     items: [...freshened, ...keptFromCache].sort((a, b) => (isOlderChat(a, b) ? 1 : -1)),
     ...(fresh.total !== undefined ? { total: fresh.total } : {}),
     ...(nextPageId !== undefined ? { next_page_id: nextPageId } : {}),
+    ...(fresh.waiting_thresholds !== undefined
+      ? { waiting_thresholds: fresh.waiting_thresholds }
+      : {}),
   };
 
   return { ...cache, pages: [merged, ...rest] };
@@ -1323,11 +1327,22 @@ export function applyPush(
       //
       // Every event also ends the connection's quiet spell (`#appendEvent`
       // clears `inactive_since`, WG-03), and no push says so separately.
+      //
+      // And the player's wait (IN-03): the server moves `awaiting_reply_since` with
+      // the same function (`waitingEffect`, `#appendEvent`), so a pushed message
+      // moves the cached counter as the stored column moves — a note or a
+      // "chat transferred" line, which the effect ignores, leaves it.
+      const effect = waitingEffect(event);
       const found = patchChatInPages(queryClient, chatId, (chat) => ({
         ...chat,
         last_event: event,
         unread_count: 1,
         inactive: false,
+        ...(effect === 'start'
+          ? { waiting_since: chat.waiting_since ?? event.created_at }
+          : effect === 'clear'
+            ? { waiting_since: null }
+            : {}),
       }));
       if (!found) refreshChatHeads();
       return;

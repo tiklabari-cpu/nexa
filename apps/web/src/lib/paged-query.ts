@@ -44,6 +44,8 @@ export interface PagedResponse<T> {
   total?: number;
   /** Absent on the last page — that absence is what ends the chain. */
   next_page_id?: string;
+  /** Only the chat list sends it: when a row's waiting counter turns to a warning and an alert (IN-03). */
+  waiting_thresholds?: { warn_seconds: number; alert_seconds: number };
 }
 
 export interface PagedQueryOptions {

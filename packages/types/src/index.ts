@@ -39,6 +39,7 @@ export * from './message-search.js';
 export * from './conversation-day.js';
 export * from './chat-inactivity.js';
 export * from './ask-email.js';
+export * from './waiting-timer.js';
 export * from './queue-entry.js';
 export * from './team-queues.js';
 export * from './handoff-routes.js';

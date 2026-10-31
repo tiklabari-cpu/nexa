@@ -1589,6 +1589,24 @@ components:
             workspace's `inactive_after_seconds`, so it does not count against
             its agent's concurrent limit until the next message. The inbox
             shows the row dimmed. False for a closed or a lively one.
+        waiting_since:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            Since when the player has waited for an answer (IN-03): the first
+            player message nobody has answered, or the moment the AI handed
+            the player to a person. Cleared by an agent's or a bot's reply the
+            player sees and by the close; an internal note or a "chat
+            transferred" line leaves it. Null: nobody waits (and for a closed
+            chat). The one source of the inbox row's counter.
+        queued_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            When the newest connection joined its team's queue; null while it
+            waits in none (`queue_position` null). The counter for a queued row.
         unread_count: { type: integer }
         connection_count:
           type: integer
@@ -1689,6 +1707,24 @@ components:
             back without a person having taken it. Null until the AI or a
             person takes part — the AI may still answer. Changes are pushed to
             agents as `chat_ai_mode_changed`.
+        waiting_since:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            Since when the player has waited for an answer (IN-03): the first
+            player message nobody has answered, or the moment the AI handed
+            the player to a person. Cleared by an agent's or a bot's reply the
+            player sees and by the close; an internal note or a "chat
+            transferred" line leaves it. Null: nobody waits (and for a closed
+            chat). The one source of the inbox row's counter.
+        queued_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            When the newest connection joined its team's queue; null while it
+            waits in none (`queue_position` null). The counter for a queued row.
         priority:
           description: |
             How pressing the connection is (AI-12 · ADR-08a §2.3); `normal`
@@ -9272,6 +9308,22 @@ components:
           description: >-
             Whether a connection waiting for a person while nobody is accepting
             chats asks the player for an e-mail at once. False unless turned on.
+        waiting_warn_seconds:
+          type: integer
+          format: int32
+          nullable: true
+          minimum: 1
+          description: >-
+            Seconds a player may wait before the inbox row turns to a warning
+            (IN-03); null: the default, 120.
+        waiting_alert_seconds:
+          type: integer
+          format: int32
+          nullable: true
+          minimum: 1
+          description: >-
+            Seconds a player may wait before the inbox row turns to an alert
+            (IN-03); null: the default, 300.
         ticket_reopen_window_days:
           type: integer
           format: int32

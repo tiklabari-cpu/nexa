@@ -69,6 +69,7 @@ import {
   localDayKey,
   type ChatInactivityOrderProblem,
 } from '@siyahtus/types';
+import { parseWaitingSeconds, waitingFormError } from './waiting-thresholds.js';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { FormSaveBar } from '../../components/settings/FormSaveBar.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
@@ -90,6 +91,9 @@ interface ChatTimeoutSettings {
   /** Absent only from a server that predates tm 342 (WG-08): read as off. */
   ask_email_after_seconds?: number | null;
   ask_email_when_offline?: boolean;
+  /** Absent only from a server that predates tm 361 (IN-03): read as the defaults. */
+  waiting_warn_seconds?: number | null;
+  waiting_alert_seconds?: number | null;
   /** Absent only from a server that predates tm 338: read as none. */
   transcript_allowed_domains?: string[];
   /** Absent only from a server that predates tm 345 (WG-06): read as none / off. */
@@ -107,6 +111,8 @@ interface ChatTimeoutBody {
   pause_unresponsive_agents?: boolean;
   ask_email_after_seconds?: number | null;
   ask_email_when_offline?: boolean;
+  waiting_warn_seconds?: number | null;
+  waiting_alert_seconds?: number | null;
   transcript_allowed_domains?: string[];
   transcript_forward_to?: string[];
   transcript_forward_include_notes?: boolean;
@@ -122,6 +128,8 @@ type FormValues = Record<
   | `${Window}Unit`
   | 'pause'
   | 'askOffline'
+  | 'waitWarn'
+  | 'waitAlert'
   | 'timezone'
   | 'hour'
   | 'domains'
@@ -338,6 +346,8 @@ function ChatTimeoutForm({
   };
   const savedPause = config.pause_unresponsive_agents ?? true;
   const savedAskOffline = config.ask_email_when_offline ?? false;
+  const savedWaitWarn = config.waiting_warn_seconds ?? null;
+  const savedWaitAlert = config.waiting_alert_seconds ?? null;
   const savedTimezone = config.day_boundary_timezone ?? DEFAULT_DAY_BOUNDARY.timezone;
   const savedHour = config.day_boundary_hour ?? DEFAULT_DAY_BOUNDARY.hour;
   const savedDomains = config.transcript_allowed_domains ?? [];
@@ -362,6 +372,8 @@ function ChatTimeoutForm({
   }
   initial.pause = String(savedPause);
   initial.askOffline = String(savedAskOffline);
+  initial.waitWarn = savedWaitWarn === null ? '' : String(savedWaitWarn);
+  initial.waitAlert = savedWaitAlert === null ? '' : String(savedWaitAlert);
   initial.timezone = savedTimezone;
   initial.hour = String(savedHour);
   initial.domains = savedDomains.join('\n');
@@ -404,6 +416,11 @@ function ChatTimeoutForm({
         setFieldError('forwardTo', t(forward.error, { max: TRANSCRIPT_FORWARD_MAX }));
         invalid = true;
       }
+      const waitError = waitingFormError(values.waitWarn, values.waitAlert);
+      if (waitError) {
+        setFieldError('waitAlert', t(waitError));
+        invalid = true;
+      }
       if (invalid || orderProblem(values)) return;
 
       const windows: Record<Window, number | null> = {
@@ -416,6 +433,14 @@ function ChatTimeoutForm({
       if (windows.ask !== saved.ask) body.ask_email_after_seconds = windows.ask;
       if ((values.askOffline === 'true') !== savedAskOffline) {
         body.ask_email_when_offline = values.askOffline === 'true';
+      }
+      const waitWarn = parseWaitingSeconds(values.waitWarn);
+      const waitAlert = parseWaitingSeconds(values.waitAlert);
+      if (waitWarn.ok && waitWarn.seconds !== savedWaitWarn) {
+        body.waiting_warn_seconds = waitWarn.seconds;
+      }
+      if (waitAlert.ok && waitAlert.seconds !== savedWaitAlert) {
+        body.waiting_alert_seconds = waitAlert.seconds;
       }
       if (windows.transfer !== saved.transfer) body.unanswered_transfer_seconds = windows.transfer;
       if (windows.inactive !== saved.inactive) body.inactive_after_seconds = windows.inactive;
@@ -457,6 +482,7 @@ function ChatTimeoutForm({
   };
   const amountsValid = Object.values(errors).every((error) => error === null);
   const problem = amountsValid ? orderProblem(form.values) : null;
+  const waitError = waitingFormError(form.values.waitWarn, form.values.waitAlert);
   const boundaryHour = Number(form.values.hour);
   const { zones, matched } = matchingZones(zoneSearch, form.values.timezone);
 
@@ -539,6 +565,51 @@ function ChatTimeoutForm({
           id="chat-inactivity-order-error"
           message={problem ? t(ORDER_MESSAGE_KEYS[problem]) : null}
         />
+      </fieldset>
+
+      <fieldset
+        disabled={!canEdit}
+        aria-labelledby="waiting-thresholds-heading"
+        className="flex flex-col gap-3 border-0 border-t border-border p-0 pt-5"
+      >
+        <div>
+          <h3 id="waiting-thresholds-heading" className="text-sm font-medium">
+            {t('settings.waiting.heading')}
+          </h3>
+          <p className="text-2xs text-content-tertiary">{t('settings.waiting.description')}</p>
+        </div>
+        <div className="flex flex-wrap items-start gap-4">
+          {(
+            [
+              ['waitWarn', 'waiting-warn', 'settings.waiting.warnLabel', 120],
+              ['waitAlert', 'waiting-alert', 'settings.waiting.alertLabel', 300],
+            ] as const
+          ).map(([field, id, label, fallback]) => (
+            <div key={field} className="flex w-44 flex-col gap-1">
+              <label
+                htmlFor={id}
+                className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+              >
+                {t(label)}
+              </label>
+              <input
+                id={id}
+                type="text"
+                inputMode="numeric"
+                value={form.values[field]}
+                onChange={(event) => form.setValue(field, event.target.value)}
+                placeholder={String(fallback)}
+                aria-describedby="waiting-thresholds-error"
+                className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none disabled:opacity-50"
+              />
+            </div>
+          ))}
+        </div>
+        <FieldError
+          id="waiting-thresholds-error"
+          message={waitError ? t(waitError) : form.errorFor('waitAlert')}
+        />
+        <p className="text-2xs text-content-tertiary">{t('settings.waiting.hint')}</p>
       </fieldset>
 
       <fieldset
@@ -704,7 +775,10 @@ function ChatTimeoutForm({
       </fieldset>
 
       {canEdit && (
-        <FormSaveBar form={form} valid={amountsValid && problem === null && form.isValid} />
+        <FormSaveBar
+          form={form}
+          valid={amountsValid && problem === null && waitError === null && form.isValid}
+        />
       )}
     </form>
   );

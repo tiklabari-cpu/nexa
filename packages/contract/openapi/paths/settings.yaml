@@ -1640,6 +1640,26 @@ chatTimeout:
                   here instead); null turns it off. Must be below
                   `unanswered_transfer_seconds`, `inactive_after_seconds` and
                   `chat_timeout_seconds` when those are on.
+              waiting_warn_seconds:
+                type: integer
+                format: int32
+                minimum: 1
+                maximum: 86400
+                nullable: true
+                description: >-
+                  Seconds a player may wait before the inbox row turns to a
+                  warning (IN-03); null puts the default (120) back. Must be
+                  below `waiting_alert_seconds`. Left out, the stored value stays.
+              waiting_alert_seconds:
+                type: integer
+                format: int32
+                minimum: 1
+                maximum: 86400
+                nullable: true
+                description: >-
+                  Seconds a player may wait before the inbox row turns to an
+                  alert (IN-03); null puts the default (300) back. Left out, the
+                  stored value stays.
               ask_email_when_offline:
                 type: boolean
                 description: >-

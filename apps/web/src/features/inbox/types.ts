@@ -61,6 +61,14 @@ export interface ChatSummary {
    * limit, and the list shows it dimmed. Omitted by older servers.
    */
   inactive?: boolean;
+  /**
+   * Since when the player has waited for an answer (IN-03): the server's own
+   * column, not derived from the last event. Null: nobody waits. Omitted by
+   * older servers.
+   */
+  waiting_since?: string | null;
+  /** When the newest connection joined its team's queue; null while it is in none. */
+  queued_at?: string | null;
   unread_count: number;
   /** The day's connections (ID-02); absent from a server that predates them. */
   connection_count?: number;

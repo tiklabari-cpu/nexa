@@ -638,6 +638,59 @@ describe('ChatTimeout e-mail request (WG-08)', () => {
   });
 });
 
+describe('ChatTimeout waiting counter (IN-03)', () => {
+  it('shows the defaults as placeholders for a workspace that never set them, and saves nothing for them', async () => {
+    renderChatTimeout();
+    const warn = await screen.findByLabelText('Warning after (seconds)');
+    const alert = screen.getByLabelText('Alert after (seconds)');
+    expect(warn).toHaveValue('');
+    expect(warn).toHaveAttribute('placeholder', '120');
+    expect(alert).toHaveAttribute('placeholder', '300');
+  });
+
+  it('loads the saved pair and saves a change as whole seconds, sending only what changed', async () => {
+    stubFetch({ ...DEFAULTS, waiting_warn_seconds: 60, waiting_alert_seconds: 600 });
+    renderChatTimeout();
+    const warn = await screen.findByLabelText('Warning after (seconds)');
+    expect(warn).toHaveValue('60');
+    expect(screen.getByLabelText('Alert after (seconds)')).toHaveValue('600');
+
+    await userEvent.clear(warn);
+    await userEvent.type(warn, '90');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(putBodies).toHaveLength(1));
+    expect(putBodies[0]).toMatchObject({ waiting_warn_seconds: 90 });
+    expect(putBodies[0]).not.toHaveProperty('waiting_alert_seconds');
+  });
+
+  it('puts the default back with an empty box (null)', async () => {
+    stubFetch({ ...DEFAULTS, waiting_warn_seconds: 60, waiting_alert_seconds: 600 });
+    renderChatTimeout();
+    const alert = await screen.findByLabelText('Alert after (seconds)');
+    await userEvent.clear(alert);
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(putBodies).toHaveLength(1));
+    expect(putBodies[0]).toMatchObject({ waiting_alert_seconds: null });
+  });
+
+  it('refuses a warning that is not before the alert, and a value out of range, before the network', async () => {
+    renderChatTimeout();
+    const warn = await screen.findByLabelText('Warning after (seconds)');
+    await userEvent.type(warn, '400');
+    expect(await screen.findByText('The warning must come before the alert.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+    await userEvent.clear(warn);
+    await userEvent.type(warn, '0');
+    expect(
+      await screen.findByText('Enter whole seconds from 1 to 86400, or leave the box empty.'),
+    ).toBeInTheDocument();
+    expect(putBodies).toHaveLength(0);
+  });
+});
+
 /** One sentinel for this file's DoD claim of being translated (I18N-j precedent, tm 133.10). */
 describe('ChatTimeout localisation (NFR-I18N2)', () => {
   afterEach(() => {

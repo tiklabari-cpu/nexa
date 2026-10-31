@@ -24,6 +24,7 @@ import { Modal } from './ui/index.js';
 
 const GROUPS: ReadonlyArray<{ scope: ShortcutScope; titleKey: string }> = [
   { scope: 'global', titleKey: 'shell.shortcuts.group.global' },
+  { scope: 'copilot', titleKey: 'shell.shortcuts.group.copilot' },
   { scope: 'inbox', titleKey: 'shell.shortcuts.group.inbox' },
   { scope: 'composer', titleKey: 'shell.shortcuts.group.composer' },
 ];

@@ -62,7 +62,7 @@ describe('the keyboard shortcuts window (IN-08)', () => {
 
     await user.type(search, 'COPILOT');
     expect(dialog.querySelectorAll('[data-shortcut]')).toHaveLength(1);
-    expect(dialog.querySelector('[data-shortcut="inbox.toggle-copilot"]')).not.toBeNull();
+    expect(dialog.querySelector('[data-shortcut="copilot.toggle-drawer"]')).not.toBeNull();
 
     await user.clear(search);
     await user.type(search, 'alt');

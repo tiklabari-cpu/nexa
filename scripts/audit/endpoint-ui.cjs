@@ -375,13 +375,6 @@ const TRACKED = [
       '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
       'the timeline viewer (tm 334) reads it too.',
   },
-  {
-    op: 'POST /copilot/ask',
-    owner: 'tm 366.2',
-    reason:
-      'the Copilot drawer question from any screen (tm 366.1 · IN-09) — the AppShell drawer ' +
-      '(`CopilotDrawer.tsx`) that asks it is CP-WEB, tm 366.2.',
-  },
 ];
 
 /** The platform contract's operations with no client, and why (tm 389.3). */

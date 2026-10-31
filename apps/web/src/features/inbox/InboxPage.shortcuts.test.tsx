@@ -2,10 +2,11 @@
  * Keyboard shortcuts in the inbox (IN-08): Alt+↓ / Alt+↑ walk the list on
  * screen and leave the cursor in the opened chat's composer, stop at either
  * end, stay silent behind a dialog and while AltGr is down, and the composer's
- * own shortcuts (Copilot, attach) work from the reply field.
+ * own shortcuts (attach, tag) work from the reply field. The key that opens the
+ * Copilot drawer is the shell's; this page only tells the drawer its chat.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -29,6 +30,8 @@ vi.mock('../../lib/auth-store.js', async (importOriginal) => {
 });
 
 const { InboxPage } = await import('./InboxPage.js');
+const { useCopilotDrawerStore, resetCopilotDrawer } =
+  await import('../copilot/copilotDrawerStore.js');
 const { ShortcutsHost } = await import('../../components/ShortcutsModal.js');
 
 function row(id: string, name: string) {
@@ -50,6 +53,7 @@ function row(id: string, name: string) {
 }
 
 beforeEach(() => {
+  resetCopilotDrawer();
   api.get.mockReset();
   localStorage.clear();
   api.get.mockImplementation((url: string) => {
@@ -196,21 +200,19 @@ describe('chat-to-chat keys in the inbox (IN-08)', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('Alt+Shift+C shows Copilot from the reply field and a second press hides it', async () => {
+  it('tells the Copilot drawer which chat is open, and lets go of it on leaving (IN-09)', async () => {
     const user = userEvent.setup();
-    renderInbox();
+    const list = renderInbox();
     await waitFor(() => expect(composer()).not.toBeNull());
-    await user.click(composer()!);
+    await waitFor(() =>
+      expect(useCopilotDrawerStore.getState().chat).toEqual({ id: 'one', canDraft: true }),
+    );
 
-    expect(localStorage.getItem('siyahtus.inbox.right-panel-tab')).toBeNull();
-    fireEvent.keyDown(composer()!, { key: 'C', code: 'KeyC', altKey: true, shiftKey: true });
-    await waitFor(() =>
-      expect(localStorage.getItem('siyahtus.inbox.right-panel-tab')).toBe('copilot'),
-    );
-    fireEvent.keyDown(composer()!, { key: 'C', code: 'KeyC', altKey: true, shiftKey: true });
-    await waitFor(() =>
-      expect(localStorage.getItem('siyahtus.inbox.right-panel-tab')).toBe('details'),
-    );
+    await user.click(await rowOf(list, 'Second player'));
+    await waitFor(() => expect(useCopilotDrawerStore.getState().chat?.id).toBe('two'));
+
+    cleanup();
+    expect(useCopilotDrawerStore.getState().chat).toBeNull();
   });
 
   it('Alt+Shift+U opens the file picker from the reply field', async () => {

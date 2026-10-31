@@ -86,6 +86,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/inbox/Composer.tsx',
   'src/features/inbox/CannedPicker.tsx',
   'src/features/inbox/ConflictBanner.tsx',
+  'src/components/CopilotDrawer.tsx',
   'src/features/inbox/CopilotPanel.tsx',
   'src/features/inbox/CreateTicketButton.tsx',
   'src/features/inbox/DetailsPanel.tsx',

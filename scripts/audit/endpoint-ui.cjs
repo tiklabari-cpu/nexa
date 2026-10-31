@@ -375,6 +375,20 @@ const TRACKED = [
       '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
       'the timeline viewer (tm 334) reads it too.',
   },
+  {
+    op: 'GET /reports/missed',
+    owner: 'tm 369.2',
+    reason:
+      'missed conversations by reason, day, hour × weekday, team and agent (tm 369.1 · RP-02) — ' +
+      'the Reports "Kaçan sohbetler" tab and its heat map, drawn by ME-WEB (tm 369.2).',
+  },
+  {
+    op: 'GET /reports/engagement',
+    owner: 'tm 369.2',
+    reason:
+      'who started the conversations (tm 369.1 · RP-02) — the Reports "Etkileşim" tab, ' +
+      'drawn by ME-WEB (tm 369.2).',
+  },
 ];
 
 /** The platform contract's operations with no client, and why (tm 389.3). */

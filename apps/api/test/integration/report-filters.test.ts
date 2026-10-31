@@ -370,6 +370,28 @@ describe('report filters (RP-01 · tm 368)', () => {
         );
         expect(days).toEqual([]);
       },
+      // RP-02 (tm 369.1).
+      missed: async () => {
+        const body = await json(`/reports/missed?${q}`);
+        expect((body.totals as Json).closed).toBe(0);
+        expect((body.totals as Json).missed).toBe(0);
+        expect(body.by_day).toEqual([]);
+        expect(body.by_team).toEqual([]);
+        expect(body.by_agent).toEqual([]);
+        expect(sum(body.heatmap as Json[], 'missed')).toBe(0);
+        expect((body.previous_period as Json).closed).toBe(0);
+        const lines = dataLines(await csv(`group=missed&${q}`));
+        expect(lines.find((line) => line[1] === 'closed')?.[3]).toBe('0');
+      },
+      engagement: async () => {
+        const body = await json(`/reports/engagement?${q}`);
+        expect((body.totals as Json).chats).toBe(0);
+        expect(sum(body.by_initiator as Json[], 'chats')).toBe(0);
+        expect(body.by_day).toEqual([]);
+        expect((body.previous_period as Json).chats).toBe(0);
+        const lines = dataLines(await csv(`group=engagement&${q}`));
+        expect(lines.reduce((total, line) => total + Number(line[3] ?? 0), 0)).toBe(0);
+      },
     };
     // A conversation group added to the list without a check here fails.
     expect(Object.keys(checks).sort()).toEqual([...REPORT_FILTERABLE_GROUPS].sort());
@@ -380,6 +402,8 @@ describe('report filters (RP-01 · tm 368)', () => {
     expect(totals(await json('/reports/overview')).chats).toBe(4);
     expect(((await json('/reports/team-performance')).agents as Json[]).length).toBe(2);
     expect(((await json('/reports/reviews')).csat as Json).responses).toBe(2);
+    expect(((await json('/reports/missed')).totals as Json).closed).toBe(4);
+    expect(((await json('/reports/engagement')).totals as Json).chats).toBe(4);
   });
 
   it('refuses a filter on every report that is not counted from conversations, rather than ignoring it', async () => {

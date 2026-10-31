@@ -62,12 +62,15 @@ import type { TenantClient, TenantContext } from '../../lib/tenant.js';
  * customer can only have one active chat at a time (`ChatService.start`
  * reuses an existing one), so this is defence in depth rather than a
  * reachable race.
+ *
+ * Returns whether a send was credited — the opening the campaign then gets
+ * the credit for as the connection's opener ({@link markCampaignInitiated}).
  */
 export async function markCampaignEngaged(
   tx: TenantClient,
   tenant: TenantContext,
   input: { customerId: string; chatId: string },
-): Promise<void> {
+): Promise<boolean> {
   const outstanding = await tx.campaignSend.findFirst({
     where: {
       licenseId: tenant.licenseId,
@@ -78,10 +81,25 @@ export async function markCampaignEngaged(
     orderBy: [{ deliveredAt: 'desc' }, { id: 'desc' }],
     select: { id: true },
   });
-  if (!outstanding) return;
+  if (!outstanding) return false;
 
-  await tx.campaignSend.updateMany({
+  const credited = await tx.campaignSend.updateMany({
     where: { id: outstanding.id, engaged: false },
     data: { engaged: true, chatId: input.chatId },
+  });
+  return credited.count > 0;
+}
+
+/**
+ * The connection a campaign opened was started by it (RP-02 · tm 369.1,
+ * `threads.initiated_by = 'campaign'`): the engagement report's own row.
+ * Over `customer` only — the opener the widget's message wrote a moment
+ * earlier — so a connection an agent or a channel started is never relabelled,
+ * and a second call changes nothing.
+ */
+export async function markCampaignInitiated(tx: TenantClient, threadId: string): Promise<void> {
+  await tx.thread.updateMany({
+    where: { id: threadId, initiatedBy: 'customer' },
+    data: { initiatedBy: 'campaign' },
   });
 }

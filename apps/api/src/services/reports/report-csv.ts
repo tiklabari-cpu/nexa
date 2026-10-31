@@ -40,6 +40,14 @@ import {
 import { type CsvCell } from '../../routes/reports-export.js';
 import { campaignReportCsv, campaignsBenchmark } from './campaign-report.js';
 import { reviewInsights, type ReviewInsight } from './review-insights.js';
+import {
+  engagementBenchmark,
+  engagementCsvTable,
+  engagementFigures,
+  missedBenchmark,
+  missedCsvTable,
+  missedFigures,
+} from './missed-engagement.js';
 import { aiResolvedSql } from '../billing/ai-resolution.js';
 import {
   accessTeamSql,
@@ -1708,6 +1716,10 @@ function groupBenchmark(
       return goalsBenchmark(tx, licenseId, window);
     case 'campaigns':
       return campaignsBenchmark(tx, licenseId, window, filters.campaignIds);
+    case 'missed':
+      return missedBenchmark(tx, licenseId, window, thread);
+    case 'engagement':
+      return engagementBenchmark(tx, licenseId, window, thread);
     case 'topics':
       // Topics keeps each cluster's baseline volume on its own row
       // (`previous_volume`), where it can be matched to the topic it belongs
@@ -1959,6 +1971,11 @@ async function groupCsvTable(
     }
     case 'campaigns':
       return campaignReportCsv(tx, licenseId, from, to, filters.campaignIds);
+    // RP-02: the same figures `GET /reports/missed` and `/engagement` read.
+    case 'missed':
+      return missedCsvTable(await missedFigures(tx, licenseId, from, to, thread));
+    case 'engagement':
+      return engagementCsvTable(await engagementFigures(tx, licenseId, from, to, thread));
     case 'sales': {
       // Same figures the JSON report reads ({@link salesReportFigures}), so
       // this can never disagree with what the tab shows — real values once

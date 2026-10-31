@@ -1123,7 +1123,10 @@ describe('module parity matrix — what is still owed', () => {
       // 361 -> 362 with `POST /copilot/ask` (tm 366.1) — the Copilot drawer's
       // question from any screen (IN-09), drawn in the web console by tm 366.2; the
       // handset has no Copilot drawer, and nothing here re-scopes.
-      contractEndpoints: 362,
+      // 362 -> 364 with `GET /reports/missed` and `GET /reports/engagement` (tm 369.1)
+      // — the missed-conversation and engagement reports (RP-02), two web Reports tabs
+      // (tm 369.2); the handset has no Reports screen, and nothing here re-scopes.
+      contractEndpoints: 364,
       scopeBoundaries: 1,
     });
   });

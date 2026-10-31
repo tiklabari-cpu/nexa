@@ -87,7 +87,7 @@ const AGENT_WROTE = Prisma.sql`EXISTS (
  * invoice. Looked up by `thread_id` (the `(thread_id, created_at)` index),
  * like {@link AGENT_WROTE}.
  */
-const HANDED_OFF = Prisma.sql`EXISTS (
+export const HANDED_OFF = Prisma.sql`EXISTS (
   SELECT 1 FROM events e
   WHERE e.thread_id = t.id
     AND e.author_type = 'system'
@@ -176,7 +176,7 @@ export async function threadWasAiResolved(
 }
 
 /** A bot wrote in the thread — the AI's line or a rule bot's. */
-const BOT_WROTE = Prisma.sql`EXISTS (
+export const BOT_WROTE = Prisma.sql`EXISTS (
   SELECT 1 FROM events e WHERE e.thread_id = t.id AND e.author_type = 'bot'
 )`;
 

@@ -60,6 +60,9 @@ export const REPORT_GROUPS: readonly ReportGroup[] = [
   { id: 'sales', label: 'Sales', scopes: ['reports_read'] },
   { id: 'goals', label: 'Goals', scopes: ['reports_read'] },
   { id: 'campaigns', label: 'Campaigns', scopes: ['reports_read'] },
+  // RP-02 (tm 369.1): conversation reports, so a Team Lead reads their teams'.
+  { id: 'missed', label: 'Missed chats', scopes: CONVERSATION_GROUP_SCOPES },
+  { id: 'engagement', label: 'Chat engagement', scopes: CONVERSATION_GROUP_SCOPES },
 ] as const;
 
 export type ReportGroupId = (typeof REPORT_GROUPS)[number]['id'];

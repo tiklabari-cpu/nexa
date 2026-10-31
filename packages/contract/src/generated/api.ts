@@ -11115,6 +11115,82 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/reports/missed': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Missed conversations — by reason, day, hour × weekday, team and agent
+     * @description Missed conversations (RP-02 · tm 369.1). A connection is missed when it
+     *     needed a person — it was queued, assigned, or handed over by the AI
+     *     (`threads.needs_human_since`) — and no agent ever answered the player
+     *     (`first_response_at`, which only an agent's public message sets). One the
+     *     AI answered and never handed over is not missed. The reason is written
+     *     once, as the connection closes, and read here, never recomputed:
+     *
+     *     - `unanswered_after_ai` — the AI or a rule bot handed it over and nobody
+     *       answered ("devir sonrası kaçan"); checked first;
+     *     - `unanswered_assigned` — it closed with an agent assigned who never
+     *       wrote to the player;
+     *     - `queue_abandoned` — it closed with nobody assigned.
+     *
+     *     Connections are windowed by their creation, like every conversation
+     *     report. `by_day` and `heatmap` are in the workspace's time zone
+     *     (`timezone`, the conversation-day zone, ID-04), never UTC. `by_team` is
+     *     the connection's own team (`threads.group_id`), one per connection.
+     *     `totals.estimated` counts the missed connections whose reason a partial
+     *     backfill inferred from the transcript (closed before the fields were
+     *     written): show the figure as not exact when it is above 0.
+     *
+     *     Takes the report filters (RP-01): `agent_id`, `group_id`, `tag` and
+     *     `topic`, each repeatable — see `ReportFilter`; the applied filter is
+     *     echoed as `filters`. A `reports_read--groups` caller (an Ekip Lideri)
+     *     reads only the teams they lead. Defaults to the last 30 days.
+     */
+    get: operations['getReportsMissed'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/engagement': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Chat engagement — who started the conversations
+     * @description Who started the connections of the window (RP-02 · tm 369.1,
+     *     `threads.initiated_by`): the player from the widget (`customer`), an
+     *     agent (`agent`), a campaign card (`campaign`), the AI (`ai`) or a channel
+     *     adapter (`channel`); `unknown` is a connection whose opener was not
+     *     recorded — opened before the field existed, or by a path that does not
+     *     say. `by_initiator` always holds all six rows in that order, zeros
+     *     included, so a campaign's row is there to read; the rows partition the
+     *     window (`SUM(chats) = totals.chats`). Each row carries how many an agent
+     *     answered and how many were missed (see `GET /reports/missed`).
+     *
+     *     `by_day` is in the workspace's time zone (`timezone`), sparse: a day ×
+     *     opener pair with no connection is absent. Takes the report filters
+     *     (RP-01) like the other conversation reports. Defaults to the last 30 days.
+     */
+    get: operations['getReportsEngagement'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/reports/sales': {
     parameters: {
       query?: never;
@@ -11351,9 +11427,17 @@ export interface paths {
      *     long-format table — `section,key,name,value`, where `section` is `funnel`
      *     (one row per funnel figure) or `goal` (one row per defined goal, `key`
      *     being its id);
+     *     `missed` serialises one long-format table —
+     *     `dimension,key,name,missed,queue_abandoned,unanswered_assigned,unanswered_after_ai`,
+     *     `dimension` being `total` (`all`, `estimated`, `closed`), `day` (a local date),
+     *     `hour_of_week` (`<ISO weekday>T<hour>`, workspace zone, cells with a miss),
+     *     `team` or `agent`; `engagement` serialises
+     *     `dimension,key,initiated_by,chats,closed,answered,missed` — six `total` rows,
+     *     then `day` rows per local date and opener;
      *     The report filters (`agent_id`, `group_id`, `tag`, `topic`; RP-01)
      *     apply to the conversation groups — `overview`, `breakdown`,
-     *     `team-performance`, `reviews` — through the same query helpers the JSON
+     *     `team-performance`, `reviews`, `missed`, `engagement` — through the same
+     *     query helpers the JSON
      *     reports use, so a filtered download equals the filtered screen; another
      *     group given a filter is a 400. A `reports_read--groups` caller exports
      *     only those groups, bounded to the teams they lead.
@@ -23164,6 +23248,133 @@ export interface components {
         /** @description Human-readable tab name. */
         label: string;
       }[];
+    };
+    /**
+     * @description Why a connection was missed (RP-02, `threads.missed_reason`) — see
+     *     `GET /reports/missed`.
+     * @enum {string}
+     */
+    MissedReason: 'queue_abandoned' | 'unanswered_assigned' | 'unanswered_after_ai';
+    /**
+     * @description Who started a connection (RP-02, `threads.initiated_by`). `ai` is held
+     *     for a proactive AI opening; no path writes it yet.
+     * @enum {string}
+     */
+    ThreadInitiatedBy: 'customer' | 'agent' | 'campaign' | 'ai' | 'channel';
+    /** @description Missed connections, in total and by reason. */
+    MissedCounts: {
+      missed: number;
+      queue_abandoned: number;
+      unanswered_assigned: number;
+      unanswered_after_ai: number;
+    };
+    /** @description The missed-conversations report (RP-02) — see `GET /reports/missed`. */
+    ReportsMissed: {
+      /**
+       * @description The filter that was applied (RP-01), after the team bound of a
+       *     `reports_read--groups` caller. Absent when nothing narrowed the report.
+       */
+      filters?: components['schemas']['ReportFilter'];
+      range: {
+        /** Format: date-time */
+        from: string;
+        /** Format: date-time */
+        to: string;
+      };
+      /** @description The IANA zone `by_day` and `heatmap` are counted in — the workspace's (ID-04). */
+      timezone: string;
+      totals: components['schemas']['MissedCounts'] & {
+        /** @description Closed connections created in the window — what `missed` is a share of. */
+        closed: number;
+        /** @description `missed / closed`, 0..1 to four places; null when nothing closed. */
+        missed_rate: number | null;
+        /**
+         * @description The missed connections whose reason a partial backfill inferred
+         *     (closed before the fields were written) — not exact. 0 for a
+         *     window that starts after.
+         */
+        estimated: number;
+      };
+      /** @description Per local day with a miss, oldest first. */
+      by_day: (components['schemas']['MissedCounts'] & {
+        /** Format: date */
+        date: string;
+      })[];
+      /**
+       * @description All 168 hour × weekday cells, Monday 00:00 first, zero-filled, in
+       *     the workspace's zone.
+       */
+      heatmap: (components['schemas']['MissedCounts'] & {
+        /** @description ISO weekday, 1 Monday … 7 Sunday. */
+        weekday: number;
+        hour: number;
+      })[];
+      /**
+       * @description Per team of the connection (`threads.group_id`), most missed first;
+       *     `team_id: null` is no team. Adds up to `totals.missed`.
+       */
+      by_team: (components['schemas']['MissedCounts'] & {
+        team_id: number | null;
+        name: string | null;
+      })[];
+      /**
+       * @description Per agent who held the connection at its close, most missed first,
+       *     at most 20; a queue abandonment, held by nobody, is in no row.
+       */
+      by_agent: (components['schemas']['MissedCounts'] & {
+        /** Format: uuid */
+        agent_id: string;
+        name: string | null;
+      })[];
+      previous_period: components['schemas']['BenchmarkWindow'] &
+        components['schemas']['MissedCounts'] & {
+          closed: number;
+        };
+    };
+    /** @description One opener's connections in the window. */
+    EngagementInitiatorRow: {
+      /** @enum {string} */
+      initiated_by: 'customer' | 'agent' | 'campaign' | 'ai' | 'channel' | 'unknown';
+      chats: number;
+      closed: number;
+      /** @description Connections an agent answered (`first_response_at` set). */
+      answered: number;
+      missed: number;
+    };
+    /** @description The engagement report (RP-02) — see `GET /reports/engagement`. */
+    ReportsEngagement: {
+      /**
+       * @description The filter that was applied (RP-01), after the team bound of a
+       *     `reports_read--groups` caller. Absent when nothing narrowed the report.
+       */
+      filters?: components['schemas']['ReportFilter'];
+      range: {
+        /** Format: date-time */
+        from: string;
+        /** Format: date-time */
+        to: string;
+      };
+      /** @description The IANA zone `by_day` is counted in — the workspace's (ID-04). */
+      timezone: string;
+      totals: {
+        chats: number;
+      };
+      /** @description All six openers, in enum order, zeros included. */
+      by_initiator: components['schemas']['EngagementInitiatorRow'][];
+      /** @description Per local day and opener with at least one connection, oldest day first. */
+      by_day: (components['schemas']['EngagementInitiatorRow'] & {
+        /** Format: date */
+        date: string;
+      })[];
+      previous_period: components['schemas']['BenchmarkWindow'] & {
+        chats: number;
+        customer: number;
+        agent: number;
+        campaign: number;
+        ai: number;
+        channel: number;
+        unknown: number;
+      };
     };
     /**
      * @description Which conversations a report counts (RP-01). Every key is optional and a
@@ -40896,6 +41107,178 @@ export interface operations {
       429: components['responses']['TooManyRequests'];
     };
   };
+  getReportsMissed: {
+    parameters: {
+      query?: {
+        /**
+         * @description Start of the reporting window. Defaults to 30 days before `to`.
+         *
+         *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
+         *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
+         *     a read replica or a column-store analytics warehouse, neither of which
+         *     this deployment has, so the window a single query may scan is bounded
+         *     instead. 366 rather than 365 so a twelve-month window that spans a leap
+         *     day is not the one that fails. The limit applies to the group endpoints
+         *     and to `/reports/export` alike — both run the same aggregation, so
+         *     capping only the download would leave the identical scan one query
+         *     string away.
+         */
+        from?: components['parameters']['ReportRangeFrom'];
+        /**
+         * @description End of the reporting window. Defaults to now. The 366-day span limit
+         *     described on `from` is measured across this pair.
+         */
+        to?: components['parameters']['ReportRangeTo'];
+        /**
+         * @description Which of **this license's own** past windows the report is benchmarked
+         *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
+         *     `previous_period`, the comparison the Overview and Reviews reports made
+         *     before this parameter existed, so omitting it changes nothing.
+         *
+         *     - `previous_period` — the equal-length window immediately before the
+         *       requested one, ending a millisecond short of `from` so no instant
+         *       falls in both.
+         *     - `previous_year` — the same window shifted back 365 days: the
+         *       comparison for a seasonal figure, where the period immediately before
+         *       is the wrong yardstick. A fixed 365 days rather than calendar-year
+         *       arithmetic, so a leap day cannot make the two windows different
+         *       lengths.
+         *
+         *     There is deliberately **no** cross-license baseline — no industry
+         *     average, peer cohort or anonymised pool. Every report figure comes from
+         *     a license-scoped query under RLS (NFR-S4); a benchmark against other
+         *     licenses would have to read rows this tenant may not see, and
+         *     aggregation does not make that safe when the cohort can be narrowed to
+         *     one. An unrecognised value is a 400, not a silent fallback, so
+         *     `baseline=industry` fails loudly rather than appearing supported.
+         */
+        baseline?: components['parameters']['BenchmarkBaseline'];
+        /**
+         * @description Only the connections whose last assignee is one of these agents (RP-01).
+         *     Account ids, never e-mail addresses (GV-05). Repeat the parameter for more than one.
+         */
+        agent_id?: components['parameters']['ReportFilterAgent'];
+        /**
+         * @description Only the conversations shared with one of these teams (`chat_access`,
+         *     RP-01). For a `reports_read--groups` caller, intersected with the teams
+         *     they lead; an empty intersection is an empty report.
+         */
+        group_id?: components['parameters']['ReportFilterGroup'];
+        /** @description Only the connections carrying any of these tags (tag ids, RP-01). */
+        tag?: components['parameters']['ReportFilterTag'];
+        /**
+         * @description Only the connections the AI recorded one of these topics for (AI-05, the
+         *     procedure key). Not the same thing as a tag (RP-01 decision 2).
+         */
+        topic?: components['parameters']['ReportFilterTopic'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The missed conversations of the requested window */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReportsMissed'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getReportsEngagement: {
+    parameters: {
+      query?: {
+        /**
+         * @description Start of the reporting window. Defaults to 30 days before `to`.
+         *
+         *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
+         *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
+         *     a read replica or a column-store analytics warehouse, neither of which
+         *     this deployment has, so the window a single query may scan is bounded
+         *     instead. 366 rather than 365 so a twelve-month window that spans a leap
+         *     day is not the one that fails. The limit applies to the group endpoints
+         *     and to `/reports/export` alike — both run the same aggregation, so
+         *     capping only the download would leave the identical scan one query
+         *     string away.
+         */
+        from?: components['parameters']['ReportRangeFrom'];
+        /**
+         * @description End of the reporting window. Defaults to now. The 366-day span limit
+         *     described on `from` is measured across this pair.
+         */
+        to?: components['parameters']['ReportRangeTo'];
+        /**
+         * @description Which of **this license's own** past windows the report is benchmarked
+         *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
+         *     `previous_period`, the comparison the Overview and Reviews reports made
+         *     before this parameter existed, so omitting it changes nothing.
+         *
+         *     - `previous_period` — the equal-length window immediately before the
+         *       requested one, ending a millisecond short of `from` so no instant
+         *       falls in both.
+         *     - `previous_year` — the same window shifted back 365 days: the
+         *       comparison for a seasonal figure, where the period immediately before
+         *       is the wrong yardstick. A fixed 365 days rather than calendar-year
+         *       arithmetic, so a leap day cannot make the two windows different
+         *       lengths.
+         *
+         *     There is deliberately **no** cross-license baseline — no industry
+         *     average, peer cohort or anonymised pool. Every report figure comes from
+         *     a license-scoped query under RLS (NFR-S4); a benchmark against other
+         *     licenses would have to read rows this tenant may not see, and
+         *     aggregation does not make that safe when the cohort can be narrowed to
+         *     one. An unrecognised value is a 400, not a silent fallback, so
+         *     `baseline=industry` fails loudly rather than appearing supported.
+         */
+        baseline?: components['parameters']['BenchmarkBaseline'];
+        /**
+         * @description Only the connections whose last assignee is one of these agents (RP-01).
+         *     Account ids, never e-mail addresses (GV-05). Repeat the parameter for more than one.
+         */
+        agent_id?: components['parameters']['ReportFilterAgent'];
+        /**
+         * @description Only the conversations shared with one of these teams (`chat_access`,
+         *     RP-01). For a `reports_read--groups` caller, intersected with the teams
+         *     they lead; an empty intersection is an empty report.
+         */
+        group_id?: components['parameters']['ReportFilterGroup'];
+        /** @description Only the connections carrying any of these tags (tag ids, RP-01). */
+        tag?: components['parameters']['ReportFilterTag'];
+        /**
+         * @description Only the connections the AI recorded one of these topics for (AI-05, the
+         *     procedure key). Not the same thing as a tag (RP-01 decision 2).
+         */
+        topic?: components['parameters']['ReportFilterTopic'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The connections of the requested window by who started them */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReportsEngagement'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
   getReportsSales: {
     parameters: {
       query?: {
@@ -41175,7 +41558,7 @@ export interface operations {
   exportReport: {
     parameters: {
       query: {
-        /** @description Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `campaigns`. */
+        /** @description Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `campaigns`, `missed`, `engagement`. */
         group: string;
         /**
          * @description Download format. Defaults to `csv` — the only format v1 shipped, so a
@@ -41340,7 +41723,7 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': {
-          /** @description Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`. */
+          /** @description Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `missed`, `engagement`. */
           group: string;
           /**
            * Format: date-time
@@ -41360,7 +41743,8 @@ export interface operations {
           /**
            * @description The report filter the link is frozen to (RP-01). Only for the
            *     conversation groups (`overview`, `breakdown`,
-           *     `team-performance`, `reviews`); another group given a
+           *     `team-performance`, `reviews`, `missed`, `engagement`); another
+           *     group given a
            *     non-empty filter is a 400. Whoever opens the link reads exactly
            *     this filter and cannot widen it.
            */
@@ -41471,7 +41855,7 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': {
-          /** @description Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`. */
+          /** @description Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `missed`, `engagement`. */
           group: string;
           frequency: components['schemas']['ScheduledExportFrequency'];
           /**

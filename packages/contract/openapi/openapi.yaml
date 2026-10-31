@@ -824,6 +824,10 @@ paths:
     $ref: "./paths/reports.yaml#/leads"
   /reports/team-performance:
     $ref: "./paths/reports.yaml#/teamPerformance"
+  /reports/missed:
+    $ref: "./paths/reports.yaml#/missed"
+  /reports/engagement:
+    $ref: "./paths/reports.yaml#/engagement"
   /reports/sales:
     $ref: "./paths/reports.yaml#/sales"
   /reports/goals:
@@ -14981,6 +14985,199 @@ components:
                 type: string
                 description: "Group id: `overview`, `breakdown`, `ai-agent` or `reviews`."
               label: { type: string, description: Human-readable tab name. }
+
+    MissedReason:
+      type: string
+      description: |
+        Why a connection was missed (RP-02, `threads.missed_reason`) — see
+        `GET /reports/missed`.
+      enum: [queue_abandoned, unanswered_assigned, unanswered_after_ai]
+
+    ThreadInitiatedBy:
+      type: string
+      description: |
+        Who started a connection (RP-02, `threads.initiated_by`). `ai` is held
+        for a proactive AI opening; no path writes it yet.
+      enum: [customer, agent, campaign, ai, channel]
+
+    MissedCounts:
+      type: object
+      description: Missed connections, in total and by reason.
+      required: [missed, queue_abandoned, unanswered_assigned, unanswered_after_ai]
+      properties:
+        missed: { type: integer }
+        queue_abandoned: { type: integer }
+        unanswered_assigned: { type: integer }
+        unanswered_after_ai: { type: integer }
+
+    ReportsMissed:
+      type: object
+      description: The missed-conversations report (RP-02) — see `GET /reports/missed`.
+      required: [range, timezone, totals, by_day, heatmap, by_team, by_agent, previous_period]
+      properties:
+        filters:
+          description: |
+            The filter that was applied (RP-01), after the team bound of a
+            `reports_read--groups` caller. Absent when nothing narrowed the report.
+          allOf:
+            - $ref: "#/components/schemas/ReportFilter"
+        range:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+        timezone:
+          type: string
+          description: The IANA zone `by_day` and `heatmap` are counted in — the workspace's (ID-04).
+        totals:
+          allOf:
+            - $ref: "#/components/schemas/MissedCounts"
+            - type: object
+              required: [closed, missed_rate, estimated]
+              properties:
+                closed:
+                  type: integer
+                  description: Closed connections created in the window — what `missed` is a share of.
+                missed_rate:
+                  type: number
+                  nullable: true
+                  description: "`missed / closed`, 0..1 to four places; null when nothing closed."
+                estimated:
+                  type: integer
+                  description: |
+                    The missed connections whose reason a partial backfill inferred
+                    (closed before the fields were written) — not exact. 0 for a
+                    window that starts after.
+        by_day:
+          type: array
+          description: Per local day with a miss, oldest first.
+          items:
+            allOf:
+              - $ref: "#/components/schemas/MissedCounts"
+              - type: object
+                required: [date]
+                properties:
+                  date: { type: string, format: date }
+        heatmap:
+          type: array
+          description: |
+            All 168 hour × weekday cells, Monday 00:00 first, zero-filled, in
+            the workspace's zone.
+          items:
+            allOf:
+              - $ref: "#/components/schemas/MissedCounts"
+              - type: object
+                required: [weekday, hour]
+                properties:
+                  weekday:
+                    type: integer
+                    minimum: 1
+                    maximum: 7
+                    description: ISO weekday, 1 Monday … 7 Sunday.
+                  hour: { type: integer, minimum: 0, maximum: 23 }
+        by_team:
+          type: array
+          description: |
+            Per team of the connection (`threads.group_id`), most missed first;
+            `team_id: null` is no team. Adds up to `totals.missed`.
+          items:
+            allOf:
+              - $ref: "#/components/schemas/MissedCounts"
+              - type: object
+                required: [team_id, name]
+                properties:
+                  team_id: { type: integer, nullable: true }
+                  name: { type: string, nullable: true }
+        by_agent:
+          type: array
+          description: |
+            Per agent who held the connection at its close, most missed first,
+            at most 20; a queue abandonment, held by nobody, is in no row.
+          items:
+            allOf:
+              - $ref: "#/components/schemas/MissedCounts"
+              - type: object
+                required: [agent_id, name]
+                properties:
+                  agent_id: { type: string, format: uuid }
+                  name: { type: string, nullable: true }
+        previous_period:
+          allOf:
+            - $ref: "#/components/schemas/BenchmarkWindow"
+            - $ref: "#/components/schemas/MissedCounts"
+            - type: object
+              required: [closed]
+              properties:
+                closed: { type: integer }
+
+    EngagementInitiatorRow:
+      type: object
+      description: One opener's connections in the window.
+      required: [initiated_by, chats, closed, answered, missed]
+      properties:
+        initiated_by:
+          type: string
+          enum: [customer, agent, campaign, ai, channel, unknown]
+        chats: { type: integer }
+        closed: { type: integer }
+        answered:
+          type: integer
+          description: Connections an agent answered (`first_response_at` set).
+        missed: { type: integer }
+
+    ReportsEngagement:
+      type: object
+      description: The engagement report (RP-02) — see `GET /reports/engagement`.
+      required: [range, timezone, totals, by_initiator, by_day, previous_period]
+      properties:
+        filters:
+          description: |
+            The filter that was applied (RP-01), after the team bound of a
+            `reports_read--groups` caller. Absent when nothing narrowed the report.
+          allOf:
+            - $ref: "#/components/schemas/ReportFilter"
+        range:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+        timezone:
+          type: string
+          description: The IANA zone `by_day` is counted in — the workspace's (ID-04).
+        totals:
+          type: object
+          required: [chats]
+          properties:
+            chats: { type: integer }
+        by_initiator:
+          type: array
+          description: All six openers, in enum order, zeros included.
+          items: { $ref: "#/components/schemas/EngagementInitiatorRow" }
+        by_day:
+          type: array
+          description: Per local day and opener with at least one connection, oldest day first.
+          items:
+            allOf:
+              - $ref: "#/components/schemas/EngagementInitiatorRow"
+              - type: object
+                required: [date]
+                properties:
+                  date: { type: string, format: date }
+        previous_period:
+          allOf:
+            - $ref: "#/components/schemas/BenchmarkWindow"
+            - type: object
+              required: [chats, customer, agent, campaign, ai, channel, unknown]
+              properties:
+                chats: { type: integer }
+                customer: { type: integer }
+                agent: { type: integer }
+                campaign: { type: integer }
+                ai: { type: integer }
+                channel: { type: integer }
+                unknown: { type: integer }
 
     ReportFilter:
       type: object

@@ -70,7 +70,10 @@ import {
   stampCampaignClicked,
 } from '../services/campaigns/campaign-delivery.js';
 import { resolveCardPostback } from '../services/campaigns/card-postback.js';
-import { markCampaignEngaged } from '../services/campaigns/campaign-engagement.js';
+import {
+  markCampaignEngaged,
+  markCampaignInitiated,
+} from '../services/campaigns/campaign-engagement.js';
 import { fireCampaignsAtVisitor } from '../services/campaigns/campaign-trigger.js';
 import { createGoalConversionRecorder } from '../services/goals/goal-triggers.js';
 import { AiResponder } from '../services/ai/ai-responder.js';
@@ -1587,10 +1590,18 @@ export default async function customerRoutes(
       // never be atomic with it anyway — its own transaction and best-effort,
       // same reasoning as the page-view/goal write above. Losing it should cost
       // a report number, not the message the visitor is trying to send.
+      // The same credit names the campaign as the connection's opener (RP-02):
+      // a send it was owed, or the card's own button the message came from.
       try {
-        await request.withTenant((tx) =>
-          markCampaignEngaged(tx, tenant, { customerId: principal.customerId, chatId }),
-        );
+        await request.withTenant(async (tx) => {
+          const credited = await markCampaignEngaged(tx, tenant, {
+            customerId: principal.customerId,
+            chatId,
+          });
+          if (credited || pressed?.sendId) {
+            await markCampaignInitiated(tx, result.event.thread_id);
+          }
+        });
       } catch (error) {
         request.log.warn({ err: error }, 'could not record campaign engagement');
       }

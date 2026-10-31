@@ -98,3 +98,4 @@ export * from './transcript-export.js';
 export * from './campaign-conditions.js';
 export * from './rich-card.js';
 export * from './report-filter.js';
+export * from './missed-engagement.js';

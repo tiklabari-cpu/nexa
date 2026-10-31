@@ -546,6 +546,8 @@ export class ChannelService {
         recipients: 'all',
         ...(masked.types.length > 0 ? { sensitiveTypes: masked.types } : {}),
       },
+      // A connection this opens was started through the channel (RP-02).
+      initiatedBy: 'channel',
       audit: audit(tenant, customerId),
     });
     const chatId = chat.id;

@@ -478,6 +478,94 @@ teamPerformance:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+missed:
+  get:
+    tags: [Reports]
+    operationId: getReportsMissed
+    summary: Missed conversations — by reason, day, hour × weekday, team and agent
+    description: |
+      Missed conversations (RP-02 · tm 369.1). A connection is missed when it
+      needed a person — it was queued, assigned, or handed over by the AI
+      (`threads.needs_human_since`) — and no agent ever answered the player
+      (`first_response_at`, which only an agent's public message sets). One the
+      AI answered and never handed over is not missed. The reason is written
+      once, as the connection closes, and read here, never recomputed:
+
+      - `unanswered_after_ai` — the AI or a rule bot handed it over and nobody
+        answered ("devir sonrası kaçan"); checked first;
+      - `unanswered_assigned` — it closed with an agent assigned who never
+        wrote to the player;
+      - `queue_abandoned` — it closed with nobody assigned.
+
+      Connections are windowed by their creation, like every conversation
+      report. `by_day` and `heatmap` are in the workspace's time zone
+      (`timezone`, the conversation-day zone, ID-04), never UTC. `by_team` is
+      the connection's own team (`threads.group_id`), one per connection.
+      `totals.estimated` counts the missed connections whose reason a partial
+      backfill inferred from the transcript (closed before the fields were
+      written): show the figure as not exact when it is above 0.
+
+      Takes the report filters (RP-01): `agent_id`, `group_id`, `tag` and
+      `topic`, each repeatable — see `ReportFilter`; the applied filter is
+      echoed as `filters`. A `reports_read--groups` caller (an Ekip Lideri)
+      reads only the teams they lead. Defaults to the last 30 days.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
+      - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterAgent"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterGroup"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterTag"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterTopic"
+    responses:
+      "200":
+        description: The missed conversations of the requested window
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ReportsMissed" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+engagement:
+  get:
+    tags: [Reports]
+    operationId: getReportsEngagement
+    summary: Chat engagement — who started the conversations
+    description: |
+      Who started the connections of the window (RP-02 · tm 369.1,
+      `threads.initiated_by`): the player from the widget (`customer`), an
+      agent (`agent`), a campaign card (`campaign`), the AI (`ai`) or a channel
+      adapter (`channel`); `unknown` is a connection whose opener was not
+      recorded — opened before the field existed, or by a path that does not
+      say. `by_initiator` always holds all six rows in that order, zeros
+      included, so a campaign's row is there to read; the rows partition the
+      window (`SUM(chats) = totals.chats`). Each row carries how many an agent
+      answered and how many were missed (see `GET /reports/missed`).
+
+      `by_day` is in the workspace's time zone (`timezone`), sparse: a day ×
+      opener pair with no connection is absent. Takes the report filters
+      (RP-01) like the other conversation reports. Defaults to the last 30 days.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
+      - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterAgent"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterGroup"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterTag"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterTopic"
+    responses:
+      "200":
+        description: The connections of the requested window by who started them
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ReportsEngagement" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 sales:
   get:
     tags: [Reports]
@@ -726,9 +814,17 @@ export:
       long-format table — `section,key,name,value`, where `section` is `funnel`
       (one row per funnel figure) or `goal` (one row per defined goal, `key`
       being its id);
+      `missed` serialises one long-format table —
+      `dimension,key,name,missed,queue_abandoned,unanswered_assigned,unanswered_after_ai`,
+      `dimension` being `total` (`all`, `estimated`, `closed`), `day` (a local date),
+      `hour_of_week` (`<ISO weekday>T<hour>`, workspace zone, cells with a miss),
+      `team` or `agent`; `engagement` serialises
+      `dimension,key,initiated_by,chats,closed,answered,missed` — six `total` rows,
+      then `day` rows per local date and opener;
       The report filters (`agent_id`, `group_id`, `tag`, `topic`; RP-01)
       apply to the conversation groups — `overview`, `breakdown`,
-      `team-performance`, `reviews` — through the same query helpers the JSON
+      `team-performance`, `reviews`, `missed`, `engagement` — through the same
+      query helpers the JSON
       reports use, so a filtered download equals the filtered screen; another
       group given a filter is a 400. A `reports_read--groups` caller exports
       only those groups, bounded to the teams they lead.
@@ -764,7 +860,7 @@ export:
       - name: group
         in: query
         required: true
-        description: "Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `campaigns`."
+        description: "Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `campaigns`, `missed`, `engagement`."
         schema: { type: string }
       - name: format
         in: query
@@ -968,7 +1064,7 @@ shareLinks:
             properties:
               group:
                 type: string
-                description: "Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`."
+                description: "Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `missed`, `engagement`."
               from:
                 type: string
                 format: date-time
@@ -988,7 +1084,8 @@ shareLinks:
                 description: |
                   The report filter the link is frozen to (RP-01). Only for the
                   conversation groups (`overview`, `breakdown`,
-                  `team-performance`, `reviews`); another group given a
+                  `team-performance`, `reviews`, `missed`, `engagement`); another
+                  group given a
                   non-empty filter is a 400. Whoever opens the link reads exactly
                   this filter and cannot widen it.
     responses:
@@ -1137,7 +1234,7 @@ scheduledExports:
             properties:
               group:
                 type: string
-                description: "Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`."
+                description: "Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `missed`, `engagement`."
               frequency: { $ref: "../openapi.yaml#/components/schemas/ScheduledExportFrequency" }
               format:
                 type: string

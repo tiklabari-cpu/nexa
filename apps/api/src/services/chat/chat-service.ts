@@ -67,6 +67,7 @@ import {
   type EventType,
   type QueueEntryOutcome,
   type SensitiveType,
+  type ThreadInitiatedBy,
   type ThreadPriority,
   type TransferReason,
   type AiHandoffCardView,
@@ -93,6 +94,7 @@ import type { RealtimePublisher } from '../realtime/publisher.js';
 import { recordAiResolution } from '../billing/metering.js';
 import { recordAgentIds } from '../archive/archive-filters.js';
 import { aiResolvedThreadWhere, recordHandledBy } from '../billing/ai-resolution.js';
+import { markNeedsHuman, recordMissedReason } from '../reports/missed-engagement.js';
 import { deliver } from '../mail/delivery.js';
 import type { Mailer } from '../mail/mailer.js';
 import {
@@ -146,6 +148,7 @@ import {
   reopensInPlace,
   resolveLocalDay,
   rolloverIdleSeconds,
+  initiatorOf,
   visitorOpenedVia,
   type ConversationDay,
 } from './conversation-day.js';
@@ -266,6 +269,13 @@ export interface ConnectionInput {
    * would ever answer it.
    */
   aiAnswers?: boolean;
+  /**
+   * Who a connection this message opens was started by (RP-02 · tm 369.1,
+   * `threads.initiated_by`): the widget's player (`customer`, the default) or
+   * a channel adapter (`channel`). A campaign's credit is stamped after the
+   * open, where the campaign is known (`routes/customer.ts`).
+   */
+  initiatedBy?: 'customer' | 'channel';
   /**
    * The request's audit context. A connection the message opens under the
    * day's chat is recorded against it (`chat.connection_opened`); a rollover
@@ -1423,6 +1433,7 @@ export class ChatService {
         await this.#keepChatBrand(tx, dayChat, input.brandId);
         const { threadId } = await this.#openFurtherConnection(tx, tenant, dayChat, {
           openedVia,
+          initiatedBy: input.initiatedBy,
           route: () =>
             this.#routeVisitor(tx, tenant, input, () =>
               this.#routeReturn(tx, tenant, dayChat, input.routing),
@@ -1472,6 +1483,7 @@ export class ChatService {
         )),
         day,
         openedVia,
+        initiatedBy: input.initiatedBy,
         brandId: input.brandId ?? null,
       });
       const threadId = created.threads[0]!.id;
@@ -1515,6 +1527,8 @@ export class ChatService {
     dayChat: ChatRow,
     opening: {
       openedVia: ConnectionOpenedVia;
+      /** Who started it, when a visitor's message opens it (see {@link initiatorOf}). */
+      initiatedBy?: ThreadInitiatedBy;
       /** Who the connection goes to — asked once the reopen has won its race. */
       route: () => Promise<ConnectionRoute>;
       marker: ConnectionMarker | null;
@@ -1569,6 +1583,7 @@ export class ChatService {
         assigneeId: route.assigneeId,
         groupId: route.groupId,
         openedVia: opening.openedVia,
+        initiatedBy: initiatorOf(opening.openedVia, opening.initiatedBy),
         ...(route.queuePosition != null
           ? { queuePosition: route.queuePosition, queuedAt, queueGroupId: route.queueGroupId }
           : {}),
@@ -1886,6 +1901,9 @@ export class ChatService {
     change: AiModeChange,
     targetGroupId?: bigint,
   ): Promise<DrainedAssignment | null> {
+    // The connection needs a person from this moment (RP-02 · AI-11), whether
+    // or not routing finds one below — the missed reports' clock.
+    await markNeedsHuman(tx, threadId);
     // Read after the change's own writes, under the row lock `writeAiMode` took.
     const thread = await tx.thread.findUnique({
       where: { id: threadId },
@@ -2798,6 +2816,9 @@ export class ChatService {
     // Who wrote to the player, for the archive's agent filter (AR-02): read
     // once, here, after the last event the connection will ever have.
     await recordAgentIds(tx, thread.id);
+    // Whether a player was left without a person, and why (RP-02): decided
+    // once, here, so the missed reports read a value rather than recompute it.
+    await recordMissedReason(tx, thread.id);
 
     // The agent's freed slot goes to their teams' queues; a close of a waiting
     // connection renumbers the queue it left (ADR-08a §2.2).
@@ -3168,6 +3189,7 @@ export class ChatService {
             assigneeId: actorId,
             groupId,
             openedVia: 'agent_reopen',
+            initiatedBy: 'agent',
           },
         });
         await tx.chatUser.updateMany({
@@ -5244,6 +5266,8 @@ export class ChatService {
       day: ConversationDay;
       /** How the chat's first connection opened (`threads.opened_via`). */
       openedVia: ConnectionOpenedVia;
+      /** Who started it, when a visitor's message opens it (see {@link initiatorOf}). */
+      initiatedBy?: ThreadInitiatedBy;
       /** The brand the member came in through (`chats.brand_id`); null when unknown. */
       brandId?: string | null;
     },
@@ -5291,6 +5315,7 @@ export class ChatService {
         assigneeId: input.assigneeId,
         groupId: input.groupId,
         openedVia: input.openedVia,
+        initiatedBy: initiatorOf(input.openedVia, input.initiatedBy),
         ...(input.queuePosition != null
           ? { queuePosition: input.queuePosition, queuedAt, queueGroupId: input.queueGroupId }
           : {}),

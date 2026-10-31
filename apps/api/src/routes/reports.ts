@@ -93,6 +93,12 @@ import {
   windowTotals,
 } from '../services/reports/report-csv.js';
 import {
+  engagementBenchmark,
+  engagementFigures,
+  missedBenchmark,
+  missedFigures,
+} from '../services/reports/missed-engagement.js';
+import {
   accessReviewCredentialTable,
   accessReviewFilename,
   accessReviewMemberTable,
@@ -1260,6 +1266,63 @@ export async function buildGoalsReport(
  * export so the two can never quote different figures for the same license
  * and range.
  */
+/**
+ * The missed-conversations report for one window (RP-02 · tm 369.1): the
+ * connections that needed a person and got no agent's answer, by reason, per
+ * local day, as an hour × weekday heat map in the workspace's zone, and per
+ * team and agent. Shared with the `missed` export through
+ * {@link missedFigures}, so the screen and the download are one reading.
+ */
+export async function buildMissedReport(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+  baseline: BenchmarkBaseline = DEFAULT_BENCHMARK_BASELINE,
+  filter: ThreadFilter | null = null,
+): Promise<Record<string, unknown>> {
+  const figures = await missedFigures(tx, licenseId, from, to, filter);
+  return withBenchmark(
+    {
+      range: { from: from.toISOString(), to: to.toISOString() },
+      ...(filter === null ? {} : { filters: toWireFilter(filter) }),
+      ...figures,
+    },
+    from,
+    to,
+    baseline,
+    (window) => missedBenchmark(tx, licenseId, window, filter),
+  );
+}
+
+/**
+ * The engagement report for one window (RP-02 · tm 369.1): who started the
+ * connections — the player, an agent, a campaign, the AI, a channel, or
+ * unknown — each with its answered and missed counts, and per local day.
+ * Shared with the `engagement` export through {@link engagementFigures}.
+ */
+export async function buildEngagementReport(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+  baseline: BenchmarkBaseline = DEFAULT_BENCHMARK_BASELINE,
+  filter: ThreadFilter | null = null,
+): Promise<Record<string, unknown>> {
+  const figures = await engagementFigures(tx, licenseId, from, to, filter);
+  return withBenchmark(
+    {
+      range: { from: from.toISOString(), to: to.toISOString() },
+      ...(filter === null ? {} : { filters: toWireFilter(filter) }),
+      ...figures,
+    },
+    from,
+    to,
+    baseline,
+    (window) => engagementBenchmark(tx, licenseId, window, filter),
+  );
+}
+
 export async function buildTeamPerformanceReport(
   tx: TenantClient,
   licenseId: bigint,
@@ -1931,6 +1994,51 @@ export default async function reportRoutes(
 
       const body = await request.withTenantRead(async (tx) =>
         buildTeamPerformanceReport(
+          tx,
+          tenant.licenseId,
+          from,
+          to,
+          baseline,
+          await resolveReportReach(tx, principal, filter),
+        ),
+      );
+      return reply.send(body);
+    },
+  );
+
+  // Missed conversations and who started them (RP-02 · tm 369.1): conversation
+  // reports, so they take the report filter and a Team Lead reads the teams
+  // they lead, exactly as the four above.
+  app.get(
+    '/reports/missed',
+    { config: { scopes: CONVERSATION_REPORT_SCOPES } },
+    async (request, reply) => {
+      const { from, to, baseline, filter } = resolveFilteredReportQuery(request.query);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
+      const body = await request.withTenantRead(async (tx) =>
+        buildMissedReport(
+          tx,
+          tenant.licenseId,
+          from,
+          to,
+          baseline,
+          await resolveReportReach(tx, principal, filter),
+        ),
+      );
+      return reply.send(body);
+    },
+  );
+
+  app.get(
+    '/reports/engagement',
+    { config: { scopes: CONVERSATION_REPORT_SCOPES } },
+    async (request, reply) => {
+      const { from, to, baseline, filter } = resolveFilteredReportQuery(request.query);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
+      const body = await request.withTenantRead(async (tx) =>
+        buildEngagementReport(
           tx,
           tenant.licenseId,
           from,

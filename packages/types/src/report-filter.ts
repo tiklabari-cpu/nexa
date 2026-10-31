@@ -2,7 +2,7 @@
  * Report filters (RP-01 · tm 368): which conversations a report counts.
  *
  * One shape for every surface that narrows a report — the query string of
- * `GET /reports/{overview,breakdown,team-performance,reviews}` and
+ * `GET /reports/{overview,breakdown,team-performance,reviews,missed,engagement}` and
  * `GET /reports/export`, the `filters` of a share link and of a scheduled
  * export — so a figure on screen, in a download, behind a link and in a mailed
  * CSV is the same figure for the same filter.
@@ -57,6 +57,8 @@ export const REPORT_FILTERABLE_GROUPS = [
   'breakdown',
   'team-performance',
   'reviews',
+  'missed',
+  'engagement',
 ] as const;
 
 export type ReportFilterableGroup = (typeof REPORT_FILTERABLE_GROUPS)[number];

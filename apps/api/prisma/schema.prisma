@@ -1244,6 +1244,24 @@ model Thread {
   /// team's queue (WG-07 · tm 346, reason `unclaimed`). Once per stay: the
   /// sweep asks again only when it is older than `queued_at`.
   unclaimedAlertedAt DateTime? @map("unclaimed_alerted_at") @db.Timestamptz(6)
+  /// Who started the connection (RP-02 · tm 369.1): one of `THREAD_INITIATED_BY`
+  /// (`@siyahtus/types`), enforced by the CHECK `threads_initiated_by_check`.
+  /// Written once, as it opens. Null on a connection opened before the column
+  /// existed, or by a path that does not say — the reports' "unknown".
+  initiatedBy      String?   @map("initiated_by")
+  /// Since when the connection has needed a person (RP-02): its first entry to
+  /// the queue, its first assignee, or the AI handing it over — whichever came
+  /// first; never moved after. Kept by the trigger `threads_needs_human_since`
+  /// for the queue and the assignee, and by the AI hand-over
+  /// (`ChatService.#routeHandover`). Null: no person was ever needed (an
+  /// AI-first connection the AI kept), and on a connection from before the column.
+  needsHumanSince  DateTime? @map("needs_human_since") @db.Timestamptz(6)
+  /// Why the connection was missed (RP-02): one of `MISSED_REASONS`
+  /// (`@siyahtus/types`), CHECK `threads_missed_reason_check`. Written once, in
+  /// the transaction that closes it (`services/reports/missed-engagement.ts`
+  /// `recordMissedReason`); the reports read it and never recompute it. Null:
+  /// not missed, or still open.
+  missedReason     String?   @map("missed_reason")
 
   chat            Chat             @relation(fields: [chatId], references: [id], onDelete: Cascade)
   tags            ThreadTag[]

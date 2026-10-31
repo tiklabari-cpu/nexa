@@ -32,7 +32,12 @@
  * move the day without waiting for one.
  */
 import { Prisma } from '@prisma/client';
-import { isConnectionOpenedVia, localDayKey, type ConnectionOpenedVia } from '@siyahtus/types';
+import {
+  isConnectionOpenedVia,
+  localDayKey,
+  type ConnectionOpenedVia,
+  type ThreadInitiatedBy,
+} from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 import { readDayBoundary } from './day-boundary.js';
 
@@ -270,6 +275,20 @@ export function visitorOpenedVia(input: {
 }): ConnectionOpenedVia {
   if (input.rolledOver) return 'day_rollover';
   return input.dayChatExists ? 'same_day_return' : 'first_of_day';
+}
+
+/**
+ * Who started a connection (`threads.initiated_by`, RP-02 · tm 369.1): an agent
+ * when an agent started or reopened it, else the visitor's opener — the
+ * widget's player unless the caller says a channel. Written once, as the
+ * connection opens; a campaign's credit is stamped over `customer` after it.
+ */
+export function initiatorOf(
+  openedVia: ConnectionOpenedVia,
+  visitor: ThreadInitiatedBy | undefined,
+): ThreadInitiatedBy {
+  if (openedVia === 'agent_start' || openedVia === 'agent_reopen') return 'agent';
+  return visitor ?? 'customer';
 }
 
 /**

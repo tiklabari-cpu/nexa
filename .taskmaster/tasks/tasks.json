@@ -15362,7 +15362,7 @@
           "293"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-31T18:26:26.772Z",
+        "updatedAt": "2026-10-31T20:08:33.038Z",
         "subtasks": [
           {
             "id": 1,
@@ -15370,11 +15370,11 @@
             "description": "Kaçan sohbet verisi ve rapor uçları: initiated_by/needs_human_since/missed_reason + geri doldurma + iki uç",
             "details": "threads.initiated_by/needs_human_since/missed_reason + CHECK; oturum oluşturmada initiated_by; kapanışta missed_reason (bir kez); kısmi geri doldurma migration'ı + rapor notu; report-csv.ts yardımcıları + GET /reports/missed, /reports/engagement + export; RP-01 filtreleri (#368 hazırsa). Ayrıntı ve kabul maddeleri: üst görev #369 details (tek kaynak).",
             "testStrategy": "Entegrasyon (AI ile kapanan kaçan değil, devir sonrası kaçan, kuyruk terki); `pnpm test:gate`.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "369",
             "priority": "medium",
-            "updatedAt": "2026-10-31T18:26:26.772Z"
+            "updatedAt": "2026-10-31T20:08:33.038Z"
           },
           {
             "id": 2,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-31T18:26:26.773Z",
+      "lastModified": "2026-10-31T20:08:33.039Z",
       "taskCount": 390,
       "completedCount": 363,
       "tags": [

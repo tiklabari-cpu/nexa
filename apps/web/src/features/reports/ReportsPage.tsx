@@ -36,11 +36,10 @@ import {
   formatDuration,
   formatMoney,
   formatRate,
-  formatWeekday,
   type Weekday,
 } from '../../lib/format.js';
 import { enumLabel } from '../../lib/enum-label.js';
-import { getLocale, useTranslate, type TFunction } from '../../lib/i18n.js';
+import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { nearestPriority } from '../inbox/ticket-priority.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import {
@@ -59,6 +58,8 @@ import { AiMetricsPanel } from './AiMetricsPanel.js';
 import { ReviewComments } from './ReviewComments.js';
 import { roleAtLeast } from '../team/RoleMenu.js';
 import { ReportFilterBar } from './ReportFilterBar.js';
+import { HourGrid } from './HourGrid.js';
+import { MissedHeatmap, type MissedHeatCell } from './MissedHeatmap.js';
 import {
   parseReportFilter,
   reportFilterKey,
@@ -352,6 +353,8 @@ const TABS = [
   { id: 'reviews' },
   { id: 'breakdown' },
   { id: 'staffing' },
+  { id: 'missed' },
+  { id: 'engagement' },
   { id: 'topics' },
   { id: 'cases' },
   { id: 'leads' },
@@ -373,7 +376,14 @@ const TAB_LABEL_KEYS: Record<TabId, string> = REPORT_TAB_LABEL_KEYS;
  * second enforcement layer. Cases, Leads, Sales and Team performance are
  * gated here; the other tabs predate this catalogue and stay unconditional.
  */
-const GROUP_GATED_TABS = new Set<TabId>(['cases', 'leads', 'sales', 'team-performance']);
+const GROUP_GATED_TABS = new Set<TabId>([
+  'cases',
+  'leads',
+  'sales',
+  'team-performance',
+  'missed',
+  'engagement',
+]);
 
 /**
  * The sidebar's categories, in order, and the tabs each one holds — the
@@ -417,9 +427,9 @@ type CategoryId = 'performance' | 'automation' | 'team' | 'business';
  * in the type system can notice an omission.
  */
 const TAB_CATEGORIES: ReadonlyArray<{ id: CategoryId; tabs: readonly TabId[] }> = [
-  { id: 'performance', tabs: ['overview', 'breakdown', 'reviews'] },
+  { id: 'performance', tabs: ['overview', 'breakdown', 'reviews', 'engagement'] },
   { id: 'automation', tabs: ['ai-agent', 'topics'] },
-  { id: 'team', tabs: ['staffing', 'team-performance'] },
+  { id: 'team', tabs: ['staffing', 'missed', 'team-performance'] },
   { id: 'business', tabs: ['cases', 'leads', 'sales'] },
 ];
 
@@ -866,6 +876,10 @@ function ReportsPageBody({
             <BreakdownTab rangeKey={rangeKey} range={range} baseline={baseline} filter={filter} />
           ) : tab === 'staffing' ? (
             <StaffingTab rangeKey={rangeKey} range={range} baseline={baseline} filter={filter} />
+          ) : tab === 'missed' ? (
+            <MissedTab rangeKey={rangeKey} range={range} baseline={baseline} filter={filter} />
+          ) : tab === 'engagement' ? (
+            <EngagementTab rangeKey={rangeKey} range={range} baseline={baseline} filter={filter} />
           ) : tab === 'topics' ? (
             <TopicsTab rangeKey={rangeKey} range={range} baseline={baseline} filter={filter} />
           ) : tab === 'cases' ? (
@@ -1875,7 +1889,6 @@ const STAFFING_DAY_OF_WEEK: readonly Weekday[] = [
   'friday',
   'saturday',
 ];
-const STAFFING_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 
 /**
  * Staffing (WORKSCHED-i, PRD §5.3-Vardiya). A read-only 7 × 24 UTC grid off
@@ -1933,49 +1946,19 @@ function StaffingTab(props: TabProps): ReactElement {
 /** The 7 × 24 grid itself: one row per UTC weekday (0 = Sunday), one column per UTC hour. */
 function StaffingGrid({ cells }: { cells: StaffingCell[] }): ReactElement {
   const t = useTranslate();
-  const locale = getLocale();
   const byKey = new Map<string, StaffingCell>();
   for (const cell of cells) {
     byKey.set(`${cell.day_of_week}-${cell.hour}`, cell);
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs">
-        <caption className="sr-only">{t('reports.staffing.gridCaption')}</caption>
-        <thead>
-          <tr className="border-b border-border text-left">
-            <th scope="col" className="px-2 py-1.5 text-2xs font-medium text-content-secondary">
-              {t('reports.common.dayColumn')}
-            </th>
-            {STAFFING_HOURS.map((hour) => (
-              <th
-                key={hour}
-                scope="col"
-                className="w-8 px-1 py-1.5 text-center text-2xs font-medium text-content-secondary"
-              >
-                {String(hour).padStart(2, '0')}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {STAFFING_DAY_OF_WEEK.map((day, dayOfWeek) => (
-            <tr key={day} className="border-b border-border last:border-0">
-              <th
-                scope="row"
-                className="px-2 py-1.5 text-left text-2xs font-medium text-content-secondary"
-              >
-                {formatWeekday(day, locale, 'short')}
-              </th>
-              {STAFFING_HOURS.map((hour) => (
-                <StaffingCellView key={hour} cell={byKey.get(`${dayOfWeek}-${hour}`)} />
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <HourGrid
+      caption={t('reports.staffing.gridCaption')}
+      weekdays={STAFFING_DAY_OF_WEEK}
+      renderCell={(dayOfWeek, hour) => (
+        <StaffingCellView cell={byKey.get(`${dayOfWeek}-${hour}`)} />
+      )}
+    />
   );
 }
 
@@ -3070,6 +3053,415 @@ function resolutionShareHint(
   return lowConfidence
     ? t('reports.overview.resolution.lowConfidence', { count: closed })
     : closedShare(t, rate);
+}
+
+interface MissedCounts {
+  missed: number;
+  queue_abandoned: number;
+  unanswered_assigned: number;
+  unanswered_after_ai: number;
+}
+
+interface ReportsMissed {
+  timezone: string;
+  totals: MissedCounts & { closed: number; missed_rate: number | null; estimated: number };
+  by_day: Array<MissedCounts & { date: string }>;
+  heatmap: Array<MissedCounts & { weekday: number; hour: number }>;
+  by_team: Array<MissedCounts & { team_id: number | null; name: string | null }>;
+  by_agent: Array<MissedCounts & { agent_id: string; name: string | null }>;
+  previous_period: MissedCounts & { closed: number };
+}
+
+const ENGAGEMENT_ROWS = ['customer', 'agent', 'campaign', 'ai', 'channel', 'unknown'] as const;
+type EngagementOpener = (typeof ENGAGEMENT_ROWS)[number];
+
+interface EngagementRow {
+  initiated_by: EngagementOpener;
+  chats: number;
+  closed: number;
+  answered: number;
+  missed: number;
+}
+
+interface ReportsEngagement {
+  timezone: string;
+  totals: { chats: number };
+  by_initiator: EngagementRow[];
+  by_day: Array<EngagementRow & { date: string }>;
+  previous_period: { chats: number } & Record<EngagementOpener, number>;
+}
+
+/** `missed / closed` of the previous window; null when nothing closed there. */
+function previousMissedRate(prev: MissedCounts & { closed: number }): number | null {
+  return prev.closed > 0 ? prev.missed / prev.closed : null;
+}
+
+/**
+ * Missed conversations (RP-02 · tm 369.2, `GET /reports/missed`). A connection
+ * is missed when it needed a person and no agent ever answered; one the AI
+ * answered and closed is not (the server's rule — nothing here re-derives it).
+ *
+ * The figures are the server's, and so is the time zone: `by_day` and the heat
+ * map are counted in the workspace's zone, which the response names. Rows
+ * closed before the fields were written carry an inferred reason; when any do,
+ * the tab says the figures are not exact instead of presenting them as recorded.
+ */
+function MissedTab(props: TabProps): ReactElement {
+  const t = useTranslate();
+  const api = useApiClient();
+  const { data, isPending, error } = useReport<ReportsMissed>('missed', api, props);
+
+  if (error) {
+    return <ErrorNotice message={t('reports.missed.error')} />;
+  }
+  if (isPending) {
+    return (
+      <>
+        <CardSkeleton rows={2} />
+        <CardSkeleton rows={7} />
+      </>
+    );
+  }
+
+  const { totals } = data;
+  const prev = data.previous_period;
+  const reasons = [
+    [
+      'queue_abandoned',
+      'reports.missed.reason.queueAbandoned',
+      'reports.missed.hint.queueAbandoned',
+    ],
+    [
+      'unanswered_assigned',
+      'reports.missed.reason.unansweredAssigned',
+      'reports.missed.hint.unansweredAssigned',
+    ],
+    [
+      'unanswered_after_ai',
+      'reports.missed.reason.unansweredAfterAi',
+      'reports.missed.hint.unansweredAfterAi',
+    ],
+  ] as const;
+
+  return (
+    <>
+      {totals.estimated > 0 && (
+        <p
+          role="note"
+          className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning"
+        >
+          {t('reports.missed.estimatedNote', { count: formatCount(totals.estimated) ?? '0' })}
+        </p>
+      )}
+
+      <Section
+        title={t('reports.missed.summary.title')}
+        description={t('reports.missed.summary.description')}
+      >
+        <KpiGrid>
+          <Kpi
+            label={t('reports.missed.kpi.missed')}
+            value={formatCount(totals.missed)}
+            delta={<CountDelta current={totals.missed} previous={prev.missed} />}
+            tone={totals.missed > 0 ? 'warn' : 'neutral'}
+          />
+          <Kpi
+            label={t('reports.missed.kpi.rate')}
+            value={formatRate(totals.missed_rate)}
+            delta={<RateDelta current={totals.missed_rate} previous={previousMissedRate(prev)} />}
+            hint={
+              totals.missed_rate === null
+                ? t('reports.common.closedShare.none')
+                : t('reports.missed.kpi.rateHint', { closed: formatCount(totals.closed) ?? '0' })
+            }
+          />
+          {reasons.map(([key, label, hint]) => (
+            <Kpi
+              key={key}
+              label={t(label)}
+              value={formatCount(totals[key])}
+              delta={<CountDelta current={totals[key]} previous={prev[key]} />}
+              hint={t(hint)}
+            />
+          ))}
+        </KpiGrid>
+      </Section>
+
+      {totals.missed === 0 ? (
+        <Card>
+          <EmptyState
+            title={t('reports.missed.emptyTitle')}
+            description={t('reports.missed.emptyDescription')}
+          />
+        </Card>
+      ) : (
+        <>
+          <Section
+            title={t('reports.missed.heatmap.title')}
+            description={t('reports.missed.heatmap.description', { timezone: data.timezone })}
+          >
+            <Card>
+              <MissedHeatmap
+                cells={data.heatmap.map((cell): MissedHeatCell => ({
+                  weekday: cell.weekday,
+                  hour: cell.hour,
+                  missed: cell.missed,
+                }))}
+                timezone={data.timezone}
+              />
+            </Card>
+          </Section>
+
+          <Section
+            title={t('reports.common.byDay')}
+            description={t('reports.missed.byDay.description', { timezone: data.timezone })}
+          >
+            <Card>
+              <MissedTable
+                caption={t('reports.missed.byDay.caption')}
+                firstColumn={t('reports.common.dayColumn')}
+                rows={data.by_day.map((row) => ({
+                  key: row.date,
+                  label: formatDay(row.date) ?? row.date,
+                  ...row,
+                }))}
+              />
+            </Card>
+          </Section>
+
+          <Section
+            title={t('reports.missed.byTeam.title')}
+            description={t('reports.missed.byTeam.description')}
+          >
+            <Card>
+              <MissedTable
+                caption={t('reports.missed.byTeam.caption')}
+                firstColumn={t('reports.breakdown.byTeam.column')}
+                rows={data.by_team.map((row) => ({
+                  key: String(row.team_id ?? 'unassigned'),
+                  label: row.name ?? t('reports.breakdown.byTeam.unassigned'),
+                  ...row,
+                }))}
+              />
+            </Card>
+          </Section>
+
+          <Section
+            title={t('reports.common.byAgent')}
+            description={t('reports.missed.byAgent.description')}
+          >
+            <Card>
+              {data.by_agent.length === 0 ? (
+                <EmptyState
+                  title={t('reports.missed.byAgent.emptyTitle')}
+                  description={t('reports.missed.byAgent.emptyDescription')}
+                />
+              ) : (
+                <MissedTable
+                  caption={t('reports.missed.byAgent.caption')}
+                  firstColumn={t('reports.common.agentColumn')}
+                  rows={data.by_agent.map((row) => ({
+                    key: row.agent_id,
+                    label: row.name ?? t('reports.common.unknownAgent'),
+                    ...row,
+                  }))}
+                />
+              )}
+            </Card>
+          </Section>
+        </>
+      )}
+    </>
+  );
+}
+
+/** A label column plus the missed total and its three reasons. */
+function MissedTable({
+  caption,
+  firstColumn,
+  rows,
+}: {
+  caption: string;
+  firstColumn: string;
+  rows: Array<MissedCounts & { key: string; label: string }>;
+}): ReactElement {
+  const t = useTranslate();
+  const numeric = 'w-28 px-4 py-2 text-right text-xs font-medium text-content-secondary';
+  return (
+    <table className="w-full text-sm">
+      <caption className="sr-only">{caption}</caption>
+      <thead>
+        <tr className="border-b border-border text-left">
+          <th scope="col" className="px-4 py-2 text-xs font-medium text-content-secondary">
+            {firstColumn}
+          </th>
+          <th scope="col" className={numeric}>
+            {t('reports.missed.kpi.missed')}
+          </th>
+          <th scope="col" className={numeric}>
+            {t('reports.missed.reason.queueAbandoned')}
+          </th>
+          <th scope="col" className={numeric}>
+            {t('reports.missed.reason.unansweredAssigned')}
+          </th>
+          <th scope="col" className={numeric}>
+            {t('reports.missed.reason.unansweredAfterAi')}
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.key} className="border-b border-border last:border-0">
+            <td className="truncate px-4 py-2">{row.label}</td>
+            <td className="tabular px-4 py-2 text-right font-medium">{formatCount(row.missed)}</td>
+            <td className="tabular px-4 py-2 text-right">{formatCount(row.queue_abandoned)}</td>
+            <td className="tabular px-4 py-2 text-right">{formatCount(row.unanswered_assigned)}</td>
+            <td className="tabular px-4 py-2 text-right">{formatCount(row.unanswered_after_ai)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/**
+ * Engagement (RP-02 · tm 369.2, `GET /reports/engagement`): who started the
+ * conversations. The server answers with all six openers, zeros included, so a
+ * campaign-started conversation is its own row even in a window with none.
+ * "Unknown" is a connection whose channel did not say how it began — shown as
+ * such, never folded into the customer's row.
+ */
+function EngagementTab(props: TabProps): ReactElement {
+  const t = useTranslate();
+  const api = useApiClient();
+  const { data, isPending, error } = useReport<ReportsEngagement>('engagement', api, props);
+
+  if (error) {
+    return <ErrorNotice message={t('reports.engagement.error')} />;
+  }
+  if (isPending) {
+    return (
+      <>
+        <CardSkeleton rows={2} />
+        <CardSkeleton rows={6} />
+      </>
+    );
+  }
+
+  const prev = data.previous_period;
+  const numeric = 'w-28 px-4 py-2 text-right text-xs font-medium text-content-secondary';
+
+  // Per local day: one count per opener.
+  const days = new Map<string, Partial<Record<EngagementOpener, number>>>();
+  for (const row of data.by_day) {
+    const day = days.get(row.date) ?? {};
+    day[row.initiated_by] = row.chats;
+    days.set(row.date, day);
+  }
+
+  return (
+    <>
+      <Section
+        title={t('reports.engagement.byInitiator.title')}
+        description={t('reports.engagement.byInitiator.description')}
+      >
+        <KpiGrid>
+          <Kpi
+            label={t('reports.engagement.kpi.chats')}
+            value={formatCount(data.totals.chats)}
+            delta={<CountDelta current={data.totals.chats} previous={prev.chats} />}
+          />
+        </KpiGrid>
+        <Card>
+          {data.totals.chats === 0 ? (
+            <EmptyState
+              title={t('reports.engagement.emptyTitle')}
+              description={t('reports.engagement.emptyDescription')}
+            />
+          ) : (
+            <table className="w-full text-sm">
+              <caption className="sr-only">{t('reports.engagement.byInitiator.caption')}</caption>
+              <thead>
+                <tr className="border-b border-border text-left">
+                  <th scope="col" className="px-4 py-2 text-xs font-medium text-content-secondary">
+                    {t('reports.engagement.column.initiator')}
+                  </th>
+                  <th scope="col" className={numeric}>
+                    {t('reports.common.resolution.chats')}
+                  </th>
+                  <th scope="col" className={numeric}>
+                    {t('reports.engagement.column.answered')}
+                  </th>
+                  <th scope="col" className={numeric}>
+                    {t('reports.missed.kpi.missed')}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.by_initiator.map((row) => (
+                  <tr key={row.initiated_by} className="border-b border-border last:border-0">
+                    <td className="px-4 py-2">
+                      <span className="block">
+                        {t(`reports.engagement.initiator.${row.initiated_by}`)}
+                      </span>
+                      {row.initiated_by === 'unknown' && (
+                        <span className="block text-2xs text-content-tertiary">
+                          {t('reports.engagement.initiator.unknownHint')}
+                        </span>
+                      )}
+                    </td>
+                    <td className="tabular px-4 py-2 text-right">
+                      <span className="block">{formatCount(row.chats)}</span>
+                      <CountDelta current={row.chats} previous={prev[row.initiated_by]} />
+                    </td>
+                    <td className="tabular px-4 py-2 text-right">{formatCount(row.answered)}</td>
+                    <td className="tabular px-4 py-2 text-right">{formatCount(row.missed)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      </Section>
+
+      {days.size > 0 && (
+        <Section
+          title={t('reports.common.byDay')}
+          description={t('reports.engagement.byDay.description', { timezone: data.timezone })}
+        >
+          <Card>
+            <table className="w-full text-sm">
+              <caption className="sr-only">{t('reports.engagement.byDay.caption')}</caption>
+              <thead>
+                <tr className="border-b border-border text-left">
+                  <th scope="col" className="px-4 py-2 text-xs font-medium text-content-secondary">
+                    {t('reports.common.dayColumn')}
+                  </th>
+                  {ENGAGEMENT_ROWS.map((opener) => (
+                    <th key={opener} scope="col" className={numeric}>
+                      {t(`reports.engagement.initiator.${opener}`)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[...days.entries()].map(([date, counts]) => (
+                  <tr key={date} className="border-b border-border last:border-0">
+                    <td className="px-4 py-2">{formatDay(date) ?? date}</td>
+                    {ENGAGEMENT_ROWS.map((opener) => (
+                      <td key={opener} className="tabular px-4 py-2 text-right">
+                        {formatCount(counts[opener] ?? 0)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        </Section>
+      )}
+    </>
+  );
 }
 
 /**

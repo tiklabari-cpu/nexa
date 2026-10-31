@@ -4,6 +4,13 @@
 > Arama: `grep -n "tm <id>" docs/archive/handoff/*.md` — baştan okuma.
 
 ---
+## tm 366.2 — CP-WEB: Copilot çekmecesi — AppShell'de her ekrandan (`Alt+Shift+C`), ortak BI/KB bileşenleri, oturum geçmişi, sohbet eylemleri — IN-09 — done — 2026-10-31 UTC
+
+- **Yapıldı (dal `feat/copilot-drawer`, kontrat/API/migration YOK; üst görev 366 böylece kapanır):** `components/CopilotDrawer.tsx` (AppShell'de `<main>` yanında yan panel, modal değil; kutuya odak, Esc/kapat odağı geri verir), `features/copilot/` (`copilotDrawerStore` zustand geçmiş ≤30, `useCopilotDrawer` `POST /copilot/ask` + özet + taslak, `biQuestions` CopilotPanel'den ortak). Kısayol satırı `inbox.toggle-copilot` → `copilot.toggle-drawer` (yeni kapsam `copilot`: yanıt composer'ı ve çekmece kutusu duyar). InboxPage açık sohbeti `setChat` ile bildirir (`chat_id`, özet/taslak, "Yanıta ekle").
+- **Doğrulama:** web birim `CopilotDrawer.test.tsx` 16, `shortcuts.test.ts` +1, `InboxPage.shortcuts.test.tsx` (Copilot testi çekmece-bağlamı testine döndü); e2e yeni `copilot-drawer.spec.ts` 2 + `copilot`/`copilot-bi`/`keyboard-shortcuts` yeşil; endpoint-ui `TRACKED` satırı silindi.
+- **Varsayımlar / sapmalar (§D416):** PLAN'da IN-09 satırı yok → kanıt `K12.1-12.3`; fare ile açma düğmesi YOK (rail'de ikinci "Copilot" düğmesi `copilot.spec`'in `getByRole('button', { name: 'Copilot' })`ini belirsizleştirir) — yalnız kısayol, "?" listesinde; `not_permitted`/`no_answer` yerel metin; rapor cevabı "Yanıta ekle" almaz.
+- **Sonraki pencere:** Çekmeceye fare yolu istenirse düğme adı "Copilot" içermemeli ya da `copilot.spec`/`copilot-bi.spec` seçicileri `exact` yapılmalı. Yeni bir kısayol tuşu çekmece kutusundan duyulsun isteniyorsa satırın kapsamı `copilot` olmalı.
+
 ## tm 366.1 — CP-API: Copilot sor API — `POST /copilot/ask` (rapor / bilgi ayrımı, `reports_read` kapısı, tek depodan kaynaklı cevap, kota, denetim) — IN-09 — done — 2026-10-31 UTC
 
 - **Yapıldı (dal `feat/copilot-ask`, migration YOK; kontrat +1 yol `copilotAsk`):** `services/ai/copilot-ask.ts` (`askCopilot`: BI sözlüğü → model `copilot_question_kind` `fast` → yedek kelime kuralı; rapor yolu `CopilotService.answerBi` + `reports_read`, yoksa `not_permitted`; bilgi yolu `embedQuery` + `retrieve` (`audience: copilot`, sohbet varsa markası) + AI-06 `knowledge_answer` taslak kapısı, bir yeniden yazım; kaynaklar `{id,title,reviewed_at}`), `copilot-question-kind.ts` (istem + şema + mock; mock sağlayıcı dalı), `answer-prompt.ts` `reader: 'agent'`, ai-mock `looksLikeReportQuestion`, route `aiBudget` + `copilot.ask` denetim kaydı (`{kind, reason?}`, metin yok; web en/tr etiketleri), ADR LLM §6a.1 iki satır.

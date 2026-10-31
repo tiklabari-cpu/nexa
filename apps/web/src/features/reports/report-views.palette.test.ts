@@ -19,6 +19,8 @@ const TR: Record<ReportTabId, string> = {
   reviews: 'Değerlendirmeler',
   breakdown: 'Dağılım',
   staffing: 'Kadro',
+  missed: 'Kaçan sohbetler',
+  engagement: 'Etkileşim',
   topics: 'Sohbet konuları',
   cases: 'Talepler',
   leads: 'Potansiyel müşteriler',

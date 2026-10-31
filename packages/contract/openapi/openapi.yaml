@@ -944,13 +944,46 @@ components:
         All five default to on. The failure this product cannot afford is an
         agent who never learns a visitor is waiting, so a new member is
         reachable and opts out rather than in.
-      required: [enabled, sound, desktop, push, email]
+
+        `events` is the other half of the question (IN-10): which things are
+        worth an interruption at all. `incoming_chat` — a visitor wrote in — is
+        always `true`; what a person can silence is its *sound* (the `sound`
+        channel). `repeat_sound` keeps the chime going every 10 seconds until the
+        message is read; it defaults to off.
+      required: [enabled, sound, desktop, push, email, events, repeat_sound]
       properties:
         enabled: { type: boolean }
         sound: { type: boolean }
         desktop: { type: boolean }
         push: { type: boolean }
         email: { type: boolean }
+        events: { $ref: "#/components/schemas/NotificationEvents" }
+        repeat_sound: { type: boolean }
+    NotificationEvents:
+      type: object
+      description: |
+        Which events interrupt one person (IN-10 · tm 367). Every key is always
+        present in a response; a key a stored object lacks reads as its default
+        (`queue_waiting` off, the rest on). `incoming_chat` cannot be turned off.
+      required:
+        - incoming_chat
+        - transferred_to_me
+        - transferred_to_my_team
+        - queue_waiting
+        - new_ticket
+        - ticket_reply
+      properties:
+        incoming_chat:
+          type: boolean
+          description: A visitor wrote in. Always `true`.
+        transferred_to_me: { type: boolean, description: A chat was handed to you. }
+        transferred_to_my_team:
+          { type: boolean, description: A chat was handed to a team you are in. }
+        queue_waiting:
+          { type: boolean, description: A visitor is waiting in a queue of a team you are in. }
+        new_ticket:
+          { type: boolean, description: A ticket was opened or assigned to you or your team. }
+        ticket_reply: { type: boolean, description: The player answered a ticket you work. }
     UiPreferences:
       type: object
       description: |

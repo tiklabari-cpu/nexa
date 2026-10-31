@@ -26,6 +26,7 @@ import { InviteTeammates, usePendingInvitations } from '../features/team/InviteT
 import { CreateTeamButton } from '../features/team/CreateTeamButton.js';
 import { roleAtLeast } from '../features/team/RoleMenu.js';
 import { useRealtime } from '../features/inbox/useInbox.js';
+import { AudioUnlockHint } from '../features/notifications/AudioUnlockHint.js';
 import { useNotifications } from '../features/notifications/useNotifications.js';
 import { CommandPalette } from './CommandPalette.js';
 import { CopilotDrawer } from './CopilotDrawer.js';
@@ -129,6 +130,8 @@ export function AppShell(): ReactElement {
           {/* The one key listener, and the "?" window it opens (IN-08). */}
           <ShortcutsHost />
           <RealtimeOwner />
+          {/* A chime the browser would not play yet (IN-10). */}
+          <AudioUnlockHint />
         </div>
       )}
     </>

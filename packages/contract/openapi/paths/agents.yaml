@@ -124,6 +124,26 @@ notificationPreferences:
               email:
                 type: boolean
                 description: An e-mail when a chat assigned to you has new activity.
+              repeat_sound:
+                type: boolean
+                description: Keep chiming every 10 seconds until the message is read.
+              events:
+                type: object
+                minProperties: 1
+                additionalProperties: false
+                description: |
+                  Which events interrupt you (IN-10). A partial update of the
+                  `events` object: send only the events that changed.
+                  `incoming_chat` cannot be turned off — sending `false` is a `400`.
+                properties:
+                  incoming_chat:
+                    type: boolean
+                    description: A visitor wrote in. Only `true` is accepted.
+                  transferred_to_me: { type: boolean }
+                  transferred_to_my_team: { type: boolean }
+                  queue_waiting: { type: boolean }
+                  new_ticket: { type: boolean }
+                  ticket_reply: { type: boolean }
     responses:
       "200":
         description: Preferences updated

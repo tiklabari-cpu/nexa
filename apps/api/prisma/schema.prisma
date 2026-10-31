@@ -389,6 +389,11 @@ model AgentMembership {
   /// a preference that does not apply to the one channel reaching a closed
   /// laptop. That is what moved all four onto the membership.
   notifyPush           Boolean   @default(true) @map("notify_push")
+  /// Which events interrupt this member (IN-10 · tm 367), keyed by event. A key the
+  /// object lacks reads as the event default (`DEFAULT_NOTIFICATION_EVENTS`).
+  notifyEvents         Json      @default("{}") @map("notify_events")
+  /// Keep chiming every 10 s until the message is read (IN-10); off by default.
+  notifyRepeatSound    Boolean   @default(false) @map("notify_repeat_sound")
   /// Whether the Settings side navigation is shown pinned (FR-MOD-08.1 ·
   /// "Unpin side navigation"). Per user and per license, like the notify_*
   /// columns above, and read by `/agents/me/ui-preferences`.

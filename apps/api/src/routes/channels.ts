@@ -666,6 +666,14 @@ export default async function channelRoutes(
           outcome.push.payload,
         );
       }
+      if (outcome.arrival) {
+        await publisher.publish(
+          tenant,
+          'incoming_ticket',
+          outcome.arrival.audience,
+          outcome.arrival.payload,
+        );
+      }
       // After the commit too, and not awaited: the ticket is durable, and the
       // provider's retry must not wait on the carrier (tm 359 · HD-04).
       if (outcome.ack) deliverAutoAck(app.backgroundMail, request.log, tenant, outcome.ack);

@@ -121,6 +121,25 @@ export interface TicketMessageAttachment {
 export const TICKET_MESSAGE_PAGE_SIZE = 50;
 
 /**
+ * A ticket was opened, or handed to somebody (`RTM_PUSH_ACTIONS`
+ * `incoming_ticket`, tm 367 · IN-10): to its assignee and its team, so the
+ * console can raise a "new ticket" alert (sound, desktop) for the people it
+ * is meant for.
+ *
+ * Ids only, for the reason {@link TicketMessageCreatedPush} gives — the subject
+ * is the player's own words. `actor_id` is the agent who did it (null for a
+ * ticket that arrived by e-mail or form), so that person is not alerted to
+ * their own action.
+ */
+export interface IncomingTicketPush {
+  ticket_id: string;
+  reason: 'created' | 'assigned';
+  assignee_id: string | null;
+  group_id: number | null;
+  actor_id: string | null;
+}
+
+/**
  * A message landed on a ticket (`RTM_PUSH_ACTIONS` `ticket_message_created`,
  * tm 356.2): to the ticket's assignee, its followers and its team.
  *

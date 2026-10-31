@@ -30,7 +30,10 @@ import {
   DEFAULT_WORK_SCHEDULE,
   GROUP_PRIORITIES,
   MAX_GROUP_REQUIRED_EXPERTISE,
+  LOCKED_ON_NOTIFICATION_EVENTS,
   NOTIFICATION_CHANNELS,
+  NOTIFICATION_EVENTS,
+  NOTIFICATION_SWITCHES,
   PANEL_FONT_PRESETS,
   QUEUE_TOPIC_ROLES,
   ROUTING_STATUSES,
@@ -40,6 +43,7 @@ import {
   normalizeWorkSchedule,
   type AgentRole,
   type NotificationChannel,
+  type NotificationEvent,
   type UiPreferenceKey,
   type WorkSchedule,
 } from '@siyahtus/types';
@@ -212,12 +216,29 @@ function groupQueueSettings(body: Partial<z.infer<typeof groupBody>>): GroupQueu
  * "off" and the server goes on interrupting.
  */
 const notificationPrefsBody = z
-  .object(
-    Object.fromEntries(NOTIFICATION_CHANNELS.map((c) => [c, z.boolean().optional()])) as Record<
+  .object({
+    ...(Object.fromEntries(NOTIFICATION_CHANNELS.map((c) => [c, z.boolean().optional()])) as Record<
       NotificationChannel,
       z.ZodOptional<z.ZodBoolean>
-    >,
-  )
+    >),
+    repeat_sound: z.boolean().optional(),
+    // IN-10: a partial update of the events object. The locked events accept
+    // only `true` — "a visitor wrote in" is the one alert nobody may switch off.
+    events: z
+      .object(
+        Object.fromEntries(
+          NOTIFICATION_EVENTS.map((event) => [
+            event,
+            (LOCKED_ON_NOTIFICATION_EVENTS as readonly string[]).includes(event)
+              ? z.literal(true).optional()
+              : z.boolean().optional(),
+          ]),
+        ) as Record<NotificationEvent, z.ZodOptional<z.ZodBoolean | z.ZodLiteral<true>>>,
+      )
+      .strict()
+      .refine((events) => Object.values(events).some((v) => v !== undefined))
+      .optional(),
+  })
   .strict()
   .refine((body) => Object.values(body).some((v) => v !== undefined), 'at least one is required');
 /** Same contract as `notificationPrefsBody`: partial, strict, never empty. */
@@ -510,7 +531,7 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
       const parsed = notificationPrefsBody.safeParse(request.body);
       if (!parsed.success) {
         throw ApiError.validation(
-          `Send at least one of ${NOTIFICATION_CHANNELS.join(', ')} as a boolean.`,
+          `Send at least one of ${[...NOTIFICATION_SWITCHES, 'events'].join(', ')}; events cannot switch off incoming_chat.`,
         );
       }
 

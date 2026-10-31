@@ -150,6 +150,20 @@ export const shell: Messages = {
   // component: it reads the active locale at the moment the push arrives)
   'shell.notification.title': 'New message',
   'shell.notification.fallbackBody': 'A visitor sent a new message.',
+  // The other events (IN-10): a title and a body each, never the player's words.
+  'shell.notification.transferredToMe.title': 'Chat handed to you',
+  'shell.notification.transferredToMe.body': 'A conversation was transferred to you.',
+  'shell.notification.transferredToMyTeam.title': 'Chat handed to your team',
+  'shell.notification.transferredToMyTeam.body': 'A conversation was transferred to your team.',
+  'shell.notification.queueWaiting.title': 'A visitor is waiting',
+  'shell.notification.queueWaiting.body': 'A conversation is waiting in the queue.',
+  'shell.notification.newTicket.title': 'New ticket',
+  'shell.notification.newTicket.body': 'A ticket was opened for you or your team.',
+  'shell.notification.ticketReply.title': 'Ticket reply',
+  'shell.notification.ticketReply.body': 'The player answered a ticket you work on.',
+  // The "enable sounds" hint (IN-10): the browser stays silent until a click.
+  'shell.audio.hint': 'Your browser is blocking alert sounds until you click here.',
+  'shell.audio.enable': 'Enable sounds',
 
   // Navigation (rail + command palette)
   'nav.home': 'Home',

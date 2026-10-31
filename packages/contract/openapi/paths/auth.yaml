@@ -498,6 +498,15 @@ me:
                       type: string
                       enum: [trialing, active, read_only]
                     trial_ends_at: { type: string, format: date-time, nullable: true }
+                group_ids:
+                  type: array
+                  items: { type: integer }
+                  description: |
+                    Agent principals only. The teams the caller belongs to
+                    (IN-10): the console decides "a chat was handed to my team"
+                    from a push that names only the receiving team's id. Read
+                    with the profile; a change of membership shows from the next
+                    read.
                 notification_preferences:
                   allOf:
                     - $ref: "../openapi.yaml#/components/schemas/NotificationPreferences"

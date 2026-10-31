@@ -122,6 +122,85 @@ describe('notification preferences', () => {
     }
   });
 
+  // IN-10 · tm 367: which events interrupt, and the repeating sound.
+  describe('events and repeat_sound (FR-MOD-13.8)', () => {
+    it('starts with the event defaults and the repeat off', async () => {
+      const prefs = (await server.get(PATH, auth(agentToken))).json() as {
+        events: Record<string, boolean>;
+        repeat_sound: boolean;
+      };
+      expect(prefs.repeat_sound).toBe(false);
+      expect(prefs.events).toEqual({
+        incoming_chat: true,
+        transferred_to_me: true,
+        transferred_to_my_team: true,
+        queue_waiting: false,
+        new_ticket: true,
+        ticket_reply: true,
+      });
+    });
+
+    it('merges one event into the stored set without dropping the others', async () => {
+      await server.put(PATH, { events: { new_ticket: false } }, auth(agentToken));
+      const second = await server.put(
+        PATH,
+        { events: { queue_waiting: true }, repeat_sound: true },
+        auth(agentToken),
+      );
+      expect(second.statusCode).toBe(200);
+      expect(second.json()).toEqual({
+        ...DEFAULT_NOTIFICATION_PREFERENCES,
+        repeat_sound: true,
+        events: {
+          ...DEFAULT_NOTIFICATION_PREFERENCES.events,
+          new_ticket: false,
+          queue_waiting: true,
+        },
+      });
+
+      // The profile carries the same object — the console's cache reads it there.
+      const me = await server.get('/auth/me', auth(agentToken));
+      const body = me.json() as { notification_preferences: { events: Record<string, boolean> } };
+      expect(body.notification_preferences.events.new_ticket).toBe(false);
+      expect(body.notification_preferences.events.queue_waiting).toBe(true);
+    });
+
+    it('refuses to switch off the visitor-wrote-in event', async () => {
+      const res = await server.put(PATH, { events: { incoming_chat: false } }, auth(agentToken));
+      expect(res.statusCode).toBe(400);
+      const ok = await server.put(PATH, { events: { incoming_chat: true } }, auth(agentToken));
+      expect(ok.statusCode).toBe(200);
+    });
+
+    it('refuses an unknown event, an empty events object and a non-boolean', async () => {
+      for (const body of [
+        { events: { new_tiket: false } },
+        { events: {} },
+        { events: { new_ticket: 'no' } },
+        { events: null },
+        { repeat_sound: 'yes' },
+      ]) {
+        const res = await server.put(PATH, body, auth(agentToken));
+        expect(res.statusCode, JSON.stringify(body)).toBe(400);
+      }
+    });
+
+    it('is one member’s own — a colleague keeps the defaults', async () => {
+      await server.put(
+        PATH,
+        { events: { ticket_reply: false }, repeat_sound: true },
+        auth(agentToken),
+      );
+      const colleague = await server.get(PATH, auth(colleagueToken));
+      expect(colleague.json()).toEqual(DEFAULT_NOTIFICATION_PREFERENCES);
+    });
+
+    it('lists the caller’s teams on the profile', async () => {
+      const me = await server.get('/auth/me', auth(agentToken));
+      expect(Array.isArray((me.json() as { group_ids: unknown }).group_ids)).toBe(true);
+    });
+  });
+
   it('requires a write scope to change anything', async () => {
     expect((await server.get(PATH, auth(readOnlyToken))).statusCode).toBe(200);
     expect((await server.put(PATH, { sound: false }, auth(readOnlyToken))).statusCode).toBe(403);

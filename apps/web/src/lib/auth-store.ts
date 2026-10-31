@@ -22,8 +22,10 @@
  */
 import { create } from 'zustand';
 import {
+  applyNotificationPatch,
   readNotificationPreferences,
   type NotificationPreferences,
+  type NotificationPreferencesPatch,
   type PanelAppearance,
   type PanelFontPreset,
 } from '@siyahtus/types';
@@ -83,6 +85,12 @@ export interface CurrentAgent {
    * server's profile, which `readNotificationPreferences` reads as the defaults.
    */
   notification_preferences?: NotificationPreferences;
+  /**
+   * The teams this agent is in (IN-10): "a chat was handed to my team" is
+   * decided here, from a push that names only the receiving team. Absent from an
+   * older server — read as none.
+   */
+  group_ids?: number[];
   /** First-run setup gate (FR-MOD-00.4). Absent on older tokens — treat as done. */
   onboarding_completed?: boolean;
   /**
@@ -271,7 +279,7 @@ interface AuthState {
    * Partial: send what moved. The server answers with the complete set, which
    * becomes both the store's value and the synchronous cache the inbox reads.
    */
-  setNotificationPreferences: (patch: Partial<NotificationPreferences>) => Promise<void>;
+  setNotificationPreferences: (patch: NotificationPreferencesPatch) => Promise<void>;
   /**
    * The caller's own panel font (owner, 2026-10-13); `null` follows the
    * workspace default again. Painted at once for a preset — a choice made now
@@ -1395,7 +1403,7 @@ export const useAuth = create<AuthState>((set, get) => {
       // flipped would go on silencing the inbox for a preference the account
       // does not hold.
       const previous = readNotificationPreferences(agent.notification_preferences);
-      const optimistic = { ...previous, ...patch };
+      const optimistic = applyNotificationPatch(previous, patch);
       set({ agent: { ...agent, notification_preferences: optimistic } });
       savePrefs(optimistic);
       try {

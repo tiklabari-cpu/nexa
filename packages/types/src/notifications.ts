@@ -48,6 +48,78 @@ export function isDevicePlatform(value: unknown): value is DevicePlatform {
 export const DEVICE_TOKEN_MAX_LENGTH = 512;
 
 /**
+ * What is worth interrupting an agent for (IN-10 · tm 367), apart from *how*.
+ *
+ * The channels below answer "through what"; these answer "about what". They
+ * used to be one question — the console only ever chimed for a visitor's
+ * message — and stopped being one when a hand-off, a queue and a ticket became
+ * things an agent has to hear about too.
+ *
+ *  - `incoming_chat` — a visitor wrote in. **Locked on:** the one event whose
+ *    silence is the product's failure mode (a player waiting, unseen). What an
+ *    agent can still turn off is its *sound* — that is the `sound` channel.
+ *  - `transferred_to_me` — a chat was handed to this person.
+ *  - `transferred_to_my_team` — a chat was handed to a team this person is in.
+ *  - `queue_waiting` — a visitor is waiting in a queue (a team lead's event).
+ *  - `new_ticket` — a ticket was opened or assigned to this person or team.
+ *  - `ticket_reply` — the player answered a ticket this person works.
+ */
+export const NOTIFICATION_EVENTS = [
+  'incoming_chat',
+  'transferred_to_me',
+  'transferred_to_my_team',
+  'queue_waiting',
+  'new_ticket',
+  'ticket_reply',
+] as const;
+export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[number];
+
+/** Whether each event is on. Every key present — see {@link NotificationPreferences}. */
+export type NotificationEventPreferences = Record<NotificationEvent, boolean>;
+
+/** The events nobody may switch off (IN-10): only "a visitor wrote in". */
+export const LOCKED_ON_NOTIFICATION_EVENTS = [
+  'incoming_chat',
+] as const satisfies readonly NotificationEvent[];
+
+export function isNotificationEvent(value: unknown): value is NotificationEvent {
+  return typeof value === 'string' && (NOTIFICATION_EVENTS as readonly string[]).includes(value);
+}
+
+/**
+ * On by default except the queue: "a visitor is waiting in the queue" is for the
+ * people who watch it (team leads), not for every agent. A key missing from a
+ * stored object reads as these (`agent_memberships.notify_events` defaults to
+ * `{}`).
+ */
+export const DEFAULT_NOTIFICATION_EVENTS: NotificationEventPreferences = {
+  incoming_chat: true,
+  transferred_to_me: true,
+  transferred_to_my_team: true,
+  queue_waiting: false,
+  new_ticket: true,
+  ticket_reply: true,
+};
+
+/**
+ * Read a stored or transmitted `events` object, filling anything missing or
+ * malformed from the defaults and holding the locked events on.
+ */
+export function readNotificationEvents(value: unknown): NotificationEventPreferences {
+  const source = (typeof value === 'object' && value !== null ? value : {}) as Record<
+    string,
+    unknown
+  >;
+  const events = { ...DEFAULT_NOTIFICATION_EVENTS };
+  for (const event of NOTIFICATION_EVENTS) {
+    const raw = source[event];
+    if (typeof raw === 'boolean') events[event] = raw;
+  }
+  for (const event of LOCKED_ON_NOTIFICATION_EVENTS) events[event] = true;
+  return events;
+}
+
+/**
  * The channels an agent can be reached through, and whether each is on.
  *
  * Every field is required — a partial shape would make "absent" and "off" the
@@ -66,10 +138,29 @@ export interface NotificationPreferences {
   push: boolean;
   /** An e-mail when a chat assigned to the agent has new activity. */
   email: boolean;
+  /** Which events interrupt the agent (IN-10); `incoming_chat` is always on. */
+  events: NotificationEventPreferences;
+  /**
+   * Keep chiming every 10 s until the unread message is read (IN-10). Off by
+   * default: a sound that does not stop is for the agent who asked for it.
+   */
+  repeat_sound: boolean;
 }
+
+/**
+ * A partial write: any channel, any subset of the events. Sent whole it would
+ * restate keys a second tab may have just changed.
+ */
+export type NotificationPreferencesPatch = Partial<Omit<NotificationPreferences, 'events'>> & {
+  events?: Partial<NotificationEventPreferences>;
+};
 
 export const NOTIFICATION_CHANNELS = ['enabled', 'sound', 'desktop', 'push', 'email'] as const;
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
+
+/** The plain boolean switches of the preference object (everything but `events`). */
+export const NOTIFICATION_SWITCHES = [...NOTIFICATION_CHANNELS, 'repeat_sound'] as const;
+export type NotificationSwitch = (typeof NOTIFICATION_SWITCHES)[number];
 
 /**
  * On by default, every channel.
@@ -84,6 +175,8 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   desktop: true,
   push: true,
   email: true,
+  events: DEFAULT_NOTIFICATION_EVENTS,
+  repeat_sound: false,
 };
 
 /**
@@ -95,6 +188,15 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
  */
 export function pushAllowed(prefs: NotificationPreferences): boolean {
   return prefs.enabled && prefs.push;
+}
+
+/**
+ * May an interruptive channel announce this event (IN-10)? The master switch
+ * and the event's own switch — what every surface (console, handset) applies
+ * before it looks at its own channel. `incoming_chat` cannot be off.
+ */
+export function eventAllowed(prefs: NotificationPreferences, event: NotificationEvent): boolean {
+  return prefs.enabled && prefs.events[event];
 }
 
 /**
@@ -112,12 +214,35 @@ export function readNotificationPreferences(value: unknown): NotificationPrefere
     string,
     unknown
   >;
-  const prefs = { ...DEFAULT_NOTIFICATION_PREFERENCES };
-  for (const channel of NOTIFICATION_CHANNELS) {
-    const raw = source[channel];
-    if (typeof raw === 'boolean') prefs[channel] = raw;
+  const prefs: NotificationPreferences = {
+    ...DEFAULT_NOTIFICATION_PREFERENCES,
+    events: readNotificationEvents(source['events']),
+  };
+  for (const key of NOTIFICATION_SWITCHES) {
+    const raw = source[key];
+    if (typeof raw === 'boolean') prefs[key] = raw;
   }
   return prefs;
+}
+
+/**
+ * Apply a patch to a full set. The optimistic write in the console and the
+ * server's write agree on how the `events` object merges: key by key, never
+ * replaced whole.
+ */
+export function applyNotificationPatch(
+  prefs: NotificationPreferences,
+  patch: NotificationPreferencesPatch,
+): NotificationPreferences {
+  const { events, ...switches } = patch;
+  const defined = Object.fromEntries(
+    Object.entries(switches).filter(([, value]) => value !== undefined),
+  );
+  return readNotificationPreferences({
+    ...prefs,
+    ...defined,
+    events: { ...prefs.events, ...(events ?? {}) },
+  });
 }
 
 /**

@@ -145,6 +145,20 @@ export const shell: Messages = {
   // component: it reads the active locale at the moment the push arrives)
   'shell.notification.title': 'Yeni mesaj',
   'shell.notification.fallbackBody': 'Bir ziyaretçi yeni bir mesaj gönderdi.',
+  // Diğer olaylar (IN-10): her birinin başlığı ve gövdesi; oyuncunun sözleri asla.
+  'shell.notification.transferredToMe.title': 'Sohbet size aktarıldı',
+  'shell.notification.transferredToMe.body': 'Bir konuşma size aktarıldı.',
+  'shell.notification.transferredToMyTeam.title': 'Sohbet ekibinize aktarıldı',
+  'shell.notification.transferredToMyTeam.body': 'Bir konuşma ekibinize aktarıldı.',
+  'shell.notification.queueWaiting.title': 'Bir ziyaretçi bekliyor',
+  'shell.notification.queueWaiting.body': 'Bir konuşma kuyrukta bekliyor.',
+  'shell.notification.newTicket.title': 'Yeni ticket',
+  'shell.notification.newTicket.body': 'Sizin ya da ekibiniz için bir ticket açıldı.',
+  'shell.notification.ticketReply.title': 'Ticket yanıtı',
+  'shell.notification.ticketReply.body': 'Oyuncu, üzerinde çalıştığınız bir ticket’ı yanıtladı.',
+  // “Sesleri etkinleştir” ipucu (IN-10): tarayıcı bir tıklamaya kadar sessiz kalır.
+  'shell.audio.hint': 'Tarayıcınız, buraya tıklayana kadar uyarı seslerini engelliyor.',
+  'shell.audio.enable': 'Sesleri etkinleştir',
 
   // Navigation
   'nav.home': 'Ana Sayfa',

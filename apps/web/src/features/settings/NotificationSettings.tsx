@@ -35,11 +35,35 @@ import { InstantToggle } from '../../components/settings/InstantToggle.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { type Permission } from '../notifications/notifications.js';
-import { readNotificationPreferences, type NotificationPreferences } from '@siyahtus/types';
+import {
+  LOCKED_ON_NOTIFICATION_EVENTS,
+  NOTIFICATION_EVENTS,
+  readNotificationPreferences,
+  type NotificationEvent,
+  type NotificationPreferencesPatch,
+} from '@siyahtus/types';
 import {
   currentPermission,
   requestNotificationPermission,
 } from '../notifications/useNotifications.js';
+
+/** The wording of each event row — keys, so the catalogue stays the one place for words. */
+const EVENT_LABELS: Record<NotificationEvent, string> = {
+  incoming_chat: 'team.notifications.event.incomingChat.label',
+  transferred_to_me: 'team.notifications.event.transferredToMe.label',
+  transferred_to_my_team: 'team.notifications.event.transferredToMyTeam.label',
+  queue_waiting: 'team.notifications.event.queueWaiting.label',
+  new_ticket: 'team.notifications.event.newTicket.label',
+  ticket_reply: 'team.notifications.event.ticketReply.label',
+};
+const EVENT_HINTS: Record<NotificationEvent, string> = {
+  incoming_chat: 'team.notifications.event.incomingChat.hint',
+  transferred_to_me: 'team.notifications.event.transferredToMe.hint',
+  transferred_to_my_team: 'team.notifications.event.transferredToMyTeam.hint',
+  queue_waiting: 'team.notifications.event.queueWaiting.hint',
+  new_ticket: 'team.notifications.event.newTicket.hint',
+  ticket_reply: 'team.notifications.event.ticketReply.hint',
+};
 
 export function NotificationSettings(): ReactElement {
   const t = useTranslate();
@@ -60,7 +84,7 @@ export function NotificationSettings(): ReactElement {
   }, []);
 
   /** Rejects when the write is refused, so the toggle goes back and says so. */
-  function update(patch: Partial<NotificationPreferences>): Promise<void> {
+  function update(patch: NotificationPreferencesPatch): Promise<void> {
     return setPreferences(patch);
   }
 
@@ -94,6 +118,14 @@ export function NotificationSettings(): ReactElement {
             checked={prefs.sound}
             disabled={!prefs.enabled}
             onChange={(sound) => update({ sound })}
+          />
+
+          <InstantToggle
+            label={t('team.notifications.repeat.label')}
+            description={t('team.notifications.repeat.hint')}
+            checked={prefs.repeat_sound}
+            disabled={!prefs.enabled || !prefs.sound}
+            onChange={(repeat_sound) => update({ repeat_sound })}
           />
 
           <div className="flex flex-wrap items-center gap-3">
@@ -139,6 +171,40 @@ export function NotificationSettings(): ReactElement {
             checked={prefs.email}
             onChange={(email) => update({ email })}
           />
+        </div>
+      </Card>
+
+      <Card>
+        <div
+          role="group"
+          aria-labelledby="notification-events-heading"
+          className="flex flex-col gap-3 p-4"
+        >
+          <div>
+            <h3 id="notification-events-heading" className="text-sm font-medium text-content">
+              {t('team.notifications.events.title')}
+            </h3>
+            <p className="mt-0.5 text-2xs text-content-secondary">
+              {t('team.notifications.events.hint')}
+            </p>
+          </div>
+          {NOTIFICATION_EVENTS.map((event) => {
+            const locked = (LOCKED_ON_NOTIFICATION_EVENTS as readonly NotificationEvent[]).includes(
+              event,
+            );
+            return (
+              <InstantToggle
+                key={event}
+                label={t(EVENT_LABELS[event])}
+                description={t(
+                  locked ? 'team.notifications.events.lockedHint' : EVENT_HINTS[event],
+                )}
+                checked={prefs.events[event]}
+                disabled={!prefs.enabled || locked}
+                onChange={(on) => update({ events: { [event]: on } })}
+              />
+            );
+          })}
         </div>
       </Card>
     </Section>

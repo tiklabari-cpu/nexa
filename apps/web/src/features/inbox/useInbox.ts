@@ -43,6 +43,7 @@ import { RISK_FLAGS_KEY } from '../risk/riskFlags.js';
 import { chatAiHandoffsKey } from './handoffCard.js';
 import { suggestionKeys, type AiSuggestionList } from '../playbook/ai-suggestions.js';
 import { TICKET_MESSAGES_KEY, withDelivery } from './ticketMessages.js';
+import { noteChatSeen } from '../notifications/useNotifications.js';
 import { customerContextKey } from './useCustomerContext.js';
 import { withAiModeChange, type AiReturnInput, type ChatAiModeResult } from './aiMode.js';
 import { DEFAULT_CHAT_SORT, type ChatSort } from './chat-sort.js';
@@ -823,6 +824,8 @@ export function useMarkSeen(chatId: string | null, seenUpTo: string | null): voi
     void apiRef.current
       .post(`/chats/${target.chatId}/seen`, { seen_up_to: target.seenUpTo })
       .then(() => {
+        // The repeating alert sound ends here too (IN-10): the message is read.
+        noteChatSeen(target.chatId);
         // Live badge update, not just a reload-survives-it guarantee — the row
         // for this chat reads `unread_count` straight from the list query.
         void queryClient.invalidateQueries({ queryKey: ['chats'] });
@@ -1182,6 +1185,8 @@ export function useRealtime(onPush?: PushHandler): void {
         // 356): the open ticket's thread, and the status a reply moved.
         'ticket_message_created',
         'ticket_message_delivery_changed',
+        // A ticket was opened or handed over (IN-10): the lists, and the alert.
+        'incoming_ticket',
         // Availability, the agent's own included: the sweep and the gateway
         // change it too now (WG-03), and say why (`reason`).
         'routing_status_set',
@@ -1644,6 +1649,13 @@ export function applyPush(
         void queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
         void queryClient.invalidateQueries({ queryKey: chatAiHandoffsKey(chatId) });
       }
+      return;
+    }
+
+    case 'incoming_ticket': {
+      // A new or newly assigned ticket moves every list it can appear in; the
+      // alert itself is `useNotifications`' (IN-10).
+      void queryClient.invalidateQueries({ queryKey: ['tickets'] });
       return;
     }
 

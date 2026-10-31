@@ -13,8 +13,12 @@
  * per license. That is FR-MOD-08.2's rule, and it is why nothing here takes an
  * account id on its own.
  */
-import type { NotificationPreferences } from '@siyahtus/types';
-import { DEFAULT_NOTIFICATION_PREFERENCES } from '@siyahtus/types';
+import type { NotificationPreferences, NotificationPreferencesPatch } from '@siyahtus/types';
+import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  NOTIFICATION_EVENTS,
+  readNotificationEvents,
+} from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 
 /**
@@ -30,6 +34,8 @@ export const NOTIFICATION_PREFERENCE_SELECT = {
   notifyDesktop: true,
   notifyPush: true,
   notifyEmail: true,
+  notifyEvents: true,
+  notifyRepeatSound: true,
 } as const;
 
 export interface NotificationPreferenceRow {
@@ -38,6 +44,9 @@ export interface NotificationPreferenceRow {
   notifyDesktop: boolean;
   notifyPush: boolean;
   notifyEmail: boolean;
+  /** The stored events object (IN-10); keys it lacks read as the defaults. */
+  notifyEvents: unknown;
+  notifyRepeatSound: boolean;
 }
 
 /**
@@ -51,25 +60,41 @@ export interface NotificationPreferenceRow {
 export function serialiseNotificationPreferences(
   row: NotificationPreferenceRow | null | undefined,
 ): NotificationPreferences {
-  if (!row) return { ...DEFAULT_NOTIFICATION_PREFERENCES };
+  if (!row) {
+    return {
+      ...DEFAULT_NOTIFICATION_PREFERENCES,
+      events: { ...DEFAULT_NOTIFICATION_PREFERENCES.events },
+    };
+  }
   return {
     enabled: row.notifyEnabled,
     sound: row.notifySound,
     desktop: row.notifyDesktop,
     push: row.notifyPush,
     email: row.notifyEmail,
+    // Every key present: a stored object only holds what the member changed,
+    // and a missing key reads as the event's default (`readNotificationEvents`).
+    events: readNotificationEvents(row.notifyEvents),
+    repeat_sound: row.notifyRepeatSound,
   };
 }
 
-/** A partial write, in the column names the membership actually stores. */
-export function toPreferenceColumns(patch: Partial<NotificationPreferences>): {
+/**
+ * A partial write, in the column names the membership actually stores.
+ *
+ * `events` is merged into the stored object by the caller (`writeNotificationPreferences`),
+ * which has to read it first — a patch of one event must not drop the others.
+ */
+export function toPreferenceColumns(patch: NotificationPreferencesPatch): {
   notifyEnabled?: boolean;
   notifySound?: boolean;
   notifyDesktop?: boolean;
   notifyPush?: boolean;
   notifyEmail?: boolean;
+  notifyRepeatSound?: boolean;
 } {
   return {
+    ...(patch.repeat_sound !== undefined ? { notifyRepeatSound: patch.repeat_sound } : {}),
     ...(patch.enabled !== undefined ? { notifyEnabled: patch.enabled } : {}),
     ...(patch.sound !== undefined ? { notifySound: patch.sound } : {}),
     ...(patch.desktop !== undefined ? { notifyDesktop: patch.desktop } : {}),
@@ -104,11 +129,32 @@ export async function readNotificationPreferences(
  */
 export async function writeNotificationPreferences(
   tx: TenantClient,
-  input: { licenseId: bigint; agentId: string; patch: Partial<NotificationPreferences> },
+  input: { licenseId: bigint; agentId: string; patch: NotificationPreferencesPatch },
 ): Promise<NotificationPreferences> {
+  const where = { licenseId_agentId: { licenseId: input.licenseId, agentId: input.agentId } };
+  const changed = Object.entries(input.patch.events ?? {}).filter(
+    ([event, on]) => (NOTIFICATION_EVENTS as readonly string[]).includes(event) && on !== undefined,
+  );
+  let notifyEvents: Record<string, boolean> | undefined;
+  if (changed.length > 0) {
+    // The stored object holds only what the member has set; merge into it under
+    // a row lock so two tabs toggling two events do not lose one of them.
+    const [current] = await tx.$queryRaw<Array<{ events: unknown }>>`
+      SELECT notify_events AS events FROM agent_memberships
+      WHERE license_id = ${input.licenseId} AND agent_id = ${input.agentId}::uuid
+      FOR NO KEY UPDATE`;
+    const stored =
+      typeof current?.events === 'object' && current.events !== null
+        ? (current.events as Record<string, boolean>)
+        : {};
+    notifyEvents = { ...stored, ...Object.fromEntries(changed) } as Record<string, boolean>;
+  }
   const row = await tx.agentMembership.update({
-    where: { licenseId_agentId: { licenseId: input.licenseId, agentId: input.agentId } },
-    data: toPreferenceColumns(input.patch),
+    where,
+    data: {
+      ...toPreferenceColumns(input.patch),
+      ...(notifyEvents ? { notifyEvents } : {}),
+    },
     select: NOTIFICATION_PREFERENCE_SELECT,
   });
   return serialiseNotificationPreferences(row);

@@ -26,7 +26,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
-import { pushAllowed } from '@siyahtus/types';
+import { applyNotificationPatch, pushAllowed } from '@siyahtus/types';
 
 import { useDevicePushPermission, useNotificationsApi } from './context';
 import type { NotificationPreferences, NotificationPreferencesPatch } from './types';
@@ -97,7 +97,8 @@ export function NotificationsScreen() {
   async function update(patch: NotificationPreferencesPatch): Promise<void> {
     if (state.status !== 'ready') return;
     const previous = state.prefs;
-    setState({ status: 'ready', prefs: { ...previous, ...patch } });
+    // `events` merges key by key, as on the server (`applyNotificationPatch`).
+    setState({ status: 'ready', prefs: applyNotificationPatch(previous, patch) });
     setSaveError(false);
     try {
       const confirmed = await api.updatePreferences(patch);

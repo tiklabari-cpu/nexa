@@ -415,6 +415,32 @@ export const team: Messages = {
   'team.notifications.email.label': 'E-posta bildirimleri',
   'team.notifications.email.hint':
     'Size atanmış bir sohbete bir ziyaretçi yazdığında, SiyahTuş kapalı olsa bile e-posta gönderilir. Yukarıdaki anahtardan etkilenmez — e-posta uzakta olduğunuzda yedek kanaldır.',
+  // Hangi olaylar sizi uyarır ve tekrarlayan ses (IN-10)
+  'team.notifications.repeat.label': 'Mesaj okunana kadar sesi tekrarla',
+  'team.notifications.repeat.hint':
+    'Sohbeti açana kadar, en çok 2 dakika boyunca 10 saniyede bir yeniden çalar. Siz açmadıkça kapalıdır.',
+  'team.notifications.events.title': 'Beni şunlardan haberdar et',
+  'team.notifications.events.hint':
+    'Her olay yukarıdaki kanalları kullanır. Ana anahtar yine hepsini susturur.',
+  'team.notifications.events.lockedHint':
+    'Her zaman açık — bekleyen bir ziyaretçi asla fark edilmeden kalmamalı. Sesini yine de yukarıdan kapatabilirsiniz.',
+  'team.notifications.event.incomingChat.label': 'Ziyaretçilerden yeni mesajlar',
+  'team.notifications.event.incomingChat.hint': 'Bir ziyaretçi yazdı.',
+  'team.notifications.event.transferredToMe.label': 'Bir sohbet bana aktarıldığında',
+  'team.notifications.event.transferredToMe.hint':
+    'Bir meslektaşınız, bir kural ya da AI size bir sohbet devretti.',
+  'team.notifications.event.transferredToMyTeam.label': 'Bir sohbet ekibime aktarıldığında',
+  'team.notifications.event.transferredToMyTeam.hint':
+    'Üyesi olduğunuz bir ekibe sohbet devredildi; kimin alacağına bakılmaksızın.',
+  'team.notifications.event.queueWaiting.label': 'Kuyrukta bir ziyaretçi beklediğinde',
+  'team.notifications.event.queueWaiting.hint':
+    'Ekiplerinizden birinde bir ziyaretçi kuyrukta ya da bir sohbeti kimse almadı. Ekip liderleri için.',
+  'team.notifications.event.newTicket.label': 'Yeni bir ticket',
+  'team.notifications.event.newTicket.hint':
+    'Sizin ya da ekibinizin üzerine bir ticket açıldı veya atandı.',
+  'team.notifications.event.ticketReply.label': 'Bir ticket’a yanıt geldiğinde',
+  'team.notifications.event.ticketReply.hint':
+    'Oyuncu, üzerinde çalıştığınız bir ticket’ı yanıtladı.',
   // AI agent performance on the Team screen — TeamAiPerformance.tsx (FR-MOD-04.2)
   'team.ai.title': 'AI temsilci performansı',
   'team.ai.description':

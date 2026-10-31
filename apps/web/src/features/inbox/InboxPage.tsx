@@ -6,6 +6,7 @@
  * comes from a token; no component hard-codes a hex value.
  */
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react';
+import { setViewedChat } from '../notifications/useNotifications.js';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { waitingThresholds } from '@siyahtus/types';
@@ -428,6 +429,12 @@ export function InboxPage(): ReactElement {
   // message however far back the agent reads (FR-MOD-02.2.2).
   const lastVisibleEventAt = onTickets ? null : (transcript.events.at(-1)?.created_at ?? null);
   useMarkSeen(seenChatId, lastVisibleEventAt);
+  // Opening a chat ends its repeating alert sound (IN-10) — at once while the
+  // agent is looking, or the moment they come back to this tab.
+  useEffect(() => {
+    setViewedChat(seenChatId);
+    return () => setViewedChat(null);
+  }, [seenChatId]);
 
   const agent = useAuth((s) => s.agent);
   const setRoutingStatus = useSetRoutingStatus();

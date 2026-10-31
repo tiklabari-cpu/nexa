@@ -205,3 +205,38 @@ describe('teammate profile panel (FR-MOD-04.3.4)', () => {
     expect(within(other).queryByRole('link', { name: 'Manage profile' })).not.toBeInTheDocument();
   });
 });
+
+describe('teammate profile → reports (RP-01 · tm 368.2)', () => {
+  function readsReports(...scopes: string[]): void {
+    const agent = useAuth.getState().agent;
+    if (agent) useAuth.setState({ agent: { ...agent, scopes } });
+  }
+
+  it('links the reports filtered to this teammate, by account id and never the e-mail', async () => {
+    readsReports('reports_read');
+    renderProfile();
+
+    const dialog = await openPanel();
+    const link = within(dialog).getByRole('link', { name: 'See the figures for Mira Haddad' });
+    expect(link).toHaveAttribute('href', '/app/reports?agent_id=a-2');
+    expect(link.getAttribute('href')).not.toContain('@');
+  });
+
+  it('offers it to a Team Lead too — the server counts the teams they lead', async () => {
+    readsReports('reports_read--groups');
+    renderProfile();
+
+    const dialog = await openPanel();
+    expect(
+      within(dialog).getByRole('link', { name: 'See the figures for Mira Haddad' }),
+    ).toBeInTheDocument();
+  });
+
+  it('draws no link for someone who reads no reports', async () => {
+    readsReports();
+    renderProfile();
+
+    const dialog = await openPanel();
+    expect(within(dialog).queryByRole('link', { name: /See the figures/ })).toBeNull();
+  });
+});

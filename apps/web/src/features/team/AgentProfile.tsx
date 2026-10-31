@@ -33,9 +33,10 @@ import { useState, type ChangeEvent, type ReactElement } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Modal } from '../../components/ui/index.js';
-import { useApiClient } from '../../lib/auth-store.js';
+import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatDateTime } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
+import { agentReportsHref } from '../reports/report-filters.js';
 import type { Group } from './Teams.js';
 
 /** The bounds `PUT /agents/{agentId}/chat-limit` enforces, mirrored so a value
@@ -67,6 +68,14 @@ export function AgentProfile({ agent, teams, isSelf, canEdit }: AgentProfileProp
   const t = useTranslate();
   const api = useApiClient();
   const client = useQueryClient();
+  // The reports filtered to this teammate (RP-01 · tm 368.2): for whoever reads
+  // reports at all — a Team Lead gets the part inside the teams they lead.
+  const canSeeReports = useAuth(
+    (s) =>
+      s.agent?.scopes.some(
+        (scope) => scope === 'reports_read' || scope === 'reports_read--groups',
+      ) ?? false,
+  );
 
   const [open, setOpen] = useState(false);
   const [limit, setLimit] = useState(String(agent.concurrent_chats_limit));
@@ -198,17 +207,29 @@ export function AgentProfile({ agent, teams, isSelf, canEdit }: AgentProfileProp
           )}
 
           <div className="mt-4 flex items-center justify-between gap-2">
-            {isSelf ? (
-              <Link
-                to="/app/settings"
-                onClick={() => setOpen(false)}
-                className="text-sm text-content-brand underline"
-              >
-                {t('team.profile.manageProfile')}
-              </Link>
-            ) : (
-              <span />
-            )}
+            <div className="flex flex-wrap items-center gap-3">
+              {isSelf && (
+                <Link
+                  to="/app/settings"
+                  onClick={() => setOpen(false)}
+                  className="text-sm text-content-brand underline"
+                >
+                  {t('team.profile.manageProfile')}
+                </Link>
+              )}
+              {canSeeReports && (
+                // By account id alone in the address (GV-05) — never the e-mail
+                // this panel shows above.
+                <Link
+                  to={agentReportsHref(agent.id)}
+                  onClick={() => setOpen(false)}
+                  aria-label={t('team.teams.members.reportsAriaLabel', { name: agent.name })}
+                  className="text-sm text-content-brand underline"
+                >
+                  {t('team.teams.members.reports')}
+                </Link>
+              )}
+            </div>
             <button
               type="button"
               onClick={() => setOpen(false)}

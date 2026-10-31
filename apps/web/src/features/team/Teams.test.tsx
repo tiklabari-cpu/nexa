@@ -13,6 +13,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { ApiClientError } from '../../lib/api-client.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 import type { Group } from './Teams.js';
@@ -385,5 +386,48 @@ describe('Teams localisation (NFR-I18N2)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Üyeleri yönet — Support' }));
     expect(screen.getByRole('dialog', { name: 'Üyeler — Support' })).toBeInTheDocument();
+  });
+});
+
+describe('Teams — "See the figures" opens the reports on the team (RP-01 · tm 368.2)', () => {
+  const LED: Group = {
+    ...SUPPORT,
+    id: 7,
+    name: 'Billing',
+    agents: [{ agent_id: 'me', priority: 'primary', lead: true }],
+  };
+
+  function renderWith(reach: 'all' | 'led' | undefined): void {
+    api.get.mockResolvedValue({ items: [SUPPORT, LED] });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <Teams agents={AGENTS} canManage={false} reportsReach={reach} viewerId="me" />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+  }
+
+  it('links every team for someone who reads the workspace, by team number only', async () => {
+    renderWith('all');
+    const link = await screen.findByRole('link', { name: 'See the figures for Support' });
+    expect(link).toHaveAttribute('href', '/app/reports?group_id=1');
+    expect(screen.getByRole('link', { name: 'See the figures for Billing' })).toHaveAttribute(
+      'href',
+      '/app/reports?group_id=7',
+    );
+  });
+
+  it('links only the teams a Team Lead leads', async () => {
+    renderWith('led');
+    expect(await screen.findByRole('link', { name: 'See the figures for Billing' })).toBeVisible();
+    expect(screen.queryByRole('link', { name: 'See the figures for Support' })).toBeNull();
+  });
+
+  it('draws no link for someone who reads no reports', async () => {
+    renderWith(undefined);
+    await screen.findByText('Billing');
+    expect(screen.queryByRole('link', { name: /See the figures/ })).toBeNull();
   });
 });

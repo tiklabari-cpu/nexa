@@ -16,6 +16,7 @@
  */
 import { useMemo, useState, type ReactElement } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import {
   GROUP_PRIORITIES,
   type AfterHoursMode,
@@ -29,6 +30,7 @@ import { LoadError } from '../../components/LoadError.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { formatLanguage } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
+import { teamReportsHref } from '../reports/report-filters.js';
 import { QueueTemplateButton } from './QueueTemplateButton.js';
 import { TeamEditor } from './TeamEditor.js';
 import { TeamMembers } from './TeamMembers.js';
@@ -54,9 +56,23 @@ interface TeamsProps {
   canManage: boolean;
   /** Admin or owner: who leads a team is their call (RL-01), not a token's. */
   canMarkLead?: boolean;
+  /**
+   * Whose reports the viewer may open from a team card (RP-01 · tm 368.2):
+   * `all` for `reports_read` — every team; `led` for `reports_read--groups` —
+   * only the teams they lead (the server counts no others). Absent: no link.
+   */
+  reportsReach?: 'all' | 'led';
+  /** The viewer's account id — which teams are theirs to lead. */
+  viewerId?: string | null;
 }
 
-export function Teams({ agents, canManage, canMarkLead = false }: TeamsProps): ReactElement {
+export function Teams({
+  agents,
+  canManage,
+  canMarkLead = false,
+  reportsReach,
+  viewerId = null,
+}: TeamsProps): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
 
@@ -140,6 +156,22 @@ export function Teams({ agents, canManage, canMarkLead = false }: TeamsProps): R
                     {t('team.page.memberCount', { count: group.agents.length })} ·{' '}
                     {formatLanguage(group.language_code)}
                   </p>
+                  {(reportsReach === 'all' ||
+                    (reportsReach === 'led' &&
+                      group.agents.some(
+                        (member) => member.agent_id === viewerId && member.lead === true,
+                      ))) && (
+                    // The reports open on this team's conversations, by team number
+                    // alone (GV-05). The label avoids the rail's own word so a
+                    // `getByRole('link', { name: 'Reports' })` stays unambiguous.
+                    <Link
+                      to={teamReportsHref(group.id)}
+                      aria-label={t('team.teams.card.reportsAriaLabel', { name: group.name })}
+                      className="mt-0.5 inline-block text-2xs font-medium text-content-brand underline"
+                    >
+                      {t('team.teams.card.reports')}
+                    </Link>
+                  )}
                 </div>
                 {canManage && (
                   <div className="flex shrink-0 gap-1">

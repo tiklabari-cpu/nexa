@@ -13,6 +13,8 @@
  * `children` is a render prop given a `close` so an item can dismiss the menu
  * after acting. The panel `<div>` wraps those children directly, so a consumer's
  * element is a direct child of the element carrying `hidden group-open:block`.
+ * The panel is always in the tree (only hidden), so `open` is also handed to the
+ * render prop for a panel whose content costs something — a request — to build.
  *
  * Once open, ArrowDown/ArrowUp/Home/End rove focus across the panel's items
  * (buttons, links, options) the way a native menu would — but only when focus
@@ -46,7 +48,7 @@ interface DropdownProps {
   /** Native tooltip on the trigger. */
   triggerTitle?: string;
   /** Panel content; receives `close` to dismiss from within. */
-  children: (helpers: { close: (returnFocus?: boolean) => void }) => ReactNode;
+  children: (helpers: { close: (returnFocus?: boolean) => void; open: boolean }) => ReactNode;
   /** Layout for the panel (position, width, padding). */
   panelClassName?: string;
   className?: string;
@@ -155,7 +157,7 @@ export function Dropdown({
           panelClassName,
         )}
       >
-        {children({ close })}
+        {children({ close, open })}
       </div>
     </details>
   );

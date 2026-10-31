@@ -775,3 +775,67 @@ test.describe('reports — share link (FR-MOD-07.3.1)', () => {
     await anonymous.close();
   });
 });
+
+test.describe('reports — filters (RP-01 · tm 368.2)', () => {
+  test('opens filtered by team and agent from the address, keeps ids only, and exports the same filter', async ({
+    agentPage,
+    request,
+  }) => {
+    const token = await ownerAccessToken(request);
+    const headers = { authorization: `Bearer ${token}` };
+    const groups = (await (await request.get(`${API_BASE}/groups`, { headers })).json()) as {
+      items: Array<{ id: number; name: string }>;
+    };
+    const agents = (await (await request.get(`${API_BASE}/agents`, { headers })).json()) as {
+      items: Array<{ id: string; name: string | null }>;
+    };
+    const team = groups.items[0];
+    const agent = agents.items.find((member) => member.name !== null);
+    expect(team, 'the seeded workspace has a team').toBeDefined();
+    expect(agent, 'the seeded workspace has a named agent').toBeDefined();
+    if (!team || !agent) return;
+
+    // The report asks the server with exactly the identifiers in the address.
+    const overview = agentPage.waitForRequest(
+      (req) =>
+        req.url().includes('/reports/overview') &&
+        req.url().includes(`group_id=${team.id}`) &&
+        req.url().includes(`agent_id=${agent.id}`),
+    );
+    await agentPage.goto(`/app/reports?group_id=${team.id}&agent_id=${agent.id}`);
+    await overview;
+    await expect(agentPage.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+
+    // The chips name them; the address does not.
+    await expect(
+      agentPage.getByRole('button', { name: `Team: ${team.name}`, exact: true }),
+    ).toBeVisible();
+    await expect(
+      agentPage.getByRole('button', { name: `Agent: ${agent.name}`, exact: true }),
+    ).toBeVisible();
+    const address = new URL(agentPage.url());
+    expect(address.searchParams.getAll('group_id')).toEqual([String(team.id)]);
+    expect(address.searchParams.getAll('agent_id')).toEqual([agent.id]);
+    expect(address.search).not.toContain('@');
+
+    // The download is the report on screen: same filter, same endpoint.
+    const exported = agentPage.waitForRequest(
+      (req) =>
+        req.url().includes('/reports/export') &&
+        req.url().includes(`group_id=${team.id}`) &&
+        req.url().includes(`agent_id=${agent.id}`),
+    );
+    const download = agentPage.waitForEvent('download');
+    await agentPage.getByRole('button', { name: 'Export' }).click();
+    await exported;
+    await download;
+
+    // A report that takes no filter says so rather than quietly ignoring it.
+    await agentPage.getByRole('tab', { name: 'Cases' }).click();
+    await expect(agentPage.getByText(/This report is not filtered/)).toBeVisible();
+
+    await agentPage.getByRole('tab', { name: 'Overview' }).click();
+    await agentPage.getByRole('button', { name: 'Clear filters' }).click();
+    await expect.poll(() => new URL(agentPage.url()).search).toBe('');
+  });
+});

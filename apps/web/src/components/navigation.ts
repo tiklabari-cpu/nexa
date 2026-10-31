@@ -143,8 +143,10 @@ export const MODULES: NavDestination[] = [
     labelKey: 'nav.reports',
     icon: '◆',
     keywords: ['analytics', 'metrics', 'kpi'],
-    // `GET /reports/overview` (routes/reports.ts).
-    scope: ['reports_read'],
+    // `GET /reports/overview` (routes/reports.ts). `reports_read--groups` is the
+    // team-bounded read a Team Lead holds (RP-01 · tm 368): the same four
+    // conversation reports over the teams they lead.
+    scope: ['reports_read', 'reports_read--groups'],
     // A Team Lead reaches the AI quality queue here (AI-24 · tm 319.3).
     orRole: 'team_lead',
   },

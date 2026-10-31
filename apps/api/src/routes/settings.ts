@@ -64,6 +64,7 @@ import {
   normaliseForwardAddress,
   normaliseTranscriptDomain,
   unverifiedForwardAddress,
+  findCannedResponseProblems,
 } from '@siyahtus/types';
 import type {
   CompanySector,
@@ -146,6 +147,8 @@ import {
 import { RUNNING_FIRST_RESPONSE, refreshFirstResponseDue } from '../services/tickets/ticket-sla.js';
 import {
   CANNED_VISIBILITIES,
+  canWriteSharedCanned,
+  cannedOwnerOf,
   cannedVisibilityFilter,
   resolveCannedVisibility,
   type CannedVisibility,
@@ -398,9 +401,32 @@ const cannedListQuery = z.object({ scope: z.enum(['chat', 'ticket']).optional() 
 const cannedGroupId = z.coerce.bigint().nullable();
 const cannedVisibility = z.enum(CANNED_VISIBILITIES);
 
+/**
+ * A saved reply's text, refused when a `{{placeholder}}` names no variable the
+ * composer can fill (IN-06). Checked here rather than only in the settings
+ * form: a typo stored is a literal `{{customer.nmae}}` sent to a player.
+ */
+const cannedText = z
+  .string()
+  .trim()
+  .min(1)
+  .max(10_000)
+  .superRefine((text, ctx) => {
+    for (const problem of findCannedResponseProblems(text)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem.message });
+    }
+  });
+
+/** Longest fallback phrase (`canned_response_settings_fallback_text_check`). */
+const CANNED_FALLBACK_MAX = 100;
+
+const cannedFallbackBody = z.object({
+  fallback_text: z.string().trim().min(1).max(CANNED_FALLBACK_MAX).nullable(),
+});
+
 const createCannedBody = z.object({
   shortcut: z.string().trim().regex(SHORTCUT, 'letters, digits, _ and - only, up to 40'),
-  text: z.string().trim().min(1).max(10_000),
+  text: cannedText,
   scope: z.enum(['chat', 'ticket']).default('chat'),
   visibility: cannedVisibility.default('all'),
   group_id: cannedGroupId.default(null),
@@ -413,7 +439,7 @@ const updateCannedBody = z
       .trim()
       .regex(SHORTCUT, 'letters, digits, _ and - only, up to 40')
       .optional(),
-    text: z.string().trim().min(1).max(10_000).optional(),
+    text: cannedText.optional(),
     visibility: cannedVisibility.optional(),
     group_id: cannedGroupId.optional(),
   })
@@ -436,19 +462,55 @@ async function resolveCannedScope(
   tx: Prisma.TransactionClient,
   visibility: CannedVisibility,
   groupId: bigint | null,
-): Promise<{ visibility: CannedVisibility; groupId: bigint | null }> {
+  ownerAccountId: string | null,
+): Promise<{
+  visibility: CannedVisibility;
+  groupId: bigint | null;
+  ownerAccountId: string | null;
+}> {
+  if (visibility === 'private') {
+    if (groupId !== null) {
+      throw ApiError.validation('A personal reply cannot also belong to a team.');
+    }
+    if (ownerAccountId === null) {
+      throw ApiError.validation('Only a signed-in member can own a personal reply.');
+    }
+    return { visibility, groupId: null, ownerAccountId };
+  }
+
   if (visibility === 'all') {
     if (groupId !== null) {
       throw ApiError.validation('A reply visible to everyone cannot also belong to a team.');
     }
-    return { visibility, groupId: null };
+    return { visibility, groupId: null, ownerAccountId: null };
   }
 
   if (groupId === null) {
     throw ApiError.validation('Name the team this reply belongs to, or make it visible to all.');
   }
   await assertGroupsExist(tx, [groupId]);
-  return { visibility, groupId };
+  return { visibility, groupId, ownerAccountId: null };
+}
+
+/**
+ * The rows a writer may reach by id: every shared reply (the scope check then
+ * decides whether they may change it) and their own personal ones — never
+ * another person's, which answer 404 as if they did not exist.
+ */
+function ownOrSharedCanned(owner: string | null): Prisma.CannedResponseWhereInput {
+  return {
+    OR: [
+      { visibility: { in: ['all', 'group'] } },
+      ...(owner !== null ? [{ visibility: 'private', ownerAccountId: owner }] : []),
+    ],
+  };
+}
+
+/** The 403 a member gets for touching a shared reply with only `canned_responses--my:rw`. */
+function sharedCannedRefused(): ApiError {
+  return ApiError.authorization('Shared saved replies are managed by the library curators.', {
+    required_scopes: ['canned_responses--all:rw'],
+  });
 }
 
 /**
@@ -2103,32 +2165,55 @@ export default async function settingsRoutes(
       const query = parse(cannedListQuery, request.query);
       const principal = request.requirePrincipal();
 
-      const items = await request.withTenant(async (tx) => {
+      const organizationId = request.tenant().organizationId;
+      const { items, settings, org } = await request.withTenant(async (tx) => {
         const visibility = await resolveCannedVisibility(tx, principal);
-        return tx.cannedResponse.findMany({
-          where: {
-            ...(query.scope ? { scope: query.scope } : {}),
-            ...cannedVisibilityFilter(visibility),
-          },
-          orderBy: { shortcut: 'asc' },
-        });
+        const [items, settings, org] = await Promise.all([
+          tx.cannedResponse.findMany({
+            where: {
+              ...(query.scope ? { scope: query.scope } : {}),
+              ...cannedVisibilityFilter(visibility),
+            },
+            orderBy: { shortcut: 'asc' },
+          }),
+          tx.cannedResponseSettings.findFirst({ select: { fallbackText: true } }),
+          // `{{company.name}}` (IN-06): the composer has no other read of it an
+          // agent may make — `GET /settings/company` is an admin's.
+          tx.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
+        ]);
+        return { items, settings, org };
       });
 
-      return reply.send({ items: items.map(serialiseCanned) });
+      return reply.send({
+        items: items.map(serialiseCanned),
+        fallback_text: settings?.fallbackText ?? null,
+        company_name: org?.name ?? null,
+      });
     },
   );
 
   app.post(
     '/settings/canned-responses',
-    { config: { scopes: ['canned_responses--all:rw'] } },
+    // `--my:rw` opens the route to every member for a personal reply; a shared
+    // one is refused below unless the caller also holds `--all:rw` (which
+    // implies `--my:rw`, so a curator passes the gate either way).
+    { config: { scopes: ['canned_responses--my:rw'] } },
     async (request, reply) => {
       const body = parse(createCannedBody, request.body);
       const tenant = request.tenant();
       const principal = request.requirePrincipal();
+      if (body.visibility !== 'private' && !canWriteSharedCanned(principal)) {
+        throw sharedCannedRefused();
+      }
 
       try {
         const created = await request.withTenant(async (tx) => {
-          const scope = await resolveCannedScope(tx, body.visibility, body.group_id);
+          const scope = await resolveCannedScope(
+            tx,
+            body.visibility,
+            body.group_id,
+            cannedOwnerOf(principal),
+          );
           return tx.cannedResponse.create({
             data: {
               licenseId: tenant.licenseId,
@@ -2137,6 +2222,7 @@ export default async function settingsRoutes(
               scope: body.scope,
               visibility: scope.visibility,
               groupId: scope.groupId,
+              ownerAccountId: scope.ownerAccountId,
               updatedBy: principal.kind === 'agent' ? principal.accountId : null,
               updatedAt: new Date(),
             },
@@ -2147,7 +2233,9 @@ export default async function settingsRoutes(
         if (isUniqueViolation(error)) {
           throw new ApiError(
             'not_allowed',
-            `#${body.shortcut} is already used for ${body.scope} replies.`,
+            body.visibility === 'private'
+              ? `You already have a personal #${body.shortcut} for ${body.scope} replies.`
+              : `#${body.shortcut} is already used for ${body.scope} replies.`,
           );
         }
         throw error;
@@ -2157,19 +2245,29 @@ export default async function settingsRoutes(
 
   app.patch<{ Params: { cannedResponseId: string } }>(
     '/settings/canned-responses/:cannedResponseId',
-    { config: { scopes: ['canned_responses--all:rw'] } },
+    { config: { scopes: ['canned_responses--my:rw'] } },
     async (request, reply) => {
       const id = parse(uuid, request.params.cannedResponseId);
       const body = parse(updateCannedBody, request.body);
       const principal = request.requirePrincipal();
+      const owner = cannedOwnerOf(principal);
 
       try {
         const updated = await request.withTenant(async (tx) => {
+          // Someone else's personal reply is not there to edit — the same 404
+          // as an id that never existed, so its existence does not leak.
           const existing = await tx.cannedResponse.findFirst({
-            where: { id },
-            select: { id: true, visibility: true, groupId: true },
+            where: { id, ...ownOrSharedCanned(owner) },
+            select: { id: true, visibility: true, groupId: true, ownerAccountId: true },
           });
           if (!existing) throw ApiError.notFound('Saved reply not found.');
+          const target = body.visibility ?? (existing.visibility as CannedVisibility);
+          if (
+            (existing.visibility !== 'private' || target !== 'private') &&
+            !canWriteSharedCanned(principal)
+          ) {
+            throw sharedCannedRefused();
+          }
 
           // The pair is re-checked as a whole, merged over what is stored: a
           // PATCH that names only `visibility: "all"` has to be allowed to
@@ -2180,16 +2278,19 @@ export default async function settingsRoutes(
           const scope = rescoping
             ? await resolveCannedScope(
                 tx,
-                body.visibility ?? (existing.visibility as CannedVisibility),
+                target,
                 body.group_id !== undefined
                   ? body.group_id
-                  : // Widening to the whole workspace clears the team by
-                    // itself; anything else keeps whatever is stored, so a
-                    // `group_id` sent alongside `visibility: "all"` is refused
-                    // rather than dropped.
-                    body.visibility === 'all'
+                  : // Widening to the whole workspace (or narrowing to the
+                    // caller alone) clears the team by itself; anything else
+                    // keeps whatever is stored, so a `group_id` sent alongside
+                    // `visibility: "all"` is refused rather than dropped.
+                    body.visibility === 'all' || body.visibility === 'private'
                     ? null
                     : existing.groupId,
+                // A reply made personal becomes the caller's; one already
+                // personal is the caller's by the lookup above.
+                target === 'private' ? owner : null,
               )
             : null;
 
@@ -2198,7 +2299,13 @@ export default async function settingsRoutes(
             data: {
               ...(body.shortcut !== undefined ? { shortcut: body.shortcut } : {}),
               ...(body.text !== undefined ? { text: body.text } : {}),
-              ...(scope ? { visibility: scope.visibility, groupId: scope.groupId } : {}),
+              ...(scope
+                ? {
+                    visibility: scope.visibility,
+                    groupId: scope.groupId,
+                    ownerAccountId: scope.ownerAccountId,
+                  }
+                : {}),
               updatedBy: principal.kind === 'agent' ? principal.accountId : null,
               updatedAt: new Date(),
             },
@@ -2216,12 +2323,24 @@ export default async function settingsRoutes(
 
   app.delete<{ Params: { cannedResponseId: string } }>(
     '/settings/canned-responses/:cannedResponseId',
-    { config: { scopes: ['canned_responses--all:rw'] } },
+    { config: { scopes: ['canned_responses--my:rw'] } },
     async (request, reply) => {
       const id = parse(uuid, request.params.cannedResponseId);
+      const principal = request.requirePrincipal();
+      const owner = cannedOwnerOf(principal);
 
       const deleted = await request.withTenant(async (tx) => {
-        const { count } = await tx.cannedResponse.deleteMany({ where: { id } });
+        const existing = await tx.cannedResponse.findFirst({
+          where: { id, ...ownOrSharedCanned(owner) },
+          select: { visibility: true },
+        });
+        if (!existing) return 0;
+        if (existing.visibility !== 'private' && !canWriteSharedCanned(principal)) {
+          throw sharedCannedRefused();
+        }
+        const { count } = await tx.cannedResponse.deleteMany({
+          where: { id, ...ownOrSharedCanned(owner) },
+        });
         // Only record a delete that actually happened — a 404 (nothing matched)
         // is not an event worth an entry.
         if (count > 0) {
@@ -2236,6 +2355,32 @@ export default async function settingsRoutes(
       if (deleted === 0) throw ApiError.notFound('Saved reply not found.');
 
       return reply.status(204).send();
+    },
+  );
+
+  // The phrase a variable the composer cannot fill becomes (IN-06). Read back
+  // on the list above, which every member reads; written by the curators.
+  app.put(
+    '/settings/canned-response-fallback',
+    { config: { scopes: ['canned_responses--all:rw'] } },
+    async (request, reply) => {
+      const body = parse(cannedFallbackBody, request.body);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
+      const updatedBy = principal.kind === 'agent' ? principal.accountId : null;
+
+      const row = await request.withTenant((tx) =>
+        tx.cannedResponseSettings.upsert({
+          where: { licenseId: tenant.licenseId },
+          create: {
+            licenseId: tenant.licenseId,
+            fallbackText: body.fallback_text,
+            updatedBy,
+          },
+          update: { fallbackText: body.fallback_text, updatedBy, updatedAt: new Date() },
+        }),
+      );
+      return reply.send({ fallback_text: row.fallbackText });
     },
   );
 
@@ -4334,6 +4479,7 @@ function serialiseCanned(row: {
   scope: string;
   groupId: bigint | null;
   visibility: string;
+  ownerAccountId: string | null;
   updatedBy: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -4345,6 +4491,7 @@ function serialiseCanned(row: {
     scope: row.scope,
     group_id: row.groupId === null ? null : Number(row.groupId),
     visibility: row.visibility,
+    owner_account_id: row.ownerAccountId,
     updated_by: row.updatedBy,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),

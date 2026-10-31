@@ -401,7 +401,7 @@ export const IMPERSONATION_ALLOWED_WRITES: readonly RegExp[] = [
   /^\/notifications\/devices(\/[^/]+)?$/,
   /^\/onboarding\//,
   /^\/uploads(\/.*)?$/,
-  /^\/settings\/(appearance|bots|canned-responses|chat-timeout|company|custom-fields|expertise|prechat|routing-rules|sales-tracker|sla|tags|ticket-email-templates|ticket-rules|trusted-domains|widget)(\/.*)?$/,
+  /^\/settings\/(appearance|bots|canned-responses|canned-response-fallback|chat-timeout|company|custom-fields|expertise|prechat|routing-rules|sales-tracker|sla|tags|ticket-email-templates|ticket-rules|trusted-domains|widget)(\/.*)?$/,
 ];
 
 /**

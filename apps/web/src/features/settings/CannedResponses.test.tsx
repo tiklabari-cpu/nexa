@@ -12,7 +12,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { api } = vi.hoisted(() => ({
-  api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+  api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), put: vi.fn(), delete: vi.fn() },
 }));
 
 vi.mock('../../lib/auth-store.js', () => ({
@@ -41,11 +41,11 @@ function mockGets(overrides: { replies?: unknown; groups?: unknown } = {}): void
   );
 }
 
-function renderReplies(canEdit = true): ReturnType<typeof render> {
+function renderReplies(canEdit = true, canWritePersonal = canEdit): ReturnType<typeof render> {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <CannedResponses canEdit={canEdit} />
+      <CannedResponses canEdit={canEdit} canWritePersonal={canWritePersonal} />
     </QueryClientProvider>,
   );
 }
@@ -54,6 +54,7 @@ beforeEach(() => {
   api.get.mockReset();
   api.post.mockReset();
   api.patch.mockReset();
+  api.put.mockReset();
   api.delete.mockReset();
   mockGets();
 });
@@ -70,7 +71,9 @@ describe('Saved replies — saving one with a team', () => {
     api.post.mockResolvedValue({ ...REPLY, id: 'canned-2', shortcut: 'discount' });
 
     await fillTheForm();
-    fireEvent.change(screen.getByLabelText('Team'), { target: { value: String(BILLING_TEAM.id) } });
+    fireEvent.change(screen.getByLabelText('Who sees it'), {
+      target: { value: String(BILLING_TEAM.id) },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Save reply' }));
 
     await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
@@ -105,11 +108,13 @@ describe('Saved replies — saving one with a team', () => {
     api.post.mockResolvedValue({ ...REPLY, id: 'canned-2', shortcut: 'discount' });
 
     await fillTheForm();
-    fireEvent.change(screen.getByLabelText('Team'), { target: { value: String(SUPPORT_TEAM.id) } });
+    fireEvent.change(screen.getByLabelText('Who sees it'), {
+      target: { value: String(SUPPORT_TEAM.id) },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Save reply' }));
 
     await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.getByLabelText('Team')).toHaveValue(''));
+    await waitFor(() => expect(screen.getByLabelText('Who sees it')).toHaveValue(''));
   });
 });
 
@@ -197,12 +202,16 @@ describe('Saved replies — re-scoping an existing one', () => {
 });
 
 describe('Saved replies — when there is nothing to scope to, or nobody to scope', () => {
-  it('shows no picker at all in a workspace with no teams', async () => {
+  it('offers only "Only me" and "Everyone" in a workspace with no teams', async () => {
     mockGets({ groups: { items: [] } });
     renderReplies();
     await screen.findByText(REPLY.text);
 
-    expect(screen.queryByLabelText('Team')).not.toBeInTheDocument();
+    const picker = screen.getByLabelText('Who sees it');
+    expect([...(picker as HTMLSelectElement).options].map((option) => option.textContent)).toEqual([
+      'Only me',
+      'Everyone',
+    ]);
     expect(
       screen.queryByRole('button', { name: 'Edit team for #shipping' }),
     ).not.toBeInTheDocument();
@@ -214,10 +223,130 @@ describe('Saved replies — when there is nothing to scope to, or nobody to scop
     renderReplies(false);
     await screen.findByText(REPLY.text);
 
-    expect(screen.queryByLabelText('Team')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Who sees it')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save reply' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Edit team for #shipping' }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('Saved replies — personal replies, variables, search, fallback (IN-06)', () => {
+  const PERSONAL = {
+    ...REPLY,
+    id: 'canned-9',
+    shortcut: 'imzam',
+    text: 'Saygılarımla, Mert',
+    visibility: 'private' as const,
+  };
+
+  async function fill(shortcut: string, text: string): Promise<void> {
+    fireEvent.change(screen.getByLabelText(/Shortcut/), { target: { value: shortcut } });
+    fireEvent.change(screen.getByLabelText('Reply'), { target: { value: text } });
+  }
+
+  it('lets a member save a personal reply and nothing else (FR-MOD-08.7.2)', async () => {
+    renderReplies(false, true);
+    await screen.findByText(REPLY.text);
+    api.post.mockResolvedValue(PERSONAL);
+
+    // No visibility choice: a member's replies are personal, and the screen says so.
+    expect(screen.queryByLabelText('Who sees it')).not.toBeInTheDocument();
+    expect(screen.getByText(/only you see them/)).toBeInTheDocument();
+    // The shared reply in the list is not theirs to delete.
+    expect(screen.queryByRole('button', { name: 'Delete #shipping' })).not.toBeInTheDocument();
+
+    await fill('imzam', 'Saygılarımla, Mert');
+    fireEvent.click(screen.getByRole('button', { name: 'Save reply' }));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    expect(api.post).toHaveBeenCalledWith('/settings/canned-responses', {
+      shortcut: 'imzam',
+      text: 'Saygılarımla, Mert',
+      visibility: 'private',
+      group_id: null,
+    });
+  });
+
+  it('marks a personal reply in the list and lets its author delete it', async () => {
+    mockGets({ replies: { items: [REPLY, PERSONAL] } });
+    renderReplies(false, true);
+    await screen.findByText(PERSONAL.text);
+
+    expect(screen.getByText('Personal')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete #imzam' })).toBeInTheDocument();
+  });
+
+  it('sends "Only me" from the curator picker as a personal reply', async () => {
+    renderReplies();
+    await screen.findByText(REPLY.text);
+    api.post.mockResolvedValue(PERSONAL);
+
+    await fill('imzam', 'x');
+    fireEvent.change(screen.getByLabelText('Who sees it'), { target: { value: 'private' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save reply' }));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    expect(api.post.mock.calls[0]![1]).toMatchObject({ visibility: 'private', group_id: null });
+  });
+
+  it('inserts a variable from the {x} menu', async () => {
+    renderReplies();
+    await screen.findByText(REPLY.text);
+    fireEvent.change(screen.getByLabelText('Reply'), { target: { value: 'Merhaba ' } });
+
+    fireEvent.click(screen.getByLabelText('Insert a variable'));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Player's name/ }));
+
+    expect(screen.getByLabelText('Reply')).toHaveValue('Merhaba {{customer.name}}');
+  });
+
+  it('refuses an unknown variable before it is sent', async () => {
+    renderReplies();
+    await screen.findByText(REPLY.text);
+
+    await fill('hatali', 'Merhaba {{customer.nmae}}');
+    fireEvent.blur(screen.getByLabelText('Reply'));
+
+    expect(
+      await screen.findByText('{{customer.nmae}} is not a variable this reply can use.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save reply' })).toBeDisabled();
+  });
+
+  it('searches the list with Turkish folding', async () => {
+    const CEKIM = { ...REPLY, id: 'c3', shortcut: 'withdraw', text: 'Çekim talebiniz alındı.' };
+    mockGets({ replies: { items: [REPLY, CEKIM] } });
+    renderReplies();
+    await screen.findByText(CEKIM.text);
+
+    fireEvent.change(screen.getByLabelText('Search saved replies'), { target: { value: 'cekim' } });
+
+    expect(screen.getByText(CEKIM.text)).toBeInTheDocument();
+    expect(screen.queryByText(REPLY.text)).not.toBeInTheDocument();
+  });
+
+  it('saves the fallback phrase, and clears it with null', async () => {
+    mockGets({ replies: { items: [REPLY], fallback_text: 'Değerli üyemiz' } });
+    renderReplies();
+    const field = await screen.findByLabelText('When a value is missing, write');
+    await waitFor(() => expect(field).toHaveValue('Değerli üyemiz'));
+    api.put.mockResolvedValue({ fallback_text: 'Sevgili oyuncu' });
+
+    fireEvent.change(field, { target: { value: 'Sevgili oyuncu' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save phrase' }));
+    await waitFor(() =>
+      expect(api.put).toHaveBeenCalledWith('/settings/canned-response-fallback', {
+        fallback_text: 'Sevgili oyuncu',
+      }),
+    );
+
+    fireEvent.change(field, { target: { value: '  ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save phrase' }));
+    await waitFor(() =>
+      expect(api.put).toHaveBeenLastCalledWith('/settings/canned-response-fallback', {
+        fallback_text: null,
+      }),
+    );
   });
 });

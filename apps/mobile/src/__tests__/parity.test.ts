@@ -1117,7 +1117,10 @@ describe('module parity matrix — what is still owed', () => {
       // 359 -> 360 with `POST /customer/chat/seen` (tm 362) — the widget's read
       // receipt (IN-05), a visitor surface; the agent app shows no transcript
       // receipt line yet, and nothing here re-scopes.
-      contractEndpoints: 360,
+      // 360 -> 361 with `PUT /settings/canned-response-fallback` (tm 363) — the
+      // saved-reply fallback phrase (IN-06), a Settings screen the handset does not
+      // have; nothing here re-scopes.
+      contractEndpoints: 361,
       scopeBoundaries: 1,
     });
   });

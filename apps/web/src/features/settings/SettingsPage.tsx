@@ -94,6 +94,8 @@ export { TicketRules } from './TicketRules.js';
 interface SectionPermissions {
   canManageAccess: boolean;
   canManageReplies: boolean;
+  /** Saving one's own personal replies (IN-06): every member's `canned_responses--my:rw`. */
+  canWritePersonalReplies: boolean;
   canManageTags: boolean;
   canManageTicketRules: boolean;
   canManageBrands: boolean;
@@ -109,6 +111,8 @@ function permissionsFrom(scopes: readonly string[], role: string | undefined): S
   return {
     canManageAccess: scopes.includes('access_rules:rw'),
     canManageReplies: scopes.includes('canned_responses--all:rw'),
+    canWritePersonalReplies:
+      scopes.includes('canned_responses--my:rw') || scopes.includes('canned_responses--all:rw'),
     canManageTags: scopes.includes('tags--all:rw'),
     canManageTicketRules: scopes.includes('tickets--all:rw'),
     canManageBrands: scopes.includes('brands--all:rw'),
@@ -145,7 +149,9 @@ export const SECTION_ELEMENTS: Record<string, (p: SectionPermissions) => ReactEl
   skills: (p) => <Skills canEdit={p.canManageAccess} />,
   'ticket-rules': (p) => <TicketRules canEdit={p.canManageTicketRules} />,
   sla: (p) => <SlaPolicy canEdit={p.canManageAccess} />,
-  'canned-responses': (p) => <CannedResponses canEdit={p.canManageReplies} />,
+  'canned-responses': (p) => (
+    <CannedResponses canEdit={p.canManageReplies} canWritePersonal={p.canWritePersonalReplies} />
+  ),
   tags: (p) => <Tags canEdit={p.canManageTags} />,
   'chat-timeout': (p) => <ChatTimeout canEdit={p.canManageAccess} />,
   'ticket-email-templates': (p) => <TicketEmailTemplates canEdit={p.canManageTicketRules} />,

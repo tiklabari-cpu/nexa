@@ -18,9 +18,18 @@
  * One team, not many. `group_id` is a scalar column and the shortcut it answers
  * to is unique across the workspace, so "which team may use `#refund`" has one
  * answer; a checkbox list would suggest otherwise.
+ *
+ * IN-06 (tm 363) adds three things. A reply can be personal ("Only me"): every
+ * member may save those (`canned_responses--my:rw`), only the curators shared
+ * ones, and nobody else is sent a personal reply — the server's rule, so this
+ * screen only offers what the caller may save. A reply's text may carry
+ * `{{variables}}`, inserted from the {x} menu and checked here by the same
+ * validator the server applies. And the list can be searched with the
+ * composer's Turkish-folding match.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type ReactElement } from 'react';
+import { useMemo, useRef, useState, type ReactElement } from 'react';
+import { CANNED_VARIABLES, findCannedResponseProblems, type CannedVariable } from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { useSettingsLeaveGuard } from '../../components/settings/FormSaveBar.js';
 import { useConfirm } from '../../components/ui/index.js';
@@ -30,6 +39,8 @@ import { useApiClient } from '../../lib/auth-store.js';
 import { useInlineEditorFocus } from '../../lib/inline-editor-focus.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import { useTranslate } from '../../lib/i18n.js';
+import { Dropdown } from '../../components/ui/Dropdown.js';
+import { foldForSearch } from '../inbox/cannedSearch.js';
 
 interface CannedResponse {
   id: string;
@@ -37,8 +48,27 @@ interface CannedResponse {
   text: string;
   scope: 'chat' | 'ticket';
   group_id: number | null;
-  visibility: 'all' | 'group';
+  visibility: 'all' | 'group' | 'private';
 }
+
+/** The picker's value for a personal reply; `''` is everyone, a number a team. */
+const PRIVATE = 'private';
+
+/**
+ * Each variable's label. `chat.id` / `thread.id` read the ids catalogue (K1 = A)
+ * so the menu names them the way every other screen does.
+ */
+const VARIABLE_LABEL_KEYS: Record<CannedVariable, string> = {
+  'customer.name': 'settings.cannedResponses.variable.customerName',
+  'customer.first_name': 'settings.cannedResponses.variable.customerFirstName',
+  'customer.username': 'settings.cannedResponses.variable.customerUsername',
+  'customer.email': 'settings.cannedResponses.variable.customerEmail',
+  'agent.name': 'settings.cannedResponses.variable.agentName',
+  'agent.first_name': 'settings.cannedResponses.variable.agentFirstName',
+  'chat.id': 'ids.thread.label',
+  'thread.id': 'ids.chat.label',
+  'company.name': 'settings.cannedResponses.variable.companyName',
+};
 
 /** Local copy of `Teams.tsx`'s `Group` shape — just enough to render a picker. */
 interface Team {
@@ -51,13 +81,25 @@ interface Team {
  * and the pair has to be sent whole: `visibility` and `group_id` are checked
  * together, so half of the decision is a 400.
  */
-function scopeBody(teamId: string): { visibility: 'all' | 'group'; group_id: number | null } {
+function scopeBody(teamId: string): {
+  visibility: 'all' | 'group' | 'private';
+  group_id: number | null;
+} {
+  if (teamId === PRIVATE) return { visibility: 'private', group_id: null };
   return teamId === ''
     ? { visibility: 'all', group_id: null }
     : { visibility: 'group', group_id: Number(teamId) };
 }
 
-export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement {
+export function CannedResponses({
+  canEdit,
+  canWritePersonal = canEdit,
+}: {
+  /** Manages the shared library (`canned_responses--all:rw`). */
+  canEdit: boolean;
+  /** Saves their own personal replies (`canned_responses--my:rw`); every member by default. */
+  canWritePersonal?: boolean;
+}): ReactElement {
   const t = useTranslate();
   const { confirm, dialog } = useConfirm();
   const api = useApiClient();
@@ -65,7 +107,10 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
 
   const list = useQuery({
     queryKey: ['settings', 'canned-responses'],
-    queryFn: () => api.get<{ items: CannedResponse[] }>('/settings/canned-responses?scope=chat'),
+    queryFn: () =>
+      api.get<{ items: CannedResponse[]; fallback_text?: string | null }>(
+        '/settings/canned-responses?scope=chat',
+      ),
   });
 
   // Same `['team', 'groups']` cache key `Teams.tsx`/`Tags.tsx` list under —
@@ -90,11 +135,47 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
     mutationFn: (body: {
       shortcut: string;
       text: string;
-      visibility: 'all' | 'group';
+      visibility: 'all' | 'group' | 'private';
       group_id: number | null;
     }) => api.post<CannedResponse>('/settings/canned-responses', body),
     onSuccess: invalidate,
   });
+
+  const saveFallback = useMutation({
+    mutationFn: (fallback: string | null) =>
+      api.put<{ fallback_text: string | null }>('/settings/canned-response-fallback', {
+        fallback_text: fallback,
+      }),
+    onSuccess: invalidate,
+  });
+  // `null` untouched: the field shows what the server has until it is edited.
+  const [fallbackDraft, setFallbackDraft] = useState<string | null>(null);
+  const [fallbackError, setFallbackError] = useState<string | null>(null);
+  const storedFallback = list.data?.fallback_text ?? '';
+  const fallbackValue = fallbackDraft ?? storedFallback;
+
+  async function submitFallback(): Promise<void> {
+    try {
+      await saveFallback.mutateAsync(fallbackValue.trim() === '' ? null : fallbackValue.trim());
+      setFallbackDraft(null);
+      setFallbackError(null);
+    } catch (error) {
+      setFallbackError(t(errorMessageKey(error)));
+    }
+  }
+
+  const [search, setSearch] = useState('');
+  const visibleItems = useMemo(() => {
+    const items = list.data?.items ?? [];
+    const needle = foldForSearch(search.trim());
+    if (!needle) return items;
+    return items.filter(
+      (item) =>
+        foldForSearch(item.shortcut).includes(needle) || foldForSearch(item.text).includes(needle),
+    );
+  }, [list.data, search]);
+
+  const replyRef = useRef<HTMLTextAreaElement>(null);
 
   const remove = useMutation({
     mutationFn: (id: string) => api.delete(`/settings/canned-responses/${id}`),
@@ -107,8 +188,9 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
     onSuccess: invalidate,
   });
 
-  /** `''` — the new reply is for everyone. */
-  const [newTeamId, setNewTeamId] = useState('');
+  /** `''` — the new reply is for everyone; `private` for its author alone. */
+  const defaultScope = canEdit ? '' : PRIVATE;
+  const [newTeamId, setNewTeamId] = useState(defaultScope);
 
   // `null` closed, otherwise the id of the reply whose team is being changed.
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -139,7 +221,14 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
     initial: { shortcut: '', text: '' },
     validators: {
       shortcut: required(t('settings.cannedResponses.shortcutError')),
-      text: required(t('settings.cannedResponses.replyError')),
+      text: (value) => {
+        if (!value.trim()) return t('settings.cannedResponses.replyError');
+        const problem = findCannedResponseProblems(value)[0];
+        if (!problem) return null;
+        return problem.reason === 'unknown_variable'
+          ? t('settings.cannedResponses.variableUnknown', { token: problem.token })
+          : t('settings.cannedResponses.variableMalformed', { token: problem.token });
+      },
     },
     onSubmit: async (values, { setSubmitError, reset }) => {
       try {
@@ -149,13 +238,26 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
           ...scopeBody(newTeamId),
         });
         reset();
-        setNewTeamId('');
+        setNewTeamId(defaultScope);
       } catch (error) {
         setSubmitError(t(errorMessageKey(error)));
       }
     },
   });
   useSettingsLeaveGuard(form.isDirty, form.isSubmitting);
+
+  /** Puts `{{name}}` at the reply field's caret (or its end) and keeps typing there. */
+  function insertVariable(name: CannedVariable): void {
+    const input = replyRef.current;
+    const value = form.values.text;
+    const at = input ? input.selectionStart : value.length;
+    const token = `{{${name}}}`;
+    form.setValue('text', value.slice(0, at) + token + value.slice(at));
+    requestAnimationFrame(() => {
+      input?.focus();
+      input?.setSelectionRange(at + token.length, at + token.length);
+    });
+  }
   const shortcutError = form.errorFor('shortcut');
   const textError = form.errorFor('text');
 
@@ -168,7 +270,7 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
         <ErrorNotice message={t('settings.cannedResponses.loadError')} />
       ) : (
         <Card>
-          {canEdit && (
+          {canWritePersonal && (
             <form
               onSubmit={form.handleSubmit}
               noValidate
@@ -197,22 +299,57 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
                   <FieldError id="new-shortcut-error" message={shortcutError} />
                 </label>
 
-                <label htmlFor="new-reply" className="flex min-w-56 flex-1 flex-col gap-1">
-                  <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                    {t('settings.cannedResponses.replyLabel')}
-                  </span>
-                  <input
+                <div className="flex min-w-56 flex-1 flex-col gap-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <label
+                      htmlFor="new-reply"
+                      className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+                    >
+                      {t('settings.cannedResponses.replyLabel')}
+                    </label>
+                    <Dropdown
+                      label={t('settings.cannedResponses.variableMenu')}
+                      trigger={<span className="font-mono text-2xs">{'{x}'}</span>}
+                      triggerClassName="rounded-md border border-border px-1.5 py-0.5 text-content-secondary transition-colors hover:bg-surface-2"
+                      panelClassName="right-0 top-7 w-56 p-1"
+                    >
+                      {({ close }) => (
+                        <div role="menu" className="flex flex-col">
+                          {CANNED_VARIABLES.map((name) => (
+                            <button
+                              key={name}
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                close(false);
+                                insertVariable(name);
+                              }}
+                              className="flex items-center justify-between gap-2 rounded px-2 py-1 text-left text-xs hover:bg-surface-2"
+                            >
+                              <span>{t(VARIABLE_LABEL_KEYS[name])}</span>
+                              <code className="font-mono text-2xs text-content-tertiary">
+                                {name}
+                              </code>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </Dropdown>
+                  </div>
+                  <textarea
                     id="new-reply"
+                    ref={replyRef}
+                    rows={2}
                     value={form.values.text}
                     onChange={(event) => form.setValue('text', event.target.value)}
                     onBlur={() => form.blur('text')}
                     aria-invalid={textError ? true : undefined}
                     aria-describedby={textError ? 'new-reply-error' : undefined}
                     placeholder={t('settings.cannedResponses.messagePlaceholder')}
-                    className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
+                    className="resize-y rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                   />
                   <FieldError id="new-reply-error" message={textError} />
-                </label>
+                </div>
 
                 <button
                   type="submit"
@@ -225,10 +362,11 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
                 </button>
               </div>
 
-              {/* No teams in the workspace means there is nothing to scope to,
-                  and a picker whose only option is "All teams" is a control
-                  that cannot be used — the same rule `Tags.tsx` follows. */}
-              {teams.length > 0 && (
+              {/* "Only me / Everyone / a team" (IN-06) in one control — the
+                  three are one decision, so two controls could disagree. A
+                  member who may save only personal replies has nothing to
+                  choose: the sentence says where the reply goes instead. */}
+              {canEdit ? (
                 <div className="flex w-56 flex-col gap-1">
                   {/* The hint is a sibling of the label, not a child of it —
                       inside, it would join the select's accessible name and a
@@ -238,7 +376,7 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
                     htmlFor="new-reply-team"
                     className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
                   >
-                    {t('settings.cannedResponses.teamLabel')}
+                    {t('settings.cannedResponses.visibilityLabel')}
                   </label>
                   <select
                     id="new-reply-team"
@@ -246,10 +384,11 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
                     onChange={(event) => setNewTeamId(event.target.value)}
                     className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
                   >
-                    <option value="">{t('settings.cannedResponses.allTeams')}</option>
+                    <option value={PRIVATE}>{t('settings.cannedResponses.onlyMe')}</option>
+                    <option value="">{t('settings.cannedResponses.everyone')}</option>
                     {teams.map((team) => (
                       <option key={team.id} value={String(team.id)}>
-                        {team.name}
+                        {t('settings.cannedResponses.teamOption', { name: team.name })}
                       </option>
                     ))}
                   </select>
@@ -257,6 +396,10 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
                     {t('settings.cannedResponses.teamHint')}
                   </span>
                 </div>
+              ) : (
+                <p className="text-2xs text-content-tertiary">
+                  {t('settings.cannedResponses.personalOnlyHint')}
+                </p>
               )}
 
               {form.submitError && (
@@ -265,6 +408,58 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
                 </p>
               )}
             </form>
+          )}
+
+          {canEdit && (
+            <div className="flex flex-wrap items-end gap-2 border-b border-border p-4">
+              <label htmlFor="canned-fallback" className="flex w-72 flex-col gap-1">
+                <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+                  {t('settings.cannedResponses.fallbackLabel')}
+                </span>
+                <input
+                  id="canned-fallback"
+                  value={fallbackValue}
+                  maxLength={100}
+                  onChange={(event) => setFallbackDraft(event.target.value)}
+                  placeholder={t('inbox.composer.picker.fallbackDefault')}
+                  className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => void submitFallback()}
+                disabled={fallbackDraft === null || saveFallback.isPending}
+                className="rounded-md border border-border px-3 py-1.5 text-sm text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+              >
+                {saveFallback.isPending
+                  ? t('settings.saving')
+                  : t('settings.cannedResponses.fallbackSave')}
+              </button>
+              <span className="w-full text-2xs text-content-tertiary">
+                {t('settings.cannedResponses.fallbackHint')}
+              </span>
+              {fallbackError && (
+                <p role="alert" className="w-full text-2xs text-danger">
+                  {fallbackError}
+                </p>
+              )}
+            </div>
+          )}
+
+          {(list.data?.items.length ?? 0) > 0 && (
+            <div className="border-b border-border px-4 py-2">
+              <label htmlFor="canned-search" className="sr-only">
+                {t('settings.cannedResponses.searchLabel')}
+              </label>
+              <input
+                id="canned-search"
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={t('settings.cannedResponses.searchPlaceholder')}
+                className="w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
+              />
+            </div>
           )}
 
           {list.isPending ? (
@@ -276,7 +471,12 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
             />
           ) : (
             <ul className="divide-y divide-border">
-              {list.data.items.map((item) => (
+              {visibleItems.length === 0 && (
+                <li className="px-4 py-3 text-sm text-content-secondary">
+                  {t('settings.cannedResponses.searchEmpty')}
+                </li>
+              )}
+              {visibleItems.map((item) => (
                 <li key={item.id} className="flex flex-col gap-2 px-4 py-2.5">
                   <div className="flex items-start gap-3">
                     <code className="mt-0.5 shrink-0 rounded-sm bg-inset px-1.5 py-0.5 font-mono text-2xs">
@@ -284,26 +484,31 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
                     </code>
                     <span className="flex-1 text-sm text-content-secondary">{item.text}</span>
                     <span className="mt-0.5 shrink-0 text-2xs text-content-tertiary">
-                      {item.group_id === null
-                        ? t('settings.cannedResponses.allTeams')
-                        : t('settings.cannedResponses.teamOnly', {
-                            name: teamName(item.group_id),
-                          })}
+                      {item.visibility === 'private'
+                        ? t('settings.cannedResponses.personal')
+                        : item.group_id === null
+                          ? t('settings.cannedResponses.allTeams')
+                          : t('settings.cannedResponses.teamOnly', {
+                              name: teamName(item.group_id),
+                            })}
                     </span>
-                    {canEdit && teams.length > 0 && editingId !== item.id && (
-                      <button
-                        type="button"
-                        ref={focus.opener(item.id)}
-                        onClick={() => startEditingTeam(item)}
-                        aria-label={t('settings.cannedResponses.editTeamAriaLabel', {
-                          shortcut: item.shortcut,
-                        })}
-                        className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
-                      >
-                        {t('settings.cannedResponses.editTeamButton')}
-                      </button>
-                    )}
-                    {canEdit && (
+                    {canEdit &&
+                      teams.length > 0 &&
+                      item.visibility !== 'private' &&
+                      editingId !== item.id && (
+                        <button
+                          type="button"
+                          ref={focus.opener(item.id)}
+                          onClick={() => startEditingTeam(item)}
+                          aria-label={t('settings.cannedResponses.editTeamAriaLabel', {
+                            shortcut: item.shortcut,
+                          })}
+                          className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+                        >
+                          {t('settings.cannedResponses.editTeamButton')}
+                        </button>
+                      )}
+                    {(item.visibility === 'private' ? canWritePersonal : canEdit) && (
                       <button
                         type="button"
                         onClick={() =>

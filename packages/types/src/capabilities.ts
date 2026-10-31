@@ -113,6 +113,7 @@ export const MEMBER_BASE_SCOPES = [
   'groups--my:ro',
   'tags--groups:ro',
   'canned_responses--groups:ro',
+  'canned_responses--my:rw',
   'brands--all:ro',
 ] as const satisfies readonly Scope[];
 

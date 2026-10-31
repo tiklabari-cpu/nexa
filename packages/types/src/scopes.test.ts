@@ -38,6 +38,9 @@ const SIYAHTUS_ADDED_SCOPES = [
   // Art. 17) and its own words make "erişim ≠ silme" the property to preserve,
   // so an irreversible delete does not ride on `customers:rw`.
   'customers.erase:rw',
+  // The source platform's saved replies are shared only (`--groups`/`--all`);
+  // IN-06 adds personal ones, written by their author alone.
+  'canned_responses--my:rw',
 ];
 
 const SOURCE_SCOPE_COUNT = 58;

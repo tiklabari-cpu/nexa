@@ -19,13 +19,18 @@
  * Membership is read from the database on every request rather than trusted
  * from the token, for the reason `resolveVisibility` gives: taking someone off
  * a team has to stop their access now, not when their token next rotates.
+ *
+ * Personal replies (`private`, IN-06 · tm 363) sit outside both gates: they
+ * reach their author and nobody else, the curator included. A library admin
+ * who could read every agent's personal notes would turn "mine" into "the
+ * workspace's, filed under my name" (04 IN-06, RL-03 default: not shown).
  */
 import { hasAnyScope } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
 
-/** The two legal values of `canned_responses.visibility`, as the CHECK spells them. */
-export const CANNED_VISIBILITIES = ['all', 'group'] as const;
+/** The legal values of `canned_responses.visibility`, as the CHECK spells them. */
+export const CANNED_VISIBILITIES = ['all', 'group', 'private'] as const;
 export type CannedVisibility = (typeof CANNED_VISIBILITIES)[number];
 
 export interface CannedResponseVisibility {
@@ -33,6 +38,19 @@ export interface CannedResponseVisibility {
   unrestricted: boolean;
   /** Teams the caller belongs to; empty for an unrestricted caller. */
   groupIds: bigint[];
+  /** The account whose personal replies the caller sees; null for a caller with no account. */
+  ownerAccountId: string | null;
+}
+
+/** Whether the caller may write shared replies (`all` / `group`), not only their own. */
+export function canWriteSharedCanned(principal: Principal): boolean {
+  if (principal.kind === 'customer') return false;
+  return hasAnyScope(principal.scopes, ['canned_responses--all:rw']);
+}
+
+/** The account a personal reply written by this caller belongs to; null when it has none. */
+export function cannedOwnerOf(principal: Principal): string | null {
+  return principal.kind === 'agent' ? principal.accountId : null;
 }
 
 /** Whether the caller curates the whole library rather than consuming a slice of it. */
@@ -53,8 +71,9 @@ export async function resolveCannedVisibility(
   tx: TenantClient,
   principal: Principal,
 ): Promise<CannedResponseVisibility> {
+  const ownerAccountId = cannedOwnerOf(principal);
   if (hasUnrestrictedCannedScope(principal)) {
-    return { unrestricted: true, groupIds: [] };
+    return { unrestricted: true, groupIds: [], ownerAccountId };
   }
 
   const actorId =
@@ -63,14 +82,14 @@ export async function resolveCannedVisibility(
       : principal.kind === 'bot'
         ? principal.botId
         : null;
-  if (actorId === null) return { unrestricted: false, groupIds: [] };
+  if (actorId === null) return { unrestricted: false, groupIds: [], ownerAccountId };
 
   const memberships = await tx.groupAgent.findMany({
     where: { agentId: actorId },
     select: { groupId: true },
   });
 
-  return { unrestricted: false, groupIds: memberships.map((m) => m.groupId) };
+  return { unrestricted: false, groupIds: memberships.map((m) => m.groupId), ownerAccountId };
 }
 
 /**
@@ -87,7 +106,16 @@ export async function resolveCannedVisibility(
 export function cannedVisibilityFilter(
   visibility: CannedResponseVisibility,
 ): Record<string, unknown> {
-  if (visibility.unrestricted) return {};
+  // The caller's own personal replies, for every caller with an account; never
+  // anyone else's, whatever the scope.
+  const own =
+    visibility.ownerAccountId !== null
+      ? [{ visibility: 'private', ownerAccountId: visibility.ownerAccountId }]
+      : [];
+
+  if (visibility.unrestricted) {
+    return { OR: [{ visibility: { in: ['all', 'group'] } }, ...own] };
+  }
 
   return {
     OR: [
@@ -98,6 +126,7 @@ export function cannedVisibilityFilter(
       ...(visibility.groupIds.length > 0
         ? [{ visibility: 'group', groupId: { in: visibility.groupIds } }]
         : []),
+      ...own,
     ],
   };
 }

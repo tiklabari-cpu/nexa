@@ -550,7 +550,10 @@ test.describe('settings', () => {
 
       await section().getByLabel('Shortcut').fill(shortcut);
       await section().getByLabel('Reply', { exact: true }).fill('Team-only answer.');
-      await section().getByLabel('Team', { exact: true }).selectOption({ label: teamName });
+      // One control for "Only me / Everyone / a team" since IN-06 (tm 363).
+      await section()
+        .getByLabel('Who sees it', { exact: true })
+        .selectOption({ label: `Team: ${teamName}` });
 
       const createResponse = agentPage.waitForResponse(
         (r) => r.url().includes('/settings/canned-responses') && r.request().method() === 'POST',

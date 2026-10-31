@@ -68,7 +68,34 @@ export interface TemplateProblem {
  *    nested `{{`/`}}` left over once the well-formed ones are removed (`malformed`).
  */
 export function findTemplateProblems(field: TemplateField, text: string): TemplateProblem[] {
-  const problems: TemplateProblem[] = [];
+  return findPlaceholderProblems(text, TEMPLATE_VARIABLES).map((problem) => ({
+    field,
+    ...problem,
+    message:
+      problem.token === '{{' || problem.token === '}}'
+        ? `Unbalanced ${problem.token} in ${field}.`
+        : problem.message,
+  }));
+}
+
+/** One problem in a piece of placeholder text, before it is tied to a field. */
+export interface PlaceholderProblem {
+  token: string;
+  reason: 'unknown_variable' | 'malformed';
+  message: string;
+}
+
+/**
+ * The placeholder check itself, against any catalogue: ticket templates use
+ * {@link TEMPLATE_VARIABLES}, saved replies `CANNED_VARIABLES` (IN-06). One
+ * pass, so "valid" means the same thing for both — the same braces, the same
+ * name shape, the same leftover-brace rule.
+ */
+export function findPlaceholderProblems(
+  text: string,
+  known: readonly string[],
+): PlaceholderProblem[] {
+  const problems: PlaceholderProblem[] = [];
 
   PLACEHOLDER.lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -76,15 +103,14 @@ export function findTemplateProblems(field: TemplateField, text: string): Templa
     const token = match[0];
     const name = match[1] ?? '';
     if (!name) {
-      problems.push({ field, token, reason: 'malformed', message: `Empty placeholder ${token}.` });
+      problems.push({ token, reason: 'malformed', message: `Empty placeholder ${token}.` });
     } else if (!VARIABLE_NAME.test(name)) {
-      problems.push({ field, token, reason: 'malformed', message: `Malformed variable ${token}.` });
-    } else if (!KNOWN.has(name)) {
+      problems.push({ token, reason: 'malformed', message: `Malformed variable ${token}.` });
+    } else if (!known.includes(name)) {
       problems.push({
-        field,
         token,
         reason: 'unknown_variable',
-        message: `Unknown variable {{${name}}} — use one of: ${TEMPLATE_VARIABLES.join(', ')}.`,
+        message: `Unknown variable {{${name}}} — use one of: ${known.join(', ')}.`,
       });
     }
   }
@@ -94,12 +120,7 @@ export function findTemplateProblems(field: TemplateField, text: string): Templa
   const leftover = text.replace(PLACEHOLDER, '');
   if (leftover.includes('{{') || leftover.includes('}}')) {
     const token = leftover.includes('{{') ? '{{' : '}}';
-    problems.push({
-      field,
-      token,
-      reason: 'malformed',
-      message: `Unbalanced ${token} in ${field}.`,
-    });
+    problems.push({ token, reason: 'malformed', message: `Unbalanced ${token}.` });
   }
 
   return problems;

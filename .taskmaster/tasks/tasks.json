@@ -15266,7 +15266,7 @@
           "283"
         ],
         "priority": "medium",
-        "updatedAt": "2026-10-31T10:17:51.603Z",
+        "updatedAt": "2026-10-31T11:28:39.940Z",
         "subtasks": [
           {
             "id": 1,
@@ -15274,11 +15274,11 @@
             "description": "Copilot sor API: /copilot/ask sınıflandırma + KB RAG + BI kapısı + kota + audit",
             "details": "contract POST /copilot/ask + routes/copilot.ts sınıflandırma (BI sözlüğü + dil modeli; LLM ADR §6) + BI yolu reports_read + KB yolu AI-14 tek depo RAG (#309) + \"bilmiyorum\" + kullanım sayacı/kota + audit (soru metni yok). Ayrıntı ve kabul maddeleri: üst görev #366 details (tek kaynak).",
             "testStrategy": "Entegrasyon (KB cevabı + kaynak, yetkisiz rol, kota); `pnpm test:gate`.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "366",
             "priority": "medium",
-            "updatedAt": "2026-10-31T10:17:51.603Z"
+            "updatedAt": "2026-10-31T11:28:39.940Z"
           },
           {
             "id": 2,
@@ -16146,7 +16146,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-31T10:17:51.604Z",
+      "lastModified": "2026-10-31T11:28:39.941Z",
       "taskCount": 390,
       "completedCount": 360,
       "tags": [

@@ -166,6 +166,8 @@ export const shell: Messages = {
   'palette.searching': 'Aranıyor…',
   'palette.noMatches': 'Eşleşme yok.',
   'palette.group.goTo': 'Git',
+  'palette.group.settings': 'Ayarlar',
+  'palette.group.reports': 'Raporlar',
   'palette.group.actions': 'Aksiyonlar',
   'palette.group.customers': 'Müşteriler',
   'palette.group.conversations': 'Sohbetler',

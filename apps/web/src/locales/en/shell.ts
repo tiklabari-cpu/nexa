@@ -176,6 +176,8 @@ export const shell: Messages = {
   'palette.searching': 'Searching…',
   'palette.noMatches': 'No matches.',
   'palette.group.goTo': 'Go to',
+  'palette.group.settings': 'Settings',
+  'palette.group.reports': 'Reports',
   'palette.group.actions': 'Actions',
   'palette.group.customers': 'Customers',
   'palette.group.conversations': 'Conversations',

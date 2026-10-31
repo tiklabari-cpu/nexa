@@ -13,6 +13,7 @@
  * Inbox's is. UI binding (the save/apply/delete controls) is 07.7-k.
  */
 import { useState } from 'react';
+import { matchRank } from '../../lib/text-fold.js';
 
 /**
  * Mirrors `TabId` in `ReportsPage.tsx` — kept independent so this module has
@@ -66,7 +67,7 @@ export interface SavedReportViewInput {
 const STORAGE_KEY = 'siyahtus.reports.saved-views';
 export const SAVED_REPORT_VIEW_NAME_MAX = 40;
 
-const REPORT_TABS: ReportTabId[] = [
+export const REPORT_TABS: readonly ReportTabId[] = [
   'overview',
   'ai-agent',
   'reviews',
@@ -215,4 +216,87 @@ export function useSavedReportViews(): {
     },
     remove: (id) => apply(removeSavedReportView(views, id)),
   };
+}
+
+/** `ReportTabId` → its catalogue key; the page and the command palette read the one table. */
+export const REPORT_TAB_LABEL_KEYS: Record<ReportTabId, string> = {
+  overview: 'reports.tabs.overview',
+  'ai-agent': 'reports.tabs.aiAgent',
+  reviews: 'reports.tabs.reviews',
+  breakdown: 'reports.tabs.breakdown',
+  staffing: 'reports.tabs.staffing',
+  topics: 'reports.tabs.topics',
+  cases: 'reports.tabs.cases',
+  leads: 'reports.tabs.leads',
+  sales: 'reports.tabs.sales',
+  'team-performance': 'reports.tabs.teamPerformance',
+};
+
+/** A tab id read off an address; anything this build does not know is `null`. */
+export function parseReportTab(value: string | null): ReportTabId | null {
+  return value !== null && (REPORT_TABS as readonly string[]).includes(value)
+    ? (value as ReportTabId)
+    : null;
+}
+
+/** Where a report view opens: a tab, or a saved view by id (the page applies it). */
+export function reportsHref(target: { tab: ReportTabId } | { viewId: string }): string {
+  return 'tab' in target
+    ? `/app/reports?tab=${target.tab}`
+    : `/app/reports?view=${encodeURIComponent(target.viewId)}`;
+}
+
+/** One report view the command palette offers (IN-11). */
+export interface ReportViewMatch {
+  id: string;
+  /** The tab's own label, or the saved view's name. */
+  label: string;
+  /** For a saved view, the tab it opens on; absent on a tab. */
+  sub?: string;
+  href: string;
+}
+
+/**
+ * Report views — the tabs, then the agent's saved views — whose label matches
+ * `query`, ranked like the settings sections (label start, label inside, then
+ * the tab id as an alias), at most `limit`. The caller decides who may see
+ * reports at all; this only matches.
+ */
+export function searchReportViews(
+  query: string,
+  labelOf: (tab: ReportTabId) => string,
+  savedViews: readonly SavedReportView[],
+  limit = 6,
+): ReportViewMatch[] {
+  const found: { match: ReportViewMatch; rank: number; order: number }[] = [];
+  let order = 0;
+  for (const tab of REPORT_TABS) {
+    const rank = matchRank(query, labelOf(tab), [tab.replace(/-/g, ' ')]);
+    if (rank !== null) {
+      found.push({
+        match: { id: `tab:${tab}`, label: labelOf(tab), href: reportsHref({ tab }) },
+        rank,
+        order: order++,
+      });
+    }
+  }
+  for (const view of savedViews) {
+    const rank = matchRank(query, view.name);
+    if (rank !== null) {
+      found.push({
+        match: {
+          id: `view:${view.id}`,
+          label: view.name,
+          sub: labelOf(view.tab),
+          href: reportsHref({ viewId: view.id }),
+        },
+        rank,
+        order: order++,
+      });
+    }
+  }
+  return found
+    .sort((a, b) => a.rank - b.rank || a.order - b.order)
+    .slice(0, limit)
+    .map((f) => f.match);
 }

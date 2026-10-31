@@ -52,6 +52,8 @@ import { useDeployment } from '../lib/deployment.js';
 import { useSetRoutingStatus } from '../lib/routing-status.js';
 import { confirmLeave } from '../lib/dirty-guard.js';
 import { useShortcut } from '../lib/shortcuts.js';
+import { foldForSearch } from '../lib/text-fold.js';
+import { liveDataApps } from '../lib/live-apps.js';
 import { useTranslate, type TFunction } from '../lib/i18n.js';
 import { Banner } from './ui/index.js';
 import { EmptyState } from './EmptyState.js';
@@ -67,6 +69,16 @@ import { AI_AGENT_LINK, NAV_DESTINATIONS, isNavVisible } from './navigation.js';
 import { ACTIONS, type ActionDeps, type PaletteResult } from './actions.js';
 import { archiveSearchReason } from '../features/inbox/archive-search.js';
 import { HighlightedSnippet, refusalText } from '../features/inbox/ArchiveSearch.js';
+import {
+  groupLabelKey,
+  searchSections,
+  sectionHref,
+} from '../features/settings/settings-sections.js';
+import {
+  REPORT_TAB_LABEL_KEYS,
+  loadSavedReportViews,
+  searchReportViews,
+} from '../features/reports/report-views.js';
 
 const CUSTOMER_READ = ['customers:ro', 'customers:rw'];
 const TICKET_READ = ['tickets--all:ro', 'tickets--access:ro', 'tickets--all:rw'];
@@ -80,6 +92,12 @@ const RECORD_READ = [...CUSTOMER_READ, ...CHAT_READ, ...TICKET_READ];
 // same courtesy the other groups get: an entry whose request would 403 is not
 // offered at all.
 const AI_QUERY_SCOPE = ['reports_read'];
+/** The report views are the Reports page's tabs; its own gate is this scope. */
+const REPORT_VIEW_SCOPE = ['reports_read'];
+/** Settings sections and report views the palette adds below the destinations. */
+const SECTION_RESULT_LIMIT = 6;
+const SETTINGS_ICON = '⚙';
+const REPORT_ICON = '◆';
 /** Words that find the "Search the archive" row besides its label. */
 const ARCHIVE_KEYWORDS = ['archive', 'arşiv', 'arsiv', 'message', 'mesaj'];
 const ARCHIVE_ICON = '⌕';
@@ -131,7 +149,9 @@ export function CommandPalette(): ReactElement | null {
       api.post<PaletteAiAnswer>('/palette/ai-query', { query: askedQuery }),
   });
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
-  const { pilot_mode: pilotMode } = useDeployment();
+  const deployment = useDeployment();
+  const pilotMode = deployment.pilot_mode;
+  const liveApps = liveDataApps(deployment).length > 0;
   const has = useCallback(
     (allowed: string[]) => allowed.some((scope) => scopes.includes(scope)),
     [scopes],
@@ -259,7 +279,7 @@ export function CommandPalette(): ReactElement | null {
 
     // Route filtering needs no network, so it tracks the raw input for an
     // instant response; only the record searches wait for the debounce.
-    const routeNeedle = rawQuery.trim().toLowerCase();
+    const routeNeedle = foldForSearch(rawQuery.trim());
     const list: PaletteResult[] = [];
     const canArchive = has(CHAT_READ);
     const archiveRow = (id: string, label: string, run: () => void): PaletteResult => ({
@@ -285,8 +305,8 @@ export function CommandPalette(): ReactElement | null {
       const label = action.label(actionDeps);
       const matches =
         !routeNeedle ||
-        label.toLowerCase().includes(routeNeedle) ||
-        action.keywords.some((keyword) => keyword.includes(routeNeedle));
+        foldForSearch(label).includes(routeNeedle) ||
+        action.keywords.some((keyword) => foldForSearch(keyword).includes(routeNeedle));
       if (!matches) continue;
 
       list.push({
@@ -322,8 +342,8 @@ export function CommandPalette(): ReactElement | null {
       canArchive &&
       !archiveTyped &&
       (!routeNeedle ||
-        t('palette.archive.enter').toLowerCase().includes(routeNeedle) ||
-        ARCHIVE_KEYWORDS.some((keyword) => keyword.includes(routeNeedle)))
+        foldForSearch(t('palette.archive.enter')).includes(routeNeedle) ||
+        ARCHIVE_KEYWORDS.some((keyword) => foldForSearch(keyword).includes(routeNeedle)))
     ) {
       list.push(
         archiveRow('archive:enter', t('palette.archive.enter'), () => {
@@ -342,8 +362,8 @@ export function CommandPalette(): ReactElement | null {
       const label = t(dest.labelKey);
       const matches =
         !routeNeedle ||
-        label.toLowerCase().includes(routeNeedle) ||
-        (dest.keywords ?? []).some((keyword) => keyword.includes(routeNeedle));
+        foldForSearch(label).includes(routeNeedle) ||
+        (dest.keywords ?? []).some((keyword) => foldForSearch(keyword).includes(routeNeedle));
       if (!matches) continue;
       list.push({
         kind: 'nav',
@@ -361,6 +381,54 @@ export function CommandPalette(): ReactElement | null {
           close();
         },
       });
+    }
+
+    // Settings sections and report views (IN-11): typed queries only — an
+    // empty palette would otherwise open on forty-odd rows. Both lists are
+    // already scope-filtered, so a member never sees a section (or the
+    // reports) their token would only 403. Choosing one is a navigation like
+    // the destinations above, so it asks before leaving a dirty form too.
+    if (routeNeedle) {
+      // A section that is only the settings door to a destination already listed
+      // above (AI Agent → Playbook, Billing) would be the same row twice.
+      const listed = new Set(list.map((entry) => entry.id));
+      for (const section of searchSections(
+        scopes,
+        rawQuery,
+        (entry) => t(entry.labelKey),
+        pilotMode,
+        liveApps,
+      )
+        .filter((section) => !listed.has(`route:${sectionHref(section)}`))
+        .slice(0, SECTION_RESULT_LIMIT)) {
+        list.push({
+          kind: 'nav',
+          id: `settings:${section.slug}`,
+          group: t('palette.group.settings'),
+          label: t(section.labelKey),
+          sub: t(groupLabelKey(section)),
+          icon: SETTINGS_ICON,
+          run: () => openTo(sectionHref(section)),
+        });
+      }
+      if (has(REPORT_VIEW_SCOPE)) {
+        for (const view of searchReportViews(
+          rawQuery,
+          (tab) => t(REPORT_TAB_LABEL_KEYS[tab]),
+          loadSavedReportViews(),
+          SECTION_RESULT_LIMIT,
+        )) {
+          list.push({
+            kind: 'nav',
+            id: `report:${view.id}`,
+            group: t('palette.group.reports'),
+            label: view.label,
+            ...(view.sub ? { sub: view.sub } : {}),
+            icon: REPORT_ICON,
+            run: () => openTo(view.href),
+          });
+        }
+      }
     }
 
     if (searching) {
@@ -419,6 +487,7 @@ export function CommandPalette(): ReactElement | null {
     has,
     scopes,
     pilotMode,
+    liveApps,
     actionDeps,
     aiAnswer.mutate,
   ]);

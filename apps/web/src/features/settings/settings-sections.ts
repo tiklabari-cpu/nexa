@@ -1,5 +1,6 @@
 import { hasAnyScope } from '@siyahtus/types';
 import { FOOTER, MODULES } from '../../components/navigation.js';
+import { matchRank } from '../../lib/text-fold.js';
 
 /**
  * The Settings navigation catalogue (FR-MOD-08.1 · tm 255.10).
@@ -124,7 +125,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     group: 'general',
     labelKey: 'settings.nav.section.profile',
     file: 'MyProfile',
-    keywords: ['name', 'password', 'nickname', 'profilim', 'ad', 'şifre', 'takma ad'],
+    keywords: ['name', 'password', 'nickname', 'profilim', 'ad', 'şifre', 'parola', 'takma ad'],
   },
   {
     slug: 'company',
@@ -232,7 +233,17 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.sla',
     scope: ACCESS_RULES,
     file: 'SlaPolicy',
-    keywords: ['response time', 'first response', 'resolution target', 'service level'],
+    keywords: [
+      'response time',
+      'first response',
+      'resolution target',
+      'service level',
+      'business hours',
+      'working hours',
+      'mesai',
+      'mesai saatleri',
+      'yanıt süresi',
+    ],
   },
 
   // 08.7 — Inbox tools
@@ -242,7 +253,17 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.cannedResponses',
     scope: ['canned_responses--all:ro', 'canned_responses--groups:ro'],
     file: 'CannedResponses',
-    keywords: ['templates', 'shortcuts', 'macros'],
+    keywords: [
+      'templates',
+      'shortcuts',
+      'macros',
+      'canned responses',
+      'hazır yanıt',
+      'hazır yanıtlar',
+      'kısayol',
+      'yanıt',
+      'şablon',
+    ],
   },
   {
     slug: 'tags',
@@ -449,7 +470,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     group: 'security',
     labelKey: 'settings.nav.section.twoFactor',
     file: 'TwoFactor',
-    keywords: ['2fa', 'mfa', 'authenticator'],
+    keywords: ['2fa', 'mfa', 'authenticator', 'iki adımlı', 'iki aşamalı', 'doğrulayıcı'],
   },
   {
     slug: 'compliance',
@@ -572,7 +593,15 @@ export function isPilotHiddenSection(
 
 /**
  * Visible sections whose label or `keywords` match `query` (FR-MOD-08.1 ·
- * tm 255.11), a case-insensitive substring on either, in navigation order.
+ * tm 255.11 · IN-11), ranked: a label that *starts* with the query first, a
+ * label that contains it next, a keyword hit last — navigation order within
+ * each rank, so the order is stable and an unranked caller sees the same list
+ * it always did.
+ *
+ * Query, label and keyword all go through the one search fold
+ * (`lib/text-fold.ts`): "iki" finds "İki adımlı doğrulama", "sifre" finds a
+ * keyword written "şifre", and `İ`/`I` fold the Turkish way instead of the
+ * English one `toLowerCase` gave them.
  *
  * Built on `visibleSections` rather than `SETTINGS_SECTIONS` directly: a
  * section the caller cannot open never appears in a search result either —
@@ -591,15 +620,14 @@ export function searchSections(
   pilotMode = false,
   liveApps = false,
 ): SettingsSectionEntry[] {
-  const needle = query.trim().toLowerCase();
-  if (!needle) return [];
-  return visibleSections(scopes, pilotMode, liveApps).filter((section) => {
-    if (labelOf(section).toLowerCase().includes(needle)) return true;
+  const ranked: { section: SettingsSectionEntry; rank: number; order: number }[] = [];
+  visibleSections(scopes, pilotMode, liveApps).forEach((section, order) => {
     const dropped = pilotMode ? (section.pilotDroppedKeywords ?? []) : [];
-    return (section.keywords ?? []).some(
-      (keyword) => !dropped.includes(keyword) && keyword.toLowerCase().includes(needle),
-    );
+    const aliases = (section.keywords ?? []).filter((keyword) => !dropped.includes(keyword));
+    const rank = matchRank(query, labelOf(section), aliases);
+    if (rank !== null) ranked.push({ section, rank, order });
   });
+  return ranked.sort((x, y) => x.rank - y.rank || x.order - y.order).map((r) => r.section);
 }
 
 /**

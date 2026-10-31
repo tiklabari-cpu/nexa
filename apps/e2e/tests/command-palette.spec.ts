@@ -189,6 +189,36 @@ test.describe('command palette', () => {
   });
 
   /**
+   * Settings sections and report views (IN-11 · tm 365.2).
+   *
+   * "hazır" is the Turkish word for what the English product calls saved
+   * replies: the palette folds it, matches the section's keyword and lands on
+   * the section's own address. A report tab opens through `?tab=`, which the
+   * Reports page consumes — the address is clean again once the tab is open.
+   */
+  test('opens a settings section by a Turkish keyword and a report tab by name', async ({
+    agentPage,
+  }) => {
+    await agentPage.keyboard.press('ControlOrMeta+k');
+    const palette = agentPage.getByRole('dialog', { name: 'Command palette' });
+    const input = palette.getByRole('combobox', { name: 'Search or jump to' });
+    await input.fill('HAZIR');
+    await palette.getByRole('option', { name: /Saved replies/ }).click();
+    await expect(agentPage).toHaveURL(/\/app\/settings\/canned-responses$/);
+    await expect(palette).toBeHidden();
+
+    await agentPage.keyboard.press('ControlOrMeta+k');
+    await input.fill('team perf');
+    await palette.getByRole('option', { name: /Team performance/ }).click();
+    await expect(agentPage.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+    await expect(agentPage.getByRole('tab', { name: 'Team performance' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await expect(agentPage).toHaveURL(/\/app\/reports$/);
+  });
+
+  /**
    * The action result type, end to end (FR-MOD-01.1.3, FR-EK-A.2).
    *
    * The web suite proves the palette sends the right request and rolls back a

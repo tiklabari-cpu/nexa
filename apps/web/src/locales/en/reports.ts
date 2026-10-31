@@ -107,6 +107,30 @@ export const reports: Messages = {
   'reports.share.copied': 'Copied',
   'reports.share.done': 'Done',
 
+  'reports.share.filtered':
+    'The link is frozen to the filters on screen: the recipient reads exactly these figures.',
+
+  // Report filters (RP-01 · tm 368.2) — the address carries identifiers only, never names
+  'reports.filters.region': 'Report filters',
+  'reports.filters.agent.label': 'Agent',
+  'reports.filters.team.label': 'Team',
+  'reports.filters.team.yours': 'Your teams',
+  'reports.filters.team.unknown': 'Team {id}',
+  'reports.filters.team.lockedHint':
+    'You see the teams you lead. Teams outside them are not counted.',
+  'reports.filters.team.outOfReach':
+    'Some teams in this link are not teams you lead; they are left out of the figures.',
+  'reports.filters.tag.label': 'Tag',
+  'reports.filters.tag.unknown': 'Unknown tag',
+  'reports.filters.topic.label': 'Topic',
+  'reports.filters.topic.none': 'The AI has not recorded a topic in this window yet.',
+  'reports.filters.clearAll': 'Clear filters',
+  'reports.filters.note':
+    'Only conversations that match every filter are counted. Goals and tracked sales belong to no agent, team, tag or topic, so they show "—" here.',
+  'reports.filters.notApplicable':
+    'This report is not filtered. Filters apply to Overview, Breakdown, Team performance and Reviews.',
+  'reports.filters.viewReports': 'View reports',
+
   // The page a share link opens
   'reports.shared.title': 'Shared report',
   'reports.shared.loading': 'Loading the report…',

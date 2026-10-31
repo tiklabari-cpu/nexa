@@ -13,7 +13,7 @@
  * customer disputing a bill.
  */
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import {
   Card,
@@ -47,6 +47,7 @@ import {
   REPORT_TAB_LABEL_KEYS,
   SAVED_REPORT_VIEW_NAME_MAX,
   parseReportTab,
+  savedViewFilter,
   useSavedReportViews,
   type ReportBaseline,
   type SavedReportView,
@@ -57,6 +58,15 @@ import { QA_PATH } from './qa/qa.js';
 import { AiMetricsPanel } from './AiMetricsPanel.js';
 import { ReviewComments } from './ReviewComments.js';
 import { roleAtLeast } from '../team/RoleMenu.js';
+import { ReportFilterBar } from './ReportFilterBar.js';
+import {
+  parseReportFilter,
+  reportFilterKey,
+  reportFilterParams,
+  takesReportFilter,
+  writeReportFilter,
+  type ReportFilterState,
+} from './report-filters.js';
 
 interface Period {
   range: { from: string; to: string };
@@ -67,7 +77,8 @@ interface Period {
   manual: number;
   assisted: number;
   automated: number;
-  achieved_goals: number;
+  /** Null under a report filter: a goal is reached by a visitor, not by an agent, team, tag or topic. */
+  achieved_goals: number | null;
   avg_first_response_seconds: number | null;
   avg_duration_seconds: number | null;
   satisfaction_score: number | null;
@@ -96,7 +107,8 @@ interface ReportsOverview {
     /** Too few *closed* cases for manual/assisted/automated to mean much (FR-MOD-07.3.2). */
     split_low_confidence: boolean;
     queued_now: number;
-    achieved_goals: number;
+    /** Null under a report filter (see `Period.achieved_goals`). */
+    achieved_goals: number | null;
   };
   chats: {
     automated_per_hour: number;
@@ -183,8 +195,9 @@ interface ReportsReviews {
   ecommerce:
     | {
         configured: true;
-        tracked_sales: number;
-        attributed_revenue_cents: number;
+        /** Null under a report filter: a sale is credited to no agent, team, tag or topic. */
+        tracked_sales: number | null;
+        attributed_revenue_cents: number | null;
         currency: string;
       }
     | {
@@ -526,15 +539,31 @@ function reportQuery(range: { from: string; to: string }, baseline: ReportBaseli
 export function ReportsPage(): ReactElement {
   const scopes = useAuth((s) => s.agent?.scopes);
   const role = useAuth((s) => s.agent?.role ?? null);
-  // A Team Lead reviews AI quality without the reports scope (AI-24 · tm 319.3):
-  // the page they are given is the QA queue, not one whose every read is refused.
-  if (scopes !== undefined && !scopes.includes('reports_read') && roleAtLeast(role, 'team_lead')) {
+  // A Team Lead holds `reports_read--groups` (RP-01 · tm 368): the teams they
+  // lead, read through the same four conversation reports. Without either scope
+  // they review AI quality (AI-24 · tm 319.3): the page they are given is the
+  // QA queue, not one whose every read is refused.
+  const readsWorkspace = scopes?.includes('reports_read') ?? false;
+  const readsTeams = scopes?.includes('reports_read--groups') ?? false;
+  if (scopes !== undefined && !readsWorkspace && !readsTeams && roleAtLeast(role, 'team_lead')) {
     return <Navigate to={QA_PATH} replace />;
   }
-  return <ReportsPageBody reviewsQa={roleAtLeast(role, 'team_lead')} />;
+  return (
+    <ReportsPageBody
+      reviewsQa={roleAtLeast(role, 'team_lead')}
+      scoped={scopes !== undefined && !readsWorkspace && readsTeams}
+    />
+  );
 }
 
-function ReportsPageBody({ reviewsQa }: { reviewsQa: boolean }): ReactElement {
+function ReportsPageBody({
+  reviewsQa,
+  scoped,
+}: {
+  reviewsQa: boolean;
+  /** The reader holds `reports_read--groups` only: the teams they lead, the four conversation reports. */
+  scoped: boolean;
+}): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
   const { data: groupsData } = useReportGroups(api);
@@ -542,10 +571,12 @@ function ReportsPageBody({ reviewsQa }: { reviewsQa: boolean }): ReactElement {
   // Hidden until the groups response confirms visibility (fail closed, not
   // open) — a transient loading state and a caller who truly lacks the scope
   // look the same for one beat, which is the safe default for a permission gate.
+  // A team-scoped reader opens only what the catalogue lists for them (the four
+  // conversation reports); the other tabs would be refused (403) at the server.
   const visibleTabs = new Set<TabId>(
-    TABS.filter((tabDef) => !GROUP_GATED_TABS.has(tabDef.id) || visibleGroupIds.has(tabDef.id)).map(
-      (tabDef) => tabDef.id,
-    ),
+    TABS.filter(
+      (tabDef) => (!scoped && !GROUP_GATED_TABS.has(tabDef.id)) || visibleGroupIds.has(tabDef.id),
+    ).map((tabDef) => tabDef.id),
   );
 
   // A report view named in the address (the command palette's `?tab=` and
@@ -610,16 +641,25 @@ function ReportsPageBody({ reviewsQa }: { reviewsQa: boolean }): ReactElement {
   // right thing to key a query on.
   const rangeKey = mode === 'custom' ? `custom:${customFrom}:${customTo}` : String(mode);
 
+  // Which conversations the reports count (RP-01 · tm 368.2). The address is the
+  // source of truth — identifiers only (GV-05) — so the filter survives a reload,
+  // a pasted link opens filtered, and nothing but the address needs keeping in sync.
+  const filter = useMemo(() => parseReportFilter(searchParams), [searchParams]);
+  const setFilter = (next: ReportFilterState): void =>
+    setSearchParams(writeReportFilter(searchParams, next), { replace: true });
+
   const savedViews = useSavedReportViews();
-  // Applying a saved view sets its whole filter — tab, range and baseline — in
-  // one click (07.7-k KK, derived from 07.7-h): the same all-at-once binding
-  // Inbox uses for its own saved views (`InboxPage.tsx`'s `applySavedView`).
-  const applySavedView = (view: SavedReportView): void => {
+  // Applying a saved view sets its whole filter — tab, range, baseline and, since
+  // RP-01, the report filter — in one click (07.7-k KK, derived from 07.7-h): the
+  // same all-at-once binding Inbox uses for its own saved views
+  // (`InboxPage.tsx`'s `applySavedView`).
+  const applySavedView = (view: SavedReportView, alsoFilter = true): void => {
     selectTab(view.tab);
     setMode(view.mode);
     setCustomFrom(view.customFrom);
     setCustomTo(view.customTo);
     setBaseline(view.baseline);
+    if (alsoFilter) setFilter(savedViewFilter(view));
   };
 
   // The address names a view: open it once, then drop the parameter so picking
@@ -628,13 +668,21 @@ function ReportsPageBody({ reviewsQa }: { reviewsQa: boolean }): ReactElement {
   // deleted saved view or an unknown tab must not leave a stale address behind).
   useEffect(() => {
     if (rawTab === null && requestedViewId === null) return;
+    // One write for the whole address: the view's filter in, `tab`/`view` out.
+    // (Two writes in a row would each start from the same stale address.)
+    let next = new URLSearchParams(searchParams);
+    next.delete('tab');
+    next.delete('view');
     if (requestedViewId !== null) {
       const saved = savedViews.views.find((view) => view.id === requestedViewId);
-      if (saved) applySavedView(saved);
+      if (saved) {
+        applySavedView(saved, false);
+        next = writeReportFilter(next, savedViewFilter(saved));
+      }
     } else if (requestedTab !== null) {
       selectTab(requestedTab);
     }
-    setSearchParams({}, { replace: true });
+    setSearchParams(next, { replace: true });
   }, [rawTab, requestedViewId]);
 
   return (
@@ -646,7 +694,9 @@ function ReportsPageBody({ reviewsQa }: { reviewsQa: boolean }): ReactElement {
           <SavedViewsControl
             views={savedViews.views}
             onSelect={applySavedView}
-            onAdd={(name) => savedViews.add({ name, tab, mode, customFrom, customTo, baseline })}
+            onAdd={(name) =>
+              savedViews.add({ name, tab, mode, customFrom, customTo, baseline, filter })
+            }
             onRemove={savedViews.remove}
           />
           {/* PRD FR-MOD-07.3.1 names Share in the *header* — "range tabs +
@@ -658,7 +708,7 @@ function ReportsPageBody({ reviewsQa }: { reviewsQa: boolean }): ReactElement {
               a link the caller may not export is a link the server refuses to
               mint (403), so offering the control would be offering a button
               that cannot work. */}
-          {visibleGroupIds.has(tab) && <ShareControl group={tab} range={range} />}
+          {visibleGroupIds.has(tab) && <ShareControl group={tab} range={range} filter={filter} />}
           <RangeControls
             mode={mode}
             onMode={setMode}
@@ -771,7 +821,7 @@ function ReportsPageBody({ reviewsQa }: { reviewsQa: boolean }): ReactElement {
               <h2 className="px-2 text-2xs font-semibold uppercase tracking-wide text-content-tertiary">
                 {t('reports.export.sectionTitle')}
               </h2>
-              <ExportControl group={tab} range={range} />
+              <ExportControl group={tab} range={range} filter={filter} />
             </div>
           )}
         </nav>
@@ -788,6 +838,14 @@ function ReportsPageBody({ reviewsQa }: { reviewsQa: boolean }): ReactElement {
             : { 'aria-label': t(TAB_LABEL_KEYS[tab]) })}
           className="flex min-w-0 flex-1 flex-col gap-6"
         >
+          <ReportFilterBar
+            filter={filter}
+            onChange={setFilter}
+            applies={takesReportFilter(tab)}
+            scoped={scoped}
+            rangeKey={rangeKey}
+            range={range}
+          />
           {mode === 'custom' && range === null ? (
             <Card>
               <EmptyState
@@ -798,26 +856,31 @@ function ReportsPageBody({ reviewsQa }: { reviewsQa: boolean }): ReactElement {
           ) : tab === 'overview' ? (
             <>
               <TopicsPromoBanner onSeeTopics={() => selectTab('topics')} />
-              <OverviewTab rangeKey={rangeKey} range={range} baseline={baseline} />
+              <OverviewTab rangeKey={rangeKey} range={range} baseline={baseline} filter={filter} />
             </>
           ) : tab === 'ai-agent' ? (
-            <AiAgentTab rangeKey={rangeKey} range={range} baseline={baseline} />
+            <AiAgentTab rangeKey={rangeKey} range={range} baseline={baseline} filter={filter} />
           ) : tab === 'reviews' ? (
-            <ReviewsTab rangeKey={rangeKey} range={range} baseline={baseline} />
+            <ReviewsTab rangeKey={rangeKey} range={range} baseline={baseline} filter={filter} />
           ) : tab === 'breakdown' ? (
-            <BreakdownTab rangeKey={rangeKey} range={range} baseline={baseline} />
+            <BreakdownTab rangeKey={rangeKey} range={range} baseline={baseline} filter={filter} />
           ) : tab === 'staffing' ? (
-            <StaffingTab rangeKey={rangeKey} range={range} baseline={baseline} />
+            <StaffingTab rangeKey={rangeKey} range={range} baseline={baseline} filter={filter} />
           ) : tab === 'topics' ? (
-            <TopicsTab rangeKey={rangeKey} range={range} baseline={baseline} />
+            <TopicsTab rangeKey={rangeKey} range={range} baseline={baseline} filter={filter} />
           ) : tab === 'cases' ? (
-            <CasesTab rangeKey={rangeKey} range={range} baseline={baseline} />
+            <CasesTab rangeKey={rangeKey} range={range} baseline={baseline} filter={filter} />
           ) : tab === 'leads' ? (
-            <LeadsTab rangeKey={rangeKey} range={range} baseline={baseline} />
+            <LeadsTab rangeKey={rangeKey} range={range} baseline={baseline} filter={filter} />
           ) : tab === 'sales' ? (
-            <SalesTab rangeKey={rangeKey} range={range} baseline={baseline} />
+            <SalesTab rangeKey={rangeKey} range={range} baseline={baseline} filter={filter} />
           ) : (
-            <TeamPerformanceTab rangeKey={rangeKey} range={range} baseline={baseline} />
+            <TeamPerformanceTab
+              rangeKey={rangeKey}
+              range={range}
+              baseline={baseline}
+              filter={filter}
+            />
           )}
         </div>
       </div>
@@ -829,19 +892,31 @@ interface TabProps {
   rangeKey: string;
   range: { from: string; to: string } | null;
   baseline: ReportBaseline | null;
+  /** The conversations the report counts (RP-01); only the four conversation reports send it. */
+  filter: ReportFilterState;
 }
 
-function useReport<T>(kind: string, api: ApiClient, { rangeKey, range, baseline }: TabProps) {
+function useReport<T>(
+  kind: string,
+  api: ApiClient,
+  { rangeKey, range, baseline, filter }: TabProps,
+) {
   // `/reports/staffing-forecast` takes no `baseline` parameter — it is a
   // projection over its own window, not a comparison against an earlier one
   // (see the route's own comment in `reports.ts`) — so this never sends one.
   const effectiveBaseline = kind === 'staffing-forecast' ? null : baseline;
+  // One function decides whether this endpoint takes the filter and what it
+  // looks like on the wire, so a report cannot send one its endpoint refuses (400)
+  // and the query key changes exactly when the request does.
+  const filterQuery = reportFilterParams(kind, filter);
   return useQuery({
-    queryKey: ['reports', kind, rangeKey, effectiveBaseline],
+    queryKey: ['reports', kind, rangeKey, effectiveBaseline, reportFilterKey(kind, filter)],
     enabled: range !== null,
     queryFn: () =>
       api.get<T>(
-        `/reports/${kind}?${reportQuery(range as { from: string; to: string }, effectiveBaseline)}`,
+        `/reports/${kind}?${reportQuery(range as { from: string; to: string }, effectiveBaseline)}${
+          filterQuery ? `&${filterQuery}` : ''
+        }`,
       ),
   });
 }
@@ -910,9 +985,15 @@ function OverviewTab(props: TabProps): ReactElement {
           />
           <Kpi
             label={t('reports.overview.kpi.achievedGoals')}
-            value={formatCount(data.totals.achieved_goals)}
+            // Null under a report filter: a goal is reached by a visitor, so no
+            // agent, team, tag or topic can be credited with it — "—", not 0.
+            value={
+              data.totals.achieved_goals === null ? '—' : formatCount(data.totals.achieved_goals)
+            }
             delta={
-              <CountDelta current={data.totals.achieved_goals} previous={prev.achieved_goals} />
+              data.totals.achieved_goals === null || prev.achieved_goals === null ? undefined : (
+                <CountDelta current={data.totals.achieved_goals} previous={prev.achieved_goals} />
+              )
             }
           />
         </KpiGrid>
@@ -1333,14 +1414,19 @@ function ReviewsTab(props: TabProps): ReactElement {
             <KpiGrid>
               <Kpi
                 label={t('reports.common.kpi.trackedSales')}
-                value={formatCount(data.ecommerce.tracked_sales)}
+                value={
+                  data.ecommerce.tracked_sales === null
+                    ? '—'
+                    : formatCount(data.ecommerce.tracked_sales)
+                }
               />
               <Kpi
                 label={t('reports.common.kpi.attributedRevenue')}
-                value={formatMoney(
-                  data.ecommerce.attributed_revenue_cents,
-                  data.ecommerce.currency,
-                )}
+                value={
+                  data.ecommerce.attributed_revenue_cents === null
+                    ? '—'
+                    : formatMoney(data.ecommerce.attributed_revenue_cents, data.ecommerce.currency)
+                }
                 hint={data.ecommerce.currency}
               />
             </KpiGrid>
@@ -2624,9 +2710,12 @@ export function TeamPerformanceTable({ rows }: { rows: AgentPerformanceRow[] }):
 function ExportControl({
   group,
   range,
+  filter,
 }: {
   group: TabId;
   range: { from: string; to: string } | null;
+  /** The same filter the screen is showing — the download is that report, not a wider one. */
+  filter: ReportFilterState;
 }): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
@@ -2636,11 +2725,14 @@ function ExportControl({
 
   const download = async (): Promise<void> => {
     if (!range) return;
+    const filterQuery = reportFilterParams(group, filter);
     setPending(true);
     setError(null);
     try {
       const { blob, filename } = await api.getFile(
-        `/reports/export?group=${group}&${rangeQuery(range)}&format=${format}`,
+        `/reports/export?group=${group}&${rangeQuery(range)}&format=${format}${
+          filterQuery ? `&${filterQuery}` : ''
+        }`,
       );
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');

@@ -60,18 +60,23 @@ function toggled<T>(list: readonly T[], value: T, on: boolean): T[] {
 }
 
 /** One name when there is one to show, otherwise how many are chosen. */
-function summarise(t: TFunction, names: readonly (string | undefined)[], count: number): string {
+export function summarise(
+  t: TFunction,
+  names: readonly (string | undefined)[],
+  count: number,
+): string {
   const [first] = names;
   if (count === 1 && first) return first;
   return t('archive.filter.selected', { count });
 }
 
-function Chip({
+export function Chip({
   label,
   summary,
   onClear,
   lead,
   trail,
+  hideClear,
   children,
 }: {
   label: string;
@@ -82,7 +87,10 @@ function Chip({
   lead?: ReactNode;
   /** Controls after it (the date chip's ›). */
   trail?: ReactNode;
-  children: ReactNode;
+  /** A chip whose value cannot be switched off (the Reports bar's locked team). */
+  hideClear?: boolean;
+  /** The panel's content; a function gets whether the panel is open (a costly list builds only then). */
+  children: ReactNode | ((state: { open: boolean }) => ReactNode);
 }): ReactElement {
   const t = useTranslate();
   const active = summary !== null;
@@ -104,10 +112,14 @@ function Chip({
         triggerClassName="block rounded-full px-2.5 py-1 hover:text-content"
         panelClassName={PANEL}
       >
-        {() => <div className="flex flex-col gap-2 text-sm text-content">{children}</div>}
+        {({ open }) => (
+          <div className="flex flex-col gap-2 text-sm text-content">
+            {typeof children === 'function' ? children({ open }) : children}
+          </div>
+        )}
       </Dropdown>
       {trail}
-      {active && (
+      {active && !hideClear && (
         <button
           type="button"
           onClick={onClear}
@@ -121,13 +133,13 @@ function Chip({
   );
 }
 
-interface Option<T> {
+export interface Option<T> {
   value: T;
   label: string;
 }
 
 /** Several of many: the values of one filter, OR-ed (AR-02). */
-function CheckList<T extends string | number>({
+export function CheckList<T extends string | number>({
   legend,
   options,
   selected,

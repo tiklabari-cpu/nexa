@@ -370,11 +370,12 @@ test.describe('Team — the Team Lead role (RL-01 · RL-04 · tm 324.2)', () => 
   /**
    * The seeded Team Lead signs in to the console a Team Member has: the role
    * ranks under admin, so every admin surface stays shut without a single gate
-   * having changed — billing off the rail, Reports leading only to the AI
-   * quality queue (tm 319.3), a security section's address sent back to the
-   * landing section, its link absent.
+   * having changed — billing off the rail, a security section's address sent
+   * back to the landing section, its link absent. Reports is the one door that
+   * opens, and only as far as the teams they lead (RP-01 · tm 368): the four
+   * conversation reports, with the AI quality queue (tm 319.3) beside them.
    */
-  test('the seeded Team Lead sees no billing, reports or security settings (FR-MOD-04.RBAC)', async ({
+  test('the seeded Team Lead sees no billing or security settings, and reads only the conversation reports (FR-MOD-04.RBAC)', async ({
     browser,
   }) => {
     const context = await browser.newContext();
@@ -387,12 +388,22 @@ test.describe('Team — the Team Lead role (RL-01 · RL-04 · tm 324.2)', () => 
       await expect(page.getByRole('link', { name: 'Inbox' })).toBeVisible();
 
       await expect(page.getByRole('link', { name: 'Billing' })).toHaveCount(0);
-      // The Reports door opens to a Team Lead for one thing only — the AI
-      // quality queue they review (AI-24 · tm 319.3); the reports stay shut.
+      // Reports opens to a Team Lead for the teams they lead (RP-01 · tm 368):
+      // the four conversation reports and nothing else — no staffing, AI Agent,
+      // cases, leads or sales — with the AI quality queue they review
+      // (AI-24 · tm 319.3) one link away.
       await page.getByRole('link', { name: 'Reports' }).click();
+      await expect(page).toHaveURL(/\/app\/reports$/);
+      await expect(page.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+      for (const name of ['Overview', 'Breakdown', 'Reviews', 'Team performance']) {
+        await expect(page.getByRole('tab', { name })).toBeVisible();
+      }
+      for (const name of ['Staffing', 'AI Agent', 'Cases', 'Leads', 'Sales']) {
+        await expect(page.getByRole('tab', { name })).toHaveCount(0);
+      }
+      await page.getByRole('link', { name: 'AI quality' }).click();
       await expect(page).toHaveURL(/\/app\/reports\/ai-quality$/);
       await expect(page.getByRole('heading', { name: 'AI quality', level: 1 })).toBeVisible();
-      await expect(page.getByRole('tab', { name: 'Overview' })).toHaveCount(0);
       // What the same session does reach, so this is a hide, not a broken rail.
       await expect(page.getByRole('link', { name: 'Team' })).toBeVisible();
 

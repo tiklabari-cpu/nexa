@@ -95,6 +95,30 @@ export const reports: Messages = {
   'reports.share.copied': 'Kopyalandı',
   'reports.share.done': 'Tamam',
 
+  'reports.share.filtered':
+    'Bağlantı ekrandaki filtrelere sabitlenir: alıcı tam olarak bu rakamları okur.',
+
+  // Rapor filtreleri (RP-01 · tm 368.2) — adres yalnız kimlik taşır, ad taşımaz
+  'reports.filters.region': 'Rapor filtreleri',
+  'reports.filters.agent.label': 'Ajan',
+  'reports.filters.team.label': 'Ekip',
+  'reports.filters.team.yours': 'Ekiplerin',
+  'reports.filters.team.unknown': 'Ekip {id}',
+  'reports.filters.team.lockedHint':
+    'Liderlik ettiğiniz ekipleri görürsünüz. Bunların dışındaki ekipler sayılmaz.',
+  'reports.filters.team.outOfReach':
+    'Bu bağlantıdaki bazı ekipler liderlik ettiğiniz ekipler değil; rakamlara katılmadı.',
+  'reports.filters.tag.label': 'Etiket',
+  'reports.filters.tag.unknown': 'Bilinmeyen etiket',
+  'reports.filters.topic.label': 'Konu',
+  'reports.filters.topic.none': 'AI bu aralıkta henüz bir konu kaydetmedi.',
+  'reports.filters.clearAll': 'Filtreleri temizle',
+  'reports.filters.note':
+    'Yalnız her filtreye uyan konuşmalar sayılır. Hedefler ve izlenen satışlar hiçbir ajana, ekibe, etikete ya da konuya ait değildir; burada "—" görünür.',
+  'reports.filters.notApplicable':
+    'Bu rapor filtrelenmiyor. Filtreler Genel Bakış, Dağılım, Ekip Performansı ve Değerlendirmeler için geçerlidir.',
+  'reports.filters.viewReports': 'Raporları gör',
+
   // Paylaşım bağlantısının açtığı sayfa
   'reports.shared.title': 'Paylaşılan rapor',
   'reports.shared.loading': 'Rapor yükleniyor…',

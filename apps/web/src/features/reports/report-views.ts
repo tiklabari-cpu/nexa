@@ -14,6 +14,12 @@
  */
 import { useState } from 'react';
 import { matchRank } from '../../lib/text-fold.js';
+import {
+  NO_REPORT_FILTER,
+  isReportFilterEmpty,
+  normalizeReportFilter,
+  type ReportFilterState,
+} from './report-filters.js';
 
 /**
  * Mirrors `TabId` in `ReportsPage.tsx` — kept independent so this module has
@@ -52,6 +58,11 @@ export interface SavedReportView {
   customTo: string;
   /** `null` when the view was saved with no benchmark comparison active. */
   baseline: ReportBaseline | null;
+  /**
+   * Which conversations the view counts (RP-01 · tm 368.2) — identifiers only.
+   * Absent on a view saved before filters existed, and on one saved with none.
+   */
+  filter?: ReportFilterState;
 }
 
 /** The filter a "Save current view" action captures. */
@@ -62,6 +73,12 @@ export interface SavedReportViewInput {
   customFrom: string;
   customTo: string;
   baseline: ReportBaseline | null;
+  filter?: ReportFilterState;
+}
+
+/** The report filter a saved view applies: its own, or none. */
+export function savedViewFilter(view: SavedReportView): ReportFilterState {
+  return view.filter ? normalizeReportFilter(view.filter) : NO_REPORT_FILTER;
 }
 
 const STORAGE_KEY = 'siyahtus.reports.saved-views';
@@ -95,6 +112,14 @@ function isReportRangeMode(value: unknown): value is ReportRangeMode {
   return (REPORT_RANGE_MODES as unknown[]).includes(value);
 }
 
+/** A stored filter is four lists of strings; `normalizeReportFilter` drops what is not an identifier. */
+function isStoredFilter(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) return false;
+  return Object.values(value).every(
+    (list) => Array.isArray(list) && list.every((entry) => typeof entry === 'string'),
+  );
+}
+
 /**
  * Accept only well-formed rows, so a hand-edited or stale `localStorage`
  * value — or a token from an older build — can never apply a tab/mode/
@@ -112,7 +137,9 @@ function isSavedReportView(value: unknown): value is SavedReportView {
     typeof v['customFrom'] === 'string' &&
     typeof v['customTo'] === 'string' &&
     (v['baseline'] === null ||
-      (typeof v['baseline'] === 'string' && (REPORT_BASELINES as string[]).includes(v['baseline'])))
+      (typeof v['baseline'] === 'string' &&
+        (REPORT_BASELINES as string[]).includes(v['baseline']))) &&
+    (v['filter'] === undefined || isStoredFilter(v['filter']))
   );
 }
 
@@ -179,6 +206,11 @@ export function addSavedReportView(
     customFrom: input.customFrom,
     customTo: input.customTo,
     baseline: input.baseline,
+    // Left out when nothing narrows, so a view without filters stays the shape
+    // it always was (and an older build reads it unchanged).
+    ...(input.filter && !isReportFilterEmpty(input.filter)
+      ? { filter: normalizeReportFilter(input.filter) }
+      : {}),
   };
   return { views: [...views, view], added: view };
 }

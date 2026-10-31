@@ -23,9 +23,11 @@
  *     place minting is. A link that has lapsed stays in the list, marked, rather
  *     than vanishing — "why did my link stop working?" has to be answerable.
  *
- * The group is the tab the agent is looking at and the window is the range they
- * have chosen: a share is the view in front of them, not a second set of
- * choices to get wrong.
+ * The group is the tab the agent is looking at, the window is the range they
+ * have chosen and the filter is the one on the screen (RP-01 · tm 368.2): a
+ * share is the view in front of them, not a second set of choices to get wrong.
+ * The server freezes that filter into the link, so the recipient reads the
+ * figures the sender saw however the sender's own filter moves on.
  */
 import { useState, type ReactElement } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -36,6 +38,7 @@ import { useApiClient } from '../../lib/auth-store.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { formatDateTime } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
+import { NO_REPORT_FILTER, reportFilterBody, type ReportFilterState } from './report-filters.js';
 
 /** The lifetimes the control offers, inside the contract's 1–90 day bound. */
 const EXPIRY_CHOICES = [7, 30, 90] as const;
@@ -70,9 +73,11 @@ function when(iso: string): string {
 export function ShareControl({
   group,
   range,
+  filter = NO_REPORT_FILTER,
 }: {
   group: string;
   range: { from: string; to: string } | null;
+  filter?: ReportFilterState;
 }): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
@@ -90,12 +95,16 @@ export function ShareControl({
     void queryClient.invalidateQueries({ queryKey: ['report-share-links'] });
   };
 
+  const filtersBody = reportFilterBody(group, filter);
   const create = useMutation({
     mutationFn: () =>
       api.post<ReportShareLinkCreated>('/reports/share-links', {
         group,
         ...(range ? { from: range.from, to: range.to } : {}),
         expires_in_days: days,
+        // Only the conversation reports take one (anything else is a 400), and
+        // an empty filter is left out rather than sent as `{}`.
+        ...(filtersBody ? { filters: filtersBody } : {}),
       }),
     onSuccess: (link) => {
       setError(null);
@@ -132,6 +141,9 @@ export function ShareControl({
         {() => (
           <div className="flex flex-col gap-2">
             <p className="px-1 text-2xs text-content-tertiary">{t('reports.share.description')}</p>
+            {filtersBody && (
+              <p className="px-1 text-2xs text-content-tertiary">{t('reports.share.filtered')}</p>
+            )}
 
             <div className="flex items-center gap-1.5 border-t border-border pt-2">
               <label

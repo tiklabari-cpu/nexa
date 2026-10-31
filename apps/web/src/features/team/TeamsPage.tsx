@@ -27,6 +27,7 @@ export function TeamsPage(): ReactElement {
   const scopes = useAuth((s) => s.agent?.scopes) ?? [];
   const canManageTeams = scopes.includes('groups--all:rw');
   const role = useAuth((s) => s.agent?.role ?? null);
+  const accountId = useAuth((s) => s.agent?.account_id ?? null);
 
   // Shares `['team', 'agents']` with `TeamPage.tsx`'s own roster read — React
   // Query dedupes the key, so switching tabs never doubles the request once
@@ -43,7 +44,19 @@ export function TeamsPage(): ReactElement {
       description={t('team.teamsPage.description')}
       actions={<TeamTabs />}
     >
-      <Teams agents={items} canManage={canManageTeams} canMarkLead={roleAtLeast(role, 'admin')} />
+      <Teams
+        agents={items}
+        canManage={canManageTeams}
+        canMarkLead={roleAtLeast(role, 'admin')}
+        reportsReach={
+          scopes.includes('reports_read')
+            ? 'all'
+            : scopes.includes('reports_read--groups')
+              ? 'led'
+              : undefined
+        }
+        viewerId={accountId}
+      />
     </Page>
   );
 }

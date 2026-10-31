@@ -238,6 +238,47 @@ typing:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+seen:
+  post:
+    tags: [Customer]
+    operationId: markCustomerSeen
+    summary: Record how far the visitor has read (read receipt)
+    description: |
+      The widget calls this — about a second after a team message comes into
+      view — so the agent can see "Read · 14:32" under the last message the
+      visitor has actually had in front of them (IN-05). It sends nothing while
+      the panel is minimised, the tab is in the background or the list is
+      scrolled away from the newest message: a message that was never on
+      screen is not read, and showing nothing is better than showing a wrong
+      "read".
+
+      `seen_up_to` only ever moves forward: the stored marker becomes the later of
+      the two, so a late or out-of-order request (several tabs, a retried call)
+      cannot pull it back. A time in the future is held at the server's now.
+      Unlike the agent's `POST /chats/{chatId}/seen`, the visitor names no chat —
+      it is always their own conversation — and with no conversation the call
+      succeeds and does nothing, like `/customer/chat/typing`.
+
+      After a change the chat's agents get `customer_seen`
+      (`{chat_id, thread_id, seen_up_to}`). The visitor is not shown the
+      receipt of the other side. Rate-limited to about one call a second per visitor.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [seen_up_to]
+            properties:
+              seen_up_to: { type: string, format: date-time }
+    responses:
+      "204":
+        description: Recorded (or nothing to record)
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 visit:
   post:
     tags: [Customer]

@@ -254,6 +254,8 @@ const transcriptRequestSchema = z
   .object({ email: z.string().trim().email().max(254).optional() })
   .strict();
 
+const seenSchema = z.object({ seen_up_to: z.coerce.date() });
+
 const typingSchema = z.object({
   is_typing: z.boolean(),
   // The in-progress text shown to the agent as a sneak-peek. Capped here as well
@@ -477,7 +479,7 @@ export default async function customerRoutes(
   async function consumePressBudget(
     request: FastifyRequest,
     principal: { organizationId: string; customerId: string },
-    budget: { key: string; limit: number; message: string } = {
+    budget: { key: string; limit: number; message: string; windowMs?: number } = {
       key: 'human-request',
       limit: HUMAN_REQUESTS_PER_HOUR,
       message: 'Too many requests for an agent — try again later.',
@@ -488,7 +490,7 @@ export default async function customerRoutes(
       const decision = await app.rateLimiter.consume(
         `rl:${budget.key}:${principal.organizationId}:${principal.customerId}`,
         budget.limit,
-        3_600_000,
+        budget.windowMs ?? 3_600_000,
       );
       allowed = decision.allowed;
       if (!allowed) {
@@ -1641,6 +1643,34 @@ export default async function customerRoutes(
         });
       }
 
+      return reply.status(204).send();
+    },
+  );
+
+  /**
+   * The visitor's read marker (IN-05): how far into the conversation they have
+   * had the team's messages in front of them. The widget sends it only while
+   * the panel is open, the tab visible and the list at the newest message; the
+   * agent's transcript turns it into "Read · 14:32". Forward only, and about
+   * one call a second per visitor (a budget that cannot be read lets it through).
+   */
+  app.post(
+    '/customer/chat/seen',
+    { config: { principals: ['customer'] } },
+    async (request, reply) => {
+      const principal = request.requirePrincipal();
+      if (principal.kind !== 'customer') throw ApiError.notFound('Resource not found.');
+
+      const body = parse(seenSchema, request.body);
+      await consumePressBudget(request, principal, {
+        key: 'customer-seen',
+        limit: 1,
+        windowMs: 1_000,
+        message: 'Read receipts are sent too often — try again in a moment.',
+      });
+
+      const marked = await chats.markCustomerSeen(request.tenant(), principal, body.seen_up_to);
+      if (marked) bindChatLogContext(request, { chatId: marked.chatId });
       return reply.status(204).send();
     },
   );

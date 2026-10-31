@@ -284,6 +284,7 @@ export const inbox: Messages = {
   'inbox.transcript.editCancel': 'Cancel',
   'inbox.transcript.editSaving': 'Saving…',
   'inbox.transcript.edited': 'edited',
+  'inbox.transcript.read': 'Read · {time}',
   'inbox.transcript.campaignCard': 'Campaign card',
   'inbox.transcript.cardPressed': 'pressed “{label}”',
   'inbox.transcript.editFailed': 'The correction was not saved.',

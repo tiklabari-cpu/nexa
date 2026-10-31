@@ -72,6 +72,7 @@ import {
   type AiHandoffCardView,
   type MessageSearchMatch,
   type ChatRatedPush,
+  type CustomerSeenPush,
   type RatingValue,
   type ThreadRating,
 } from '@siyahtus/types';
@@ -152,6 +153,13 @@ import { searchMessages, type MessageSearchInput } from './event-search.js';
 
 /** How long a completed request stays replayable by idempotency key. */
 const IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60;
+
+/**
+ * How far past the server's clock a visitor's read marker may point: the widget
+ * sends the time of a message it received, which can only be behind the clock,
+ * so anything beyond this is a wrong clock or a forged value, held at the edge.
+ */
+const SEEN_CLOCK_SKEW_MS = 60_000;
 
 /** Chat ids are random; a collision is vanishingly unlikely but not impossible. */
 const ID_GENERATION_ATTEMPTS = 5;
@@ -4835,26 +4843,102 @@ export class ChatService {
     });
   }
 
+  /**
+   * Move the caller's read marker on a chat forward to `seenUpTo`.
+   *
+   * Forward only: the stored marker becomes the later of the two, so a late or
+   * out-of-order request (a second tab, a retried call) cannot pull it back and
+   * resurrect unread badges the agent already cleared — or take away a
+   * "Read" the player already earned. Returns whether the marker moved.
+   */
   async markSeen(
     tenant: TenantContext,
     principal: Principal,
     chatId: string,
     seenUpTo: Date,
-  ): Promise<void> {
-    await withTenant(this.db, tenant, async (tx) => {
+  ): Promise<boolean> {
+    return withTenant(this.db, tenant, async (tx) => {
       const visibility = await resolveVisibility(tx, principal, 'read');
       const chat = await this.#loadVisibleChat(tx, visibility, chatId);
-      const userId = actorOf(principal);
-      const userType = principal.kind === 'customer' ? 'customer' : 'agent';
-
-      await tx.chatUser.upsert({
-        where: { chatId_userId: { chatId: chat.id, userId } },
-        create: { chatId: chat.id, userId, userType, seenUpTo, present: true },
-        // Never move the marker backwards: an out-of-order request would
-        // resurrect unread badges the agent already cleared.
-        update: { seenUpTo },
-      });
+      return this.#advanceSeen(tx, chat.id, principal, seenUpTo);
     });
+  }
+
+  /**
+   * The player has read up to `seenUpTo` in their open conversation (IN-05 ·
+   * `POST /customer/chat/seen`). Same forward-only rule as `markSeen`; a time
+   * past the server's clock (beyond `SEEN_CLOCK_SKEW_MS`) is held there. After
+   * commit, and only when the marker actually moved, `customer_seen` goes to
+   * the chat's agents. No open conversation: nothing to mark, nothing raised.
+   */
+  async markCustomerSeen(
+    tenant: TenantContext,
+    principal: Principal,
+    seenUpTo: Date,
+  ): Promise<{ chatId: string } | null> {
+    if (principal.kind !== 'customer') throw ApiError.notFound('Resource not found.');
+    const ceiling = new Date(this.now().getTime() + SEEN_CLOCK_SKEW_MS);
+    const marker = seenUpTo > ceiling ? ceiling : seenUpTo;
+
+    const outcome = await withTenant(this.db, tenant, async (tx) => {
+      const open = await tx.chat.findFirst({
+        where: { customerId: principal.customerId, active: true },
+        select: { id: true },
+      });
+      if (!open) return null;
+      const visibility = await resolveVisibility(tx, principal, 'read');
+      const chat = await this.#loadVisibleChat(tx, visibility, open.id);
+      const moved = await this.#advanceSeen(tx, chat.id, principal, marker);
+      const thread = chat.threads.find((t) => t.active) ?? chat.threads[0];
+      return { chat, moved, threadId: thread?.id ?? null };
+    });
+    if (!outcome) return null;
+
+    if (outcome.moved && this.publisher) {
+      const audience = this.#audienceFor(outcome.chat);
+      if (audience.groupIds.length > 0 || audience.agentIds.length > 0) {
+        await this.publisher.publish(
+          tenant,
+          'customer_seen',
+          { groupIds: audience.groupIds, agentIds: audience.agentIds },
+          {
+            chat_id: outcome.chat.id,
+            thread_id: outcome.threadId,
+            seen_up_to: marker.toISOString(),
+          } satisfies CustomerSeenPush,
+        );
+      }
+    }
+    return { chatId: outcome.chat.id };
+  }
+
+  /**
+   * One atomic step, no read-then-write: a first marker is inserted, otherwise
+   * the row is updated only where it holds nothing or something earlier — two
+   * tabs racing each other cannot leave the earlier time behind.
+   */
+  async #advanceSeen(
+    tx: TenantClient,
+    chatId: string,
+    principal: Principal,
+    seenUpTo: Date,
+  ): Promise<boolean> {
+    const userId = actorOf(principal);
+    const userType = principal.kind === 'customer' ? 'customer' : 'agent';
+    const created = await tx.chatUser.createMany({
+      data: [{ chatId, userId, userType, seenUpTo, present: true }],
+      skipDuplicates: true,
+    });
+    if (created.count > 0) return true;
+    const moved = await tx.chatUser.updateMany({
+      where: {
+        chatId,
+        userId,
+        OR: [{ seenUpTo: null }, { seenUpTo: { lt: seenUpTo } }],
+      },
+      data: { seenUpTo },
+    });
+    return moved.count > 0;
   }
 
   // -------------------------------------------------------------------------

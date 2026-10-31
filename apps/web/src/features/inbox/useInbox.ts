@@ -1175,6 +1175,9 @@ export function useRealtime(onPush?: PushHandler): void {
         // The player rated a connection or commented on its rating (AR-03 ·
         // WG-11): the Details panel's Rating row, and an open archive row.
         'chat_rated',
+        // The player read up to a point (IN-05 · tm 362): the transcript's
+        // "Read · time" line, within a second of their seeing it.
+        'customer_seen',
         // A message landed on a ticket, or a reply's e-mail settled (HD-01 · tm
         // 356): the open ticket's thread, and the status a reply moved.
         'ticket_message_created',
@@ -1594,6 +1597,42 @@ export function applyPush(
         void queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
       }
       void queryClient.invalidateQueries({ queryKey: ['archive'] });
+      return;
+    }
+
+    case 'customer_seen': {
+      // The player's read marker moved (IN-05). The push carries the new time,
+      // so the open chat is patched rather than re-read — and only ever forward,
+      // like the server: a push that overtook a newer read must not undo it.
+      const chatId = payload['chat_id'];
+      const seenUpTo = payload['seen_up_to'];
+      if (typeof chatId !== 'string' || typeof seenUpTo !== 'string') return;
+      const next = Date.parse(seenUpTo);
+      if (Number.isNaN(next)) return;
+      const held = queryClient.getQueryData<ChatDetail>(['chat', chatId]);
+      // The cached chat holds no customer row to move yet: re-read it.
+      if (held && !held.users.some((u) => u.user_type === 'customer')) {
+        void queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
+        return;
+      }
+      queryClient.setQueryData<ChatDetail>(['chat', chatId], (chat) =>
+        chat
+          ? {
+              ...chat,
+              users: chat.users.map((u) =>
+                u.user_type === 'customer'
+                  ? {
+                      ...u,
+                      seen_up_to:
+                        u.seen_up_to !== null && Date.parse(u.seen_up_to) >= next
+                          ? u.seen_up_to
+                          : seenUpTo,
+                    }
+                  : u,
+              ),
+            }
+          : chat,
+      );
       return;
     }
 

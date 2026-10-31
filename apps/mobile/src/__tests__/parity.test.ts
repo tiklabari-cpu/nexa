@@ -1114,7 +1114,10 @@ describe('module parity matrix — what is still owed', () => {
       // (tm 354) — copying a campaign and the campaign report (EN-05), both in the web
       // Campaigns screen; the handset has no campaign builder or report tab, and nothing
       // here re-scopes.
-      contractEndpoints: 359,
+      // 359 -> 360 with `POST /customer/chat/seen` (tm 362) — the widget's read
+      // receipt (IN-05), a visitor surface; the agent app shows no transcript
+      // receipt line yet, and nothing here re-scopes.
+      contractEndpoints: 360,
       scopeBoundaries: 1,
     });
   });

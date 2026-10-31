@@ -201,6 +201,9 @@ export const RTM_PUSH_ACTIONS = [
   // and how one ended (`AiSuggestionReviewedPush`): to its author.
   'ai_suggestion_created',
   'ai_suggestion_reviewed',
+  // A ticket was opened or handed to somebody (tm 367 · IN-10,
+  // `IncomingTicketPush`): to its assignee and its team.
+  'incoming_ticket',
   // A reply, an internal note or the player's message landed on a ticket (tm
   // 356.2 · HD-01, `TicketMessageCreatedPush`): to its assignee, its followers
   // and its team.

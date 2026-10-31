@@ -998,7 +998,7 @@ export default async function authRoutes(
       // SECURITY DEFINER function.
       const [profile, twoFactorStatus] = await Promise.all([
         request.withTenant(async (tx) => {
-          const [account, membership, license, organization, trial] = await Promise.all([
+          const [account, membership, license, organization, trial, groups] = await Promise.all([
             tx.account.findUnique({
               where: { id: principal.accountId },
               select: { email: true, name: true, publicName: true, avatarUrl: true },
@@ -1035,6 +1035,13 @@ export default async function authRoutes(
             // trial strip reads it here because `/billing/subscription` is behind a
             // billing scope an agent does not carry.
             trialState(tx, request.tenant()),
+            // The teams this person is in (IN-10): the console decides "a chat
+            // was handed to my team" from a push that names only the team.
+            tx.groupAgent.findMany({
+              where: { licenseId: principal.licenseId, agentId: principal.accountId },
+              select: { groupId: true },
+              orderBy: { groupId: 'asc' },
+            }),
           ]);
           // The panel font (owner, 2026-10-13), resolved here once so the
           // panel paints an answer rather than re-deriving the rule.
@@ -1058,7 +1065,7 @@ export default async function authRoutes(
               data: { locale },
             });
           }
-          return { account, membership, license, organization, trial, workspaceFont };
+          return { account, membership, license, organization, trial, workspaceFont, groups };
         }),
         twoFactor.status(principal.accountId),
       ]);
@@ -1089,6 +1096,7 @@ export default async function authRoutes(
         // profile it already requests is what keeps that cache honest without a
         // second round trip (13.7-c).
         notification_preferences: serialiseNotificationPreferences(profile.membership),
+        group_ids: profile.groups.map((row) => Number(row.groupId)),
         onboarding_completed: profile.license?.onboardingCompletedAt != null,
         license: { access: profile.trial.access, trial_ends_at: profile.trial.trialEndsAt },
         appearance: panelAppearance({

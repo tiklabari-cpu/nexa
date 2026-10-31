@@ -3,19 +3,37 @@ import type { ReactElement } from 'react';
 
 import { NotificationsScreen } from './NotificationsScreen';
 import { DevicePushPermissionContext, NotificationsContext } from './context';
+import { applyNotificationPatch } from '@siyahtus/types';
 import type { NotificationsApi } from './api';
 import type { NotificationPreferences, NotificationPreferencesPatch } from './types';
 import type { PushPermission } from '../../auth/push-tokens';
 import { ThemeProvider } from '../../theme/theme';
 
 function prefs(overrides: Partial<NotificationPreferences> = {}): NotificationPreferences {
-  return { enabled: true, sound: true, desktop: true, push: true, email: true, ...overrides };
+  return {
+    enabled: true,
+    sound: true,
+    desktop: true,
+    push: true,
+    email: true,
+    events: {
+      incoming_chat: true,
+      transferred_to_me: true,
+      transferred_to_my_team: true,
+      queue_waiting: false,
+      new_ticket: true,
+      ticket_reply: true,
+    },
+    repeat_sound: false,
+    ...overrides,
+  };
 }
 
 function api(overrides: Partial<NotificationsApi> = {}): NotificationsApi {
   return {
     getPreferences: async () => prefs(),
-    updatePreferences: async (patch: NotificationPreferencesPatch) => ({ ...prefs(), ...patch }),
+    updatePreferences: async (patch: NotificationPreferencesPatch) =>
+      applyNotificationPatch(prefs(), patch),
     ...overrides,
   };
 }

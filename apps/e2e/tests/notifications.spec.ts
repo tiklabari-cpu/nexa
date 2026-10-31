@@ -98,6 +98,79 @@ test.describe('notification settings (FR-MOD-13.8)', () => {
   });
 });
 
+test.describe('which events alert you (FR-MOD-13.8 · IN-10)', () => {
+  /**
+   * The event list and the repeating sound are account preferences like the
+   * channels above, so they are shared with every test that signs in as the demo
+   * owner: put them back through the API in a `finally`, and state them before
+   * the page loads (the page caches the profile's copy when it loads it).
+   */
+  test('a visitor’s message cannot be switched off; a ticket event and the repeat persist', async ({
+    agentPage,
+    request,
+  }) => {
+    const token = await ownerAccessTokenFor(request, ACME_OWNER);
+    const headers = { authorization: `Bearer ${token}` };
+    const reset = () =>
+      request.put(`${API_BASE}${PREFERENCES_PATH}`, {
+        headers,
+        data: { enabled: true, repeat_sound: false, events: { new_ticket: true } },
+      });
+
+    // The server refuses it too, not just the greyed-out row.
+    const refused = await request.put(`${API_BASE}${PREFERENCES_PATH}`, {
+      headers,
+      data: { events: { incoming_chat: false } },
+    });
+    expect(refused.status()).toBe(400);
+
+    expect((await reset()).ok()).toBe(true);
+    try {
+      await agentPage.goto('/app/settings/notifications');
+      const section = agentPage.getByRole('region', { name: 'Notifications' });
+
+      const visitors = section.getByRole('switch', { name: /New messages from visitors/ });
+      await expect(visitors).toBeChecked();
+      await expect(visitors).toBeDisabled();
+
+      const newTicket = section.getByRole('switch', { name: /A new ticket/ });
+      const repeat = section.getByRole('switch', { name: /Repeat the sound until/ });
+      await expect(newTicket).toBeChecked();
+      await expect(repeat).not.toBeChecked();
+
+      const ticketSaved = agentPage.waitForResponse(
+        (response) =>
+          response.request().method() === 'PUT' &&
+          response.url().endsWith(PREFERENCES_PATH) &&
+          (response.request().postDataJSON() as { events?: { new_ticket?: boolean } } | null)
+            ?.events?.new_ticket === false,
+      );
+      await newTicket.click();
+      expect(await (await ticketSaved).json()).toMatchObject({ events: { new_ticket: false } });
+
+      const repeatSaved = agentPage.waitForResponse(
+        (response) =>
+          response.request().method() === 'PUT' &&
+          response.url().endsWith(PREFERENCES_PATH) &&
+          (response.request().postDataJSON() as { repeat_sound?: boolean } | null)?.repeat_sound ===
+            true,
+      );
+      await repeat.click();
+      expect(await (await repeatSaved).json()).toMatchObject({ repeat_sound: true });
+
+      // Stored on the account, not in React state: both survive a reload.
+      await agentPage.reload();
+      const after = agentPage.getByRole('region', { name: 'Notifications' });
+      await expect(after.getByRole('switch', { name: /A new ticket/ })).not.toBeChecked();
+      await expect(after.getByRole('switch', { name: /Repeat the sound until/ })).toBeChecked();
+      // The one the person left alone is as it was.
+      await expect(after.getByRole('switch', { name: /A reply on a ticket/ })).toBeChecked();
+    } finally {
+      await reset();
+    }
+  });
+});
+
 test.describe('notifications away from the inbox (FR-MOD-13.8)', () => {
   /**
    * The socket used to belong to `InboxPage`, so its lifetime was one route's

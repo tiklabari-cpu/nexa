@@ -45,6 +45,7 @@ import { messageIdDomainOf } from '../services/tickets/ticket-auto-ack.js';
 import { selfAccountId } from '../services/auth/principal.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
+import { ticketArrivalPush } from '../services/tickets/ticket-arrival.js';
 import { createObjectStore } from '../services/storage/object-store.js';
 import { licenseOfStoredKey } from '../services/storage/upload-url.js';
 import {
@@ -334,16 +335,26 @@ export default async function ticketRoutes(
     const tenant = request.tenant();
     const principal = request.requirePrincipal();
 
-    const ticket = await request.withTenant((tx) =>
-      tickets.create(tx, tenant, principal, {
+    const { ticket, arrival } = await request.withTenant(async (tx) => {
+      const created = await tickets.create(tx, tenant, principal, {
         subject: body.subject,
         ...(body.source_chat_id !== undefined ? { source_chat_id: body.source_chat_id } : {}),
         ...(body.customer_id !== undefined ? { customer_id: body.customer_id } : {}),
         ...(body.group_id !== undefined ? { group_id: body.group_id } : {}),
         ...(body.assignee_id !== undefined ? { assignee_id: body.assignee_id } : {}),
         ...(body.status !== undefined ? { status: body.status } : {}),
-      }),
-    );
+      });
+      // The assignee and team as the ticket rules left them (IN-10).
+      const arrived = await ticketArrivalPush(tx, created.id, {
+        reason: 'created',
+        actorId: selfAccountId(principal),
+      });
+      return { ticket: created, arrival: arrived };
+    });
+    // After the commit (see `RealtimePublisher`): the console's new-ticket alert.
+    if (arrival) {
+      await publisher.publish(tenant, 'incoming_ticket', arrival.audience, arrival.payload);
+    }
 
     // After the transaction, never inside it (FR-MOD-09.4): the delivery is an
     // HTTP call to somebody else's server, and the ticket is already committed
@@ -414,7 +425,17 @@ export default async function ticketRoutes(
       const audit = request.auditContext();
       const templateId = body.email_template_id;
 
-      const { ticket, notice } = await request.withTenant(async (tx) => {
+      const { ticket, notice, arrival } = await request.withTenant(async (tx) => {
+        // Handing a ticket to somebody is news to them (IN-10): note who held it.
+        const heldBy =
+          body.assignee_id !== undefined
+            ? (
+                await tx.ticket.findUnique({
+                  where: { id: ticketId },
+                  select: { assigneeId: true },
+                })
+              )?.assigneeId
+            : undefined;
         // Everything the notice needs is settled *before* the transition, and
         // inside the same transaction: an unusable template throws here and the
         // status never moves. The alternative — update, then discover the
@@ -472,11 +493,22 @@ export default async function ticketRoutes(
               select: { name: true },
             })
           : null;
+        const handedOver =
+          body.assignee_id != null && heldBy !== undefined && heldBy !== body.assignee_id;
         return {
           ticket: updated,
           notice: mail ? { ...mail, workspaceName: organization?.name ?? 'SiyahTuş' } : null,
+          arrival: handedOver
+            ? await ticketArrivalPush(tx, ticketId, {
+                reason: 'assigned',
+                actorId: selfAccountId(principal),
+              })
+            : null,
         };
       });
+      if (arrival) {
+        await publisher.publish(tenant, 'incoming_ticket', arrival.audience, arrival.payload);
+      }
 
       // After the commit, never inside it: a mail must not be able to hold a
       // transaction open or be undone by a rollback. Handed off rather than

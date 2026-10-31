@@ -54,6 +54,7 @@ import type { Env } from '../config/env.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { aiAnswersVisitors } from '../services/chat/ai-first.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
+import { ticketArrivalPush } from '../services/tickets/ticket-arrival.js';
 import { CustomerService } from '../services/customers/customer-service.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 import { TicketService } from '../services/tickets/ticket-service.js';
@@ -1859,9 +1860,21 @@ export default async function customerRoutes(
         ? await autoAck.prepare(tx, tenant, { ticketId: ticket.id, ack: ticket.ack })
         : null;
 
-      return { ticketId: ticket.id, becameLead: before?.isLead === false, ack };
+      // The assignee and team the rules just settled (IN-10); nobody on the
+      // other side is "the actor" — a visitor left it.
+      const arrival = await ticketArrivalPush(tx, ticket.id, { reason: 'created', actorId: null });
+
+      return { ticketId: ticket.id, becameLead: before?.isLead === false, ack, arrival };
     });
     if (result.ack) deliverAutoAck(app.backgroundMail, request.log, tenant, result.ack);
+    if (result.arrival) {
+      await publisher.publish(
+        tenant,
+        'incoming_ticket',
+        result.arrival.audience,
+        result.arrival.payload,
+      );
+    }
 
     // After the transaction commits: `evaluate` reads `is_lead` back, so it has
     // to see the write that set it.

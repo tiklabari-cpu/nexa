@@ -47,6 +47,7 @@ import {
   type TicketMessageService,
 } from '../tickets/ticket-message-service.js';
 import type { PendingAck } from '../tickets/apply-ticket-rules.js';
+import { ticketArrivalPush, type TicketArrivalPush } from '../tickets/ticket-arrival.js';
 import type { AutoAckMail, TicketAutoAck } from '../tickets/ticket-auto-ack.js';
 import type { TicketReplyAddresses } from '../tickets/ticket-reply-address.js';
 import type { TicketService } from '../tickets/ticket-service.js';
@@ -130,6 +131,12 @@ export interface InboundOutcome {
    * asked for one or it must not go (an automatic reply, a failed sender).
    */
   ack?: AutoAckMail | null;
+  /**
+   * The new-ticket alert for a ticket this mail opened (IN-10 · tm 367) — in
+   * place of `push`, which is null then: a brand-new ticket's first message is
+   * the ticket arriving, not a reply to it, and both go to the same people.
+   */
+  arrival?: TicketArrivalPush | null;
 }
 
 /** What `ingestInboundEmail` writes with. */
@@ -590,7 +597,8 @@ export async function ingestInboundEmail(
       await noteRejected(tx, tenant, services, email, created.id, at);
       return {
         result: { status: 'created', ticket_id: created.id, related_ticket_id: ticket.id },
-        push: written.push,
+        push: null,
+        arrival: await ticketArrivalPush(tx, created.id, { reason: 'created', actorId: null }),
         filesKept: true,
         ack: await acknowledge(tx, tenant, services, email, created, at),
       };
@@ -675,7 +683,8 @@ export async function ingestInboundEmail(
   await noteRejected(tx, tenant, services, email, written.message.ticket_id, at);
   return {
     result: { status: 'created', ticket_id: ticket.id },
-    push: written.push,
+    push: null,
+    arrival: await ticketArrivalPush(tx, ticket.id, { reason: 'created', actorId: null }),
     filesKept: true,
     ack: await acknowledge(tx, tenant, services, email, ticket, at),
   };

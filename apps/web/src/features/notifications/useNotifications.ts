@@ -5,16 +5,115 @@
  * The decision of *whether* to do any of this is `decideNotification`, which is
  * pure and tested on its own; this hook only carries out what it returns and
  * owns the browser state the decision needs — focus and the unread count.
+ *
+ * **Tabs and the repeating sound (IN-10 · tm 367).** Two tabs both receive every
+ * push, and sound cannot be taken back, so one tab — the leader
+ * (`leaderTab.ts`) — plays it, and only while nobody is looking at any console
+ * tab. With "repeat" on, a visitor's message also registers with the
+ * `SoundRepeater`, which chimes again every 10 s until the chat is read
+ * ({@link noteChatSeen}, {@link setViewedChat}), 2 minutes pass, or another tab
+ * reads it.
  */
 import { useCallback, useEffect, useState } from 'react';
+import type { NotificationEvent } from '@siyahtus/types';
 import { setUnreadCount } from '../../lib/document-title.js';
+import { useAuth } from '../../lib/auth-store.js';
 import { getLocale, translate } from '../../lib/i18n.js';
+import { playChime } from './chime.js';
+import { TabLeader, openLeaderChannel } from './leaderTab.js';
+import { SoundRepeater } from './soundRepeater.js';
 import {
   decideNotification,
   loadPrefs,
-  type NotifiableEvent,
+  type NotifyDecision,
+  type NotifyMe,
   type Permission,
 } from './notifications.js';
+
+// --- The tab-wide runtime ------------------------------------------------------
+
+interface Runtime {
+  leader: TabLeader;
+  repeater: SoundRepeater;
+  /** The chat open in this tab, if any — read the moment the agent comes back. */
+  viewing: string | null;
+  dispose: () => void;
+}
+
+let runtime: Runtime | null = null;
+
+/**
+ * The leader election and the repeater, created on first use. One per tab (a
+ * module singleton), because the hook is mounted by the shell once and the
+ * inbox, which reports reads, is a different part of the tree.
+ */
+function getRuntime(): Runtime {
+  if (runtime) return runtime;
+  const leader = new TabLeader({ channel: openLeaderChannel(), isFocused });
+  const repeater = new SoundRepeater({
+    play: () => void playChime(),
+    shouldPlay: () => mayMakeSound(leader),
+  });
+  leader.onCleared((key) => repeater.clear(key));
+  leader.start();
+
+  const rt: Runtime = { leader, repeater, viewing: null, dispose: () => undefined };
+  // The agent coming back to this tab has seen the chat that is open in it.
+  const returned = (): void => {
+    if (isFocused() && rt.viewing) markRead(rt, rt.viewing);
+  };
+  const leave = (): void => leader.stop();
+  window.addEventListener('focus', returned);
+  document.addEventListener('visibilitychange', returned);
+  window.addEventListener('pagehide', leave);
+  rt.dispose = () => {
+    window.removeEventListener('focus', returned);
+    document.removeEventListener('visibilitychange', returned);
+    window.removeEventListener('pagehide', leave);
+    repeater.clearAll();
+    leader.stop();
+  };
+  runtime = rt;
+  return rt;
+}
+
+/** Tear the runtime down (tests, and a sign-out that wants a clean slate). */
+export function resetNotificationRuntime(): void {
+  runtime?.dispose();
+  runtime = null;
+}
+
+/** Only the leader makes sound, and only while no console tab is being looked at. */
+function mayMakeSound(leader: TabLeader): boolean {
+  return leader.isLeader() && !isFocused() && !leader.anyPeerFocused();
+}
+
+function markRead(rt: Runtime, key: string): void {
+  rt.repeater.clear(key);
+  rt.leader.announceCleared(key);
+}
+
+/**
+ * The chat open in this tab (null when none is on screen). Opening a chat ends
+ * its repeating sound — at once if the agent is looking, otherwise the moment
+ * they come back to the tab.
+ */
+export function setViewedChat(chatId: string | null): void {
+  const rt = getRuntime();
+  rt.viewing = chatId;
+  if (chatId && isFocused()) markRead(rt, chatId);
+}
+
+/** The agent's read marker for `chatId` reached the server (`useMarkSeen`). */
+export function noteChatSeen(chatId: string): void {
+  if (isFocused()) markRead(getRuntime(), chatId);
+}
+
+/** Who is signed in, for "was this handed to me / my team?". */
+function currentMe(): NotifyMe {
+  const agent = useAuth.getState().agent;
+  return { accountId: agent?.account_id ?? null, groupIds: agent?.group_ids ?? [] };
+}
 
 export interface Notifier {
   /** Feed every realtime push through this; it decides and acts. */
@@ -50,16 +149,27 @@ export function useNotifications(): Notifier {
     // immediately, without this component having to re-mount or re-subscribe.
     const decision = decideNotification({
       action,
-      event: payload['event'] as NotifiableEvent | undefined,
+      payload,
       prefs: loadPrefs(),
       focused: isFocused(),
       permission: currentPermission(),
+      me: currentMe(),
     });
     if (!decision) return;
 
+    const rt = getRuntime();
     if (decision.badge) setUnread((n) => n + 1);
-    if (decision.sound) playChime();
-    if (decision.desktop) showDesktop(payload);
+
+    // One tab speaks (the leader), and not over somebody who is looking at the
+    // console in another tab.
+    const speaks = mayMakeSound(rt.leader);
+    if (decision.sound && speaks) void playChime();
+    if (decision.desktop && rt.leader.isLeader() && !rt.leader.anyPeerFocused()) {
+      showDesktop(payload, decision);
+    }
+    // Every tab keeps the entry so a leader that closes hands the beat on; only
+    // the leader's ticks are audible.
+    if (decision.repeat && decision.key) rt.repeater.start(decision.key);
   }, []);
 
   return { handlePush };
@@ -85,49 +195,56 @@ function isFocused(): boolean {
 
 // --- Effects -----------------------------------------------------------------
 
-function showDesktop(payload: Record<string, unknown>): void {
+/** The title and body wording of each event; the visitor's own words are never here. */
+const EVENT_WORDING: Record<
+  Exclude<NotificationEvent, 'incoming_chat'>,
+  { title: string; body: string }
+> = {
+  transferred_to_me: {
+    title: 'shell.notification.transferredToMe.title',
+    body: 'shell.notification.transferredToMe.body',
+  },
+  transferred_to_my_team: {
+    title: 'shell.notification.transferredToMyTeam.title',
+    body: 'shell.notification.transferredToMyTeam.body',
+  },
+  queue_waiting: {
+    title: 'shell.notification.queueWaiting.title',
+    body: 'shell.notification.queueWaiting.body',
+  },
+  new_ticket: {
+    title: 'shell.notification.newTicket.title',
+    body: 'shell.notification.newTicket.body',
+  },
+  ticket_reply: {
+    title: 'shell.notification.ticketReply.title',
+    body: 'shell.notification.ticketReply.body',
+  },
+};
+
+function showDesktop(payload: Record<string, unknown>, decision: NotifyDecision): void {
   try {
-    const event = payload['event'] as { text?: string } | undefined;
     // Not a component, so no `useTranslate`: the language is read when the push
     // arrives, which is also when a mid-session switch has already taken effect.
     const locale = getLocale();
-    new Notification(translate(locale, 'shell.notification.title'), {
-      body: event?.text?.slice(0, 140) ?? translate(locale, 'shell.notification.fallbackBody'),
-      // One notification per chat replaces the last rather than stacking.
-      tag: typeof payload['chat_id'] === 'string' ? (payload['chat_id'] as string) : undefined,
+    // One notification per chat or ticket replaces the last rather than stacking.
+    const tag = decision.key ? `${decision.event}:${decision.key}` : decision.event;
+    if (decision.event === 'incoming_chat') {
+      const event = payload['event'] as { text?: string } | undefined;
+      new Notification(translate(locale, 'shell.notification.title'), {
+        body: event?.text?.slice(0, 140) ?? translate(locale, 'shell.notification.fallbackBody'),
+        tag: typeof payload['chat_id'] === 'string' ? (payload['chat_id'] as string) : undefined,
+      });
+      return;
+    }
+    const wording = EVENT_WORDING[decision.event];
+    new Notification(translate(locale, wording.title), {
+      body: translate(locale, wording.body),
+      tag,
     });
   } catch {
     // Permission can be revoked between the check and here; never throw at an
     // agent for it.
-  }
-}
-
-/**
- * A short two-tone chime, synthesised so the app ships no audio asset and needs
- * no network fetch. Best-effort: an AudioContext may be suspended until a user
- * gesture, which is a silent no-op rather than an error.
- */
-function playChime(): void {
-  try {
-    const Ctor =
-      window.AudioContext ??
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctor) return;
-    const ctx = new Ctor();
-    const gain = ctx.createGain();
-    gain.gain.value = 0.04;
-    gain.connect(ctx.destination);
-
-    const osc = ctx.createOscillator();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, ctx.currentTime);
-    osc.frequency.setValueAtTime(660, ctx.currentTime + 0.1);
-    osc.connect(gain);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.2);
-    osc.onended = () => void ctx.close();
-  } catch {
-    // No audio device or a blocked context — the badge still tells the agent.
   }
 }
 

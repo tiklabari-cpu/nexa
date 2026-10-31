@@ -19,7 +19,12 @@
  */
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { DEFAULT_NOTIFICATION_PREFERENCES, type NotificationPreferences } from '@siyahtus/types';
+import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  applyNotificationPatch,
+  type NotificationPreferences,
+  type NotificationPreferencesPatch,
+} from '@siyahtus/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NotificationSettings } from './SettingsPage.js';
 import { useAuth } from '../../lib/auth-store.js';
@@ -36,7 +41,7 @@ const AGENT = {
   routing_status: 'accepting_chats' as const,
 };
 
-let patches: Array<Partial<NotificationPreferences>>;
+let patches: Array<NotificationPreferencesPatch>;
 let nextSaveFails: boolean;
 
 function signIn(prefs: NotificationPreferences = DEFAULT_NOTIFICATION_PREFERENCES): void {
@@ -46,14 +51,14 @@ function signIn(prefs: NotificationPreferences = DEFAULT_NOTIFICATION_PREFERENCE
     agent: { ...AGENT, notification_preferences: prefs },
     // Stand in for the real action: the store's own optimistic/rollback path is
     // its business, and this test is about what the screen sends and shows.
-    setNotificationPreferences: async (patch: Partial<NotificationPreferences>) => {
+    setNotificationPreferences: async (patch: NotificationPreferencesPatch) => {
       patches.push(patch);
       if (nextSaveFails) throw new Error('save failed');
       const agent = useAuth.getState().agent;
       useAuth.setState({
         agent: {
           ...agent!,
-          notification_preferences: { ...agent!.notification_preferences!, ...patch },
+          notification_preferences: applyNotificationPatch(agent!.notification_preferences!, patch),
         },
       });
     },
@@ -87,7 +92,7 @@ describe('NotificationSettings', () => {
   it('saves each row the moment it is flipped, and says so with an Undo (GV-06)', async () => {
     const { container } = render(<NotificationSettings />);
     // Every row is the person's own preference: the instant pattern, never a Save bar.
-    expect(container.querySelectorAll('[data-save-pattern="instant"]')).toHaveLength(5);
+    expect(container.querySelectorAll('[data-save-pattern="instant"]')).toHaveLength(12);
     expect(container.querySelector('[data-save-pattern="form"]')).toBeNull();
 
     await userEvent.click(checkbox(/Play a sound/));
@@ -127,6 +132,56 @@ describe('NotificationSettings', () => {
     // "stop interrupting me" leaves it alone and usable.
     expect(checkbox(/Email notifications/)).toBeEnabled();
     expect(checkbox(/Email notifications/)).toBeChecked();
+  });
+
+  // IN-10 · tm 367
+  describe('the event list (FR-MOD-13.8)', () => {
+    it('lists the six events, with the visitor’s message locked on', () => {
+      render(<NotificationSettings />);
+
+      const locked = checkbox(/New messages from visitors/);
+      expect(locked).toBeChecked();
+      expect(locked).toBeDisabled();
+      expect(checkbox(/transferred to me/)).toBeChecked();
+      expect(checkbox(/transferred to my team/)).toBeChecked();
+      expect(checkbox(/waiting in the queue/)).not.toBeChecked();
+      expect(checkbox(/A new ticket/)).toBeChecked();
+      expect(checkbox(/A reply on a ticket/)).toBeChecked();
+    });
+
+    it('sends just the one event that moved, as a partial events object', async () => {
+      render(<NotificationSettings />);
+      await userEvent.click(checkbox(/A new ticket/));
+
+      await waitFor(() => expect(patches).toEqual([{ events: { new_ticket: false } }]));
+      await waitFor(() => expect(checkbox(/A new ticket/)).not.toBeChecked());
+      expect(checkbox(/A reply on a ticket/)).toBeChecked();
+    });
+
+    it('turns the master switch into a stop for every event row', async () => {
+      signIn({ ...DEFAULT_NOTIFICATION_PREFERENCES, enabled: false });
+      render(<NotificationSettings />);
+
+      expect(checkbox(/A new ticket/)).toBeDisabled();
+      expect(checkbox(/transferred to me/)).toBeDisabled();
+    });
+  });
+
+  describe('the repeating sound (FR-MOD-13.8)', () => {
+    it('starts off, and is a plain preference write when turned on', async () => {
+      render(<NotificationSettings />);
+      expect(checkbox(/Repeat the sound until the message is read/)).not.toBeChecked();
+
+      await userEvent.click(checkbox(/Repeat the sound until the message is read/));
+      await waitFor(() => expect(patches).toEqual([{ repeat_sound: true }]));
+    });
+
+    it('has nothing to repeat when the sound itself is off', () => {
+      signIn({ ...DEFAULT_NOTIFICATION_PREFERENCES, sound: false });
+      render(<NotificationSettings />);
+
+      expect(checkbox(/Repeat the sound until the message is read/)).toBeDisabled();
+    });
   });
 
   it('says so when the save fails, rather than showing a switch that lies', async () => {

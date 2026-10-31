@@ -27,7 +27,9 @@ const tablet: PushDevice = {
 
 describe('deliverablePushTargets', () => {
   it('addresses every live handset by default', () => {
-    expect(deliverablePushTargets(DEFAULT_NOTIFICATION_PREFERENCES, [phone, tablet])).toEqual([
+    expect(
+      deliverablePushTargets(DEFAULT_NOTIFICATION_PREFERENCES, [phone, tablet], 'message'),
+    ).toEqual([
       { deviceId: phone.id, platform: 'ios', token: 'apns-token-a' },
       { deviceId: tablet.id, platform: 'android', token: 'fcm-token-b' },
     ]);
@@ -35,7 +37,7 @@ describe('deliverablePushTargets', () => {
 
   it('sends nothing when the push channel is off (FR-MOD-08.2)', () => {
     const prefs = { ...DEFAULT_NOTIFICATION_PREFERENCES, push: false };
-    expect(deliverablePushTargets(prefs, [phone, tablet])).toEqual([]);
+    expect(deliverablePushTargets(prefs, [phone, tablet], 'message')).toEqual([]);
   });
 
   it('sends nothing when the master switch is off', () => {
@@ -45,7 +47,7 @@ describe('deliverablePushTargets', () => {
     // everything" vs "not on my phone") and a build that honoured only one of
     // them would look correct in a single test.
     const prefs = { ...DEFAULT_NOTIFICATION_PREFERENCES, enabled: false, push: true };
-    expect(deliverablePushTargets(prefs, [phone])).toEqual([]);
+    expect(deliverablePushTargets(prefs, [phone], 'message')).toEqual([]);
   });
 
   it('leaves e-mail out of it', () => {
@@ -54,27 +56,27 @@ describe('deliverablePushTargets', () => {
     // object, and collapsing them would make one channel's opt-out disable the
     // other's for somebody who never asked.
     const prefs = { ...DEFAULT_NOTIFICATION_PREFERENCES, email: false };
-    expect(deliverablePushTargets(prefs, [phone])).toHaveLength(1);
+    expect(deliverablePushTargets(prefs, [phone], 'message')).toHaveLength(1);
   });
 
   it('skips a handset that was signed out', () => {
     // The query filters `revokedAt` too. This is the second lock: a revoked
     // token is somebody else's phone as far as this workspace is concerned.
     const revoked: PushDevice = { ...tablet, revokedAt: new Date('2026-08-16T10:00:00Z') };
-    expect(deliverablePushTargets(DEFAULT_NOTIFICATION_PREFERENCES, [phone, revoked])).toEqual([
-      { deviceId: phone.id, platform: 'ios', token: 'apns-token-a' },
-    ]);
+    expect(
+      deliverablePushTargets(DEFAULT_NOTIFICATION_PREFERENCES, [phone, revoked], 'message'),
+    ).toEqual([{ deviceId: phone.id, platform: 'ios', token: 'apns-token-a' }]);
   });
 
   it('skips a platform this build cannot address', () => {
     // Unreachable while the database CHECK holds; the point is which way it
     // fails if it ever does not.
     const odd: PushDevice = { ...phone, platform: 'blackberry' };
-    expect(deliverablePushTargets(DEFAULT_NOTIFICATION_PREFERENCES, [odd])).toEqual([]);
+    expect(deliverablePushTargets(DEFAULT_NOTIFICATION_PREFERENCES, [odd], 'message')).toEqual([]);
   });
 
   it('has nothing to say about a member with no registered handset', () => {
-    expect(deliverablePushTargets(DEFAULT_NOTIFICATION_PREFERENCES, [])).toEqual([]);
+    expect(deliverablePushTargets(DEFAULT_NOTIFICATION_PREFERENCES, [], 'message')).toEqual([]);
   });
 });
 

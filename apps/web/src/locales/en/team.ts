@@ -423,6 +423,30 @@ export const team: Messages = {
   'team.notifications.email.label': 'Email notifications',
   'team.notifications.email.hint':
     'Emailed when a visitor writes in a chat assigned to you, even when SiyahTuş is closed. Not affected by the switch above — email is the fallback for when you are away.',
+  // Which events alert you, and the repeating sound (IN-10)
+  'team.notifications.repeat.label': 'Repeat the sound until the message is read',
+  'team.notifications.repeat.hint':
+    'Chimes again every 10 seconds, for up to 2 minutes, until you open the chat. Off unless you turn it on.',
+  'team.notifications.events.title': 'Notify me about',
+  'team.notifications.events.hint':
+    'Each event uses the channels above. The master switch still silences all of them.',
+  'team.notifications.events.lockedHint':
+    'Always on — a waiting visitor must never go unnoticed. You can still turn off its sound above.',
+  'team.notifications.event.incomingChat.label': 'New messages from visitors',
+  'team.notifications.event.incomingChat.hint': 'A visitor wrote in.',
+  'team.notifications.event.transferredToMe.label': 'A chat is transferred to me',
+  'team.notifications.event.transferredToMe.hint':
+    'A colleague, a rule or the AI handed you a chat.',
+  'team.notifications.event.transferredToMyTeam.label': 'A chat is transferred to my team',
+  'team.notifications.event.transferredToMyTeam.hint':
+    'A chat was handed to a team you are in, whoever ends up taking it.',
+  'team.notifications.event.queueWaiting.label': 'A visitor is waiting in the queue',
+  'team.notifications.event.queueWaiting.hint':
+    'A visitor is queued in one of your teams, or nobody took a chat. Meant for team leads.',
+  'team.notifications.event.newTicket.label': 'A new ticket',
+  'team.notifications.event.newTicket.hint': 'A ticket was opened or assigned to you or your team.',
+  'team.notifications.event.ticketReply.label': 'A reply on a ticket',
+  'team.notifications.event.ticketReply.hint': 'The player answered a ticket you work on.',
   // AI agent performance on the Team screen — TeamAiPerformance.tsx (FR-MOD-04.2)
   'team.ai.title': 'AI agent performance',
   'team.ai.description':

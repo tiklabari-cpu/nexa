@@ -33,7 +33,8 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import type { DevicePlatform, NotificationPreferences } from '@siyahtus/types';
-import { isDevicePlatform, pushAllowed } from '@siyahtus/types';
+import { eventAllowed, isDevicePlatform } from '@siyahtus/types';
+import type { NotificationEvent } from '@siyahtus/types';
 import { withTenant, type TenantClient, type TenantContext } from '../../lib/tenant.js';
 import type { PushEventKind, PushProvider } from '../push/push-provider.js';
 import { NOTIFICATION_PREFERENCE_SELECT, serialiseNotificationPreferences } from './preferences.js';
@@ -60,6 +61,24 @@ export interface PushEvent {
 }
 
 /**
+ * Which preference event a handset notification is an instance of (IN-10).
+ *
+ * A visitor's first message and their follow-ups are both "a visitor wrote in"
+ * (`incoming_chat`, locked on); a conversation handed to this person is
+ * `transferred_to_me`. The mapping lives here, beside the kinds, so a new kind
+ * cannot ship without saying which switch governs it.
+ */
+export function preferenceEventOf(kind: PushEventKind): NotificationEvent {
+  switch (kind) {
+    case 'new_chat':
+    case 'message':
+      return 'incoming_chat';
+    case 'assignment':
+      return 'transferred_to_me';
+  }
+}
+
+/**
  * Which of this member's handsets may be addressed for this event.
  *
  * Pure, and separated from the query for the same reason `shouldEmailAssignee`
@@ -71,11 +90,13 @@ export interface PushEvent {
 export function deliverablePushTargets(
   prefs: NotificationPreferences,
   devices: readonly PushDevice[],
+  kind: PushEventKind,
 ): PushTarget[] {
-  // The master switch and the channel, in one place shared with the console and
-  // the phone's own settings screen, so the three cannot disagree about what
-  // "notifications off" means (FR-MOD-08.2 · `pushAllowed`).
-  if (!pushAllowed(prefs)) return [];
+  // The master switch, the channel and the event's own switch, in one place
+  // shared with the console and the phone's own settings screen, so the three
+  // cannot disagree about what "notifications off" means (FR-MOD-08.2 ·
+  // `eventAllowed`, IN-10).
+  if (!prefs.push || !eventAllowed(prefs, preferenceEventOf(kind))) return [];
 
   return devices.flatMap((device) => {
     // Signed out. The query filters these too; this is the second lock.
@@ -97,7 +118,7 @@ export function deliverablePushTargets(
  */
 export async function readPushTargets(
   tx: TenantClient,
-  input: { licenseId: bigint; accountId: string },
+  input: { licenseId: bigint; accountId: string; kind: PushEventKind },
 ): Promise<PushTarget[]> {
   const [membership, devices] = await Promise.all([
     tx.agentMembership.findUnique({
@@ -120,7 +141,7 @@ export async function readPushTargets(
   // this is what happens if it ever is not.
   if (!membership) return [];
 
-  return deliverablePushTargets(serialiseNotificationPreferences(membership), devices);
+  return deliverablePushTargets(serialiseNotificationPreferences(membership), devices, input.kind);
 }
 
 /**
@@ -168,7 +189,11 @@ export async function pushToAgentDevices(
 ): Promise<void> {
   try {
     const targets = await withTenant(deps.db, tenant, (tx) =>
-      readPushTargets(tx, { licenseId: tenant.licenseId, accountId: input.accountId }),
+      readPushTargets(tx, {
+        licenseId: tenant.licenseId,
+        accountId: input.accountId,
+        kind: input.event.kind,
+      }),
     );
     if (targets.length === 0) return;
 

@@ -156,6 +156,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/settings/Integrations.tsx',
   'src/features/settings/MemberRecognition.tsx',
   'src/features/settings/NotificationSettings.tsx',
+  'src/features/notifications/AudioUnlockHint.tsx',
   'src/features/settings/ChatFormsSettings.tsx',
   'src/features/settings/Tags.tsx',
   'src/features/settings/TicketEmailTemplates.tsx',

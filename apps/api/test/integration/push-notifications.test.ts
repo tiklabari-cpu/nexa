@@ -210,6 +210,25 @@ describe('agent push notifications', () => {
     expect(await notificationMails()).toHaveLength(1);
   });
 
+  it('still pushes a visitor’s message when every other event is off — it cannot be switched off (FR-MOD-13.8)', async () => {
+    await owner.agentMembership.update({
+      where: { licenseId_agentId: { licenseId: fx.a.licenseId, agentId: fx.a.agentAccountId } },
+      data: {
+        notifyEvents: {
+          incoming_chat: false,
+          transferred_to_me: false,
+          transferred_to_my_team: false,
+          new_ticket: false,
+          ticket_reply: false,
+        },
+      },
+    });
+
+    await visitorWrites('anybody there?');
+
+    expect(await push.delivered()).toHaveLength(1);
+  });
+
   it('does not push when the master switch is off', async () => {
     // `enabled` covers the interruptive channels, and a push is the most
     // interruptive of them. Separate from `notifyPush` because they are
@@ -376,6 +395,26 @@ describe('agent push notifications', () => {
         kind: 'assignment',
         chat_id: chatId,
       });
+    });
+
+    it('does not push a handed-over chat to a colleague who switched that event off (FR-MOD-13.8)', async () => {
+      // IN-10 · tm 367: the handset obeys the event list, not just the channel.
+      await registerDevice(fx.a.licenseId, fx.a.ownerAccountId, 'apns-token-a-colleague', 'ios');
+      await owner.agentMembership.update({
+        where: { licenseId_agentId: { licenseId: fx.a.licenseId, agentId: fx.a.ownerAccountId } },
+        data: { notifyEvents: { transferred_to_me: false } },
+      });
+      const chatId = await openChat();
+      await rm(pushDir, { recursive: true, force: true });
+
+      const response = await server.post(
+        `/chats/${chatId}/transfer`,
+        { agent_id: fx.a.ownerAccountId, reason: 'manual' },
+        auth(agentToken),
+      );
+      expect(response.statusCode).toBe(200);
+
+      expect(await push.delivered()).toEqual([]);
     });
 
     it('does not push when an agent hands a chat to themselves', async () => {

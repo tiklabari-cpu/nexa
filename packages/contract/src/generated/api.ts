@@ -12606,6 +12606,12 @@ export interface components {
      *     All five default to on. The failure this product cannot afford is an
      *     agent who never learns a visitor is waiting, so a new member is
      *     reachable and opts out rather than in.
+     *
+     *     `events` is the other half of the question (IN-10): which things are
+     *     worth an interruption at all. `incoming_chat` — a visitor wrote in — is
+     *     always `true`; what a person can silence is its *sound* (the `sound`
+     *     channel). `repeat_sound` keeps the chime going every 10 seconds until the
+     *     message is read; it defaults to off.
      */
     NotificationPreferences: {
       enabled: boolean;
@@ -12613,6 +12619,27 @@ export interface components {
       desktop: boolean;
       push: boolean;
       email: boolean;
+      events: components['schemas']['NotificationEvents'];
+      repeat_sound: boolean;
+    };
+    /**
+     * @description Which events interrupt one person (IN-10 · tm 367). Every key is always
+     *     present in a response; a key a stored object lacks reads as its default
+     *     (`queue_waiting` off, the rest on). `incoming_chat` cannot be turned off.
+     */
+    NotificationEvents: {
+      /** @description A visitor wrote in. Always `true`. */
+      incoming_chat: boolean;
+      /** @description A chat was handed to you. */
+      transferred_to_me: boolean;
+      /** @description A chat was handed to a team you are in. */
+      transferred_to_my_team: boolean;
+      /** @description A visitor is waiting in a queue of a team you are in. */
+      queue_waiting: boolean;
+      /** @description A ticket was opened or assigned to you or your team. */
+      new_ticket: boolean;
+      /** @description The player answered a ticket you work. */
+      ticket_reply: boolean;
     };
     /**
      * @description How one person has arranged the console, for one workspace
@@ -24597,6 +24624,14 @@ export interface operations {
               trial_ends_at: string | null;
             };
             /**
+             * @description Agent principals only. The teams the caller belongs to
+             *     (IN-10): the console decides "a chat was handed to my team"
+             *     from a push that names only the receiving team's id. Read
+             *     with the profile; a change of membership shows from the next
+             *     read.
+             */
+            group_ids?: number[];
+            /**
              * @description Agent principals only. Every channel the caller can be reached
              *     through — per user, per license (FR-MOD-13.8 / 08.2). Shipped
              *     with the profile because the console's alerting decision runs
@@ -29599,6 +29634,22 @@ export interface operations {
           push?: boolean;
           /** @description An e-mail when a chat assigned to you has new activity. */
           email?: boolean;
+          /** @description Keep chiming every 10 seconds until the message is read. */
+          repeat_sound?: boolean;
+          /**
+           * @description Which events interrupt you (IN-10). A partial update of the
+           *     `events` object: send only the events that changed.
+           *     `incoming_chat` cannot be turned off — sending `false` is a `400`.
+           */
+          events?: {
+            /** @description A visitor wrote in. Only `true` is accepted. */
+            incoming_chat?: boolean;
+            transferred_to_me?: boolean;
+            transferred_to_my_team?: boolean;
+            queue_waiting?: boolean;
+            new_ticket?: boolean;
+            ticket_reply?: boolean;
+          };
         };
       };
     };

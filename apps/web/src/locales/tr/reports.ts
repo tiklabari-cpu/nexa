@@ -13,6 +13,8 @@ export const reports: Messages = {
   'reports.tabs.reviews': 'Değerlendirmeler',
   'reports.tabs.breakdown': 'Dağılım',
   'reports.tabs.staffing': 'Personel Planlama',
+  'reports.tabs.missed': 'Kaçan sohbetler',
+  'reports.tabs.engagement': 'Etkileşim',
   'reports.tabs.topics': 'Sohbet Konuları',
   'reports.tabs.cases': 'Talepler',
   'reports.tabs.leads': 'Potansiyel Müşteriler',
@@ -474,6 +476,68 @@ export const reports: Messages = {
     'Her UTC hafta günü ve saati için gereken ile planlanan temsilci sayısı',
   'reports.staffing.cellUnknown': 'Yeterli veri yok',
   'reports.staffing.cellTitle': 'Gereken {required} · Planlanan {scheduled} · Fark {gap}',
+
+  // Kaçan sohbetler (RP-02 · tm 369.2)
+  'reports.missed.error':
+    'Kaçan sohbetler raporu yüklenemedi. API’ye ulaşılabildiğini kontrol edip yeniden deneyin.',
+  'reports.missed.estimatedNote':
+    'Kaçan sohbetlerin {count} tanesi kaçan sohbetler kaydedilmeye başlamadan önce kapandı; nedenleri tahmindir. Bu rakamlar kesin değildir.',
+  'reports.missed.summary.title': 'Kaçan sohbetler',
+  'reports.missed.summary.description':
+    'Bir kişiye ihtiyaç duyan ve hiçbir ajanın yanıtlamadığı sohbetler. AI’ın tek başına yanıtlayıp kapattığı sohbet sayılmaz.',
+  'reports.missed.kpi.missed': 'Kaçan',
+  'reports.missed.kpi.rate': 'Kaçan oranı',
+  'reports.missed.kpi.rateHint': 'Kapanan {closed} sohbetin',
+  'reports.missed.reason.queueAbandoned': 'Kuyrukta kalan',
+  'reports.missed.reason.unansweredAssigned': 'Atanmış, yanıtsız',
+  'reports.missed.reason.unansweredAfterAi': 'AI devrinden sonra kaçan',
+  'reports.missed.hint.queueAbandoned': 'Kimseye atanmadan kapandı',
+  'reports.missed.hint.unansweredAssigned': 'Atanan ajan hiç yanıt vermeden kapandı',
+  'reports.missed.hint.unansweredAfterAi': 'AI devretti, kimse yanıtlamadı',
+  'reports.missed.emptyTitle': 'Bu aralıkta kaçan sohbet yok',
+  'reports.missed.emptyDescription':
+    'Kişi gerektiren her sohbet yanıtlandı ya da AI tarafından çözüldü.',
+  'reports.missed.heatmap.title': 'Sohbetler ne zaman kaçıyor',
+  'reports.missed.heatmap.description':
+    'Kaçan sohbetler, çalışma alanının saat diliminde ({timezone}) gün ve saate göre.',
+  'reports.missed.heatmap.caption': 'Gün ve saate göre kaçan sohbetler, {timezone}',
+  'reports.missed.heatmap.cellTitle': '{count} kaçan',
+  'reports.missed.byDay.description':
+    'En az bir kaçan sohbet olan günler, çalışma alanının saat diliminde ({timezone}) sayılır.',
+  'reports.missed.byDay.caption': 'Güne göre kaçan sohbetler, nedene göre ayrılmış',
+  'reports.missed.byTeam.title': 'Ekibe göre',
+  'reports.missed.byTeam.description': 'Sohbet kapandığında ait olduğu ekip.',
+  'reports.missed.byTeam.caption': 'Ekibe göre kaçan sohbetler, nedene göre ayrılmış',
+  'reports.missed.byAgent.description':
+    'Sohbet kapandığında onu elinde tutan ajan; en çok kaçıran önce.',
+  'reports.missed.byAgent.emptyTitle': 'Kaçan sohbeti elinde tutan ajan yok',
+  'reports.missed.byAgent.emptyDescription':
+    'Kuyrukta kalan sohbetlerin ajanı yoktur; yalnız toplamlarda ve ekip tablosunda görünür.',
+  'reports.missed.byAgent.caption': 'Ajana göre kaçan sohbetler, nedene göre ayrılmış',
+
+  // Etkileşim (RP-02 · tm 369.2)
+  'reports.engagement.error':
+    'Etkileşim raporu yüklenemedi. API’ye ulaşılabildiğini kontrol edip yeniden deneyin.',
+  'reports.engagement.kpi.chats': 'Başlayan sohbet',
+  'reports.engagement.byInitiator.title': 'Sohbeti kim başlattı',
+  'reports.engagement.byInitiator.description':
+    'Aralıktaki her sohbet, onu açana göre. Kampanyadan açılan sohbetler ayrı satırda sayılır.',
+  'reports.engagement.byInitiator.caption': 'Sohbetler, başlatana göre',
+  'reports.engagement.column.initiator': 'Başlatan',
+  'reports.engagement.column.answered': 'Ajanın yanıtladığı',
+  'reports.engagement.initiator.customer': 'Müşteri',
+  'reports.engagement.initiator.agent': 'Ajan',
+  'reports.engagement.initiator.campaign': 'Kampanya',
+  'reports.engagement.initiator.ai': 'AI',
+  'reports.engagement.initiator.channel': 'Kanal',
+  'reports.engagement.initiator.unknown': 'Bilinmiyor',
+  'reports.engagement.initiator.unknownHint': 'Kanal sohbetin nasıl başladığını bildirmedi',
+  'reports.engagement.emptyTitle': 'Bu aralıkta sohbet yok',
+  'reports.engagement.emptyDescription':
+    'Daha fazlasını görmek için aralığı genişletin ya da filtreleri temizleyin.',
+  'reports.engagement.byDay.description':
+    'Güne göre başlayan sohbetler, çalışma alanının saat diliminde ({timezone}) sayılır.',
+  'reports.engagement.byDay.caption': 'Güne göre başlayan sohbetler, başlatana göre',
 
   // Chat topics (FR-MOD-07.6)
   'reports.topics.error':

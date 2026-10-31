@@ -380,13 +380,15 @@ test.describe('reports overview', () => {
     await agentPage.goto('/app/reports');
     await expect(agentPage.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
 
-    // Six always-rendered tabs plus the four gated on `GET /reports/groups`.
+    // Six always-rendered tabs plus the six gated on `GET /reports/groups`.
     const TABS = [
       'Overview',
       'AI Agent',
       'Reviews',
       'Breakdown',
       'Staffing',
+      'Missed chats',
+      'Engagement',
       'Chat topics',
       'Cases',
       'Leads',
@@ -837,5 +839,73 @@ test.describe('reports — filters (RP-01 · tm 368.2)', () => {
     await agentPage.getByRole('tab', { name: 'Overview' }).click();
     await agentPage.getByRole('button', { name: 'Clear filters' }).click();
     await expect.poll(() => new URL(agentPage.url()).search).toBe('');
+  });
+});
+
+test.describe('reports — missed chats and engagement (RP-02 · tm 369.2)', () => {
+  test('opens both tabs from the sidebar and asks the server for each report', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/reports');
+    await expect(agentPage.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+
+    const missed = agentPage.waitForResponse(
+      (res) => res.url().includes('/reports/missed') && res.ok(),
+    );
+    await agentPage.getByRole('tab', { name: 'Missed chats' }).click();
+    await missed;
+    const panel = agentPage.getByRole('tabpanel');
+    await expect(panel.getByText('Missed rate')).toBeVisible();
+
+    const engagement = agentPage.waitForResponse(
+      (res) => res.url().includes('/reports/engagement') && res.ok(),
+    );
+    await agentPage.getByRole('tab', { name: 'Engagement' }).click();
+    await engagement;
+    await expect(
+      agentPage.getByRole('tabpanel').getByText('Chats started', { exact: true }),
+    ).toBeVisible();
+  });
+
+  test('draws the heat map in the time zone the report names, with the not-exact note', async ({
+    agentPage,
+  }) => {
+    const none = { missed: 0, queue_abandoned: 0, unanswered_assigned: 0, unanswered_after_ai: 0 };
+    const heatmap: Array<Record<string, number>> = [];
+    for (let weekday = 1; weekday <= 7; weekday++) {
+      for (let hour = 0; hour < 24; hour++) {
+        heatmap.push({ ...none, weekday, hour, missed: weekday === 2 && hour === 15 ? 4 : 0 });
+      }
+    }
+    const window = { from: '2026-10-01T00:00:00.000Z', to: '2026-10-31T00:00:00.000Z' };
+    await agentPage.route('**/reports/missed?**', (route) =>
+      route.fulfill({
+        json: {
+          range: window,
+          timezone: 'Pacific/Auckland',
+          totals: {
+            ...none,
+            missed: 4,
+            queue_abandoned: 4,
+            closed: 20,
+            missed_rate: 0.2,
+            estimated: 4,
+          },
+          by_day: [{ ...none, date: '2026-10-06', missed: 4, queue_abandoned: 4 }],
+          heatmap,
+          by_team: [{ ...none, team_id: null, name: null, missed: 4, queue_abandoned: 4 }],
+          by_agent: [],
+          previous_period: { range: window, ...none, closed: 10 },
+        },
+      }),
+    );
+    await agentPage.goto('/app/reports?tab=missed');
+
+    const grid = agentPage.getByRole('table', {
+      name: 'Missed chats per weekday and hour, Pacific/Auckland',
+    });
+    await expect(grid).toBeVisible();
+    await expect(grid.getByRole('row', { name: /^Tue/ }).getByRole('cell').nth(15)).toHaveText('4');
+    await expect(agentPage.getByRole('note')).toContainText('not exact');
   });
 });

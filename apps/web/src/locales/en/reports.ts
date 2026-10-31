@@ -27,6 +27,8 @@ export const reports: Messages = {
   'reports.tabs.reviews': 'Reviews',
   'reports.tabs.breakdown': 'Breakdown',
   'reports.tabs.staffing': 'Staffing',
+  'reports.tabs.missed': 'Missed chats',
+  'reports.tabs.engagement': 'Engagement',
   'reports.tabs.topics': 'Chat topics',
   'reports.tabs.cases': 'Cases',
   'reports.tabs.leads': 'Leads',
@@ -486,6 +488,67 @@ export const reports: Messages = {
   'reports.staffing.gridCaption': 'Required vs scheduled agents per UTC weekday and hour',
   'reports.staffing.cellUnknown': 'Not enough data',
   'reports.staffing.cellTitle': 'Required {required} · Scheduled {scheduled} · Gap {gap}',
+
+  // Missed chats (RP-02 · tm 369.2)
+  'reports.missed.error':
+    'Could not load the missed-chats report. Check that the API is reachable and try again.',
+  'reports.missed.estimatedNote':
+    '{count} of the missed chats closed before missed chats were recorded, so their reason is an estimate. These figures are not exact.',
+  'reports.missed.summary.title': 'Missed chats',
+  'reports.missed.summary.description':
+    'Chats that needed a person and were never answered by an agent. A chat the AI answered and closed on its own is not counted.',
+  'reports.missed.kpi.missed': 'Missed',
+  'reports.missed.kpi.rate': 'Missed rate',
+  'reports.missed.kpi.rateHint': 'Of {closed} closed',
+  'reports.missed.reason.queueAbandoned': 'Left in queue',
+  'reports.missed.reason.unansweredAssigned': 'Assigned, no reply',
+  'reports.missed.reason.unansweredAfterAi': 'Missed after AI handover',
+  'reports.missed.hint.queueAbandoned': 'Closed with nobody assigned',
+  'reports.missed.hint.unansweredAssigned': 'Closed with an agent assigned who never replied',
+  'reports.missed.hint.unansweredAfterAi': 'The AI handed over and nobody answered',
+  'reports.missed.emptyTitle': 'No missed chats in this window',
+  'reports.missed.emptyDescription':
+    'Every chat that needed a person was answered, or the AI handled it.',
+  'reports.missed.heatmap.title': 'When chats are missed',
+  'reports.missed.heatmap.description':
+    'Missed chats by weekday and hour, in the workspace time zone ({timezone}).',
+  'reports.missed.heatmap.caption': 'Missed chats per weekday and hour, {timezone}',
+  'reports.missed.heatmap.cellTitle': '{count} missed',
+  'reports.missed.byDay.description':
+    'Days with at least one missed chat, counted in the workspace time zone ({timezone}).',
+  'reports.missed.byDay.caption': 'Missed chats per day, split by reason',
+  'reports.missed.byTeam.title': 'By team',
+  'reports.missed.byTeam.description': 'The team the chat belonged to when it closed.',
+  'reports.missed.byTeam.caption': 'Missed chats per team, split by reason',
+  'reports.missed.byAgent.description':
+    'The agent who held the chat when it closed, most missed first.',
+  'reports.missed.byAgent.emptyTitle': 'No agent held a missed chat',
+  'reports.missed.byAgent.emptyDescription':
+    'Chats left in the queue have no agent, so they appear only in the totals and the team table.',
+  'reports.missed.byAgent.caption': 'Missed chats per agent, split by reason',
+
+  // Engagement (RP-02 · tm 369.2)
+  'reports.engagement.error':
+    'Could not load the engagement report. Check that the API is reachable and try again.',
+  'reports.engagement.kpi.chats': 'Chats started',
+  'reports.engagement.byInitiator.title': 'Who started the chat',
+  'reports.engagement.byInitiator.description':
+    'Every chat in the window by who opened it. Chats opened from a campaign are counted on their own row.',
+  'reports.engagement.byInitiator.caption': 'Chats by who started them',
+  'reports.engagement.column.initiator': 'Started by',
+  'reports.engagement.column.answered': 'Answered by an agent',
+  'reports.engagement.initiator.customer': 'Customer',
+  'reports.engagement.initiator.agent': 'Agent',
+  'reports.engagement.initiator.campaign': 'Campaign',
+  'reports.engagement.initiator.ai': 'AI',
+  'reports.engagement.initiator.channel': 'Channel',
+  'reports.engagement.initiator.unknown': 'Unknown',
+  'reports.engagement.initiator.unknownHint': 'The channel did not say how the chat began',
+  'reports.engagement.emptyTitle': 'No chats in this window',
+  'reports.engagement.emptyDescription': 'Widen the range or clear the filters to see more.',
+  'reports.engagement.byDay.description':
+    'Chats started per day, counted in the workspace time zone ({timezone}).',
+  'reports.engagement.byDay.caption': 'Chats started per day, by who started them',
 
   // Chat topics (FR-MOD-07.6)
   'reports.topics.error':

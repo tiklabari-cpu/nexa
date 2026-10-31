@@ -1463,7 +1463,9 @@ describe('ReportsPage — Overview "Chat topics" promo banner (07.6-f)', () => {
     const queryClient = new QueryClient();
     const view = render(
       <QueryClientProvider client={queryClient}>
-        <ReportsPage />
+        <MemoryRouter>
+          <ReportsPage />
+        </MemoryRouter>
       </QueryClientProvider>,
     );
     expect(screen.getByText('Top chat topics in one place')).toBeInTheDocument();
@@ -1473,7 +1475,9 @@ describe('ReportsPage — Overview "Chat topics" promo banner (07.6-f)', () => {
     view.unmount();
     render(
       <QueryClientProvider client={new QueryClient()}>
-        <ReportsPage />
+        <MemoryRouter>
+          <ReportsPage />
+        </MemoryRouter>
       </QueryClientProvider>,
     );
     expect(screen.queryByText('Top chat topics in one place')).not.toBeInTheDocument();
@@ -1492,7 +1496,9 @@ describe('ReportsPage — Overview "Chat topics" promo banner (07.6-f)', () => {
     const queryClient = new QueryClient();
     const view = render(
       <QueryClientProvider client={queryClient}>
-        <ReportsPage />
+        <MemoryRouter>
+          <ReportsPage />
+        </MemoryRouter>
       </QueryClientProvider>,
     );
 
@@ -1505,7 +1511,9 @@ describe('ReportsPage — Overview "Chat topics" promo banner (07.6-f)', () => {
     view.unmount();
     render(
       <QueryClientProvider client={new QueryClient()}>
-        <ReportsPage />
+        <MemoryRouter>
+          <ReportsPage />
+        </MemoryRouter>
       </QueryClientProvider>,
     );
     expect(screen.queryByText('Top chat topics in one place')).not.toBeInTheDocument();

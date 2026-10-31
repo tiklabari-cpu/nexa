@@ -17,6 +17,7 @@ import { CommandPalette } from './CommandPalette.js';
 import { ShortcutsHost } from './ShortcutsModal.js';
 import { useAuth } from '../lib/auth-store.js';
 import { useLeaveGuard } from '../lib/dirty-guard.js';
+import { resetLocale, setLocale } from '../test/i18n.js';
 
 /** Surfaces the current location so navigation can be asserted. */
 function LocationProbe(): React.ReactElement {
@@ -202,7 +203,9 @@ describe('command palette', () => {
       await openPalette(user);
 
       await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), needle);
-      await user.click(await screen.findByRole('option', { name: /AI Agent/ }));
+      // The Reports page has an "AI Agent" tab too (IN-11); the door is listed first.
+      const [door] = await screen.findAllByRole('option', { name: /AI Agent/ });
+      await user.click(door!);
 
       expect(screen.getByTestId('location')).toHaveTextContent('/app/playbook?view=general');
     },
@@ -826,9 +829,16 @@ describe('command palette — mixed-kind keyboard navigation', () => {
     // e-mail, ticket via "order") in one list — action, nav and content all
     // contributing rows at once, with nothing left to the "ai" result to add.
     // The extra row is the AI Agent door (tm 390.2: "bot" matches its keywords).
+    // Settings sections (≤ 6) and report views (IN-11) now sit between the nav
+    // destinations and the content records, so the list ends at the ticket row
+    // wherever that lands; the walk below is counted from it.
     await user.type(combobox, 'o');
-    await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(13));
+    await waitFor(() =>
+      expect(screen.getAllByRole('option').at(-1)).toHaveTextContent('Refund for order 42'),
+    );
     const options = screen.getAllByRole('option');
+    const last = options.length - 1;
+    expect(last).toBeGreaterThan(12);
 
     // Starts on the action (index 0, group "Actions") — its heading is drawn
     // above the row but is not itself a row, so nothing has to be skipped.
@@ -836,12 +846,12 @@ describe('command palette — mixed-kind keyboard navigation', () => {
     expect(options[0]).toHaveAttribute('aria-selected', 'true');
     expect(combobox).toHaveAttribute('aria-activedescendant', 'command-option-0');
 
-    // Twelve steps crosses the action → nav → content group boundaries (indices
-    // 1 and 11) without stalling on either heading and lands on the last row.
-    await user.keyboard('{ArrowDown}'.repeat(12));
-    expect(options[12]).toHaveTextContent('Refund for order 42');
-    expect(options[12]).toHaveAttribute('aria-selected', 'true');
-    expect(combobox).toHaveAttribute('aria-activedescendant', 'command-option-12');
+    // The walk crosses the action → nav → settings → reports → content group
+    // boundaries without stalling on a heading and lands on the last row.
+    await user.keyboard('{ArrowDown}'.repeat(last));
+    expect(options[last]).toHaveTextContent('Refund for order 42');
+    expect(options[last]).toHaveAttribute('aria-selected', 'true');
+    expect(combobox).toHaveAttribute('aria-activedescendant', `command-option-${last}`);
     // Exactly one row is ever marked current.
     expect(
       options.filter((option) => option.getAttribute('aria-selected') === 'true'),
@@ -855,8 +865,8 @@ describe('command palette — mixed-kind keyboard navigation', () => {
 
     // And the same in reverse: ArrowUp from the first row wraps to the last.
     await user.keyboard('{ArrowUp}');
-    expect(options[12]).toHaveAttribute('aria-selected', 'true');
-    expect(combobox).toHaveAttribute('aria-activedescendant', 'command-option-12');
+    expect(options[last]).toHaveAttribute('aria-selected', 'true');
+    expect(combobox).toHaveAttribute('aria-activedescendant', `command-option-${last}`);
   });
 
   it('lets Enter act on whichever kind the arrow keys landed on, not only the first result', async () => {
@@ -1068,5 +1078,168 @@ describe('command palette — archive search mode', () => {
     await user.keyboard('{Backspace}');
     expect(screen.getByRole('combobox')).toHaveAttribute('placeholder', 'Search Text or go to…');
     expect(screen.queryByRole('button', { name: 'Leave archive search' })).toBeNull();
+  });
+});
+
+describe('command palette — settings sections and report views (IN-11)', () => {
+  const SEARCH = 'Search or jump to';
+  const OWNER = defaultScopesForRole('owner');
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse({ items: [] })),
+    );
+    localStorage.removeItem('siyahtus.reports.saved-views');
+  });
+  afterEach(() => {
+    resetLocale();
+    localStorage.removeItem('siyahtus.reports.saved-views');
+  });
+
+  /** The option rows drawn under the heading `group`, in order. */
+  function rowsOf(group: string): string[] {
+    const rows: string[] = [];
+    let current = '';
+    for (const li of screen.getByRole('listbox').querySelectorAll('li')) {
+      const heading = li.querySelector('p');
+      if (heading) current = heading.textContent ?? '';
+      const option = li.querySelector('[role="option"]');
+      if (option && current === group)
+        rows.push(option.querySelector('.truncate')?.textContent ?? '');
+    }
+    return rows;
+  }
+
+  it('"hazır" finds the Saved replies section and opens it', async () => {
+    const user = userEvent.setup();
+    renderPalette(OWNER);
+    await openPalette(user);
+
+    await user.type(screen.getByRole('combobox', { name: SEARCH }), 'hazır');
+    expect(rowsOf('Settings')).toEqual(['Saved replies']);
+    await user.click(screen.getByRole('option', { name: /Saved replies/ }));
+
+    expect(screen.getByTestId('location')).toHaveTextContent('/app/settings/canned-responses');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('finds sections by the Turkish fold: "iki" and "SIFRE" reach the right ones', async () => {
+    const user = userEvent.setup();
+    renderPalette(defaultScopesForRole('agent'));
+    await openPalette(user);
+    const input = screen.getByRole('combobox', { name: SEARCH });
+
+    await user.type(input, 'iki');
+    expect(rowsOf('Settings')).toEqual(['Two-factor authentication']);
+
+    await user.clear(input);
+    await user.type(input, 'SIFRE');
+    expect(rowsOf('Settings')).toEqual(['My profile']);
+  });
+
+  it('searches the Turkish labels in Turkish, capital İ and all', async () => {
+    setLocale('tr');
+    const user = userEvent.setup();
+    renderPalette(defaultScopesForRole('agent'));
+    await user.keyboard('{Meta>}k{/Meta}');
+
+    await user.type(await screen.findByRole('combobox'), 'İKİ');
+    expect(rowsOf('Ayarlar')).toEqual(['İki adımlı doğrulama']);
+  });
+
+  it('never offers a security section the member cannot open', async () => {
+    const user = userEvent.setup();
+    renderPalette(defaultScopesForRole('agent'));
+    await openPalette(user);
+    await user.type(screen.getByRole('combobox', { name: SEARCH }), 'saml');
+    expect(rowsOf('Settings')).toEqual([]);
+    expect(screen.queryByRole('option', { name: /Single sign-on/ })).toBeNull();
+  });
+
+  it('offers the owner the same section', async () => {
+    const user = userEvent.setup();
+    renderPalette(OWNER);
+    await openPalette(user);
+    await user.type(screen.getByRole('combobox', { name: SEARCH }), 'saml');
+    expect(rowsOf('Settings')).toEqual(['Single sign-on']);
+  });
+
+  it('shows at most six settings sections, and none for an empty query', async () => {
+    const user = userEvent.setup();
+    renderPalette(OWNER);
+    await openPalette(user);
+    expect(rowsOf('Settings')).toEqual([]);
+
+    await user.type(screen.getByRole('combobox', { name: SEARCH }), 'e');
+    expect(rowsOf('Settings')).toHaveLength(6);
+  });
+
+  it('puts a label that starts with the query before one that only contains it', async () => {
+    const user = userEvent.setup();
+    renderPalette(OWNER);
+    await openPalette(user);
+    await user.type(screen.getByRole('combobox', { name: SEARCH }), 'tag');
+    expect(rowsOf('Settings')[0]).toBe('Tags');
+  });
+
+  it('asks before leaving a dirty form for a section, and stays when declined', async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderPalette(OWNER);
+    const { unmount } = renderHook(() => useLeaveGuard(true, 'Discard your changes?'));
+    await openPalette(user);
+
+    await user.type(screen.getByRole('combobox', { name: SEARCH }), 'saml');
+    await user.click(screen.getByRole('option', { name: /Single sign-on/ }));
+
+    expect(confirm).toHaveBeenCalledWith('Discard your changes?');
+    expect(screen.getByTestId('location')).toHaveTextContent('/app/inbox');
+    confirm.mockRestore();
+    unmount();
+  });
+
+  it('offers the report tabs to a caller with reports_read and opens one by ?tab=', async () => {
+    const user = userEvent.setup();
+    renderPalette(OWNER);
+    await openPalette(user);
+
+    await user.type(screen.getByRole('combobox', { name: SEARCH }), 'team perf');
+    expect(rowsOf('Reports')).toEqual(['Team performance']);
+    await user.click(screen.getByRole('option', { name: /Team performance/ }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/app/reports?tab=team-performance');
+  });
+
+  it('offers no report view to a caller without reports_read', async () => {
+    const user = userEvent.setup();
+    renderPalette(defaultScopesForRole('agent'));
+    await openPalette(user);
+    await user.type(screen.getByRole('combobox', { name: SEARCH }), 'overview');
+    expect(rowsOf('Reports')).toEqual([]);
+  });
+
+  it("lists the agent's saved report views by name and opens one by ?view=", async () => {
+    localStorage.setItem(
+      'siyahtus.reports.saved-views',
+      JSON.stringify([
+        {
+          id: 'view-7',
+          name: 'Haftalık değerlendirme',
+          tab: 'reviews',
+          mode: 7,
+          customFrom: '',
+          customTo: '',
+          baseline: null,
+        },
+      ]),
+    );
+    const user = userEvent.setup();
+    renderPalette(OWNER);
+    await openPalette(user);
+
+    await user.type(screen.getByRole('combobox', { name: SEARCH }), 'degerlendirme');
+    expect(rowsOf('Reports')).toContain('Haftalık değerlendirme');
+    await user.click(screen.getByRole('option', { name: /Haftalık değerlendirme/ }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/app/reports?view=view-7');
   });
 });

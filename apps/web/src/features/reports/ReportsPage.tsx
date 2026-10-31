@@ -14,7 +14,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState, type ReactElement } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import {
   Card,
   CardSkeleton,
@@ -44,7 +44,9 @@ import { getLocale, useTranslate, type TFunction } from '../../lib/i18n.js';
 import { nearestPriority } from '../inbox/ticket-priority.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import {
+  REPORT_TAB_LABEL_KEYS,
   SAVED_REPORT_VIEW_NAME_MAX,
+  parseReportTab,
   useSavedReportViews,
   type ReportBaseline,
   type SavedReportView,
@@ -345,20 +347,8 @@ const TABS = [
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 
-/** `TabId` → its catalogue key. Module-level data, not JSX, so it carries no
- * English fallback text — the render site resolves it through `t()`. */
-const TAB_LABEL_KEYS: Record<TabId, string> = {
-  overview: 'reports.tabs.overview',
-  'ai-agent': 'reports.tabs.aiAgent',
-  reviews: 'reports.tabs.reviews',
-  breakdown: 'reports.tabs.breakdown',
-  staffing: 'reports.tabs.staffing',
-  topics: 'reports.tabs.topics',
-  cases: 'reports.tabs.cases',
-  leads: 'reports.tabs.leads',
-  sales: 'reports.tabs.sales',
-  'team-performance': 'reports.tabs.teamPerformance',
-};
+/** `TabId` → its catalogue key (shared with the command palette, `report-views.ts`). */
+const TAB_LABEL_KEYS: Record<TabId, string> = REPORT_TAB_LABEL_KEYS;
 
 /**
  * Tabs whose visibility follows `GET /reports/groups` (07.7-i) rather than
@@ -558,7 +548,13 @@ function ReportsPageBody({ reviewsQa }: { reviewsQa: boolean }): ReactElement {
     ),
   );
 
-  const [tab, setTab] = useState<TabId>('overview');
+  // A report view named in the address (the command palette's `?tab=` and
+  // `?view=`, IN-11) opens on arrival; `consumeViewParams` below then clears it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawTab = searchParams.get('tab');
+  const requestedTab = parseReportTab(rawTab);
+  const requestedViewId = searchParams.get('view');
+  const [tab, setTab] = useState<TabId>(requestedTab ?? 'overview');
   // Every category open on arrival. The sidebar is a *navigation* aid, not a
   // way to hide reports: a first visit that showed four collapsed headings
   // would have replaced one flat strip with an emptier screen. Collapsing is
@@ -625,6 +621,21 @@ function ReportsPageBody({ reviewsQa }: { reviewsQa: boolean }): ReactElement {
     setCustomTo(view.customTo);
     setBaseline(view.baseline);
   };
+
+  // The address names a view: open it once, then drop the parameter so picking
+  // the same entry from the palette again is a change the effect sees. The
+  // params are cleared whether or not they name something that still exists (a
+  // deleted saved view or an unknown tab must not leave a stale address behind).
+  useEffect(() => {
+    if (rawTab === null && requestedViewId === null) return;
+    if (requestedViewId !== null) {
+      const saved = savedViews.views.find((view) => view.id === requestedViewId);
+      if (saved) applySavedView(saved);
+    } else if (requestedTab !== null) {
+      selectTab(requestedTab);
+    }
+    setSearchParams({}, { replace: true });
+  }, [rawTab, requestedViewId]);
 
   return (
     <Page

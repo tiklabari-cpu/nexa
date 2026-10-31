@@ -280,6 +280,8 @@ paths:
     $ref: "./paths/customer-chat.yaml#/events"
   /customer/chat/typing:
     $ref: "./paths/customer-chat.yaml#/typing"
+  /customer/chat/seen:
+    $ref: "./paths/customer-chat.yaml#/seen"
   /customer/chat/request-human:
     $ref: "./paths/customer-chat.yaml#/requestHuman"
   /customer/chat/resolution:

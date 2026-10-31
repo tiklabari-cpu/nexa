@@ -2254,6 +2254,43 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/customer/chat/seen': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Record how far the visitor has read (read receipt)
+     * @description The widget calls this — about a second after a team message comes into
+     *     view — so the agent can see "Read · 14:32" under the last message the
+     *     visitor has actually had in front of them (IN-05). It sends nothing while
+     *     the panel is minimised, the tab is in the background or the list is
+     *     scrolled away from the newest message: a message that was never on
+     *     screen is not read, and showing nothing is better than showing a wrong
+     *     "read".
+     *
+     *     `seen_up_to` only ever moves forward: the stored marker becomes the later of
+     *     the two, so a late or out-of-order request (several tabs, a retried call)
+     *     cannot pull it back. A time in the future is held at the server's now.
+     *     Unlike the agent's `POST /chats/{chatId}/seen`, the visitor names no chat —
+     *     it is always their own conversation — and with no conversation the call
+     *     succeeds and does nothing, like `/customer/chat/typing`.
+     *
+     *     After a change the chat's agents get `customer_seen`
+     *     (`{chat_id, thread_id, seen_up_to}`). The visitor is not shown the
+     *     receipt of the other side. Rate-limited to about one call a second per visitor.
+     */
+    post: operations['markCustomerSeen'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/customer/chat/request-human': {
     parameters: {
       query?: never;
@@ -27238,6 +27275,35 @@ export interface operations {
     };
     responses: {
       /** @description Accepted — typing state fanned out to the agents on the chat */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  markCustomerSeen: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: date-time */
+          seen_up_to: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Recorded (or nothing to record) */
       204: {
         headers: {
           [name: string]: unknown;

@@ -1146,6 +1146,9 @@ export function InboxPage(): ReactElement {
                       focus={focus?.chatId === selectedId ? focus : undefined}
                       loading={transcript.isPending}
                       currentAgentId={agent?.account_id ?? null}
+                      customerSeenUpTo={
+                        chat.data.users.find((u) => u.user_type === 'customer')?.seen_up_to ?? null
+                      }
                       hasOlder={transcript.hasOlder}
                       isLoadingOlder={transcript.isLoadingOlder}
                       onLoadOlder={transcript.loadOlder}

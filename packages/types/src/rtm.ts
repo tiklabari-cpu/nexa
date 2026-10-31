@@ -154,6 +154,9 @@ export const RTM_PUSH_ACTIONS = [
   // tm 337, `ChatRatedPush`): to the chat's agents and teams. Ids only — what
   // a caller may see of the rating is the server's call (`ratings.view`).
   'chat_rated',
+  // The player has read up to a point (IN-05 · tm 362, `CustomerSeenPush`): to
+  // the chat's agents, for the "Read · 14:32" line under the last team message.
+  'customer_seen',
   'user_added_to_chat',
   'user_removed_from_chat',
   'queue_positions_updated',
@@ -240,6 +243,18 @@ export interface IncomingChatPush {
 export interface ChatRatedPush {
   chat_id: string;
   thread_id: string;
+}
+
+/**
+ * `customer_seen` (IN-05): the player's read marker on chat `chat_id` moved
+ * forward to `seen_up_to` (an ISO time). Sent only when the stored marker
+ * actually advanced — a repeat or an older time says nothing — and only to the
+ * chat's agents; the player is not told what the other side has read.
+ */
+export interface CustomerSeenPush {
+  chat_id: string;
+  thread_id: string | null;
+  seen_up_to: string;
 }
 
 export interface IncomingEventPush {

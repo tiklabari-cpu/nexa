@@ -28,6 +28,7 @@ import { SuggestModal } from './SuggestModal.js';
 import { Dropdown } from '../../components/ui/index.js';
 import { suggestionSubjectOf, type SuggestionSubject } from '../playbook/ai-suggestions.js';
 import { handoffCardIdOf } from './handoffCard.js';
+import { readReceiptEventId } from './readReceipt.js';
 import { AttachmentView } from './Attachment.js';
 import { RichCardView } from '../campaigns/RichCardView.js';
 import { renderRichText } from './richText.js';
@@ -86,6 +87,7 @@ export function Transcript({
   canSuggest = false,
   connections = [],
   focus,
+  customerSeenUpTo = null,
 }: {
   /** Which conversation this is — the one thing that means "start over". */
   chatId: string;
@@ -104,6 +106,12 @@ export function Transcript({
   connections?: readonly ConnectionLabel[];
   loading: boolean;
   currentAgentId: string | null;
+  /**
+   * How far the player has read (`seen_up_to` of the customer in `chat.users`,
+   * IN-05 · tm 362): "Read · time" is drawn once, under the last team message
+   * they had on screen by then. Absent where the surface has no such marker.
+   */
+  customerSeenUpTo?: string | null;
   /** More history exists above the oldest event loaded. */
   hasOlder?: boolean;
   isLoadingOlder?: boolean;
@@ -267,6 +275,11 @@ export function Transcript({
     if (hasOlder && !isLoadingOlder && node.scrollTop < OLDER_THRESHOLD_PX) onLoadOlder?.();
   };
 
+  const receiptEventId = useMemo(
+    () => readReceiptEventId(events, customerSeenUpTo),
+    [events, customerSeenUpTo],
+  );
+
   if (loading) {
     return (
       <div className="flex-1 space-y-3 overflow-y-auto p-5" aria-hidden="true">
@@ -322,6 +335,14 @@ export function Transcript({
                 {...(onEdit ? { onEdit } : {})}
                 {...(canSuggest ? { onSuggest: setSuggestion } : {})}
               />
+              {receiptEventId === event.id && customerSeenUpTo && (
+                <p
+                  data-testid="read-receipt"
+                  className="-mt-2 self-end text-2xs text-content-tertiary"
+                >
+                  {t('inbox.transcript.read', { time: formatTime(customerSeenUpTo) })}
+                </p>
+              )}
             </Fragment>
           );
         })}

@@ -1271,6 +1271,39 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     }
   }
 
+  // --- Read receipt (IN-05) --------------------------------------------------
+
+  // Tells the team how far the visitor has read, a second after a team message
+  // is actually in front of them: panel open, tab visible, list at the newest
+  // message. A message that arrived while the panel was shut, or the tab in the
+  // background, was not read — and a missing receipt is better than a wrong one.
+  let seenTimer: ReturnType<typeof setTimeout> | null = null;
+  let seenSent: string | null = null;
+
+  function scheduleSeen(): void {
+    seenTimer ??= setTimeout(sendSeen, 1_000);
+  }
+
+  function sendSeen(): void {
+    seenTimer = null;
+    const list = ui.transcript;
+    const newest = newestTeamMessageAt(state.events);
+    if (
+      !newest ||
+      !state.open ||
+      doc.visibilityState !== 'visible' ||
+      list.scrollHeight - list.scrollTop - list.clientHeight > 8 ||
+      (seenSent !== null && newest <= seenSent)
+    ) {
+      return;
+    }
+    seenSent = newest;
+    // A refused or dropped call is simply tried again on the next trigger.
+    void api.seen(newest).catch(() => {
+      if (seenSent === newest) seenSent = null;
+    });
+  }
+
   // --- Outbound typing (sneak-peek) ----------------------------------------
 
   // The visitor's own typing, sent to the agent (FR-MOD-11.8). Throttled on the
@@ -1395,6 +1428,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
         rememberLastReadAt(win, newest);
       }
       state.unread = 0;
+      scheduleSeen();
     } else {
       const unread = team.filter((event) => lastRead === null || event.created_at > lastRead);
       state.unread = unread.length;
@@ -2772,6 +2806,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
   // `doc`/`win` listeners around it are set once and read `ui` live.
   function wireUi(): void {
     ui.launcher.addEventListener('click', () => setOpen(!state.open));
+    ui.transcript.addEventListener('scroll', scheduleSeen);
     ui.help.addEventListener('click', () => void toggleHelp());
     ui.close.addEventListener('click', () => {
       setOpen(false);
@@ -2914,6 +2949,8 @@ export function mount(doc: Document = document, win: Window = window): () => voi
   }
   wireUi();
 
+  doc.addEventListener('visibilitychange', scheduleSeen, { signal });
+
   doc.addEventListener(
     'click',
     (event) => {
@@ -3040,6 +3077,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       sendPauseTimer,
       typingThrottle,
       typingStop,
+      seenTimer,
       supportCopiedTimer,
     ]) {
       if (timer != null) clearTimeout(timer);

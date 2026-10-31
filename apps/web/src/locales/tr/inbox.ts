@@ -268,6 +268,7 @@ export const inbox: Messages = {
   'inbox.transcript.editCancel': 'Vazgeç',
   'inbox.transcript.editSaving': 'Kaydediliyor…',
   'inbox.transcript.edited': 'düzenlendi',
+  'inbox.transcript.read': 'Okundu · {time}',
   'inbox.transcript.campaignCard': 'Kampanya kartı',
   'inbox.transcript.cardPressed': '“{label}” butonuna bastı',
   'inbox.transcript.editFailed': 'Düzeltme kaydedilemedi.',

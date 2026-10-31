@@ -1201,6 +1201,64 @@ describe('applyPush — chat_rated re-reads the open chat and the archive (AR-03
   });
 });
 
+describe('applyPush — customer_seen moves the player marker, forward only (IN-05 · tm 362)', () => {
+  function held(seenUpTo: string | null) {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(['chat', CHAT], {
+      id: CHAT,
+      users: [
+        { user_id: 'agent-1', user_type: 'agent', present: true, seen_up_to: null },
+        { user_id: 'cust-1', user_type: 'customer', present: true, seen_up_to: seenUpTo },
+      ],
+    });
+    return queryClient;
+  }
+
+  function markerOf(queryClient: QueryClient): string | null {
+    const chat = queryClient.getQueryData<{
+      users: Array<{ user_type: string; seen_up_to: string | null }>;
+    }>(['chat', CHAT]);
+    return chat?.users.find((u) => u.user_type === 'customer')?.seen_up_to ?? null;
+  }
+
+  it("patches the customer's row in place — no re-read — and leaves the agent's alone", () => {
+    const queryClient = held(null);
+    applyPush(queryClient, 'customer_seen', {
+      chat_id: CHAT,
+      thread_id: 'C1',
+      seen_up_to: '2026-10-31T10:00:20.000Z',
+    });
+    expect(markerOf(queryClient)).toBe('2026-10-31T10:00:20.000Z');
+    expect(queryClient.getQueryState(['chat', CHAT])?.isInvalidated).toBe(false);
+    const chat = queryClient.getQueryData<{ users: Array<{ seen_up_to: string | null }> }>([
+      'chat',
+      CHAT,
+    ]);
+    expect(chat?.users[0]?.seen_up_to).toBeNull();
+  });
+
+  it('never moves the marker back when a push arrives out of order', () => {
+    const queryClient = held('2026-10-31T10:00:40.000Z');
+    applyPush(queryClient, 'customer_seen', {
+      chat_id: CHAT,
+      thread_id: 'C1',
+      seen_up_to: '2026-10-31T10:00:20.000Z',
+    });
+    expect(markerOf(queryClient)).toBe('2026-10-31T10:00:40.000Z');
+  });
+
+  it('ignores a push without a usable time or for a chat that is not open', () => {
+    const queryClient = held(null);
+    applyPush(queryClient, 'customer_seen', { chat_id: CHAT, seen_up_to: 'soon' });
+    applyPush(queryClient, 'customer_seen', {
+      chat_id: 'other',
+      seen_up_to: '2026-10-31T10:00:20.000Z',
+    });
+    expect(markerOf(queryClient)).toBeNull();
+    expect(queryClient.getQueryData(['chat', 'other'])).toBeUndefined();
+  });
+});
+
 describe('applyPush — a quiet connection (WG-03 · tm 340.3)', () => {
   beforeEach(() => {
     api.get.mockReset();

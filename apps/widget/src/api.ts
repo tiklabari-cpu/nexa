@@ -613,6 +613,15 @@ export class WidgetApi {
   }
 
   /**
+   * The read receipt (IN-05): the visitor has had the team's messages up to
+   * `seenUpTo` (a message's `created_at`) in front of them. Fire-and-forget; the
+   * server keeps the later of this and what it holds, so a repeat is harmless.
+   */
+  async seen(seenUpTo: string): Promise<void> {
+    await this.#request('POST', '/customer/chat/seen', { seen_up_to: seenUpTo });
+  }
+
+  /**
    * A vote, or a vote with its comment (AR-03 · WG-11): one rating per
    * connection on the server, so sending the comment again with the same
    * value writes onto the rating rather than adding one. `threadId` is the

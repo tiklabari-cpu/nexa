@@ -2489,7 +2489,9 @@ describe('ReportsPage — sidebar categories and group expanders (FR-MOD-07.1)',
     // notice. Ten, i.e. PRD's eight report items plus Reviews (07.8) and
     // Staffing, which the product has and the PRD list predates.
     const tabs = within(nav).getAllByRole('tab');
-    expect(tabs).toHaveLength(10);
+    // Twelve since Availability and Agent activity (RP-03 · tm 370), which open
+    // for every reader of the page rather than following the catalogue.
+    expect(tabs).toHaveLength(12);
 
     // And each one sits inside a category's list, not loose in the nav.
     for (const tab of tabs) {
@@ -2505,7 +2507,7 @@ describe('ReportsPage — sidebar categories and group expanders (FR-MOD-07.1)',
     const expected: Array<[string, string[]]> = [
       ['Performance', ['Overview', 'Breakdown', 'Reviews']],
       ['AI & automation', ['AI Agent', 'Chat topics']],
-      ['Team & staffing', ['Staffing', 'Team performance']],
+      ['Team & staffing', ['Staffing', 'Availability', 'Agent activity', 'Team performance']],
       ['Business', ['Cases', 'Leads', 'Sales']],
     ];
     for (const [category, members] of expected) {

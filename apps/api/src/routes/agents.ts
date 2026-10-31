@@ -467,7 +467,12 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
         // log stays a history of changes rather than of button presses.
         if (transition.count > 0) {
           await tx.agentPresenceEvent.create({
-            data: { licenseId: tenant.licenseId, agentId: principal.accountId, status },
+            data: {
+              licenseId: tenant.licenseId,
+              agentId: principal.accountId,
+              status,
+              source: 'manual',
+            },
           });
         }
 

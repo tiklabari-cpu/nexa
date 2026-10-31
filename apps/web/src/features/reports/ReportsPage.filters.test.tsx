@@ -441,7 +441,16 @@ describe('ReportsPage — a Team Lead reads the teams they lead', () => {
     await waitFor(() => expect(requests('/reports/overview').length).toBeGreaterThan(0));
     await screen.findByRole('tab', { name: 'Breakdown' });
     const tabs = screen.getAllByRole('tab').map((tab) => tab.textContent);
-    expect(tabs).toEqual(['Overview', 'Breakdown', 'Reviews', 'Team performance']);
+    // Plus the two person reports (RP-03 · tm 370): the server bounds them to
+    // the lead's teams' members.
+    expect(tabs).toEqual([
+      'Overview',
+      'Breakdown',
+      'Reviews',
+      'Availability',
+      'Agent activity',
+      'Team performance',
+    ]);
   });
 
   it('shows the team picker locked to their own teams', async () => {

@@ -124,3 +124,4 @@
 #### K07.5 — 07.5 · Metrics breakdown — ajan/takım/kanal/saat
 
 - ✅ tm 368.1 · RP-01 rapor filtreleri API: ajan/ekip/etiket/konu tek `threadFilterSql` ile dört konuşma raporuna + export/paylaşım/zamanlı (filters JSONB), Ekip Lideri `reports_read--groups` kesişimi · `apps/api/src/services/reports/report-filter.ts` · `test/integration/report-filters.test.ts (10)`, `report-filter.test.ts (5)` · feat/report-filters-api · §D418
+- ✅ tm 368.2 · RP-01 rapor filtre çubuğu: ajan/ekip/etiket/konu çoklu seçim, adreste yalnız kimlik, kayıtlı görünüm + dışa aktarma + paylaşım aynı filtre, ekip/üye "Raporları gör" derin linki, Ekip Lideri kilitli ekip seçici · `apps/web/src/features/reports/ReportFilterBar.tsx`, `report-filters.ts` · `report-filters.test.ts (14)`, `ReportsPage.filters.test.tsx (20)`, `reports.spec.ts` · feat/report-filters-web · §D419

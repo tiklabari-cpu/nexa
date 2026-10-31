@@ -352,9 +352,10 @@ describe('the inactivity sweep (WG-03)', () => {
     expect(await statusOf(silent)).toBe('not_accepting_chats');
     const presence = await owner.agentPresenceEvent.findMany({
       where: { licenseId: fx.a.licenseId, agentId: silent },
-      select: { status: true },
+      select: { status: true, source: true },
     });
-    expect(presence).toEqual([{ status: 'not_accepting_chats' }]);
+    // RP-03 · tm 370: the sweep's pause is told apart from the agent's own choice.
+    expect(presence).toEqual([{ status: 'not_accepting_chats', source: 'unresponsive' }]);
 
     const [transferred] = await pushed('chat_transferred');
     expect(transferred?.payload).toMatchObject({

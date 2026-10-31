@@ -38,6 +38,8 @@ export type ReportTabId =
   | 'staffing'
   | 'missed'
   | 'engagement'
+  | 'availability'
+  | 'agent-activity'
   | 'topics'
   | 'cases'
   | 'leads'
@@ -94,6 +96,8 @@ export const REPORT_TABS: readonly ReportTabId[] = [
   'staffing',
   'missed',
   'engagement',
+  'availability',
+  'agent-activity',
   'topics',
   'cases',
   'leads',
@@ -263,6 +267,8 @@ export const REPORT_TAB_LABEL_KEYS: Record<ReportTabId, string> = {
   staffing: 'reports.tabs.staffing',
   missed: 'reports.tabs.missed',
   engagement: 'reports.tabs.engagement',
+  availability: 'reports.tabs.availability',
+  'agent-activity': 'reports.tabs.agentActivity',
   topics: 'reports.tabs.topics',
   cases: 'reports.tabs.cases',
   leads: 'reports.tabs.leads',

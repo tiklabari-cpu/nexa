@@ -4916,6 +4916,10 @@ model AgentPresenceEvent {
   /// `agent_presence_events_status_check`, the mirror of
   /// `agent_memberships_routing_status_check`.
   status    String
+  /// What wrote the row — one of `PRESENCE_SOURCES` (`@siyahtus/types`),
+  /// enforced by `agent_presence_events_source_check` (RP-03 · tm 370).
+  /// `disconnect` is the RTM's dropped-connection `offline`.
+  source    String   @default("manual")
   changedAt DateTime @default(now()) @map("changed_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)

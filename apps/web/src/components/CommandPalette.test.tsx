@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { defaultScopesForRole, type SearchResult } from '@siyahtus/types';
 import { CommandPalette } from './CommandPalette.js';
+import { ShortcutsHost } from './ShortcutsModal.js';
 import { useAuth } from '../lib/auth-store.js';
 import { useLeaveGuard } from '../lib/dirty-guard.js';
 
@@ -84,6 +85,7 @@ function renderPalette(
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={['/app/inbox']}>
+        <ShortcutsHost />
         <CommandPalette />
         <LocationProbe />
         <Routes>

@@ -52,6 +52,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/reports/ReviewComments.tsx',
   'src/components/FontPicker.tsx',
   'src/components/CommandPalette.tsx',
+  'src/components/ShortcutsModal.tsx',
   'src/components/DeploymentGate.tsx',
   'src/components/LoadError.tsx',
   'src/components/LoadingPage.tsx',

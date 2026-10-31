@@ -18,15 +18,11 @@
  * text does; inside a band, by shortcut, and a personal reply before a shared
  * one with the same shortcut (it is the one its author wrote for themselves).
  */
+import { foldForSearch } from '../../lib/text-fold.js';
 import type { CannedResponse } from './useCannedResponses.js';
 
-export function foldForSearch(value: string): string {
-  return value
-    .toLocaleLowerCase('tr-TR')
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .replace(/ı/g, 'i');
-}
+// Re-exported: the fold moved to `lib/text-fold.ts`, shared with the palette.
+export { foldForSearch };
 
 /** 0 shortcut prefix, 1 shortcut infix, 2 text; null for no match. */
 function band(item: CannedResponse, needle: string): number | null {

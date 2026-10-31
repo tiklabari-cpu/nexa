@@ -54,6 +54,8 @@ import {
 } from './useCannedResponses.js';
 import { CannedPicker, PICKER_KEYS } from './CannedPicker.js';
 import { cannedValuesOf } from './cannedValues.js';
+import { claimComposerFocus } from './composerFocus.js';
+import { COMPOSER_FIELD_ATTRIBUTE, useShortcut } from '../../lib/shortcuts.js';
 import { useCustomerContext } from './useCustomerContext.js';
 import { EMOJI_CATEGORIES, insertAtCaret } from './emoji.js';
 import { applyBulletPrefix, wrapSelection } from './richText.js';
@@ -188,6 +190,21 @@ export function Composer({
     queryFn: () => api.get<{ file_sharing_enabled: boolean }>('/uploads-policy'),
   });
   const fileSharingEnabled = fileSharing.data?.file_sharing_enabled ?? true;
+
+  // Keyboard (IN-08). Alt+↓ opened this chat and asked for the cursor here.
+  useEffect(() => {
+    claimComposerFocus(chatId, inputRef.current);
+  }, [chatId]);
+  const tagsRef = useRef<HTMLSpanElement>(null);
+  // Both open something the agent then confirms — neither sends or deletes.
+  useShortcut(
+    'composer.add-tag',
+    disabled ? null : () => tagsRef.current?.querySelector<HTMLElement>('summary')?.click(),
+  );
+  useShortcut(
+    'composer.attach-file',
+    disabled || !fileSharingEnabled || uploading ? null : () => fileRef.current?.click(),
+  );
 
   const isNote = mode === 'agents';
   const canSend =
@@ -853,6 +870,9 @@ export function Composer({
         <textarea
           ref={inputRef}
           id="composer-input"
+          data-composer-input=""
+          data-chat-id={chatId}
+          {...{ [COMPOSER_FIELD_ATTRIBUTE]: 'composer' }}
           value={text}
           onChange={(event) => {
             const value = event.target.value;
@@ -923,16 +943,19 @@ export function Composer({
           >
             <ListIcon />
           </button>
-          <Dropdown
-            label={t('inbox.composer.tags.trigger')}
-            trigger={<TagIcon />}
-            triggerClassName="flex items-center justify-center rounded-md p-1.5 text-content-secondary transition-colors hover:bg-surface-2 hover:text-content"
-            // Same reasoning as the emoji panel below: anchored above the
-            // trigger so it does not open off the bottom of the window.
-            panelClassName="bottom-10 left-0 w-64 p-2"
-          >
-            {() => <TagPicker chatId={chatId} tags={tags} />}
-          </Dropdown>
+          {/* `contents`: the wrapper only gives the tag shortcut a handle on the menu. */}
+          <span ref={tagsRef} className="contents">
+            <Dropdown
+              label={t('inbox.composer.tags.trigger')}
+              trigger={<TagIcon />}
+              triggerClassName="flex items-center justify-center rounded-md p-1.5 text-content-secondary transition-colors hover:bg-surface-2 hover:text-content"
+              // Same reasoning as the emoji panel below: anchored above the
+              // trigger so it does not open off the bottom of the window.
+              panelClassName="bottom-10 left-0 w-64 p-2"
+            >
+              {() => <TagPicker chatId={chatId} tags={tags} />}
+            </Dropdown>
+          </span>
           <Dropdown
             label={t('inbox.composer.emoji.trigger')}
             trigger={<EmojiIcon />}

@@ -35,6 +35,7 @@ describe('the sortable columns', () => {
       'subject',
       'customer',
       'priority',
+      'sla',
       'last_message',
     ]);
 

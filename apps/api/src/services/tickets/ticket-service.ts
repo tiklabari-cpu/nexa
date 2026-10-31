@@ -19,6 +19,7 @@ import {
   type CustomFieldValue,
   type SortOrder,
   type TicketBulkSkipReason,
+  type TicketSla,
   type TicketSortKey,
 } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
@@ -29,6 +30,7 @@ import { seesPlayerContact } from '../customers/player-contact.js';
 import { readCustomFieldValues } from '../custom-fields/custom-field-service.js';
 import { evaluate, evaluateSubject, readClock } from '../sla/sla-service.js';
 import { applyTicketRules, type PendingAck } from './apply-ticket-rules.js';
+import { breachedFirstResponses, refreshFirstResponseDue, ticketSlaOf } from './ticket-sla.js';
 
 export const TICKET_STATUSES = ['open', 'pending', 'solved', 'closed', 'spam'] as const;
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
@@ -83,6 +85,8 @@ export interface TicketSummary {
   related_ticket_id: string | null;
   last_message_at: string | null;
   created_at: string;
+  /** The first-response clock (HD-05 · tm 360). */
+  sla: TicketSla;
 }
 
 export interface TicketFollowerSummary {
@@ -199,9 +203,16 @@ export class TicketService {
       tx,
       page.map((row) => row.assigneeId),
     );
+    const breached = await breachedFirstResponses(
+      tx,
+      page.map((row) => row.id),
+    );
+    const now = new Date();
 
     return {
-      items: page.map((row) => maskTicketContact(serialise(row, names), contactVisible)),
+      items: page.map((row) =>
+        maskTicketContact(serialise(row, names, breached, now), contactVisible),
+      ),
       total,
       ...(hasMore && last ? { nextPageId: encodeCursor(sort, order, column, last) } : {}),
     };
@@ -293,6 +304,8 @@ export class TicketService {
         subject: created.subject,
         source: input.source_chat_id ? 'chat' : 'manual',
       });
+      // After the rules: they may have set the priority the target hangs on.
+      await refreshFirstResponseDue(tx, tenant, { id: created.id });
       const fresh = await tx.ticket.findUnique({
         where: { id: created.id },
         include: TICKET_INCLUDE,
@@ -364,6 +377,7 @@ export class TicketService {
       subject,
       source: 'email',
     });
+    await refreshFirstResponseDue(tx, tenant, { id: created.id });
     return { ...created, ack };
   }
 
@@ -412,6 +426,7 @@ export class TicketService {
       subject,
       source: 'widget',
     });
+    await refreshFirstResponseDue(tx, tenant, { id: created.id });
     // A hand-over from a chat has the player in the conversation already.
     return { ...created, ack: input.sourceChatId ? null : ack };
   }
@@ -468,14 +483,14 @@ export class TicketService {
 
     // The resolution clock stops when the ticket leaves the unresolved set.
     //
-    // A ticket's *first response* is an agent's reply (HD-01): the message
-    // service stamps `first_response_at` on the first `agent_reply` (tm 356.2).
-    // The clock that measures it against a target is HD-05's (tm 360) — until
-    // then nothing reports a first-response breach for a ticket, because the
-    // only target there is to measure against is the chat's. Where a ticket
-    // came from a chat, the first reply happened in that conversation and is
-    // measured there.
+    // A ticket's *first response* is an agent's reply (HD-01), measured by
+    // `ticket-sla.ts` (HD-05): a new priority moves its due moment, a status
+    // leaving open/pending stops it, coming back resumes it from the creation.
     await stopResolutionClock(tx, tenant, existing, patch.status);
+    if (patch.priority !== undefined || patch.status !== undefined) {
+      const due = await refreshFirstResponseDue(tx, tenant, { id: ticketId });
+      updated.firstResponseDueAt = due.get(ticketId) ?? null;
+    }
 
     return toDetail(tx, updated);
   }
@@ -615,9 +630,20 @@ export class TicketService {
               target: 'resolution',
               startedAt: row.createdAt,
               stoppedAt: now,
+              priority: patch.priority ?? row.priority,
             });
           }
         }
+      }
+
+      // The first-response due moments, in one read and one write for the batch.
+      if (patch.priority !== undefined || patch.status !== undefined) {
+        await refreshFirstResponseDue(
+          tx,
+          tenant,
+          { id: { in: eligible.map((row) => row.id) } },
+          { at: now },
+        );
       }
     }
 
@@ -643,7 +669,7 @@ export class TicketService {
    */
   async merge(
     tx: TenantClient,
-    _tenant: TenantContext,
+    tenant: TenantContext,
     principal: Principal,
     audit: AuditContext,
     ticketId: string,
@@ -679,6 +705,9 @@ export class TicketService {
       target: `ticket:${ticketId}`,
       metadata: { into: intoId },
     });
+    // A merged ticket's clock stops, and is not carried to the primary.
+    const due = await refreshFirstResponseDue(tx, tenant, { id: ticketId });
+    merged.firstResponseDueAt = due.get(ticketId) ?? null;
 
     return toDetail(tx, merged);
   }
@@ -686,7 +715,7 @@ export class TicketService {
   /** Undo a merge (FR-MOD-13.6). Clears the pointer — the exact inverse of merge. */
   async unmerge(
     tx: TenantClient,
-    _tenant: TenantContext,
+    tenant: TenantContext,
     principal: Principal,
     audit: AuditContext,
     ticketId: string,
@@ -709,6 +738,8 @@ export class TicketService {
       target: `ticket:${ticketId}`,
       metadata: { from: ticket.mergedIntoId },
     });
+    const due = await refreshFirstResponseDue(tx, tenant, { id: ticketId });
+    restored.firstResponseDueAt = due.get(ticketId) ?? null;
 
     return toDetail(tx, restored);
   }
@@ -822,9 +853,11 @@ async function toDetail(tx: TenantClient, row: TicketRow): Promise<TicketDetail>
   ]);
   const followerIds = followers.map((f) => f.accountId);
   const names = await accountNames(tx, [row.assigneeId, ...followerIds]);
+  const breached = await breachedFirstResponses(tx, [row.id]);
   return serialiseDetail(
     row,
     names,
+    breached,
     followerIds,
     children.map((c) => c.id),
     tags.map((t) => t.tag.name),
@@ -1074,7 +1107,7 @@ export async function writeTicketChangeAudit(
 export async function stopResolutionClock(
   tx: TenantClient,
   tenant: TenantContext,
-  before: { id: string; status: string; createdAt: Date },
+  before: { id: string; status: string; createdAt: Date; priority: number },
   next: TicketStatus | undefined,
 ): Promise<void> {
   if (
@@ -1091,6 +1124,7 @@ export async function stopResolutionClock(
     target: 'resolution',
     startedAt: before.createdAt,
     stoppedAt: new Date(),
+    priority: before.priority,
   });
 }
 
@@ -1131,7 +1165,12 @@ function canSeeChat(
   return chat.users.some((u) => u.userId === visibility.actorId && u.userType === 'agent');
 }
 
-function serialise(row: TicketRow, names: Map<string, string>): TicketSummary {
+function serialise(
+  row: TicketRow,
+  names: Map<string, string>,
+  breached: ReadonlySet<string>,
+  now: Date,
+): TicketSummary {
   return {
     id: row.id,
     subject: row.subject,
@@ -1150,19 +1189,21 @@ function serialise(row: TicketRow, names: Map<string, string>): TicketSummary {
     related_ticket_id: row.relatedTicketId,
     last_message_at: row.lastMessageAt?.toISOString() ?? null,
     created_at: row.createdAt.toISOString(),
+    sla: ticketSlaOf(row, breached, now),
   };
 }
 
 function serialiseDetail(
   row: TicketRow,
   names: Map<string, string>,
+  breached: ReadonlySet<string>,
   followerIds: string[],
   mergedTicketIds: string[],
   tags: string[],
   customFields: CustomFieldValue[],
 ): TicketDetail {
   return {
-    ...serialise(row, names),
+    ...serialise(row, names, breached, new Date()),
     source_chat: row.sourceChat
       ? {
           id: row.sourceChat.id,
@@ -1253,6 +1294,15 @@ const SORT_COLUMNS: Record<TicketSortKey, SortColumn> = {
     beyond: (op, value) => ({ subject: { [op]: value } }),
     equals: (value) => ({ subject: value }),
     empty: () => ({}),
+  },
+  sla: {
+    // A ticket whose clock is not running has no due moment and trails the list.
+    nullable: true,
+    orderBy: (order) => ({ firstResponseDueAt: { sort: order, nulls: 'last' } }),
+    valueOf: (row) => row.firstResponseDueAt?.toISOString() ?? null,
+    beyond: (op, value) => ({ firstResponseDueAt: { [op]: new Date(value) } }),
+    equals: (value) => ({ firstResponseDueAt: new Date(value) }),
+    empty: () => ({ firstResponseDueAt: null }),
   },
   priority: {
     nullable: false,
@@ -1359,6 +1409,12 @@ function decodeCursor(
     throw ApiError.validation('page_id was issued for a different sort; start the list again.');
   }
 
-  if (typeof v === 'string' && sort === 'last_message' && Number.isNaN(Date.parse(v))) return null;
+  if (
+    typeof v === 'string' &&
+    (sort === 'last_message' || sort === 'sla') &&
+    Number.isNaN(Date.parse(v))
+  ) {
+    return null;
+  }
   return { value: v, id: i };
 }

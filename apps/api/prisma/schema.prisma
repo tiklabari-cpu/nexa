@@ -1619,6 +1619,10 @@ model Ticket {
   /// the first-response SLA (HD-05) measures. Null until then, never moved once
   /// set.
   firstResponseAt       DateTime? @map("first_response_at") @db.Timestamptz(6)
+  /// From when a first reply is late (HD-05 · tm 360), while the first-response
+  /// clock runs; null otherwise. Stored so the list can sort by it — the
+  /// service and the SLA sweep keep it current (`services/tickets/ticket-sla.ts`).
+  firstResponseDueAt    DateTime? @map("first_response_due_at") @db.Timestamptz(6)
   /// The player's newest message and the agents' newest reply (HD-01), apart
   /// from `last_message_at`, which any activity moves: "who is waiting on whom"
   /// is the comparison of these two.
@@ -1657,6 +1661,8 @@ model Ticket {
   /// (FR-MOD-03.2.1) — nothing indexed `customer_id` before this, so that
   /// probe was a sequential scan of the license's tickets per candidate row.
   @@index([licenseId, customerId], map: "tickets_license_customer_idx")
+  /// Serves the list's "nearest to SLA" order (HD-05 · tm 360).
+  @@index([licenseId, firstResponseDueAt], map: "tickets_license_first_response_due_idx")
   /// Serves the per-address activity the forwarding-address list reports
   /// (FR-MOD-08.5.3) — without it that aggregate scans the licence's tickets.
   @@index([inboundAddressId], map: "tickets_inbound_address_idx")
@@ -4790,6 +4796,12 @@ model SlaPolicy {
   licenseId            BigInt   @id @map("license_id")
   firstResponseMinutes Int?     @map("first_response_minutes")
   resolutionMinutes    Int?     @map("resolution_minutes")
+  /// The ticket clocks (HD-05 · tm 360). A null first-response target is "not
+  /// measured"; a null resolution target falls back to `resolution_minutes`.
+  ticketFirstResponseMinutes Int?  @map("ticket_first_response_minutes")
+  ticketResolutionMinutes    Int?  @map("ticket_resolution_minutes")
+  /// A priority's own ticket targets — `SlaTicketTargetsByPriority`.
+  ticketTargetsByPriority    Json? @map("ticket_targets_by_priority")
   businessHoursOnly    Boolean  @default(false) @map("business_hours_only")
   createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)

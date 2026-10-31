@@ -482,6 +482,13 @@ export const reports: Messages = {
   'reports.cases.volume.description': 'Tickets in the selected window, by current status.',
   'reports.cases.kpi.open': 'Open',
   'reports.cases.kpi.total': 'Total',
+  'reports.cases.firstResponse.title': 'First response',
+  'reports.cases.firstResponse.description':
+    "From a ticket's creation to an agent's first reply, for tickets created in the window. Tickets opened from a chat are left out.",
+  'reports.cases.firstResponse.avg': 'Average first response',
+  'reports.cases.firstResponse.median': 'Median first response',
+  'reports.cases.firstResponse.answered': 'Answered',
+  'reports.cases.firstResponse.breached': 'First-response misses',
   'reports.cases.byDay.description': 'Tickets created per UTC day, split open and closed.',
   'reports.cases.byDay.emptyTitle': 'No cases in this window',
   'reports.cases.byDay.emptyDescription':

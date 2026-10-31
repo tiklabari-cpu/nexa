@@ -469,6 +469,13 @@ export const reports: Messages = {
   'reports.cases.volume.description': 'Seçilen aralıktaki talepler, geçerli duruma göre.',
   'reports.cases.kpi.open': 'Açık',
   'reports.cases.kpi.total': 'Toplam',
+  'reports.cases.firstResponse.title': 'İlk yanıt',
+  'reports.cases.firstResponse.description':
+    'Aralıkta açılan talepler için, talebin açılmasından bir temsilcinin ilk yanıtına kadar. Sohbetten açılan talepler dışarıda kalır.',
+  'reports.cases.firstResponse.avg': 'Ortalama ilk yanıt',
+  'reports.cases.firstResponse.median': 'Ortanca ilk yanıt',
+  'reports.cases.firstResponse.answered': 'Yanıtlanan',
+  'reports.cases.firstResponse.breached': 'İlk yanıt ihlalleri',
   'reports.cases.byDay.description':
     'UTC gününe göre oluşturulan talepler, açık ve kapanan olarak ayrılmış.',
   'reports.cases.byDay.emptyTitle': 'Bu aralıkta talep yok',

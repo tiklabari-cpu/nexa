@@ -582,8 +582,14 @@ describe('tickets — bulk actions (FR-13-EK.3)', () => {
       );
 
       expect(await ticketCalls(few)).toEqual(await ticketCalls(many));
-      // And it is the batched shape, not an accidentally equal pair of numbers.
-      expect(await ticketCalls(many)).toEqual(['ticket.findMany', 'ticket.updateMany']);
+      // And it is the batched shape, not an accidentally equal pair of numbers:
+      // the selection, the write, and one read for the batch's first-response
+      // due moments (HD-05 · tm 360).
+      expect(await ticketCalls(many)).toEqual([
+        'ticket.findMany',
+        'ticket.updateMany',
+        'ticket.findMany',
+      ]);
     });
   });
 });

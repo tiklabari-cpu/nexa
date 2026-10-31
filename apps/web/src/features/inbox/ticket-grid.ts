@@ -55,6 +55,8 @@ export const TICKET_COLUMNS: readonly TicketColumn[] = [
   { key: 'customer', label: 'Customer', defaultOrder: 'asc' },
   { key: 'status', label: 'Status', defaultOrder: null },
   { key: 'priority', label: 'Priority', defaultOrder: 'desc' },
+  // Opens ascending: the first click puts the ticket nearest its target on top.
+  { key: 'sla', label: 'First response', defaultOrder: 'asc' },
   { key: 'assignee', label: 'Assignee', defaultOrder: null },
   { key: 'last_message', label: 'Last message', align: 'right', defaultOrder: 'desc' },
 ];

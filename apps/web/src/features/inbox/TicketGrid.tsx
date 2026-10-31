@@ -4,7 +4,7 @@
  *
  * A grid rather than the narrow inbox list because tickets are compared across
  * columns (who owns it, how urgent, when it last moved) the way a chat list is
- * not. Four of the six headers sort — the server does the sorting, over the
+ * not. Five of the seven headers sort — the server does the sorting, over the
  * whole collection, and the two it cannot order by say so by not being buttons
  * (`ColumnHeader` below). The sort lives in the URL so a link reopens the same
  * order (see `ticket-grid.ts`). A row opens the ticket conversation — the whole
@@ -23,6 +23,7 @@ import { StatusDot } from '../../components/StatusDot.js';
 import { formatDate } from '../../lib/format.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { hasElevatedPriority, nearestPriority } from './ticket-priority.js';
+import { TicketSlaBadge } from './TicketSlaBadge.js';
 import {
   TICKET_COLUMNS,
   ariaSortFor,
@@ -71,6 +72,7 @@ const COLUMN_LABEL_KEY: Record<TicketColumnKey, string> = {
   customer: 'inbox.ticketGrid.column.customer',
   status: 'inbox.ticketGrid.column.status',
   priority: 'inbox.ticketGrid.column.priority',
+  sla: 'inbox.ticketGrid.column.sla',
   assignee: 'inbox.ticketGrid.column.assignee',
   last_message: 'inbox.ticketGrid.column.lastMessage',
 };
@@ -300,6 +302,9 @@ export function TicketGrid({
           </td>
           <td className="px-4 py-2.5">
             <PriorityCell value={ticket.priority} t={t} />
+          </td>
+          <td className="whitespace-nowrap px-4 py-2.5 text-xs">
+            <TicketSlaBadge sla={ticket.sla} />
           </td>
           <td className="px-4 py-2.5 text-content-secondary">
             {ticket.assignee_name ?? (

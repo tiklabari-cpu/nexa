@@ -289,6 +289,38 @@ export function elapsedMinutes(from: Date, to: Date, week: BusinessWeek | null):
 }
 
 /**
+ * The first instant a clock started at `from` reads as a miss of `target` —
+ * the inverse of {@link elapsedMinutes} + {@link isBreach} (HD-05 · tm 360).
+ *
+ * A stop at any instant before it measures at most `target` minutes, and a stop
+ * at or after it measures more, under the same flooring: so a ticket list can
+ * compare "now" against a stored moment and agree with the breach row the
+ * clock would write. Null for a calendar that is never open — no wait in it
+ * ever counts, so none is ever late.
+ */
+export function lateFrom(from: Date, target: number, week: BusinessWeek | null): Date | null {
+  const start = weekAlignedMinute(from);
+  if (!week) return minuteToDate(start + target + 1);
+  if (week.openMinutesPerWeek === 0) return null;
+
+  // The smallest minute index with `target + 1` open minutes behind it. The
+  // count is monotone, so a binary search over enough whole weeks finds it.
+  const needed = openBeforeMinute(week, start) + target + 1;
+  let low = start;
+  let high = start + (Math.ceil((target + 1) / week.openMinutesPerWeek) + 1) * MINUTES_PER_WEEK;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (openBeforeMinute(week, middle) >= needed) high = middle;
+    else low = middle + 1;
+  }
+  return minuteToDate(low);
+}
+
+function minuteToDate(minute: number): Date {
+  return new Date((minute - EPOCH_WEEK_OFFSET_MINUTES) * MS_PER_MINUTE);
+}
+
+/**
  * Whether a wait of `elapsed` minutes missed `target`, where a null target means
  * nothing was promised.
  *

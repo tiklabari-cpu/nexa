@@ -37,11 +37,12 @@
  * nothing downstream is *able* to tell them apart (NFR-S5).
  */
 import type { PrismaClient } from '@prisma/client';
-import type { ReportShareLink, ReportShareLinkCreated } from '@siyahtus/types';
+import type { ReportFilter, ReportShareLink, ReportShareLinkCreated } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import { generateToken, hashToken } from '../../lib/crypto.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { reportGroup } from '../../routes/reports-export.js';
+import { reportFilterJson, storedReportFilter } from './report-filter.js';
 
 /** How long a link lives when the caller names no lifetime. */
 export const SHARE_LINK_DEFAULT_DAYS = 7;
@@ -73,6 +74,8 @@ export interface ShareLinkInput {
   from: Date;
   to: Date;
   expiresInDays: number;
+  /** The report filter the link is frozen to (RP-01), already normalised. */
+  filters?: ReportFilter;
   /** The agent minting it, kept as a soft reference. A bot token leaves it unset. */
   createdByAgentId?: string;
 }
@@ -85,6 +88,8 @@ export interface ResolvedShareLink {
   from: Date;
   to: Date;
   expiresAt: Date;
+  /** The frozen report filter; `{}` when none. */
+  filters: ReportFilter;
 }
 
 interface ShareLinkRow {
@@ -96,6 +101,7 @@ interface ShareLinkRow {
   expiresAt: Date;
   revokedAt: Date | null;
   createdAt: Date;
+  filters: unknown;
 }
 
 /**
@@ -116,6 +122,7 @@ function toDto(row: ShareLinkRow, now: Date): ReportShareLink {
     group: row.groupId,
     from: row.rangeFrom.toISOString(),
     to: row.rangeTo.toISOString(),
+    filters: storedReportFilter(row.filters),
     token_last_four: row.tokenLastFour,
     created_at: row.createdAt.toISOString(),
     expires_at: row.expiresAt.toISOString(),
@@ -195,6 +202,8 @@ export class ReportShareService {
         rangeFrom: input.from,
         rangeTo: input.to,
         expiresAt,
+        // Frozen with the link (RP-01): normalised by the route, ids only.
+        filters: reportFilterJson(input.filters),
         ...(input.createdByAgentId ? { createdByAgentId: input.createdByAgentId } : {}),
       },
     });
@@ -247,6 +256,7 @@ export async function resolveShareLink(
       range_from: Date;
       range_to: Date;
       expires_at: Date;
+      filters: unknown;
     }>
   >`SELECT * FROM reports_resolve_share_link(${hashToken(token)})`;
 
@@ -259,5 +269,8 @@ export async function resolveShareLink(
     from: match.range_from,
     to: match.range_to,
     expiresAt: match.expires_at,
+    // Fails closed: a stored filter that cannot be read is an error, never
+    // a link that suddenly reads the whole report.
+    filters: storedReportFilter(match.filters),
   };
 }

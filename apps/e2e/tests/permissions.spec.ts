@@ -53,7 +53,8 @@ test.describe('permission matrix (RL-02)', () => {
       await lead.goto('/app/settings/my-permissions');
       await expect(lead.getByText('Your role: Team Lead')).toBeVisible();
       const leadReports = lead.locator('dd[data-capability="reports.view"]');
-      await expect(leadReports).toHaveText('None');
+      // `team` since tm 368 (K7): the conversation reports of the teams they lead.
+      await expect(leadReports).toHaveText('Team');
       // The matrix itself is Admin and up: no door, and the address goes back.
       const leadNav = lead.getByRole('navigation', { name: 'Settings navigation' });
       await expect(leadNav.getByRole('link', { name: 'My permissions' })).toBeVisible();
@@ -64,7 +65,7 @@ test.describe('permission matrix (RL-02)', () => {
       const reportsRow = agentPage.locator('tr[data-capability="reports.view"]');
       // The Owner column is locked and says why.
       await expect(reportsRow.locator('[data-locked="owner_column"]')).toBeVisible();
-      await expect(agentPage.getByRole('combobox', { name: CELL })).toHaveValue('none');
+      await expect(agentPage.getByRole('combobox', { name: CELL })).toHaveValue('team');
 
       const saved = waitForPut(agentPage);
       await agentPage.getByRole('combobox', { name: CELL }).selectOption('all');
@@ -93,25 +94,25 @@ test.describe('permission matrix (RL-02)', () => {
 
       // Back to the default, through the screen.
       const restored = waitForPut(agentPage);
-      await agentPage.getByRole('button', { name: `Reset ${CELL} to the default (None)` }).click();
+      await agentPage.getByRole('button', { name: `Reset ${CELL} to the default (Team)` }).click();
       await agentPage.getByRole('button', { name: 'Save' }).click();
       await confirmWithReason(agentPage, 'e2e: back to the default');
       const restoredResponse = await restored;
       expect(restoredResponse.status()).toBe(200);
       expect(restoredResponse.request().postDataJSON()).toMatchObject({
-        changes: [{ role: 'team_lead', capability: 'reports.view', value: 'none' }],
+        changes: [{ role: 'team_lead', capability: 'reports.view', value: 'team' }],
       });
       await expect(reportsRow.getByText('Changed')).toHaveCount(0);
 
       await lead.reload();
-      await expect(leadReports).toHaveText('None');
+      await expect(leadReports).toHaveText('Team');
     } finally {
       await leadContext.close();
       const auth = { authorization: `Bearer ${await ownerAccessToken(request)}` };
       const put = await request.put(`${API_BASE}/settings/permissions`, {
         headers: auth,
         data: {
-          changes: [{ role: 'team_lead', capability: 'reports.view', value: 'none' }],
+          changes: [{ role: 'team_lead', capability: 'reports.view', value: 'team' }],
           reason: 'e2e: restore the seeded matrix',
         },
       });

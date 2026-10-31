@@ -12,6 +12,15 @@ overview:
     operationId: getReportsOverview
     summary: Headline conversation metrics
     description: |
+      Takes the report filters (RP-01): `agent_id`, `group_id`, `tag` and
+      `topic`, each repeatable, any-of within a key and all-of across keys —
+      see `ReportFilter`. The response echoes the filter that was applied as
+      `filters`. A caller holding `reports_read--groups` rather than
+      `reports_read` (an Ekip Lideri) reads only the teams they lead: the
+      server intersects `group_id` with those teams — or applies them when no
+      `group_id` is sent — and an empty intersection is an empty report, never
+      the workspace's.
+
       Defaults to the last 30 days when no range is given.
 
       Two rates deliberately return `null` rather than zero:
@@ -26,6 +35,10 @@ overview:
       - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
       - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
       - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterAgent"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterGroup"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterTag"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterTopic"
     responses:
       "200":
         description: Metrics for the requested window
@@ -43,6 +56,15 @@ breakdown:
     operationId: getReportsBreakdown
     summary: Resolution split by day, agent, hour, team and channel
     description: |
+      Takes the report filters (RP-01): `agent_id`, `group_id`, `tag` and
+      `topic`, each repeatable, any-of within a key and all-of across keys —
+      see `ReportFilter`. The response echoes the filter that was applied as
+      `filters`. A caller holding `reports_read--groups` rather than
+      `reports_read` (an Ekip Lideri) reads only the teams they lead: the
+      server intersects `group_id` with those teams — or applies them when no
+      `group_id` is sent — and an empty intersection is an empty report, never
+      the workspace's.
+
       The Overview's manual / assisted / automated split (FR-MOD-07.3.2) resolved
       over up to four dimensions — each UTC day in the window, each assigned
       agent, each hour of day and each team and channel — for the Metrics
@@ -57,6 +79,10 @@ breakdown:
       - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
       - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
       - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterAgent"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterGroup"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterTag"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterTopic"
     responses:
       "200":
         description: Breakdown for the requested window
@@ -192,6 +218,15 @@ reviews:
     operationId: getReportsReviews
     summary: Reviews / Ratings — CSAT and daily rating volume
     description: |
+      Takes the report filters (RP-01): `agent_id`, `group_id`, `tag` and
+      `topic`, each repeatable, any-of within a key and all-of across keys —
+      see `ReportFilter`. The response echoes the filter that was applied as
+      `filters`. A caller holding `reports_read--groups` rather than
+      `reports_read` (an Ekip Lideri) reads only the teams they lead: the
+      server intersects `group_id` with those teams — or applies them when no
+      `group_id` is sent — and an empty intersection is an empty report, never
+      the workspace's.
+
       The Reviews report (FR-MOD-07.8): customer satisfaction read back from the
       ratings the widget writes (§8 only wrote them until now). It gives the CSAT
       donut its `good` / `bad` split, a per-UTC-day series for the daily bar, and
@@ -217,6 +252,10 @@ reviews:
       - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
       - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
       - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterAgent"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterGroup"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterTag"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterTopic"
     responses:
       "200":
         description: Reviews metrics for the requested window
@@ -390,6 +429,15 @@ teamPerformance:
     operationId: getReportsTeamPerformance
     summary: Team performance — per-agent KPIs
     description: |
+      Takes the report filters (RP-01): `agent_id`, `group_id`, `tag` and
+      `topic`, each repeatable, any-of within a key and all-of across keys —
+      see `ReportFilter`. The response echoes the filter that was applied as
+      `filters`. A caller holding `reports_read--groups` rather than
+      `reports_read` (an Ekip Lideri) reads only the teams they lead: the
+      server intersects `group_id` with those teams — or applies them when no
+      `group_id` is sent — and an empty intersection is an empty report, never
+      the workspace's.
+
       Team performance (FR-MOD-07.7, v2 payload): the Breakdown tab's by-agent
       chat split (FR-MOD-07.5), extended per agent with average first-response
       and duration, CSAT and AI→human transfer hand-offs. Defaults to the last
@@ -415,6 +463,10 @@ teamPerformance:
       - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
       - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
       - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterAgent"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterGroup"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterTag"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterTopic"
     responses:
       "200":
         description: Per-agent KPIs for the requested window
@@ -674,6 +726,13 @@ export:
       long-format table — `section,key,name,value`, where `section` is `funnel`
       (one row per funnel figure) or `goal` (one row per defined goal, `key`
       being its id);
+      The report filters (`agent_id`, `group_id`, `tag`, `topic`; RP-01)
+      apply to the conversation groups — `overview`, `breakdown`,
+      `team-performance`, `reviews` — through the same query helpers the JSON
+      reports use, so a filtered download equals the filtered screen; another
+      group given a filter is a 400. A `reports_read--groups` caller exports
+      only those groups, bounded to the teams they lead.
+
       the two window summaries (`overview`, `ai-agent`) serialise as
       `metric,value` pairs. `sales` also serialises as `metric,value` pairs, and
       until FR-MOD-13.5 lands every value but `configured` (`false`) is an empty
@@ -717,6 +776,10 @@ export:
       - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
       - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
       - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterAgent"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterGroup"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterTag"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterTopic"
       - name: campaign_id
         in: query
         description: Only for `group=campaigns`; the same filter as `GET /reports/campaigns`. Ignored by every other group.
@@ -920,6 +983,14 @@ shareLinks:
                 maximum: 90
                 default: 7
                 description: How long the link resolves for, from now.
+              filters:
+                $ref: "../openapi.yaml#/components/schemas/ReportFilter"
+                description: |
+                  The report filter the link is frozen to (RP-01). Only for the
+                  conversation groups (`overview`, `breakdown`,
+                  `team-performance`, `reviews`); another group given a
+                  non-empty filter is a 400. Whoever opens the link reads exactly
+                  this filter and cannot widen it.
     responses:
       "201":
         description: The link, with its token — the only time the token is returned
@@ -1082,6 +1153,11 @@ scheduledExports:
                 type: boolean
                 default: true
                 description: Create the definition switched off by passing `false`.
+              filters:
+                $ref: "../openapi.yaml#/components/schemas/ReportFilter"
+                description: |
+                  The report filter every run applies (RP-01). Only for the
+                  conversation groups; another group given a non-empty filter is a 400.
     responses:
       "201":
         description: Scheduled
@@ -1165,6 +1241,11 @@ scheduledExport:
               enabled:
                 type: boolean
                 description: "`false` pauses delivery without discarding the definition."
+              filters:
+                $ref: "../openapi.yaml#/components/schemas/ReportFilter"
+                description: |
+                  The report filter every run applies (RP-01). Only for the
+                  conversation groups; another group given a non-empty filter is a 400. Replaces the stored filter; `{}` clears it.
     responses:
       "200":
         description: The updated scheduled export

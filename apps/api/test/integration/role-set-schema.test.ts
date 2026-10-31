@@ -415,7 +415,13 @@ describe('the Team Lead role — vocabulary and schema (RL-01 · RL-04 · K6 · 
       });
       const me = await server.get('/auth/me', auth(session));
       expect(me.statusCode, me.body).toBe(200);
-      expect(me.json()).toMatchObject({ role: 'team_lead', scopes: TEAM_LEAD_SCOPES });
+      // The Team Lead set but its team-bounded report scope (tm 368): a session
+      // gains no scope it was not minted with, and the admin set carries
+      // `reports_read` instead — which the lead's ceiling takes off.
+      expect(me.json()).toMatchObject({
+        role: 'team_lead',
+        scopes: TEAM_LEAD_SCOPES.filter((scope) => scope !== 'reports_read--groups'),
+      });
     });
 
     it('cannot open billing, security or AI configuration — 403 (FR-MOD-04.RBAC)', async () => {

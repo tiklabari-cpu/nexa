@@ -10739,7 +10739,16 @@ export interface paths {
     };
     /**
      * Headline conversation metrics
-     * @description Defaults to the last 30 days when no range is given.
+     * @description Takes the report filters (RP-01): `agent_id`, `group_id`, `tag` and
+     *     `topic`, each repeatable, any-of within a key and all-of across keys —
+     *     see `ReportFilter`. The response echoes the filter that was applied as
+     *     `filters`. A caller holding `reports_read--groups` rather than
+     *     `reports_read` (an Ekip Lideri) reads only the teams they lead: the
+     *     server intersects `group_id` with those teams — or applies them when no
+     *     `group_id` is sent — and an empty intersection is an empty report, never
+     *     the workspace's.
+     *
+     *     Defaults to the last 30 days when no range is given.
      *
      *     Two rates deliberately return `null` rather than zero:
      *
@@ -10768,7 +10777,16 @@ export interface paths {
     };
     /**
      * Resolution split by day, agent, hour, team and channel
-     * @description The Overview's manual / assisted / automated split (FR-MOD-07.3.2) resolved
+     * @description Takes the report filters (RP-01): `agent_id`, `group_id`, `tag` and
+     *     `topic`, each repeatable, any-of within a key and all-of across keys —
+     *     see `ReportFilter`. The response echoes the filter that was applied as
+     *     `filters`. A caller holding `reports_read--groups` rather than
+     *     `reports_read` (an Ekip Lideri) reads only the teams they lead: the
+     *     server intersects `group_id` with those teams — or applies them when no
+     *     `group_id` is sent — and an empty intersection is an empty report, never
+     *     the workspace's.
+     *
+     *     The Overview's manual / assisted / automated split (FR-MOD-07.3.2) resolved
      *     over up to four dimensions — each UTC day in the window, each assigned
      *     agent, each hour of day and each team and channel — for the Metrics
      *     breakdown tab (FR-MOD-07.5). Defaults to the last 30 days.
@@ -10871,7 +10889,16 @@ export interface paths {
     };
     /**
      * Reviews / Ratings — CSAT and daily rating volume
-     * @description The Reviews report (FR-MOD-07.8): customer satisfaction read back from the
+     * @description Takes the report filters (RP-01): `agent_id`, `group_id`, `tag` and
+     *     `topic`, each repeatable, any-of within a key and all-of across keys —
+     *     see `ReportFilter`. The response echoes the filter that was applied as
+     *     `filters`. A caller holding `reports_read--groups` rather than
+     *     `reports_read` (an Ekip Lideri) reads only the teams they lead: the
+     *     server intersects `group_id` with those teams — or applies them when no
+     *     `group_id` is sent — and an empty intersection is an empty report, never
+     *     the workspace's.
+     *
+     *     The Reviews report (FR-MOD-07.8): customer satisfaction read back from the
      *     ratings the widget writes (§8 only wrote them until now). It gives the CSAT
      *     donut its `good` / `bad` split, a per-UTC-day series for the daily bar, and
      *     the same equal-length previous window the Overview uses, so the tab can show
@@ -11048,7 +11075,16 @@ export interface paths {
     };
     /**
      * Team performance — per-agent KPIs
-     * @description Team performance (FR-MOD-07.7, v2 payload): the Breakdown tab's by-agent
+     * @description Takes the report filters (RP-01): `agent_id`, `group_id`, `tag` and
+     *     `topic`, each repeatable, any-of within a key and all-of across keys —
+     *     see `ReportFilter`. The response echoes the filter that was applied as
+     *     `filters`. A caller holding `reports_read--groups` rather than
+     *     `reports_read` (an Ekip Lideri) reads only the teams they lead: the
+     *     server intersects `group_id` with those teams — or applies them when no
+     *     `group_id` is sent — and an empty intersection is an empty report, never
+     *     the workspace's.
+     *
+     *     Team performance (FR-MOD-07.7, v2 payload): the Breakdown tab's by-agent
      *     chat split (FR-MOD-07.5), extended per agent with average first-response
      *     and duration, CSAT and AI→human transfer hand-offs. Defaults to the last
      *     30 days.
@@ -11315,6 +11351,13 @@ export interface paths {
      *     long-format table — `section,key,name,value`, where `section` is `funnel`
      *     (one row per funnel figure) or `goal` (one row per defined goal, `key`
      *     being its id);
+     *     The report filters (`agent_id`, `group_id`, `tag`, `topic`; RP-01)
+     *     apply to the conversation groups — `overview`, `breakdown`,
+     *     `team-performance`, `reviews` — through the same query helpers the JSON
+     *     reports use, so a filtered download equals the filtered screen; another
+     *     group given a filter is a 400. A `reports_read--groups` caller exports
+     *     only those groups, bounded to the teams they lead.
+     *
      *     the two window summaries (`overview`, `ai-agent`) serialise as
      *     `metric,value` pairs. `sales` also serialises as `metric,value` pairs, and
      *     until FR-MOD-13.5 lands every value but `configured` (`false`) is an empty
@@ -22061,6 +22104,11 @@ export interface components {
       };
     };
     ReportsOverview: {
+      /**
+       * @description The filter that was applied (RP-01), after the team bound of a
+       *     `reports_read--groups` caller. Absent when nothing narrowed the report.
+       */
+      filters?: components['schemas']['ReportFilter'];
       range: {
         /** Format: date-time */
         from: string;
@@ -22084,8 +22132,12 @@ export interface components {
         avg_duration_seconds?: number | null;
         /** @description Null when nobody rated the baseline window. */
         satisfaction_score?: number | null;
-        /** @description Goals reached in the baseline window (FR-MOD-13.3). */
-        achieved_goals: number;
+        /**
+         * @description Goals reached in the baseline window (FR-MOD-13.3). Null under a
+         *     report filter: a goal is reached by a visitor, not by an
+         *     agent, team, tag or topic.
+         */
+        achieved_goals: number | null;
         /** @description SLA misses detected in the baseline window (FR-MOD-11.5). */
         sla_breaches: number;
         /**
@@ -22134,8 +22186,12 @@ export interface components {
          */
         split_low_confidence: boolean;
         queued_now: number;
-        /** @description Goals reached in the range (FR-MOD-13.3) — the funnel's converted stage. */
-        achieved_goals: number;
+        /**
+         * @description Goals reached in the range (FR-MOD-13.3) — the funnel's converted
+         *     stage. Null under a report filter (RP-01): a goal is reached by a
+         *     visitor, and no agent, team, tag or topic can be credited with it.
+         */
+        achieved_goals: number | null;
       };
       /**
        * @description Operational chat metrics for the Chats section cards (FR-MOD-07.3.3):
@@ -22208,6 +22264,11 @@ export interface components {
      *     dimensions keeps working unchanged.
      */
     ReportsBreakdown: {
+      /**
+       * @description The filter that was applied (RP-01), after the team bound of a
+       *     `reports_read--groups` caller. Absent when nothing narrowed the report.
+       */
+      filters?: components['schemas']['ReportFilter'];
       range: {
         /** Format: date-time */
         from: string;
@@ -22548,6 +22609,11 @@ export interface components {
      *     sentences.
      */
     ReportsReviews: {
+      /**
+       * @description The filter that was applied (RP-01), after the team bound of a
+       *     `reports_read--groups` caller. Absent when nothing narrowed the report.
+       */
+      filters?: components['schemas']['ReportFilter'];
       range: {
         /** Format: date-time */
         from: string;
@@ -22866,6 +22932,11 @@ export interface components {
      *     transfer landed inside the window on an older thread of theirs.
      */
     ReportsTeamPerformance: {
+      /**
+       * @description The filter that was applied (RP-01), after the team bound of a
+       *     `reports_read--groups` caller. Absent when nothing narrowed the report.
+       */
+      filters?: components['schemas']['ReportFilter'];
       range: {
         /** Format: date-time */
         from: string;
@@ -23095,6 +23166,22 @@ export interface components {
       }[];
     };
     /**
+     * @description Which conversations a report counts (RP-01). Every key is optional and a
+     *     list; a missing key narrows nothing. Any-of within a key, all-of across
+     *     keys. Identifiers only — no e-mail address or name (GV-05).
+     *
+     *     - `agent_id` — the connection's last assignee.
+     *     - `group_id` — the conversation's access teams (`chat_access`).
+     *     - `tag` — any of these tags on the connection.
+     *     - `topic` — the AI-recorded topic (AI-05 procedure key); not a tag.
+     */
+    ReportFilter: {
+      agent_id?: string[];
+      group_id?: string[];
+      tag?: string[];
+      topic?: string[];
+    };
+    /**
      * @description A time-limited, scope-limited link that lets someone without a SiyahTuş
      *     account read **one** report group over **one** fixed window
      *     (FR-MOD-07.3.1 "Share export/link").
@@ -23112,6 +23199,8 @@ export interface components {
     ReportShareLink: {
       /** Format: uuid */
       id: string;
+      /** @description The report filter the link is frozen to (RP-01); `{}` when none. */
+      filters: components['schemas']['ReportFilter'];
       /** @description A report group id — the same vocabulary `GET /reports/export?group=` uses. */
       group: string;
       /**
@@ -23168,6 +23257,8 @@ export interface components {
     SharedReport: {
       /** @description The report group this link was minted for. */
       group: string;
+      /** @description The report filter the link is frozen to (RP-01); `{}` when none. */
+      filters: components['schemas']['ReportFilter'];
       /** @description The group's human-readable name. */
       label: string;
       /** Format: date-time */
@@ -23325,6 +23416,8 @@ export interface components {
     ScheduledExport: {
       /** Format: uuid */
       id: string;
+      /** @description The report filter every run applies (RP-01); `{}` when none. */
+      filters: components['schemas']['ReportFilter'];
       /** @description A report group id — the same vocabulary `GET /reports/export?group=` uses. */
       group: string;
       frequency: components['schemas']['ScheduledExportFrequency'];
@@ -24114,6 +24207,24 @@ export interface components {
     AiMetricsVersion: string;
     /** @description Only the connections in this language. */
     AiMetricsLanguage: string;
+    /**
+     * @description Only the connections whose last assignee is one of these agents (RP-01).
+     *     Account ids, never e-mail addresses (GV-05). Repeat the parameter for more than one.
+     */
+    ReportFilterAgent: string[];
+    /**
+     * @description Only the conversations shared with one of these teams (`chat_access`,
+     *     RP-01). For a `reports_read--groups` caller, intersected with the teams
+     *     they lead; an empty intersection is an empty report.
+     */
+    ReportFilterGroup: string[];
+    /** @description Only the connections carrying any of these tags (tag ids, RP-01). */
+    ReportFilterTag: string[];
+    /**
+     * @description Only the connections the AI recorded one of these topics for (AI-05, the
+     *     procedure key). Not the same thing as a tag (RP-01 decision 2).
+     */
+    ReportFilterTopic: string[];
     /**
      * @description Start of the reporting window. Defaults to 30 days before `to`.
      *
@@ -40044,6 +40155,24 @@ export interface operations {
          *     `baseline=industry` fails loudly rather than appearing supported.
          */
         baseline?: components['parameters']['BenchmarkBaseline'];
+        /**
+         * @description Only the connections whose last assignee is one of these agents (RP-01).
+         *     Account ids, never e-mail addresses (GV-05). Repeat the parameter for more than one.
+         */
+        agent_id?: components['parameters']['ReportFilterAgent'];
+        /**
+         * @description Only the conversations shared with one of these teams (`chat_access`,
+         *     RP-01). For a `reports_read--groups` caller, intersected with the teams
+         *     they lead; an empty intersection is an empty report.
+         */
+        group_id?: components['parameters']['ReportFilterGroup'];
+        /** @description Only the connections carrying any of these tags (tag ids, RP-01). */
+        tag?: components['parameters']['ReportFilterTag'];
+        /**
+         * @description Only the connections the AI recorded one of these topics for (AI-05, the
+         *     procedure key). Not the same thing as a tag (RP-01 decision 2).
+         */
+        topic?: components['parameters']['ReportFilterTopic'];
       };
       header?: never;
       path?: never;
@@ -40112,6 +40241,24 @@ export interface operations {
          *     `baseline=industry` fails loudly rather than appearing supported.
          */
         baseline?: components['parameters']['BenchmarkBaseline'];
+        /**
+         * @description Only the connections whose last assignee is one of these agents (RP-01).
+         *     Account ids, never e-mail addresses (GV-05). Repeat the parameter for more than one.
+         */
+        agent_id?: components['parameters']['ReportFilterAgent'];
+        /**
+         * @description Only the conversations shared with one of these teams (`chat_access`,
+         *     RP-01). For a `reports_read--groups` caller, intersected with the teams
+         *     they lead; an empty intersection is an empty report.
+         */
+        group_id?: components['parameters']['ReportFilterGroup'];
+        /** @description Only the connections carrying any of these tags (tag ids, RP-01). */
+        tag?: components['parameters']['ReportFilterTag'];
+        /**
+         * @description Only the connections the AI recorded one of these topics for (AI-05, the
+         *     procedure key). Not the same thing as a tag (RP-01 decision 2).
+         */
+        topic?: components['parameters']['ReportFilterTopic'];
       };
       header?: never;
       path?: never;
@@ -40372,6 +40519,24 @@ export interface operations {
          *     `baseline=industry` fails loudly rather than appearing supported.
          */
         baseline?: components['parameters']['BenchmarkBaseline'];
+        /**
+         * @description Only the connections whose last assignee is one of these agents (RP-01).
+         *     Account ids, never e-mail addresses (GV-05). Repeat the parameter for more than one.
+         */
+        agent_id?: components['parameters']['ReportFilterAgent'];
+        /**
+         * @description Only the conversations shared with one of these teams (`chat_access`,
+         *     RP-01). For a `reports_read--groups` caller, intersected with the teams
+         *     they lead; an empty intersection is an empty report.
+         */
+        group_id?: components['parameters']['ReportFilterGroup'];
+        /** @description Only the connections carrying any of these tags (tag ids, RP-01). */
+        tag?: components['parameters']['ReportFilterTag'];
+        /**
+         * @description Only the connections the AI recorded one of these topics for (AI-05, the
+         *     procedure key). Not the same thing as a tag (RP-01 decision 2).
+         */
+        topic?: components['parameters']['ReportFilterTopic'];
       };
       header?: never;
       path?: never;
@@ -40691,6 +40856,24 @@ export interface operations {
          *     `baseline=industry` fails loudly rather than appearing supported.
          */
         baseline?: components['parameters']['BenchmarkBaseline'];
+        /**
+         * @description Only the connections whose last assignee is one of these agents (RP-01).
+         *     Account ids, never e-mail addresses (GV-05). Repeat the parameter for more than one.
+         */
+        agent_id?: components['parameters']['ReportFilterAgent'];
+        /**
+         * @description Only the conversations shared with one of these teams (`chat_access`,
+         *     RP-01). For a `reports_read--groups` caller, intersected with the teams
+         *     they lead; an empty intersection is an empty report.
+         */
+        group_id?: components['parameters']['ReportFilterGroup'];
+        /** @description Only the connections carrying any of these tags (tag ids, RP-01). */
+        tag?: components['parameters']['ReportFilterTag'];
+        /**
+         * @description Only the connections the AI recorded one of these topics for (AI-05, the
+         *     procedure key). Not the same thing as a tag (RP-01 decision 2).
+         */
+        topic?: components['parameters']['ReportFilterTopic'];
       };
       header?: never;
       path?: never;
@@ -41043,6 +41226,24 @@ export interface operations {
          *     `baseline=industry` fails loudly rather than appearing supported.
          */
         baseline?: components['parameters']['BenchmarkBaseline'];
+        /**
+         * @description Only the connections whose last assignee is one of these agents (RP-01).
+         *     Account ids, never e-mail addresses (GV-05). Repeat the parameter for more than one.
+         */
+        agent_id?: components['parameters']['ReportFilterAgent'];
+        /**
+         * @description Only the conversations shared with one of these teams (`chat_access`,
+         *     RP-01). For a `reports_read--groups` caller, intersected with the teams
+         *     they lead; an empty intersection is an empty report.
+         */
+        group_id?: components['parameters']['ReportFilterGroup'];
+        /** @description Only the connections carrying any of these tags (tag ids, RP-01). */
+        tag?: components['parameters']['ReportFilterTag'];
+        /**
+         * @description Only the connections the AI recorded one of these topics for (AI-05, the
+         *     procedure key). Not the same thing as a tag (RP-01 decision 2).
+         */
+        topic?: components['parameters']['ReportFilterTopic'];
         /** @description Only for `group=campaigns`; the same filter as `GET /reports/campaigns`. Ignored by every other group. */
         campaign_id?: string[];
       };
@@ -41156,6 +41357,14 @@ export interface operations {
            * @default 7
            */
           expires_in_days?: number;
+          /**
+           * @description The report filter the link is frozen to (RP-01). Only for the
+           *     conversation groups (`overview`, `breakdown`,
+           *     `team-performance`, `reviews`); another group given a
+           *     non-empty filter is a 400. Whoever opens the link reads exactly
+           *     this filter and cannot widen it.
+           */
+          filters?: components['schemas']['ReportFilter'];
         };
       };
     };
@@ -41277,6 +41486,11 @@ export interface operations {
            * @default true
            */
           enabled?: boolean;
+          /**
+           * @description The report filter every run applies (RP-01). Only for the
+           *     conversation groups; another group given a non-empty filter is a 400.
+           */
+          filters?: components['schemas']['ReportFilter'];
         };
       };
     };
@@ -41369,6 +41583,11 @@ export interface operations {
           recipients?: string[];
           /** @description `false` pauses delivery without discarding the definition. */
           enabled?: boolean;
+          /**
+           * @description The report filter every run applies (RP-01). Only for the
+           *     conversation groups; another group given a non-empty filter is a 400. Replaces the stored filter; `{}` clears it.
+           */
+          filters?: components['schemas']['ReportFilter'];
         };
       };
     };

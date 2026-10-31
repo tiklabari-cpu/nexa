@@ -124,9 +124,9 @@ export const MEMBER_BASE_SCOPES = [
  * (tm 325.5, PLAN §D337):
  *   - Ekip Üyesi sees only their own teams' chats — `chats.view` `team`, the
  *     level the role already had;
- *   - Ekip Lideri sees only their own teams in reports — `reports.view` stays
- *     `none` until the `team` level exists (#368): `all` would show every
- *     team's figures, more than K7 allows;
+ *   - Ekip Lideri sees only their own teams in reports — `reports.view`
+ *     `team` (tm 368; `none` until that level existed, since `all` would show
+ *     every team's figures, more than K7 allows);
  *   - Yönetici sees billing and does not change it — `billing.manage` became
  *     Founder-only (`OWNER_SCOPES`);
  *   - only the Kurucu changes the matrix — `settings.permissions`, already
@@ -390,19 +390,20 @@ export const CAPABILITIES = [
   },
   // Raporlar
   {
-    // A level row with no `team` level yet: a team-bounded report needs the
-    // server-side team filter (#368), and `reports_read` alone opens the whole
-    // workspace. `reports_read` also reads billing (`BILLING_READ_SCOPES`) and
-    // every member's performance — opening this row opens those too. K7 wants
-    // an Ekip Lideri to see their own teams' figures: `none` until #368 adds
-    // the `team` level, which then becomes the Ekip Lideri default.
+    // `team` (RP-01 · tm 368) = the conversation reports of the teams the person
+    // leads (`group_agents.is_lead`): the server intersects every team filter
+    // with those teams and an empty intersection is an empty report — it never
+    // falls back to the workspace. `all` = `reports_read`, the workspace, which
+    // also reads billing (`BILLING_READ_SCOPES`) and every member's
+    // performance; `team` reads neither billing nor the non-conversation
+    // groups. K7: an Ekip Lideri sees their own teams' figures — `team`.
     key: 'reports.view',
     group: 'reports',
     labelKey: 'permissions.capability.reports.view',
-    values: ['none', 'all'],
-    scopes: { all: ['reports_read'] },
+    values: ['none', 'team', 'all'],
+    scopes: { team: ['reports_read--groups'], all: ['reports_read'] },
     floorRole: 'agent',
-    defaults: { owner: 'all', admin: 'all', team_lead: 'none', agent: 'none' },
+    defaults: { owner: 'all', admin: 'all', team_lead: 'team', agent: 'none' },
   },
   {
     // Scheduled report mail: workspace data leaves on a timer.

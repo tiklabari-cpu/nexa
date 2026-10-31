@@ -134,6 +134,13 @@ export const SCOPES = [
   'audit_log--export:ro',
   // Reports / Billing — do not follow the `--` pattern
   'reports_read',
+  // Team-bounded reports (RP-01 · tm 368): the conversation reports of the teams
+  // the holder leads, never the workspace's. The server intersects any team
+  // filter the caller sends with those teams; it does not read billing
+  // (`BILLING_READ_SCOPES` is `reports_read`'s) or the non-conversation report
+  // groups. A SiyahTuş addition. Not implied by `reports_read` through
+  // `expandScope` (no `:perm` suffix) — every route that takes it lists both.
+  'reports_read--groups',
   // Scheduled report exports (PRD §5.3-Reports). A SiyahTuş addition: the source
   // platform's reports surface is read-only, so `reports_read` was the whole of
   // it. Defining a schedule is a *mutation* — it decides which report leaves the

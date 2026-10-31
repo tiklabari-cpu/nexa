@@ -459,7 +459,7 @@ describe('scopesForRole with the workspace’s choices', () => {
   it('ignores a stored row the PUT would refuse', () => {
     const agentDefault = sorted(scopesForRole('agent', []));
     for (const row of [
-      set('agent', 'reports.view', 'team'), // a level the row does not have
+      set('agent', 'reports.view', 'own'), // a level the row does not have
       set('agent', 'reports.view', 'on'),
       set('agent', 'customers.edit', 'true'),
       set('agent', 'tickets.view', 'own'),
@@ -520,7 +520,7 @@ describe('capabilityChangeProblem — the PUT’s validation', () => {
     expect(capabilityChangeProblem(set('agent', 'reports.export', 'on'))).toBe(
       'unknown_capability',
     );
-    expect(capabilityChangeProblem(set('agent', 'reports.view', 'team'))).toBe('invalid_value');
+    expect(capabilityChangeProblem(set('agent', 'reports.view', 'own'))).toBe('invalid_value');
     expect(capabilityChangeProblem(set('agent', 'customers.edit', 'true'))).toBe('invalid_value');
   });
 
@@ -555,7 +555,7 @@ describe('capabilityAtLeast', () => {
   it('refuses what it cannot read', () => {
     expect(capabilityAtLeast('reports.export', 'on')).toBe(false);
     expect(capabilityAtLeast('reports.view', undefined)).toBe(false);
-    expect(capabilityAtLeast('reports.view', 'all', 'team')).toBe(false);
-    expect(capabilityAtLeast('reports.view', 'team')).toBe(false);
+    expect(capabilityAtLeast('reports.view', 'all', 'own')).toBe(false);
+    expect(capabilityAtLeast('reports.view', 'own')).toBe(false);
   });
 });

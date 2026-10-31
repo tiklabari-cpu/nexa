@@ -69,7 +69,7 @@ describe('a workspace that never touched the matrix', () => {
       set('agent', 'settings.permissions', 'on'),
       set('owner', 'reports.view', 'none'),
       set('agent', 'no.such.row', 'on'),
-      set('agent', 'reports.view', 'team'),
+      set('agent', 'reports.view', 'own'),
     ];
     for (const role of ROLES) {
       for (const grant of GRANTS) {

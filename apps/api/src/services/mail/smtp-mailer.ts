@@ -176,6 +176,7 @@ export class SmtpMailer implements Mailer {
       inReplyTo: message.inReplyTo,
       references: message.references,
       replyTo: message.replyTo,
+      autoSubmitted: message.autoSubmitted,
     });
     const scrub = this.#scrubber(message.to);
 

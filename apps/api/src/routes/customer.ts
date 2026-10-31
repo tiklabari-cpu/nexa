@@ -58,6 +58,13 @@ import { CustomerService } from '../services/customers/customer-service.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 import { TicketService } from '../services/tickets/ticket-service.js';
 import {
+  TicketAutoAck,
+  deliverAutoAck,
+  messageIdDomainOf,
+} from '../services/tickets/ticket-auto-ack.js';
+import { TicketMessageService } from '../services/tickets/ticket-message-service.js';
+import { TicketReplyAddresses } from '../services/tickets/ticket-reply-address.js';
+import {
   deliverPendingCampaign,
   stampCampaignClicked,
 } from '../services/campaigns/campaign-delivery.js';
@@ -418,6 +425,14 @@ export default async function customerRoutes(
   // Only ever entered through `createFromWidget` from here: the visitor has no
   // principal, so none of the scope-guarded methods on it are reachable.
   const tickets = new TicketService();
+  // The acknowledgement a ticket rule asks for on a message left in the widget
+  // (tm 359 · HD-04); it shares the ticket reply's mail settings (K23).
+  const autoAck = new TicketAutoAck(new TicketMessageService(), {
+    outbound: env.TICKET_MAIL_OUTBOUND,
+    messageIdDomain: messageIdDomainOf(env),
+    replyAddresses: new TicketReplyAddresses(env.CUSTOMER_TOKEN_SECRET, env.INBOUND_EMAIL_DOMAIN),
+    pilotMode: env.PILOT_MODE,
+  });
   // Every moment a visitor can convert on this route — a page view, an e-mail
   // that makes them a lead, a reported sale — goes through the one recorder
   // (FR-MOD-13.3). The chat core holds its own for the close path.
@@ -1808,8 +1823,15 @@ export default async function customerRoutes(
         await customFields.setFormValues(tx, tenant, 'ticket', ticket.id, ticketAnswers);
       }
 
-      return { ticketId: ticket.id, becameLead: before?.isLead === false };
+      // The rule's acknowledgement, written in this transaction and mailed
+      // after it (HD-04). The visitor's address was set above.
+      const ack = ticket.ack
+        ? await autoAck.prepare(tx, tenant, { ticketId: ticket.id, ack: ticket.ack })
+        : null;
+
+      return { ticketId: ticket.id, becameLead: before?.isLead === false, ack };
     });
+    if (result.ack) deliverAutoAck(app.backgroundMail, request.log, tenant, result.ack);
 
     // After the transaction commits: `evaluate` reads `is_lead` back, so it has
     // to see the write that set it.

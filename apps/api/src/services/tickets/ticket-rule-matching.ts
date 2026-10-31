@@ -20,6 +20,13 @@ import type { TicketRuleActions, TicketRuleConditions, TicketRuleSource } from '
 export interface TicketRuleContext {
   subject: string;
   source: TicketRuleSource | 'manual' | 'widget';
+  /**
+   * Whether the team is out of hours at the moment the ticket opens (tm 359 ·
+   * HD-04). The engine reads the work schedules once and only when a rule asks;
+   * the matcher just compares. Absent, no `outside_business_hours` condition
+   * can match.
+   */
+  outsideBusinessHours?: boolean;
 }
 
 /**
@@ -30,6 +37,8 @@ export interface TicketRuleContext {
 export function hasCondition(conditions: TicketRuleConditions): boolean {
   if (conditions.subject_contains && conditions.subject_contains.trim()) return true;
   if (conditions.source) return true;
+  // `false` is a condition too: "while the team is in".
+  if (typeof conditions.outside_business_hours === 'boolean') return true;
   return false;
 }
 
@@ -43,6 +52,7 @@ export function hasAction(actions: TicketRuleActions): boolean {
   if (actions.assign_group_id != null) return true;
   if (actions.priority != null) return true;
   if (actions.add_tag && actions.add_tag.trim()) return true;
+  if (actions.send_template_id) return true;
   return false;
 }
 
@@ -66,6 +76,9 @@ export function matchesTicketRule(
   }
   if (conditions.source) {
     checks.push(conditions.source === ctx.source);
+  }
+  if (typeof conditions.outside_business_hours === 'boolean') {
+    checks.push(ctx.outsideBusinessHours === conditions.outside_business_hours);
   }
 
   if (checks.length === 0) return false;

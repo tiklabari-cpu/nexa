@@ -46,6 +46,8 @@ import {
   type TicketMessagePush,
   type TicketMessageService,
 } from '../tickets/ticket-message-service.js';
+import type { PendingAck } from '../tickets/apply-ticket-rules.js';
+import type { AutoAckMail, TicketAutoAck } from '../tickets/ticket-auto-ack.js';
 import type { TicketReplyAddresses } from '../tickets/ticket-reply-address.js';
 import type { TicketService } from '../tickets/ticket-service.js';
 import { rejectedAttachmentsNote, type RejectedAttachment } from './inbound-email-attachments.js';
@@ -78,6 +80,11 @@ export interface InboundEmail {
   replyLabels?: string[];
   /** An auto-reply, out-of-office or bulk mail (`isAutomatedMail`, tm 358). */
   automated?: boolean;
+  /**
+   * The provider reports the sender's SPF or DMARC as failed
+   * (`senderFailedChecks`, tm 359): the ticket opens, nothing is mailed back.
+   */
+  authFailed?: boolean;
   /** The files already stored, outside the transaction (`screenInboundAttachments`). */
   attachments?: TicketMessageAttachment[];
   /** The files that were not kept, for the ticket's system line. */
@@ -117,12 +124,20 @@ export interface InboundOutcome {
    * route deletes them: nothing points at them.
    */
   filesKept: boolean;
+  /**
+   * The automatic acknowledgement to mail once the transaction has committed
+   * (tm 359 · HD-04) — only for a ticket this mail opened, and null when no rule
+   * asked for one or it must not go (an automatic reply, a failed sender).
+   */
+  ack?: AutoAckMail | null;
 }
 
 /** What `ingestInboundEmail` writes with. */
 export interface InboundServices {
   tickets: TicketService;
   messages: TicketMessageService;
+  /** Settles a rule's acknowledgement for a ticket this mail opens. Absent, none is sent. */
+  autoAck?: TicketAutoAck;
   /** Verifies reply-address labels. Absent, no label matches (the console's test message). */
   replyAddresses?: TicketReplyAddresses;
   /**
@@ -577,6 +592,7 @@ export async function ingestInboundEmail(
         result: { status: 'created', ticket_id: created.id, related_ticket_id: ticket.id },
         push: written.push,
         filesKept: true,
+        ack: await acknowledge(tx, tenant, services, email, created, at),
       };
     }
 
@@ -655,19 +671,37 @@ export async function ingestInboundEmail(
     ticketId: ticket.id,
     ...message,
   });
-  await noteRejected(
-    tx,
-    tenant,
-    services,
-    email,
-    written.message.ticket_id,
-    new Date(written.message.created_at),
-  );
+  const at = new Date(written.message.created_at);
+  await noteRejected(tx, tenant, services, email, written.message.ticket_id, at);
   return {
     result: { status: 'created', ticket_id: ticket.id },
     push: written.push,
     filesKept: true,
+    ack: await acknowledge(tx, tenant, services, email, ticket, at),
   };
+}
+
+/**
+ * The acknowledgement a rule asked for on a ticket this mail just opened
+ * (tm 359 · HD-04), or null. Never to a machine (`automated`: an auto-reply that
+ * opened a ticket because it matched none) and never to a sender whose domain
+ * failed its checks — the ticket exists either way; only the mail is withheld.
+ */
+async function acknowledge(
+  tx: TenantClient,
+  tenant: TenantContext,
+  services: InboundServices,
+  email: InboundEmail,
+  ticket: { id: string; ack: PendingAck | null },
+  after: Date,
+): Promise<AutoAckMail | null> {
+  if (!ticket.ack || !services.autoAck || email.automated || email.authFailed) return null;
+  return services.autoAck.prepare(tx, tenant, {
+    ticketId: ticket.id,
+    ack: ticket.ack,
+    thread: { messageId: email.messageId ?? null, references: email.references ?? [] },
+    after,
+  });
 }
 
 /** The line naming the files that were not kept, under the message they came with. */

@@ -54,6 +54,11 @@ export interface TicketEmailFacts {
   agentName: string | null;
   /** The workspace's own name (`organizations.name`), the "branded" in the requirement. */
   companyName: string | null;
+  /**
+   * When the player can expect a person (`ticket.expected_response`, tm 359 ·
+   * HD-04). Omitted or null on a notice that promises nothing, and renders empty.
+   */
+  expectedResponse?: string | null;
 }
 
 /** A message ready to hand to the mailer, plus the trail's share of it. */
@@ -105,6 +110,7 @@ export function ticketTemplateContext(facts: TicketEmailFacts): TemplateContext 
     'ticket.subject': facts.subject,
     'ticket.status': facts.status,
     'ticket.priority': nearestTicketPriorityBand(facts.priority).label,
+    'ticket.expected_response': facts.expectedResponse ?? '',
     'customer.name': facts.customerName ?? '',
     'customer.email': facts.customerEmail ?? '',
     'agent.name': facts.agentName ?? '',

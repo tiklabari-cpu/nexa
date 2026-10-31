@@ -125,6 +125,89 @@ describe('TicketRules validation', () => {
   });
 });
 
+describe('TicketRules acknowledgement (FR-MOD-13.6)', () => {
+  const TEMPLATE = {
+    id: 'tpl-1',
+    name: 'Request received',
+    subject: 'We got your request {{ticket.id}}',
+    body: 'Hi {{customer.name}}, we will answer {{ticket.expected_response}}soon.',
+    enabled: true,
+  };
+
+  /** Rules and templates by path; anything else is empty. */
+  function serve(templates: unknown[] = [TEMPLATE]): void {
+    api.get.mockImplementation(async (path: string) =>
+      path === '/settings/ticket-email-templates' ? { items: templates } : { items: [] },
+    );
+  }
+
+  it('needs no subject text once the rule is scoped by business hours', async () => {
+    serve();
+    renderComponent(<TicketRules canEdit />);
+    const submit = await screen.findByRole('button', { name: 'Add rule' });
+    await userEvent.type(screen.getByPlaceholderText('Refunds'), 'After hours');
+    await userEvent.selectOptions(screen.getByLabelText('Then'), 'send_template');
+    await userEvent.selectOptions(await screen.findByLabelText('Template'), 'tpl-1');
+    expect(submit).toBeDisabled(); // no condition yet: the subject is still required
+
+    await userEvent.selectOptions(screen.getByLabelText('During'), 'out');
+    expect(submit).toBeEnabled();
+  });
+
+  it('previews the chosen template with sample data and posts its id (FR-MOD-13.6)', async () => {
+    serve();
+    api.post.mockResolvedValue({});
+    renderComponent(<TicketRules canEdit />);
+    await screen.findByRole('button', { name: 'Add rule' });
+    await userEvent.type(screen.getByPlaceholderText('Refunds'), 'Ack');
+    await userEvent.selectOptions(screen.getByLabelText('During'), 'out');
+    await userEvent.selectOptions(screen.getByLabelText('Then'), 'send_template');
+    await userEvent.selectOptions(await screen.findByLabelText('Template'), 'tpl-1');
+
+    const preview = await screen.findByLabelText('Preview with sample data');
+    expect(within(preview).getByText('We got your request TCK00000001')).toBeInTheDocument();
+    expect(within(preview).getByText('Hi Alex Example, we will answer soon.')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add rule' }));
+    expect(api.post).toHaveBeenCalledWith('/settings/ticket-rules', {
+      name: 'Ack',
+      conditions: { outside_business_hours: true },
+      actions: { send_template_id: 'tpl-1' },
+    });
+  });
+
+  it('says so when there is no template to send yet', async () => {
+    serve([]);
+    renderComponent(<TicketRules canEdit />);
+    await screen.findByRole('button', { name: 'Add rule' });
+    await userEvent.selectOptions(screen.getByLabelText('Then'), 'send_template');
+    expect(await screen.findByText('Create a ticket e-mail template first.')).toBeInTheDocument();
+  });
+
+  it('describes a rule that sends a template by its name', async () => {
+    api.get.mockImplementation(async (path: string) =>
+      path === '/settings/ticket-email-templates'
+        ? { items: [TEMPLATE] }
+        : {
+            items: [
+              {
+                id: 'r1',
+                name: 'After-hours ack',
+                conditions: { outside_business_hours: true },
+                actions: { send_template_id: 'tpl-1' },
+                enabled: true,
+                position: 0,
+              },
+            ],
+          },
+    );
+    renderComponent(<TicketRules canEdit />);
+    expect(
+      await screen.findByText('outside business hours → e-mail “Request received” to the player'),
+    ).toBeInTheDocument();
+  });
+});
+
 describe('TicketEmailTemplates validation (FR-MOD-08.7.5)', () => {
   // fireEvent sets the raw value: user-event treats `{{` as an escape for a
   // literal `{`, which would fight the very braces these fields are about.

@@ -50,6 +50,11 @@ export interface Message {
    */
   replyTo?: string;
   /**
+   * `Auto-Submitted: auto-replied` (RFC 3834, tm 359 · HD-04): the message is a
+   * machine's answer, so another auto-responder must not answer it in turn.
+   */
+  autoSubmitted?: 'auto-replied';
+  /**
    * The name shown beside the system address in `From:` — the workspace a
    * ticket reply is written for (tm 356.3). The address itself is always the
    * deployment's own (`SMTP_FROM`): a workspace's name is display text, never

@@ -43,11 +43,23 @@ describe('ticketTemplateContext', () => {
       'ticket.subject': 'Withdrawal is stuck',
       'ticket.status': 'solved',
       'ticket.priority': 'High',
+      'ticket.expected_response': '',
       'customer.name': 'Ada Lovelace',
       'customer.email': 'ada@example.com',
       'agent.name': 'Grace',
       'company.name': 'Acme Support',
     });
+  });
+
+  it('fills ticket.expected_response from the facts, and leaves it empty when nothing is promised (tm 359 · FR-MOD-13.6)', () => {
+    expect(
+      ticketTemplateContext({ ...FACTS, expectedResponse: 'within 4 hours' })[
+        'ticket.expected_response'
+      ],
+    ).toBe('within 4 hours');
+    expect(
+      ticketTemplateContext({ ...FACTS, expectedResponse: null })['ticket.expected_response'],
+    ).toBe('');
   });
 
   it('renders the priority as its named band, never as the stored integer', () => {

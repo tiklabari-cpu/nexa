@@ -305,7 +305,7 @@ describe('composeMessage for a ticket reply (tm 356.3)', () => {
   });
 });
 
-describe('composeMessage with a reply address (tm 358 · HD-03)', () => {
+describe('composeMessage with a reply address (tm 358 · FR-MOD-13.6)', () => {
   const REPLY_TO =
     '0b6f9a4e-2c1d-4e8f-9a7b-3c5d7e9f1a2b+t-tj1h8cfkrv-8x2k4m6p@inbound.siyahtus.localhost';
 
@@ -324,5 +324,16 @@ describe('composeMessage with a reply address (tm 358 · HD-03)', () => {
 
   it('writes none when there is none', () => {
     expect(composeMessage(BASE)).not.toContain('Reply-To');
+  });
+});
+
+describe('composeMessage for an automatic acknowledgement (tm 359 · FR-MOD-13.6)', () => {
+  it('says it is an automatic reply, so another auto-responder stays quiet', () => {
+    const message = composeMessage({ ...BASE, autoSubmitted: 'auto-replied' });
+    expect(headerValue(message, 'Auto-Submitted')).toBe('auto-replied');
+  });
+
+  it('writes no Auto-Submitted on an ordinary message', () => {
+    expect(composeMessage(BASE)).not.toContain('Auto-Submitted');
   });
 });

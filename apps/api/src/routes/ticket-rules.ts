@@ -22,6 +22,7 @@ const conditionsSchema = z
   .object({
     subject_contains: z.string().trim().max(2048).optional(),
     source: z.enum(['chat', 'email']).optional(),
+    outside_business_hours: z.boolean().optional(),
   })
   .strict();
 
@@ -31,6 +32,7 @@ const actionsSchema = z
     assign_group_id: z.number().int().nonnegative().optional(),
     priority: z.number().int().min(0).max(1000).optional(),
     add_tag: z.string().trim().min(1).max(64).optional(),
+    send_template_id: z.string().uuid().optional(),
   })
   .strict();
 

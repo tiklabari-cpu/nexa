@@ -70,6 +70,8 @@ export interface ComposeInput {
   references?: readonly string[] | undefined;
   /** `Reply-To` (tm 358) — a bare address; one that is not is left out. */
   replyTo?: string | undefined;
+  /** `Auto-Submitted` (RFC 3834, tm 359) — set on an automatic acknowledgement. */
+  autoSubmitted?: 'auto-replied' | undefined;
 }
 
 export function composeMessage(input: ComposeInput): string {
@@ -84,6 +86,7 @@ export function composeMessage(input: ComposeInput): string {
     foldSubject(input.subject),
     `Date: ${rfc5322Date(input.date)}`,
     `Message-ID: <${input.messageId}>`,
+    ...(input.autoSubmitted === 'auto-replied' ? ['Auto-Submitted: auto-replied'] : []),
   ];
   // The thread (RFC 5322 §3.6.4). Each id is checked here rather than trusted:
   // the ids a reply threads on are partly ones a player's mail server chose,

@@ -21,6 +21,12 @@ import { ApiError } from '../lib/api-error.js';
 import { maskForWrite } from '../lib/sensitive-mask.js';
 import { TicketMessageService } from '../services/tickets/ticket-message-service.js';
 import { TicketReplyAddresses, isReplyLabel } from '../services/tickets/ticket-reply-address.js';
+import {
+  TicketAutoAck,
+  deliverAutoAck,
+  messageIdDomainOf,
+  senderFailedChecks,
+} from '../services/tickets/ticket-auto-ack.js';
 import { RateLimiter } from '../plugins/rate-limit.js';
 import { createObjectStore } from '../services/storage/object-store.js';
 import { createVirusScanner } from '../services/storage/virus-scanner.js';
@@ -142,6 +148,16 @@ const inboundBody = z.object({
       x_auto_response_suppress: z.string().max(200).nullish(),
     })
     .default({}),
+  // What the provider checked about the sender (tm 359 · HD-04): an SPF or
+  // DMARC failure keeps the workspace's acknowledgement from being mailed to
+  // the (likely forged) address. Absent is unknown, not a failure.
+  authentication: z
+    .object({
+      spf: z.string().max(40).nullish(),
+      dkim: z.string().max(40).nullish(),
+      dmarc: z.string().max(40).nullish(),
+    })
+    .default({}),
   attachments: z
     .array(
       z.object({
@@ -233,6 +249,14 @@ export default async function channelRoutes(
     env.CUSTOMER_TOKEN_SECRET,
     env.INBOUND_EMAIL_DOMAIN,
   );
+  // The automatic acknowledgement a ticket rule asks for (tm 359 · HD-04): the
+  // mail settings are the ticket reply's, so one switch (K23) governs both.
+  const autoAck = new TicketAutoAck(ticketMessages, {
+    outbound: env.TICKET_MAIL_OUTBOUND,
+    messageIdDomain: messageIdDomainOf(env),
+    replyAddresses,
+    pilotMode: env.PILOT_MODE,
+  });
   const limiter = new RateLimiter(app.redis);
   /**
    * The sender's hourly budget for opening and reopening tickets, per licence.
@@ -597,6 +621,7 @@ export default async function channelRoutes(
           {
             tickets,
             messages: ticketMessages,
+            autoAck,
             replyAddresses,
             openBudget: openBudget(tenant.licenseId),
           },
@@ -614,6 +639,7 @@ export default async function channelRoutes(
               .filter((reference): reference is string => reference !== null),
             replyLabels,
             automated: isAutomatedMail(body.headers),
+            authFailed: senderFailedChecks(body.authentication),
             attachments: files.stored,
             rejected: files.rejected,
           },
@@ -640,6 +666,9 @@ export default async function channelRoutes(
           outcome.push.payload,
         );
       }
+      // After the commit too, and not awaited: the ticket is durable, and the
+      // provider's retry must not wait on the carrier (tm 359 · HD-04).
+      if (outcome.ack) deliverAutoAck(app.backgroundMail, request.log, tenant, outcome.ack);
       return reply.send(outcome.result);
     },
   );

@@ -254,6 +254,12 @@ export function nextOpenAt(week: BusinessWeek, at: Date): Date | null {
   return null;
 }
 
+/** Whether the calendar is open during the minute `at` falls in (tm 359 · HD-04). */
+export function isOpenAt(week: BusinessWeek, at: Date): boolean {
+  const minute = weekAlignedMinute(at);
+  return openBeforeMinute(week, minute + 1) > openBeforeMinute(week, minute);
+}
+
 /** Open minutes strictly before an absolute (Monday-aligned) minute index. */
 function openBeforeMinute(week: BusinessWeek, minute: number): number {
   const wholeWeeks = Math.floor(minute / MINUTES_PER_WEEK);

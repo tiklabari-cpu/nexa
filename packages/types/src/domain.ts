@@ -778,6 +778,13 @@ export interface TicketRuleConditions {
   subject_contains?: string;
   /** Restrict the rule to tickets opened from a chat, or forwarded by email. */
   source?: TicketRuleSource;
+  /**
+   * `true` fires only while the team is out of hours when the ticket opens,
+   * `false` only while it is in (tm 359 · HD-04) — so an in-hours and an
+   * out-of-hours acknowledgement are two rules. A workspace with no saved
+   * work schedule has no hours to be outside of: it counts as in.
+   */
+  outside_business_hours?: boolean;
 }
 
 /**
@@ -795,6 +802,12 @@ export interface TicketRuleActions {
   priority?: number;
   /** Apply this tag (by name, created in the tag library if new). */
   add_tag?: string;
+  /**
+   * Mail the ticket's player this ticket e-mail template as an automatic
+   * acknowledgement (tm 359 · HD-04). One per ticket — the first matching
+   * rule's — and only for a ticket that arrived by e-mail or the offline form.
+   */
+  send_template_id?: string;
 }
 
 export interface TicketRule {

@@ -148,8 +148,8 @@ export class TicketRuleService {
 }
 
 /**
- * Reject an action that assigns to an agent or team that does not exist on this
- * tenant — the same guard `TicketService` makes on a direct assignment, so a
+ * Reject an action that assigns to an agent or team, or mails a template, that
+ * does not exist on this tenant — the same guard `TicketService` makes on a direct assignment, so a
  * rule cannot be saved that would drop tickets into a queue no one reads. RLS
  * narrows both lookups to the caller's licence, so another workspace's agent or
  * group fails here exactly as an unknown id does.
@@ -174,6 +174,19 @@ async function assertActionsResolvable(
       select: { id: true },
     });
     if (!group) throw ApiError.validation('assign_group_id: team does not exist on this licence.');
+  }
+  // A template that is switched off is still saveable (the author may be about
+  // to turn it on); one that does not exist on this workspace is not.
+  if (actions.send_template_id) {
+    const template = await tx.ticketEmailTemplate.findFirst({
+      where: { id: actions.send_template_id, licenseId: tenant.licenseId },
+      select: { id: true },
+    });
+    if (!template) {
+      throw ApiError.validation(
+        'send_template_id: e-mail template does not exist on this licence.',
+      );
+    }
   }
 }
 

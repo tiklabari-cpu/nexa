@@ -68,6 +68,14 @@ describe('ticket email template variables', () => {
       expect(findTemplateProblems('body', 'Set { "a": 1 } in config.')).toEqual([]);
     });
 
+    it('takes an underscore inside a variable name (tm 359)', () => {
+      expect(findTemplateProblems('body', 'x {{ticket.expected_response}} y')).toEqual([]);
+      // An unknown name with an underscore is unknown, not malformed.
+      expect(findTemplateProblems('body', '{{ticket.expected_respons}}')[0]?.reason).toBe(
+        'unknown_variable',
+      );
+    });
+
     it('lists every catalogued variable as valid', () => {
       for (const variable of TEMPLATE_VARIABLES) {
         expect(findTemplateProblems('body', `x {{ ${variable} }} y`)).toEqual([]);

@@ -41,6 +41,7 @@ import {
   type RenderedTicketEmail,
 } from '../services/tickets/ticket-email.js';
 import { logUnsentMail } from '../services/mail/delivery.js';
+import { messageIdDomainOf } from '../services/tickets/ticket-auto-ack.js';
 import { selfAccountId } from '../services/auth/principal.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
@@ -753,16 +754,4 @@ export default async function ticketRoutes(
       );
     },
   );
-}
-
-/**
- * The right-hand side of a ticket reply's `Message-ID`: the system address's
- * domain, as the SMTP carrier would choose for a message it numbers itself.
- * Without `SMTP_FROM` (the spool in development and the test suites) a
- * reserved name (RFC 2606) that can belong to nobody.
- */
-function messageIdDomainOf(env: Env): string {
-  const from = env.SMTP_FROM ?? '';
-  const domain = from.slice(from.lastIndexOf('@') + 1);
-  return from.includes('@') && /^[A-Za-z0-9.-]+$/.test(domain) ? domain : 'siyahtus.invalid';
 }

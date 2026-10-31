@@ -24,6 +24,7 @@ export const TEMPLATE_VARIABLES = [
   'ticket.subject',
   'ticket.status',
   'ticket.priority',
+  'ticket.expected_response',
   'customer.name',
   'customer.email',
   'agent.name',
@@ -42,8 +43,11 @@ const KNOWN: ReadonlySet<string> = new Set(TEMPLATE_VARIABLES);
  */
 const PLACEHOLDER = /\{\{\s*([^{}]*?)\s*\}\}/g;
 
-/** A well-formed variable name inside a placeholder: lower dotted identifiers. */
-const VARIABLE_NAME = /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$/;
+/**
+ * A well-formed variable name inside a placeholder: lower dotted identifiers,
+ * with underscores allowed inside a part (`ticket.expected_response`, tm 359).
+ */
+const VARIABLE_NAME = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/;
 
 /** Which half of a template a problem sits in. */
 export type TemplateField = 'subject' | 'body';

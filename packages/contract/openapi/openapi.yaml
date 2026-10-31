@@ -11080,6 +11080,12 @@ components:
           type: string
           enum: [chat, email]
           description: Restrict to tickets opened from a chat, or forwarded by email.
+        outside_business_hours:
+          type: boolean
+          description: |
+            `true`: only while the team is out of hours when the ticket opens;
+            `false`: only while it is in (HD-04). A workspace with no saved
+            work schedule counts as in hours.
 
     TicketRuleActions:
       type: object
@@ -11105,6 +11111,15 @@ components:
           minLength: 1
           maxLength: 64
           description: Apply this tag (created in the tag library if new).
+        send_template_id:
+          type: string
+          format: uuid
+          description: |
+            Mail the ticket's player this ticket e-mail template as an automatic
+            "request received" reply (HD-04). The first matching rule's only, for
+            a ticket that came by e-mail or the offline form; never to an
+            automatic reply, a spam-flagged sender or one whose SPF/DMARC failed.
+            The template must exist on this workspace.
 
     TicketRule:
       type: object
@@ -12231,6 +12246,18 @@ components:
             precedence: { type: string, maxLength: 200 }
             x_autoreply: { type: string, maxLength: 200 }
             x_auto_response_suppress: { type: string, maxLength: 200 }
+        authentication:
+          type: object
+          description: |
+            The receiving provider's sender checks, when it reports them (HD-04).
+            An SPF or DMARC `fail` / `softfail` keeps the workspace's automatic
+            acknowledgement from being sent to the address (backscatter to a
+            forged `From`); the ticket itself is still opened. Absent means
+            unknown, and unknown is not a failure.
+          properties:
+            spf: { type: string, maxLength: 40 }
+            dkim: { type: string, maxLength: 40 }
+            dmarc: { type: string, maxLength: 40 }
         attachments:
           type: array
           maxItems: 50

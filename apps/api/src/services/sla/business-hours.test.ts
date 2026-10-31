@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { WORK_SCHEDULE_DAYS, type WorkScheduleSlot } from '@siyahtus/types';
-import { buildBusinessWeek, elapsedMinutes, isBreach } from './business-hours.js';
+import { buildBusinessWeek, elapsedMinutes, isBreach, isOpenAt } from './business-hours.js';
 
 /** A weekday plan: the named days open for the given window, the rest off. */
 function plan(
@@ -91,6 +91,34 @@ describe('buildBusinessWeek', () => {
     // Monday 05:00-06:00 UTC is still closed; 06:00-07:00 is open.
     expect(elapsedMinutes(at(0, 5), at(0, 6), week)).toBe(0);
     expect(elapsedMinutes(at(0, 6), at(0, 7), week)).toBe(60);
+  });
+});
+
+describe('isOpenAt (tm 359 · FR-MOD-13.6)', () => {
+  const week = buildBusinessWeek([plan(WEEKDAYS, '09:00', '18:00')], at(0, 12));
+
+  it('is open inside a weekday window, from its first minute to its last', () => {
+    expect(isOpenAt(week!, at(0, 9, 0))).toBe(true);
+    expect(isOpenAt(week!, at(2, 13, 30))).toBe(true);
+    expect(isOpenAt(week!, at(4, 17, 59))).toBe(true);
+  });
+
+  it('is closed at the closing minute, before opening, and all weekend', () => {
+    expect(isOpenAt(week!, at(0, 18, 0))).toBe(false);
+    expect(isOpenAt(week!, at(1, 8, 59))).toBe(false);
+    expect(isOpenAt(week!, at(5, 12))).toBe(false);
+    expect(isOpenAt(week!, at(6, 12))).toBe(false);
+  });
+
+  it('reads the plan in its own zone', () => {
+    // 09:00-18:00 in Istanbul (UTC+3) is 06:00-15:00 UTC.
+    const istanbul = buildBusinessWeek(
+      [plan(WEEKDAYS, '09:00', '18:00', 'Europe/Istanbul')],
+      at(0, 12),
+    );
+    expect(isOpenAt(istanbul!, at(0, 6, 0))).toBe(true);
+    expect(isOpenAt(istanbul!, at(0, 15, 0))).toBe(false);
+    expect(isOpenAt(istanbul!, at(0, 17, 0))).toBe(false);
   });
 });
 

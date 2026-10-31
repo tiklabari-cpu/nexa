@@ -6,6 +6,9 @@ describe('hasCondition', () => {
     expect(hasCondition({ subject_contains: 'refund' })).toBe(true);
     expect(hasCondition({ source: 'email' })).toBe(true);
     expect(hasCondition({})).toBe(false);
+    // "while the team is in" is a condition as much as "while it is out" (FR-MOD-13.6).
+    expect(hasCondition({ outside_business_hours: false })).toBe(true);
+    expect(hasCondition({ outside_business_hours: true })).toBe(true);
     // Whitespace is not a condition — it would match every ticket.
     expect(hasCondition({ subject_contains: '   ' })).toBe(false);
   });
@@ -16,6 +19,7 @@ describe('hasAction', () => {
     expect(hasAction({ assign_agent_id: 'a1' })).toBe(true);
     expect(hasAction({ assign_group_id: 3 })).toBe(true);
     expect(hasAction({ add_tag: 'vip' })).toBe(true);
+    expect(hasAction({ send_template_id: 'b6a2d6f0-0000-4000-8000-000000000001' })).toBe(true);
     expect(hasAction({})).toBe(false);
     expect(hasAction({ add_tag: '  ' })).toBe(false);
   });
@@ -49,6 +53,20 @@ describe('matchesTicketRule', () => {
     // Right subject, wrong origin — a rule reading "refunds, from chat" must not
     // fire for a refund that arrived by email.
     expect(matchesTicketRule({ subject_contains: 'refund', source: 'chat' }, ticket)).toBe(false);
+  });
+
+  it('matches out-of-hours and in-hours rules apart (tm 359 · FR-MOD-13.6)', () => {
+    const out = { ...ticket, outsideBusinessHours: true };
+    const inside = { ...ticket, outsideBusinessHours: false };
+    expect(matchesTicketRule({ outside_business_hours: true }, out)).toBe(true);
+    expect(matchesTicketRule({ outside_business_hours: true }, inside)).toBe(false);
+    expect(matchesTicketRule({ outside_business_hours: false }, inside)).toBe(true);
+    expect(matchesTicketRule({ outside_business_hours: false }, out)).toBe(false);
+    // The engine did not read the schedules (nothing asked): the condition cannot hold.
+    expect(matchesTicketRule({ outside_business_hours: false }, ticket)).toBe(false);
+    expect(matchesTicketRule({ outside_business_hours: true }, ticket)).toBe(false);
+    // And it ANDs with the others.
+    expect(matchesTicketRule({ source: 'chat', outside_business_hours: true }, out)).toBe(false);
   });
 
   it('matches nobody when no condition is set', () => {

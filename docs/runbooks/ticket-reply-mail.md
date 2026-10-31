@@ -76,3 +76,35 @@ ticket: the thread shows "sent".
 4. A reply stuck at `queued` means the API stopped between the commit and the
    send (a crash; a graceful stop waits for the send). It is not retried by
    itself; there is no resend for `queued`.
+
+## Automatic "request received" reply (HD-04, tm 359)
+
+A ticket rule (Settings › Ticket rules) with the action **Send e-mail template**
+(`send_template_id`) mails the player a ticket e-mail template when a ticket
+opens by e-mail or on the widget's offline form — never from a chat or by an
+agent. It rides the same switch (`TICKET_MAIL_OUTBOUND`): off, nothing is sent
+and the ticket's system line says "not sent: ticket e-mail is switched off".
+
+Code: `apps/api/src/services/tickets/ticket-auto-ack.ts` (`prepare` inside the
+creation transaction, `deliverAutoAck` after the commit),
+`apply-ticket-rules.ts` (picks the first matching rule's template).
+
+- The mail is kind `ticket_notice` (external daily cap), subject
+  `[#<ticket id>] …`, `Auto-Submitted: auto-replied`, `Reply-To` the ticket's
+  signed address (none in the pilot). It is an answer to the player's mail
+  (`In-Reply-To`), and its own `Message-ID` is stored on the ticket's system
+  line, so the player's answer to it lands on the same ticket.
+- One per ticket: the first matching rule (by `position`) that names a template.
+  In-hours and out-of-hours templates are two rules, with the condition
+  `outside_business_hours` `false` / `true`. A workspace with no saved work
+  schedule counts as in hours.
+- Not sent, and the ticket still opens: an automatic reply (`Auto-Submitted`,
+  `Precedence: bulk|junk|auto_reply`, `X-Autoreply`, `X-Auto-Response-Suppress`),
+  a sender the provider reports as `authentication.spf` or `authentication.dmarc`
+  `fail` / `softfail` (backscatter to a forged `From`), a template turned off
+  (silent), a deleted or no-longer-valid template, or a ticket with no address.
+  A provider that reports no `authentication` is "unknown", which is answered.
+- `{{ticket.expected_response}}` is empty until the first-response target of
+  HD-05 (tm 360) exists; write templates so they read well without it.
+- A failed send is logged as `"event":"ticket.auto_ack_mail"` with the
+  `template_id` and `ticket_id`; there is no resend (the ticket is not stuck).

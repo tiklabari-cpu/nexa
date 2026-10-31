@@ -19994,6 +19994,12 @@ export interface components {
        * @enum {string}
        */
       source?: 'chat' | 'email';
+      /**
+       * @description `true`: only while the team is out of hours when the ticket opens;
+       *     `false`: only while it is in (HD-04). A workspace with no saved
+       *     work schedule counts as in hours.
+       */
+      outside_business_hours?: boolean;
     };
     /**
      * @description What a matching rule does (FR-MOD-08.6.2): assign, prioritise, tag — or
@@ -20012,6 +20018,15 @@ export interface components {
       priority?: number;
       /** @description Apply this tag (created in the tag library if new). */
       add_tag?: string;
+      /**
+       * Format: uuid
+       * @description Mail the ticket's player this ticket e-mail template as an automatic
+       *     "request received" reply (HD-04). The first matching rule's only, for
+       *     a ticket that came by e-mail or the offline form; never to an
+       *     automatic reply, a spam-flagged sender or one whose SPF/DMARC failed.
+       *     The template must exist on this workspace.
+       */
+      send_template_id?: string;
     };
     /** @description Condition + action automation over tickets (FR-MOD-08.6.2). */
     TicketRule: {
@@ -20894,6 +20909,18 @@ export interface components {
         precedence?: string;
         x_autoreply?: string;
         x_auto_response_suppress?: string;
+      };
+      /**
+       * @description The receiving provider's sender checks, when it reports them (HD-04).
+       *     An SPF or DMARC `fail` / `softfail` keeps the workspace's automatic
+       *     acknowledgement from being sent to the address (backscatter to a
+       *     forged `From`); the ticket itself is still opened. Absent means
+       *     unknown, and unknown is not a failure.
+       */
+      authentication?: {
+        spf?: string;
+        dkim?: string;
+        dmarc?: string;
       };
       attachments?: components['schemas']['InboundEmailAttachment'][];
       /** @description The provider's spam verdict, honoured when the workspace filter is on. */

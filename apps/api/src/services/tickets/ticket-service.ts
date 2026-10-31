@@ -28,7 +28,7 @@ import type { Principal } from '../auth/principal.js';
 import { seesPlayerContact } from '../customers/player-contact.js';
 import { readCustomFieldValues } from '../custom-fields/custom-field-service.js';
 import { evaluate, evaluateSubject, readClock } from '../sla/sla-service.js';
-import { applyTicketRules } from './apply-ticket-rules.js';
+import { applyTicketRules, type PendingAck } from './apply-ticket-rules.js';
 
 export const TICKET_STATUSES = ['open', 'pending', 'solved', 'closed', 'spam'] as const;
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
@@ -323,6 +323,10 @@ export class TicketService {
    *
    * `relatedTicketId` (tm 358 · HD-03): the player answered a ticket that was
    * closed, or quiet past the reopen window — this one follows on from it.
+   *
+   * `ack` (tm 359 · HD-04): the automatic acknowledgement a rule asked for.
+   * The caller settles it (`TicketAutoAck.prepare`) once the ticket has its
+   * first message and mails it after the commit.
    */
   async createFromEmail(
     tx: TenantClient,
@@ -333,7 +337,7 @@ export class TicketService {
       inboundAddressId?: string | null;
       relatedTicketId?: string | null;
     },
-  ): Promise<{ id: string }> {
+  ): Promise<{ id: string; ack: PendingAck | null }> {
     const subject = input.subject.trim() || '(no subject)';
     const created = await tx.ticket.create({
       data: {
@@ -356,8 +360,11 @@ export class TicketService {
     // Ticket rules (FR-MOD-08.6.2): a forwarded email arrives with no agent
     // behind it, so auto-triage matters most here — `source: 'email'` lets a
     // rule target exactly this origin.
-    await applyTicketRules(tx, tenant.licenseId, created.id, { subject, source: 'email' });
-    return created;
+    const { ack } = await applyTicketRules(tx, tenant.licenseId, created.id, {
+      subject,
+      source: 'email',
+    });
+    return { ...created, ack };
   }
 
   /**
@@ -380,7 +387,7 @@ export class TicketService {
     tx: TenantClient,
     tenant: TenantContext,
     input: { subject: string; customerId: string; sourceChatId?: string },
-  ): Promise<{ id: string }> {
+  ): Promise<{ id: string; ack: PendingAck | null }> {
     const subject = input.subject.trim() || '(no subject)';
     const created = await tx.ticket.create({
       data: {
@@ -401,8 +408,12 @@ export class TicketService {
     // Ticket rules (FR-MOD-08.6.2). `widget` is an origin no `source` condition
     // can name (see `TicketRuleContext`), so a subject rule still triages this
     // ticket while a rule scoped to chats or forwarded mail correctly does not.
-    await applyTicketRules(tx, tenant.licenseId, created.id, { subject, source: 'widget' });
-    return created;
+    const { ack } = await applyTicketRules(tx, tenant.licenseId, created.id, {
+      subject,
+      source: 'widget',
+    });
+    // A hand-over from a chat has the player in the conversation already.
+    return { ...created, ack: input.sourceChatId ? null : ack };
   }
 
   async update(

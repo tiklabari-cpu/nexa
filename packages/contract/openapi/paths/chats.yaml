@@ -164,6 +164,18 @@ chats:
                     rows the browser happened to load instead — the console did,
                     up to `limit` — is silently wrong from the 51st resolution
                     on, and gets quieter the larger the workspace.
+                waiting_thresholds:
+                  type: object
+                  required: [warn_seconds, alert_seconds]
+                  description: |
+                    The seconds after which a row's waiting counter turns to a
+                    warning and to an alert (IN-03): the workspace's setting
+                    for the active brand (`/settings/chat-timeout`), else 120
+                    and 300. Sent with the list because the settings endpoint
+                    is the admins' and every agent's inbox draws the counter.
+                  properties:
+                    warn_seconds: { type: integer, minimum: 1 }
+                    alert_seconds: { type: integer, minimum: 1 }
                 next_page_id: { type: string }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }

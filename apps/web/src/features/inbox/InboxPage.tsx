@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { waitingThresholds } from '@siyahtus/types';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { useDeployment } from '../../lib/deployment.js';
@@ -73,6 +74,7 @@ import { TEAMS_KEY, claimableTeamIds, type TransferNotice, type TransferTeam } f
 import { canTakeOver, ledTeamIds } from './takeover.js';
 import { TeamRowActions } from './TeamRowActions.js';
 import { ClaimRowAction } from './ClaimRowAction.js';
+import { WaitingTimer } from './WaitingTimer.js';
 import { TRAFFIC_TABS, filterByTrafficTab, trafficTabCounts } from './traffic.js';
 import { QueueTeamTabs } from './QueueTeamTabs.js';
 import {
@@ -366,6 +368,18 @@ export function InboxPage(): ReactElement {
     activeChannel,
     view === 'queued' ? queueTeam : null,
     priorityFilter,
+  );
+  // When a row's waiting counter turns to a warning and an alert (IN-03): the
+  // workspace's pair, which the list itself carries — the settings endpoint is
+  // the admins', every agent's inbox draws the counter.
+  const listedThresholds = list.pages[0]?.waiting_thresholds;
+  const thresholds = useMemo(
+    () =>
+      waitingThresholds({
+        warn_seconds: listedThresholds?.warn_seconds ?? null,
+        alert_seconds: listedThresholds?.alert_seconds ?? null,
+      }),
+    [listedThresholds?.warn_seconds, listedThresholds?.alert_seconds],
   );
   // The Archive's search replaces the list while it is asked for; leaving the
   // view leaves the list alone and the words in the bar for the way back.
@@ -973,6 +987,22 @@ export function InboxPage(): ReactElement {
                                     })}
                                   </span>
                                 )}
+                                {/* How long the player has waited (IN-03): the server's
+                              column, the queue entry for a queued row. */}
+                                {item.active &&
+                                  (item.queue_position !== null && item.queued_at ? (
+                                    <WaitingTimer
+                                      since={item.queued_at}
+                                      queued
+                                      thresholds={thresholds}
+                                    />
+                                  ) : item.waiting_since ? (
+                                    <WaitingTimer
+                                      since={item.waiting_since}
+                                      queued={false}
+                                      thresholds={thresholds}
+                                    />
+                                  ) : null)}
                                 {/* The member's connections today (ID-02 · tm 286.4);
                               one is every chat, so only a return is marked. */}
                                 {(item.connection_count ?? 0) > 1 && (

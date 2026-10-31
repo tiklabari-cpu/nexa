@@ -284,6 +284,43 @@ describe('useChatList — paging', () => {
     expect(api.get.mock.calls).toHaveLength(requestsBefore);
   });
 
+  it("a pushed event moves the row's waiting counter by the server's rule (IN-03)", async () => {
+    api.get.mockResolvedValue(
+      chatPage([chat('c1', 14, { waiting_since: '2026-08-27T10:05:00.000Z' }), chat('c2', 13)]),
+    );
+    const { result, queryClient } = renderChatList();
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+    const waiting = (id: string) => result.current.items.find((c) => c.id === id)?.waiting_since;
+    const lastAt = () => result.current.items[0]?.last_event?.created_at;
+    const push = (chatId: string, over: Partial<ChatEvent>, at: string) =>
+      act(() => {
+        applyPush(queryClient, 'incoming_event', {
+          chat_id: chatId,
+          event: { ...message('e-' + at, chatId, 'x'), created_at: at, ...over },
+        });
+      });
+
+    // The player writes to a chat nobody waits on: the count starts at that message.
+    push('c2', {}, '2026-08-27T10:20:00.000Z');
+    await waitFor(() => expect(waiting('c2')).toBe('2026-08-27T10:20:00.000Z'));
+    // A second message does not restart it.
+    push('c2', {}, '2026-08-27T10:21:00.000Z');
+    await waitFor(() => expect(lastAt()).toBe('2026-08-27T10:21:00.000Z'));
+    expect(waiting('c2')).toBe('2026-08-27T10:20:00.000Z');
+
+    // An internal note and a system line leave a running count alone...
+    push('c1', { author_type: 'agent', recipients: 'agents' }, '2026-08-27T10:22:00.000Z');
+    await waitFor(() => expect(lastAt()).toBe('2026-08-27T10:22:00.000Z'));
+    expect(waiting('c1')).toBe('2026-08-27T10:05:00.000Z');
+    push('c1', { author_type: 'system', type: 'system_message' }, '2026-08-27T10:23:00.000Z');
+    await waitFor(() => expect(lastAt()).toBe('2026-08-27T10:23:00.000Z'));
+    expect(waiting('c1')).toBe('2026-08-27T10:05:00.000Z');
+
+    // ...an agent's reply the player sees ends it.
+    push('c1', { author_type: 'agent' }, '2026-08-27T10:24:00.000Z');
+    await waitFor(() => expect(waiting('c1')).toBeNull());
+  });
+
   it('sorted oldest-first the same event sends the row to the bottom instead', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     api.get.mockImplementation((url: string) =>

@@ -1223,6 +1223,11 @@ model Thread {
   /// `inactive_after_seconds`, so it leaves its agent's concurrent limit. Null
   /// while it is lively; the next event clears it.
   inactiveSince    DateTime? @map("inactive_since") @db.Timestamptz(6)
+  /// Since when the player has waited for an answer (IN-03 · tm 361): set by the
+  /// first player message nobody has answered, or by the AI handing the player to
+  /// a person; cleared by an agent's or a bot's reply and by the close. An internal
+  /// note or a "chat transferred" line leaves it alone (`waitingEffect`). Null: nobody waits.
+  awaitingReplySince DateTime? @map("awaiting_reply_since") @db.Timestamptz(6)
   /// How many times the sweep took the connection from an agent who did not
   /// answer (reason `agent_unresponsive`) — capped by the sweep, so it cannot
   /// bounce between silent agents forever. CHECK `>= 0` in the migration.
@@ -3888,6 +3893,11 @@ model InboxSettings {
   /// Whether a connection that waits for a person while nobody is accepting
   /// chats asks the player for an e-mail at once (WG-08 · tm 342). Off by default.
   askEmailWhenOffline Boolean @default(false) @map("ask_email_when_offline")
+  /// Seconds a player may wait before the inbox row turns to a warning, and to an
+  /// alert (IN-03 · tm 361). Null: the defaults, 120 and 300. Positive by CHECK;
+  /// the endpoint keeps warn below alert.
+  waitingWarnSeconds Int? @map("waiting_warn_seconds")
+  waitingAlertSeconds Int? @map("waiting_alert_seconds")
   /// Days after its last activity that a player's e-mailed answer still reopens
   /// a solved ticket (HD-03 · tm 358); later, or on a closed ticket, it opens a
   /// related one. 1-365 by CHECK; `TICKET_REOPEN_WINDOW_DAYS_DEFAULT`.

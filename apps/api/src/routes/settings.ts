@@ -50,6 +50,8 @@ import {
   type ChatInactivityOrderProblem,
   INACTIVITY_WINDOW_MAX_SECONDS,
   ASK_EMAIL_MAX_SECONDS,
+  WAITING_MAX_SECONDS,
+  waitingThresholdProblem,
   CAPTCHA_MODES,
   isCaptchaMode,
   AI_TURNS_PER_CUSTOMER_DAY_MAX,
@@ -608,6 +610,10 @@ const updateChatTimeoutBody = z.object({
     .nullable()
     .optional(),
   ask_email_when_offline: z.boolean().optional(),
+  // When an inbox row turns to a warning and to an alert (IN-03 · tm 361).
+  // Null puts the default back; their order is checked against the stored row.
+  waiting_warn_seconds: z.number().int().positive().max(WAITING_MAX_SECONDS).nullable().optional(),
+  waiting_alert_seconds: z.number().int().positive().max(WAITING_MAX_SECONDS).nullable().optional(),
   // How long a solved ticket still reopens on the player's e-mailed answer
   // (tm 358 · HD-03). Optional the same way; the CHECK holds the same bounds.
   ticket_reopen_window_days: z.number().int().min(1).max(TICKET_REOPEN_WINDOW_DAYS_MAX).optional(),
@@ -2907,6 +2913,26 @@ export default async function settingsRoutes(
         if (problem) {
           throw ApiError.validation(CHAT_INACTIVITY_ORDER_MESSAGES[problem], { problem });
         }
+        // The two inbox thresholds as this save leaves them (IN-03): a field left
+        // out keeps what is stored, and the pair must run warn < alert.
+        const waiting = {
+          waitingWarnSeconds:
+            body.waiting_warn_seconds === undefined
+              ? (stored?.waitingWarnSeconds ?? null)
+              : body.waiting_warn_seconds,
+          waitingAlertSeconds:
+            body.waiting_alert_seconds === undefined
+              ? (stored?.waitingAlertSeconds ?? null)
+              : body.waiting_alert_seconds,
+        };
+        if (waitingThresholdProblem(waiting.waitingWarnSeconds, waiting.waitingAlertSeconds)) {
+          throw ApiError.validation(
+            'waiting_warn_seconds must be shorter than waiting_alert_seconds.',
+            {
+              problem: 'warn_not_before_alert',
+            },
+          );
+        }
         const dayBoundary = {
           ...(body.day_boundary_timezone === undefined
             ? {}
@@ -2970,6 +2996,7 @@ export default async function settingsRoutes(
             brandId,
             chatTimeoutSeconds: body.chat_timeout_seconds,
             ...windows,
+            ...waiting,
             ...dayBoundary,
             ...pauseAndReopen,
             ...forward,
@@ -2977,6 +3004,7 @@ export default async function settingsRoutes(
           update: {
             chatTimeoutSeconds: body.chat_timeout_seconds,
             ...windows,
+            ...waiting,
             ...dayBoundary,
             ...pauseAndReopen,
             ...forward,
@@ -2993,6 +3021,8 @@ export default async function settingsRoutes(
             pause_unresponsive_agents: row.pauseUnresponsiveAgents,
             ask_email_after_seconds: row.askEmailAfterSeconds,
             ask_email_when_offline: row.askEmailWhenOffline,
+            waiting_warn_seconds: row.waitingWarnSeconds,
+            waiting_alert_seconds: row.waitingAlertSeconds,
             ticket_reopen_window_days: row.ticketReopenWindowDays,
             transcript_allowed_domains: row.transcriptAllowedDomains,
             // The domains only, as the transcript mails are recorded.
@@ -3905,6 +3935,8 @@ function serialiseInbox(
         pauseUnresponsiveAgents: boolean;
         askEmailAfterSeconds: number | null;
         askEmailWhenOffline: boolean;
+        waitingWarnSeconds: number | null;
+        waitingAlertSeconds: number | null;
         ticketReopenWindowDays: number;
         transcriptAllowedDomains: string[];
         transcriptForwardTo: string[];
@@ -3928,6 +3960,9 @@ function serialiseInbox(
     pause_unresponsive_agents: row?.pauseUnresponsiveAgents ?? true,
     ask_email_after_seconds: row?.askEmailAfterSeconds ?? null,
     ask_email_when_offline: row?.askEmailWhenOffline ?? false,
+    // Null: the defaults below (IN-03); the inbox reads the effective pair too.
+    waiting_warn_seconds: row?.waitingWarnSeconds ?? null,
+    waiting_alert_seconds: row?.waitingAlertSeconds ?? null,
     ticket_reopen_window_days: row?.ticketReopenWindowDays ?? TICKET_REOPEN_WINDOW_DAYS_DEFAULT,
     transcript_allowed_domains: row?.transcriptAllowedDomains ?? [],
     transcript_forward_to: row?.transcriptForwardTo ?? [],

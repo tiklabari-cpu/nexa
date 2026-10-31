@@ -239,6 +239,14 @@ export const settings: Messages = {
 
   // Chat timeout — ChatTimeout.tsx
   'settings.chatTimeout.title': 'Inactivity, chat timeout and day boundary',
+  'settings.waiting.heading': 'Waiting counter',
+  'settings.waiting.description':
+    'The inbox shows how long each player has waited for an answer. The row changes look at these two points.',
+  'settings.waiting.warnLabel': 'Warning after (seconds)',
+  'settings.waiting.alertLabel': 'Alert after (seconds)',
+  'settings.waiting.hint': 'Leave a box empty to use the default: 120 seconds and 300 seconds.',
+  'settings.waiting.rangeError': 'Enter whole seconds from 1 to 86400, or leave the box empty.',
+  'settings.waiting.orderError': 'The warning must come before the alert.',
   'settings.chatTimeout.description':
     'Pass on chats an agent has not answered, set quiet ones aside so they stop filling an agent’s limit, close idle ones, and choose where one conversation day ends and the next begins.',
   'settings.chatTimeout.loadError': 'Could not load the chat timeout setting.',

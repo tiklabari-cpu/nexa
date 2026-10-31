@@ -229,6 +229,15 @@ export const settings: Messages = {
 
   // Sohbet zaman aşımı — ChatTimeout.tsx
   'settings.chatTimeout.title': 'Hareketsizlik, sohbet süresi ve gün sınırı',
+  'settings.waiting.heading': 'Bekleme sayacı',
+  'settings.waiting.description':
+    'Gelen kutusu her oyuncunun ne kadar süredir cevap beklediğini gösterir. Satırın görünümü bu iki noktada değişir.',
+  'settings.waiting.warnLabel': 'Uyarı süresi (saniye)',
+  'settings.waiting.alertLabel': 'Alarm süresi (saniye)',
+  'settings.waiting.hint':
+    'Varsayılanı kullanmak için kutuyu boş bırakın: 120 saniye ve 300 saniye.',
+  'settings.waiting.rangeError': '1 ile 86400 arasında tam saniye girin ya da kutuyu boş bırakın.',
+  'settings.waiting.orderError': 'Uyarı süresi alarm süresinden önce gelmelidir.',
   'settings.chatTimeout.description':
     'Ajanın yanıtlamadığı sohbetleri başkasına aktarın, sessiz kalanları ajanın sınırından düşürün, boşta kalanları kapatın ve bir konuşma gününün nerede bitip yenisinin başladığını seçin.',
   'settings.chatTimeout.loadError': 'Sohbet zaman aşımı ayarı yüklenemedi.',

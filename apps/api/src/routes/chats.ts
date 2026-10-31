@@ -15,6 +15,7 @@ import {
   TIMELINE_EXPORT_MAX,
   TIMELINE_PAGE_MAX,
   TIMELINE_PAGE_SIZE,
+  waitingThresholds as waitingThresholdsOf,
 } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
@@ -374,9 +375,31 @@ export default async function chatRoutes(
         ...(query.page_id !== undefined ? { pageId: query.page_id } : {}),
       });
 
+      // The two thresholds the rows' waiting counters turn at (IN-03 · tm 361).
+      // Every agent reads them with the list — the settings endpoint is the
+      // admins' — and the stored pair is the brand's, else the defaults.
+      // A workspace with no default brand reads the defaults — a list is not
+      // the place to refuse for a missing setting.
+      const waitingThresholds = await request.withTenant(async (tx) => {
+        const brandId =
+          request.brandId ??
+          (await tx.brand.findFirst({ where: { isDefault: true }, select: { id: true } }))?.id;
+        const row = brandId
+          ? await tx.inboxSettings.findFirst({
+              where: { brandId },
+              select: { waitingWarnSeconds: true, waitingAlertSeconds: true },
+            })
+          : null;
+        return waitingThresholdsOf({
+          warn_seconds: row?.waitingWarnSeconds ?? null,
+          alert_seconds: row?.waitingAlertSeconds ?? null,
+        });
+      });
+
       return reply.send({
         items: result.items,
         total: result.total,
+        waiting_thresholds: waitingThresholds,
         ...(result.nextPageId ? { next_page_id: result.nextPageId } : {}),
       });
     },

@@ -245,6 +245,7 @@ model License {
   aiConfigVersions       AiConfigVersion[]
   aiSuggestions          AiSuggestion[]
   qaSettings             QaSettings?
+  cannedResponseSettings CannedResponseSettings?
   qaRubrics              QaRubric[]
   qaReviews              QaReview[]
   qaCalibrations         QaCalibration[]
@@ -358,6 +359,8 @@ model Account {
   qaReviewsAssigned     QaReview[]     @relation("QaReviewAssignee")
   qaReviewsCompleted    QaReview[]     @relation("QaReviewReviewer")
   qaCalibrationScores   QaCalibrationScore[]
+  /// Personal saved replies this member authored (IN-06 · tm 363).
+  cannedResponsesOwned  CannedResponse[] @relation("CannedResponseOwner")
 
   @@map("accounts")
 }
@@ -1910,15 +1913,34 @@ model CannedResponse {
   text       String
   groupId    BigInt?  @map("group_id")
   visibility String   @default("all")
+  /// The author of a personal reply (`visibility = 'private'`, IN-06 · tm 363);
+  /// null on a shared one (CHECK `canned_responses_visibility_check`).
+  ownerAccountId String? @map("owner_account_id") @db.Uuid
   updatedBy  String?  @map("updated_by")
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  license License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  owner   Account? @relation("CannedResponseOwner", fields: [ownerAccountId], references: [id], onDelete: Cascade)
 
-  @@unique([licenseId, scope, shortcut])
+  // Shortcut uniqueness is two partial unique indexes Prisma cannot spell
+  // (20261207090100/090200): shared replies per (licence, scope), personal
+  // ones per (licence, scope, owner).
   @@index([licenseId, groupId])
   @@map("canned_responses")
+}
+
+/// A licence's saved-reply settings (IN-06 · tm 363). No row reads as the defaults.
+model CannedResponseSettings {
+  licenseId    BigInt   @id @map("license_id")
+  /// What the composer inserts for a variable it has no value for; null = the console default.
+  fallbackText String?  @map("fallback_text")
+  updatedBy    String?  @map("updated_by") @db.Uuid
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@map("canned_response_settings")
 }
 
 // ===========================================================================

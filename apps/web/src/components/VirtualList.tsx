@@ -229,6 +229,36 @@ export interface VirtualListProps<T> extends CommonProps<T> {
   /** Accessible name for the `role="list"` scroller. */
   label?: string;
   className?: string;
+  /**
+   * `listbox` for a picker whose rows are `role="option"` (the composer's
+   * `#` saved-reply list, IN-06). Defaults to `list`.
+   */
+  role?: 'list' | 'listbox';
+  /**
+   * Keep this row inside the viewport — a picker's highlighted row, moved by
+   * the arrow keys, may be one the window has not rendered yet.
+   */
+  scrollToIndex?: number;
+}
+
+/**
+ * Scrolls the container just far enough to show row `index`, when it changes.
+ * Skipped with no layout (jsdom measures 0), where every row the fallback
+ * viewport covers is already rendered.
+ */
+function useScrollToIndex(
+  containerRef: RefObject<HTMLDivElement>,
+  index: number | undefined,
+  rowHeight: number,
+): void {
+  useEffect(() => {
+    const el = containerRef.current;
+    if (index === undefined || !el || el.clientHeight === 0) return;
+    const top = index * rowHeight;
+    const bottom = top + rowHeight;
+    if (top < el.scrollTop) el.scrollTop = top;
+    else if (bottom > el.scrollTop + el.clientHeight) el.scrollTop = bottom - el.clientHeight;
+  }, [containerRef, index, rowHeight]);
 }
 
 /**
@@ -247,6 +277,8 @@ export function VirtualList<T>({
   endReachedThreshold = DEFAULT_END_REACHED_THRESHOLD,
   label,
   className,
+  role = 'list',
+  scrollToIndex,
 }: VirtualListProps<T>): ReactElement {
   const { containerRef, onScroll, window } = useVirtualRows(
     items.length,
@@ -255,13 +287,14 @@ export function VirtualList<T>({
     viewportHeight,
   );
   useEndReached(items.length, window.endIndex, endReachedThreshold, onEndReached);
+  useScrollToIndex(containerRef, scrollToIndex, rowHeight);
   const visible = items.slice(window.startIndex, window.endIndex);
 
   return (
     <div
       ref={containerRef}
       onScroll={onScroll}
-      role="list"
+      role={role}
       aria-label={label}
       className={`overflow-y-auto${className ? ` ${className}` : ''}`}
       style={{ maxHeight }}

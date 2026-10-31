@@ -243,6 +243,8 @@ export const inbox: Messages = {
     'I’m still on it — please bear with me for a moment.',
   'inbox.composer.suggestions.chip.holdingMoment': 'Give me a moment, I’ll check that for you.',
   'inbox.composer.picker.ariaLabel': 'Saved replies',
+  'inbox.composer.picker.personal': 'Personal',
+  'inbox.composer.picker.fallbackDefault': 'valued member',
   'inbox.composer.placeholder.note': 'Add a note for your team…',
   'inbox.composer.placeholder.reply': 'Type your reply, or press Space for suggestions…',
   'inbox.composer.attachFile': 'Attach a file',

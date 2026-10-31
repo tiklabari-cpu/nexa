@@ -226,6 +226,8 @@ export const inbox: Messages = {
   'inbox.composer.suggestions.chip.holdingMoment':
     'Bana bir dakika verin, sizin için kontrol edeyim.',
   'inbox.composer.picker.ariaLabel': 'Kayıtlı yanıtlar',
+  'inbox.composer.picker.personal': 'Kişisel',
+  'inbox.composer.picker.fallbackDefault': 'Değerli üyemiz',
   'inbox.composer.placeholder.note': 'Ekibiniz için bir not ekleyin…',
   'inbox.composer.placeholder.reply': 'Yanıtınızı yazın veya öneriler için Boşluk tuşuna basın…',
   'inbox.composer.attachFile': 'Dosya ekle',

@@ -13,6 +13,7 @@ import {
   eventsKey,
   flattenTranscript,
   newIdempotencyKey,
+  useChat,
   useChatAction,
   useSendMessage,
   type TranscriptCache,
@@ -46,10 +47,14 @@ import {
 import { useCopilotReply } from './useCopilot.js';
 import {
   activeShortcutQuery,
-  applyShortcut,
+  insertCannedReply,
   useCannedResponses,
   useMatchingResponses,
+  type CannedResponse,
 } from './useCannedResponses.js';
+import { CannedPicker, PICKER_KEYS } from './CannedPicker.js';
+import { cannedValuesOf } from './cannedValues.js';
+import { useCustomerContext } from './useCustomerContext.js';
 import { EMOJI_CATEGORIES, insertAtCaret } from './emoji.js';
 import { applyBulletPrefix, wrapSelection } from './richText.js';
 import { Dropdown } from '../../components/ui/Dropdown.js';
@@ -151,6 +156,25 @@ export function Composer({
   const canned = useCannedResponses();
   const matches = useMatchingResponses(canned.data?.items, shortcut?.query ?? null);
   const pickerOpen = shortcut !== null && matches.length > 0;
+
+  // What a saved reply's `{{variables}}` are filled with when it is inserted
+  // (IN-06): the player card (IN-02, the same cache the Details panel reads),
+  // the chat and its connection, the signed-in agent and the workspace name.
+  const chatQuery = useChat(chatId);
+  const customerContext = useCustomerContext(chatId);
+  const agent = useAuth((s) => s.agent);
+  const cannedValues = useMemo(
+    () =>
+      cannedValuesOf({
+        customer: customerContext.context?.customer ?? null,
+        agent,
+        chatId,
+        threadId: chatQuery.data?.thread?.id ?? null,
+        companyName: canned.data?.company_name ?? null,
+      }),
+    [customerContext.context, agent, chatId, chatQuery.data, canned.data],
+  );
+  const cannedFallback = canned.data?.fallback_text || t('inbox.composer.picker.fallbackDefault');
 
   // File sharing (FR-MOD-08.9.4): `GET /settings/security` carries the full
   // rule set but is admin-only (`access_rules:ro`); this is the one bit every
@@ -387,19 +411,27 @@ export function Composer({
     setHighlighted(0);
   };
 
-  const insert = (replacement: string): void => {
+  const insert = (reply: CannedResponse): void => {
     const input = inputRef.current;
     if (!input || !shortcut) return;
 
-    const result = applyShortcut(text, input.selectionStart, shortcut.from, replacement);
+    const result = insertCannedReply(
+      text,
+      input.selectionStart,
+      shortcut.from,
+      reply.text,
+      cannedValues,
+      cannedFallback,
+    );
     setText(result.text);
     setShortcut(null);
 
-    // The caret has to land after the inserted text, which React will not do on
-    // its own — a controlled textarea puts it at the end of the whole value.
+    // The caret has to land after the inserted text — or the selection on the
+    // first fallback phrase, for the agent to overtype — which React will not
+    // do on its own: a controlled textarea puts it at the end of the value.
     requestAnimationFrame(() => {
       input.focus();
-      input.setSelectionRange(result.caret, result.caret);
+      input.setSelectionRange(result.selectionStart, result.selectionEnd);
     });
   };
 
@@ -610,7 +642,7 @@ export function Composer({
       if (event.key === 'Enter' || event.key === 'Tab') {
         event.preventDefault();
         const chosen = matches[highlighted];
-        if (chosen) insert(chosen.text);
+        if (chosen) insert(chosen);
         return;
       }
       if (event.key === 'Escape') {
@@ -809,38 +841,13 @@ export function Composer({
 
       <div className="relative">
         {pickerOpen && (
-          <ul
-            role="listbox"
-            aria-label={t('inbox.composer.picker.ariaLabel')}
-            // Above the input: the composer sits at the bottom of the window, so
-            // a list opening downwards would fall off screen.
-            className="absolute bottom-full left-0 z-10 mb-1 w-full overflow-hidden rounded-lg border border-border bg-surface shadow-md"
-          >
-            {matches.map((item, index) => (
-              <li key={item.id}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={index === highlighted}
-                  onMouseEnter={() => setHighlighted(index)}
-                  // `onMouseDown` rather than `onClick`: a click would blur the
-                  // textarea first, losing the caret the insertion depends on.
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    insert(item.text);
-                  }}
-                  className={`flex w-full items-start gap-2 px-3 py-2 text-left text-sm transition-colors ${
-                    index === highlighted ? 'bg-brand-100 dark:bg-brand-950' : 'hover:bg-surface-2'
-                  }`}
-                >
-                  <code className="shrink-0 rounded-sm bg-inset px-1.5 py-0.5 font-mono text-2xs">
-                    #{item.shortcut}
-                  </code>
-                  <span className="truncate text-content-secondary">{item.text}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <CannedPicker
+            matches={matches}
+            highlighted={highlighted}
+            onHighlight={setHighlighted}
+            onPick={insert}
+            label={t('inbox.composer.picker.ariaLabel')}
+          />
         )}
 
         <textarea
@@ -861,8 +868,10 @@ export function Composer({
           }}
           onKeyUp={(event) => {
             // Arrow keys and clicks move the caret without changing the value,
-            // and the picker has to follow it.
-            if (!pickerOpen) return;
+            // and the picker has to follow it. Not the keys the picker itself
+            // answers to: re-reading the token resets the highlight, which undid
+            // every ArrowDown on its own key-up (IN-06).
+            if (!pickerOpen || PICKER_KEYS.has(event.key)) return;
             syncShortcut(event.currentTarget.value, event.currentTarget.selectionStart);
           }}
           onBlur={() => setShortcut(null)}

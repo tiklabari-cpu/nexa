@@ -33,8 +33,8 @@ function agent(scopes: string[]): Principal {
 }
 
 describe('canned response visibility (FR-MOD-08.7.2)', () => {
-  it('names exactly the two values the CHECK constraint allows', () => {
-    expect([...CANNED_VISIBILITIES]).toEqual(['all', 'group']);
+  it('names exactly the three values the CHECK constraint allows', () => {
+    expect([...CANNED_VISIBILITIES]).toEqual(['all', 'group', 'private']);
   });
 
   describe('who curates the library', () => {
@@ -62,20 +62,43 @@ describe('canned response visibility (FR-MOD-08.7.2)', () => {
   });
 
   describe('the where-clause', () => {
-    it('adds nothing for a curator', () => {
-      expect(cannedVisibilityFilter({ unrestricted: true, groupIds: [] })).toEqual({});
+    const me = '11111111-1111-1111-1111-111111111111';
+
+    it('gives a curator every shared reply and only their own personal ones (IN-06)', () => {
+      expect(
+        cannedVisibilityFilter({ unrestricted: true, groupIds: [], ownerAccountId: me }),
+      ).toEqual({
+        OR: [
+          { visibility: { in: ['all', 'group'] } },
+          { visibility: 'private', ownerAccountId: me },
+        ],
+      });
     });
 
-    it("offers the workspace-wide replies plus the caller's teams", () => {
-      expect(cannedVisibilityFilter({ unrestricted: false, groupIds: [7n, 9n] })).toEqual({
-        OR: [{ visibility: 'all' }, { visibility: 'group', groupId: { in: [7n, 9n] } }],
+    it('never offers personal replies to a caller with no account', () => {
+      expect(
+        cannedVisibilityFilter({ unrestricted: true, groupIds: [], ownerAccountId: null }),
+      ).toEqual({ OR: [{ visibility: { in: ['all', 'group'] } }] });
+    });
+
+    it("offers the workspace-wide replies, the caller's teams and their own personal ones", () => {
+      expect(
+        cannedVisibilityFilter({ unrestricted: false, groupIds: [7n, 9n], ownerAccountId: me }),
+      ).toEqual({
+        OR: [
+          { visibility: 'all' },
+          { visibility: 'group', groupId: { in: [7n, 9n] } },
+          { visibility: 'private', ownerAccountId: me },
+        ],
       });
     });
 
     it('leaves an agent in no team with the workspace-wide replies alone', () => {
       // Not `{}` — that would be the curator's clause and would show every
       // team's private text to somebody in no team at all.
-      expect(cannedVisibilityFilter({ unrestricted: false, groupIds: [] })).toEqual({
+      expect(
+        cannedVisibilityFilter({ unrestricted: false, groupIds: [], ownerAccountId: null }),
+      ).toEqual({
         OR: [{ visibility: 'all' }],
       });
     });

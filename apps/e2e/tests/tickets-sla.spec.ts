@@ -29,6 +29,23 @@ test.describe('the ticket first-response SLA (HD-05)', () => {
     const saved = (await original.json()) as Record<string, unknown>;
 
     try {
+      // Calendar minutes for this spec: the seeded policy counts business hours
+      // only, and once `staffing.spec.ts` has saved a work schedule on the same
+      // stack a 150-minute target set on a Saturday reads "51 h left" (tm 363,
+      // shard order). The `finally` below puts the saved policy back.
+      const calendar = await request.put(`${API_BASE}/settings/sla`, {
+        ...authorised,
+        data: {
+          first_response_minutes: saved['first_response_minutes'] ?? null,
+          resolution_minutes: saved['resolution_minutes'] ?? null,
+          business_hours_only: false,
+          ticket_first_response_minutes: saved['ticket_first_response_minutes'] ?? null,
+          ticket_resolution_minutes: saved['ticket_resolution_minutes'] ?? null,
+          ticket_targets_by_priority: saved['ticket_targets_by_priority'] ?? null,
+        },
+      });
+      expect(calendar.ok(), await calendar.text()).toBe(true);
+
       // --- The target, set on the screen ----------------------------------
       await agentPage.goto('/app/settings/sla');
       const sla = agentPage.getByRole('region', { name: 'SLA' });

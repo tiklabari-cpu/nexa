@@ -15,6 +15,7 @@ import { usePagedQuery, type PagedQueryResult, type PagedResponse } from '../../
 import type { TicketComposerKind, TicketReplySetStatus } from '@siyahtus/types';
 import { ticketMessagesKey, withMessage } from './ticketMessages.js';
 import type { TicketMessage } from './types.js';
+import type { CannedResponseList } from './useCannedResponses.js';
 
 const MESSAGE_PAGE_SIZE = 50;
 
@@ -95,10 +96,7 @@ export function useTicketCannedResponses() {
   const api = useApiClient();
   return useQuery({
     queryKey: ['canned-responses', 'ticket'],
-    queryFn: () =>
-      api.get<{ items: { id: string; shortcut: string; text: string }[] }>(
-        '/settings/canned-responses?scope=ticket',
-      ),
+    queryFn: () => api.get<CannedResponseList>('/settings/canned-responses?scope=ticket'),
     staleTime: 5 * 60_000,
   });
 }

@@ -193,14 +193,37 @@ export const settings: Messages = {
   'settings.cannedResponses.deleteConfirmTitle': '#{shortcut} kısayolu silinsin mi?',
   'settings.cannedResponses.deleteConfirmDescription':
     'Kayıtlı yanıt, onu kullanabilen herkes için silinir. Bu işlem geri alınamaz.',
-  'settings.cannedResponses.teamLabel': 'İlgili ekip',
   'settings.cannedResponses.allTeams': 'Tüm ekipler',
   'settings.cannedResponses.teamOnly': 'yalnız {name}',
-  'settings.cannedResponses.teamHint':
-    'Yanıtı herkesin kullanabilmesi için Tüm ekipler seçili kalsın.',
+  'settings.cannedResponses.teamHint': 'Herkes, tek bir ekip ya da yalnız siz.',
   'settings.cannedResponses.editTeamButton': 'Ekibi düzenle',
   'settings.cannedResponses.editTeamAriaLabel': '#{shortcut} kısayolunun ekibini düzenle',
   'settings.cannedResponses.teamForLabel': '#{shortcut} kısayolunun ekibi',
+  'settings.cannedResponses.visibilityLabel': 'Kimler görür',
+  'settings.cannedResponses.onlyMe': 'Yalnız ben',
+  'settings.cannedResponses.everyone': 'Herkes',
+  'settings.cannedResponses.teamOption': 'Ekip: {name}',
+  'settings.cannedResponses.personal': 'Kişisel',
+  'settings.cannedResponses.personalOnlyHint':
+    'Burada kaydettiğiniz yanıtlar kişiseldir: yazma alanında yalnız siz görürsünüz.',
+  'settings.cannedResponses.variableMenu': 'Değişken ekle',
+  'settings.cannedResponses.variableUnknown':
+    '{token} bu yanıtta kullanılabilecek bir değişken değil.',
+  'settings.cannedResponses.variableMalformed': 'Süslü parantezleri kontrol edin: {token}',
+  'settings.cannedResponses.variable.customerName': 'Oyuncu adı',
+  'settings.cannedResponses.variable.customerFirstName': 'Oyuncunun ilk adı',
+  'settings.cannedResponses.variable.customerUsername': 'Kullanıcı adı',
+  'settings.cannedResponses.variable.customerEmail': 'Oyuncu e-postası',
+  'settings.cannedResponses.variable.agentName': 'Adınız',
+  'settings.cannedResponses.variable.agentFirstName': 'İlk adınız',
+  'settings.cannedResponses.variable.companyName': 'Şirket adı',
+  'settings.cannedResponses.fallbackLabel': 'Değer yoksa şunu yaz',
+  'settings.cannedResponses.fallbackSave': 'İfadeyi kaydet',
+  'settings.cannedResponses.fallbackHint':
+    'Sohbette değeri olmayan bir değişken için kullanılır; örneğin adını yazmamış bir oyuncu. Temsilci bunu seçili görür ve değiştirebilir.',
+  'settings.cannedResponses.searchLabel': 'Kayıtlı yanıtlarda ara',
+  'settings.cannedResponses.searchPlaceholder': 'Kısayol ve metinde ara…',
+  'settings.cannedResponses.searchEmpty': 'Eşleşen kayıtlı yanıt yok.',
 
   // Etiketler — Tags.tsx
   'settings.tags.title': 'Etiketler',

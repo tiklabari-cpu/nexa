@@ -641,6 +641,8 @@ paths:
     $ref: "./paths/settings.yaml#/cannedResponses"
   /settings/canned-responses/{cannedResponseId}:
     $ref: "./paths/settings.yaml#/cannedResponse"
+  /settings/canned-response-fallback:
+    $ref: "./paths/settings.yaml#/cannedResponseFallback"
   /settings/routing-rules:
     $ref: "./paths/settings.yaml#/routingRules"
   /settings/routing-rules/{ruleId}:
@@ -9854,7 +9856,18 @@ components:
         visible to everyone would be ownership metadata rather than a scope, and
         a team-only reply with no team would be one nobody could reach — the
         database refuses both pairings.
-      required: [id, shortcut, text, scope, group_id, visibility, created_at, updated_at]
+
+        `private` (IN-06) is a personal reply: `owner_account_id` is its author,
+        it carries no team, and nobody else — an admin included — is sent it.
+        Shared replies keep one shortcut per scope; personal ones are unique per
+        author, so two agents may both own `#selam` beside a shared `#selam`.
+
+        `text` may carry `{{variable}}` placeholders from the saved-reply
+        catalogue (`CANNED_VARIABLES` in @siyahtus/types); the composer fills
+        them when the reply is inserted. A write naming an unknown variable is
+        refused with 400.
+      required:
+        [id, shortcut, text, scope, group_id, visibility, owner_account_id, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         shortcut: { type: string }
@@ -9867,12 +9880,18 @@ components:
           description: The team this reply is scoped to; null when `visibility` is `all`.
         visibility:
           type: string
-          enum: [all, group]
+          enum: [all, group, private]
           default: all
           description: |
             Who may see the reply. `all` — everyone in the workspace; `group` —
-            members of `group_id` only. The list endpoint applies this
-            server-side, so a reply a caller may not use never reaches them.
+            members of `group_id` only; `private` — its author alone. The list
+            endpoint applies this server-side, so a reply a caller may not use
+            never reaches them.
+        owner_account_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The author of a `private` reply; null for a shared one.
         updated_by: { type: string, nullable: true }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }

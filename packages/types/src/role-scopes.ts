@@ -80,6 +80,10 @@ export const DEFAULT_AGENT_SCOPES: Scope[] = [
   // (`services/team/canned-response-access.ts`). Curating the library stays an
   // owner/admin power, spelled `canned_responses--all:rw` in `ADMIN_SCOPES`.
   'canned_responses--groups:ro',
+  // Writing one's own personal saved replies (IN-06): a reply only its author
+  // sees, so every role writes their own. The route refuses a shared reply to
+  // this scope alone and hides other people's personal replies from everyone.
+  'canned_responses--my:rw',
   // Reading the brand catalogue (Multibrand, PRD §5.3): an agent picks the brand
   // they are working under, so they read brands but do not create or rename them.
   'brands--all:ro',

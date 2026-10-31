@@ -43,6 +43,12 @@ export const SCOPES = [
   'canned_responses--groups:rw',
   'canned_responses--all:ro',
   'canned_responses--all:rw',
+  // A SiyahTuş addition (IN-06): writing one's own *personal* saved replies.
+  // The source platform's catalogue has `--groups`/`--all` only, and both
+  // reach replies other people use; a personal reply is seen by its author
+  // alone, so writing one is held by every member. `--all:rw` implies it
+  // (`expandScope`), so a curator writes their own personal replies too.
+  'canned_responses--my:rw',
   // Group
   'groups--my:rw',
   'groups--my:ro',

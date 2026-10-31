@@ -7991,10 +7991,20 @@ export interface paths {
      *     filtering a paged list after the fact returns short pages, and a private
      *     reply that reaches the browser before being hidden has already left the
      *     workspace.
+     *
+     *     **Personal replies** (`visibility: private`, IN-06) reach their author
+     *     only — whatever scope the caller holds, another person's personal reply is
+     *     never listed. `fallback_text` is the workspace's phrase for a variable
+     *     the composer cannot fill (null: the console's own default).
      */
     get: operations['listCannedResponses'];
     put?: never;
-    /** Save a reply */
+    /**
+     * Save a reply
+     * @description Open to `canned_responses--my:rw` (every member) for a personal reply;
+     *     a shared one (`all` / `group`) is refused with 403 unless the caller
+     *     holds `canned_responses--all:rw`.
+     */
     post: operations['createCannedResponse'];
     delete?: never;
     options?: never;
@@ -8014,12 +8024,45 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    /** Delete a saved reply */
+    /**
+     * Delete a saved reply
+     * @description A personal reply by its author alone (404 to anyone else); a shared one
+     *     with `canned_responses--all:rw`.
+     */
     delete: operations['deleteCannedResponse'];
     options?: never;
     head?: never;
-    /** Edit a saved reply */
+    /**
+     * Edit a saved reply
+     * @description A personal reply is edited by its author alone — to anyone else it does
+     *     not exist (404). A shared reply, or turning a personal one into a shared
+     *     one, needs `canned_responses--all:rw`; making a reply `private` makes the
+     *     caller its author.
+     */
     patch: operations['updateCannedResponse'];
+    trace?: never;
+  };
+  '/settings/canned-response-fallback': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Set the saved-reply fallback phrase
+     * @description The phrase the composer inserts for a variable it has no value for — a
+     *     player who gave no name gets "Değerli üyemiz" rather than an empty gap
+     *     (IN-06). `null` returns to the console's default. Read back on
+     *     `GET /settings/canned-responses`.
+     */
+    put: operations['setCannedResponseFallback'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
     trace?: never;
   };
   '/settings/routing-rules': {
@@ -19102,6 +19145,16 @@ export interface components {
      *     visible to everyone would be ownership metadata rather than a scope, and
      *     a team-only reply with no team would be one nobody could reach — the
      *     database refuses both pairings.
+     *
+     *     `private` (IN-06) is a personal reply: `owner_account_id` is its author,
+     *     it carries no team, and nobody else — an admin included — is sent it.
+     *     Shared replies keep one shortcut per scope; personal ones are unique per
+     *     author, so two agents may both own `#selam` beside a shared `#selam`.
+     *
+     *     `text` may carry `{{variable}}` placeholders from the saved-reply
+     *     catalogue (`CANNED_VARIABLES` in @siyahtus/types); the composer fills
+     *     them when the reply is inserted. A write naming an unknown variable is
+     *     refused with 400.
      */
     CannedResponse: {
       /** Format: uuid */
@@ -19117,12 +19170,18 @@ export interface components {
       group_id: number | null;
       /**
        * @description Who may see the reply. `all` — everyone in the workspace; `group` —
-       *     members of `group_id` only. The list endpoint applies this
-       *     server-side, so a reply a caller may not use never reaches them.
+       *     members of `group_id` only; `private` — its author alone. The list
+       *     endpoint applies this server-side, so a reply a caller may not use
+       *     never reaches them.
        * @default all
        * @enum {string}
        */
-      visibility: 'all' | 'group';
+      visibility: 'all' | 'group' | 'private';
+      /**
+       * Format: uuid
+       * @description The author of a `private` reply; null for a shared one.
+       */
+      owner_account_id: string | null;
       updated_by?: string | null;
       /** Format: date-time */
       created_at: string;
@@ -35605,6 +35664,16 @@ export interface operations {
         content: {
           'application/json': {
             items: components['schemas']['CannedResponse'][];
+            /**
+             * @description What the composer puts in place of a variable it has no value
+             *     for ("Değerli üyemiz"), selected so the agent can overtype it.
+             */
+            fallback_text: string | null;
+            /**
+             * @description The workspace's name, for `{{company.name}}` — sent here because
+             *     the company endpoint is an admin's and every member fills replies.
+             */
+            company_name: string | null;
           };
         };
       };
@@ -35625,6 +35694,7 @@ export interface operations {
         'application/json': {
           /** @description Typed after `#` in the composer. Letters, digits, `_` and `-`. */
           shortcut: string;
+          /** @description May carry `{{variable}}` placeholders; an unknown one is a 400. */
           text: string;
           /**
            * @default chat
@@ -35632,13 +35702,16 @@ export interface operations {
            */
           scope?: 'chat' | 'ticket';
           /**
-           * @description `group` requires `group_id`; `all` refuses one. Omitting both
-           *     saves a workspace-wide reply, which is what every reply saved
-           *     before this field existed is.
+           * @description `group` requires `group_id`; `all` and `private` refuse one.
+           *     Omitting both saves a workspace-wide reply, which is what every
+           *     reply saved before this field existed is. `private` saves a
+           *     personal reply owned by the caller and needs only
+           *     `canned_responses--my:rw`; a shared one needs
+           *     `canned_responses--all:rw`.
            * @default all
            * @enum {string}
            */
-          visibility?: 'all' | 'group';
+          visibility?: 'all' | 'group' | 'private';
           /**
            * Format: int64
            * @description The team the reply belongs to. Required when `visibility` is `group`.
@@ -35711,7 +35784,7 @@ export interface operations {
           shortcut?: string;
           text?: string;
           /** @enum {string} */
-          visibility?: 'all' | 'group';
+          visibility?: 'all' | 'group' | 'private';
           /**
            * Format: int64
            * @description Re-scoping is a pair, so the two fields are read together: the
@@ -35748,6 +35821,38 @@ export interface operations {
           'application/json': components['schemas']['Error'];
         };
       };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  setCannedResponseFallback: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          fallback_text: string | null;
+        };
+      };
+    };
+    responses: {
+      /** @description Saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            fallback_text: string | null;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
     };
   };

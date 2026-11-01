@@ -528,3 +528,35 @@ test('opens Settings › AI: both providers read from the environment, the stub 
 
   await scanBothThemes(page, 'settings-ai', testInfo);
 });
+
+test('opens Billing › Payment queue and Payment settings: every section answers from the real stack and passes axe', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(120_000);
+
+  await page.goto(`${ADMIN}/billing`);
+  await typePassword(page);
+  const signInCode = await nextTotpCode(secret, usedStep);
+  usedStep = stepOf();
+  await page.getByLabel('Authenticator code').fill(signInCode);
+  await page.getByRole('button', { name: 'Verify' }).click();
+  await expect(page.getByRole('heading', { name: 'Billing', level: 1 })).toBeVisible();
+
+  // Read only: the switches are the whole stack's, and the tenant specs pay against them.
+  await page.getByRole('tab', { name: 'Payment queue' }).click();
+  for (const heading of ['Crypto payment requests', 'Bank transfers']) {
+    await expect(page.getByRole('heading', { name: heading, level: 2 })).toBeVisible();
+  }
+  await expect(page.getByText(/could not be loaded/)).toHaveCount(0);
+  await scanBothThemes(page, 'billing-payment-queue', testInfo);
+
+  await page.getByRole('tab', { name: 'Payment settings' }).click();
+  for (const heading of ['Payment methods', 'Bank account', 'Statement issuer']) {
+    await expect(page.getByRole('heading', { name: heading, level: 2 })).toBeVisible();
+  }
+  await expect(page.getByText(/could not be loaded/)).toHaveCount(0);
+  // Nothing stored on the e2e stack: ADR-13a's defaults — both manual methods on, cards off.
+  await expect(page.getByRole('checkbox', { name: 'Bank transfer (SWIFT)' })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: /^Card \(Stripe\)/ })).not.toBeChecked();
+  await scanBothThemes(page, 'billing-payment-settings', testInfo);
+});

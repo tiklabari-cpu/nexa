@@ -281,6 +281,28 @@ paths:
     $ref: "./paths/billing.yaml#/credits"
   /billing/manual-subscription:
     $ref: "./paths/billing.yaml#/manualSubscription"
+  /billing/invoices/{invoiceId}/pdf:
+    $ref: "./paths/payment-ops.yaml#/invoicePdf"
+  /billing/payment-requests:
+    $ref: "./paths/payment-ops.yaml#/paymentRequests"
+  /billing/payment-requests/{requestId}/send-address:
+    $ref: "./paths/payment-ops.yaml#/sendAddress"
+  /billing/payment-requests/{requestId}/confirm-txid:
+    $ref: "./paths/payment-ops.yaml#/confirmTxid"
+  /billing/payment-requests/{requestId}/cancel:
+    $ref: "./paths/payment-ops.yaml#/cancelRequest"
+  /billing/swift-payments:
+    $ref: "./paths/payment-ops.yaml#/swiftPayments"
+  /billing/swift-payments/{paymentId}/mark-paid:
+    $ref: "./paths/payment-ops.yaml#/markSwiftPaid"
+  /billing/providers:
+    $ref: "./paths/payment-ops.yaml#/providers"
+  /billing/bank-details:
+    $ref: "./paths/payment-ops.yaml#/bankDetails"
+  /billing/issuer-profile:
+    $ref: "./paths/payment-ops.yaml#/issuerProfile"
+  /billing/refund-approvals:
+    $ref: "./paths/payment-ops.yaml#/refundApprovals"
   /usage/global:
     $ref: "./paths/usage.yaml#/global"
   /usage/workspaces:
@@ -2348,6 +2370,7 @@ components:
         - credit_cents
         - total_cents
         - issued_at
+        - pdf_available
       properties:
         id: { type: string, format: uuid }
         license_id: { type: string }
@@ -2363,6 +2386,9 @@ components:
           description: What the platform's credits took off the statement (a positive figure).
         total_cents: { type: integer }
         issued_at: { type: string, format: date-time }
+        pdf_available:
+          type: boolean
+          description: Whether the statement has its PDF (#383) — older ones have only the CSV.
 
     PlatformInvoiceList:
       type: object
@@ -2498,6 +2524,282 @@ components:
         period_end: { type: string, format: date-time }
         seats: { type: integer, minimum: 1, maximum: 100000 }
         billing_cycle: { type: string, enum: [monthly, annual] }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    PlatformPaymentRequestState:
+      type: string
+      description: A crypto request's state (`CRYPTO_REQUEST_STATUSES`, tm 382).
+      enum: [requested, address_sent, paid, rejected, canceled]
+
+    PlatformCryptoNetwork:
+      type: string
+      enum: [usdt_trc20, usdt_erc20]
+
+    PlatformPaymentRequest:
+      type: object
+      description: |
+        One crypto payment request — the queue the team works from. Billing
+        facts only: the amount, the network, the invoicing name the owner gave,
+        the address the team sent and the TXID the owner wrote.
+      required:
+        - id
+        - license_id
+        - organization_name
+        - network
+        - status
+        - amount_minor
+        - currency
+        - billing_cycle
+        - billing_name
+        - wallet_address
+        - address_sent_at
+        - txid
+        - txid_submitted_at
+        - closed_reason
+        - handled_by_email
+        - created_at
+        - closed_at
+      properties:
+        id: { type: string, format: uuid }
+        license_id: { type: string }
+        organization_name: { type: string }
+        network: { $ref: "#/components/schemas/PlatformCryptoNetwork" }
+        status: { $ref: "#/components/schemas/PlatformPaymentRequestState" }
+        amount_minor: { type: integer }
+        currency: { type: string }
+        billing_cycle: { type: string, enum: [monthly, annual] }
+        billing_name: { type: string }
+        wallet_address: { type: ["string", "null"] }
+        address_sent_at: { type: ["string", "null"], format: date-time }
+        txid: { type: ["string", "null"] }
+        txid_submitted_at: { type: ["string", "null"], format: date-time }
+        closed_reason: { type: ["string", "null"] }
+        handled_by_email:
+          type: ["string", "null"]
+          description: The operator who last acted on it.
+        created_at: { type: string, format: date-time }
+        closed_at: { type: ["string", "null"], format: date-time }
+
+    PlatformPaymentRequestList:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/PlatformPaymentRequest" } }
+        next_cursor: { type: ["string", "null"] }
+
+    PlatformPaymentRequestEnvelope:
+      type: object
+      required: [request]
+      properties:
+        request: { $ref: "#/components/schemas/PlatformPaymentRequest" }
+
+    PlatformSendAddressRequest:
+      type: object
+      required: [network, address, reason]
+      properties:
+        network:
+          allOf: [{ $ref: "#/components/schemas/PlatformCryptoNetwork" }]
+          description: Must be the request's own network — another is 400 `network_mismatch`.
+        address:
+          type: string
+          maxLength: 100
+          description: TRC-20 `T` + 33 base58, ERC-20 `0x` + 40 hex; anything else is 400 `address_invalid`.
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    PlatformConfirmTxidRequest:
+      type: object
+      required: [txid, reason]
+      properties:
+        txid:
+          type: string
+          maxLength: 100
+          description: |
+            The transaction found on the chain. When the owner already wrote one
+            it must be the same (400 `txid_mismatch`); one used on another
+            payment is 409 `platform_payment_state` (`txid_used`).
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    PlatformSwiftPaymentState:
+      type: string
+      enum: [pending, succeeded, failed, canceled, disputed]
+
+    PlatformSwiftPayment:
+      type: object
+      required:
+        - id
+        - license_id
+        - organization_name
+        - reference
+        - status
+        - amount_minor
+        - currency
+        - billing_cycle
+        - created_at
+        - settled_at
+        - handled_by_email
+      properties:
+        id: { type: string, format: uuid }
+        license_id: { type: string }
+        organization_name: { type: string }
+        reference:
+          type: string
+          description: The code the transfer's description carries (`ST-XXXX-XXXX`).
+        status: { $ref: "#/components/schemas/PlatformSwiftPaymentState" }
+        amount_minor: { type: integer }
+        currency: { type: string }
+        billing_cycle: { type: string, enum: [monthly, annual] }
+        created_at: { type: string, format: date-time }
+        settled_at: { type: ["string", "null"], format: date-time }
+        handled_by_email: { type: ["string", "null"] }
+
+    PlatformSwiftPaymentList:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/PlatformSwiftPayment" } }
+        next_cursor: { type: ["string", "null"] }
+
+    PlatformSwiftPaymentEnvelope:
+      type: object
+      required: [payment]
+      properties:
+        payment: { $ref: "#/components/schemas/PlatformSwiftPayment" }
+
+    PlatformMarkSwiftPaidRequest:
+      type: object
+      required: [reference, reason]
+      properties:
+        reference:
+          type: string
+          maxLength: 32
+          description: The reference read off the bank statement — must be this transfer's (400 `reference_mismatch`).
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    PlatformPaymentProviderSwitches:
+      type: object
+      required: [swift_manual, crypto_manual, stripe]
+      properties:
+        swift_manual: { type: boolean }
+        crypto_manual: { type: boolean }
+        stripe: { type: boolean }
+
+    PlatformPaymentProviders:
+      type: object
+      required: [providers, stored, stripe_card_ready, updated_at]
+      properties:
+        providers: { $ref: "#/components/schemas/PlatformPaymentProviderSwitches" }
+        stored:
+          type: boolean
+          description: False while no row exists — the defaults (both manual methods on, Stripe off) apply.
+        stripe_card_ready:
+          type: boolean
+          description: |
+            Whether the deployment's card processor can take a card on its own
+            page. While it cannot (the mock), no workspace is offered Stripe,
+            whatever its switch says.
+        updated_at: { type: ["string", "null"], format: date-time }
+
+    PlatformPaymentProvidersRequest:
+      type: object
+      required: [swift_manual, crypto_manual, stripe, reason]
+      properties:
+        swift_manual: { type: boolean }
+        crypto_manual: { type: boolean }
+        stripe: { type: boolean }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    PlatformSwiftBankDetails:
+      type: object
+      required: [beneficiary, bank_name, iban, swift_bic, bank_address]
+      properties:
+        beneficiary: { type: string }
+        bank_name: { type: string }
+        iban: { type: string }
+        swift_bic: { type: string }
+        bank_address: { type: ["string", "null"] }
+
+    PlatformBankDetails:
+      type: object
+      required: [details, updated_at]
+      properties:
+        details:
+          description: Null until set — the workspaces' SWIFT screen then has no account to show.
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformSwiftBankDetails" }
+            - { type: "null" }
+        updated_at: { type: ["string", "null"], format: date-time }
+
+    PlatformBankDetailsRequest:
+      type: object
+      required: [beneficiary, bank_name, iban, swift_bic, reason]
+      properties:
+        beneficiary: { type: string, minLength: 1, maxLength: 200 }
+        bank_name: { type: string, minLength: 1, maxLength: 200 }
+        iban:
+          type: string
+          maxLength: 64
+          description: Two letters, two digits, 11–30 letters or digits; spaces are dropped.
+        swift_bic:
+          type: string
+          maxLength: 16
+          description: 8 or 11 characters (`AAAABBCC` / `AAAABBCCDDD`).
+        bank_address: { type: ["string", "null"], maxLength: 500 }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    PlatformIssuerParty:
+      type: object
+      required: [legal_name, address_lines, country, tax_office, tax_id, vat_id, email, tax_note]
+      properties:
+        legal_name: { type: string }
+        address_lines: { type: array, items: { type: string } }
+        country: { type: ["string", "null"] }
+        tax_office: { type: ["string", "null"] }
+        tax_id: { type: ["string", "null"] }
+        vat_id: { type: ["string", "null"] }
+        email: { type: ["string", "null"] }
+        tax_note: { type: ["string", "null"] }
+
+    PlatformIssuerProfile:
+      type: object
+      required: [profile, updated_at]
+      properties:
+        profile:
+          description: |
+            Null until set — statements then carry the placeholder issuer. A
+            statement already issued keeps the issuer it was issued with
+            (`invoices.seller_snapshot`, #383).
+          oneOf:
+            - { $ref: "#/components/schemas/PlatformIssuerParty" }
+            - { type: "null" }
+        updated_at: { type: ["string", "null"], format: date-time }
+
+    PlatformIssuerProfileRequest:
+      type: object
+      required: [legal_name, reason]
+      properties:
+        legal_name: { type: string, minLength: 1, maxLength: 200 }
+        address_lines:
+          type: array
+          maxItems: 6
+          items: { type: string, maxLength: 200 }
+        country: { type: ["string", "null"], pattern: "^[A-Z]{2}$" }
+        tax_office: { type: ["string", "null"], maxLength: 100 }
+        tax_id: { type: ["string", "null"], maxLength: 32 }
+        vat_id: { type: ["string", "null"], maxLength: 15 }
+        email: { type: ["string", "null"], maxLength: 254 }
+        tax_note: { type: ["string", "null"], maxLength: 1000 }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    PlatformRefundApprovalRequest:
+      type: object
+      required: [license_id, invoice_id, amount_minor, reason]
+      properties:
+        license_id: { type: string, pattern: "^[1-9][0-9]{0,18}$" }
+        invoice_id: { type: string, format: uuid }
+        amount_minor:
+          type: integer
+          minimum: 1
+          description: At most the statement's total (400 `amount_exceeds_invoice`).
         reason: { type: string, minLength: 3, maxLength: 500 }
 
     PlatformUsageTopMeter:
@@ -3460,7 +3762,8 @@ components:
         `platform_last_superadmin`, `account_exists`, `two_factor_already_enabled` or
         `platform_workspace_state` (`details.reason`, tm 389.10) or
         `platform_account_state` (`details.reason`, tm 389.11) or
-        `platform_operation_running` (tm 389.17) — the request was fine, the
+        `platform_operation_running` (tm 389.17) or `platform_payment_state`
+        (`details.reason`, tm 389.18) — the request was fine, the
         state refused it.
       content:
         application/json:

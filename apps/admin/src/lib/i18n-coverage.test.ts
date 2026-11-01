@@ -59,6 +59,8 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/auth/RecoveryCodesPage.tsx',
   'src/features/auth/SignInPage.tsx',
   'src/features/billing/BillingPage.tsx',
+  'src/features/billing/PaymentQueue.tsx',
+  'src/features/billing/PaymentSettings.tsx',
   'src/features/dashboard/DashboardPage.tsx',
   'src/features/dashboard/HealthSection.tsx',
   'src/features/operations/MaintenanceSections.tsx',

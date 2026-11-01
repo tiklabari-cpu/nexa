@@ -177,9 +177,13 @@ export const ERROR_TYPES = [
   // `platform_operation_running` (tm 389.17): a long operation the panel
   // started — re-embedding the knowledge base — is still running, and a
   // second one may not start beside it.
+  // `platform_payment_state` (tm 389.18): a payment action the request's or
+  // transfer's state refuses — already paid, closed, or a transaction id
+  // already used on another payment (`details.reason`).
   'platform_account_state',
   'platform_last_superadmin',
   'platform_operation_running',
+  'platform_payment_state',
   'platform_reason_required',
   'platform_recent_totp_required',
   'platform_totp_required',
@@ -310,6 +314,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   platform_account_state: 409,
   platform_last_superadmin: 409,
   platform_operation_running: 409,
+  platform_payment_state: 409,
   platform_reason_required: 400,
   platform_recent_totp_required: 403,
   platform_totp_required: 403,

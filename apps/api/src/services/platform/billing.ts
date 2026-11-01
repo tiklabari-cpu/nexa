@@ -73,12 +73,12 @@ export const CREDIT_CURRENCY = INVOICE_CURRENCY.toUpperCase();
 /** A cursor this list did not write, or wrote for other filters. */
 export class BillingCursorError extends Error {}
 
-const clamp = (value: number | undefined, fallback: number, max: number): number =>
+export const clamp = (value: number | undefined, fallback: number, max: number): number =>
   value === undefined ? fallback : Math.min(Math.max(1, Math.trunc(value)), max);
 
 // --- Keyset cursors ---------------------------------------------------------
 
-interface Cursor {
+export interface Cursor {
   /** Which list and filters wrote it, hashed. */
   f: string;
   /** The last row's sort key, as text. */
@@ -86,18 +86,18 @@ interface Cursor {
   id: string;
 }
 
-function fingerprint(list: string, filter: unknown): string {
+export function fingerprint(list: string, filter: unknown): string {
   return createHash('sha256')
     .update(JSON.stringify([list, filter]))
     .digest('base64url')
     .slice(0, 16);
 }
 
-function encodeCursor(cursor: Cursor): string {
+export function encodeCursor(cursor: Cursor): string {
   return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
 }
 
-function decodeCursor(raw: string, expected: string, key: RegExp): Cursor {
+export function decodeCursor(raw: string, expected: string, key: RegExp): Cursor {
   try {
     const value = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8')) as Partial<Cursor>;
     if (
@@ -116,7 +116,7 @@ function decodeCursor(raw: string, expected: string, key: RegExp): Cursor {
 }
 
 /** Epoch milliseconds in SQL — a JavaScript `Date` keeps no microseconds, so the key cannot either. */
-const epochMs = (column: string) =>
+export const epochMs = (column: string) =>
   Prisma.raw(`floor(extract(epoch from ${column}) * 1000)::bigint`);
 
 // --- Views -------------------------------------------------------------------
@@ -158,6 +158,8 @@ export interface InvoiceRow {
   credit_cents: number;
   total_cents: number;
   issued_at: string;
+  /** Whether the statement has its stored PDF (#383) — older ones have only the CSV. */
+  pdf_available: boolean;
 }
 
 export interface CreditView {
@@ -412,11 +414,13 @@ export class PlatformBilling {
         credit_cents: number;
         total_cents: number;
         issued_at: Date;
+        pdf_available: boolean;
       }>
     >`
       SELECT i.id::text AS id, i.license_id, o.name AS organization_name, i.number,
              i.period::text AS period, i.origin, i.status, i.currency::text AS currency,
              i.subtotal_cents, i.total_cents, i.issued_at,
+             (i.pdf_storage_key IS NOT NULL) AS pdf_available,
              COALESCE((SELECT -sum(li.amount_cents) FROM invoice_line_items li
                         WHERE li.invoice_id = i.id AND li.platform_credit_id IS NOT NULL), 0)::int
                AS credit_cents
@@ -443,6 +447,7 @@ export class PlatformBilling {
         credit_cents: row.credit_cents,
         total_cents: row.total_cents,
         issued_at: row.issued_at.toISOString(),
+        pdf_available: row.pdf_available,
       })),
       next_cursor:
         rows.length > limit && last ? encodeCursor({ f, k: last.period, id: last.id }) : null,

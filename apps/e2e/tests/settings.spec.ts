@@ -1439,6 +1439,73 @@ test.describe('routing rules', () => {
       }
     }
   });
+
+  /**
+   * AU-02 · tm 373 — the form speaks the whole of what the engine accepts. An
+   * exact page URL typed with campaign parameters is stored in its normalised
+   * form, several countries are one condition, and the rule opens again for
+   * editing with its values as chips.
+   */
+  test('adds a rule with an exact URL and countries, then edits its countries', async ({
+    agentPage,
+    request,
+  }) => {
+    const token = await ownerAccessToken(request);
+    const auth = { authorization: `Bearer ${token}` };
+    const teamName = `Routing parity ${Date.now().toString().slice(-6)}`;
+    const ruleName = `Deposit TR ${Date.now().toString().slice(-6)}`;
+    let groupId: number | undefined;
+
+    const created = await request.post(`${API_BASE}/groups`, {
+      headers: auth,
+      data: { name: teamName },
+    });
+    expect(created.ok(), `team create failed: ${created.status()} ${await created.text()}`).toBe(
+      true,
+    );
+    groupId = ((await created.json()) as { id: number }).id;
+
+    try {
+      await agentPage.goto('/app/settings/routing-rules');
+      const section = agentPage.getByRole('region', { name: 'Routing' });
+      await expect(section.getByRole('heading', { name: 'Routing', level: 2 })).toBeVisible();
+
+      await section.getByLabel('Rule name').fill(ruleName);
+      await section
+        .getByLabel('When the page URL is exactly')
+        .fill('HTTPS://Site.com/tr/para-yatir/?utm_source=mail#top');
+      await section.getByLabel("When the visitor's country is").selectOption('TR');
+      await section.getByLabel("When the visitor's country is").selectOption('AZ');
+      await section.getByLabel('Send to team').selectOption({ label: teamName });
+      await section.getByRole('button', { name: 'Add rule' }).click();
+
+      const row = section.locator('li').filter({ hasText: ruleName });
+      await expect(row).toContainText(
+        `url is exactly https://site.com/tr/para-yatir and country TR or AZ → ${teamName}`,
+      );
+
+      await row.getByRole('button', { name: `Edit rule ${ruleName}` }).click();
+      await expect(section.getByLabel('Rule name')).toHaveValue(ruleName);
+      await section.getByRole('button', { name: /^Remove .*\(AZ\)$/ }).click();
+      await section.getByRole('button', { name: 'Save rule' }).click();
+
+      await expect(row).toContainText(
+        `url is exactly https://site.com/tr/para-yatir and country TR → ${teamName}`,
+      );
+
+      await row.getByRole('button', { name: `Delete rule ${ruleName}` }).click();
+      await confirmDialog(agentPage, 'Delete');
+      await expect(section.locator('li').filter({ hasText: ruleName })).toHaveCount(0);
+
+      const allowed = await request.delete(`${API_BASE}/groups/${groupId}`, { headers: auth });
+      expect(allowed.status()).toBe(204);
+      groupId = undefined;
+    } finally {
+      if (groupId) {
+        await request.delete(`${API_BASE}/groups/${groupId}`, { headers: auth }).catch(() => {});
+      }
+    }
+  });
 });
 
 test.describe('audit log', () => {

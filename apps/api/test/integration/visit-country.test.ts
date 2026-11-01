@@ -211,4 +211,114 @@ describe('visitor country from the address (GEOIP-COUNTRY · tm 330)', () => {
       JSON.stringify(row, (_k, v: unknown) => (typeof v === 'bigint' ? String(v) : v)),
     ).not.toContain(ISTANBUL);
   });
+
+  // AU-02 · tm 373: the routing rules read the contact's country and compare
+  // exact page URLs in normalised form.
+  describe('routing rules (AU-02 · tm 373)', () => {
+    let salesId: bigint;
+    let supportId: bigint;
+
+    beforeEach(async () => {
+      supportId = (await owner.group.findFirstOrThrow({ where: { licenseId: fx.a.licenseId } })).id;
+      const sales = await owner.group.create({
+        data: { licenseId: fx.a.licenseId, name: 'Sales' },
+        select: { id: true },
+      });
+      salesId = sales.id;
+      await owner.groupAgent.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          groupId: salesId,
+          agentId: fx.a.agentAccountId,
+          priority: 'normal',
+        },
+      });
+    });
+
+    const teamOf = async (customerId: string) => {
+      const chat = await owner.chat.findFirstOrThrow({ where: { customerId } });
+      const access = await owner.chatAccess.findMany({ where: { chatId: chat.id } });
+      return access.map((row) => row.groupId);
+    };
+
+    it('sends a widget chat from a listed country to the rule team, others to the next rule (AU-02-S2)', async () => {
+      await owner.routingRule.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          kind: 'chat',
+          conditions: { country_codes: ['TR', 'AZ'] },
+          targetGroupId: salesId,
+          priority: 1,
+        },
+      });
+
+      const turkish = await mint(ISTANBUL);
+      expect((await send(ISTANBUL, turkish.token, 'https://shop.example/')).statusCode).toBe(201);
+      expect(await teamOf(turkish.customer_id)).toEqual([salesId]);
+
+      // A country the rule does not name, and one nobody could tell, both fall
+      // through to the fallback.
+      const german = await mint(BERLIN);
+      await send(BERLIN, german.token, 'https://shop.example/');
+      expect(await teamOf(german.customer_id)).toEqual([supportId]);
+
+      const unknown = await mint(UNKNOWN);
+      await send(UNKNOWN, unknown.token, 'https://shop.example/');
+      expect(await teamOf(unknown.customer_id)).toEqual([supportId]);
+    });
+
+    it('matches "URL is exactly" through campaign parameters, a fragment and a trailing slash (AU-02-S1)', async () => {
+      await owner.routingRule.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          kind: 'chat',
+          // Stored the way the settings screen stores it, and the way an older
+          // client might have: both must match.
+          conditions: { url_equals: ['https://Site.com/tr/para-yatir/'] },
+          targetGroupId: salesId,
+          priority: 1,
+        },
+      });
+
+      const exact = await mint(BERLIN);
+      await send(BERLIN, exact.token, 'https://site.com/tr/para-yatir?utm_source=mail&x=1#top');
+      expect(await teamOf(exact.customer_id)).toEqual([salesId]);
+
+      // The same host, another page: not equal, however much of it matches.
+      const other = await mint(BERLIN);
+      await send(BERLIN, other.token, 'https://site.com/tr/para-yatir/gecmis');
+      expect(await teamOf(other.customer_id)).toEqual([supportId]);
+    });
+
+    it('stores a rule saved from the screen with its exact URLs normalised and countries upper-cased', async () => {
+      const response = await server.post(
+        '/settings/routing-rules',
+        {
+          name: 'TR deposit',
+          conditions: {
+            url_equals: [
+              'HTTPS://Site.com/tr/para-yatir/?utm_source=x#top',
+              'https://site.com/tr/para-yatir',
+            ],
+            country_codes: ['tr', 'AZ', 'TR'],
+          },
+          target_group_id: Number(salesId),
+          priority: 3,
+        },
+        auth(
+          await grantToken(owner, {
+            licenseId: fx.a.licenseId,
+            organizationId: fx.a.organizationId,
+            ownerId: fx.a.ownerAccountId,
+            scopes: ['access_rules:rw'],
+          }),
+        ),
+      );
+      expect(response.statusCode).toBe(201);
+      expect(response.json().conditions).toEqual({
+        url_equals: ['https://site.com/tr/para-yatir'],
+        country_codes: ['TR', 'AZ'],
+      });
+    });
+  });
 });

@@ -259,6 +259,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/settings/McpConnection.tsx',
   'src/features/settings/PersonalAccessTokens.tsx',
   'src/features/settings/RoutingRules.tsx',
+  'src/components/settings/RoutingConditionFields.tsx',
   'src/features/settings/SalesTracker.tsx',
   'src/features/settings/Sandbox.tsx',
   'src/features/settings/ScheduledExports.tsx',

@@ -60,6 +60,7 @@ import {
 } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 import { enterQueue, leaveQueue } from './queue-entries.js';
+import { normalisePageUrl } from './page-url.js';
 
 export interface RoutingContext {
   /** Page the visitor was on — matched against rule conditions. */
@@ -1173,7 +1174,14 @@ function matches(conditions: RoutingConditions, context: RoutingContext): boolea
     checks.push(conditions.url_contains.some((fragment) => url.includes(fragment)));
   }
   if (conditions.url_equals?.length) {
-    checks.push(conditions.url_equals.some((candidate) => candidate === context.url));
+    // Compared in normalised form on both sides (AU-02 · tm 373): the widget's URL
+    // carries query parameters and fragments the owner never typed. A visit with
+    // no URL equals nothing.
+    const page = context.url === undefined ? null : normalisePageUrl(context.url);
+    checks.push(
+      page !== null &&
+        conditions.url_equals.some((candidate) => normalisePageUrl(candidate) === page),
+    );
   }
   if (conditions.country_codes?.length) {
     const country = context.countryCode?.toUpperCase() ?? '';

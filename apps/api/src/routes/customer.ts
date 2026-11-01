@@ -1508,6 +1508,22 @@ export default async function customerRoutes(
       // together or not at all. `expired` at the door when the chat is
       // already too far behind.
       const enqueued: { job: EnqueuedAiJob | null } = { job: null };
+
+      // Where the visitor is, for the routing rules (AU-02 · tm 373): the country
+      // the contact carries (tm 330 fills it from the address, offline, on the
+      // page view above). Read after that write, only when this message opens a
+      // connection — a continued one is not routed. Unknown stays unset, so a
+      // rule that names countries never matches it and the next rule decides.
+      const visitorCountry = opens
+        ? await request.withTenant(async (tx) => {
+            const row = await tx.customer.findUnique({
+              where: { id: principal.customerId },
+              select: { countryCode: true },
+            });
+            return row?.countryCode ?? undefined;
+          })
+        : undefined;
+
       const result = await chats.openOrContinueConnection(tenant, principal, {
         customerId: principal.customerId,
         event: {
@@ -1519,10 +1535,11 @@ export default async function customerRoutes(
           ...(body.idempotency_key ? { idempotencyKey: body.idempotency_key } : {}),
           ...(pressed ? { properties: { postback: pressed.postback } } : {}),
         },
-        ...(body.url || topicGroupId !== undefined
+        ...(body.url || topicGroupId !== undefined || visitorCountry !== undefined
           ? {
               routing: {
                 ...(body.url ? { url: body.url } : {}),
+                ...(visitorCountry !== undefined ? { countryCode: visitorCountry } : {}),
                 ...(topicGroupId !== undefined ? { requestedGroupId: topicGroupId } : {}),
               },
             }

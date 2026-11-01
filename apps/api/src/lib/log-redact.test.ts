@@ -18,6 +18,7 @@ import {
   PLATFORM_SECRET_LOG_PATHS,
   PROVIDER_SECRET_LOG_PATHS,
   requestPath,
+  visitedPageUrl,
 } from './log-redact.js';
 
 describe('maskPii', () => {
@@ -114,8 +115,51 @@ describe('logSafeUrl', () => {
     expect(logSafeUrl('/x?seq=4&q=a')).toBe('/x?seq=4&q=[redacted]');
   });
 
+  it('masks q, search, name, username and phone — a search box or a handle in the address (GV-05)', () => {
+    expect(logSafeUrl('/api/v1/accounts?q=jane&limit=25')).toBe(
+      '/api/v1/accounts?q=[redacted]&limit=25',
+    );
+    expect(logSafeUrl('/x?search=papara%20sorunu&page_id=p2')).toBe(
+      '/x?search=[redacted]&page_id=p2',
+    );
+    expect(logSafeUrl('/x?name=Jane%20Roe&username=jroe&phone=%2B905551112233&seq=4')).toBe(
+      '/x?name=[redacted]&username=[redacted]&phone=[redacted]&seq=4',
+    );
+    // A key that only ends in one of them is not one of them.
+    expect(logSafeUrl('/x?file_name=a.pdf&research=1')).toBe('/x?file_name=a.pdf&research=1');
+  });
+
   it('leaves a plain path alone', () => {
     expect(logSafeUrl('/api/v1/chats/c1234567890a')).toBe('/api/v1/chats/c1234567890a');
+  });
+});
+
+describe('visitedPageUrl (GV-05 · NFR-S9)', () => {
+  it("masks an operator page's email= before the visit keeps it, and keeps the path", () => {
+    expect(visitedPageUrl('https://casino.test/account?email=jane%40example.test&tab=bonus')).toBe(
+      'https://casino.test/account?email=[redacted]&tab=bonus',
+    );
+  });
+
+  it('keeps a harmless query a campaign rule may target', () => {
+    const url = 'https://casino.test/deposit?step=1&utm_source=mail';
+    expect(visitedPageUrl(url)).toBe(url);
+  });
+
+  it('catches an address or a search in any key, and in the fragment', () => {
+    expect(visitedPageUrl('https://s.test/r?to=jane@example.test&q=bonus#x')).toBe(
+      'https://s.test/r?to=[redacted]&q=[redacted]#x',
+    );
+    expect(visitedPageUrl('https://s.test/r#mail=jane@example.test')).toBe(
+      'https://s.test/r#mail=[redacted]',
+    );
+  });
+
+  it('leaves the path alone, ids and all, and an address with no query unchanged', () => {
+    expect(visitedPageUrl('https://s.test/u/4111111111111111')).toBe(
+      'https://s.test/u/4111111111111111',
+    );
+    expect(visitedPageUrl('')).toBe('');
   });
 });
 

@@ -122,6 +122,7 @@ import {
   renderTranscript,
   type TranscriptLine,
 } from '../services/notifications/chat-transcript.js';
+import { visitedPageUrl } from '../lib/log-redact.js';
 
 const startSchema = z
   .object({
@@ -1562,7 +1563,8 @@ export default async function customerRoutes(
         audit: request.auditContext(),
         outbox: aiJobOutbox({
           requestId: request.id,
-          pageUrl: body.url ?? null,
+          // Masked like the visit's page list (tm 386 · GV-05).
+          pageUrl: body.url ? visitedPageUrl(body.url) : null,
           // Who wrote it, as their token says (tm 294 · K4): what the AI may
           // recall of their day depends on it.
           identityTrust: principal.identity ?? null,

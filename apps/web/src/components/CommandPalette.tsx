@@ -236,6 +236,7 @@ export function CommandPalette(): ReactElement | null {
     queryKey: ['palette', 'search', query],
     queryFn: () =>
       api.get<{ items: SearchResult[] }>(
+        // url-pii-ok: API request, not the address bar; the server log masks the value
         `/search?query=${encodeURIComponent(query)}&limit=${SEARCH_LIMIT}`,
       ),
     enabled: searching && !archiveMode && has(RECORD_READ),
@@ -254,6 +255,7 @@ export function CommandPalette(): ReactElement | null {
     queryKey: ['palette', 'archive', query],
     queryFn: () =>
       api.get<{ items: SearchResult[] }>(
+        // url-pii-ok: API request, not the address bar; the server log masks the value
         `/search?query=${encodeURIComponent(query)}&types=message&limit=${SEARCH_LIMIT}`,
       ),
     enabled: open && archiveMode && archiveWords.ok && has(CHAT_READ),

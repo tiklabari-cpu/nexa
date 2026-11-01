@@ -159,6 +159,7 @@ function buildListUrl(
   pageId?: string,
 ): string {
   const params = new URLSearchParams();
+  // url-pii-ok: API request, not the address bar; the server log masks the value
   if (query) params.set('query', query);
   if (category !== 'all') params.set('category', category);
   if (collection !== 'all') params.set('collection', collection);

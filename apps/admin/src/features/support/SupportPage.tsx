@@ -32,6 +32,7 @@ export function SupportPage(): ReactElement {
   const [text, setText] = useState('');
   const lookup = useMutation({
     mutationFn: (q: string) =>
+      // url-pii-ok: API request, not the address bar; the server log masks the value
       api.get<PlatformSupportLookup>(`/support/lookup?q=${encodeURIComponent(q)}`),
   });
   const notFound = lookup.error instanceof ApiClientError && lookup.error.status === 404;

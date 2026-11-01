@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
+    <!-- A link out sends our origin at most, never the path or query (GV-05 · tm 386); nginx sends the same as a header. -->
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <title>SiyahTuş</title>
     <!--
       Theme boot (NFR-I18N2). Inline and synchronous because `data-theme` has to

@@ -194,9 +194,13 @@ const EMAIL = /[A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
  * free-text field a person types their own details into. Longest alternatives
  * first so the pattern reads in the order it matches (`code_verifier` before
  * `code`); the trailing `=` makes the distinction load-bearing either way.
+ *
+ * `search`, `name`, `username` and `phone` joined in tm 386 (GV-05): a search
+ * box that writes what was typed into the address, or a page that carries the
+ * player's handle, is the same free text as `q`.
  */
 const SENSITIVE_QUERY_KEY =
-  /([?&](?:access_token|refresh_token|code_verifier|client_secret|signature|password|secret|token|email|query|code|state|key|sig|q)=)[^&#]*/gi;
+  /([?&](?:access_token|refresh_token|code_verifier|client_secret|signature|username|password|search|secret|token|email|phone|query|name|code|state|key|sig|q)=)[^&#]*/gi;
 
 /**
  * Mask personal data in free text — an address, a card number, and every other
@@ -239,4 +243,27 @@ export function requestPath(url: string): string {
   if (!url) return url;
   const cut = url.search(/[?#]/);
   return cut < 0 ? url : url.slice(0, cut);
+}
+
+/**
+ * A visited page's address in the form it may be stored on a visit (tm 386 ·
+ * GV-05 · NFR-S9).
+ *
+ * `visits.pages` is shown to every agent who opens the visitor, kept for the
+ * retention period, and read by campaign and goal rules. An operator page such
+ * as `/account?email=jane@example.test` would otherwise sit there verbatim.
+ *
+ * Only the query and the fragment are touched: the path is what the agent and
+ * the URL rules read ("they are on /deposit"), and a path digit run is an id,
+ * not a card. In the query the named keys are masked whatever their value, and
+ * the general pass catches an address or a card in any other key — the same
+ * two passes as {@link logSafeUrl}. A harmless key (`step=1`, `utm_source`)
+ * survives, so a campaign rule on it keeps matching.
+ */
+export function visitedPageUrl(url: string): string {
+  if (!url) return url;
+  const cut = url.search(/[?#]/);
+  if (cut < 0) return url;
+  const tail = url.slice(cut);
+  return url.slice(0, cut) + maskPii(tail.replace(SENSITIVE_QUERY_KEY, `$1${CENSOR}`));
 }

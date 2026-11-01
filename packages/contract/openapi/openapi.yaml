@@ -885,6 +885,10 @@ paths:
     $ref: "./paths/reports.yaml#/invoices"
   /billing/invoices/{period}/download:
     $ref: "./paths/reports.yaml#/invoiceDownload"
+  /billing/invoices/{period}/pdf:
+    $ref: "./paths/billing-profile.yaml#/invoicePdf"
+  /billing/profile:
+    $ref: "./paths/billing-profile.yaml#/billingProfile"
   /billing/payment-method:
     $ref: "./paths/reports.yaml#/paymentMethod"
   /billing/api-packages:
@@ -13538,9 +13542,18 @@ components:
           line_items,
           subtotal_cents,
           total_cents,
+          pdf_available,
+          payment_method,
+          payment_reference,
         ]
       properties:
-        number: { type: string, description: "Invoice number, `SIYAHTUS-<yyyymm>`." }
+        number:
+          type: string
+          description: |
+            The issued number, `<year>-<serial>` (`2026-000123`): gapless and
+            consecutive per year across every workspace the issuer invoices
+            (tm 383 · BL-02). The open estimate has no number yet and reads
+            `SIYAHTUS-<yyyymm>`, as does a statement frozen before numbering.
         period: { type: string, description: "Billing period as `yyyymm`." }
         period_label: { type: string, description: "Friendly period label, e.g. `July 2026`." }
         period_start:
@@ -13593,6 +13606,75 @@ components:
               amount_cents: { type: integer }
         subtotal_cents: { type: integer }
         total_cents: { type: integer }
+        pdf_available:
+          type: boolean
+          description: |
+            An informational PDF was stored when the statement was issued
+            (`GET /billing/invoices/{period}/pdf`). Always `false` on the open
+            estimate and on a statement issued before PDFs existed.
+        payment_method:
+          description: How the period was paid, frozen at issue (K16); null when nothing was.
+          oneOf:
+            - $ref: "#/components/schemas/PaymentMethodId"
+            - type: "null"
+        payment_reference:
+          type: [string, "null"]
+          description: The SWIFT reference, the crypto TXID or the Stripe payment id.
+
+    BillingProfileInput:
+      type: object
+      additionalProperties: false
+      description: |
+        Who the workspace is on its invoices (tm 383 · BL-02). Empty optional
+        fields are stored as null.
+      required: [legal_name, address_line1, city, country]
+      properties:
+        legal_name: { type: string, minLength: 1, maxLength: 200 }
+        address_line1: { type: string, minLength: 1, maxLength: 200 }
+        address_line2: { type: [string, "null"], maxLength: 200 }
+        city: { type: string, minLength: 1, maxLength: 100 }
+        postal_code: { type: [string, "null"], maxLength: 20 }
+        country:
+          type: string
+          minLength: 2
+          maxLength: 2
+          description: ISO 3166-1 alpha-2.
+        tax_office: { type: [string, "null"], maxLength: 100 }
+        tax_id:
+          type: [string, "null"]
+          maxLength: 48
+          description: Required for Turkey (10-digit VKN or 11-digit TCKN).
+        vat_id: { type: [string, "null"], maxLength: 23 }
+        invoice_email: { type: [string, "null"], maxLength: 254 }
+
+    BillingProfile:
+      type: object
+      required:
+        [
+          legal_name,
+          address_line1,
+          address_line2,
+          city,
+          postal_code,
+          country,
+          tax_office,
+          tax_id,
+          vat_id,
+          invoice_email,
+          updated_at,
+        ]
+      properties:
+        legal_name: { type: string }
+        address_line1: { type: string }
+        address_line2: { type: [string, "null"] }
+        city: { type: string }
+        postal_code: { type: [string, "null"] }
+        country: { type: string, description: ISO 3166-1 alpha-2, upper case. }
+        tax_office: { type: [string, "null"] }
+        tax_id: { type: [string, "null"] }
+        vat_id: { type: [string, "null"] }
+        invoice_email: { type: [string, "null"] }
+        updated_at: { type: string, format: date-time }
 
     PaymentMethod:
       type: object

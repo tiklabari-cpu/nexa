@@ -9,11 +9,13 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  buildInvoiceKey,
   buildKey,
   buildKnowledgeKey,
   buildMailKey,
   KnowledgeDownloadSigner,
   keyFromAttachmentUrl,
+  licenseOfInvoiceKey,
   licenseOfKey,
   licenseOfKnowledgeKey,
   licenseOfMailKey,
@@ -152,5 +154,24 @@ describe('knowledge download links', () => {
 
     const attachment = { ...grant, key: buildKey(7n, 'application/pdf') };
     expect(signer.verify({ ...attachment, signature: signer.sign(attachment) }, now)).toBeNull();
+  });
+});
+
+describe('invoice PDF keys (tm 383 · BL-02)', () => {
+  it('lives under its licence in its own prefix, and no upload or mail door takes it', () => {
+    const key = buildInvoiceKey(42n);
+    expect(key).toMatch(/^42-i-[0-9a-f-]{36}\.pdf$/);
+    expect(licenseOfInvoiceKey(key)).toBe(42n);
+    expect(licenseOfStoredKey(key)).toBe(42n);
+    expect(storedObjectPath(key)).toBe(`42/invoices/${key}`);
+    expect(licenseOfKey(key)).toBeNull();
+    expect(licenseOfMailKey(key)).toBeNull();
+    expect(keyFromAttachmentUrl(`${UPLOAD_PATH_PREFIX}${key}`)).toBeNull();
+  });
+
+  it('refuses another extension and a path in front', () => {
+    const key = buildInvoiceKey(42n);
+    expect(licenseOfInvoiceKey(key.replace('.pdf', '.csv'))).toBeNull();
+    expect(licenseOfInvoiceKey(`../${key}`)).toBeNull();
   });
 });

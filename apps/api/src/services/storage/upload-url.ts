@@ -107,17 +107,44 @@ export function licenseOfKnowledgeKey(key: string): bigint | null {
 }
 
 /**
+ * `<licenseId>-i-<uuid>.pdf` — an issued invoice's PDF (tm 383 · BL-02).
+ *
+ * Its own shape for the mail key's reason: `licenseOfKey` refuses it, so the
+ * uploads route never serves it and no message can carry it; it opens only
+ * through `GET /billing/invoices/{period}/pdf`, which checks the billing
+ * scopes. Written once, by the period-close sweep, and never deleted — the
+ * database CHECK on `invoices.pdf_storage_key` repeats the pattern.
+ */
+export function buildInvoiceKey(licenseId: bigint): string {
+  return `${licenseId}-i-${randomUUID()}.pdf`;
+}
+
+const INVOICE_KEY = /^(\d{1,19})-i-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.pdf$/;
+
+/** The licence an invoice PDF's key belongs to, or null if it is not one. */
+export function licenseOfInvoiceKey(key: string): bigint | null {
+  return licenceIn(INVOICE_KEY, key);
+}
+
+/**
  * The licence of anything the object store holds — an upload, an e-mailed
- * file or a knowledge document — or null for a key in none of those shapes.
- * What the stores lay their paths out by; never what a route authorises by.
+ * file, a knowledge document or an invoice — or null for a key in none of
+ * those shapes. What the stores lay their paths out by; never what a route
+ * authorises by.
  */
 export function licenseOfStoredKey(key: string): bigint | null {
-  return licenseOfKey(key) ?? licenseOfMailKey(key) ?? licenseOfKnowledgeKey(key);
+  return (
+    licenseOfKey(key) ??
+    licenseOfMailKey(key) ??
+    licenseOfKnowledgeKey(key) ??
+    licenseOfInvoiceKey(key)
+  );
 }
 
 /**
  * Where a key lives inside the store, or null for a key in none of our shapes:
- * `<licence>/<key>`, and `<licence>/knowledge/<key>` for a knowledge document
+ * `<licence>/<key>`, `<licence>/invoices/<key>` for an invoice PDF, and
+ * `<licence>/knowledge/<key>` for a knowledge document
  * — a prefix of its own, so a bucket policy or lifecycle rule can treat the
  * documents a workspace keeps apart from what its conversations carry. Both
  * stores derive their paths here, so the two cannot disagree.
@@ -125,7 +152,9 @@ export function licenseOfStoredKey(key: string): bigint | null {
 export function storedObjectPath(key: string): string | null {
   const license = licenseOfStoredKey(key);
   if (license === null) return null;
-  return licenseOfKnowledgeKey(key) === null ? `${license}/${key}` : `${license}/knowledge/${key}`;
+  if (licenseOfKnowledgeKey(key) !== null) return `${license}/knowledge/${key}`;
+  if (licenseOfInvoiceKey(key) !== null) return `${license}/invoices/${key}`;
+  return `${license}/${key}`;
 }
 
 function licenceIn(pattern: RegExp, key: string): bigint | null {

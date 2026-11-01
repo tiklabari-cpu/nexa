@@ -260,6 +260,8 @@ model License {
   invoices               Invoice[]
   invoiceLineItems       InvoiceLineItem[]
   paymentMethod          PaymentMethod?
+  billingProfile         BillingProfile?
+  invoiceESubmissions    InvoiceESubmission[]
   paymentTransactions    PaymentTransaction[]
   cryptoPaymentRequests  CryptoPaymentRequest[]
   auditEntries           AuditLogEntry[]
@@ -4579,17 +4581,102 @@ model Invoice {
   /// that says how long after the period the freeze actually happened.
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
+  /// The gapless number (tm 383 · BL-02): `issuer`'s series for
+  /// `serialYear`, from `billing_next_invoice_serial` in the transaction that
+  /// writes the row, so a statement that fails to commit hands its serial
+  /// back. `number` is then `<serialYear>-<serial, six digits>`
+  /// (`invoices_serial_check`). All three null on a statement frozen before
+  /// numbering existed, which keeps its `SIYAHTUS-<yyyymm>`.
+  issuer     String?
+  serialYear Int?    @map("serial_year")
+  serial     Int?
+  /// The two parties as they stood when the statement was issued
+  /// (`InvoiceParty`, @siyahtus/types): editing the billing profile later
+  /// changes neither, nor the PDF printed from them.
+  sellerSnapshot Json? @map("seller_snapshot")
+  buyerSnapshot  Json? @map("buyer_snapshot")
+  /// The informational PDF (K24), rendered once at issue and stored under
+  /// `<licence>-i-<uuid>.pdf`; null on a statement frozen before PDFs.
+  pdfStorageKey  String? @map("pdf_storage_key")
+  /// How the period was paid (K16): `swift_manual` / `crypto_manual` /
+  /// `stripe`, and its SWIFT reference, TXID or Stripe payment id.
+  paymentMethod    String? @map("payment_method")
+  paymentReference String? @map("payment_reference")
+
   license   License            @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   lineItems InvoiceLineItem[]
   /// Platform credits applied to this statement (tm 389.1).
   platformCredits PlatformCredit[]
+  /// The e-invoice provider's receipt (tm 383 · K24), when it was filed.
+  eSubmission     InvoiceESubmission?
 
   /// The only index the table needs. It is the idempotency guarantee for the
   /// sweep *and* the access path for the list, which reads one workspace's rows
   /// newest first — a btree serves that backwards, so a second `DESC` index
   /// would cost every insert and buy nothing.
   @@unique([licenseId, period])
+  /// One serial per issuer and year. Legacy rows hold three nulls, which a
+  /// unique index never compares equal.
+  @@unique([issuer, serialYear, serial])
   @@map("invoices")
+}
+
+/// An issued statement handed to the e-invoice provider (tm 383 · K24): which
+/// provider took it and its id there. Its own row rather than columns on
+/// `invoices` because the receipt exists only after the statement and its PDF
+/// do, and a statement is never updated. Mock-only today (`provider = 'mock'`);
+/// a real integrator would write `pending` rows from an outbox after commit.
+model InvoiceESubmission {
+  invoiceId   String   @id @map("invoice_id") @db.Uuid
+  licenseId   BigInt   @map("license_id")
+  provider    String
+  reference   String
+  submittedAt DateTime @default(now()) @map("submitted_at") @db.Timestamptz(6)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId])
+  @@map("invoice_e_submissions")
+}
+
+/// Who the workspace is on paper (tm 383 · BL-02): copied onto each invoice
+/// when it is issued (`invoices.buyer_snapshot`). Written by the owner, read by
+/// admins; the CHECKs repeat `billingProfileProblem` (@siyahtus/types).
+model BillingProfile {
+  licenseId    BigInt   @id @map("license_id")
+  legalName    String   @map("legal_name")
+  addressLine1 String   @map("address_line1")
+  addressLine2 String?  @map("address_line2")
+  city         String
+  postalCode   String?  @map("postal_code")
+  /// ISO 3166-1 alpha-2, upper case.
+  country      String   @db.Char(2)
+  taxOffice    String?  @map("tax_office")
+  taxId        String?  @map("tax_id")
+  vatId        String?  @map("vat_id")
+  invoiceEmail String?  @map("invoice_email")
+  updatedBy    String?  @map("updated_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@map("billing_profiles")
+}
+
+/// The last serial each issuer gave out in each year (tm 383 · BL-02). One
+/// row per series, locked by `billing_next_invoice_serial` until the
+/// statement's transaction ends — that lock is what makes the numbers gapless
+/// and two concurrent issues consecutive. Not a tenant table: no licence owns
+/// a series, and `siyahtus_app` has no privilege on it.
+model InvoiceNumberCounter {
+  issuer     String
+  year       Int
+  lastSerial Int @map("last_serial")
+
+  @@id([issuer, year])
+  @@map("invoice_number_counters")
 }
 
 /// One line on a frozen statement (FR-MOD-10.3).

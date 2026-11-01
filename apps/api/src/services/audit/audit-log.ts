@@ -294,6 +294,9 @@ export const AUDIT_ACTIONS = [
   'settings.ip_allowlist_removed',
   'billing.subscription_updated',
   'billing.payment_method_updated',
+  // The owner saved the billing profile (tm 383 · BL-02): the country and
+  // whether tax and VAT numbers are on file, never the numbers or the address.
+  'billing.profile_updated',
   // The licence left the trial gate because the workspace now has a plan and a
   // card (FR-MOD-10.2 · tm 256.1). Written once, on the transition — the
   // answer to "when did this workspace start paying, and from which state"

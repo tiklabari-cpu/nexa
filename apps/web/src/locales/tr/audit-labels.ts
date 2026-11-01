@@ -64,6 +64,7 @@ export const auditLabels: Messages = {
   'audit.action.settings.ip_allowlist_removed': 'IP izin listesinden kayıt kaldırıldı',
   'audit.action.billing.subscription_updated': 'Abonelik güncellendi',
   'audit.action.billing.payment_method_updated': 'Ödeme yöntemi güncellendi',
+  'audit.action.billing.profile_updated': 'Fatura bilgileri güncellendi',
   'audit.action.billing.license_activated': 'Plan etkinleştirildi',
   'audit.action.billing.payment_started': 'Ödeme başlatıldı',
   'audit.action.billing.payment_succeeded': 'Ödeme alındı',

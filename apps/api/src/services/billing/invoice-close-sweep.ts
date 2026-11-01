@@ -57,6 +57,18 @@
  * for a period never reaches the credits — and the function locks the credit
  * rows, so two periods closing at once cannot both take the same one.
  *
+ * **The issued document (tm 383 · BL-02 · K24).** In the same transaction the
+ * statement takes the next gapless number of its year
+ * (`billing_next_invoice_serial`, a locked counter row: a statement that fails
+ * to commit hands its number back, and two issued at once are consecutive),
+ * the two parties as they stand now (the root panel's issuer profile, the
+ * workspace's billing profile) and how the period was paid (K16). Once the
+ * credits are off, the informational PDF is rendered from exactly those
+ * fields, stored, and handed to the e-invoice provider (a mock — no network);
+ * only then does the transaction commit. A store that cannot take the PDF
+ * fails the whole statement, which the next pass writes again — a statement
+ * never exists without its document.
+ *
  * **What is not swept.** A period with no usage record and no purchase gets no
  * statement, exactly as the derived path listed no such period. A workspace that
  * did nothing for a month leaves no evidence that the month happened, and
@@ -64,12 +76,17 @@
  * workspace existed.
  */
 import { Prisma, type PrismaClient } from '@prisma/client';
+import { formatInvoiceNumber, INVOICE_ISSUER } from '@siyahtus/types';
 import type { Env } from '../../config/env.js';
 import { type TenantContext, withTenant } from '../../lib/tenant.js';
+import { createObjectStore, type ObjectStore } from '../storage/object-store.js';
+import { buildInvoiceKey } from '../storage/upload-url.js';
+import { buyerSnapshot, periodPayment, sellerSnapshot } from './billing-profile.js';
+import { createEInvoiceProvider, type EInvoiceProvider } from './e-invoice.js';
+import { renderInvoicePdf } from './invoice-pdf.js';
 import {
   composeInvoice,
   INVOICE_CURRENCY,
-  invoiceNumber,
   issuedAt,
   periodWindow,
   previousPeriod,
@@ -107,13 +124,23 @@ interface TenantRow {
   organization_id: string;
 }
 
+/** Where the PDFs go and who files them — the deployment's own unless a test says otherwise. */
+export interface InvoiceIssueDeps {
+  store?: ObjectStore;
+  eInvoice?: EInvoiceProvider;
+}
+
 export class InvoiceCloseSweeper {
   readonly #db: PrismaClient;
   readonly #env: Env;
+  readonly #store: ObjectStore;
+  readonly #eInvoice: EInvoiceProvider;
 
-  constructor(db: PrismaClient, env: Env) {
+  constructor(db: PrismaClient, env: Env, deps: InvoiceIssueDeps = {}) {
     this.#db = db;
     this.#env = env;
+    this.#store = deps.store ?? createObjectStore(env.STORAGE_PROVIDER, env.storage);
+    this.#eInvoice = deps.eInvoice ?? createEInvoiceProvider();
   }
 
   async run(options: { now?: Date } = {}): Promise<InvoiceCloseReport> {
@@ -236,24 +263,47 @@ export class InvoiceCloseSweeper {
     origin: 'issued' | 'reconstructed',
   ): Promise<boolean> {
     const window = periodWindow(period);
+    const issued = issuedAt(period);
+    const serialYear = issued.getUTCFullYear();
 
     try {
       await withTenant(this.#db, context, async (tx) => {
-        const composed = composeInvoice(await readComposition(tx, context, period, this.#env));
+        const [composition, seller, buyer, payment] = await Promise.all([
+          readComposition(tx, context, period, this.#env),
+          sellerSnapshot(tx),
+          buyerSnapshot(tx, context),
+          periodPayment(tx, context, period),
+        ]);
+        const composed = composeInvoice(composition);
+
+        // Last thing before the INSERT: the series lock is held from here to
+        // commit, so everything that can be read first already was.
+        const [allocated] = await tx.$queryRaw<{ serial: number }[]>`
+          SELECT billing_next_invoice_serial(${INVOICE_ISSUER}, ${serialYear}::int) AS serial`;
+        const serial = allocated!.serial;
+        const pdfKey = buildInvoiceKey(context.licenseId);
 
         const invoice = await tx.invoice.create({
           data: {
             licenseId: context.licenseId,
-            number: invoiceNumber(period),
+            number: formatInvoiceNumber(serialYear, serial),
+            issuer: INVOICE_ISSUER,
+            serialYear,
+            serial,
             period,
             periodStart: window.start,
             periodEnd: window.end,
-            issuedAt: issuedAt(period),
+            issuedAt: issued,
             origin,
             status: composed.trialing ? 'trial' : 'paid',
             currency: INVOICE_CURRENCY,
             subtotalCents: composed.subtotal_cents,
             totalCents: composed.total_cents,
+            sellerSnapshot: seller as unknown as Prisma.InputJsonObject,
+            buyerSnapshot: buyer as unknown as Prisma.InputJsonObject,
+            pdfStorageKey: pdfKey,
+            paymentMethod: payment?.method ?? null,
+            paymentReference: payment?.reference ?? null,
           },
           select: { id: true },
         });
@@ -271,6 +321,50 @@ export class InvoiceCloseSweeper {
         // The workspace's open credits, off this statement — or nothing, on a
         // trial month or a statement that owes nothing.
         await tx.$queryRaw`SELECT billing_apply_platform_credits(${invoice.id}::uuid) AS applied`;
+
+        // The document, from the statement as it now stands — credits included.
+        const issuedRow = await tx.invoice.findUniqueOrThrow({
+          where: { id: invoice.id },
+          include: { lineItems: { orderBy: { position: 'asc' } } },
+        });
+        const pdf = renderInvoicePdf({
+          number: issuedRow.number,
+          issuedAt: issuedRow.issuedAt,
+          period,
+          periodStart: issuedRow.periodStart,
+          periodEnd: issuedRow.periodEnd,
+          currency: issuedRow.currency,
+          lineItems: issuedRow.lineItems.map((item) => ({
+            description: item.description,
+            amountCents: item.amountCents,
+          })),
+          subtotalCents: issuedRow.subtotalCents,
+          totalCents: issuedRow.totalCents,
+          status: issuedRow.status,
+          seller,
+          buyer,
+          payment,
+        });
+        await this.#store.put(pdfKey, pdf, 'application/pdf');
+
+        const receipt = await this.#eInvoice.submit({
+          licenseId: context.licenseId,
+          number: issuedRow.number,
+          issuedAt: issuedRow.issuedAt,
+          currency: issuedRow.currency,
+          totalCents: issuedRow.totalCents,
+          seller,
+          buyer,
+          pdf,
+        });
+        await tx.invoiceESubmission.create({
+          data: {
+            invoiceId: invoice.id,
+            licenseId: context.licenseId,
+            provider: receipt.provider,
+            reference: receipt.reference,
+          },
+        });
       });
       return true;
     } catch (error) {

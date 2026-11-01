@@ -218,6 +218,7 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
     actions: [
       'billing.subscription_updated',
       'billing.payment_method_updated',
+      'billing.profile_updated',
       'billing.license_activated',
       'billing.payment_started',
       'billing.payment_succeeded',

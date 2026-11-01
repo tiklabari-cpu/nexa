@@ -223,7 +223,13 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
   },
   {
     labelKey: 'audit.group.webhooks',
-    actions: ['webhook.created', 'webhook.deleted', 'webhook.delivery_exhausted'],
+    actions: [
+      'webhook.created',
+      'webhook.updated',
+      'webhook.deleted',
+      'webhook.redelivered',
+      'webhook.delivery_exhausted',
+    ],
   },
   {
     // Conversation lifecycle (FR-MOD-02.8 · FR-MOD-08.6.3). Archiving makes a

@@ -9883,6 +9883,103 @@ export interface paths {
     delete: operations['unregisterWebhook'];
     options?: never;
     head?: never;
+    /**
+     * Switch a webhook on or off
+     * @description Only `enabled` can change (KN-03): a switched-off webhook receives no new
+     *     events, and a delivery still queued for it is given up rather than sent
+     *     (consent withdrawn). The URL, event and secret are fixed at registration —
+     *     to change one, register a new webhook.
+     */
+    patch: operations['updateWebhook'];
+    trace?: never;
+  };
+  '/webhooks/{webhookId}/deliveries': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        webhookId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * The delivery log of one webhook
+     * @description One row per **attempt**, newest first, by `next_cursor` (KN-03). A row
+     *     says what happened to one send: the HTTP status the receiver answered
+     *     with and a short, cleaned error (`http_503`, `ssrf_blocked`,
+     *     `ECONNREFUSED`, `AbortError` — never a response body, a URL or a secret;
+     *     at most 500 characters).
+     *
+     *     `state` filters: `pending` (another try is queued), `delivered`,
+     *     `failed` (an attempt a later one superseded) or `exhausted` (gave up).
+     *     `can_redeliver` says whether "Redeliver" would work on the row — the
+     *     payload of an exhausted delivery is kept 72 hours, a delivered one is
+     *     never kept.
+     */
+    get: operations['listWebhookDeliveries'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/webhooks/{webhookId}/deliveries/{deliveryId}/redeliver': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        webhookId: string;
+        deliveryId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send a delivery again
+     * @description Re-sends the stored payload of a queued or exhausted delivery through the
+     *     normal sender — the SSRF check, the signature and a fresh nonce included —
+     *     and returns the **new attempt row**, which is also the newest row of the
+     *     log. The row it replaces becomes `failed` (superseded).
+     *
+     *     A refused redelivery is a `400` validation error whose
+     *     `error.details.reason` is `not_redeliverable` (a delivered attempt, a test
+     *     ping, a row whose payload has aged out, or one that is no longer the
+     *     newest attempt) or `webhook_disabled`.
+     */
+    post: operations['redeliverWebhookDelivery'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/webhooks/{webhookId}/test': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        webhookId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send a signed test event
+     * @description POSTs a signed ping to the webhook — `{"action": …, "test": true, "data":
+     *     {…}}` with the same headers a real delivery carries — and returns what the
+     *     receiver answered. The attempt is logged with `test: true`, is never
+     *     queued for a retry, and does not count toward an automation card's "last
+     *     run". Works on a switched-off webhook too (check it before switching on).
+     *     A few per minute per webhook; `429` beyond that.
+     */
+    post: operations['testWebhook'];
+    delete?: never;
+    options?: never;
+    head?: never;
     patch?: never;
     trace?: never;
   };
@@ -18608,6 +18705,39 @@ export interface components {
       label: string;
       /** @description At least one of these scopes must be granted. */
       required_scopes: string[];
+    };
+    /**
+     * @description One delivery attempt of a webhook (KN-03). `event_id` groups the
+     *     attempts of one event; `attempt` counts them from 1.
+     */
+    WebhookDelivery: {
+      /** Format: uuid */
+      id: string;
+      event_id: string | null;
+      action: string;
+      attempt: number;
+      /** @enum {string} */
+      state: 'pending' | 'delivered' | 'failed' | 'exhausted';
+      ok: boolean;
+      /** @description The HTTP status the receiver answered with, if it answered. */
+      status_code: number | null;
+      /**
+       * @description A short cleaned reason (`http_503`, `ssrf_blocked`, `ECONNREFUSED`):
+       *     no secret, token, URL or response body, at most 500 characters.
+       */
+      error: string | null;
+      /** @description A test ping */
+      test: boolean;
+      /** Format: date-time */
+      created_at: string;
+      /** @description When the next automatic try is due (`pending` rows only). */
+      next_attempt_at: string | null;
+      /** @description Whether `redeliver` would work on this row. */
+      can_redeliver: boolean;
+    };
+    WebhookDeliveryList: {
+      items: components['schemas']['WebhookDelivery'][];
+      next_cursor: string | null;
     };
     /**
      * @description What `GET /integrations/manifest` returns (FR-MOD-09.4): the trigger +
@@ -39793,6 +39923,124 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateWebhook: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        webhookId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          enabled: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description The webhook as it is now */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Webhook'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listWebhookDeliveries: {
+    parameters: {
+      query?: {
+        state?: 'pending' | 'delivered' | 'failed' | 'exhausted';
+        limit?: number;
+        cursor?: string;
+      };
+      header?: never;
+      path: {
+        webhookId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page of delivery attempts */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['WebhookDeliveryList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  redeliverWebhookDelivery: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        webhookId: string;
+        deliveryId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The new attempt */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['WebhookDelivery'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  testWebhook: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        webhookId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The attempt */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['WebhookDelivery'];
+        };
       };
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];

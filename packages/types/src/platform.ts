@@ -355,7 +355,9 @@ export const IMPERSONATION_FORBIDDEN_PATHS: readonly ImpersonationForbiddenRule[
   { pattern: /^\/customers\/[^/]+\/erase$/, category: 'data_deletion' },
   { pattern: /^\/settings\/retention$/, category: 'data_deletion' },
   { pattern: /^\/settings\/sandbox(\/reset)?$/, category: 'sandbox' },
-  { pattern: /^\/webhooks(\/[^/]+)?$/, category: 'data_egress' },
+  // `/webhooks/{id}` plus its sub-resources: the test ping and a redelivery are
+  // outbound requests to a customer-supplied URL on demand (KN-03 · tm 375).
+  { pattern: /^\/webhooks(\/.*)?$/, category: 'data_egress' },
   { pattern: /^\/settings\/siem$/, category: 'data_egress' },
   // Who receives the workspace's figures by e-mail each morning (RP-05).
   { pattern: /^\/settings\/digests$/, category: 'data_egress' },

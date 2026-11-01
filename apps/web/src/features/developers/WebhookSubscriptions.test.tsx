@@ -14,7 +14,7 @@ import { ApiClientError } from '../../lib/api-client.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({
-  api: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
+  api: { get: vi.fn(), post: vi.fn(), delete: vi.fn(), patch: vi.fn() },
 }));
 
 vi.mock('../../lib/auth-store.js', async (importOriginal) => {
@@ -113,6 +113,44 @@ describe('WebhookSubscriptions', () => {
     api.get.mockReset();
     api.post.mockReset();
     api.delete.mockReset();
+    api.patch.mockReset();
+  });
+
+  it('switches a webhook off with a PATCH and reloads the list (KN-03)', async () => {
+    mockList([registeredWebhook]);
+    api.patch.mockResolvedValue({ ...registeredWebhook, enabled: false });
+    renderComponent('webhooks');
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: `Turn off webhook for ${registeredWebhook.url}` }),
+    );
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith(`/webhooks/${registeredWebhook.id}`, {
+        enabled: false,
+      }),
+    );
+  });
+
+  it('opens the delivery log from a webhook row and offers it to a read-only caller too', async () => {
+    mockList([registeredWebhook]);
+    api.get.mockImplementation((path: string) => {
+      if (path === '/webhooks') return Promise.resolve({ items: [registeredWebhook] });
+      if (path === '/integrations/manifest') return Promise.resolve(manifest);
+      if (path.startsWith('/settings/apps')) return Promise.resolve({ items: [] });
+      if (path.startsWith(`/webhooks/${registeredWebhook.id}/deliveries`)) {
+        return Promise.resolve({ items: [], next_cursor: null });
+      }
+      return Promise.reject(new Error(`unexpected GET ${path}`));
+    });
+    renderComponent('webhooks', false);
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: `Show deliveries for ${registeredWebhook.url}` }),
+    );
+    expect(await screen.findByText('No deliveries yet')).toBeInTheDocument();
+    // Read-only: the log opens, but there is no switch and no test button.
+    expect(screen.queryByRole('button', { name: /Turn off webhook/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send test event' })).not.toBeInTheDocument();
   });
 
   it('renders a meaningful empty state when there are no webhooks', async () => {

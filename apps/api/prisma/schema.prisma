@@ -3857,12 +3857,16 @@ model WebhookDelivery {
   /// and — pushed forward by the sweep that claims it — the lease that stops a
   /// second worker taking the same row.
   nextAttemptAt DateTime? @map("next_attempt_at") @db.Timestamptz(6)
-  /// The exact serialized body to re-send, held only while a retry is still
-  /// owed and cleared the moment the delivery is terminal. Text rather than
-  /// jsonb because these are the bytes the signature commits to and jsonb
-  /// would reorder them; kept off terminal rows so a delivered webhook leaves
-  /// no lasting copy of a customer payload in the log.
+  /// The exact serialized body to re-send, held while a retry is still owed
+  /// and — since tm 375 — on an `exhausted` row for `WEBHOOK_PAYLOAD_KEEP_MS`
+  /// (72 h) so the operator can press "Redeliver"; cleared the moment a
+  /// delivery succeeds or is superseded. Text rather than jsonb because these
+  /// are the bytes the signature commits to and jsonb would reorder them; a
+  /// delivered webhook leaves no lasting copy of a customer payload in the log.
   payload       String?
+  /// A signed test ping from the delivery log screen (KN-03 · tm 375), not a
+  /// workspace event: never queued, never counted as an automation run.
+  isTest        Boolean   @default(false) @map("is_test")
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)

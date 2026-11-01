@@ -279,7 +279,10 @@ describe('webhook redelivery (M-SCHED-e)', () => {
     expect(rows.map((r) => r.state)).toEqual(['failed', 'failed', 'failed', 'exhausted']);
     // `permanent` finally means what its name says.
     expect(rows.map((r) => r.permanent)).toEqual([false, false, false, true]);
-    expect(rows.every((r) => r.payload === null && r.nextAttemptAt === null)).toBe(true);
+    expect(rows.every((r) => r.nextAttemptAt === null)).toBe(true);
+    // Superseded attempts keep no copy; the exhausted one keeps the body for the
+    // delivery log's "Redeliver" until the 72 h sweep clears it (KN-03 · tm 375).
+    expect(rows.map((r) => r.payload !== null)).toEqual([false, false, false, true]);
 
     const audit = await owner.auditLogEntry.findMany({
       where: { licenseId: fx.a.licenseId, action: 'webhook.delivery_exhausted' },

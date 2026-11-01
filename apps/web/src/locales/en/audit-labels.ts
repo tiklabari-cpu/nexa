@@ -76,6 +76,8 @@ export const auditLabels: Messages = {
   'audit.action.billing.ai_package_purchased': 'AI package purchased',
   'audit.action.webhook.created': 'Webhook created',
   'audit.action.webhook.deleted': 'Webhook deleted',
+  'audit.action.webhook.updated': 'Webhook switched on or off',
+  'audit.action.webhook.redelivered': 'Webhook delivery sent again',
   'audit.action.webhook.delivery_exhausted': 'Webhook delivery gave up',
   'audit.action.scheduled_export.created': 'Scheduled export created',
   'audit.action.scheduled_export.updated': 'Scheduled export updated',

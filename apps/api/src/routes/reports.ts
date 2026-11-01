@@ -99,6 +99,11 @@ import {
   missedFigures,
 } from '../services/reports/missed-engagement.js';
 import {
+  queueAbandonmentFigures,
+  queueBenchmark,
+  queueFigures,
+} from '../services/reports/queue-reports.js';
+import {
   agentActivityReport,
   availabilityReport,
   parseAgentActivityQuery,
@@ -1331,6 +1336,63 @@ export async function buildEngagementReport(
   );
 }
 
+/**
+ * The queue report for one window (RP-04 · tm 371): the stays in the routing
+ * queue that began in it — how many, how long the assigned ones waited (average,
+ * 80th percentile, longest), the share assigned and the share abandoned — per
+ * local day, as an hour × weekday heat map in the workspace's zone, and per
+ * team queue. Shared with the `queue` export through {@link queueFigures}.
+ */
+export async function buildQueueReport(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+  baseline: BenchmarkBaseline = DEFAULT_BENCHMARK_BASELINE,
+  filter: ThreadFilter | null = null,
+): Promise<Record<string, unknown>> {
+  const figures = await queueFigures(tx, licenseId, from, to, filter);
+  return withBenchmark(
+    {
+      range: { from: from.toISOString(), to: to.toISOString() },
+      ...(filter === null ? {} : { filters: toWireFilter(filter) }),
+      ...figures,
+    },
+    from,
+    to,
+    baseline,
+    (window) => queueBenchmark(tx, licenseId, window, filter),
+  );
+}
+
+/**
+ * The queue-abandonment report for one window (RP-04 · tm 371): the stays that
+ * ended because the player left, how long they had waited (the distribution and
+ * the mean), when and for which team. The queue report's figures plus
+ * `by_wait`; shared with the `queue-abandonment` export.
+ */
+export async function buildQueueAbandonmentReport(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+  baseline: BenchmarkBaseline = DEFAULT_BENCHMARK_BASELINE,
+  filter: ThreadFilter | null = null,
+): Promise<Record<string, unknown>> {
+  const figures = await queueAbandonmentFigures(tx, licenseId, from, to, filter);
+  return withBenchmark(
+    {
+      range: { from: from.toISOString(), to: to.toISOString() },
+      ...(filter === null ? {} : { filters: toWireFilter(filter) }),
+      ...figures,
+    },
+    from,
+    to,
+    baseline,
+    (window) => queueBenchmark(tx, licenseId, window, filter),
+  );
+}
+
 export async function buildTeamPerformanceReport(
   tx: TenantClient,
   licenseId: bigint,
@@ -2072,6 +2134,50 @@ export default async function reportRoutes(
     );
     return reply.send(body);
   });
+
+  // The queue record's reports (RP-04 · tm 371): conversation reports, so they take
+  // the report filter and a Team Lead reads the teams they lead.
+  app.get(
+    '/reports/queue',
+    { config: { scopes: CONVERSATION_REPORT_SCOPES } },
+    async (request, reply) => {
+      const { from, to, baseline, filter } = resolveFilteredReportQuery(request.query);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
+      const body = await request.withTenantRead(async (tx) =>
+        buildQueueReport(
+          tx,
+          tenant.licenseId,
+          from,
+          to,
+          baseline,
+          await resolveReportReach(tx, principal, filter),
+        ),
+      );
+      return reply.send(body);
+    },
+  );
+
+  app.get(
+    '/reports/queue-abandonment',
+    { config: { scopes: CONVERSATION_REPORT_SCOPES } },
+    async (request, reply) => {
+      const { from, to, baseline, filter } = resolveFilteredReportQuery(request.query);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
+      const body = await request.withTenantRead(async (tx) =>
+        buildQueueAbandonmentReport(
+          tx,
+          tenant.licenseId,
+          from,
+          to,
+          baseline,
+          await resolveReportReach(tx, principal, filter),
+        ),
+      );
+      return reply.send(body);
+    },
+  );
 
   // Sales (FR-MOD-07.7, v2 payload; FR-MOD-13.5 dependency): the honest
   // "not configured" skeleton until the Sales tracker wires a real source (see

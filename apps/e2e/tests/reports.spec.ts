@@ -845,6 +845,33 @@ test.describe('reports — filters (RP-01 · tm 368.2)', () => {
   });
 });
 
+test.describe('reports — queue and queue abandonment (RP-04 · tm 371)', () => {
+  test('opens both tabs from the sidebar and asks the server for each report', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/reports');
+    await expect(agentPage.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+
+    const queue = agentPage.waitForResponse(
+      (res) => res.url().includes('/reports/queue?') && res.ok(),
+    );
+    await agentPage.getByRole('tab', { name: 'Queue', exact: true }).click();
+    await queue;
+    const panel = agentPage.getByRole('tabpanel');
+    // The queue summary is there whether or not the seeded workspace queued anyone.
+    await expect(panel.getByRole('heading', { name: 'Queue', exact: true })).toBeVisible();
+
+    const abandonment = agentPage.waitForResponse(
+      (res) => res.url().includes('/reports/queue-abandonment') && res.ok(),
+    );
+    await agentPage.getByRole('tab', { name: 'Queue abandonment' }).click();
+    await abandonment;
+    await expect(
+      agentPage.getByRole('tabpanel').getByText('Abandonment rate', { exact: true }),
+    ).toBeVisible();
+  });
+});
+
 test.describe('reports — missed chats and engagement (RP-02 · tm 369.2)', () => {
   test('opens both tabs from the sidebar and asks the server for each report', async ({
     agentPage,

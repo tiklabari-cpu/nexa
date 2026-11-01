@@ -167,6 +167,8 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/reports/MissedHeatmap.tsx',
   'src/features/reports/ActivityStrip.tsx',
   'src/features/reports/PresenceReports.tsx',
+  'src/features/reports/QueueReports.tsx',
+  'src/features/reports/ReportDeltas.tsx',
   'src/features/reports/ReportFilterBar.tsx',
   'src/features/reports/ReportsPage.tsx',
   'src/features/reports/SurveyPopover.tsx',

@@ -11191,6 +11191,73 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/reports/queue': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Queue — entries, wait, assignment share, hour × weekday heat map and team queues
+     * @description The routing queue (RP-04 · tm 371), read from the `queue_entries` record
+     *     (tm 291). One row is one **stay**: a connection that waited twice (a
+     *     transfer to another team, a re-queue) is two stays. Windowed by when the
+     *     stay began.
+     *
+     *     The wait is the time from entering the queue to leaving it. The headline
+     *     wait — `avg_wait_seconds`, `p80_wait_seconds`, `max_wait_seconds` — is
+     *     over the stays that ended in an assignment (`assigned`): a wait of 3
+     *     minutes before an agent got the chat reads 180 and "assigned".
+     *     `assigned_rate` and `abandonment_rate` are shares of `entries`, stays
+     *     still `waiting` included. A stay is **abandoned** when the player closed
+     *     the chat while it waited or it closed for inactivity; closing the widget
+     *     window is not an event.
+     *
+     *     `by_team` is the queue each stay waited for (`queue_entries.group_id`,
+     *     AU-01) — every team has its own averages; `by_day` and `heatmap` are in
+     *     the workspace's time zone (`timezone`, ID-04), never UTC.
+     *
+     *     Takes the report filters (RP-01): `agent_id`, `group_id`, `tag` and
+     *     `topic`, each repeatable; the applied filter is echoed as `filters`. A
+     *     `reports_read--groups` caller (an Ekip Lideri) reads only the queues of the
+     *     teams they lead. Defaults to the last 30 days.
+     */
+    get: operations['getReportsQueue'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/queue-abandonment': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Queue abandonment — who gave up, after how long, when and for which team
+     * @description The stays that ended because the player left (RP-04 · tm 371): they closed
+     *     the chat (`/customer/chat/close`) or it closed for inactivity while they
+     *     waited. Same stays, window, filters and breakdowns as `GET /reports/queue`
+     *     (`totals`, `by_day`, `heatmap` and `by_team` carry the same fields),
+     *     plus `by_wait`: the abandonments by how long the player had waited — all
+     *     six bands in order, zeros included, partitioning `totals.abandoned`.
+     *     `abandon_avg_wait_seconds` is the mean wait before giving up.
+     */
+    get: operations['getReportsQueueAbandonment'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/reports/availability': {
     parameters: {
       query?: never;
@@ -11505,10 +11572,17 @@ export interface paths {
      *     `team` or `agent`; `engagement` serialises
      *     `dimension,key,initiated_by,chats,closed,answered,missed` — six `total` rows,
      *     then `day` rows per local date and opener;
+     *     `queue` serialises one long-format table —
+     *     `dimension,key,name,entries,assigned,abandoned,waiting,avg_wait_seconds,p80_wait_seconds,max_wait_seconds`,
+     *     `dimension` being `total` (`all`), `day` (a local date), `hour_of_week`
+     *     (`<ISO weekday>T<hour>`, workspace zone, hours with a stay) or `team`;
+     *     `queue-abandonment` serialises
+     *     `dimension,key,name,entries,abandoned,abandonment_rate,abandon_avg_wait_seconds`
+     *     with an extra `wait` dimension (one row per wait band, `key` its name);
      *     The report filters (`agent_id`, `group_id`, `tag`, `topic`; RP-01)
      *     apply to the conversation groups — `overview`, `breakdown`,
-     *     `team-performance`, `reviews`, `missed`, `engagement` — through the same
-     *     query helpers the JSON
+     *     `team-performance`, `reviews`, `missed`, `engagement`, `queue`,
+     *     `queue-abandonment` — through the same query helpers the JSON
      *     reports use, so a filtered download equals the filtered screen; another
      *     group given a filter is a 400. A `reports_read--groups` caller exports
      *     only those groups, bounded to the teams they lead.
@@ -23544,6 +23618,111 @@ export interface components {
       })[];
       /** Format: uuid */
       next_cursor: string | null;
+    };
+    /**
+     * @description The stays in the routing queue of one set (RP-04) — the whole window, a
+     *     local day, an hour of the week, a team's queue. A stay is one row of
+     *     `queue_entries`: a connection that waited twice counts twice.
+     */
+    QueueCounts: {
+      /** @description Stays that began in the set. */
+      entries: number;
+      /** @description Stays that ended with an agent getting the connection. */
+      assigned: number;
+      /** @description Stays that ended because the player closed the chat or it closed for inactivity. */
+      abandoned: number;
+      /** @description Stays an agent or a bot archived while they waited. */
+      closed_by_agent: number;
+      /** @description Stays handed to a named agent or another team. */
+      transferred: number;
+      /** @description Stays the system ended with nobody choosing to (the day rolled over, or the sweep's safety net). */
+      timeout: number;
+      /** @description Stays still in the queue. */
+      waiting: number;
+      /** @description Mean wait, in whole seconds, of the `assigned` stays; null when none. */
+      avg_wait_seconds: number | null;
+      /** @description 80th-percentile wait of the `assigned` stays; null when none. */
+      p80_wait_seconds: number | null;
+      /** @description Longest wait of the `assigned` stays; null when none. */
+      max_wait_seconds: number | null;
+      /** @description Mean wait, in whole seconds, of the `abandoned` stays; null when none. */
+      abandon_avg_wait_seconds: number | null;
+    };
+    /** @description The figures both queue reports carry (RP-04). */
+    QueueReportBody: {
+      /**
+       * @description The filter that was applied (RP-01), after the team bound of a
+       *     `reports_read--groups` caller. Absent when nothing narrowed the report.
+       */
+      filters?: components['schemas']['ReportFilter'];
+      range: {
+        /** Format: date-time */
+        from: string;
+        /** Format: date-time */
+        to: string;
+      };
+      /** @description The IANA zone `by_day` and `heatmap` are counted in — the workspace's (ID-04). */
+      timezone: string;
+      totals: components['schemas']['QueueCounts'] & {
+        /** @description `assigned / entries`, 0..1 to four places; null when nothing entered. */
+        assigned_rate: number | null;
+        /** @description `abandoned / entries`, 0..1 to four places; null when nothing entered. */
+        abandonment_rate: number | null;
+      };
+      /** @description Per local day (of when the stay began) with a stay, oldest first. */
+      by_day: (components['schemas']['QueueCounts'] & {
+        /** Format: date */
+        date: string;
+      })[];
+      /**
+       * @description All 168 hour × weekday cells of when a stay began, Monday 00:00
+       *     first, zero-filled, in the workspace's zone.
+       */
+      heatmap: (components['schemas']['QueueCounts'] & {
+        /** @description ISO weekday, 1 Monday … 7 Sunday. */
+        weekday: number;
+        hour: number;
+      })[];
+      /**
+       * @description Per team queue (`queue_entries.group_id`), busiest first; `team_id:
+       *     null` is a stay that waited for no team. Each team has its own
+       *     averages. Adds up to `totals.entries`.
+       */
+      by_team: (components['schemas']['QueueCounts'] & {
+        team_id: number | null;
+        name: string | null;
+        assigned_rate: number | null;
+        abandonment_rate: number | null;
+      })[];
+      previous_period: components['schemas']['BenchmarkWindow'] & {
+        entries: number;
+        assigned: number;
+        abandoned: number;
+        avg_wait_seconds: number | null;
+        p80_wait_seconds: number | null;
+        assigned_rate: number | null;
+        abandonment_rate: number | null;
+      };
+    };
+    /** @description The queue report (RP-04) — see `GET /reports/queue`. */
+    ReportsQueue: components['schemas']['QueueReportBody'];
+    /** @description How many players gave up after waiting within one band. */
+    QueueWaitBand: {
+      /** @enum {string} */
+      key: 'under_30s' | '30s_to_1m' | '1m_to_2m' | '2m_to_5m' | '5m_to_10m' | 'over_10m';
+      /** @description Inclusive lower bound of the wait. */
+      from_seconds: number;
+      /** @description Exclusive upper bound of the wait; null for the last band. */
+      to_seconds: number | null;
+      abandoned: number;
+    };
+    /** @description The queue-abandonment report (RP-04) — see `GET /reports/queue-abandonment`. */
+    ReportsQueueAbandonment: components['schemas']['QueueReportBody'] & {
+      /**
+       * @description All six wait bands in order, zeros included; they partition
+       *     `totals.abandoned`.
+       */
+      by_wait: components['schemas']['QueueWaitBand'][];
     };
     /**
      * @description Which conversations a report counts (RP-01). Every key is optional and a
@@ -41462,6 +41641,178 @@ export interface operations {
       429: components['responses']['TooManyRequests'];
     };
   };
+  getReportsQueue: {
+    parameters: {
+      query?: {
+        /**
+         * @description Start of the reporting window. Defaults to 30 days before `to`.
+         *
+         *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
+         *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
+         *     a read replica or a column-store analytics warehouse, neither of which
+         *     this deployment has, so the window a single query may scan is bounded
+         *     instead. 366 rather than 365 so a twelve-month window that spans a leap
+         *     day is not the one that fails. The limit applies to the group endpoints
+         *     and to `/reports/export` alike — both run the same aggregation, so
+         *     capping only the download would leave the identical scan one query
+         *     string away.
+         */
+        from?: components['parameters']['ReportRangeFrom'];
+        /**
+         * @description End of the reporting window. Defaults to now. The 366-day span limit
+         *     described on `from` is measured across this pair.
+         */
+        to?: components['parameters']['ReportRangeTo'];
+        /**
+         * @description Which of **this license's own** past windows the report is benchmarked
+         *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
+         *     `previous_period`, the comparison the Overview and Reviews reports made
+         *     before this parameter existed, so omitting it changes nothing.
+         *
+         *     - `previous_period` — the equal-length window immediately before the
+         *       requested one, ending a millisecond short of `from` so no instant
+         *       falls in both.
+         *     - `previous_year` — the same window shifted back 365 days: the
+         *       comparison for a seasonal figure, where the period immediately before
+         *       is the wrong yardstick. A fixed 365 days rather than calendar-year
+         *       arithmetic, so a leap day cannot make the two windows different
+         *       lengths.
+         *
+         *     There is deliberately **no** cross-license baseline — no industry
+         *     average, peer cohort or anonymised pool. Every report figure comes from
+         *     a license-scoped query under RLS (NFR-S4); a benchmark against other
+         *     licenses would have to read rows this tenant may not see, and
+         *     aggregation does not make that safe when the cohort can be narrowed to
+         *     one. An unrecognised value is a 400, not a silent fallback, so
+         *     `baseline=industry` fails loudly rather than appearing supported.
+         */
+        baseline?: components['parameters']['BenchmarkBaseline'];
+        /**
+         * @description Only the connections whose last assignee is one of these agents (RP-01).
+         *     Account ids, never e-mail addresses (GV-05). Repeat the parameter for more than one.
+         */
+        agent_id?: components['parameters']['ReportFilterAgent'];
+        /**
+         * @description Only the conversations shared with one of these teams (`chat_access`,
+         *     RP-01). For a `reports_read--groups` caller, intersected with the teams
+         *     they lead; an empty intersection is an empty report.
+         */
+        group_id?: components['parameters']['ReportFilterGroup'];
+        /** @description Only the connections carrying any of these tags (tag ids, RP-01). */
+        tag?: components['parameters']['ReportFilterTag'];
+        /**
+         * @description Only the connections the AI recorded one of these topics for (AI-05, the
+         *     procedure key). Not the same thing as a tag (RP-01 decision 2).
+         */
+        topic?: components['parameters']['ReportFilterTopic'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The queue stays of the requested window */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReportsQueue'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getReportsQueueAbandonment: {
+    parameters: {
+      query?: {
+        /**
+         * @description Start of the reporting window. Defaults to 30 days before `to`.
+         *
+         *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
+         *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
+         *     a read replica or a column-store analytics warehouse, neither of which
+         *     this deployment has, so the window a single query may scan is bounded
+         *     instead. 366 rather than 365 so a twelve-month window that spans a leap
+         *     day is not the one that fails. The limit applies to the group endpoints
+         *     and to `/reports/export` alike — both run the same aggregation, so
+         *     capping only the download would leave the identical scan one query
+         *     string away.
+         */
+        from?: components['parameters']['ReportRangeFrom'];
+        /**
+         * @description End of the reporting window. Defaults to now. The 366-day span limit
+         *     described on `from` is measured across this pair.
+         */
+        to?: components['parameters']['ReportRangeTo'];
+        /**
+         * @description Which of **this license's own** past windows the report is benchmarked
+         *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
+         *     `previous_period`, the comparison the Overview and Reviews reports made
+         *     before this parameter existed, so omitting it changes nothing.
+         *
+         *     - `previous_period` — the equal-length window immediately before the
+         *       requested one, ending a millisecond short of `from` so no instant
+         *       falls in both.
+         *     - `previous_year` — the same window shifted back 365 days: the
+         *       comparison for a seasonal figure, where the period immediately before
+         *       is the wrong yardstick. A fixed 365 days rather than calendar-year
+         *       arithmetic, so a leap day cannot make the two windows different
+         *       lengths.
+         *
+         *     There is deliberately **no** cross-license baseline — no industry
+         *     average, peer cohort or anonymised pool. Every report figure comes from
+         *     a license-scoped query under RLS (NFR-S4); a benchmark against other
+         *     licenses would have to read rows this tenant may not see, and
+         *     aggregation does not make that safe when the cohort can be narrowed to
+         *     one. An unrecognised value is a 400, not a silent fallback, so
+         *     `baseline=industry` fails loudly rather than appearing supported.
+         */
+        baseline?: components['parameters']['BenchmarkBaseline'];
+        /**
+         * @description Only the connections whose last assignee is one of these agents (RP-01).
+         *     Account ids, never e-mail addresses (GV-05). Repeat the parameter for more than one.
+         */
+        agent_id?: components['parameters']['ReportFilterAgent'];
+        /**
+         * @description Only the conversations shared with one of these teams (`chat_access`,
+         *     RP-01). For a `reports_read--groups` caller, intersected with the teams
+         *     they lead; an empty intersection is an empty report.
+         */
+        group_id?: components['parameters']['ReportFilterGroup'];
+        /** @description Only the connections carrying any of these tags (tag ids, RP-01). */
+        tag?: components['parameters']['ReportFilterTag'];
+        /**
+         * @description Only the connections the AI recorded one of these topics for (AI-05, the
+         *     procedure key). Not the same thing as a tag (RP-01 decision 2).
+         */
+        topic?: components['parameters']['ReportFilterTopic'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The abandoned queue stays of the requested window */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReportsQueueAbandonment'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
   getReportsAvailability: {
     parameters: {
       query: {
@@ -41820,7 +42171,7 @@ export interface operations {
   exportReport: {
     parameters: {
       query: {
-        /** @description Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `campaigns`, `missed`, `engagement`. */
+        /** @description Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `campaigns`, `missed`, `engagement`, `queue`, `queue-abandonment`. */
         group: string;
         /**
          * @description Download format. Defaults to `csv` — the only format v1 shipped, so a
@@ -41985,7 +42336,7 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': {
-          /** @description Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `missed`, `engagement`. */
+          /** @description Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `missed`, `engagement`, `queue`, `queue-abandonment`. */
           group: string;
           /**
            * Format: date-time
@@ -42005,7 +42356,8 @@ export interface operations {
           /**
            * @description The report filter the link is frozen to (RP-01). Only for the
            *     conversation groups (`overview`, `breakdown`,
-           *     `team-performance`, `reviews`, `missed`, `engagement`); another
+           *     `team-performance`, `reviews`, `missed`, `engagement`, `queue`,
+           *     `queue-abandonment`); another
            *     group given a
            *     non-empty filter is a 400. Whoever opens the link reads exactly
            *     this filter and cannot widen it.
@@ -42117,7 +42469,7 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': {
-          /** @description Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `missed`, `engagement`. */
+          /** @description Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `missed`, `engagement`, `queue`, `queue-abandonment`. */
           group: string;
           frequency: components['schemas']['ScheduledExportFrequency'];
           /**

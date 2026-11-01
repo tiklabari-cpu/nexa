@@ -31,6 +31,8 @@ export const reports: Messages = {
   'reports.tabs.availability': 'Availability',
   'reports.tabs.agentActivity': 'Agent activity',
   'reports.tabs.engagement': 'Engagement',
+  'reports.tabs.queue': 'Queue',
+  'reports.tabs.queueAbandonment': 'Queue abandonment',
   'reports.tabs.topics': 'Chat topics',
   'reports.tabs.cases': 'Cases',
   'reports.tabs.leads': 'Leads',
@@ -490,6 +492,86 @@ export const reports: Messages = {
   'reports.staffing.gridCaption': 'Required vs scheduled agents per UTC weekday and hour',
   'reports.staffing.cellUnknown': 'Not enough data',
   'reports.staffing.cellTitle': 'Required {required} · Scheduled {scheduled} · Gap {gap}',
+
+  // Queue and queue abandonment (RP-04 · tm 371)
+  'reports.queue.error':
+    'Could not load the queue report. Check that the API is reachable and try again.',
+  'reports.queue.summary.title': 'Queue',
+  'reports.queue.summary.description':
+    'Chats that waited for an agent. A chat that waits twice (a transfer to another team) counts twice. Waits are measured on the chats that were then assigned.',
+  'reports.queue.kpi.entries': 'Entered the queue',
+  'reports.queue.kpi.entriesHint': '{waiting} still waiting',
+  'reports.queue.kpi.assignedRate': 'Assigned',
+  'reports.queue.kpi.assignedRateHint': '{count} reached an agent',
+  'reports.queue.kpi.avgWait': 'Average wait',
+  'reports.queue.kpi.waitHint': 'Until an agent took the chat',
+  'reports.queue.kpi.p80Wait': '80th percentile wait',
+  'reports.queue.kpi.p80Hint': '8 in 10 were assigned within this',
+  'reports.queue.kpi.maxWait': 'Longest wait',
+  'reports.queue.kpi.abandoned': 'Left the queue',
+  'reports.queue.kpi.abandonedHint': '{rate} of the chats that entered',
+  'reports.queue.emptyTitle': 'Nobody waited in this window',
+  'reports.queue.emptyDescription': 'Every chat was assigned the moment it opened, or none opened.',
+  'reports.queue.heatmap.title': 'When the queue fills',
+  'reports.queue.heatmap.description':
+    'Chats that entered the queue by weekday and hour, in the workspace time zone ({timezone}).',
+  'reports.queue.heatmap.caption.entries':
+    'Chats that entered the queue per weekday and hour, {timezone}',
+  'reports.queue.heatmap.caption.abandoned':
+    'Chats abandoned in the queue per weekday and hour, {timezone}',
+  'reports.queue.heatmap.cellTitle.entries': '{count} entered',
+  'reports.queue.heatmap.cellTitle.abandoned': '{count} abandoned',
+  'reports.queue.byDay.description':
+    'Days with at least one chat in the queue, counted in the workspace time zone ({timezone}).',
+  'reports.queue.byDay.caption': 'Queue entries per day',
+  'reports.queue.byTeam.title': 'By team',
+  'reports.queue.byTeam.description':
+    'The team queue each chat waited in. Every team has its own averages.',
+  'reports.queue.byTeam.caption': 'Queue entries, assignment and wait per team',
+  'reports.queue.column.entries': 'Entered',
+  'reports.queue.column.assigned': 'Assigned',
+  'reports.queue.column.assignedRate': 'Assigned %',
+  'reports.queue.column.abandoned': 'Abandoned',
+  'reports.queue.column.avgWait': 'Avg wait',
+  'reports.queue.column.p80Wait': '80th pct.',
+  'reports.queue.column.maxWait': 'Longest',
+  'reports.queueAbandonment.error':
+    'Could not load the queue abandonment report. Check that the API is reachable and try again.',
+  'reports.queueAbandonment.summary.title': 'Queue abandonment',
+  'reports.queueAbandonment.summary.description':
+    'Chats the player left while they waited: they closed the chat, or it closed for inactivity. Closing the chat window alone does not count.',
+  'reports.queueAbandonment.kpi.abandoned': 'Abandoned',
+  'reports.queueAbandonment.kpi.rate': 'Abandonment rate',
+  'reports.queueAbandonment.kpi.rateHint': 'Of {entries} that entered the queue',
+  'reports.queueAbandonment.kpi.rateNone': 'Nobody entered the queue in this window',
+  'reports.queueAbandonment.kpi.avgWait': 'Average wait before leaving',
+  'reports.queueAbandonment.kpi.avgWaitHint': 'Time in the queue before the player left',
+  'reports.queueAbandonment.kpi.entries': 'Entered the queue',
+  'reports.queueAbandonment.emptyTitle': 'Nobody left the queue in this window',
+  'reports.queueAbandonment.emptyDescription':
+    'Every chat that waited was assigned, handed on or closed by an agent.',
+  'reports.queueAbandonment.byWait.title': 'How long they waited',
+  'reports.queueAbandonment.byWait.description':
+    'Abandoned chats by how long the player had waited before leaving.',
+  'reports.queueAbandonment.byWait.caption': 'Abandoned chats by time waited',
+  'reports.queueAbandonment.byWait.column': 'Waited',
+  'reports.queueAbandonment.byWait.bar': 'Share of the longest band',
+  'reports.queueAbandonment.band.under_30s': 'Under 30 s',
+  'reports.queueAbandonment.band.30s_to_1m': '30 s – 1 min',
+  'reports.queueAbandonment.band.1m_to_2m': '1 – 2 min',
+  'reports.queueAbandonment.band.2m_to_5m': '2 – 5 min',
+  'reports.queueAbandonment.band.5m_to_10m': '5 – 10 min',
+  'reports.queueAbandonment.band.over_10m': 'Over 10 min',
+  'reports.queueAbandonment.heatmap.title': 'When players leave',
+  'reports.queueAbandonment.heatmap.description':
+    'Abandoned chats by the weekday and hour they entered the queue, in the workspace time zone ({timezone}).',
+  'reports.queueAbandonment.byDay.description':
+    'Days with at least one chat in the queue, counted in the workspace time zone ({timezone}).',
+  'reports.queueAbandonment.byDay.caption': 'Queue abandonment per day',
+  'reports.queueAbandonment.byTeam.description': 'The team queue each chat waited in.',
+  'reports.queueAbandonment.byTeam.caption': 'Queue abandonment per team',
+  'reports.queueAbandonment.column.rate': 'Abandoned %',
+  'reports.queueAbandonment.column.avgWait': 'Avg wait before leaving',
 
   // Missed chats (RP-02 · tm 369.2)
   'reports.missed.error':

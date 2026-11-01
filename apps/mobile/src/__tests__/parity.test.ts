@@ -1130,7 +1130,10 @@ describe('module parity matrix — what is still owed', () => {
       // (tm 370) — availability and the agent activity strip (RP-03), two web Reports
       // tabs and the team profile's "Today's activity"; the handset has no Reports
       // screen, and nothing here re-scopes.
-      contractEndpoints: 366,
+      // 366 -> 368 with `GET /reports/queue` and `GET /reports/queue-abandonment`
+      // (tm 371) — the queue wait and abandonment reports (RP-04), two web Reports
+      // tabs; the handset has no Reports screen, and nothing here re-scopes.
+      contractEndpoints: 368,
       scopeBoundaries: 1,
     });
   });

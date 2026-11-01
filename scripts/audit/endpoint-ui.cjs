@@ -339,6 +339,22 @@ const INDIRECT = [
     },
   },
   {
+    op: 'GET /reports/queue',
+    reason: 'same `useReport(kind)` call site as `GET /reports/breakdown` (tm 371 tab, RP-04).',
+    site: {
+      file: 'apps/web/src/features/reports/ReportsPage.tsx',
+      contains: '`/reports/${kind}?${reportQuery(',
+    },
+  },
+  {
+    op: 'GET /reports/queue-abandonment',
+    reason: 'same `useReport(kind)` call site as `GET /reports/breakdown` (tm 371 tab, RP-04).',
+    site: {
+      file: 'apps/web/src/features/reports/ReportsPage.tsx',
+      contains: '`/reports/${kind}?${reportQuery(',
+    },
+  },
+  {
     op: 'GET /reports/staffing-forecast',
     reason: 'same `useReport(kind)` call site as `GET /reports/breakdown`.',
     site: {

@@ -100,3 +100,4 @@ export * from './rich-card.js';
 export * from './report-filter.js';
 export * from './missed-engagement.js';
 export * from './presence-activity.js';
+export * from './queue-report.js';

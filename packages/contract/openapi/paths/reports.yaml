@@ -655,6 +655,85 @@ agentActivity:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+queue:
+  get:
+    tags: [Reports]
+    operationId: getReportsQueue
+    summary: Queue — entries, wait, assignment share, hour × weekday heat map and team queues
+    description: |
+      The routing queue (RP-04 · tm 371), read from the `queue_entries` record
+      (tm 291). One row is one **stay**: a connection that waited twice (a
+      transfer to another team, a re-queue) is two stays. Windowed by when the
+      stay began.
+
+      The wait is the time from entering the queue to leaving it. The headline
+      wait — `avg_wait_seconds`, `p80_wait_seconds`, `max_wait_seconds` — is
+      over the stays that ended in an assignment (`assigned`): a wait of 3
+      minutes before an agent got the chat reads 180 and "assigned".
+      `assigned_rate` and `abandonment_rate` are shares of `entries`, stays
+      still `waiting` included. A stay is **abandoned** when the player closed
+      the chat while it waited or it closed for inactivity; closing the widget
+      window is not an event.
+
+      `by_team` is the queue each stay waited for (`queue_entries.group_id`,
+      AU-01) — every team has its own averages; `by_day` and `heatmap` are in
+      the workspace's time zone (`timezone`, ID-04), never UTC.
+
+      Takes the report filters (RP-01): `agent_id`, `group_id`, `tag` and
+      `topic`, each repeatable; the applied filter is echoed as `filters`. A
+      `reports_read--groups` caller (an Ekip Lideri) reads only the queues of the
+      teams they lead. Defaults to the last 30 days.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
+      - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterAgent"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterGroup"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterTag"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterTopic"
+    responses:
+      "200":
+        description: The queue stays of the requested window
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ReportsQueue" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+queueAbandonment:
+  get:
+    tags: [Reports]
+    operationId: getReportsQueueAbandonment
+    summary: Queue abandonment — who gave up, after how long, when and for which team
+    description: |
+      The stays that ended because the player left (RP-04 · tm 371): they closed
+      the chat (`/customer/chat/close`) or it closed for inactivity while they
+      waited. Same stays, window, filters and breakdowns as `GET /reports/queue`
+      (`totals`, `by_day`, `heatmap` and `by_team` carry the same fields),
+      plus `by_wait`: the abandonments by how long the player had waited — all
+      six bands in order, zeros included, partitioning `totals.abandoned`.
+      `abandon_avg_wait_seconds` is the mean wait before giving up.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
+      - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterAgent"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterGroup"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterTag"
+      - $ref: "../openapi.yaml#/components/parameters/ReportFilterTopic"
+    responses:
+      "200":
+        description: The abandoned queue stays of the requested window
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ReportsQueueAbandonment" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 sales:
   get:
     tags: [Reports]
@@ -910,10 +989,17 @@ export:
       `team` or `agent`; `engagement` serialises
       `dimension,key,initiated_by,chats,closed,answered,missed` — six `total` rows,
       then `day` rows per local date and opener;
+      `queue` serialises one long-format table —
+      `dimension,key,name,entries,assigned,abandoned,waiting,avg_wait_seconds,p80_wait_seconds,max_wait_seconds`,
+      `dimension` being `total` (`all`), `day` (a local date), `hour_of_week`
+      (`<ISO weekday>T<hour>`, workspace zone, hours with a stay) or `team`;
+      `queue-abandonment` serialises
+      `dimension,key,name,entries,abandoned,abandonment_rate,abandon_avg_wait_seconds`
+      with an extra `wait` dimension (one row per wait band, `key` its name);
       The report filters (`agent_id`, `group_id`, `tag`, `topic`; RP-01)
       apply to the conversation groups — `overview`, `breakdown`,
-      `team-performance`, `reviews`, `missed`, `engagement` — through the same
-      query helpers the JSON
+      `team-performance`, `reviews`, `missed`, `engagement`, `queue`,
+      `queue-abandonment` — through the same query helpers the JSON
       reports use, so a filtered download equals the filtered screen; another
       group given a filter is a 400. A `reports_read--groups` caller exports
       only those groups, bounded to the teams they lead.
@@ -949,7 +1035,7 @@ export:
       - name: group
         in: query
         required: true
-        description: "Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `campaigns`, `missed`, `engagement`."
+        description: "Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `campaigns`, `missed`, `engagement`, `queue`, `queue-abandonment`."
         schema: { type: string }
       - name: format
         in: query
@@ -1153,7 +1239,7 @@ shareLinks:
             properties:
               group:
                 type: string
-                description: "Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `missed`, `engagement`."
+                description: "Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `missed`, `engagement`, `queue`, `queue-abandonment`."
               from:
                 type: string
                 format: date-time
@@ -1173,7 +1259,8 @@ shareLinks:
                 description: |
                   The report filter the link is frozen to (RP-01). Only for the
                   conversation groups (`overview`, `breakdown`,
-                  `team-performance`, `reviews`, `missed`, `engagement`); another
+                  `team-performance`, `reviews`, `missed`, `engagement`, `queue`,
+                  `queue-abandonment`); another
                   group given a
                   non-empty filter is a 400. Whoever opens the link reads exactly
                   this filter and cannot widen it.
@@ -1323,7 +1410,7 @@ scheduledExports:
             properties:
               group:
                 type: string
-                description: "Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `missed`, `engagement`."
+                description: "Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `missed`, `engagement`, `queue`, `queue-abandonment`."
               frequency: { $ref: "../openapi.yaml#/components/schemas/ScheduledExportFrequency" }
               format:
                 type: string

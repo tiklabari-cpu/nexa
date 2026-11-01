@@ -48,6 +48,13 @@ import {
   missedCsvTable,
   missedFigures,
 } from './missed-engagement.js';
+import {
+  queueAbandonmentCsvTable,
+  queueAbandonmentFigures,
+  queueBenchmark,
+  queueCsvTable,
+  queueFigures,
+} from './queue-reports.js';
 import { aiResolvedSql } from '../billing/ai-resolution.js';
 import {
   accessTeamSql,
@@ -1720,6 +1727,9 @@ function groupBenchmark(
       return missedBenchmark(tx, licenseId, window, thread);
     case 'engagement':
       return engagementBenchmark(tx, licenseId, window, thread);
+    case 'queue':
+    case 'queue-abandonment':
+      return queueBenchmark(tx, licenseId, window, thread);
     case 'topics':
       // Topics keeps each cluster's baseline volume on its own row
       // (`previous_volume`), where it can be matched to the topic it belongs
@@ -1976,6 +1986,13 @@ async function groupCsvTable(
       return missedCsvTable(await missedFigures(tx, licenseId, from, to, thread));
     case 'engagement':
       return engagementCsvTable(await engagementFigures(tx, licenseId, from, to, thread));
+    // RP-04: the same figures `GET /reports/queue` and `/queue-abandonment` read.
+    case 'queue':
+      return queueCsvTable(await queueFigures(tx, licenseId, from, to, thread));
+    case 'queue-abandonment':
+      return queueAbandonmentCsvTable(
+        await queueAbandonmentFigures(tx, licenseId, from, to, thread),
+      );
     case 'sales': {
       // Same figures the JSON report reads ({@link salesReportFigures}), so
       // this can never disagree with what the tab shows — real values once

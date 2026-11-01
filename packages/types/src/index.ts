@@ -57,6 +57,7 @@ export * from './work-schedule.js';
 export * from './sla.js';
 export * from './sandbox.js';
 export * from './mobile-auth.js';
+export * from './digest.js';
 export * from './notifications.js';
 export * from './push.js';
 export * from './company.js';

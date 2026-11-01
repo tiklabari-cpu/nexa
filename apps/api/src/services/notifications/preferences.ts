@@ -15,11 +15,14 @@
  */
 import type { NotificationPreferences, NotificationPreferencesPatch } from '@siyahtus/types';
 import {
+  DEFAULT_DIGEST_ROLES,
   DEFAULT_NOTIFICATION_PREFERENCES,
   NOTIFICATION_EVENTS,
+  effectiveDigestSwitch,
   readNotificationEvents,
 } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
+import { readDigestRoles, type DigestRoles } from './digest-settings.js';
 
 /**
  * The membership columns the preferences are made of.
@@ -36,6 +39,11 @@ export const NOTIFICATION_PREFERENCE_SELECT = {
   notifyEmail: true,
   notifyEvents: true,
   notifyRepeatSound: true,
+  // The summary e-mails (RP-05): the member's own choice, and the role the
+  // workspace default is read for when they have made none.
+  role: true,
+  notifyDigestDaily: true,
+  notifyDigestWeekly: true,
 } as const;
 
 export interface NotificationPreferenceRow {
@@ -47,6 +55,10 @@ export interface NotificationPreferenceRow {
   /** The stored events object (IN-10); keys it lacks read as the defaults. */
   notifyEvents: unknown;
   notifyRepeatSound: boolean;
+  /** The member's role and their own summary switches; `null` follows the workspace default. */
+  role?: string;
+  notifyDigestDaily?: boolean | null;
+  notifyDigestWeekly?: boolean | null;
 }
 
 /**
@@ -59,6 +71,7 @@ export interface NotificationPreferenceRow {
  */
 export function serialiseNotificationPreferences(
   row: NotificationPreferenceRow | null | undefined,
+  digestRoles: DigestRoles = DEFAULT_DIGEST_ROLES,
 ): NotificationPreferences {
   if (!row) {
     return {
@@ -76,6 +89,19 @@ export function serialiseNotificationPreferences(
     // and a missing key reads as the event's default (`readNotificationEvents`).
     events: readNotificationEvents(row.notifyEvents),
     repeat_sound: row.notifyRepeatSound,
+    // The effective switch: their own, or the workspace default for their role.
+    digest_daily: effectiveDigestSwitch(
+      row.notifyDigestDaily,
+      row.role ?? 'agent',
+      'daily',
+      digestRoles,
+    ),
+    digest_weekly: effectiveDigestSwitch(
+      row.notifyDigestWeekly,
+      row.role ?? 'agent',
+      'weekly',
+      digestRoles,
+    ),
   };
 }
 
@@ -92,8 +118,12 @@ export function toPreferenceColumns(patch: NotificationPreferencesPatch): {
   notifyPush?: boolean;
   notifyEmail?: boolean;
   notifyRepeatSound?: boolean;
+  notifyDigestDaily?: boolean;
+  notifyDigestWeekly?: boolean;
 } {
   return {
+    ...(patch.digest_daily !== undefined ? { notifyDigestDaily: patch.digest_daily } : {}),
+    ...(patch.digest_weekly !== undefined ? { notifyDigestWeekly: patch.digest_weekly } : {}),
     ...(patch.repeat_sound !== undefined ? { notifyRepeatSound: patch.repeat_sound } : {}),
     ...(patch.enabled !== undefined ? { notifyEnabled: patch.enabled } : {}),
     ...(patch.sound !== undefined ? { notifySound: patch.sound } : {}),
@@ -117,7 +147,7 @@ export async function readNotificationPreferences(
     where: { licenseId_agentId: { licenseId: input.licenseId, agentId: input.agentId } },
     select: NOTIFICATION_PREFERENCE_SELECT,
   });
-  return serialiseNotificationPreferences(row);
+  return serialiseNotificationPreferences(row, await readDigestRoles(tx, input.licenseId));
 }
 
 /**
@@ -157,5 +187,5 @@ export async function writeNotificationPreferences(
     },
     select: NOTIFICATION_PREFERENCE_SELECT,
   });
-  return serialiseNotificationPreferences(row);
+  return serialiseNotificationPreferences(row, await readDigestRoles(tx, input.licenseId));
 }

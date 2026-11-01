@@ -63,6 +63,7 @@ import { CAPTCHA_TOKEN_MAX_LENGTH } from '../services/security/captcha.js';
 import { OauthService, type Membership } from '../services/auth/oauth-service.js';
 import type { IssuedToken } from '../services/auth/token-service.js';
 import { badCode, TOTP_ISSUER, TwoFactorService } from '../services/auth/two-factor-service.js';
+import { readDigestRoles } from '../services/notifications/digest-settings.js';
 import {
   NOTIFICATION_PREFERENCE_SELECT,
   serialiseNotificationPreferences,
@@ -1046,6 +1047,8 @@ export default async function authRoutes(
           // The panel font (owner, 2026-10-13), resolved here once so the
           // panel paints an answer rather than re-deriving the rule.
           const workspaceFont = await readWorkspaceFontChoice(tx);
+          // The workspace default behind the summary e-mail switches (RP-05).
+          const digestRoles = await readDigestRoles(tx, principal.licenseId);
           // The language this person reads the panel in (tm 265), kept on the
           // membership so mail sent to them later — a visitor's message, a
           // transcript, a scheduled report — is written in it. The panel sends
@@ -1065,7 +1068,16 @@ export default async function authRoutes(
               data: { locale },
             });
           }
-          return { account, membership, license, organization, trial, workspaceFont, groups };
+          return {
+            account,
+            membership,
+            license,
+            organization,
+            trial,
+            workspaceFont,
+            groups,
+            digestRoles,
+          };
         }),
         twoFactor.status(principal.accountId),
       ]);
@@ -1095,7 +1107,10 @@ export default async function authRoutes(
         // incoming message and cannot afford a fetch; shipping them with the
         // profile it already requests is what keeps that cache honest without a
         // second round trip (13.7-c).
-        notification_preferences: serialiseNotificationPreferences(profile.membership),
+        notification_preferences: serialiseNotificationPreferences(
+          profile.membership,
+          profile.digestRoles,
+        ),
         group_ids: profile.groups.map((row) => Number(row.groupId)),
         onboarding_completed: profile.license?.onboardingCompletedAt != null,
         license: { access: profile.trial.access, trial_ends_at: profile.trial.trialEndsAt },

@@ -387,6 +387,8 @@ paths:
     $ref: "./paths/agents.yaml#/notificationPreferences"
   /agents/me/ui-preferences:
     $ref: "./paths/agents.yaml#/uiPreferences"
+  /settings/digests:
+    $ref: "./paths/notifications.yaml#/digestSettings"
   /notifications/devices:
     $ref: "./paths/notifications.yaml#/devices"
   /notifications/devices/{deviceId}:
@@ -962,7 +964,8 @@ components:
         always `true`; what a person can silence is its *sound* (the `sound`
         channel). `repeat_sound` keeps the chime going every 10 seconds until the
         message is read; it defaults to off.
-      required: [enabled, sound, desktop, push, email, events, repeat_sound]
+      required:
+        [enabled, sound, desktop, push, email, events, repeat_sound, digest_daily, digest_weekly]
       properties:
         enabled: { type: boolean }
         sound: { type: boolean }
@@ -971,6 +974,32 @@ components:
         email: { type: boolean }
         events: { $ref: "#/components/schemas/NotificationEvents" }
         repeat_sound: { type: boolean }
+        digest_daily:
+          type: boolean
+          description: |
+            Whether the daily summary e-mail (RP-05) reaches this person: their own
+            choice, or while they have made none the workspace default for their
+            role (`GET /settings/digests`). Gated by `email` like every other mail.
+        digest_weekly:
+          type: boolean
+          description: The same for the weekly summary, each Monday.
+    DigestSettings:
+      type: object
+      description: |
+        Which roles receive the summary e-mails by default in this workspace
+        (RP-05). A member's own `digest_daily` / `digest_weekly` choice beats it.
+        A workspace that never saved reads the shipped default: Founder, Vice
+        Founder, Administrator and Team Lead the daily summary, nobody the weekly one.
+        A role that cannot read reports (`reports.view` = none) receives nothing
+        whatever this says.
+      required: [daily_roles, weekly_roles]
+      properties:
+        daily_roles:
+          type: array
+          items: { $ref: "#/components/schemas/AgentRole" }
+        weekly_roles:
+          type: array
+          items: { $ref: "#/components/schemas/AgentRole" }
     NotificationEvents:
       type: object
       description: |

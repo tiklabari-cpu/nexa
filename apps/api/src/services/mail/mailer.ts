@@ -106,6 +106,9 @@ export interface Message {
     | 'invitation'
     | 'notification'
     | 'scheduled_report'
+    // The morning summary to one member (RP-05 · tm 372): the workspace's figures to
+    // its own people, so not external (`EXTERNAL_KINDS`).
+    | 'digest'
     | 'ticket_notice'
     | 'ticket_reply'
     | 'chat_transcript'

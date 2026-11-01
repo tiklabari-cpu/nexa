@@ -357,6 +357,8 @@ export const IMPERSONATION_FORBIDDEN_PATHS: readonly ImpersonationForbiddenRule[
   { pattern: /^\/settings\/sandbox(\/reset)?$/, category: 'sandbox' },
   { pattern: /^\/webhooks(\/[^/]+)?$/, category: 'data_egress' },
   { pattern: /^\/settings\/siem$/, category: 'data_egress' },
+  // Who receives the workspace's figures by e-mail each morning (RP-05).
+  { pattern: /^\/settings\/digests$/, category: 'data_egress' },
   { pattern: /^\/settings\/apps\//, category: 'data_egress' },
   { pattern: /^\/reports\/(share-links|scheduled-exports)(\/[^/]+)?$/, category: 'data_egress' },
   { pattern: /^\/customer\//, category: 'not_a_member_surface' },

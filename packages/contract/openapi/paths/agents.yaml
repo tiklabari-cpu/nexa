@@ -127,6 +127,15 @@ notificationPreferences:
               repeat_sound:
                 type: boolean
                 description: Keep chiming every 10 seconds until the message is read.
+              digest_daily:
+                type: boolean
+                description: |
+                  The daily summary e-mail, each morning at 08:00 company time (RP-05).
+                  Sending a value is a choice of your own and stays whatever the
+                  workspace default later becomes.
+              digest_weekly:
+                type: boolean
+                description: The weekly summary e-mail, each Monday at 08:00 company time (RP-05).
               events:
                 type: object
                 minProperties: 1

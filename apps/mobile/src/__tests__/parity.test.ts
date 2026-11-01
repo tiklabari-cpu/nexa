@@ -1133,7 +1133,11 @@ describe('module parity matrix — what is still owed', () => {
       // 366 -> 368 with `GET /reports/queue` and `GET /reports/queue-abandonment`
       // (tm 371) — the queue wait and abandonment reports (RP-04), two web Reports
       // tabs; the handset has no Reports screen, and nothing here re-scopes.
-      contractEndpoints: 368,
+      // 368 -> 369 with `/settings/digests` (tm 372) — the workspace default behind
+      // the summary e-mails (RP-05), a card in the web Settings → Notifications;
+      // the personal switches ride the existing `/agents/me/notification-preferences`,
+      // and nothing here re-scopes.
+      contractEndpoints: 369,
       scopeBoundaries: 1,
     });
   });

@@ -445,6 +445,24 @@ export const team: Messages = {
   'team.notifications.event.ticketReply.label': 'Bir ticket’a yanıt geldiğinde',
   'team.notifications.event.ticketReply.hint':
     'Oyuncu, üzerinde çalıştığınız bir ticket’ı yanıtladı.',
+  // Özet e-postaları (RP-05 · tm 372)
+  'team.notifications.digest.title': 'Özet e-postaları',
+  'team.notifications.digest.hint':
+    'Yalnızca sayılar — sohbet, kaçan sohbet, ilk yanıt, memnuniyet, AI, risk bayraklı sohbet ve kuyruk beklemesi — hiçbir zaman oyuncunun adı ya da mesajı değil. Ekip Liderinin özeti yalnızca liderlik ettiği ekipleri kapsar.',
+  'team.notifications.digest.daily.label': 'Günlük özet',
+  'team.notifications.digest.daily.hint': 'Dünün rakamları, her sabah şirket saatiyle 08:00’de.',
+  'team.notifications.digest.weekly.label': 'Haftalık özet',
+  'team.notifications.digest.weekly.hint':
+    'Geçen haftanın rakamları, her Pazartesi şirket saatiyle 08:00’de.',
+  'team.notifications.digest.emailOff':
+    'Özetler birer e-postadır, bu yüzden yukarıdaki e-posta anahtarına bağlıdır.',
+  'team.notifications.digest.loadError': 'Özet e-postası varsayılanları yüklenemedi.',
+  'team.notifications.digest.defaults.title': 'Çalışma alanı varsayılanı',
+  'team.notifications.digest.defaults.hint':
+    'Kişi kendi tercihini yapana kadar her özeti kimin alacağı. Özeti kendisi açan ya da kapatan kişi tercihini korur; geri kalan herkes, sonradan katılanlar dahil, bunu izler.',
+  'team.notifications.digest.defaults.role': 'Rol',
+  'team.notifications.digest.defaults.reachNote':
+    'Özet yalnızca raporları okuyabilen kişiye gider. Bu izni olmayan bir rol, burada işaretli olsa bile hiçbir şey almaz.',
   // AI agent performance on the Team screen — TeamAiPerformance.tsx (FR-MOD-04.2)
   'team.ai.title': 'AI temsilci performansı',
   'team.ai.description':

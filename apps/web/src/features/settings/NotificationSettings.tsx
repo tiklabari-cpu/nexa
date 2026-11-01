@@ -34,6 +34,7 @@ import { Card, Section } from '../../components/Page.js';
 import { InstantToggle } from '../../components/settings/InstantToggle.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
+import { DigestDefaults } from '../notifications/DigestDefaults.js';
 import { type Permission } from '../notifications/notifications.js';
 import {
   LOCKED_ON_NOTIFICATION_EVENTS,
@@ -76,6 +77,11 @@ export function NotificationSettings(): ReactElement {
   const stored = useAuth((s) => s.agent?.notification_preferences);
   const prefs = useMemo(() => readNotificationPreferences(stored), [stored]);
   const setPreferences = useAuth((s) => s.setNotificationPreferences);
+  // The workspace default for the summary e-mails is the Founder's and the
+  // Administrators' to set (RP-05).
+  const canSetDigestDefaults = useAuth((s) =>
+    ['owner', 'viceowner', 'admin'].includes(s.agent?.role ?? ''),
+  );
 
   // The permission is read once on mount — `Notification.permission` is a
   // browser global, not a render-time value.
@@ -207,6 +213,44 @@ export function NotificationSettings(): ReactElement {
           })}
         </div>
       </Card>
+
+      <Card>
+        <div
+          role="group"
+          aria-labelledby="notification-digest-heading"
+          className="flex flex-col gap-3 p-4"
+        >
+          <div>
+            <h3 id="notification-digest-heading" className="text-sm font-medium text-content">
+              {t('team.notifications.digest.title')}
+            </h3>
+            <p className="mt-0.5 text-2xs text-content-secondary">
+              {t('team.notifications.digest.hint')}
+            </p>
+          </div>
+          <InstantToggle
+            label={t('team.notifications.digest.daily.label')}
+            description={t('team.notifications.digest.daily.hint')}
+            checked={prefs.digest_daily}
+            disabled={!prefs.email}
+            onChange={(digest_daily) => update({ digest_daily })}
+          />
+          <InstantToggle
+            label={t('team.notifications.digest.weekly.label')}
+            description={t('team.notifications.digest.weekly.hint')}
+            checked={prefs.digest_weekly}
+            disabled={!prefs.email}
+            onChange={(digest_weekly) => update({ digest_weekly })}
+          />
+          {!prefs.email && (
+            <p className="text-2xs text-content-secondary">
+              {t('team.notifications.digest.emailOff')}
+            </p>
+          )}
+        </div>
+      </Card>
+
+      {canSetDigestDefaults && <DigestDefaults />}
     </Section>
   );
 }

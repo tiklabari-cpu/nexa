@@ -531,6 +531,10 @@ export const AUDIT_ACTIONS = [
   // address (`sanitizeAuditMetadata` would strip it, and no writer offers it).
   'device.registered',
   'device.revoked',
+  // Which roles get the summary e-mails by default changed (RP-05 · tm 372).
+  // Recorded because the setting decides who receives the workspace's figures
+  // by mail. Metadata carries the two role lists as they became, never an address.
+  'digest_settings.updated',
   // Partner apps (FR-MOD-09.4). Registering an OAuth client hands a third party
   // a credential that can later act on this workspace, and its scopes, redirect
   // allowlist and secret are the whole of what bounds it — the same class of

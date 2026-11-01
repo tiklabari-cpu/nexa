@@ -23,9 +23,13 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { DEVICE_PLATFORMS, DEVICE_TOKEN_MAX_LENGTH } from '@siyahtus/types';
+import { AGENT_ROLES, DEVICE_PLATFORMS, DEVICE_TOKEN_MAX_LENGTH } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
+import {
+  readDigestSettings,
+  writeDigestSettings,
+} from '../services/notifications/digest-settings.js';
 
 /**
  * A registration. `token` is named exactly that because the server's pino
@@ -40,6 +44,18 @@ const registerBody = z.object({
 });
 
 const deviceIdSchema = z.string().uuid();
+
+/**
+ * The workspace default for the summary e-mails (RP-05): partial, strict, never
+ * empty — an unknown key is a `400` rather than a toggle that silently did nothing.
+ */
+const digestSettingsBody = z
+  .object({
+    daily_roles: z.array(z.enum(AGENT_ROLES)).max(AGENT_ROLES.length).optional(),
+    weekly_roles: z.array(z.enum(AGENT_ROLES)).max(AGENT_ROLES.length).optional(),
+  })
+  .strict()
+  .refine((body) => Object.values(body).some((v) => v !== undefined), 'at least one is required');
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
@@ -247,6 +263,46 @@ export default async function notificationRoutes(app: FastifyInstance): Promise<
       });
 
       return reply.status(204).send();
+    },
+  );
+
+  /**
+   * Which roles receive the summary e-mails by default (RP-05 · tm 372). Any
+   * member may read it — the personal switch says "follow the default" and the
+   * screen should be able to say what that means — and the Founder and the
+   * Administrators change it.
+   */
+  app.get(
+    '/settings/digests',
+    { config: { scopes: ['agents--my:ro'], principals: ['agent'] } },
+    async (request, reply) => {
+      const tenant = request.tenant();
+      const settings = await request.withTenant((tx) => readDigestSettings(tx, tenant.licenseId));
+      return reply.send(settings);
+    },
+  );
+
+  app.put(
+    '/settings/digests',
+    {
+      config: { scopes: ['access_rules:rw'], minimumRole: 'admin', principals: ['agent'] },
+    },
+    async (request, reply) => {
+      const body = parse(digestSettingsBody, request.body);
+      const tenant = request.tenant();
+      const after = await request.withTenant(async (tx) => {
+        const { after: saved } = await writeDigestSettings(tx, {
+          licenseId: tenant.licenseId,
+          patch: body,
+        });
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'digest_settings.updated',
+          target: `license:${tenant.licenseId}`,
+          metadata: { daily_roles: saved.daily_roles, weekly_roles: saved.weekly_roles },
+        });
+        return saved;
+      });
+      return reply.send(after);
     },
   );
 }

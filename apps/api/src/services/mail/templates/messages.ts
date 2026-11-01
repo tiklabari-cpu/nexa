@@ -1235,6 +1235,184 @@ export function scheduledReportMail(
   });
 }
 
+/**
+ * The figures a summary e-mail states (RP-05 · tm 372). Counts, seconds and
+ * 0..1 shares only — there is no field a player's name, user name or message
+ * text could travel in, and `digest-mail.test.ts` holds the rendered body to
+ * the same rule.
+ */
+export interface DigestMailFigures {
+  chats: number;
+  closed: number;
+  missed: number;
+  avg_first_response_seconds: number | null;
+  csat_score: number | null;
+  csat_responses: number;
+  ai_conversations: number;
+  ai_resolved: number;
+  ai_handed_off: number;
+  risk_flagged_chats: number;
+  queue_entries: number;
+  queue_p80_wait_seconds: number | null;
+}
+
+/** `1 dk 20 sn` / `1 min 20 s` — whole seconds, spoken the way a desk reads a wait. */
+function durationText(locale: MailLocale, seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  const minutes = Math.floor(total / 60);
+  const rest = total % 60;
+  const [m, s] = tr(locale) ? ['dk', 'sn'] : ['min', 's'];
+  if (minutes === 0) return `${rest} ${s}`;
+  return rest === 0 ? `${minutes} ${m}` : `${minutes} ${m} ${rest} ${s}`;
+}
+
+const MINUS = '−';
+const NO_CHANGE = '±0';
+
+const signed = (n: number): string =>
+  n > 0 ? `+${n}` : n < 0 ? `${MINUS}${Math.abs(n)}` : NO_CHANGE;
+
+/**
+ * Change against the period before: ` (+4)` for a count, ` (−10 s)` for a
+ * duration, ` (+3 pts)` for a share. Nothing when either side is unknown — a
+ * quiet previous day has no first-response time to compare with.
+ */
+function changeText(
+  locale: MailLocale,
+  kind: 'count' | 'seconds' | 'points',
+  current: number | null,
+  previous: number | null,
+): string {
+  if (current === null || previous === null) return '';
+  if (kind === 'count') return ` (${signed(current - previous)})`;
+  if (kind === 'seconds') {
+    const diff = Math.round(current - previous);
+    if (diff === 0) return ` (${NO_CHANGE})`;
+    return ` (${diff > 0 ? '+' : MINUS}${durationText(locale, Math.abs(diff))})`;
+  }
+  const points = Math.round((current - previous) * 100);
+  return ` (${signed(points)} ${tr(locale) ? 'puan' : 'pts'})`;
+}
+
+/**
+ * The morning summary for one reader (RP-05 · tm 372): yesterday's — or last
+ * week's — figures, each against the period before it, for the workspace or for
+ * the teams the reader leads. Counts and durations only; the one link goes to the
+ * Reports screen and carries team ids at most.
+ */
+export function digestMail(
+  ctx: MailContext,
+  input: {
+    workspaceName: string;
+    frequency: 'daily' | 'weekly';
+    /** `2026-11-01` or `2026-10-26 – 2026-11-01` — local dates, locale-neutral. */
+    periodLabel: string;
+    /** `teams`: the reader leads teams and the figures are theirs alone. */
+    scope: 'workspace' | 'teams';
+    current: DigestMailFigures;
+    previous: DigestMailFigures;
+    /** The Reports screen, with the reader's team ids when `scope` is `teams`. */
+    reportsUrl?: string;
+  },
+): RenderedEmail {
+  const t = tr(ctx.locale);
+  const { current: c, previous: p } = input;
+  const daily = input.frequency === 'daily';
+  const none = '—';
+
+  const wait = (seconds: number | null): string =>
+    seconds === null ? none : durationText(ctx.locale, seconds);
+  const percent = (score: number | null): string =>
+    score === null ? none : t ? `%${Math.round(score * 100)}` : `${Math.round(score * 100)}%`;
+  const ratings =
+    c.csat_responses === 0
+      ? ''
+      : t
+        ? ` (${c.csat_responses} oy)`
+        : ` (${c.csat_responses} ${c.csat_responses === 1 ? 'rating' : 'ratings'})`;
+  const count = (label: string, value: number, before: number): readonly [string, string] => [
+    label,
+    `${value}${changeText(ctx.locale, 'count', value, before)}`,
+  ];
+
+  const rows: Array<readonly [string, string]> = [
+    count(t ? 'Sohbet' : 'Chats', c.chats, p.chats),
+    count(t ? 'Kaçan sohbet' : 'Missed chats', c.missed, p.missed),
+    [
+      t ? 'İlk yanıt (ortalama)' : 'First reply (average)',
+      `${wait(c.avg_first_response_seconds)}${changeText(ctx.locale, 'seconds', c.avg_first_response_seconds, p.avg_first_response_seconds)}`,
+    ],
+    [
+      t ? 'Memnuniyet' : 'Satisfaction',
+      `${percent(c.csat_score)}${ratings}${changeText(ctx.locale, 'points', c.csat_score, p.csat_score)}`,
+    ],
+    count(t ? 'AI çözdü' : 'Resolved by AI', c.ai_resolved, p.ai_resolved),
+    count(t ? 'AI devretti' : 'Handed over by AI', c.ai_handed_off, p.ai_handed_off),
+    count(
+      t ? 'Risk bayraklı sohbet' : 'Chats with a risk flag',
+      c.risk_flagged_chats,
+      p.risk_flagged_chats,
+    ),
+    [
+      t ? 'Kuyrukta bekleme (80. yüzdelik)' : 'Queue wait (80th percentile)',
+      `${wait(c.queue_p80_wait_seconds)}${changeText(ctx.locale, 'seconds', c.queue_p80_wait_seconds, p.queue_p80_wait_seconds)}`,
+    ],
+  ];
+
+  const lead = daily
+    ? t
+      ? `${input.workspaceName} için ${input.periodLabel} günü. Parantez içindeki değişim, bir önceki güne göredir.`
+      : `${input.workspaceName} for ${input.periodLabel}. The change in brackets is against the day before.`
+    : t
+      ? `${input.workspaceName} için ${input.periodLabel} haftası. Parantez içindeki değişim, bir önceki haftaya göredir.`
+      : `${input.workspaceName} for the week ${input.periodLabel}. The change in brackets is against the week before.`;
+
+  const blocks: EmailBlock[] = [{ type: 'paragraph', text: lead }];
+  if (input.scope === 'teams') {
+    blocks.push({
+      type: 'note',
+      text: t
+        ? 'Bu özet yalnızca liderlik ettiğiniz ekiplerin sayılarını içerir.'
+        : 'This summary covers only the teams you lead.',
+    });
+  }
+  blocks.push({ type: 'facts', rows });
+  if (input.reportsUrl) {
+    blocks.push({
+      type: 'button',
+      label: t ? 'Raporları aç' : 'Open reports',
+      url: input.reportsUrl,
+      fallback: fallback(ctx),
+    });
+  }
+
+  const kind = daily
+    ? t
+      ? 'Günlük özet'
+      : 'Daily summary'
+    : t
+      ? 'Haftalık özet'
+      : 'Weekly summary';
+  return renderEmail({
+    locale: ctx.locale,
+    homeUrl: ctx.appUrl ?? '',
+    eyebrow: input.workspaceName,
+    subject: `${kind}: ${input.workspaceName} · ${input.periodLabel}`,
+    preheader: t
+      ? `${c.chats} sohbet, ${c.missed} kaçan, ${c.risk_flagged_chats} risk bayraklı.`
+      : `${c.chats} chats, ${c.missed} missed, ${c.risk_flagged_chats} with a risk flag.`,
+    icon: ICON.chart,
+    heading: kind,
+    blocks,
+    footer: [
+      t
+        ? `Bu e-postayı, ${input.workspaceName} çalışma alanında ${daily ? 'günlük' : 'haftalık'} özet sizin için açık olduğu için aldınız. Panelde Ayarlar › Bildirimler bölümünden kapatabilirsiniz. Özette oyuncu bilgisi ya da mesaj metni yer almaz.`
+        : `You received this email because the ${daily ? 'daily' : 'weekly'} summary is on for you in ${input.workspaceName}. Switch it off in the panel under Settings › Notifications. It carries no player details or message text.`,
+      signature(ctx),
+    ],
+  });
+}
+
 export interface SlaBreachLine {
   subjectType: string;
   subjectId: string;

@@ -62,6 +62,8 @@ describe('readNotificationPreferences', () => {
       email: false,
       events: { ...DEFAULT_NOTIFICATION_EVENTS, new_ticket: false },
       repeat_sound: true,
+      digest_daily: true,
+      digest_weekly: true,
     };
     expect(readNotificationPreferences(prefs)).toEqual(prefs);
   });

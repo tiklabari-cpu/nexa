@@ -113,6 +113,7 @@ export const auditLabels: Messages = {
   'audit.action.member_tokens.revoked': 'Geri dönen ziyaretçiler unutuldu',
   'audit.action.device.registered': 'Cihaz kaydedildi',
   'audit.action.device.revoked': 'Cihaz erişimi iptal edildi',
+  'audit.action.digest_settings.updated': 'Özet e-postası varsayılanları değişti',
   'audit.action.partner_app.created': 'Uygulama oluşturuldu',
   'audit.action.partner_app.updated': 'Uygulama güncellendi',
   'audit.action.partner_app.deleted': 'Uygulama silindi',

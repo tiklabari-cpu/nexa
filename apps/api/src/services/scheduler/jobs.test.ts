@@ -316,7 +316,14 @@ describe('buildSchedulerJobs', () => {
         (j) => j.name === 'scheduled_reports',
       );
       const outcome = await job?.run(context());
-      expect(outcome?.counts).toEqual({ tenants: 0, delivered: 0, skipped: 0, failed: 0 });
+      expect(outcome?.counts).toEqual({
+        tenants: 0,
+        delivered: 0,
+        skipped: 0,
+        failed: 0,
+        digests_delivered: 0,
+        digests_failed: 0,
+      });
     });
 
     it('retention, once RETENTION_ENABLED, prunes nothing and reports zero tenants', async () => {

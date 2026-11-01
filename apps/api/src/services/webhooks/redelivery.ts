@@ -51,6 +51,7 @@ import type { PrismaClient } from '@prisma/client';
 import { type TenantContext, withTenant } from '../../lib/tenant.js';
 import type { HostResolver } from '../../lib/ssrf.js';
 import { writeAuditEntry } from '../audit/audit-log.js';
+import { pruneDeliveryLog } from './delivery-log.js';
 import {
   deliveryState,
   WEBHOOK_MAX_ATTEMPTS,
@@ -257,6 +258,14 @@ export class WebhookRedeliverer {
       else result.requeued += 1;
     }
 
+    // The delivery log's retention (KN-03 · tm 375): an exhausted row's payload
+    // ages out after 72 h and a settled row after 30 days. Here because this
+    // sweep already walks every tenant under RLS; after the sends so a long
+    // batch is not delayed by housekeeping.
+    if (!signal?.aborted) {
+      await withTenant(this.#db, context, (tx) => pruneDeliveryLog(tx, now));
+    }
+
     return result;
   }
 
@@ -418,7 +427,9 @@ export class WebhookRedeliverer {
     await withTenant(this.#db, context, async (tx) => {
       const { count } = await tx.webhookDelivery.updateMany({
         where: { id: row.id, state: 'pending' },
-        data: { state: 'exhausted', permanent: true, nextAttemptAt: null, payload: null },
+        // The payload stays: the webhook may be switched back on and the
+        // operator may press "Redeliver" (KN-03) — the 72 h sweep clears it.
+        data: { state: 'exhausted', permanent: true, nextAttemptAt: null },
       });
       if (count === 0) return;
 

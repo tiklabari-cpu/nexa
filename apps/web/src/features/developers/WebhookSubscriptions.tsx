@@ -42,6 +42,7 @@ import { useApiClient } from '../../lib/auth-store.js';
 import { formatDateTime } from '../../lib/format.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import { useTranslate } from '../../lib/i18n.js';
+import { WebhookDeliveryLog } from './WebhookDeliveryLog.js';
 
 const WEBHOOKS_KEY = ['developers', 'webhooks'] as const;
 const MANIFEST_KEY = ['developers', 'integration-manifest'] as const;
@@ -127,6 +128,7 @@ export function WebhookSubscriptions({ canEdit }: { canEdit: boolean }): ReactEl
   const automationApps = useConnectedAutomationApps();
   const [newSubscription, setNewSubscription] = useState<WebhookRegistration | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Webhook | null>(null);
+  const [logTarget, setLogTarget] = useState<Webhook | null>(null);
 
   const list = useQuery({
     queryKey: WEBHOOKS_KEY,
@@ -180,6 +182,15 @@ export function WebhookSubscriptions({ canEdit }: { canEdit: boolean }): ReactEl
                           : t('apps.developers.webhooks.disabled')
                       }
                     />
+                    <button
+                      type="button"
+                      onClick={() => setLogTarget(webhook)}
+                      aria-label={t('apps.developers.webhooks.deliveriesFor', { url: webhook.url })}
+                      className="shrink-0 rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+                    >
+                      {t('apps.developers.webhooks.deliveriesButton')}
+                    </button>
+                    {canEdit && <EnabledToggle webhook={webhook} />}
                     {canEdit && (
                       <button
                         type="button"
@@ -233,7 +244,65 @@ export function WebhookSubscriptions({ canEdit }: { canEdit: boolean }): ReactEl
       {deleteTarget && (
         <DeleteWebhookModal webhook={deleteTarget} onClose={() => setDeleteTarget(null)} />
       )}
+
+      {logTarget && (
+        <WebhookDeliveryLog
+          webhook={logTarget}
+          canEdit={canEdit}
+          eventLabel={triggerLabel}
+          onClose={() => setLogTarget(null)}
+        />
+      )}
     </Section>
+  );
+}
+
+/**
+ * Switch a webhook on or off (KN-03). A switched-off webhook receives no new
+ * events; the server refuses a queued retry for it too. Not optimistic: the dot
+ * beside it flips when the server has said so, because "off" that did not take
+ * is the worse way to be wrong.
+ */
+function EnabledToggle({ webhook }: { webhook: Webhook }): ReactElement {
+  const api = useApiClient();
+  const t = useTranslate();
+  const queryClient = useQueryClient();
+  const [failed, setFailed] = useState(false);
+
+  const toggle = useMutation({
+    mutationFn: (enabled: boolean) => api.patch<Webhook>(`/webhooks/${webhook.id}`, { enabled }),
+    onMutate: () => setFailed(false),
+    onError: () => setFailed(true),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: WEBHOOKS_KEY });
+      // The card's trigger count only counts enabled subscriptions.
+      await queryClient.invalidateQueries({ queryKey: AUTOMATION_APPS_KEY });
+    },
+  });
+
+  return (
+    <>
+      <button
+        type="button"
+        disabled={toggle.isPending}
+        onClick={() => toggle.mutate(!webhook.enabled)}
+        aria-label={
+          webhook.enabled
+            ? t('apps.developers.webhooks.disableFor', { url: webhook.url })
+            : t('apps.developers.webhooks.enableFor', { url: webhook.url })
+        }
+        className="shrink-0 rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+      >
+        {webhook.enabled
+          ? t('apps.developers.webhooks.disable')
+          : t('apps.developers.webhooks.enable')}
+      </button>
+      {failed && (
+        <span role="alert" className="text-2xs text-danger">
+          {t('apps.developers.webhooks.toggleFailed')}
+        </span>
+      )}
+    </>
   );
 }
 

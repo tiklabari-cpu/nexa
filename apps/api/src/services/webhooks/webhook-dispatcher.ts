@@ -54,6 +54,7 @@ import {
 } from '../../lib/ssrf.js';
 import { isApiError } from '../../lib/api-error.js';
 import { refuseInSimulation } from '../../lib/simulation-context.js';
+import { sanitizeDeliveryError } from './delivery-error.js';
 import { signWebhook } from './signature.js';
 
 /**
@@ -333,9 +334,11 @@ export class WebhookDispatcher {
  * CHECK constraints will accept.
  *
  * Shared with `redelivery.ts` so the sweep's rows are indistinguishable from
- * the request's: the payload is carried only while another try is owed, and
- * dropped the moment the delivery settles, so a delivered webhook leaves no
- * lasting copy of a customer payload in the log.
+ * the request's: the payload is carried while another try is owed and — for
+ * `WEBHOOK_PAYLOAD_KEEP_MS` (72 h, swept by `pruneDeliveryLog`) — on an
+ * exhausted row so "Redeliver" has a body; it is dropped the moment a delivery
+ * succeeds or is superseded, so a delivered webhook leaves no lasting copy of
+ * a customer payload in the log.
  */
 export function writeableAttempt(
   licenseId: bigint,
@@ -372,14 +375,17 @@ export function writeableAttempt(
     ok: entry.result.ok,
     statusCode: entry.result.statusCode ?? null,
     // The secret is never part of a result, so it cannot reach the log here.
-    error: entry.result.error ?? null,
+    error: sanitizeDeliveryError(entry.result.error),
     // Kept in lockstep with the state a CHECK constraint ties it to.
     permanent: entry.state === 'exhausted',
     state: entry.state,
     nextAttemptAt: queued
       ? new Date(entry.now.getTime() + redeliveryBackoffMs(entry.attempt))
       : null,
-    payload: queued ? entry.body : null,
+    // A queued row carries the body for its next try; an exhausted one keeps it
+    // for `WEBHOOK_PAYLOAD_KEEP_MS` so the delivery log's "Redeliver" has
+    // something to send (KN-03 · tm 375). A delivered or superseded row keeps none.
+    payload: queued || entry.state === 'exhausted' ? entry.body : null,
   };
 }
 

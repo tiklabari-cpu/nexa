@@ -689,7 +689,7 @@ export async function buildServer({
       await api.register(onboardingRoutes);
       await api.register(websiteRoutes, { env });
       await api.register(brandRoutes);
-      await api.register(webhookRoutes);
+      await api.register(webhookRoutes, webhookSender ? { sender: webhookSender } : {});
       await api.register(partnerAppRoutes);
       await api.register(mcpRoutes, {
         serverUrl: `${env.API_BASE_URL}${API_PREFIX}/mcp`,

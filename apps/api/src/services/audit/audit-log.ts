@@ -310,6 +310,12 @@ export const AUDIT_ACTIONS = [
   // secret the register response carries once.
   'webhook.created',
   'webhook.deleted',
+  // A webhook switched on or off (KN-03 · tm 375) — recorded only when the state
+  // really changed, with the host and subscription, never the URL.
+  'webhook.updated',
+  // A failed delivery sent again from the delivery log by a person (KN-03). The
+  // outcome is recorded, never the payload.
+  'webhook.redelivered',
   // A delivery was given up on (M-SCHED-e) — every attempt used up, or the
   // webhook switched off while one was still queued. Recorded because the
   // failure mode it names is silent by nature: an integration that stopped

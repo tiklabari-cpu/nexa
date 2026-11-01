@@ -152,6 +152,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/settings/ChatTimeout.tsx',
   'src/features/settings/CustomFieldsSettings.tsx',
   'src/features/developers/DeveloperPortal.tsx',
+  'src/features/developers/WebhookDeliveryLog.tsx',
   'src/features/developers/WebhookSubscriptions.tsx',
   'src/features/settings/Integrations.tsx',
   'src/features/settings/MemberRecognition.tsx',

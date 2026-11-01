@@ -29,9 +29,15 @@ import {
   isAutomationApp,
 } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
-import { assertPublicHttpUrl } from '../lib/ssrf.js';
+import { assertPublicHttpUrl, type HostResolver } from '../lib/ssrf.js';
 import type { TenantClient } from '../lib/tenant.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
+import { DELIVERY_STATES, WebhookDeliveryLog } from '../services/webhooks/delivery-log.js';
+import {
+  WebhookDispatcher,
+  createHttpWebhookSender,
+  type WebhookSender,
+} from '../services/webhooks/webhook-dispatcher.js';
 import {
   WebhookService,
   WEBHOOK_ACTIONS,
@@ -59,6 +65,28 @@ const registerBody = z.object({
 });
 
 const uuid = z.string().uuid();
+
+const updateBody = z.object({ enabled: z.boolean() }).strict();
+
+const deliveriesQuery = z.object({
+  state: z.enum(DELIVERY_STATES).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  cursor: z.string().max(512).optional(),
+});
+
+/**
+ * Test pings a webhook may be sent per minute (KN-03). A ping is an outbound
+ * request to a customer-supplied URL on demand — without a bound the button is
+ * a way to make this server hammer a third party.
+ */
+export const WEBHOOK_TESTS_PER_MINUTE = 5;
+
+export interface WebhookRouteOptions {
+  /** How a ping / redelivery leaves the process. Defaults to the real HTTP sender. */
+  sender?: WebhookSender;
+  /** DNS resolver for the send-time SSRF re-check (tests pin it). */
+  resolver?: HostResolver;
+}
 
 /**
  * The host of a webhook URL for an audit note — never the path, query or the URL
@@ -125,8 +153,21 @@ async function requireConnectedAutomation(tx: TenantClient, appId: string): Prom
   return entry.id;
 }
 
-export default async function webhookRoutes(app: FastifyInstance): Promise<void> {
+export default async function webhookRoutes(
+  app: FastifyInstance,
+  options: WebhookRouteOptions = {},
+): Promise<void> {
   const webhooks = new WebhookService();
+  // The one guarded way out: SSRF re-check, pinned connection, signature. A
+  // manual send takes one attempt — a retry is the operator pressing the button
+  // again, or the sweep for a queued row.
+  const deliveryLog = new WebhookDeliveryLog({
+    dispatcher: new WebhookDispatcher({
+      sender: options.sender ?? createHttpWebhookSender(),
+      ...(options.resolver ? { resolver: options.resolver } : {}),
+      requestAttempts: 1,
+    }),
+  });
 
   app.get(
     '/webhooks',
@@ -226,6 +267,119 @@ export default async function webhookRoutes(app: FastifyInstance): Promise<void>
       if (removed === 0) throw ApiError.notFound('Webhook not found.');
 
       return reply.status(204).send();
+    },
+  );
+  app.patch<{ Params: { webhookId: string } }>(
+    '/webhooks/:webhookId',
+    { config: { scopes: ['webhooks--all:rw'] } },
+    async (request, reply) => {
+      const id = parse(uuid, request.params.webhookId);
+      const body = parse(updateBody, request.body);
+
+      const updated = await request.withTenant(async (tx) => {
+        const before = await tx.webhook.findUnique({
+          where: { id },
+          select: { enabled: true, action: true, url: true, appId: true },
+        });
+        const row = await webhooks.setEnabled(tx, id, body.enabled);
+        // Only a real change is recorded (NFR-S12): switching a webhook to the
+        // state it is already in leaves the trail alone.
+        if (row && before && before.enabled !== body.enabled) {
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'webhook.updated',
+            target: `webhook:${id}`,
+            metadata: {
+              enabled: body.enabled,
+              action: before.action,
+              url_host: urlHost(before.url),
+              ...(before.appId ? { app_id: before.appId } : {}),
+            },
+          });
+        }
+        return row;
+      });
+      // Another tenant's id reads as absent (RLS): 404 keeps ids un-enumerable.
+      if (!updated) throw ApiError.notFound('Webhook not found.');
+      return reply.send(updated);
+    },
+  );
+
+  app.get<{ Params: { webhookId: string }; Querystring: Record<string, unknown> }>(
+    '/webhooks/:webhookId/deliveries',
+    { config: { scopes: ['webhooks--all:ro', 'webhooks--all:rw'] } },
+    async (request, reply) => {
+      const id = parse(uuid, request.params.webhookId);
+      const query = parse(deliveriesQuery, request.query);
+      const page = await request.withTenantRead((tx) =>
+        deliveryLog.list(tx, id, {
+          limit: query.limit,
+          ...(query.state ? { state: query.state } : {}),
+          ...(query.cursor ? { cursor: query.cursor } : {}),
+        }),
+      );
+      return reply.send(page);
+    },
+  );
+
+  app.post<{ Params: { webhookId: string; deliveryId: string } }>(
+    '/webhooks/:webhookId/deliveries/:deliveryId/redeliver',
+    { config: { scopes: ['webhooks--all:rw'] } },
+    async (request, reply) => {
+      const webhookId = parse(uuid, request.params.webhookId);
+      const deliveryId = parse(uuid, request.params.deliveryId);
+      const tenant = request.tenant();
+
+      const attempt = await deliveryLog.redeliver(
+        (fn) => request.withTenant(fn),
+        tenant,
+        webhookId,
+        deliveryId,
+      );
+      await request.withTenant((tx) =>
+        writeAuditEntry(tx, request.auditContext(), {
+          action: 'webhook.redelivered',
+          target: `webhook:${webhookId}`,
+          metadata: {
+            delivery_id: deliveryId,
+            attempt: attempt.attempt,
+            outcome: attempt.state,
+            ...(attempt.event_id ? { event_id: attempt.event_id } : {}),
+          },
+        }),
+      );
+      return reply.send(attempt);
+    },
+  );
+
+  app.post<{ Params: { webhookId: string } }>(
+    '/webhooks/:webhookId/test',
+    { config: { scopes: ['webhooks--all:rw'] } },
+    async (request, reply) => {
+      const webhookId = parse(uuid, request.params.webhookId);
+      const tenant = request.tenant();
+
+      // Charged first, per webhook, before any network: an unknown id costs a
+      // budget unit too, so the limiter cannot be used to probe which ids exist.
+      // Fails open on a Redis outage like every in-handler budget.
+      let decision: { allowed: boolean; resetMs: number } | null = null;
+      try {
+        decision = await app.rateLimiter.consume(
+          `rl:webhook-test:${tenant.licenseId}:${webhookId}`,
+          WEBHOOK_TESTS_PER_MINUTE,
+          60_000,
+        );
+      } catch (error) {
+        request.log.error({ err: error }, 'webhook test budget unavailable — allowing ping');
+      }
+      if (decision && !decision.allowed) {
+        throw ApiError.tooManyRequests(
+          Math.max(1, Math.ceil(decision.resetMs / 1000)),
+          'Too many test events — try again in a minute.',
+        );
+      }
+
+      const attempt = await deliveryLog.sendTest((fn) => request.withTenant(fn), tenant, webhookId);
+      return reply.send(attempt);
     },
   );
 }

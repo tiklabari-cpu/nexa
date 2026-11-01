@@ -69,6 +69,8 @@ export const auditLabels: Messages = {
   'audit.action.billing.ai_package_purchased': 'Yapay zekâ paketi satın alındı',
   'audit.action.webhook.created': 'Webhook oluşturuldu',
   'audit.action.webhook.deleted': 'Webhook silindi',
+  'audit.action.webhook.updated': 'Webhook açıldı veya kapatıldı',
+  'audit.action.webhook.redelivered': 'Webhook teslimatı yeniden gönderildi',
   'audit.action.webhook.delivery_exhausted': 'Webhook teslimatından vazgeçildi',
   'audit.action.scheduled_export.created': 'Zamanlanmış dışa aktarım oluşturuldu',
   'audit.action.scheduled_export.updated': 'Zamanlanmış dışa aktarım güncellendi',

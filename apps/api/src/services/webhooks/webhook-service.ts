@@ -101,6 +101,14 @@ const SAFE_SELECT = {
 } as const;
 
 export class WebhookService {
+  /** Switch a webhook on or off (KN-03). Null when it is not in this workspace. */
+  async setEnabled(tx: TenantClient, id: string, enabled: boolean): Promise<Webhook | null> {
+    const { count } = await tx.webhook.updateMany({ where: { id }, data: { enabled } });
+    if (count === 0) return null;
+    const row = await tx.webhook.findUnique({ where: { id }, select: SAFE_SELECT });
+    return row ? this.serialise(row) : null;
+  }
+
   async list(tx: TenantClient): Promise<Webhook[]> {
     // RLS narrows to the caller's license; oldest-first gives a stable order.
     const rows = await tx.webhook.findMany({ orderBy: { createdAt: 'asc' }, select: SAFE_SELECT });
@@ -204,7 +212,9 @@ export class WebhookService {
     // subscription off afterwards does not un-happen it.
     const runs = await tx.webhookDelivery.groupBy({
       by: ['webhookId'],
-      where: { webhookId: { in: hooks.map((hook) => hook.id) }, ok: true },
+      // A test ping from the delivery log screen reached the receiver, but
+      // no workspace event ran the automation (KN-03).
+      where: { webhookId: { in: hooks.map((hook) => hook.id) }, ok: true, isTest: false },
       _max: { createdAt: true },
     });
     const appOfHook = new Map(hooks.map((hook) => [hook.id, hook.appId]));

@@ -756,6 +756,12 @@ paths:
     $ref: "./paths/webhooks.yaml#/webhooks"
   /webhooks/{webhookId}:
     $ref: "./paths/webhooks.yaml#/webhook"
+  /webhooks/{webhookId}/deliveries:
+    $ref: "./paths/webhooks.yaml#/webhookDeliveries"
+  /webhooks/{webhookId}/deliveries/{deliveryId}/redeliver:
+    $ref: "./paths/webhooks.yaml#/webhookRedeliver"
+  /webhooks/{webhookId}/test:
+    $ref: "./paths/webhooks.yaml#/webhookTest"
   /integrations/manifest:
     $ref: "./paths/webhooks.yaml#/integrationManifest"
 
@@ -8572,6 +8578,71 @@ components:
           type: array
           items: { type: string }
           description: At least one of these scopes must be granted.
+
+    WebhookDelivery:
+      type: object
+      description: |
+        One delivery attempt of a webhook (KN-03). `event_id` groups the
+        attempts of one event; `attempt` counts them from 1.
+      required:
+        - id
+        - event_id
+        - action
+        - attempt
+        - state
+        - ok
+        - status_code
+        - error
+        - test
+        - created_at
+        - next_attempt_at
+        - can_redeliver
+      properties:
+        id: { type: string, format: uuid }
+        event_id:
+          oneOf:
+            - { type: string, format: uuid }
+            - { type: "null" }
+        action: { type: string }
+        attempt: { type: integer, minimum: 1 }
+        state:
+          type: string
+          enum: [pending, delivered, failed, exhausted]
+        ok: { type: boolean }
+        status_code:
+          description: The HTTP status the receiver answered with, if it answered.
+          oneOf:
+            - { type: integer }
+            - { type: "null" }
+        error:
+          description: |
+            A short cleaned reason (`http_503`, `ssrf_blocked`, `ECONNREFUSED`):
+            no secret, token, URL or response body, at most 500 characters.
+          oneOf:
+            - { type: string, maxLength: 500 }
+            - { type: "null" }
+        test: { type: boolean, description: A test ping, not a workspace event. }
+        created_at: { type: string, format: date-time }
+        next_attempt_at:
+          description: When the next automatic try is due (`pending` rows only).
+          oneOf:
+            - { type: string, format: date-time }
+            - { type: "null" }
+        can_redeliver:
+          type: boolean
+          description: Whether `redeliver` would work on this row.
+
+    WebhookDeliveryList:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/WebhookDelivery" }
+        next_cursor:
+          oneOf:
+            - { type: string }
+            - { type: "null" }
 
     IntegrationManifest:
       type: object

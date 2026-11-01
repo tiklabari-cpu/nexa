@@ -115,8 +115,8 @@ describe('writeableAttempt', () => {
     expect(row).toMatchObject({ licenseId: 7n, attempt: 3, ok: false, statusCode: 503 });
   });
 
-  it('drops the payload the moment the delivery settles, whichever way', () => {
-    for (const state of ['delivered', 'failed', 'exhausted'] as const) {
+  it('drops the payload the moment a delivery succeeds or is superseded', () => {
+    for (const state of ['delivered', 'failed'] as const) {
       const row = writeableAttempt(7n, webhook, {
         ...base,
         result: state === 'delivered' ? { ok: true, statusCode: 200 } : { ok: false },
@@ -126,6 +126,27 @@ describe('writeableAttempt', () => {
       expect(row.payload).toBeNull();
       expect(row.nextAttemptAt).toBeNull();
     }
+  });
+
+  it('keeps the payload of a delivery that gave up, so the delivery log can redeliver it (KN-03)', () => {
+    const row = writeableAttempt(7n, webhook, {
+      ...base,
+      result: { ok: false, statusCode: 503, error: 'http_503' },
+      state: 'exhausted',
+    });
+    // Held for WEBHOOK_PAYLOAD_KEEP_MS by the sweep, then cleared; never queued.
+    expect(row.payload).toBe(base.body);
+    expect(row.nextAttemptAt).toBeNull();
+  });
+
+  it('cleans the error text before it is stored', () => {
+    const row = writeableAttempt(7n, webhook, {
+      ...base,
+      result: { ok: false, error: 'bad Bearer abc123def456 at https://x.test/p?t=1' },
+      state: 'pending',
+    });
+    expect(row.error).not.toContain('abc123def456');
+    expect(row.error).not.toContain('x.test');
   });
 
   it('sets permanent exactly when the state is exhausted', () => {

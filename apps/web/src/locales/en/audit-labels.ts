@@ -120,6 +120,7 @@ export const auditLabels: Messages = {
   'audit.action.member_tokens.revoked': 'Returning visitors forgotten',
   'audit.action.device.registered': 'Device registered',
   'audit.action.device.revoked': 'Device revoked',
+  'audit.action.digest_settings.updated': 'Summary e-mail defaults changed',
   'audit.action.partner_app.created': 'App created',
   'audit.action.partner_app.updated': 'App updated',
   'audit.action.partner_app.deleted': 'App deleted',

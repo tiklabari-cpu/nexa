@@ -288,3 +288,72 @@ test.describe('notifications away from the inbox (FR-MOD-13.8)', () => {
     }
   });
 });
+
+test.describe('summary emails (RP-05)', () => {
+  /**
+   * The summary switches are account preferences like the channels above, and
+   * the workspace default is the demo workspace's own: both are shared with every
+   * test that signs in as the demo owner, so both are put back through the API in
+   * a `finally` (the Founder's own weekly choice back to NULL is not expressible
+   * through the API, so it is put back to the value it reads as by default).
+   */
+  test('the Founder switches the weekly summary on and sets who gets it by default', async ({
+    agentPage,
+    request,
+  }) => {
+    const token = await ownerAccessTokenFor(request, ACME_OWNER);
+    const headers = { authorization: `Bearer ${token}` };
+    const reset = async () => {
+      await request.put(`${API_BASE}${PREFERENCES_PATH}`, {
+        headers,
+        data: { digest_weekly: false },
+      });
+      await request.put(`${API_BASE}/settings/digests`, {
+        headers,
+        data: {
+          daily_roles: ['owner', 'viceowner', 'admin', 'team_lead'],
+          weekly_roles: [],
+        },
+      });
+    };
+    await reset();
+    try {
+      await agentPage.goto('/app/settings/notifications');
+      const section = agentPage.getByRole('region', { name: 'Notifications' });
+
+      // The Founder is on the daily summary by default, and not on the weekly one.
+      await expect(section.getByRole('switch', { name: /Daily summary/ })).toBeChecked();
+      const weekly = section.getByRole('switch', { name: /Weekly summary/ });
+      await expect(weekly).not.toBeChecked();
+
+      const weeklySaved = agentPage.waitForResponse(
+        (response) =>
+          response.request().method() === 'PUT' &&
+          response.url().endsWith(PREFERENCES_PATH) &&
+          (response.request().postDataJSON() as { digest_weekly?: boolean } | null)
+            ?.digest_weekly === true,
+      );
+      await weekly.click();
+      expect(await (await weeklySaved).json()).toMatchObject({ digest_weekly: true });
+
+      // The workspace default is a grid the Founder saves, not a switch.
+      const adminWeekly = section.getByRole('checkbox', { name: 'Admin · Weekly summary' });
+      await expect(adminWeekly).not.toBeChecked();
+      await adminWeekly.check();
+      const defaultSaved = agentPage.waitForResponse(
+        (response) =>
+          response.request().method() === 'PUT' && response.url().endsWith('/settings/digests'),
+      );
+      await section.getByRole('button', { name: 'Save' }).click();
+      expect(await (await defaultSaved).json()).toMatchObject({ weekly_roles: ['admin'] });
+
+      // Both are stored, not React state: they survive a reload.
+      await agentPage.reload();
+      const after = agentPage.getByRole('region', { name: 'Notifications' });
+      await expect(after.getByRole('switch', { name: /Weekly summary/ })).toBeChecked();
+      await expect(after.getByRole('checkbox', { name: 'Admin · Weekly summary' })).toBeChecked();
+    } finally {
+      await reset();
+    }
+  });
+});

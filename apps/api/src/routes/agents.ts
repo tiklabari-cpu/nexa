@@ -222,6 +222,9 @@ const notificationPrefsBody = z
       z.ZodOptional<z.ZodBoolean>
     >),
     repeat_sound: z.boolean().optional(),
+    // RP-05: the member's own summary e-mail switches.
+    digest_daily: z.boolean().optional(),
+    digest_weekly: z.boolean().optional(),
     // IN-10: a partial update of the events object. The locked events accept
     // only `true` — "a visitor wrote in" is the one alert nobody may switch off.
     events: z

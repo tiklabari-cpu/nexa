@@ -25,6 +25,8 @@ function prefs(overrides: Partial<NotificationPreferences> = {}): NotificationPr
       ticket_reply: true,
     },
     repeat_sound: false,
+    digest_daily: false,
+    digest_weekly: false,
     ...overrides,
   };
 }

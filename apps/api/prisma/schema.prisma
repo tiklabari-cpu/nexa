@@ -279,6 +279,7 @@ model License {
   presenceEvents         AgentPresenceEvent[]
   scheduledReports       ScheduledReport[]
   scheduledReportRuns    ScheduledReportRun[]
+  digestSettings         DigestSettings?
   reportShareLinks       ReportShareLink[]
   chatSupervisions       ChatSupervision[]
   goalAchievements       GoalAchievement[]
@@ -394,6 +395,11 @@ model AgentMembership {
   notifyEvents         Json      @default("{}") @map("notify_events")
   /// Keep chiming every 10 s until the message is read (IN-10); off by default.
   notifyRepeatSound    Boolean   @default(false) @map("notify_repeat_sound")
+  /// This member's own switch for the daily / weekly summary e-mail (RP-05 ·
+  /// tm 372). NULL follows the workspace default for their role
+  /// (`digest_settings`); true / false is their choice.
+  notifyDigestDaily    Boolean?  @map("notify_digest_daily")
+  notifyDigestWeekly   Boolean?  @map("notify_digest_weekly")
   /// Whether the Settings side navigation is shown pinned (FR-MOD-08.1 ·
   /// "Unpin side navigation"). Per user and per license, like the notify_*
   /// columns above, and read by `/agents/me/ui-preferences`.
@@ -418,9 +424,10 @@ model AgentMembership {
   scimExternalId       String?   @map("scim_external_id")
   createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  license      License       @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-  agent        Account       @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  deviceTokens DeviceToken[]
+  license         License          @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  agent           Account          @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  deviceTokens    DeviceToken[]
+  digestDeliveries DigestDelivery[]
 
   @@id([licenseId, agentId])
   /// At most one member per external id. NULLs are distinct in Postgres, so
@@ -5035,6 +5042,53 @@ model ScheduledReportRun {
   @@unique([scheduledReportId, periodKey])
   @@index([licenseId, scheduledReportId, createdAt])
   @@map("scheduled_report_runs")
+}
+
+/// Which roles receive the daily / weekly summary e-mail by default (RP-05 ·
+/// tm 372), one row per workspace, written on first save. A member's own
+/// `notify_digest_*` overrides it. No row reads `DEFAULT_DIGEST_ROLES`
+/// (`@siyahtus/types`). Role names are `AGENT_ROLES`, by CHECK.
+model DigestSettings {
+  licenseId   BigInt   @id @map("license_id")
+  dailyRoles  String[] @default(["owner", "viceowner", "admin", "team_lead"]) @map("daily_roles")
+  weeklyRoles String[] @default([]) @map("weekly_roles")
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@map("digest_settings")
+}
+
+/// One summary e-mail claimed for one member and one period (RP-05 · tm 372).
+/// The row is INSERTed before the mail is built, so `UNIQUE (license_id,
+/// agent_id, period_key)` is what makes a second sweep, or two instances at
+/// once, send nothing: the loser meets P2002 and skips. The composite key to
+/// the membership keeps a delivery inside its own workspace. A failed row
+/// consumes the period, as a failed scheduled-report run does.
+model DigestDelivery {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  licenseId  BigInt    @map("license_id")
+  agentId    String    @map("agent_id") @db.Uuid
+  /// `daily` | `weekly`, by CHECK.
+  frequency  String
+  /// `D2026-10-31` (the local day covered) | `W2026-10-26` (the local Monday
+  /// of the week covered), by CHECK.
+  periodKey  String    @map("period_key")
+  periodFrom DateTime  @map("period_from") @db.Timestamptz(6)
+  periodTo   DateTime  @map("period_to") @db.Timestamptz(6)
+  /// `pending` (claimed) | `sent` | `failed`, by CHECK.
+  status     String    @default("pending")
+  error      String?
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  sentAt     DateTime? @map("sent_at") @db.Timestamptz(6)
+
+  /// The workspace is reached through the membership (whose own key cascades
+  /// from the licence), so there is no second foreign key to `licenses`.
+  membership AgentMembership @relation(fields: [licenseId, agentId], references: [licenseId, agentId], onDelete: Cascade, map: "digest_deliveries_membership_fkey")
+
+  @@unique([licenseId, agentId, periodKey])
+  @@index([licenseId, createdAt])
+  @@map("digest_deliveries")
 }
 
 /// A shareable report link (FR-MOD-07.3.1) — the "link" half of the Overview

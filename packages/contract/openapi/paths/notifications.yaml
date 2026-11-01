@@ -161,3 +161,56 @@ Device:
       format: date-time
       nullable: true
       description: Always null in these responses — a revoked device is not listed.
+
+digestSettings:
+  get:
+    tags: [Notifications]
+    operationId: getDigestSettings
+    summary: Read which roles get the summary e-mails by default
+    description: |
+      The workspace default behind `digest_daily` / `digest_weekly` in the
+      notification preferences (RP-05 · tm 372). Readable by any member, so the
+      personal switch can say what "follow the default" means for them.
+    responses:
+      "200":
+        description: The workspace default
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DigestSettings" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  put:
+    tags: [Notifications]
+    operationId: setDigestSettings
+    summary: Set which roles get the summary e-mails by default
+    description: |
+      Founder and Administrators. The roles are a default, not a roster: a member
+      who has chosen for themselves keeps their choice, and one who has not
+      follows this on their next summary. At least one of the two lists is
+      required; a list left out keeps what is stored. Answers the whole setting.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            additionalProperties: false
+            properties:
+              daily_roles:
+                type: array
+                items: { $ref: "../openapi.yaml#/components/schemas/AgentRole" }
+              weekly_roles:
+                type: array
+                items: { $ref: "../openapi.yaml#/components/schemas/AgentRole" }
+    responses:
+      "200":
+        description: The workspace default after the change
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DigestSettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

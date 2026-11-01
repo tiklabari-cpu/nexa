@@ -451,6 +451,25 @@ export const team: Messages = {
   'team.notifications.event.newTicket.hint': 'A ticket was opened or assigned to you or your team.',
   'team.notifications.event.ticketReply.label': 'A reply on a ticket',
   'team.notifications.event.ticketReply.hint': 'The player answered a ticket you work on.',
+  // Summary e-mails (RP-05 · tm 372)
+  'team.notifications.digest.title': 'Summary emails',
+  'team.notifications.digest.hint':
+    'Counts only — chats, missed chats, first reply, satisfaction, the AI, risk-flagged chats and the queue wait — never a player’s name or message. A Team Lead’s summary covers only the teams they lead.',
+  'team.notifications.digest.daily.label': 'Daily summary',
+  'team.notifications.digest.daily.hint':
+    'Yesterday’s figures, every morning at 08:00 company time.',
+  'team.notifications.digest.weekly.label': 'Weekly summary',
+  'team.notifications.digest.weekly.hint':
+    'Last week’s figures, every Monday at 08:00 company time.',
+  'team.notifications.digest.emailOff':
+    'Summaries are emails, so they follow the email switch above.',
+  'team.notifications.digest.loadError': 'The summary email defaults could not be loaded.',
+  'team.notifications.digest.defaults.title': 'Workspace default',
+  'team.notifications.digest.defaults.hint':
+    'Who receives each summary until they choose for themselves. Someone who has switched it on or off keeps their choice; everyone else, including people who join later, follows this.',
+  'team.notifications.digest.defaults.role': 'Role',
+  'team.notifications.digest.defaults.reachNote':
+    'A summary only goes to someone who can read reports. A role without that permission receives nothing, whatever is ticked here.',
   // AI agent performance on the Team screen — TeamAiPerformance.tsx (FR-MOD-04.2)
   'team.ai.title': 'AI agent performance',
   'team.ai.description':

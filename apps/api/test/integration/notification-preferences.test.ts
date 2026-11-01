@@ -36,6 +36,8 @@ describe('notification preferences', () => {
 
   const auth = (token: string) => ({ authorization: `Bearer ${token}` });
   const PATH = '/agents/me/notification-preferences';
+  // The colleague is the Founder, who receives the daily summary by default (RP-05).
+  const COLLEAGUE_DEFAULTS = { ...DEFAULT_NOTIFICATION_PREFERENCES, digest_daily: true };
 
   beforeAll(async () => {
     owner = ownerClient();
@@ -192,7 +194,7 @@ describe('notification preferences', () => {
         auth(agentToken),
       );
       const colleague = await server.get(PATH, auth(colleagueToken));
-      expect(colleague.json()).toEqual(DEFAULT_NOTIFICATION_PREFERENCES);
+      expect(colleague.json()).toEqual(COLLEAGUE_DEFAULTS);
     });
 
     it('lists the caller’s teams on the profile', async () => {
@@ -210,7 +212,7 @@ describe('notification preferences', () => {
     await server.put(PATH, { enabled: false }, auth(agentToken));
 
     const colleague = await server.get(PATH, auth(colleagueToken));
-    expect(colleague.json()).toEqual(DEFAULT_NOTIFICATION_PREFERENCES);
+    expect(colleague.json()).toEqual(COLLEAGUE_DEFAULTS);
   });
 
   it('is per license — the same person stays reachable on their other workspace', async () => {

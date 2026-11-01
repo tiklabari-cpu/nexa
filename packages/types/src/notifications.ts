@@ -141,6 +141,16 @@ export interface NotificationPreferences {
   /** Which events interrupt the agent (IN-10); `incoming_chat` is always on. */
   events: NotificationEventPreferences;
   /**
+   * The summary e-mail each morning at 08:00 company time (RP-05 · tm 372).
+   * What the server answers is the *effective* switch: the member's own, or
+   * while they have made none the workspace default for their role
+   * (`GET /settings/digests`). It is e-mail, so `email` gates it as it gates
+   * every other mail; `enabled` does not (it governs interruptions only).
+   */
+  digest_daily: boolean;
+  /** The same for the weekly summary, each Monday at 08:00 company time. */
+  digest_weekly: boolean;
+  /**
    * Keep chiming every 10 s until the unread message is read (IN-10). Off by
    * default: a sound that does not stop is for the agent who asked for it.
    */
@@ -159,7 +169,12 @@ export const NOTIFICATION_CHANNELS = ['enabled', 'sound', 'desktop', 'push', 'em
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
 
 /** The plain boolean switches of the preference object (everything but `events`). */
-export const NOTIFICATION_SWITCHES = [...NOTIFICATION_CHANNELS, 'repeat_sound'] as const;
+export const NOTIFICATION_SWITCHES = [
+  ...NOTIFICATION_CHANNELS,
+  'repeat_sound',
+  'digest_daily',
+  'digest_weekly',
+] as const;
 export type NotificationSwitch = (typeof NOTIFICATION_SWITCHES)[number];
 
 /**
@@ -177,6 +192,10 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   email: true,
   events: DEFAULT_NOTIFICATION_EVENTS,
   repeat_sound: false,
+  // What a client shows before the server has answered. The real default is the
+  // workspace's, by role (`DEFAULT_DIGEST_ROLES`), and arrives with the preferences.
+  digest_daily: false,
+  digest_weekly: false,
 };
 
 /**

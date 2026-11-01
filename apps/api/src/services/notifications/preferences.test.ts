@@ -14,6 +14,9 @@ const row = {
   notifyEmail: true,
   notifyEvents: { new_ticket: false },
   notifyRepeatSound: true,
+  role: 'agent',
+  notifyDigestDaily: null,
+  notifyDigestWeekly: null,
 };
 
 describe('serialiseNotificationPreferences', () => {
@@ -27,6 +30,41 @@ describe('serialiseNotificationPreferences', () => {
       // A stored object holds only what the member set; the rest read as defaults.
       events: { ...DEFAULT_NOTIFICATION_PREFERENCES.events, new_ticket: false },
       repeat_sound: true,
+      // Neither summary switch chosen, and an Agent is on neither by default.
+      digest_daily: false,
+      digest_weekly: false,
+    });
+  });
+
+  it('reads an unset summary switch as the workspace default for the role, an own choice as given (RP-05)', () => {
+    const roles = { daily: ['team_lead'], weekly: ['team_lead', 'agent'] };
+    expect(serialiseNotificationPreferences({ ...row, role: 'team_lead' }, roles)).toMatchObject({
+      digest_daily: true,
+      digest_weekly: true,
+    });
+    expect(serialiseNotificationPreferences({ ...row, role: 'owner' }, roles)).toMatchObject({
+      digest_daily: false,
+      digest_weekly: false,
+    });
+    // An own choice beats the default in both directions.
+    expect(
+      serialiseNotificationPreferences(
+        { ...row, role: 'team_lead', notifyDigestDaily: false, notifyDigestWeekly: false },
+        roles,
+      ),
+    ).toMatchObject({ digest_daily: false, digest_weekly: false });
+    expect(
+      serialiseNotificationPreferences({ ...row, role: 'owner', notifyDigestDaily: true }, roles),
+    ).toMatchObject({ digest_daily: true });
+  });
+
+  it('with no workspace default given, the shipped one applies: managers daily, nobody weekly', () => {
+    expect(serialiseNotificationPreferences({ ...row, role: 'owner' })).toMatchObject({
+      digest_daily: true,
+      digest_weekly: false,
+    });
+    expect(serialiseNotificationPreferences({ ...row, role: 'agent' })).toMatchObject({
+      digest_daily: false,
     });
   });
 
@@ -53,7 +91,7 @@ describe('serialiseNotificationPreferences', () => {
     expect(DEFAULT_NOTIFICATION_PREFERENCES.events.new_ticket).toBe(true);
   });
 
-  it('selects exactly the seven columns it reads', () => {
+  it('selects exactly the ten columns it reads', () => {
     // The select is exported so `/auth/me` can fold it into a query it already
     // makes. If the two drifted, that query would read a column the serialiser
     // does not use, or fail to read one it does.
@@ -62,6 +100,13 @@ describe('serialiseNotificationPreferences', () => {
 });
 
 describe('toPreferenceColumns', () => {
+  it('writes the summary switches under their column names (RP-05)', () => {
+    expect(toPreferenceColumns({ digest_daily: false, digest_weekly: true })).toEqual({
+      notifyDigestDaily: false,
+      notifyDigestWeekly: true,
+    });
+  });
+
   it('writes only the channels the patch names', () => {
     expect(toPreferenceColumns({ sound: false })).toEqual({ notifySound: false });
   });

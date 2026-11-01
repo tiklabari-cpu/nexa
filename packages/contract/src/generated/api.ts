@@ -4032,6 +4032,35 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/settings/digests': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read which roles get the summary e-mails by default
+     * @description The workspace default behind `digest_daily` / `digest_weekly` in the
+     *     notification preferences (RP-05 · tm 372). Readable by any member, so the
+     *     personal switch can say what "follow the default" means for them.
+     */
+    get: operations['getDigestSettings'];
+    /**
+     * Set which roles get the summary e-mails by default
+     * @description Founder and Administrators. The roles are a default, not a roster: a member
+     *     who has chosen for themselves keeps their choice, and one who has not
+     *     follows this on their next summary. At least one of the two lists is
+     *     required; a list left out keeps what is stored. Answers the whole setting.
+     */
+    put: operations['setDigestSettings'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/notifications/devices': {
     parameters: {
       query?: never;
@@ -12893,6 +12922,26 @@ export interface components {
       email: boolean;
       events: components['schemas']['NotificationEvents'];
       repeat_sound: boolean;
+      /**
+       * @description Whether the daily summary e-mail (RP-05) reaches this person: their own
+       *     choice, or while they have made none the workspace default for their
+       *     role (`GET /settings/digests`). Gated by `email` like every other mail.
+       */
+      digest_daily: boolean;
+      /** @description The same for the weekly summary, each Monday. */
+      digest_weekly: boolean;
+    };
+    /**
+     * @description Which roles receive the summary e-mails by default in this workspace
+     *     (RP-05). A member's own `digest_daily` / `digest_weekly` choice beats it.
+     *     A workspace that never saved reads the shipped default: Founder, Vice
+     *     Founder, Administrator and Team Lead the daily summary, nobody the weekly one.
+     *     A role that cannot read reports (`reports.view` = none) receives nothing
+     *     whatever this says.
+     */
+    DigestSettings: {
+      daily_roles: components['schemas']['AgentRole'][];
+      weekly_roles: components['schemas']['AgentRole'][];
     };
     /**
      * @description Which events interrupt one person (IN-10 · tm 367). Every key is always
@@ -30321,6 +30370,14 @@ export interface operations {
           /** @description Keep chiming every 10 seconds until the message is read. */
           repeat_sound?: boolean;
           /**
+           * @description The daily summary e-mail, each morning at 08:00 company time (RP-05).
+           *     Sending a value is a choice of your own and stays whatever the
+           *     workspace default later becomes.
+           */
+          digest_daily?: boolean;
+          /** @description The weekly summary e-mail, each Monday at 08:00 company time (RP-05). */
+          digest_weekly?: boolean;
+          /**
            * @description Which events interrupt you (IN-10). A partial update of the
            *     `events` object: send only the events that changed.
            *     `incoming_chat` cannot be turned off — sending `false` is a `400`.
@@ -30405,6 +30462,60 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['UiPreferences'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getDigestSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The workspace default */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DigestSettings'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  setDigestSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          daily_roles?: components['schemas']['AgentRole'][];
+          weekly_roles?: components['schemas']['AgentRole'][];
+        };
+      };
+    };
+    responses: {
+      /** @description The workspace default after the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DigestSettings'];
         };
       };
       400: components['responses']['BadRequest'];

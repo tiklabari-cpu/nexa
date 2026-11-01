@@ -129,6 +129,7 @@ import { ChatTimeoutSweeper } from '../chat/chat-timeout.js';
 import type { Mailer } from '../mail/mailer.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
 import { AiMetricsRollup, AiOutcomeFinalizer } from '../reports/ai-metrics.js';
+import { DigestSweeper } from '../notifications/digest-sweeper.js';
 import { ScheduledReportSweeper } from '../reports/scheduled-report-sweeper.js';
 import { resolveRetentionPolicy } from '../retention/policy.js';
 import { RetentionRunner } from '../retention/retention.js';
@@ -317,12 +318,22 @@ export function buildSchedulerJobs({
       intervalMs: intervals.scheduled_reports,
       async run() {
         const report = await new ScheduledReportSweeper(db, mailer, readDb).run();
+        // The morning summary e-mails (RP-05 · tm 372) ride this job: the same
+        // minute-long tick that asks whether a scheduled report is due asks
+        // whether a summary is, and a job of its own would be a second lock,
+        // a second `/health` row and a second interval key for the same question.
+        const digests = await new DigestSweeper(db, mailer, {
+          readDb,
+          appUrl: env.WEB_APP_URL,
+        }).run();
         return {
           counts: {
             tenants: report.totals.tenants,
             delivered: report.totals.delivered,
             skipped: report.totals.skipped,
             failed: report.totals.failed,
+            digests_delivered: digests.totals.delivered,
+            digests_failed: digests.totals.failed,
           },
         };
       },

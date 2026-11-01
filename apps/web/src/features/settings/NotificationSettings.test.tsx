@@ -92,7 +92,7 @@ describe('NotificationSettings', () => {
   it('saves each row the moment it is flipped, and says so with an Undo (GV-06)', async () => {
     const { container } = render(<NotificationSettings />);
     // Every row is the person's own preference: the instant pattern, never a Save bar.
-    expect(container.querySelectorAll('[data-save-pattern="instant"]')).toHaveLength(12);
+    expect(container.querySelectorAll('[data-save-pattern="instant"]')).toHaveLength(14);
     expect(container.querySelector('[data-save-pattern="form"]')).toBeNull();
 
     await userEvent.click(checkbox(/Play a sound/));
@@ -203,6 +203,35 @@ describe('NotificationSettings', () => {
     expect(checkbox(/Enable notifications/)).toBeChecked();
     expect(checkbox(/Mobile push notifications/)).toBeChecked();
     expect(checkbox(/Email notifications/)).toBeChecked();
+  });
+});
+
+describe('summary emails (RP-05)', () => {
+  it('shows the effective switches the server sent and sends only the one that moved', async () => {
+    signIn({ ...DEFAULT_NOTIFICATION_PREFERENCES, digest_daily: true });
+    render(<NotificationSettings />);
+
+    expect(checkbox(/Daily summary/)).toBeChecked();
+    expect(checkbox(/Weekly summary/)).not.toBeChecked();
+
+    await userEvent.click(checkbox(/Weekly summary/));
+    await waitFor(() => expect(patches).toEqual([{ digest_weekly: true }]));
+    await waitFor(() => expect(checkbox(/Weekly summary/)).toBeChecked());
+  });
+
+  it('follows the email switch: a summary is an email, so with email off it cannot be set', () => {
+    signIn({ ...DEFAULT_NOTIFICATION_PREFERENCES, email: false, digest_daily: true });
+    render(<NotificationSettings />);
+
+    expect(checkbox(/Daily summary/)).toBeDisabled();
+    expect(checkbox(/Weekly summary/)).toBeDisabled();
+    expect(screen.getByText(/follow the email switch above/)).toBeInTheDocument();
+  });
+
+  it('leaves the workspace default to the Founder and the Administrators', () => {
+    render(<NotificationSettings />);
+    // An Agent sees the two personal switches and no role grid.
+    expect(screen.queryByText('Workspace default')).toBeNull();
   });
 });
 

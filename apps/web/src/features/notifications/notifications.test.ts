@@ -349,6 +349,8 @@ describe('the preference cache', () => {
       email: true,
       events: { ...DEFAULT_NOTIFICATION_PREFERENCES.events, new_ticket: false },
       repeat_sound: true,
+      digest_daily: true,
+      digest_weekly: false,
     };
     savePrefs(prefs, memStore(store));
     expect(loadPrefs(memStore(store))).toEqual(prefs);

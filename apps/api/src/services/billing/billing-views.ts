@@ -13,6 +13,7 @@
 import type { Env } from '../../config/env.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { trialState, usageSummary } from './metering.js';
+import { cancellationView } from './subscription-cancel.js';
 import { priceSeats, pricingForPlan, type BillingCycle } from './subscription-service.js';
 
 /**
@@ -49,7 +50,7 @@ export async function buildSubscriptionView(
   tenant: TenantContext,
   env: Env,
 ): Promise<Record<string, unknown>> {
-  const [subscription, trial, usage, activeUsers] = await Promise.all([
+  const [subscription, trial, usage, activeUsers, organization] = await Promise.all([
     tx.subscription.findFirst({
       where: { licenseId: tenant.licenseId },
       orderBy: { createdAt: 'desc' },
@@ -57,6 +58,7 @@ export async function buildSubscriptionView(
     trialState(tx, tenant),
     usageSummary(tx, tenant, usageConfig(env)),
     tx.agentMembership.count({ where: { licenseId: tenant.licenseId, suspended: false } }),
+    tx.organization.findUnique({ where: { id: tenant.organizationId }, select: { name: true } }),
   ]);
 
   const unitPrice = subscription?.unitPriceCents ?? env.UNIT_PRICE_CENTS;
@@ -95,5 +97,8 @@ export async function buildSubscriptionView(
       : seatChargeCents + usage.ai_resolutions.overage_cents + usage.api_calls.overage_cents,
     annual_savings_cents: owesNothing ? 0 : annualSavingsCents,
     provider: 'mock',
+    // The owner's cancellation (tm 384 · BL-03): scheduled, ended, the export
+    // window and the deletion date — and the name the confirmation asks for.
+    cancellation: cancellationView(subscription, organization?.name ?? '', new Date()),
   };
 }

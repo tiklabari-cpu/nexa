@@ -610,6 +610,127 @@ export function workspacePurgeScheduledMail(
   });
 }
 
+/** A calendar date in the reader's language, in UTC (the dates billing keeps). */
+function billingDate(date: Date, locale: MailLocale): string {
+  return new Intl.DateTimeFormat(intlLocale(locale), {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(date);
+}
+
+/**
+ * The owner's subscription cancellation (tm 384 · BL-03), to the owners:
+ * `scheduled` when it is set (it ends with the period, nothing is refunded,
+ * it can be taken back until then), `resumed` when it is taken back, and
+ * `ended` when the period ended (read-only, export until, deletion on).
+ */
+export function subscriptionCancelMail(
+  ctx: MailContext,
+  input: { workspaceName: string; billingUrl: string | null } & (
+    | { kind: 'scheduled'; takesEffectAt: Date }
+    | { kind: 'resumed' }
+    | { kind: 'ended'; exportUntil: Date; dataDeletionAt: Date | null }
+  ),
+): RenderedEmail {
+  const t = tr(ctx.locale);
+  const name = input.workspaceName;
+  const blocks: EmailBlock[] = [];
+  let subject: string;
+  let preheader: string;
+  let heading: string;
+  if (input.kind === 'scheduled') {
+    const on = billingDate(input.takesEffectAt, ctx.locale);
+    subject = t
+      ? `${name} aboneliği ${on} tarihinde sona erecek`
+      : `${name}'s subscription ends on ${on}`;
+    preheader = t
+      ? 'O güne kadar her şey çalışır; iptali geri alabilirsiniz.'
+      : 'Everything works until then, and you can undo the cancellation.';
+    heading = t ? 'Aboneliğiniz iptal edildi' : 'Your subscription is cancelled';
+    blocks.push(
+      {
+        type: 'paragraph',
+        text: t
+          ? `${name} çalışma alanının aboneliği dönem sonunda, ${on} tarihinde sona erecek. O güne kadar çalışma alanı her zamanki gibi çalışır. Kalan süre için iade yapılmaz.`
+          : `The subscription of the workspace ${name} ends with its period, on ${on}. Until then the workspace works as usual. The remaining time is not refunded.`,
+      },
+      {
+        type: 'paragraph',
+        text: t
+          ? `Dönem sonunda çalışma alanı salt okunur olur: veriler okunabilir ve 30 gün boyunca dışa aktarılabilir. Fikrinizi değiştirirseniz ${on} tarihine kadar iptali geri alabilirsiniz.`
+          : `When the period ends the workspace becomes read-only: its data stays readable and can be exported for 30 days. If you change your mind, you can undo the cancellation until ${on}.`,
+      },
+    );
+  } else if (input.kind === 'resumed') {
+    subject = t ? `${name} aboneliği devam ediyor` : `${name}'s subscription continues`;
+    preheader = t ? 'İptal geri alındı.' : 'The cancellation was undone.';
+    heading = t ? 'İptal geri alındı' : 'Cancellation undone';
+    blocks.push({
+      type: 'paragraph',
+      text: t
+        ? `${name} çalışma alanının abonelik iptali geri alındı. Abonelik dönem sonunda her zamanki gibi yenilenir.`
+        : `The cancellation of the workspace ${name}'s subscription was undone. The subscription renews at the end of the period as usual.`,
+    });
+  } else {
+    const until = billingDate(input.exportUntil, ctx.locale);
+    subject = t ? `${name} aboneliği sona erdi` : `${name}'s subscription has ended`;
+    preheader = t
+      ? `${until} tarihine kadar verilerinizi dışa aktarabilirsiniz.`
+      : `You can export your data until ${until}.`;
+    heading = t ? 'Aboneliğiniz sona erdi' : 'Your subscription has ended';
+    blocks.push(
+      {
+        type: 'paragraph',
+        text: t
+          ? `${name} çalışma alanı artık salt okunur. Veriler okunabilir ve ${until} tarihine kadar dışa aktarılabilir; bu tarihten sonra çalışma alanına giriş yapılamaz.`
+          : `The workspace ${name} is now read-only. Its data stays readable and can be exported until ${until}; after that nobody can sign in to it.`,
+      },
+      {
+        type: 'paragraph',
+        text: input.dataDeletionAt
+          ? t
+            ? `Veriler, çalışma alanının saklama ayarına göre ${billingDate(input.dataDeletionAt, ctx.locale)} tarihinde kalıcı olarak silinecek.`
+            : `Following the workspace's retention setting, its data will be deleted for good on ${billingDate(input.dataDeletionAt, ctx.locale)}.`
+          : t
+            ? 'Çalışma alanının saklama ayarı "sınırsız" olduğu için veriler kendiliğinden silinmez.'
+            : 'The workspace keeps its conversations without limit, so its data is not deleted automatically.',
+      },
+      {
+        type: 'note',
+        text: t
+          ? 'Yeniden abone olmak yeni bir satın almadır ve çalışma alanını salt okunur durumdan çıkarır.'
+          : 'Subscribing again is a new purchase and takes the workspace out of read-only.',
+      },
+    );
+  }
+  if (input.billingUrl) {
+    blocks.push({
+      type: 'button',
+      label: t ? 'Faturalandırmayı aç' : 'Open billing',
+      url: input.billingUrl,
+      fallback: fallback(ctx),
+    });
+  }
+  return renderEmail({
+    locale: ctx.locale,
+    homeUrl: ctx.appUrl ?? '',
+    eyebrow: name,
+    subject,
+    preheader,
+    icon: ICON.alarm,
+    heading,
+    blocks,
+    footer: [
+      t
+        ? 'Bu e-postayı, bu çalışma alanının Kurucusu olduğunuz için aldınız.'
+        : 'You received this email because you are the owner of this workspace.',
+      signature(ctx),
+    ],
+  });
+}
+
 /**
  * SiyahTuş moved a workspace's ownership by hand (tm 389.10 · FR-ADMIN-09 —
  * the forced transfer, when the owner could not be reached). Everyone with a

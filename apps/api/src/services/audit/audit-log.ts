@@ -318,6 +318,14 @@ export const AUDIT_ACTIONS = [
   // A crypto request moved on (`metadata.step`: address_sent, txid_submitted,
   // paid, rejected, canceled) — the step and the network, not the address.
   'billing.crypto_request_updated',
+  // The owner's cancellation (tm 384 · BL-03): `cancel_scheduled` sets the
+  // end-of-period flag (`metadata.reason`, `takes_effect_at`), `resumed` clears
+  // it, `subscription_ended` is the period end turning it into a canceled
+  // subscription (`export_until`, `data_deletion_at`). Written by the system for
+  // the last one; the licence moves are `license_status_changed`.
+  'billing.subscription_cancel_scheduled',
+  'billing.subscription_resumed',
+  'billing.subscription_ended',
   'billing.api_package_purchased',
   // AI-resolution overage packs (FR-MOD-10.1.4). Written only for a sale, never
   // for an idempotent replay — the trail is the answer to "who spent this", and

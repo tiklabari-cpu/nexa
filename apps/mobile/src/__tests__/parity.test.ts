@@ -1156,7 +1156,10 @@ describe('module parity matrix — what is still owed', () => {
       // 383 -> 385 with `/billing/profile` and `/billing/invoices/{period}/pdf` (tm 383) —
       // the company details printed on invoices and the issued invoice's PDF, both on the
       // web Billing screen; the handset has none, and nothing here re-scopes.
-      contractEndpoints: 385,
+      // 385 -> 387 with `/billing/subscription/cancel` and `/billing/subscription/resume`
+      // (tm 384) — the owner's cancellation on the web Billing screen; the handset has no
+      // Billing screen, and nothing here re-scopes.
+      contractEndpoints: 387,
       scopeBoundaries: 1,
     });
   });

@@ -135,6 +135,7 @@ import { DigestSweeper } from '../notifications/digest-sweeper.js';
 import { ScheduledReportSweeper } from '../reports/scheduled-report-sweeper.js';
 import { resolveRetentionPolicy } from '../retention/policy.js';
 import { RetentionRunner } from '../retention/retention.js';
+import { SubscriptionPeriodEnd } from '../billing/subscription-cancel.js';
 import { createObjectStore } from '../storage/object-store.js';
 import { createVirusScanner } from '../storage/virus-scanner.js';
 import { buildChannelService } from '../channels/channel-service-factory.js';
@@ -386,6 +387,7 @@ export function buildSchedulerJobs({
             sensitiveFiles: report.totals.sensitiveFiles,
             mailFiles: report.totals.mailFiles,
             auditEntries: report.totals.auditEntries,
+            canceledWorkspaces: report.totals.canceledWorkspaces,
           },
         };
       },
@@ -486,14 +488,28 @@ export function buildSchedulerJobs({
       // leaves the building — and a period it has closed cannot be closed twice.
       name: 'invoice_close',
       intervalMs: intervals.invoice_close,
-      async run() {
+      //
+      // Then the period end of a cancelled subscription (tm 384 · BL-03): a
+      // flagged one whose period is over becomes `canceled` and its workspace
+      // read-only, and one whose 30-day export window has passed closes. After
+      // the statements, so the last month is issued before the workspace stops.
+      async run(context) {
         const report = await new InvoiceCloseSweeper(db, env).run();
+        const ends = await new SubscriptionPeriodEnd({
+          db,
+          auditChainSecret: env.AUDIT_CHAIN_SECRET,
+          appUrl: env.WEB_APP_URL,
+          log: context.logger,
+          mailer,
+        }).run();
         return {
           counts: {
             tenants: report.totals.tenants,
             issued: report.totals.issued,
             reconstructed: report.totals.reconstructed,
             skipped: report.totals.skipped,
+            subscriptions_ended: ends.ended,
+            workspaces_closed: ends.closed,
           },
         };
       },

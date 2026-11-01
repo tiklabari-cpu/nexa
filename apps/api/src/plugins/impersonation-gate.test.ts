@@ -86,6 +86,8 @@ describe('impersonation write verdicts against the tenant contract (tm 389.15)',
     expect(verdictOf('/settings/ip-allowlist')).toMatchObject({ category: 'security' });
     expect(verdictOf('/billing/payment-method')).toMatchObject({ category: 'payment' });
     expect(verdictOf('/billing/subscription')).toMatchObject({ category: 'subscription' });
+    expect(verdictOf('/billing/subscription/cancel')).toMatchObject({ category: 'subscription' });
+    expect(verdictOf('/billing/subscription/resume')).toMatchObject({ category: 'subscription' });
     expect(verdictOf('/settings/compliance/baa')).toMatchObject({ category: 'baa' });
     expect(verdictOf('/customers/{customerId}/erase')).toMatchObject({ category: 'data_deletion' });
     expect(verdictOf('/settings/sandbox/reset')).toMatchObject({ category: 'sandbox' });

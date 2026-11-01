@@ -879,6 +879,10 @@ paths:
     $ref: "./paths/reports.yaml#/scheduledExportRuns"
   /billing/subscription:
     $ref: "./paths/reports.yaml#/subscription"
+  /billing/subscription/cancel:
+    $ref: "./paths/billing-cancel.yaml#/subscriptionCancel"
+  /billing/subscription/resume:
+    $ref: "./paths/billing-cancel.yaml#/subscriptionResume"
   /billing/usage:
     $ref: "./paths/reports.yaml#/usage"
   /billing/invoices:
@@ -13416,6 +13420,7 @@ components:
           estimated_total_cents,
           provider,
           pricing,
+          cancellation,
         ]
       properties:
         plan: { type: string }
@@ -13457,6 +13462,52 @@ components:
           type: integer
           description: What annual billing saves versus twelve monthly charges. 0 on monthly, while trialing and in the public pilot.
         provider: { type: string, enum: [mock] }
+        cancellation: { $ref: "#/components/schemas/SubscriptionCancellation" }
+
+    CancelReason:
+      type: string
+      description: Why the owner cancels (tm 384 · BL-03).
+      enum: [too_expensive, missing_features, switching_provider, not_using, business_closed, other]
+
+    SubscriptionCancellation:
+      type: object
+      description: |
+        The owner's cancellation (tm 384 · BL-03). `scheduled`: the subscription
+        ends at `takes_effect_at` and can be taken back until then. Once the
+        period ended: `ended_at`, read-only and exportable until `export_until`,
+        deleted at `data_deletion_at` (null when the workspace keeps its
+        conversations without limit).
+      required:
+        [
+          scheduled,
+          reason,
+          requested_at,
+          takes_effect_at,
+          ended_at,
+          export_until,
+          data_deletion_at,
+          can_cancel,
+          can_resume,
+          workspace_name,
+        ]
+      properties:
+        scheduled: { type: boolean }
+        reason:
+          type: string
+          nullable: true
+          description: A `CancelReason`; null for a cancellation the SiyahTuş team made.
+        requested_at: { type: string, format: date-time, nullable: true }
+        takes_effect_at: { type: string, format: date-time, nullable: true }
+        ended_at: { type: string, format: date-time, nullable: true }
+        export_until: { type: string, format: date-time, nullable: true }
+        data_deletion_at: { type: string, format: date-time, nullable: true }
+        can_cancel:
+          type: boolean
+          description: A subscription exists, has not ended and is not already cancelled.
+        can_resume: { type: boolean }
+        workspace_name:
+          type: string
+          description: What `confirmation` has to match.
 
     Entitlement:
       type: string

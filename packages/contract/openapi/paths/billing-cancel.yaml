@@ -1,0 +1,75 @@
+# Cancelling the subscription (tm 384 · BL-03): the owner cancels at the end of
+# the period and can take it back until then. The period end, the export
+# window and the deletion are the server's jobs; `GET /billing/subscription`'s
+# `cancellation` reports them.
+
+subscriptionCancel:
+  post:
+    tags: [Billing]
+    operationId: cancelSubscription
+    summary: Cancel the subscription at the end of its period
+    description: |
+      Sets the subscription to end with its period. Until then everything
+      works as before; nothing is refunded. When the period ends the
+      subscription is `canceled` and the workspace read-only — readable and
+      exportable for 30 days, closed after that, and deleted when its
+      retention setting says (the export window, or the longer conversation
+      retention the workspace chose; never with `unlimited`). A subscription
+      with no paid term on file ends with the calendar month (UTC).
+
+      `confirmation` is the workspace's name, typed by the owner (case and
+      surrounding spaces do not matter).
+
+      **Owner only** (K7) — an admin or vice owner gets `403`. Writable while
+      the workspace is read-only. Idempotent: cancelling again changes nothing.
+      `400 validation` with `error.details.reason`: `confirmation_mismatch`,
+      `no_subscription` (a trial has nothing to cancel) or `subscription_ended`.
+      The public pilot refuses it like every billing write.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [reason, confirmation]
+            properties:
+              reason: { $ref: "../openapi.yaml#/components/schemas/CancelReason" }
+              confirmation:
+                type: string
+                maxLength: 200
+                description: The workspace's name.
+    responses:
+      "200":
+        description: The subscription, with `cancellation.scheduled` true
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SubscriptionView" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+subscriptionResume:
+  post:
+    tags: [Billing]
+    operationId: resumeSubscription
+    summary: Take the cancellation back
+    description: |
+      Clears a cancellation before the period ends; the subscription renews as
+      usual. After the period ended it is refused (`400 validation`,
+      `error.details.reason: subscription_ended`) — subscribing again is a new
+      purchase. `no_subscription` on a trial. Resuming a subscription that is
+      not cancelled changes nothing.
+
+      **Owner only** (K7), writable while read-only.
+    responses:
+      "200":
+        description: The subscription, with `cancellation.scheduled` false
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SubscriptionView" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

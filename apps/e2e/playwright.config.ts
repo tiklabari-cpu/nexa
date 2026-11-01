@@ -134,6 +134,9 @@ const STACK_LAUNCH = PRIVATE
     }
   : {};
 
+/** Specs that need a stack of their own (`playwright.pilot.config.ts`, `playwright.session.config.ts`). */
+const SPECS_ON_OTHER_STACKS = ['**/pilot-mode.spec.ts', '**/session-refresh.spec.ts'];
+
 /** Specs written for the narrow projects, run at 375 and 768 px instead of the desktop. */
 const NARROW_SPECS = ['**/narrow-inbox.spec.ts'];
 
@@ -158,7 +161,7 @@ export default defineConfig({
   // It runs on its own stack: `playwright.pilot.config.ts`, `pnpm test:e2e:pilot`.
   // The same holds for the minute-long access token `session-refresh.spec.ts`
   // waits out (tm 259.1): `playwright.session.config.ts`, `pnpm test:e2e:session`.
-  testIgnore: ['**/pilot-mode.spec.ts', '**/session-refresh.spec.ts'],
+  testIgnore: SPECS_ON_OTHER_STACKS,
   globalSetup: './tests/global-setup.ts',
   // The suite shares one database and one seed, so parallel files would clobber
   // each other's conversations. Correctness over wall-clock here.
@@ -213,7 +216,8 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testIgnore: NARROW_SPECS,
+      // A project's own `testIgnore` replaces the config's: both lists, then.
+      testIgnore: [...SPECS_ON_OTHER_STACKS, ...NARROW_SPECS],
       use: { ...devices['Desktop Chrome'], ...STACK_LAUNCH },
     },
     // The console below the desktop layout (GV-04 · tm 385): a phone held upright

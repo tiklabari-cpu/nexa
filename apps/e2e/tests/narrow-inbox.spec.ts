@@ -220,6 +220,8 @@ test.describe('the inbox on a narrow window (GV-04)', () => {
         (response) =>
           response.url().endsWith(`/chats/${chatId}/takeover`) &&
           response.request().method() === 'POST',
+        // The gate runs three stacks at once; a loaded dev proxy has held a 70 ms answer past 10 s.
+        { timeout: 20_000 },
       );
       await dialog.getByRole('button', { name: 'Take over' }).tap();
       expect((await taken).status()).toBe(200);

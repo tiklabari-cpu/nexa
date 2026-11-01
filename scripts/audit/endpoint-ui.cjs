@@ -199,6 +199,12 @@ const HEADLESS = [
       'by `X-Hub-Signature-256` (HMAC of the body under the app secret), not a browser.',
   },
   {
+    op: 'POST /billing/webhooks/stripe',
+    reason:
+      "the card processor's event callback (tm 382). The caller is Stripe, authenticated by " +
+      '`Stripe-Signature` (HMAC of the body under `STRIPE_WEBHOOK_SECRET`), not a browser.',
+  },
+  {
     op: 'GET /channels/{type}/messages',
     reason:
       'the wire-level message log (M-CHOBS-a). Its own handler says what it is for: the table ' +

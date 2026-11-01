@@ -186,6 +186,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/reports/qa/QaReview.tsx',
   'src/features/reports/qa/QaScoring.tsx',
   'src/features/billing/BillingPage.tsx',
+  'src/features/billing/PaymentMethods.tsx',
   'src/features/playbook/PlaybookPage.tsx',
   'src/features/playbook/SkillEditor.tsx',
   'src/features/playbook/ProcedureSections.tsx',

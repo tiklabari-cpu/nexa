@@ -32,6 +32,7 @@ import { HealthSnapshotPublisher } from '../services/ops/health-publisher.js';
 import { OpsChannel } from '../services/ops/ops-channel.js';
 import { buildSchedulerJobs } from '../services/scheduler/jobs.js';
 import { Scheduler } from '../services/scheduler/scheduler.js';
+import type { PaymentProvider } from '../services/billing/payment-provider.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
 import type { Telemetry } from '../telemetry/telemetry.js';
 import { VERSION } from '../version.js';
@@ -69,6 +70,8 @@ export interface SchedulerPluginOptions {
   geo?: Pick<GeoLocator, 'status'>;
   /** Whether the widget's human check can run — a provider was resolved (tm 389.14). */
   captchaUsable?: boolean;
+  /** The card processor the dunning job charges through (tm 382). */
+  payments?: PaymentProvider;
 }
 
 async function schedulerPlugin(
@@ -93,6 +96,7 @@ async function schedulerPlugin(
     ...(options.publisher ? { publisher: options.publisher } : {}),
     ...(options.llm ? { llm: options.llm } : {}),
     ...(options.inference ? { inference: options.inference } : {}),
+    ...(options.payments ? { payments: options.payments } : {}),
   })) {
     scheduler.register(job);
   }

@@ -116,6 +116,10 @@ export const APPS_SECRET_LOG_PATHS = [
   // The live WhatsApp's Meta app secret and webhook verify token (tm 380).
   'WHATSAPP_APP_SECRET',
   '*.WHATSAPP_APP_SECRET',
+  'STRIPE_SECRET_KEY',
+  '*.STRIPE_SECRET_KEY',
+  'STRIPE_WEBHOOK_SECRET',
+  '*.STRIPE_WEBHOOK_SECRET',
   'WHATSAPP_VERIFY_TOKEN',
   '*.WHATSAPP_VERIFY_TOKEN',
   'apiKey',

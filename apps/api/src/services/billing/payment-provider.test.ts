@@ -15,8 +15,11 @@ import {
   createPaymentProvider,
   MockPaymentProvider,
   PAYMENT_PROVIDERS,
+  PaymentProviderError,
+  resolvePaymentProvider,
   type PaymentMethodDetails,
 } from './payment-provider.js';
+import { StripePaymentProvider } from './stripe-provider.js';
 
 const CARD: PaymentMethodDetails = {
   brand: 'visa',
@@ -37,10 +40,77 @@ describe('createPaymentProvider', () => {
   });
 
   it('has an implementation for every value the vocabulary allows', () => {
+    const keys = { secretKey: 'sk_test_x', webhookSecret: 'whsec_x' };
     for (const provider of PAYMENT_PROVIDERS) {
-      expect(createPaymentProvider(provider).name).toBe(provider);
+      expect(createPaymentProvider(provider, keys).name).toBe(provider);
     }
-    expect(PAYMENT_PROVIDERS).toEqual(['mock']);
+    expect(PAYMENT_PROVIDERS).toEqual(['mock', 'stripe']);
+  });
+
+  it('refuses to build stripe without its keys', () => {
+    expect(() => createPaymentProvider('stripe')).toThrow(/STRIPE_SECRET_KEY/);
+  });
+});
+
+describe('resolvePaymentProvider (tm 382 · ADR-13a §4)', () => {
+  const base = { NODE_ENV: 'test', STRIPE_PROVIDER: 'stripe' as const };
+
+  it('runs the mock by default, silently', () => {
+    const { provider, warnings } = resolvePaymentProvider({ ...base, STRIPE_PROVIDER: 'mock' });
+    expect(provider).toBeInstanceOf(MockPaymentProvider);
+    expect(warnings).toEqual([]);
+  });
+
+  it('runs Stripe with both keys', () => {
+    const { provider, warnings } = resolvePaymentProvider({
+      ...base,
+      STRIPE_SECRET_KEY: 'sk_test_abc',
+      STRIPE_WEBHOOK_SECRET: 'whsec_abc',
+    });
+    expect(provider).toBeInstanceOf(StripePaymentProvider);
+    expect(provider.hostedCheckout).toBe(true);
+    expect(warnings).toEqual([]);
+  });
+
+  it('stays on the mock and names the missing key, never refusing to boot', () => {
+    const { provider, warnings } = resolvePaymentProvider({
+      ...base,
+      STRIPE_SECRET_KEY: 'sk_test_abc',
+    });
+    expect(provider).toBeInstanceOf(MockPaymentProvider);
+    expect(warnings).toEqual([expect.stringContaining('STRIPE_WEBHOOK_SECRET is not set')]);
+  });
+
+  it('ignores a live key outside production', () => {
+    const { provider, warnings } = resolvePaymentProvider({
+      ...base,
+      STRIPE_SECRET_KEY: 'sk_live_abc',
+      STRIPE_WEBHOOK_SECRET: 'whsec_abc',
+    });
+    expect(provider).toBeInstanceOf(MockPaymentProvider);
+    expect(warnings).toEqual([expect.stringContaining('live key')]);
+  });
+
+  it('accepts a live key in production — going live is the operator’s decision', () => {
+    const { provider } = resolvePaymentProvider({
+      ...base,
+      NODE_ENV: 'production',
+      STRIPE_SECRET_KEY: 'sk_live_abc',
+      STRIPE_WEBHOOK_SECRET: 'whsec_abc',
+    });
+    expect(provider).toBeInstanceOf(StripePaymentProvider);
+  });
+});
+
+describe('MockPaymentProvider has no hosted checkout', () => {
+  it('says so and refuses every processor-side call', async () => {
+    const mock = new MockPaymentProvider();
+    expect(mock.hostedCheckout).toBe(false);
+    await expect(mock.createCustomer()).rejects.toBeInstanceOf(PaymentProviderError);
+    await expect(mock.createCheckoutSession()).rejects.toBeInstanceOf(PaymentProviderError);
+    await expect(mock.chargeInvoice()).rejects.toBeInstanceOf(PaymentProviderError);
+    await expect(mock.refund()).rejects.toBeInstanceOf(PaymentProviderError);
+    expect(() => mock.parseWebhook()).toThrow(/no webhooks/);
   });
 });
 

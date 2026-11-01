@@ -12529,6 +12529,233 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/billing/payment-options': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * How this workspace can pay, what is due, and where its payments stand
+     * @description The payment methods the platform has switched on for this deployment
+     *     (`methods`, display order), the amount one term of the subscription
+     *     costs, the SWIFT bank details with any reference already issued, and the
+     *     payment state the "payment failed" band reads.
+     *
+     *     `stripe` is listed only when the platform shows it **and** the deployment
+     *     runs a real card processor (`STRIPE_PROVIDER=stripe` with its keys); on
+     *     the mock processor the masked card form (`PUT /billing/payment-method`)
+     *     stays the card path and `card_form` is `true`.
+     *
+     *     `amount_due` is `null` on a quoted plan (Enterprise): its price is in a
+     *     contract this deployment never sees, so there is nothing to pay here.
+     */
+    get: operations['getPaymentOptions'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/payments': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Payment history
+     * @description Every payment attempt for this workspace, newest first, at most 50: how
+     *     it was paid, its reference, amount, outcome and the term it paid.
+     */
+    get: operations['listPayments'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/payments/swift': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Issue (or return) this term's bank-transfer reference
+     * @description The reference the owner writes in the transfer description. One per
+     *     term: calling again returns the same reference, with the amount brought
+     *     up to date if the plan changed since. The SiyahTuş team matches the
+     *     transfer to it and marks it paid; the subscription is active from then.
+     *     Nothing is charged here.
+     *
+     *     **Owner only** (K7) and writable while the workspace is read-only —
+     *     paying is how a read-only workspace comes back. `400 validation` with
+     *     `error.details.reason`: `method_unavailable` (the platform switched SWIFT
+     *     off) or `quoted_plan`.
+     */
+    post: operations['startSwiftPayment'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/payments/stripe/checkout': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Open a hosted card checkout for one term
+     * @description Creates a pending payment and a hosted checkout session at the card
+     *     processor and returns its address; the browser goes there and the card
+     *     never touches SiyahTuş (PCI SAQ A). The processor's signed webhook
+     *     (`POST /billing/webhooks/stripe`) settles the payment; the card it saves
+     *     renews the next term.
+     *
+     *     **Owner only** (K7), writable while read-only. `400 validation` with
+     *     `error.details.reason`: `method_unavailable` (Stripe is not shown, or the
+     *     deployment runs the mock processor) or `quoted_plan`. `503 service_unavailable`
+     *     (`error.details.reason: payment_provider_unavailable`) when the processor
+     *     does not answer; nothing is left pending.
+     */
+    post: operations['startStripeCheckout'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/crypto-requests': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Crypto payment requests
+     * @description This workspace's "request an address" requests, newest first, at most 20.
+     *     `wallet_address` is set only once the SiyahTuş team has sent one — it is
+     *     never shown by itself (ADR-13a §3).
+     */
+    get: operations['listCryptoPaymentRequests'];
+    put?: never;
+    /**
+     * Ask for a wallet address to pay one term in crypto
+     * @description Opens a request in the platform's billing queue: the network, the
+     *     billing name and details. The amount is the term's (`amount_due`) — no
+     *     discount, no exchange rate, USDT read 1:1 from US cents. The team answers
+     *     with an address on the request; the owner then submits the TXID.
+     *
+     *     **Owner only** (K7), writable while read-only. `400 validation` with
+     *     `error.details.reason`: `method_unavailable`, `quoted_plan`, or
+     *     `request_open` (one open request per workspace).
+     */
+    post: operations['createCryptoPaymentRequest'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/crypto-requests/{requestId}/txid': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Submit the transfer's TXID
+     * @description The transaction hash of the transfer to the address the team sent: 64
+     *     hex characters on TRON, `0x` and 64 on Ethereum. The team checks it on
+     *     the chain and confirms the payment; the subscription is active from then.
+     *     A TXID is accepted once. Replaces an earlier TXID on the same request
+     *     until it is confirmed.
+     *
+     *     **Owner only** (K7), writable while read-only. `400 validation` with
+     *     `error.details.reason`: `txid_invalid`, `txid_used` or `not_awaiting_txid`
+     *     (no address sent yet, or the request is closed). `404` for a request of
+     *     another workspace.
+     */
+    post: operations['submitCryptoPaymentTxid'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/crypto-requests/{requestId}/cancel': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Withdraw an open crypto request
+     * @description Closes a request that is still waiting for an address or a TXID
+     *     confirmation. A paid, rejected or already withdrawn request cannot be
+     *     withdrawn (`400 validation`, `error.details.reason: not_cancellable`).
+     *
+     *     **Owner only** (K7), writable while read-only.
+     */
+    post: operations['cancelCryptoPaymentRequest'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/webhooks/stripe': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * The card processor's signed event callback
+     * @description Called by Stripe, never by a member. The raw body is checked against
+     *     `Stripe-Signature` (HMAC-SHA256 over `<t>.<body>` with
+     *     `STRIPE_WEBHOOK_SECRET`, five minutes' tolerance) before anything is
+     *     parsed; a missing, wrong or stale signature is `401` and nothing is
+     *     written. `payment_intent.succeeded` settles the payment it names,
+     *     `payment_intent.payment_failed` records the failure,
+     *     `charge.dispute.created` marks the payment disputed; every other event is
+     *     acknowledged and ignored. An event is taken in once: a redelivery answers
+     *     `duplicate: true` and changes nothing.
+     *
+     *     `404` unless the deployment runs the real card processor.
+     */
+    post: operations['receiveStripeWebhook'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/audit-log': {
     parameters: {
       query?: never;
@@ -22570,6 +22797,151 @@ export interface components {
       updated_at: string;
     };
     /**
+     * @description A way to pay (ADR-13a): a bank transfer the SiyahTuş team marks paid,
+     *     a crypto transfer confirmed by its TXID, or a Stripe card charge.
+     * @enum {string}
+     */
+    PaymentMethodId: 'swift_manual' | 'crypto_manual' | 'stripe';
+    /** @description How this workspace can pay, what one term costs, and its payment state. */
+    PaymentOptions: {
+      /** @description The methods shown to this workspace, in display order. */
+      methods: components['schemas']['PaymentMethodId'][];
+      /**
+       * @description The deployment runs the mock card processor, so the masked card
+       *     form (`PUT /billing/payment-method`) is the card path rather than a
+       *     hosted checkout.
+       */
+      card_form: boolean;
+      /** @description One term of the subscription, or null on a quoted plan. */
+      amount_due: {
+        amount_minor: number;
+        /** @enum {string} */
+        currency: 'usd';
+        /** @enum {string} */
+        billing_cycle: 'monthly' | 'annual';
+        seats: number;
+      } | null;
+      swift: {
+        /** @description The platform's bank details, or null until the team has entered them. */
+        bank: components['schemas']['SwiftBankDetails'] | null;
+        /** @description The reference already issued for this term, if any. */
+        pending: components['schemas']['SwiftPayment'] | null;
+      };
+      state: components['schemas']['PaymentState'];
+    };
+    /**
+     * @description Where the workspace's payments stand. A renewal that fails puts the
+     *     licence `past_due` (still writable) and the card is tried again on the
+     *     1st, 3rd and 7th day; when the last try fails the workspace turns
+     *     read-only (`read_only_after` is that day).
+     */
+    PaymentState: {
+      license_status: string;
+      /** @description How the last term was paid, or null before the first payment. */
+      provider: components['schemas']['PaymentMethodId'] | null;
+      /** Format: date-time */
+      paid_through: string | null;
+      /** Format: date-time */
+      past_due_since: string | null;
+      /** Format: date-time */
+      read_only_after: string | null;
+      /** Format: date-time */
+      next_retry_at: string | null;
+      /** @description The newest attempt, when it failed and nothing has succeeded since. */
+      last_failure: {
+        reference: string;
+        failure_code: string | null;
+        /** Format: date-time */
+        at: string;
+      } | null;
+    };
+    /** @description The account a transfer goes to, as the platform set it (`billing.swift_bank_details`). */
+    SwiftBankDetails: {
+      beneficiary: string;
+      bank_name: string;
+      iban: string;
+      swift_bic: string;
+      bank_address?: string | null;
+    };
+    SwiftPayment: {
+      /**
+       * @description Written in the transfer description so the team can match it.
+       * @example ST-7K2M-Q9TB
+       */
+      reference: string;
+      amount_minor: number;
+      /** @enum {string} */
+      currency: 'usd';
+      /** @enum {string} */
+      billing_cycle: 'monthly' | 'annual';
+      /** Format: date-time */
+      created_at: string;
+    };
+    /** @description One payment attempt and, once it succeeded, the term it paid. */
+    PaymentTransaction: {
+      /** Format: uuid */
+      id: string;
+      reference: string;
+      provider: components['schemas']['PaymentMethodId'];
+      /**
+       * @description Started by the owner, or the saved card charged for the next term.
+       * @enum {string}
+       */
+      kind: 'checkout' | 'renewal';
+      /** @enum {string} */
+      status: 'pending' | 'succeeded' | 'failed' | 'canceled' | 'disputed';
+      amount_minor: number;
+      currency: string;
+      /** @enum {string} */
+      billing_cycle: 'monthly' | 'annual';
+      attempt: number;
+      failure_code: string | null;
+      /** Format: date-time */
+      term_start: string | null;
+      /** Format: date-time */
+      term_end: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      settled_at: string | null;
+    };
+    /**
+     * @description The asset and chain — USDT on TRON (TRC-20) or on Ethereum (ERC-20).
+     * @enum {string}
+     */
+    CryptoNetwork: 'usdt_trc20' | 'usdt_erc20';
+    CryptoPaymentRequestInput: {
+      network: components['schemas']['CryptoNetwork'];
+      billing_name: string;
+      /** @description Address, tax number — whatever the invoice should carry. */
+      billing_details?: string | null;
+    };
+    CryptoPaymentRequest: {
+      /** Format: uuid */
+      id: string;
+      network: components['schemas']['CryptoNetwork'];
+      /** @enum {string} */
+      status: 'requested' | 'address_sent' | 'paid' | 'rejected' | 'canceled';
+      amount_minor: number;
+      currency: string;
+      /** @enum {string} */
+      billing_cycle: 'monthly' | 'annual';
+      billing_name: string;
+      billing_details: string | null;
+      /** @description Set only once the SiyahTuş team sent it. */
+      wallet_address: string | null;
+      /** Format: date-time */
+      address_sent_at: string | null;
+      txid: string | null;
+      /** Format: date-time */
+      txid_submitted_at: string | null;
+      closed_reason: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      closed_at: string | null;
+    };
+    /**
      * @description A named, purchasable block of API calls (FR-MOD-09.3). The catalogue is
      *     static and global — the same three packages for every workspace, never
      *     filtered or repriced per tenant — so a price change is a code change
@@ -24915,6 +25287,20 @@ export interface components {
       };
     };
     /**
+     * @description The card processor did not answer in time, or answered with an error
+     *     of its own (`service_unavailable`, tm 382): `error.details.reason` is
+     *     `payment_provider_unavailable`. Nothing was charged and nothing is
+     *     left pending; the request can simply be repeated.
+     */
+    PaymentProviderUnavailable: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        'application/json': components['schemas']['Error'];
+      };
+    };
+    /**
      * @description The message text search ran out of time (`service_unavailable`,
      *     ID-07): `error.details.reason` is `search_timeout`. Nothing was
      *     written. A narrower search — another word, a shorter date range — is
@@ -25105,6 +25491,8 @@ export interface components {
     AiConfigChangeTo: string;
     /** @description Opaque keyset cursor from the previous page. */
     PageId: string;
+    /** @description A crypto payment request's id. */
+    CryptoRequestId: string;
     /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
     ChatId: string;
     /** @description The adapter channel. */
@@ -43691,6 +44079,258 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
+    };
+  };
+  getPaymentOptions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Payment methods, amount due and payment state */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PaymentOptions'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listPayments: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Payment history */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            payments: components['schemas']['PaymentTransaction'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  startSwiftPayment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The pending transfer */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SwiftPayment'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  startStripeCheckout: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Where to send the browser */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** Format: uri */
+            url: string;
+            reference: string;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+      503: components['responses']['PaymentProviderUnavailable'];
+    };
+  };
+  listCryptoPaymentRequests: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Requests */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            requests: components['schemas']['CryptoPaymentRequest'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createCryptoPaymentRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CryptoPaymentRequestInput'];
+      };
+    };
+    responses: {
+      /** @description The request */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CryptoPaymentRequest'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  submitCryptoPaymentTxid: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description A crypto payment request's id. */
+        requestId: components['parameters']['CryptoRequestId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          txid: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The request */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CryptoPaymentRequest'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  cancelCryptoPaymentRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description A crypto payment request's id. */
+        requestId: components['parameters']['CryptoRequestId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The request */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CryptoPaymentRequest'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  receiveStripeWebhook: {
+    parameters: {
+      query?: never;
+      header: {
+        'Stripe-Signature': string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          [key: string]: unknown;
+        };
+      };
+    };
+    responses: {
+      /** @description Received */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @enum {boolean} */
+            received: true;
+            /** @description The event had already been taken in; nothing changed. */
+            duplicate: boolean;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
     };
   };
   listAuditLog: {

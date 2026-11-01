@@ -333,8 +333,11 @@ export class PlatformAlertScanner {
   }
 
   /**
-   * The manual crypto payment queue (tm 382/389.18). The table is looked up,
-   * not assumed — the dashboard does the same: this ships before the queue.
+   * The manual crypto payment queue (tm 382/389.18): a request waiting for the
+   * team — for an address (`requested`), or for its TXID to be confirmed
+   * (`address_sent` with a TXID on it) — for longer than the threshold, timed
+   * from when it started waiting. The table is still looked up rather than
+   * assumed, so a database restored from before tm 382 answers nothing.
    */
   async #paymentsWaiting(now: Date): Promise<Candidate[]> {
     const { db } = this.#options;
@@ -345,12 +348,16 @@ export class PlatformAlertScanner {
     const rows = await db.$queryRaw<
       Array<{ id: string; license_id: bigint; name: string; created_at: Date }>
     >`
-      SELECT r.id::text AS id, r.license_id, o.name, r.created_at
+      SELECT r.id::text AS id, r.license_id, o.name,
+             coalesce(r.txid_submitted_at, r.created_at) AS created_at
       FROM crypto_payment_requests r
       JOIN licenses l ON l.id = r.license_id
       JOIN organizations o ON o.id = l.organization_id
-      WHERE r.status IN ('pending', 'requested') AND r.created_at <= ${before}
-      ORDER BY r.created_at, r.id LIMIT 200`;
+      WHERE (
+          (r.status = 'requested' AND r.created_at <= ${before})
+          OR (r.status = 'address_sent' AND r.txid_submitted_at <= ${before})
+        )
+      ORDER BY 4, r.id LIMIT 200`;
     return rows.map((row) => ({
       kind: 'payment_request_waiting',
       target: row.id,

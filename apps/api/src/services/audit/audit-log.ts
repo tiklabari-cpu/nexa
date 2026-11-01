@@ -299,6 +299,22 @@ export const AUDIT_ACTIONS = [
   // answer to "when did this workspace start paying, and from which state"
   // (`metadata.from`: trialing, read_only or past_due).
   'billing.license_activated',
+  // Paying for a term (tm 382 · BL-01 · ADR-13a). `payment_started`: a SWIFT
+  // reference issued, a card checkout opened, a crypto address asked for.
+  // `payment_succeeded` / `payment_failed` / `payment_disputed`: the outcome,
+  // whoever recorded it (the owner never does — the team, Stripe's webhook or
+  // the dunning job). The provider, reference, amount and failure code — never
+  // card, bank or wallet details.
+  'billing.payment_started',
+  'billing.payment_succeeded',
+  'billing.payment_failed',
+  'billing.payment_disputed',
+  // The dunning plan moved the licence (`metadata.from`/`to`: active →
+  // past_due → read_only). The way back to active is `license_activated`.
+  'billing.license_status_changed',
+  // A crypto request moved on (`metadata.step`: address_sent, txid_submitted,
+  // paid, rejected, canceled) — the step and the network, not the address.
+  'billing.crypto_request_updated',
   'billing.api_package_purchased',
   // AI-resolution overage packs (FR-MOD-10.1.4). Written only for a sale, never
   // for an idempotent replay — the trail is the answer to "who spent this", and

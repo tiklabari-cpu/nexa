@@ -350,6 +350,13 @@ export const IMPERSONATION_FORBIDDEN_PATHS: readonly ImpersonationForbiddenRule[
   // workspace they belong to, not this one's daily work.
   { pattern: /^\/agents\/me$/, category: 'membership' },
   { pattern: /^\/billing\/(payment-method|api-packages|ai-packages)$/, category: 'payment' },
+  // Starting a payment of any method (tm 382): a SWIFT reference, a hosted card
+  // checkout, a crypto request and its TXID or withdrawal.
+  {
+    pattern:
+      /^\/billing\/(payments\/(swift|stripe\/checkout)|crypto-requests(\/[^/]+\/(txid|cancel))?)$/,
+    category: 'payment',
+  },
   { pattern: /^\/billing\/subscription$/, category: 'subscription' },
   { pattern: /^\/settings\/compliance\/baa$/, category: 'baa' },
   { pattern: /^\/customers\/[^/]+\/erase$/, category: 'data_deletion' },
@@ -369,6 +376,8 @@ export const IMPERSONATION_FORBIDDEN_PATHS: readonly ImpersonationForbiddenRule[
   // Meta's signed WhatsApp delivery callback (tm 380): the caller is Meta, never a member.
   { pattern: /^\/channels\/whatsapp\/cloud-webhook$/, category: 'not_a_member_surface' },
   { pattern: /^\/channels\/email\/inbound$/, category: 'not_a_member_surface' },
+  // Stripe's signed event callback (tm 382): the caller is the processor.
+  { pattern: /^\/billing\/webhooks\/stripe$/, category: 'not_a_member_surface' },
 ];
 
 /**

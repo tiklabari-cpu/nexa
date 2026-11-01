@@ -225,10 +225,14 @@ export async function trialState(tx: TenantClient, tenant: TenantContext): Promi
   const daysRemaining =
     endsAt === null ? null : Math.max(0, Math.ceil((endsAt.getTime() - Date.now()) / 86_400_000));
 
+  // `past_due` is the dunning plan's grace (tm 382 · BL-01): the renewal
+  // failed and the card is being tried again on the 1st, 3rd and 7th day.
+  // The workspace keeps working through it — the band says so — and turns
+  // `read_only` only when the last retry fails (`payment-methods.ts`).
   let access: LicenseAccess = 'active';
   if (license.status === 'trialing') {
     access = endsAt !== null && endsAt.getTime() <= Date.now() ? 'read_only' : 'trialing';
-  } else if (license.status === 'read_only' || license.status === 'past_due') {
+  } else if (license.status === 'read_only') {
     access = 'read_only';
   } else if (isLicenseClosed(license.status)) {
     access = 'read_only';

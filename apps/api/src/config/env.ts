@@ -1164,11 +1164,24 @@ export const envSchema = z.object({
   /** How long a signed upload URL stays usable. One shot, so this is short. */
   UPLOAD_URL_TTL: z.coerce.number().int().positive().max(3600).default(300),
   /**
-   * The payment processor (M-PROV-a). `mock` accepts any unexpired card and
-   * charges nothing (ADR-13); a real Stripe provider slots in behind
-   * `PaymentProvider`. See services/billing/payment-provider.ts.
+   * The card processor (M-PROV-a · tm 382 · ADR-13a). `mock` accepts any
+   * unexpired card on the masked form and charges nothing (ADR-13); `stripe`
+   * takes cards on Stripe's hosted checkout and renews off-session — only with
+   * both keys below, otherwise the boot warns and stays on the mock. No key is
+   * in this repository; a live key (`sk_live_`) is ignored outside
+   * `NODE_ENV=production`. See services/billing/payment-provider.ts.
    */
   STRIPE_PROVIDER: z.enum(PAYMENT_PROVIDERS).default('mock'),
+  /** Stripe's secret API key (sandbox `sk_test_…` in any build but production's). */
+  STRIPE_SECRET_KEY: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().optional(),
+  ),
+  /** The webhook endpoint's signing secret (`whsec_…`), which `Stripe-Signature` is checked with. */
+  STRIPE_WEBHOOK_SECRET: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().optional(),
+  ),
   /**
    * Who fetches a website knowledge source's pages (tm 312.3 · AI-17). `mock`
    * — no network, every page the same deterministic text; the default, a
@@ -1238,6 +1251,7 @@ export const envSchema = z.object({
    * is one indexed anti-join per workspace.
    */
   SCHEDULE_INVOICE_CLOSE_MS: z.coerce.number().int().positive().default(3_600_000),
+  SCHEDULE_BILLING_DUNNING_MS: z.coerce.number().int().positive().default(3_600_000),
   /**
    * The expired unverified sign-up sweep (tm 257.19). Hourly: the window it
    * acts on is days long, so all a shorter interval buys is deleting a bot's

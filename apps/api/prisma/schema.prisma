@@ -260,6 +260,8 @@ model License {
   invoices               Invoice[]
   invoiceLineItems       InvoiceLineItem[]
   paymentMethod          PaymentMethod?
+  paymentTransactions    PaymentTransaction[]
+  cryptoPaymentRequests  CryptoPaymentRequest[]
   auditEntries           AuditLogEntry[]
   auditChainHead         AuditChainHead?
   pendingAuditEntries    PendingAuditEntry[]
@@ -4156,11 +4158,102 @@ model Subscription {
   cancelAtPeriodEnd     Boolean   @default(false) @map("cancel_at_period_end")
   canceledAt            DateTime? @map("canceled_at") @db.Timestamptz(6)
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// How the last term was paid (tm 382 · ADR-13a): `swift_manual`,
+  /// `crypto_manual` or `stripe`, null before the first payment. Only `stripe`
+  /// renews by itself (the `billing_dunning` job); the manual two are paid
+  /// again by hand.
+  paymentProvider         String?   @map("payment_provider")
+  /// The processor's customer and the card it saved at the hosted checkout —
+  /// references only, never card data (PCI SAQ A). Stripe only.
+  providerCustomerId      String?   @map("provider_customer_id")
+  providerPaymentMethodId String?   @map("provider_payment_method_id")
+  /// When the renewal charge first failed; null again once a payment succeeds.
+  /// The dunning plan's clock (1st, 3rd, 7th day), then read-only.
+  pastDueSince            DateTime? @map("past_due_since") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 
   @@index([licenseId, status])
   @@map("subscriptions")
+}
+
+/// One attempt to take money for a subscription term (tm 382 · BL-01 ·
+/// ADR-13a), whichever way it is paid: a bank transfer the platform marks
+/// paid, a crypto transfer confirmed by its TXID, or a Stripe charge. Amounts
+/// in minor units of `currency` (`INVOICE_CURRENCY`). A payment pays a term of
+/// the subscription — `[term_start, term_end)`, set when it succeeds — not a
+/// frozen month-end statement. `provider_event_id` is the processor event that
+/// settled it, unique per provider, so a webhook delivered twice settles once.
+model PaymentTransaction {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  licenseId       BigInt    @map("license_id")
+  provider        String
+  /// `checkout` (the owner started it) or `renewal` (the dunning job charged
+  /// the saved card off-session).
+  kind            String
+  /// Our code for it — the SWIFT transfer description, the Stripe metadata.
+  reference       String    @unique
+  /// The processor's id: Stripe payment intent, or the crypto TXID.
+  providerRef     String?   @map("provider_ref")
+  providerEventId String?   @map("provider_event_id")
+  amountMinor     Int       @map("amount_minor")
+  currency        String    @db.Char(3)
+  /// `yyyymm` the payment was started in.
+  period          String    @db.Char(6)
+  billingCycle    String    @map("billing_cycle")
+  status          String    @default("pending")
+  failureCode     String?   @map("failure_code")
+  /// 1 for the first charge of a renewal, then one more per dunning retry.
+  attempt         Int       @default(1)
+  termStart       DateTime? @map("term_start") @db.Timestamptz(6)
+  termEnd         DateTime? @map("term_end") @db.Timestamptz(6)
+  /// Who confirmed a manual payment — a platform admin id or an account id.
+  handledBy       String?   @map("handled_by")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  settledAt       DateTime? @map("settled_at") @db.Timestamptz(6)
+
+  license        License                @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  cryptoRequests CryptoPaymentRequest[]
+
+  @@unique([provider, providerEventId])
+  @@index([licenseId, createdAt])
+  @@index([provider, providerRef])
+  @@map("payment_transactions")
+}
+
+/// "Adres isteyin" (tm 382 · ADR-13a §3): the owner asks to pay in crypto, the
+/// SiyahTuş team answers with a wallet address on the request (never shown by
+/// itself), the owner writes the TXID, the team confirms it by hand. One open
+/// request per workspace; a TXID is accepted once per network.
+model CryptoPaymentRequest {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  licenseId       BigInt    @map("license_id")
+  network         String
+  amountMinor     Int       @map("amount_minor")
+  currency        String    @db.Char(3)
+  billingCycle    String    @map("billing_cycle")
+  billingName     String    @map("billing_name")
+  billingDetails  String?   @map("billing_details")
+  status          String    @default("requested")
+  walletAddress   String?   @map("wallet_address")
+  addressSentAt   DateTime? @map("address_sent_at") @db.Timestamptz(6)
+  txid            String?
+  txidSubmittedAt DateTime? @map("txid_submitted_at") @db.Timestamptz(6)
+  transactionId   String?   @unique @map("transaction_id") @db.Uuid
+  requestedBy     String?   @map("requested_by") @db.Uuid
+  handledBy       String?   @map("handled_by")
+  closedReason    String?   @map("closed_reason")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  closedAt        DateTime? @map("closed_at") @db.Timestamptz(6)
+
+  license     License             @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  transaction PaymentTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@unique([network, txid])
+  @@index([licenseId, createdAt])
+  @@index([status, createdAt])
+  @@map("crypto_payment_requests")
 }
 
 /// Metered usage, aggregated per calendar month.

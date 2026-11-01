@@ -1,30 +1,30 @@
 /**
- * The payment processor seam (M-PROV-a · §D113/K3) — `STRIPE_PROVIDER`.
+ * The card processor seam (M-PROV-a · §D113/K3 · tm 382 · ADR-13a) —
+ * `STRIPE_PROVIDER`.
  *
- * Billing is mocked (ADR-13) and card entry is out of scope (PRD §11.1/1), so
- * there is one implementation and it charges nothing. The point of the seam is
- * not that a second one exists; it is that the boundary between *us* and *a
- * processor* is drawn somewhere, because today it was drawn nowhere and
- * `STRIPE_PROVIDER` was a validated string nothing read.
+ * Two implementations. `mock` (the default, ADR-13) charges nothing: it takes
+ * the masked card form and accepts any unexpired card, which is how every
+ * test, demo and the pilot run. `stripe` (`stripe-provider.ts`) speaks Stripe's
+ * REST API; this build runs it only against a stand-in (tests) or sandbox keys
+ * an operator supplies — no key is in the repository, and going live is a
+ * human decision (ADR-13a §4).
  *
- * **Where the line falls.** A processor takes card details, decides whether it
- * would accept them, and hands back the masked representation it will recognise
- * later; storing that representation against a workspace is ours, and stays in
- * `payment-method-service.ts` with the tenant transaction. So the only method
- * here is `registerPaymentMethod`, and the only judgement inside the mock is the
- * expiry check that used to live in that file — the same check, the same
- * `ApiError.validation`, the same message. Nothing about what the API does
- * changed; what changed is who owns the decision.
+ * **Where the line falls.** A processor holds the card: it takes it on its own
+ * hosted page (so card data never reaches SiyahTuş — PCI SAQ A), keeps a
+ * customer and a saved payment method, charges that method later, refunds,
+ * and tells us what happened through a signed webhook. Everything about *what*
+ * a payment pays for — the term, the licence it lifts, the dunning plan — is
+ * ours and processor-independent (`payment-methods.ts`): the bank transfer and
+ * the crypto transfer pay exactly the same way without any processor at all.
  *
- * A real Stripe provider would slot in by tokenising through their SDK and
- * returning `brand`/`last4`/`exp_*` off the resulting `PaymentMethod` — the four
- * fields this interface already speaks in, which is why they are the ones a real
- * processor exposes rather than an invention of ours. It would also gain the
- * methods a mock has no honest version of (detach, charge); those are not
- * declared here, because an interface with methods nobody calls is a promise a
- * second implementation has to keep blind.
+ * The methods are the ones a real processor has an honest version of
+ * (ADR-13a §4). The mock has none of the hosted ones — it has no page to send
+ * a browser to — so it says so with `hostedCheckout: false` and refuses them;
+ * nothing calls them on it, because `stripe` is not offered on the mock.
  */
 import { ApiError } from '../../lib/api-error.js';
+// A cycle, and a safe one: each side uses the other only inside functions.
+import { StripePaymentProvider } from './stripe-provider.js';
 
 /** Card networks the mock accepts — the four a real form would detect. */
 export const PAYMENT_BRANDS = ['visa', 'mastercard', 'amex', 'discover'] as const;
@@ -44,15 +44,87 @@ export interface PaymentMethodDetails {
   holderName: string;
 }
 
+/** A hosted checkout for one term: the processor's page takes the card. */
+export interface HostedCheckoutInput {
+  customerId: string;
+  amountMinor: number;
+  currency: string;
+  /** Ours — carried in the processor's metadata so its webhook names it back. */
+  transactionId: string;
+  reference: string;
+  description: string;
+  successUrl: string;
+  cancelUrl: string;
+}
+
+/** An off-session charge of the card the checkout saved (a renewal). */
+export interface ChargeInput {
+  customerId: string;
+  paymentMethodId: string;
+  amountMinor: number;
+  currency: string;
+  transactionId: string;
+  reference: string;
+}
+
+/**
+ * What a charge came to. `pending` is the processor still deciding (its
+ * webhook settles it); `failed` carries a code, never the processor's prose.
+ */
+export type ChargeResult =
+  | { outcome: 'succeeded'; providerRef: string; paymentMethodId: string | null }
+  | { outcome: 'failed'; providerRef: string | null; failureCode: string }
+  | { outcome: 'pending'; providerRef: string };
+
+/**
+ * One processor event, read and verified. `ignored` is every event this build
+ * has nothing to do with — acknowledged, so the processor stops sending it.
+ */
+export interface ProviderEvent {
+  id: string;
+  type: 'payment_succeeded' | 'payment_failed' | 'dispute_opened' | 'ignored';
+  /** Our transaction id from the event's metadata, when it carries one. */
+  transactionId: string | null;
+  /** The processor's id for the payment (a Stripe payment intent). */
+  providerRef: string | null;
+  customerId: string | null;
+  paymentMethodId: string | null;
+  failureCode: string | null;
+}
+
+/**
+ * The processor did not answer, or answered with an error of its own — an
+ * outage from our side (503), never the client's mistake. A refused card is
+ * not this: that is a `failed` charge.
+ */
+export class PaymentProviderError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PaymentProviderError';
+  }
+}
+
+/** A webhook whose signature is missing, wrong or stale. */
+export class WebhookSignatureError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'WebhookSignatureError';
+  }
+}
+
 export interface PaymentProvider {
   /** The `STRIPE_PROVIDER` value this implementation serves. */
   readonly name: PaymentProviderId;
   /**
-   * Register a card and return the masked representation to keep on file.
-   *
-   * Rejects with an `ApiError` for a card the processor refuses — which is a
-   * client's mistake, not an outage, and is why the failure is a validation
-   * error rather than a 502.
+   * Whether cards are taken on the processor's own page. False on the mock,
+   * whose card path is the masked form; true on Stripe, whose card path is the
+   * hosted checkout — and which therefore refuses the masked form.
+   */
+  readonly hostedCheckout: boolean;
+  /**
+   * Register a card and return the masked representation to keep on file
+   * (the mock's card form). Rejects with an `ApiError` for a card the
+   * processor refuses — a client's mistake, not an outage.
    *
    * `now` is injected for the reason every sweep takes one: an expiry rule is
    * only testable against a clock the test controls.
@@ -61,10 +133,34 @@ export interface PaymentProvider {
     details: PaymentMethodDetails,
     options?: { now?: Date },
   ): Promise<PaymentMethodDetails>;
+  /** The processor's customer for a workspace — made once, kept on the subscription. */
+  createCustomer(input: {
+    licenseId: bigint;
+    name: string;
+    email: string | null;
+  }): Promise<{ customerId: string }>;
+  createCheckoutSession(input: HostedCheckoutInput): Promise<{ sessionId: string; url: string }>;
+  chargeInvoice(input: ChargeInput): Promise<ChargeResult>;
+  /**
+   * Give money back. No route calls it in this build — SiyahTuş does not
+   * refund (BL-03 decision 2) — but a processor that can take money has to be
+   * able to return it, and an operator correcting a double charge needs it.
+   */
+  refund(input: {
+    providerRef: string;
+    amountMinor?: number;
+    idempotencyKey: string;
+  }): Promise<{ refundId: string }>;
+  /**
+   * Verify a webhook's signature over its raw bytes and read it. Throws
+   * {@link WebhookSignatureError} before anything is parsed when the
+   * signature does not hold.
+   */
+  parseWebhook(rawBody: Buffer, signature: string | undefined, now?: Date): ProviderEvent;
 }
 
-/** The payment providers this deployment can select between (`STRIPE_PROVIDER`). */
-export const PAYMENT_PROVIDERS = ['mock'] as const;
+/** The payment processors this deployment can select between (`STRIPE_PROVIDER`). */
+export const PAYMENT_PROVIDERS = ['mock', 'stripe'] as const;
 export type PaymentProviderId = (typeof PAYMENT_PROVIDERS)[number];
 
 /**
@@ -77,6 +173,7 @@ export type PaymentProviderId = (typeof PAYMENT_PROVIDERS)[number];
  */
 export class MockPaymentProvider implements PaymentProvider {
   readonly name = 'mock' as const;
+  readonly hostedCheckout = false;
 
   async registerPaymentMethod(
     details: PaymentMethodDetails,
@@ -93,12 +190,101 @@ export class MockPaymentProvider implements PaymentProvider {
     }
     return details;
   }
+
+  async createCustomer(): Promise<{ customerId: string }> {
+    throw new PaymentProviderError('The mock processor has no customers.');
+  }
+
+  async createCheckoutSession(): Promise<{ sessionId: string; url: string }> {
+    throw new PaymentProviderError('The mock processor has no hosted checkout.');
+  }
+
+  async chargeInvoice(): Promise<ChargeResult> {
+    throw new PaymentProviderError('The mock processor charges nothing.');
+  }
+
+  async refund(): Promise<{ refundId: string }> {
+    throw new PaymentProviderError('The mock processor charges nothing to refund.');
+  }
+
+  parseWebhook(): ProviderEvent {
+    throw new WebhookSignatureError('The mock processor sends no webhooks.');
+  }
 }
 
-/** The provider `STRIPE_PROVIDER` names. */
-export function createPaymentProvider(provider: PaymentProviderId): PaymentProvider {
+/** What `stripe` needs besides the vocabulary — the two keys and how to reach the API. */
+export interface StripeProviderConfig {
+  secretKey: string;
+  webhookSecret: string;
+  /** Injected in tests: a stand-in for `api.stripe.com`. Omitted, the global `fetch`. */
+  fetch?: typeof fetch;
+}
+
+/**
+ * The provider `STRIPE_PROVIDER` names. `stripe` needs its keys; the boot path
+ * goes through {@link resolvePaymentProvider}, which falls back to the mock
+ * with a warning instead of throwing.
+ */
+export function createPaymentProvider(
+  provider: PaymentProviderId,
+  stripe?: StripeProviderConfig,
+): PaymentProvider {
   switch (provider) {
     case 'mock':
       return new MockPaymentProvider();
+    case 'stripe':
+      if (!stripe)
+        throw new Error('STRIPE_PROVIDER=stripe needs STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET');
+      return new StripePaymentProvider(stripe);
   }
+}
+
+export interface PaymentProviderEnv {
+  NODE_ENV: string;
+  STRIPE_PROVIDER: PaymentProviderId;
+  STRIPE_SECRET_KEY?: string | undefined;
+  STRIPE_WEBHOOK_SECRET?: string | undefined;
+}
+
+/**
+ * The processor this deployment runs, and why it is not the one asked for.
+ *
+ * `stripe` without both keys stays on the mock and the boot says which key is
+ * missing — never a refusal to start: the bank transfer and crypto work without
+ * Stripe (ADR-13a §4). A live key (`sk_live_…`) outside `NODE_ENV=production`
+ * is refused the same way: a developer's machine must not charge real cards.
+ */
+export function resolvePaymentProvider(
+  env: PaymentProviderEnv,
+  options: { fetch?: typeof fetch } = {},
+): { provider: PaymentProvider; warnings: string[] } {
+  if (env.STRIPE_PROVIDER === 'mock') return { provider: new MockPaymentProvider(), warnings: [] };
+  const missing = (['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'] as const).filter(
+    (key) => !env[key],
+  );
+  if (missing.length > 0) {
+    return {
+      provider: new MockPaymentProvider(),
+      warnings: [
+        `STRIPE_PROVIDER=stripe but ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} not set; card payments stay on the mock and Stripe is not offered.`,
+      ],
+    };
+  }
+  const secretKey = env.STRIPE_SECRET_KEY as string;
+  if (secretKey.startsWith('sk_live_') && env.NODE_ENV !== 'production') {
+    return {
+      provider: new MockPaymentProvider(),
+      warnings: [
+        'STRIPE_SECRET_KEY is a live key outside NODE_ENV=production; it is ignored and card payments stay on the mock.',
+      ],
+    };
+  }
+  return {
+    provider: new StripePaymentProvider({
+      secretKey,
+      webhookSecret: env.STRIPE_WEBHOOK_SECRET as string,
+      ...(options.fetch ? { fetch: options.fetch } : {}),
+    }),
+    warnings: [],
+  };
 }

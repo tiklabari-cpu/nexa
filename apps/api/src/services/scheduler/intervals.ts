@@ -33,6 +33,8 @@ import type { Env } from '../../config/env.js';
  * knowledge chunks no version answers from any more (tm 316.6); the
  * seventeenth drafts the suggestions agents made to the AI (tm 318.1), and the
  * eighteenth puts the previous day's AI connections in the QA queue (tm 319.1).
+ * `billing_dunning`, beside the statement freeze, renews a card-paid
+ * subscription and runs its retry plan (tm 382 · BL-01).
  */
 export const SCHEDULER_JOB_NAMES = [
   'chat_timeout',
@@ -43,6 +45,7 @@ export const SCHEDULER_JOB_NAMES = [
   'webhook_redelivery',
   'knowledge_refresh',
   'invoice_close',
+  'billing_dunning',
   'unverified_signups',
   'ai_stall',
   'ai_sandbox_sessions',
@@ -77,6 +80,7 @@ export type SchedulerIntervalEnv = Pick<
   | 'SCHEDULE_WEBHOOK_REDELIVERY_MS'
   | 'SCHEDULE_KNOWLEDGE_REFRESH_MS'
   | 'SCHEDULE_INVOICE_CLOSE_MS'
+  | 'SCHEDULE_BILLING_DUNNING_MS'
   | 'SCHEDULE_UNVERIFIED_SIGNUPS_MS'
   | 'SCHEDULE_AI_STALL_MS'
   | 'SCHEDULE_AI_SANDBOX_SESSIONS_MS'
@@ -110,6 +114,7 @@ export function jobIntervals(env: SchedulerIntervalEnv): Record<SchedulerJobName
     webhook_redelivery: env.SCHEDULE_WEBHOOK_REDELIVERY_MS,
     knowledge_refresh: env.SCHEDULE_KNOWLEDGE_REFRESH_MS,
     invoice_close: env.SCHEDULE_INVOICE_CLOSE_MS,
+    billing_dunning: env.SCHEDULE_BILLING_DUNNING_MS,
     unverified_signups: env.SCHEDULE_UNVERIFIED_SIGNUPS_MS,
     ai_stall: env.SCHEDULE_AI_STALL_MS,
     ai_sandbox_sessions: env.SCHEDULE_AI_SANDBOX_SESSIONS_MS,

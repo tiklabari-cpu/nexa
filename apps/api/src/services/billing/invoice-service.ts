@@ -426,10 +426,39 @@ export async function listInvoices(
   // not ended, so it wins.
   const closed = stored.filter((row) => row.period !== period);
 
-  return [
-    toInvoice(period, composeInvoice(composition), 'estimate'),
-    ...closed.map(serialiseStored),
-  ];
+  const estimate = toInvoice(period, composeInvoice(composition), 'estimate');
+  if (estimate.status === 'open' && (await periodPaid(tx, tenant, period))) {
+    estimate.status = 'paid';
+  }
+  return [estimate, ...closed.map(serialiseStored)];
+}
+
+/**
+ * Whether the period in progress has been paid for (tm 382 · BL-01): a payment
+ * started in it succeeded, or a term already paid runs past its end (an annual
+ * payment, or a monthly one made late in the previous month). The open
+ * statement then reads `paid` — by bank transfer, crypto or card alike — while
+ * its figures keep moving until the period closes, as before.
+ */
+async function periodPaid(
+  tx: TenantClient,
+  tenant: TenantContext,
+  period: string,
+): Promise<boolean> {
+  const [payment, subscription] = await Promise.all([
+    tx.paymentTransaction.findFirst({
+      where: { licenseId: tenant.licenseId, period, status: 'succeeded' },
+      select: { id: true },
+    }),
+    tx.subscription.findFirst({
+      where: { licenseId: tenant.licenseId, paymentProvider: { not: null } },
+      orderBy: { createdAt: 'desc' },
+      select: { currentPeriodEnd: true },
+    }),
+  ]);
+  if (payment) return true;
+  const paidThrough = subscription?.currentPeriodEnd;
+  return paidThrough != null && paidThrough >= periodWindow(period).end;
 }
 
 /**

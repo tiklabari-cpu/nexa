@@ -173,6 +173,17 @@ export const settings: Messages = {
   'settings.integrations.hint':
     'Browse the marketplace to connect the tools your team already uses.',
   'settings.integrations.openMarketplace': 'Open marketplace',
+  'settings.integrations.igaming.title': 'iGaming platforms',
+  'settings.integrations.igaming.description':
+    'Look up a player’s deposits, withdrawals and verification status from inside a conversation. Not available yet.',
+  'settings.integrations.igaming.soon': 'Coming soon',
+  'settings.integrations.igaming.connect': 'Connect',
+  'settings.integrations.igaming.connectDisabledHint':
+    'Connecting {name} is not available yet. It is coming in a later release.',
+  'settings.integrations.igaming.betconstruct.description':
+    'Player accounts, deposits and withdrawals from the BetConstruct platform.',
+  'settings.integrations.igaming.everymatrix.description':
+    'Player accounts, deposits and withdrawals from the EveryMatrix platform.',
 
   // Trusted domains — TrustedDomains.tsx
   'settings.trustedDomains.title': 'Trusted domains',

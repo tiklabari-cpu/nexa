@@ -160,6 +160,17 @@ export const settings: Messages = {
   'settings.integrations.hint':
     'Ekibinizin zaten kullandığı araçları bağlamak için mağazaya göz atın.',
   'settings.integrations.openMarketplace': 'Mağazayı aç',
+  'settings.integrations.igaming.title': 'iGaming platformları',
+  'settings.integrations.igaming.description':
+    'Bir konuşmanın içinden oyuncunun yatırım, çekim ve doğrulama durumuna bakın. Henüz kullanılamıyor.',
+  'settings.integrations.igaming.soon': 'Yakında',
+  'settings.integrations.igaming.connect': 'Bağla',
+  'settings.integrations.igaming.connectDisabledHint':
+    '{name} bağlantısı henüz kullanılamıyor. Sonraki bir sürümde gelecek.',
+  'settings.integrations.igaming.betconstruct.description':
+    'BetConstruct platformundaki oyuncu hesapları, yatırımlar ve çekimler.',
+  'settings.integrations.igaming.everymatrix.description':
+    'EveryMatrix platformundaki oyuncu hesapları, yatırımlar ve çekimler.',
 
   // Güvenilir alan adları — TrustedDomains.tsx
   'settings.trustedDomains.title': 'Güvenilir alan adları',

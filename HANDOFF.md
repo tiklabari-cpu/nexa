@@ -15,6 +15,13 @@
 
 ## Task log (newest-first)
 
+## tm 377 — IGAMING-CONNECT-PLACEHOLDERS: Ayarlar › Entegrasyonlar'da "iGaming platformları" bölümü — BetConstruct + EveryMatrix kartları, "Yakında" rozeti, pasif "Bağla" — KN-06 F1 (K15) — done — 2026-11-01 UTC
+
+- **Yapıldı (dal `feat/igaming-connect-placeholders`; kontrat/migration/API YOK):** types `igaming-platforms.ts` (`IGAMING_PLATFORMS`, `coming_soon`); web `Integrations.tsx` `IgamingPlatformCard` (buton `disabled` + `aria-disabled` + `aria-describedby` gizli gerekçe + `title` tooltip, handler yok); en/tr `settings.integrations.igaming.*` anahtarları.
+- **Doğrulama:** web `Integrations.test.tsx` 6 (kart + rozet, a11y, tıklamada fetch/XHR yok, TR), types `igaming-platforms.test.ts` 2, e2e `igaming-platforms.spec.ts` 1 (görünürlük, `force` tıklama sonrası 0 istek, axe 0 engel); `SettingsPage.pilot` + `i18n-coverage` yeşil. Kapı sonucu aşağıdaki commit'te.
+- **Varsayımlar / sapmalar (§D429):** PLAN'da KN-06 satırı yok → kanıt `K08.8.1`. Katalog mevcut Zapier manifestinden (`integrations.ts`) ayrı dosyada. Logo yok, yalnız metin.
+- **Sonraki pencere:** Yeni platform = `IGAMING_PLATFORMS` girdisi + en/tr `…igaming.<vendor>.description`. F2 (#378) gerçek bağlantıyı kurunca `status` `available` olur ve düğme gerçek akışa bağlanır; şimdilik düğmenin handler'ı yok.
+
 ## tm 376 — HOSTED-API-DOCS: barındırılan API dokümanı — `x-public` damgalı 52 operasyondan üretilen tek dosya, CSP uyumlu statik görüntüleyici `/developers/docs/` (girişsiz, aranabilir), PAT/webhook imza/oran sınırı/hata rehberi, sürüm + değişiklik günlüğü, iç uç sızıntısı testi — KN-04 — done — 2026-11-01 UTC
 
 - **Yapıldı (dal `feat/hosted-api-docs`; migration YOK, kontrat şeması/tipleri DEĞİŞMEDİ — yalnız 52 operasyona `x-public: true`):** contract `src/public-spec.ts` (süzme + bileşen budama + sızıntı reddi + yüzey parmak izi), `public-guide.ts` (rehber bölümleri), `public-docs.ts`, `scripts/publish-docs.ts` (`pnpm contract:generate` içinde; `publish:docs:check`), `openapi/public-changelog.yaml`, `docs-examples/verify-webhook.mjs`; çıktı `apps/web/public/developers/docs/openapi.json` (commit'li). Web: `developers/docs/index.html` + `docs-site/{spec,markdown,render,main}.ts` + `docs.css`, vite.config ikinci girdi (+ dev'de kısa adres yönlendirmesi), `nginx.conf` iki konum, DeveloperPortal "API dokümanı" bağlantısı (en/tr).

@@ -1676,6 +1676,7 @@ chatTimeout:
       long for a person's first reply. When on it must be below the transfer,
       inactive and auto-close windows that are on, or the save is a 400.
       `ask_email_when_offline` asks at once while nobody is accepting chats.
+      `bad_rating_actions` (AU-03): what the player's bad vote sets off.
     requestBody:
       required: true
       content:
@@ -1803,6 +1804,16 @@ chatTimeout:
                   forwarding address — as this save leaves the list — is
                   outside the workspace's verified SSO domains. Left out, the
                   stored value stays.
+              bad_rating_actions:
+                type: object
+                additionalProperties: false
+                description: >-
+                  The bad-rating automation (AU-03). Each switch is optional; a
+                  switch left out keeps its stored value (or its default).
+                properties:
+                  notify_team_leads: { type: boolean }
+                  add_to_qa_queue: { type: boolean }
+                  open_ticket: { type: boolean }
     responses:
       "200":
         description: Updated

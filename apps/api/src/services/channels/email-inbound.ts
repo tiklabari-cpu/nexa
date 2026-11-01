@@ -49,6 +49,7 @@ import {
 import type { PendingAck } from '../tickets/apply-ticket-rules.js';
 import { ticketArrivalPush, type TicketArrivalPush } from '../tickets/ticket-arrival.js';
 import type { AutoAckMail, TicketAutoAck } from '../tickets/ticket-auto-ack.js';
+import { TicketSignals } from '../tickets/ticket-events.js';
 import type { TicketReplyAddresses } from '../tickets/ticket-reply-address.js';
 import type { TicketService } from '../tickets/ticket-service.js';
 import { rejectedAttachmentsNote, type RejectedAttachment } from './inbound-email-attachments.js';
@@ -137,6 +138,12 @@ export interface InboundOutcome {
    * the ticket arriving, not a reply to it, and both go to the same people.
    */
   arrival?: TicketArrivalPush | null;
+  /**
+   * The webhook deliveries an answer on a standing ticket earned (AU-03 · tm
+   * 374) — `ticket_message_added`, and the change a reopening made — for the
+   * route to emit once the transaction committed.
+   */
+  signals?: TicketSignals;
 }
 
 /** What `ingestInboundEmail` writes with. */
@@ -608,6 +615,7 @@ export async function ingestInboundEmail(
     // does not. Past the budget — or a stale ticket past it — the answer is
     // still kept, on the ticket it answers, and the status stays.
     const allowReopen = !stale && (ticket.status !== 'solved' || (await budget()));
+    const signals = new TicketSignals();
     const written = await services.messages.recordCustomerMessage(
       tx,
       tenant,
@@ -619,6 +627,7 @@ export async function ingestInboundEmail(
         senderMismatch,
         allowReopen,
       },
+      signals,
     );
     // The Message-ID lock above already answered a known mail, so this is a
     // belt-and-braces branch: a replay must not write its lines twice.
@@ -657,6 +666,7 @@ export async function ingestInboundEmail(
       },
       push: written.push,
       filesKept: true,
+      signals,
     };
   }
 

@@ -180,6 +180,93 @@ export const INTEGRATION_TRIGGERS: readonly IntegrationTrigger[] = [
       },
     },
   },
+  {
+    // AU-03 (tm 374): a new vote or a changed one — a comment added to a vote
+    // already sent is not a second judgement. The comment leaves masked.
+    action: 'chat_rated',
+    label: 'Chat rated',
+    description:
+      'Fires when the player rates a connection good or bad, or changes the rating; the comment is masked.',
+    sample_payload: {
+      action: 'chat_rated',
+      data: {
+        rating_id: '9b2f6c1e-3d4a-4f5b-8c7d-0e1f2a3b4c5d',
+        chat_id: 'CH1H8CFKRV',
+        thread_id: 'TH1H8CFKRV',
+        value: 'bad',
+        comment: 'My withdrawal is still pending.',
+        customer_id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+        group_id: 42,
+        rated_at: '2026-01-15T10:40:00.000Z',
+      },
+    },
+  },
+  {
+    action: 'ticket_updated',
+    label: 'Ticket updated',
+    description:
+      'Fires when someone changes a ticket — subject, status, priority, assignee or team — naming what moved.',
+    sample_payload: {
+      action: 'ticket_updated',
+      data: {
+        ticket_id: 'TCK1H8CFK',
+        changed: ['status', 'priority'],
+        status: 'pending',
+        priority: 5,
+        assignee_id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+        group_id: 42,
+        updated_at: '2026-01-15T11:00:00.000Z',
+      },
+    },
+  },
+  {
+    action: 'ticket_status_changed',
+    label: 'Ticket status changed',
+    description: 'Fires when a ticket moves to another status, with the old and the new one.',
+    sample_payload: {
+      action: 'ticket_status_changed',
+      data: {
+        ticket_id: 'TCK1H8CFK',
+        from: 'open',
+        to: 'solved',
+        changed_at: '2026-01-15T11:00:00.000Z',
+      },
+    },
+  },
+  {
+    action: 'ticket_assigned',
+    label: 'Ticket assigned',
+    description: 'Fires when a ticket is handed to another agent or team.',
+    sample_payload: {
+      action: 'ticket_assigned',
+      data: {
+        ticket_id: 'TCK1H8CFK',
+        assignee_id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+        group_id: 42,
+        previous_assignee_id: null,
+        previous_group_id: 42,
+        assigned_at: '2026-01-15T11:00:00.000Z',
+      },
+    },
+  },
+  {
+    // HD-01: a reply, an internal note or the player's answer. Ids and kind
+    // only — the text stays behind the API's own visibility rules.
+    action: 'ticket_message_added',
+    label: 'Ticket message added',
+    description:
+      "Fires when a reply, an internal note or the player's message lands on a ticket; no message text.",
+    sample_payload: {
+      action: 'ticket_message_added',
+      data: {
+        ticket_id: 'TCK1H8CFK',
+        message_id: '1b4e28ba-2fa1-41d2-883f-0016d3cca427',
+        kind: 'customer_message',
+        author_type: 'customer',
+        created_at: '2026-01-15T11:05:00.000Z',
+      },
+    },
+  },
 ] as const;
 
 /** One existing write endpoint a Zapier/Make "action" step may call. */

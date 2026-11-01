@@ -8,6 +8,7 @@
  * is triaged is an admin action, not something a group-scoped agent does.
  */
 import type { FastifyInstance } from 'fastify';
+import { TICKET_RULE_EVENTS, TICKET_STATUSES } from '@siyahtus/types';
 import { z } from 'zod';
 import { ApiError } from '../lib/api-error.js';
 import {
@@ -23,8 +24,15 @@ const conditionsSchema = z
     subject_contains: z.string().trim().max(2048).optional(),
     source: z.enum(['chat', 'email']).optional(),
     outside_business_hours: z.boolean().optional(),
+    // AU-03 (tm 374): which of them a rule's moment can carry is the service's
+    // check (`ruleShapeProblem`), against the moment as the save leaves it.
+    status_to: z.enum(TICKET_STATUSES).optional(),
+    priority_at_least: z.number().int().min(0).max(1000).optional(),
+    from_requester: z.boolean().optional(),
   })
   .strict();
+
+const onSchema = z.enum(TICKET_RULE_EVENTS);
 
 const actionsSchema = z
   .object({
@@ -38,6 +46,7 @@ const actionsSchema = z
 
 const createBody = z.object({
   name: z.string().trim().min(1).max(120),
+  on: onSchema.optional(),
   conditions: conditionsSchema,
   actions: actionsSchema,
   enabled: z.boolean().optional(),
@@ -47,6 +56,7 @@ const createBody = z.object({
 const updateBody = z
   .object({
     name: z.string().trim().min(1).max(120).optional(),
+    on: onSchema.optional(),
     conditions: conditionsSchema.optional(),
     actions: actionsSchema.optional(),
     enabled: z.boolean().optional(),
@@ -88,6 +98,7 @@ export default async function ticketRuleRoutes(app: FastifyInstance): Promise<vo
       const tenant = request.tenant();
       const input: TicketRuleInput = {
         name: body.name,
+        on: body.on,
         conditions: body.conditions,
         actions: body.actions,
         enabled: body.enabled,
@@ -107,6 +118,7 @@ export default async function ticketRuleRoutes(app: FastifyInstance): Promise<vo
       const tenant = request.tenant();
       const patch: TicketRulePatch = {
         name: body.name,
+        on: body.on,
         conditions: body.conditions,
         actions: body.actions,
         enabled: body.enabled,

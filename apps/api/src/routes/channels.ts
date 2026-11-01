@@ -677,6 +677,8 @@ export default async function channelRoutes(
       // After the commit too, and not awaited: the ticket is durable, and the
       // provider's retry must not wait on the carrier (tm 359 · HD-04).
       if (outcome.ack) deliverAutoAck(app.backgroundMail, request.log, tenant, outcome.ack);
+      // The player's answer to subscribers (AU-03 · tm 374); `emit` never throws.
+      await outcome.signals?.emit(automations, tenant);
       return reply.send(outcome.result);
     },
   );

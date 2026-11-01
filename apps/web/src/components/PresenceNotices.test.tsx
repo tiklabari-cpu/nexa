@@ -13,6 +13,7 @@ import { defaultScopesForRole } from '@siyahtus/types';
 import { PresenceNotices } from './PresenceNotices.js';
 import { useAuth } from '../lib/auth-store.js';
 import {
+  noteBadRatingAlert,
   noteSelfStatusChange,
   noteUnansweredAlert,
   resetPresenceNotices,
@@ -228,5 +229,27 @@ describe('PresenceNotices localisation', () => {
     );
     expect(screen.getByRole('status')).toHaveTextContent('Durumunuz değişti');
     expect(screen.getByRole('status')).toHaveTextContent('2 dakika');
+  });
+
+  it('tells a lead a conversation was rated bad, once per vote, and links to it (AU-03 · tm 374)', async () => {
+    renderNotices();
+    act(() => {
+      noteBadRatingAlert({ id: 'r-1', chatId: 'c-1', threadId: 't-1', ticketId: null });
+      noteBadRatingAlert({ id: 'r-1', chatId: 'c-1', threadId: 't-1', ticketId: null });
+    });
+    expect(screen.getAllByText('A player rated a chat bad')).toHaveLength(1);
+    expect(screen.getByRole('link', { name: 'Open the conversation' })).toHaveAttribute(
+      'href',
+      '/app/archive?c=t-1',
+    );
+    act(() => {
+      noteBadRatingAlert({ id: 'r-2', chatId: 'c-2', threadId: 't-2', ticketId: 'TCK9' });
+    });
+    expect(screen.getByRole('link', { name: 'Open the ticket' })).toHaveAttribute(
+      'href',
+      '/app/inbox?ticket=TCK9',
+    );
+    await userEvent.click(screen.getByRole('link', { name: 'Open the ticket' }));
+    await waitFor(() => expect(screen.queryByRole('link', { name: 'Open the ticket' })).toBeNull());
   });
 });

@@ -30,7 +30,11 @@ import {
 import { RtmClient, type PushHandler } from '../../lib/realtime.js';
 import { noteTrafficVisitorUpdated } from '../../lib/traffic-live.js';
 import { setRealtimeStatus } from '../../lib/realtime-status.js';
-import { noteSelfStatusChange, noteUnansweredAlert } from '../../lib/presence-notice.js';
+import {
+  noteBadRatingAlert,
+  noteSelfStatusChange,
+  noteUnansweredAlert,
+} from '../../lib/presence-notice.js';
 import { noteAiConfigPublished, readAiConfigPublished } from '../../lib/ai-config-notice.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { optimisticCacheUpdate } from '../../lib/optimistic.js';
@@ -1178,6 +1182,9 @@ export function useRealtime(onPush?: PushHandler): void {
         // The player rated a connection or commented on its rating (AR-03 ·
         // WG-11): the Details panel's Rating row, and an open archive row.
         'chat_rated',
+        // To a team's leads (AU-03 · tm 374): the player voted a conversation
+        // bad — the shell's banner.
+        'chat_bad_rating_alert',
         // The player read up to a point (IN-05 · tm 362): the transcript's
         // "Read · time" line, within a second of their seeing it.
         'customer_seen',
@@ -1726,6 +1733,23 @@ export function applyPush(
     case 'ai_suggestion_reviewed': {
       // To the author: the queue they read and the badge both moved.
       void queryClient.invalidateQueries({ queryKey: suggestionKeys.all });
+      return;
+    }
+
+    case 'chat_bad_rating_alert': {
+      // Addressed by the API to the team's leads (AU-03): ids only.
+      const chatId = payload['chat_id'];
+      const threadId = payload['thread_id'];
+      const ratingId = payload['rating_id'];
+      const ticketId = payload['ticket_id'];
+      if (typeof chatId !== 'string' || typeof threadId !== 'string') return;
+      if (typeof ratingId !== 'string') return;
+      noteBadRatingAlert({
+        id: ratingId,
+        chatId,
+        threadId,
+        ticketId: typeof ticketId === 'string' ? ticketId : null,
+      });
       return;
     }
 

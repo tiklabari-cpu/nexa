@@ -11,6 +11,10 @@
  * for an afternoon. So each change leaves a notice saying what happened and
  * offering the way back.
  *
+ * A third is the lead's too (AU-03 · tm 374): `chat_bad_rating_alert` says a
+ * player voted a conversation of the team bad — where to read it, and the
+ * follow-up ticket when the brand's automation opened one.
+ *
  * The second kind is the lead's: `chat_unanswered_alert` says a conversation
  * went unanswered and is waiting at the front of the team's queue. Those stack
  * — several can arrive in one sweep — newest first, a few at most.
@@ -50,12 +54,23 @@ export interface UnansweredAlert {
 /** How many lead alerts stay on screen; older ones are dropped, not queued. */
 export const MAX_UNANSWERED_ALERTS = 3;
 
+/** One `chat_bad_rating_alert` (AU-03), as the lead's banner shows it. */
+export interface BadRatingAlert {
+  /** The rating — the same vote delivered twice is shown once. */
+  id: string;
+  chatId: string;
+  threadId: string;
+  /** The follow-up ticket the automation opened, or null. */
+  ticketId: string | null;
+}
+
 interface PresenceNoticeState {
   self: SelfStatusNotice | null;
   alerts: UnansweredAlert[];
+  badRatings: BadRatingAlert[];
 }
 
-const useStore = create<PresenceNoticeState>(() => ({ self: null, alerts: [] }));
+const useStore = create<PresenceNoticeState>(() => ({ self: null, alerts: [], badRatings: [] }));
 
 export function usePresenceNotices(): PresenceNoticeState {
   return useStore();
@@ -79,11 +94,24 @@ export function dismissSelfStatusNotice(): void {
   useStore.setState({ self: null });
 }
 
+export function noteBadRatingAlert(alert: BadRatingAlert): void {
+  useStore.setState((state) => ({
+    badRatings: [alert, ...state.badRatings.filter((a) => a.id !== alert.id)].slice(
+      0,
+      MAX_UNANSWERED_ALERTS,
+    ),
+  }));
+}
+
+export function dismissBadRatingAlert(id: string): void {
+  useStore.setState((state) => ({ badRatings: state.badRatings.filter((a) => a.id !== id) }));
+}
+
 export function dismissUnansweredAlert(id: string): void {
   useStore.setState((state) => ({ alerts: state.alerts.filter((a) => a.id !== id) }));
 }
 
 /** For tests, and for a sign-out: nothing of one session's notices outlives it. */
 export function resetPresenceNotices(): void {
-  useStore.setState({ self: null, alerts: [] });
+  useStore.setState({ self: null, alerts: [], badRatings: [] });
 }

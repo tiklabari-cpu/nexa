@@ -32,6 +32,9 @@ import type { TenantClient, TenantContext } from '../../lib/tenant.js';
  *
  * `risk_flag_raised` / `risk_flag_cleared` (AI-27-S4 · tm 302.2): a risk
  * flag on a conversation, as `RiskFlagSignal` — no text anyone wrote.
+ *
+ * `chat_rated` and the four ticket lifecycle events (AU-03 · tm 374): see
+ * `@siyahtus/types` `ticket-triggers.ts` for their payloads.
  */
 export const WEBHOOK_ACTIONS = [
   'chat_started',
@@ -42,6 +45,11 @@ export const WEBHOOK_ACTIONS = [
   'thread_started',
   'risk_flag_raised',
   'risk_flag_cleared',
+  'chat_rated',
+  'ticket_updated',
+  'ticket_status_changed',
+  'ticket_assigned',
+  'ticket_message_added',
 ] as const;
 export type WebhookAction = (typeof WEBHOOK_ACTIONS)[number];
 

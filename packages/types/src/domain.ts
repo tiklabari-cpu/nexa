@@ -770,6 +770,33 @@ export const TICKET_RULE_SOURCES = ['chat', 'email'] as const;
 export type TicketRuleSource = (typeof TICKET_RULE_SOURCES)[number];
 
 /**
+ * When a ticket rule runs (AU-03 · tm 374) — the rule's "Ne zaman":
+ *
+ *   - `created` — the ticket was opened (the only moment before AU-03, and the
+ *     column default, so every older rule keeps running exactly then);
+ *   - `updated` — a person changed its subject, status, priority, assignee or
+ *     team (a request that changes nothing is no update);
+ *   - `status_changed` — its status moved to another one;
+ *   - `message_added` — a reply, an internal note or the player's message
+ *     landed on it (HD-01).
+ *
+ * A rule's own change never runs the rules again (`triggered_by_rule`,
+ * depth 1): "when solved, tag it" tags once, and a rule that sets the
+ * priority on `updated` cannot feed itself. The database CHECKs the same list.
+ */
+export const TICKET_RULE_EVENTS = [
+  'created',
+  'updated',
+  'status_changed',
+  'message_added',
+] as const;
+export type TicketRuleEvent = (typeof TICKET_RULE_EVENTS)[number];
+
+export function isTicketRuleEvent(value: unknown): value is TicketRuleEvent {
+  return (TICKET_RULE_EVENTS as readonly unknown[]).includes(value);
+}
+
+/**
  * A ticket rule's trigger (FR-MOD-08.6.2). Every key that is set must hold
  * (AND). An empty predicate matches nothing: a rule with no condition is not
  * "apply to every ticket", it is simply not ready — which is what keeps the
@@ -789,6 +816,20 @@ export interface TicketRuleConditions {
    * work schedule has no hours to be outside of: it counts as in.
    */
   outside_business_hours?: boolean;
+  /**
+   * The status the ticket moved to (AU-03 · tm 374). Only a transition
+   * matches: a `status_changed` or `updated` event whose status became this
+   * one — "solved" fires as the ticket is solved, not on every later edit of a
+   * solved ticket. Never on `created` or `message_added`.
+   */
+  status_to?: TicketStatus;
+  /** The ticket's priority, after the event, is at least this (AU-03). */
+  priority_at_least?: number;
+  /**
+   * `true`: the message came from the ticket's player; `false`: from the
+   * team — a reply or a note (AU-03). Only on `message_added`.
+   */
+  from_requester?: boolean;
 }
 
 /**
@@ -817,6 +858,8 @@ export interface TicketRuleActions {
 export interface TicketRule {
   id: string;
   name: string;
+  /** When it runs (AU-03 · tm 374); `created` for every rule saved before. */
+  on: TicketRuleEvent;
   conditions: TicketRuleConditions;
   actions: TicketRuleActions;
   /** Whether the rule fires. Off keeps it configured without acting. */

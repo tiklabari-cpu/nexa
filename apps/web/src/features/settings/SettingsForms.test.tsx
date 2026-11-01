@@ -171,6 +171,7 @@ describe('TicketRules acknowledgement (FR-MOD-13.6)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Add rule' }));
     expect(api.post).toHaveBeenCalledWith('/settings/ticket-rules', {
       name: 'Ack',
+      on: 'created',
       conditions: { outside_business_hours: true },
       actions: { send_template_id: 'tpl-1' },
     });
@@ -193,6 +194,7 @@ describe('TicketRules acknowledgement (FR-MOD-13.6)', () => {
               {
                 id: 'r1',
                 name: 'After-hours ack',
+                on: 'created',
                 conditions: { outside_business_hours: true },
                 actions: { send_template_id: 'tpl-1' },
                 enabled: true,
@@ -203,8 +205,76 @@ describe('TicketRules acknowledgement (FR-MOD-13.6)', () => {
     );
     renderComponent(<TicketRules canEdit />);
     expect(
-      await screen.findByText('outside business hours → e-mail “Request received” to the player'),
+      await screen.findByText(
+        'Opened: outside business hours → e-mail “Request received” to the player',
+      ),
     ).toBeInTheDocument();
+  });
+});
+
+describe('TicketRules moments (AU-03 · tm 374)', () => {
+  beforeEach(() => {
+    api.get.mockImplementation(async (path: string) =>
+      path === '/settings/ticket-rules'
+        ? {
+            items: [
+              {
+                id: 'r2',
+                name: 'Solved tag',
+                on: 'status_changed',
+                conditions: { status_to: 'solved' },
+                actions: { add_tag: 'kapandi' },
+                enabled: true,
+                position: 0,
+              },
+            ],
+          }
+        : { items: [] },
+    );
+  });
+
+  it('posts the moment and the status reached, with no subject needed (FR-MOD-08.6.2)', async () => {
+    api.post.mockResolvedValue({});
+    renderComponent(<TicketRules canEdit />);
+    expect(
+      await screen.findByText('Status changed: status becomes Solved → add tag “kapandi”'),
+    ).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText('Rule name'), 'Çözülünce');
+    await userEvent.selectOptions(screen.getByLabelText('When'), 'status_changed');
+    // The opening's acknowledgement is not offered at a later moment.
+    expect(
+      within(screen.getByLabelText('Then')).queryByRole('option', { name: 'Send e-mail template' }),
+    ).toBeNull();
+    await userEvent.selectOptions(screen.getByLabelText('Status becomes'), 'solved');
+    await userEvent.selectOptions(screen.getByLabelText('Then'), 'tag');
+    await userEvent.type(screen.getByLabelText('Tag'), 'kapandi');
+    await userEvent.click(screen.getByRole('button', { name: 'Add rule' }));
+    expect(api.post).toHaveBeenCalledWith('/settings/ticket-rules', {
+      name: 'Çözülünce',
+      on: 'status_changed',
+      conditions: { status_to: 'solved' },
+      actions: { add_tag: 'kapandi' },
+    });
+  });
+
+  it('asks who wrote only for a message rule', async () => {
+    api.post.mockResolvedValue({});
+    renderComponent(<TicketRules canEdit />);
+    await screen.findByRole('button', { name: 'Add rule' });
+    expect(screen.queryByLabelText('Written by')).toBeNull();
+    await userEvent.selectOptions(screen.getByLabelText('When'), 'message_added');
+    expect(screen.queryByLabelText('Status becomes')).toBeNull();
+    await userEvent.type(screen.getByLabelText('Rule name'), 'Oyuncu yazınca');
+    await userEvent.selectOptions(screen.getByLabelText('Written by'), 'player');
+    await userEvent.type(screen.getByLabelText('Priority'), '8');
+    await userEvent.click(screen.getByRole('button', { name: 'Add rule' }));
+    expect(api.post).toHaveBeenCalledWith('/settings/ticket-rules', {
+      name: 'Oyuncu yazınca',
+      on: 'message_added',
+      conditions: { from_requester: true },
+      actions: { priority: 8 },
+    });
   });
 });
 

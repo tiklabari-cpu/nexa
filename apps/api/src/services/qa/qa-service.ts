@@ -897,17 +897,105 @@ export async function addQaReviewByHand(
     throw stateError('completed', 'This conversation was reviewed already.');
   }
 
+  await upsertQaReview(tx, tenant, {
+    chatId: chat.id,
+    threadId: thread.id,
+    brandId: chat.brandId,
+    teamId,
+    aiAgentId: agent.id,
+    reasons: ['manual'],
+    note: maskedComments(input.note) ?? null,
+  });
+  return tx.qaReview.findFirstOrThrow({ where: { threadId: thread.id } });
+}
+
+/**
+ * The bad-rating automation's QA step (AU-03 · tm 374 · 05 karar 1): a closed
+ * connection the AI answered alone that the player voted bad goes to the
+ * queue now, rather than with the next morning's sample — reason
+ * `low_bsat`, the sampler's own rule for it (no agent message, the newest
+ * vote bad). A connection a person answered is no AI review; a still-open
+ * one is the sampler's when it closed; one already reviewed is left alone.
+ * True when the queue holds it for this reason now.
+ */
+export async function queueBadRatingForQa(
+  tx: TenantClient,
+  tenant: TenantContext,
+  ref: { chatId: string; threadId: string },
+): Promise<boolean> {
+  const [row] = await tx.$queryRaw<
+    Array<{ group_id: bigint | null; access_group_id: bigint | null; brand_id: string | null }>
+  >`
+    SELECT t.group_id,
+           (SELECT ca.group_id FROM chat_access ca WHERE ca.chat_id = c.id
+             ORDER BY ca.group_id LIMIT 1) AS access_group_id,
+           c.brand_id::text AS brand_id
+      FROM threads t
+      JOIN chats c ON c.id = t.chat_id
+     WHERE t.id = ${ref.threadId} AND t.chat_id = ${ref.chatId}
+       AND NOT t.active
+       AND ${aiTookPart('t')}
+       AND NOT EXISTS (
+         SELECT 1 FROM events e WHERE e.thread_id = t.id AND e.author_type = 'agent')
+       AND COALESCE((
+         SELECT r.value = 'bad' FROM ratings r
+          WHERE r.thread_id = t.id ORDER BY r.created_at DESC LIMIT 1), false)`;
+  if (!row) return false;
+  const agent = await tx.aiAgent.findFirst({
+    where: { kind: 'ai_agent' },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    select: { id: true },
+  });
+  if (!agent) return false;
+  await upsertQaReview(tx, tenant, {
+    chatId: ref.chatId,
+    threadId: ref.threadId,
+    brandId: row.brand_id,
+    teamId: row.group_id ?? row.access_group_id,
+    aiAgentId: agent.id,
+    reasons: ['low_bsat'],
+    note: null,
+  });
+  const review = await tx.qaReview.findFirst({
+    where: { threadId: ref.threadId },
+    select: { reasons: true },
+  });
+  return review?.reasons.includes('low_bsat') ?? false;
+}
+
+/**
+ * Put a connection in the queue, or add the reasons to the review it has —
+ * unless that review is complete. The one writer for a review taken by hand
+ * and one a bad vote sent.
+ */
+async function upsertQaReview(
+  tx: TenantClient,
+  tenant: TenantContext,
+  input: {
+    chatId: string;
+    threadId: string;
+    brandId: string | null;
+    teamId: bigint | null;
+    aiAgentId: string;
+    reasons: QaReason[];
+    note: string | null;
+  },
+): Promise<void> {
   const settings = await readQaSettings(tx);
   const boundary = await readDayBoundary(tx);
   const rubric = await ensureActiveQaRubric(tx, tenant.licenseId);
   const conversation = await tx.aiConversation.findFirst({
-    where: { threadId: thread.id },
+    where: { threadId: input.threadId },
     select: { configVersionId: true },
   });
-  const reasons: QaReason[] = ['manual'];
+  const reasons = input.reasons;
   const priority = qaPriorityOf(reasons);
-  const excerpt = await readQaExcerpt(tx, thread.id);
-  const note = maskedComments(input.note) ?? null;
+  const excerpt = await readQaExcerpt(tx, input.threadId);
+  const note = input.note;
+  const chat = { id: input.chatId, brandId: input.brandId };
+  const thread = { id: input.threadId };
+  const agent = { id: input.aiAgentId };
+  const teamId = input.teamId;
   await tx.$executeRaw`
     INSERT INTO qa_reviews (
       id, license_id, chat_id, thread_id, ai_agent_id, config_version_id, team_id, brand_id,
@@ -930,7 +1018,6 @@ export async function addQaReviewByHand(
       comments = COALESCE(qa_reviews.comments, EXCLUDED.comments),
       updated_at = now()
     WHERE qa_reviews.status <> 'completed'`;
-  return tx.qaReview.findFirstOrThrow({ where: { threadId: thread.id } });
 }
 
 // ---------------------------------------------------------------------------

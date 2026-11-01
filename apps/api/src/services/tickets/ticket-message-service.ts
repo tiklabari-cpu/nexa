@@ -72,6 +72,7 @@ import {
   type TicketStatus,
 } from './ticket-service.js';
 import { refreshFirstResponseDue } from './ticket-sla.js';
+import { answerTicketEvent, type TicketSignals } from './ticket-events.js';
 
 /** One entry of a ticket's thread, as `GET /tickets/{id}/messages` returns it. */
 export interface TicketMessageView {
@@ -311,6 +312,8 @@ export class TicketMessageService {
     audit: AuditContext,
     ticketId: string,
     input: ComposerInput,
+    /** Where the message's webhook deliveries are collected for after the commit (AU-03). */
+    signals?: TicketSignals,
   ): Promise<WrittenTicketMessage> {
     const visibility = await resolveVisibility(tx, principal, 'write');
     await lockTicket(tx, ticketId);
@@ -411,11 +414,30 @@ export class TicketMessageService {
     if (nextStatus !== undefined) {
       await writeTicketChangeAudit(tx, audit, ticket.id, ticket, { status: nextStatus });
       await stopResolutionClock(tx, tenant, ticket, nextStatus);
-      // A note that solves an unanswered ticket stops its clock (and the
-      // reverse resumes it); a reply has already stopped it for good.
-      if (!firstResponse && nextStatus !== ticket.status) {
-        await refreshFirstResponseDue(tx, tenant, { id: ticket.id });
-      }
+    }
+    // One event (AU-03 · tm 374): the message, and the status it moved — the
+    // `message_added` rules and, on a move, the `updated`/`status_changed`
+    // ones, in one pass.
+    const event = await answerTicketEvent(
+      tx,
+      tenant,
+      {
+        before: ticket,
+        after: nextStatus !== undefined ? { ...ticket, status: nextStatus } : ticket,
+        message: { id, kind, authorType: author.type, createdAt: now },
+        at: now,
+      },
+      signals,
+    );
+    // A note that solves an unanswered ticket stops its clock (and the reverse
+    // resumes it); a reply has already stopped it for good. A rule's new
+    // priority moves the target.
+    if (
+      !firstResponse &&
+      ((nextStatus !== undefined && nextStatus !== ticket.status) ||
+        event.final.priority !== ticket.priority)
+    ) {
+      await refreshFirstResponseDue(tx, tenant, { id: ticket.id });
     }
 
     const names = author.id ? await accountNames(tx, [author.id]) : new Map<string, string>();
@@ -585,6 +607,12 @@ export class TicketMessageService {
     tenant: TenantContext,
     audit: AuditContext,
     input: CustomerMessageInput,
+    /**
+     * Where the message's webhook deliveries go (AU-03). Given only for an
+     * answer on a ticket that already stood: a new ticket's first message is
+     * the ticket arriving (`ticket_created` and the `created` rules).
+     */
+    signals?: TicketSignals,
   ): Promise<CustomerMessageResult> {
     let ticket = await lockedTicket(tx, input.ticketId);
     if (ticket.mergedIntoId) ticket = await lockedTicket(tx, ticket.mergedIntoId);
@@ -643,9 +671,30 @@ export class TicketMessageService {
     if (reopen) {
       await writeTicketChangeAudit(tx, audit, ticket.id, ticket, { status: 'open' });
     }
+    // The player's answer is an event of its own (AU-03 · tm 374) — the
+    // `message_added` rules (`from_requester`) and, when it reopened the
+    // ticket, the `updated`/`status_changed` ones. Only where the caller
+    // listens: a new ticket's first message is its opening, already answered.
+    const event = signals
+      ? await answerTicketEvent(
+          tx,
+          tenant,
+          {
+            before: ticket,
+            after: reopen ? { ...ticket, status: 'open' } : ticket,
+            message: { id, kind: 'customer_message', authorType: 'customer', createdAt: now },
+            at: now,
+          },
+          signals,
+        )
+      : null;
     // A solved ticket nobody answered resumes its first-response clock from its
-    // creation — reopening does not reset it (HD-05).
-    if (reopened && ticket.firstResponseAt === null) {
+    // creation — reopening does not reset it (HD-05). A rule's new priority
+    // moves the target.
+    if (
+      ticket.firstResponseAt === null &&
+      (reopened || (event !== null && event.final.priority !== ticket.priority))
+    ) {
       await refreshFirstResponseDue(tx, tenant, { id: ticket.id });
     }
 

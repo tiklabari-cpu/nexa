@@ -1288,7 +1288,7 @@ export const settings: Messages = {
   // Ticket rules — TicketRules.tsx
   'settings.ticketRules.title': 'Ticket rules',
   'settings.ticketRules.description':
-    'When a ticket is opened, the first matching rule sets its priority or applies a tag.',
+    'When a ticket is opened, updated, changes status or gets a message, the matching rules set its priority or apply a tag. A rule’s own change never runs the rules again.',
   'settings.ticketRules.loadError': 'Could not load ticket rules.',
   'settings.ticketRules.ruleNameLabel': 'Rule name',
   'settings.ticketRules.ruleNameError': 'Name the rule.',
@@ -1330,6 +1330,45 @@ export const settings: Messages = {
   'settings.ticketRules.insideHoursCondition': 'during business hours',
   'settings.ticketRules.sendTemplateAction': 'e-mail “{template}” to the player',
   'settings.ticketRules.sendTemplateActionUnknown': 'e-mail a template to the player',
+  'settings.ticketRules.onLabel': 'When',
+  'settings.ticketRules.on.created': 'Opened',
+  'settings.ticketRules.on.updated': 'Updated',
+  'settings.ticketRules.on.status_changed': 'Status changed',
+  'settings.ticketRules.on.message_added': 'Message added',
+  'settings.ticketRules.statusToLabel': 'Status becomes',
+  'settings.ticketRules.statusToAny': 'Any status',
+  'settings.ticketRules.status.open': 'Open',
+  'settings.ticketRules.status.pending': 'Pending',
+  'settings.ticketRules.status.solved': 'Solved',
+  'settings.ticketRules.status.closed': 'Closed',
+  'settings.ticketRules.status.spam': 'Spam',
+  'settings.ticketRules.authorLabel': 'Written by',
+  'settings.ticketRules.authorAny': 'Anyone',
+  'settings.ticketRules.authorPlayer': 'The player',
+  'settings.ticketRules.authorTeam': 'The team',
+  'settings.ticketRules.minPriorityLabel': 'Priority at least',
+  'settings.ticketRules.minPriorityError':
+    'Enter a whole number, 0 or more, for the minimum priority.',
+  'settings.ticketRules.statusToCondition': 'status becomes {status}',
+  'settings.ticketRules.fromPlayerCondition': 'the player wrote',
+  'settings.ticketRules.fromTeamCondition': 'the team wrote',
+  'settings.ticketRules.minPriorityCondition': 'priority {priority} or more',
+
+  // Bad-rating automation (AU-03) — ChatTimeout.tsx
+  'settings.badRating.heading': 'When a player rates a chat bad',
+  'settings.badRating.description':
+    'What happens the moment a player votes a conversation bad. A comment added to the vote later does not run it again.',
+  'settings.badRating.notify_team_leads.label': 'Tell the team leads',
+  'settings.badRating.notify_team_leads.hint':
+    'The leads of the conversation’s team see a notice in the panel; a team nobody leads, its admins.',
+  'settings.badRating.add_to_qa_queue.label': 'Send it to AI quality review',
+  'settings.badRating.add_to_qa_queue.hint':
+    'Only a closed conversation the AI answered alone; one a person answered is not the AI’s to review.',
+  'settings.badRating.open_ticket.label': 'Open a follow-up ticket',
+  'settings.badRating.open_ticket.hint':
+    'A ticket in the conversation’s team, unless the conversation already has an unresolved one.',
+  'settings.badRating.webhookNote':
+    'To send it to your own systems, subscribe a webhook to “Chat rated” under Developers.',
 
   // Two-factor authentication — TwoFactor.tsx
   'settings.twoFactor.title': 'Two-factor authentication',

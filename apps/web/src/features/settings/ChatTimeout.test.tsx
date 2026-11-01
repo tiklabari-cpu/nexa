@@ -371,6 +371,23 @@ describe('ChatTimeout day boundary (ID-04)', () => {
     ).toBeInTheDocument();
   });
 
+  it('reads the bad-rating switches with the defaults and saves only the one that moved (AU-03 · tm 374)', async () => {
+    renderChatTimeout();
+    const leads = await screen.findByRole('checkbox', { name: /Tell the team leads/ });
+    expect(leads).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Send it to AI quality review/ })).toBeChecked();
+    const ticket = screen.getByRole('checkbox', { name: /Open a follow-up ticket/ });
+    expect(ticket).not.toBeChecked();
+
+    await userEvent.click(ticket);
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(putBodies).toHaveLength(1));
+    expect(putBodies[0]).toEqual({
+      chat_timeout_seconds: null,
+      bad_rating_actions: { open_ticket: true },
+    });
+  });
+
   it('typing in the search box alone does not make the form dirty', async () => {
     renderChatTimeout();
     await screen.findByLabelText('Time zone');

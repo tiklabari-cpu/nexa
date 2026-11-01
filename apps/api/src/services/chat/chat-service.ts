@@ -5358,10 +5358,18 @@ export class ChatService {
  * Who hears that a team's connection waits unanswered (WG-03 · tm 340.2): the
  * team's leads (RL-01 · `group_agents.is_lead`), or — a team nobody leads —
  * the workspace's admins and up, so the notice reaches someone. A suspended
- * member hears nothing.
+ * member hears nothing. No team at all (a bad vote on a connection no team
+ * held, AU-03 · tm 374) goes to the admins and up the same way.
  */
-async function teamLeads(tx: TenantClient, licenseId: bigint, groupId: bigint): Promise<string[]> {
-  const leads = await tx.$queryRaw<Array<{ agent_id: string }>>`
+export async function teamLeads(
+  tx: TenantClient,
+  licenseId: bigint,
+  groupId: bigint | null,
+): Promise<string[]> {
+  const leads =
+    groupId === null
+      ? []
+      : await tx.$queryRaw<Array<{ agent_id: string }>>`
     SELECT ga.agent_id::text AS agent_id
       FROM group_agents ga
       JOIN agent_memberships m ON m.license_id = ga.license_id AND m.agent_id = ga.agent_id

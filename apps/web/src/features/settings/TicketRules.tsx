@@ -8,6 +8,11 @@
  * "koşul+eylem zorunlu" KK): the action value is required, and so is the subject
  * fragment unless the rule is scoped by business hours instead.
  *
+ * Since AU-03 (tm 374) a rule has a moment ("When": opened, updated, status
+ * changed, message added) and the conditions only a later moment carries — the
+ * status reached, who wrote — beside a minimum priority. An acknowledgement
+ * template is offered for the opening only, as the server requires.
+ *
  * Its own file rather than a section inside `SettingsPage.tsx` (I18N-j, tm
  * 133.10) — `NotificationSettings.tsx`'s precedent (I18N-e, tm 133.5): the i18n
  * coverage sentinel claims a whole *file* as translated. `SettingsForms.test.tsx`
@@ -15,7 +20,14 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
-import { renderTemplate, type TemplateContext } from '@siyahtus/types';
+import {
+  TICKET_RULE_EVENTS,
+  TICKET_STATUSES,
+  renderTemplate,
+  type TemplateContext,
+  type TicketRuleEvent,
+  type TicketStatus,
+} from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { useSettingsLeaveGuard } from '../../components/settings/FormSaveBar.js';
 import { useConfirm } from '../../components/ui/index.js';
@@ -30,10 +42,14 @@ import { optimisticCacheUpdate } from '../../lib/optimistic.js';
 interface TicketRule {
   id: string;
   name: string;
+  on: TicketRuleEvent;
   conditions: {
     subject_contains?: string;
     source?: 'chat' | 'email';
     outside_business_hours?: boolean;
+    status_to?: TicketStatus;
+    priority_at_least?: number;
+    from_requester?: boolean;
   };
   actions: {
     assign_agent_id?: string;
@@ -56,6 +72,12 @@ interface EmailTemplate {
 
 /** Which business-hours condition the form adds: none, out of hours, or in hours. */
 type HoursChoice = 'any' | 'out' | 'in';
+
+/** Who wrote the message a `message_added` rule asks about: anyone, the player, the team. */
+type AuthorChoice = 'any' | 'player' | 'team';
+
+/** The moments that can see a status move (the server refuses `status_to` elsewhere). */
+const SEES_STATUS: ReadonlySet<TicketRuleEvent> = new Set(['updated', 'status_changed']);
 
 /**
  * What the preview fills a template with. `ticket.expected_response` is empty
@@ -92,10 +114,34 @@ export function TicketRules({ canEdit }: { canEdit: boolean }): ReactElement {
   // The business-hours condition lives beside the form rather than in it: it
   // decides whether the subject fragment is still required.
   const [hours, setHours] = useState<HoursChoice>('any');
+  // The moment and the conditions only some moments carry (AU-03), beside the
+  // form for the same reason: each one can stand in for the subject fragment.
+  const [on, setOn] = useState<TicketRuleEvent>('created');
+  const [statusTo, setStatusTo] = useState<TicketStatus | ''>('');
+  const [author, setAuthor] = useState<AuthorChoice>('any');
+  const [minPriority, setMinPriority] = useState('');
+  const seesStatus = SEES_STATUS.has(on);
+  const seesMessage = on === 'message_added';
+  const minPriorityValue = minPriority.trim() === '' ? null : Number(minPriority);
+  const minPriorityValid =
+    minPriorityValue === null || (Number.isInteger(minPriorityValue) && minPriorityValue >= 0);
+  const otherCondition =
+    hours !== 'any' ||
+    (seesStatus && statusTo !== '') ||
+    (seesMessage && author !== 'any') ||
+    (minPriorityValue !== null && minPriorityValid);
+  const resetMoment = () => {
+    setHours('any');
+    setOn('created');
+    setStatusTo('');
+    setAuthor('any');
+    setMinPriority('');
+  };
 
   const create = useMutation({
     mutationFn: (body: {
       name: string;
+      on: TicketRuleEvent;
       conditions: TicketRule['conditions'];
       actions: TicketRule['actions'];
     }) => api.post<TicketRule>('/settings/ticket-rules', body),
@@ -127,16 +173,24 @@ export function TicketRules({ canEdit }: { canEdit: boolean }): ReactElement {
     initial: { name: '', subject_contains: '', action_type: 'priority', value: '' },
     validators: {
       name: required(t('settings.ticketRules.ruleNameError')),
-      // A rule scoped by business hours needs no subject text as well.
-      subject_contains:
-        hours === 'any' ? required(t('settings.ticketRules.subjectError')) : () => null,
+      // A rule scoped by another condition needs no subject text as well.
+      subject_contains: otherCondition
+        ? () => null
+        : required(t('settings.ticketRules.subjectError')),
       value: required(t('settings.ticketRules.valueError')),
     },
     onSubmit: async (values, { setSubmitError, setFieldError, reset }) => {
       const subject = values.subject_contains.trim();
+      if (!minPriorityValid) {
+        setSubmitError(t('settings.ticketRules.minPriorityError'));
+        return;
+      }
       const conditions: TicketRule['conditions'] = {
         ...(subject ? { subject_contains: subject } : {}),
         ...(hours === 'any' ? {} : { outside_business_hours: hours === 'out' }),
+        ...(seesStatus && statusTo !== '' ? { status_to: statusTo } : {}),
+        ...(seesMessage && author !== 'any' ? { from_requester: author === 'player' } : {}),
+        ...(minPriorityValue !== null ? { priority_at_least: minPriorityValue } : {}),
       };
       let actions: TicketRule['actions'];
       if (values.action_type === 'send_template') {
@@ -152,8 +206,8 @@ export function TicketRules({ canEdit }: { canEdit: boolean }): ReactElement {
         actions = { add_tag: values.value.trim() };
       }
       try {
-        await create.mutateAsync({ name: values.name.trim(), conditions, actions });
-        setHours('any');
+        await create.mutateAsync({ name: values.name.trim(), on, conditions, actions });
+        resetMoment();
         reset();
       } catch (error) {
         setSubmitError(t(errorMessageKey(error)));
@@ -196,6 +250,32 @@ export function TicketRules({ canEdit }: { canEdit: boolean }): ReactElement {
               className="flex flex-col gap-3 border-b border-border p-4"
             >
               <div className="flex flex-wrap items-start gap-3">
+                <label htmlFor="rule-on" className="flex w-44 flex-col gap-1">
+                  <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+                    {t('settings.ticketRules.onLabel')}
+                  </span>
+                  <select
+                    id="rule-on"
+                    value={on}
+                    onChange={(event) => {
+                      const next = event.target.value as TicketRuleEvent;
+                      setOn(next);
+                      // An acknowledgement belongs to the opening only.
+                      if (next !== 'created' && form.values.action_type === 'send_template') {
+                        form.setValue('action_type', 'priority');
+                        form.setValue('value', '');
+                      }
+                    }}
+                    className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
+                  >
+                    {TICKET_RULE_EVENTS.map((moment) => (
+                      <option key={moment} value={moment}>
+                        {t(`settings.ticketRules.on.${moment}`)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
                 <label htmlFor="rule-name" className="flex w-40 flex-col gap-1">
                   <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
                     {t('settings.ticketRules.ruleNameLabel')}
@@ -248,6 +328,60 @@ export function TicketRules({ canEdit }: { canEdit: boolean }): ReactElement {
                   </select>
                 </label>
 
+                {seesStatus && (
+                  <label htmlFor="rule-status-to" className="flex w-40 flex-col gap-1">
+                    <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+                      {t('settings.ticketRules.statusToLabel')}
+                    </span>
+                    <select
+                      id="rule-status-to"
+                      value={statusTo}
+                      onChange={(event) => setStatusTo(event.target.value as TicketStatus | '')}
+                      className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
+                    >
+                      <option value="">{t('settings.ticketRules.statusToAny')}</option>
+                      {TICKET_STATUSES.map((status) => (
+                        <option key={status} value={status}>
+                          {t(`settings.ticketRules.status.${status}`)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+
+                {seesMessage && (
+                  <label htmlFor="rule-author" className="flex w-40 flex-col gap-1">
+                    <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+                      {t('settings.ticketRules.authorLabel')}
+                    </span>
+                    <select
+                      id="rule-author"
+                      value={author}
+                      onChange={(event) => setAuthor(event.target.value as AuthorChoice)}
+                      className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
+                    >
+                      <option value="any">{t('settings.ticketRules.authorAny')}</option>
+                      <option value="player">{t('settings.ticketRules.authorPlayer')}</option>
+                      <option value="team">{t('settings.ticketRules.authorTeam')}</option>
+                    </select>
+                  </label>
+                )}
+
+                <label htmlFor="rule-min-priority" className="flex w-28 flex-col gap-1">
+                  <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+                    {t('settings.ticketRules.minPriorityLabel')}
+                  </span>
+                  <input
+                    id="rule-min-priority"
+                    type="number"
+                    min={0}
+                    value={minPriority}
+                    onChange={(event) => setMinPriority(event.target.value)}
+                    aria-invalid={minPriorityValid ? undefined : true}
+                    className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
+                  />
+                </label>
+
                 <label htmlFor="rule-action" className="flex w-44 flex-col gap-1">
                   <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
                     {t('settings.ticketRules.thenLabel')}
@@ -265,9 +399,11 @@ export function TicketRules({ canEdit }: { canEdit: boolean }): ReactElement {
                   >
                     <option value="priority">{t('settings.ticketRules.setPriorityOption')}</option>
                     <option value="tag">{t('settings.ticketRules.addTagOption')}</option>
-                    <option value="send_template">
-                      {t('settings.ticketRules.sendTemplateOption')}
-                    </option>
+                    {on === 'created' && (
+                      <option value="send_template">
+                        {t('settings.ticketRules.sendTemplateOption')}
+                      </option>
+                    )}
                   </select>
                 </label>
 
@@ -433,6 +569,26 @@ function describeTicketRule(
   templates: readonly EmailTemplate[],
 ): string {
   const when: string[] = [];
+  if (rule.conditions.status_to)
+    when.push(
+      t('settings.ticketRules.statusToCondition', {
+        status: t(`settings.ticketRules.status.${rule.conditions.status_to}`),
+      }),
+    );
+  if (rule.conditions.from_requester != null)
+    when.push(
+      t(
+        rule.conditions.from_requester
+          ? 'settings.ticketRules.fromPlayerCondition'
+          : 'settings.ticketRules.fromTeamCondition',
+      ),
+    );
+  if (rule.conditions.priority_at_least != null)
+    when.push(
+      t('settings.ticketRules.minPriorityCondition', {
+        priority: rule.conditions.priority_at_least,
+      }),
+    );
   if (rule.conditions.subject_contains)
     when.push(
       t('settings.ticketRules.subjectContains', { text: rule.conditions.subject_contains }),
@@ -464,5 +620,6 @@ function describeTicketRule(
     );
   }
 
-  return `${when.length ? when.join(t('settings.andJoiner')) : t('settings.ticketRules.anyTicket')} → ${then.length ? then.join(', ') : t('settings.ticketRules.doNothing')}`;
+  const moment = t(`settings.ticketRules.on.${rule.on ?? 'created'}`);
+  return `${moment}: ${when.length ? when.join(t('settings.andJoiner')) : t('settings.ticketRules.anyTicket')} → ${then.length ? then.join(', ') : t('settings.ticketRules.doNothing')}`;
 }

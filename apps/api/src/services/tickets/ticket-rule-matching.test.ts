@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { hasAction, hasCondition, matchesTicketRule } from './ticket-rule-matching.js';
+import {
+  hasAction,
+  hasCondition,
+  matchesTicketRule,
+  ruleShapeProblem,
+} from './ticket-rule-matching.js';
 
 describe('hasCondition', () => {
   it('is true only when a condition carries something to match on', () => {
@@ -73,5 +78,66 @@ describe('matchesTicketRule', () => {
     // The engine only ever sees validated rules, but a predicate with nothing
     // set must fire at no one rather than everyone.
     expect(matchesTicketRule({}, ticket)).toBe(false);
+  });
+});
+
+describe('the later moments (AU-03 · tm 374)', () => {
+  const ticket = { subject: 'Withdrawal pending', source: 'manual' as const, priority: 4 };
+
+  it('counts the new conditions as conditions', () => {
+    expect(hasCondition({ status_to: 'solved' })).toBe(true);
+    expect(hasCondition({ priority_at_least: 0 })).toBe(true);
+    expect(hasCondition({ from_requester: false })).toBe(true);
+  });
+
+  it('matches a status only as the transition to it (FR-MOD-08.6.2)', () => {
+    expect(matchesTicketRule({ status_to: 'solved' }, { ...ticket, statusTo: 'solved' })).toBe(
+      true,
+    );
+    expect(matchesTicketRule({ status_to: 'solved' }, { ...ticket, statusTo: 'pending' })).toBe(
+      false,
+    );
+    // No status moved in this event: a solved ticket edited again is no match.
+    expect(matchesTicketRule({ status_to: 'solved' }, ticket)).toBe(false);
+  });
+
+  it('compares the priority after the event, and who wrote the message', () => {
+    expect(matchesTicketRule({ priority_at_least: 4 }, ticket)).toBe(true);
+    expect(matchesTicketRule({ priority_at_least: 5 }, ticket)).toBe(false);
+    expect(matchesTicketRule({ priority_at_least: 0 }, { subject: 'x', source: 'chat' })).toBe(
+      false,
+    );
+    expect(matchesTicketRule({ from_requester: true }, { ...ticket, fromRequester: true })).toBe(
+      true,
+    );
+    expect(matchesTicketRule({ from_requester: true }, { ...ticket, fromRequester: false })).toBe(
+      false,
+    );
+    expect(matchesTicketRule({ from_requester: false }, ticket)).toBe(false);
+  });
+
+  it('refuses a condition or action the moment never has', () => {
+    expect(
+      ruleShapeProblem('status_changed', { status_to: 'solved' }, { add_tag: 'x' }),
+    ).toBeNull();
+    expect(ruleShapeProblem('updated', { status_to: 'solved' }, { add_tag: 'x' })).toBeNull();
+    expect(ruleShapeProblem('created', { status_to: 'solved' }, { add_tag: 'x' })).toMatch(
+      /status_to/,
+    );
+    expect(ruleShapeProblem('message_added', { status_to: 'open' }, { add_tag: 'x' })).toMatch(
+      /status_to/,
+    );
+    expect(ruleShapeProblem('updated', { from_requester: true }, { add_tag: 'x' })).toMatch(
+      /from_requester/,
+    );
+    expect(
+      ruleShapeProblem('message_added', { from_requester: true }, { add_tag: 'x' }),
+    ).toBeNull();
+    expect(
+      ruleShapeProblem('updated', { subject_contains: 'a' }, { send_template_id: 'tpl' }),
+    ).toMatch(/send_template_id/);
+    expect(
+      ruleShapeProblem('created', { subject_contains: 'a' }, { send_template_id: 'tpl' }),
+    ).toBeNull();
   });
 });

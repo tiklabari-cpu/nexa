@@ -26,6 +26,7 @@
  * comes back.
  */
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import { reopenCanceledSubscription } from './subscription-cancel.js';
 
 /** Licence states a completed purchase lifts to `active`. */
 const PAYABLE_STATES = ['trialing', 'read_only', 'past_due'] as const;
@@ -79,5 +80,8 @@ export async function activateIfPaid(
     where: { id: tenant.licenseId },
     data: { status: 'active', trialEndsAt: null },
   });
+  // A subscription that had ended (tm 384) is bought again: its export window
+  // and deletion date go with the read-only state.
+  await reopenCanceledSubscription(tx, tenant.licenseId);
   return { activated: true, from: license.status };
 }

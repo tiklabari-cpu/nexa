@@ -360,4 +360,47 @@ export const billing: Messages = {
   'billing.payments.history.statusValue.canceled': 'Tamamlanmadı',
   'billing.payments.history.statusValue.disputed': 'İtiraz edildi',
   'billing.payments.history.term': '{from} – {to} dönemini kapsar',
+
+  // Aboneliği iptal etme — CancelSubscription.tsx (tm 384)
+  'billing.cancel.title': 'Aboneliği iptal et',
+  'billing.cancel.description':
+    'Abonelik içinde bulunulan dönemin sonunda biter. O zamana kadar her şey çalışmaya devam eder.',
+  'billing.cancel.open': 'Aboneliği iptal et',
+  'billing.cancel.scheduled':
+    'Abonelik {date} tarihinde sona erecek. O zamana kadar her şey çalışmaya devam eder.',
+  'billing.cancel.resume': 'İptali geri al',
+  'billing.cancel.ended.title': 'Abonelik sona erdi',
+  'billing.cancel.ended.exportUntil':
+    'Çalışma alanı salt okunur. Verileri {date} tarihine kadar okuyabilir ve dışa aktarabilirsiniz; bu tarihten sonra giriş yapılamaz.',
+  'billing.cancel.ended.deletionAt':
+    'Veriler, çalışma alanının saklama ayarına göre {date} tarihinde silinir.',
+  'billing.cancel.ended.kept':
+    'Çalışma alanının saklama ayarı "sınırsız" olduğu için veriler kendiliğinden silinmez.',
+  'billing.cancel.ended.exportReports': 'Raporları dışa aktar',
+  'billing.cancel.ended.exportArchive': 'Konuşmaları arşivden indir',
+  'billing.cancel.dialog.title': 'Abonelik iptal edilsin mi?',
+  'billing.cancel.dialog.reason': 'Neden iptal ediyorsunuz?',
+  'billing.cancel.dialog.consequences': 'Bundan sonra ne olur',
+  'billing.cancel.dialog.untilPeriodEnd':
+    'İçinde bulunulan dönemin sonuna kadar her şey çalışmaya devam eder.',
+  'billing.cancel.dialog.readOnly': 'Dönem bitince çalışma alanı salt okunur olur.',
+  'billing.cancel.dialog.export':
+    'Bundan sonraki 30 gün boyunca verileri okuyabilir ve dışa aktarabilirsiniz.',
+  'billing.cancel.dialog.deletion':
+    'Ardından veriler çalışma alanının saklama ayarına göre silinir (daha uzun saklama seçtiyseniz daha sonra).',
+  'billing.cancel.dialog.noRefund': 'Dönemin kalan kısmı için iade yapılmaz.',
+  'billing.cancel.dialog.confirm': 'Onaylamak için {name} yazın',
+  'billing.cancel.dialog.keep': 'Aboneliği koru',
+  'billing.cancel.dialog.submit': 'Dönem sonunda iptal et',
+  'billing.cancel.reason.too_expensive': 'Fiyatı yüksek',
+  'billing.cancel.reason.missing_features': 'İhtiyacımız olan bir özellik eksik',
+  'billing.cancel.reason.switching_provider': 'Başka bir ürüne geçiyoruz',
+  'billing.cancel.reason.not_using': 'Yeterince kullanmıyoruz',
+  'billing.cancel.reason.business_closed': 'İşimizi kapatıyoruz ya da ara veriyoruz',
+  'billing.cancel.reason.other': 'Başka bir neden',
+  'billing.cancel.error.confirmation': 'Yazılan ad çalışma alanının adıyla eşleşmiyor.',
+  'billing.cancel.error.ended':
+    'Abonelik zaten sona erdi. Yeniden abone olmak yeni bir satın almadır.',
+  'billing.cancel.error.noSubscription': 'Bu çalışma alanının iptal edilecek aboneliği yok.',
+  'billing.cancel.error.generic': 'Değişiklik kaydedilemedi. Yeniden deneyin.',
 };

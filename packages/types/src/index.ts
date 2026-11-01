@@ -106,3 +106,4 @@ export * from './queue-report.js';
 export * from './igaming-platforms.js';
 export * from './billing-payments.js';
 export * from './billing-profile.js';
+export * from './subscription-cancel.js';

@@ -22,6 +22,18 @@ function subscription(overrides: Partial<Subscription> = {}): Subscription {
     estimated_total_cents: 49500,
     annual_savings_cents: 0,
     provider: 'mock',
+    cancellation: {
+      scheduled: false,
+      reason: null,
+      requested_at: null,
+      takes_effect_at: null,
+      ended_at: null,
+      export_until: null,
+      data_deletion_at: null,
+      can_cancel: true,
+      can_resume: false,
+      workspace_name: 'Acme',
+    },
     ...overrides,
   };
 }

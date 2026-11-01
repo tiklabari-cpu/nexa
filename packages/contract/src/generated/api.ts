@@ -12222,6 +12222,67 @@ export interface paths {
     patch: operations['updateSubscription'];
     trace?: never;
   };
+  '/billing/subscription/cancel': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Cancel the subscription at the end of its period
+     * @description Sets the subscription to end with its period. Until then everything
+     *     works as before; nothing is refunded. When the period ends the
+     *     subscription is `canceled` and the workspace read-only — readable and
+     *     exportable for 30 days, closed after that, and deleted when its
+     *     retention setting says (the export window, or the longer conversation
+     *     retention the workspace chose; never with `unlimited`). A subscription
+     *     with no paid term on file ends with the calendar month (UTC).
+     *
+     *     `confirmation` is the workspace's name, typed by the owner (case and
+     *     surrounding spaces do not matter).
+     *
+     *     **Owner only** (K7) — an admin or vice owner gets `403`. Writable while
+     *     the workspace is read-only. Idempotent: cancelling again changes nothing.
+     *     `400 validation` with `error.details.reason`: `confirmation_mismatch`,
+     *     `no_subscription` (a trial has nothing to cancel) or `subscription_ended`.
+     *     The public pilot refuses it like every billing write.
+     */
+    post: operations['cancelSubscription'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/subscription/resume': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Take the cancellation back
+     * @description Clears a cancellation before the period ends; the subscription renews as
+     *     usual. After the period ended it is refused (`400 validation`,
+     *     `error.details.reason: subscription_ended`) — subscribing again is a new
+     *     purchase. `no_subscription` on a trial. Resuming a subscription that is
+     *     not cancelled changes nothing.
+     *
+     *     **Owner only** (K7), writable while read-only.
+     */
+    post: operations['resumeSubscription'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/billing/usage': {
     parameters: {
       query?: never;
@@ -22738,6 +22799,45 @@ export interface components {
       annual_savings_cents?: number;
       /** @enum {string} */
       provider: 'mock';
+      cancellation: components['schemas']['SubscriptionCancellation'];
+    };
+    /**
+     * @description Why the owner cancels (tm 384 · BL-03).
+     * @enum {string}
+     */
+    CancelReason:
+      | 'too_expensive'
+      | 'missing_features'
+      | 'switching_provider'
+      | 'not_using'
+      | 'business_closed'
+      | 'other';
+    /**
+     * @description The owner's cancellation (tm 384 · BL-03). `scheduled`: the subscription
+     *     ends at `takes_effect_at` and can be taken back until then. Once the
+     *     period ended: `ended_at`, read-only and exportable until `export_until`,
+     *     deleted at `data_deletion_at` (null when the workspace keeps its
+     *     conversations without limit).
+     */
+    SubscriptionCancellation: {
+      scheduled: boolean;
+      /** @description A `CancelReason`; null for a cancellation the SiyahTuş team made. */
+      reason: string | null;
+      /** Format: date-time */
+      requested_at: string | null;
+      /** Format: date-time */
+      takes_effect_at: string | null;
+      /** Format: date-time */
+      ended_at: string | null;
+      /** Format: date-time */
+      export_until: string | null;
+      /** Format: date-time */
+      data_deletion_at: string | null;
+      /** @description A subscription exists, has not ended and is not already cancelled. */
+      can_cancel: boolean;
+      can_resume: boolean;
+      /** @description What `confirmation` has to match. */
+      workspace_name: string;
     };
     /**
      * @description A capability a commercial tier unlocks (FR-MOD-11.5). Closed
@@ -43884,6 +43984,62 @@ export interface operations {
     };
     responses: {
       /** @description Updated subscription */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SubscriptionView'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  cancelSubscription: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          reason: components['schemas']['CancelReason'];
+          /** @description The workspace's name. */
+          confirmation: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The subscription, with `cancellation.scheduled` true */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SubscriptionView'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  resumeSubscription: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The subscription, with `cancellation.scheduled` false */
       200: {
         headers: {
           [name: string]: unknown;

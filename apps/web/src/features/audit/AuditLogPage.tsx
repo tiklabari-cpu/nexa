@@ -226,6 +226,9 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
       'billing.payment_disputed',
       'billing.license_status_changed',
       'billing.crypto_request_updated',
+      'billing.subscription_cancel_scheduled',
+      'billing.subscription_resumed',
+      'billing.subscription_ended',
     ],
   },
   {

@@ -365,4 +365,46 @@ export const billing: Messages = {
   'billing.payments.history.statusValue.canceled': 'Not completed',
   'billing.payments.history.statusValue.disputed': 'Disputed',
   'billing.payments.history.term': 'Covers {from} – {to}',
+
+  // Cancelling the subscription — CancelSubscription.tsx (tm 384)
+  'billing.cancel.title': 'Cancel subscription',
+  'billing.cancel.description':
+    'The subscription ends with the current period. Everything keeps working until then.',
+  'billing.cancel.open': 'Cancel subscription',
+  'billing.cancel.scheduled':
+    'The subscription ends on {date}. Everything keeps working until then.',
+  'billing.cancel.resume': 'Undo cancellation',
+  'billing.cancel.ended.title': 'The subscription has ended',
+  'billing.cancel.ended.exportUntil':
+    'The workspace is read-only. You can read and export its data until {date}; after that nobody can sign in.',
+  'billing.cancel.ended.deletionAt':
+    "Following the workspace's retention setting, its data is deleted on {date}.",
+  'billing.cancel.ended.kept':
+    'The workspace keeps its conversations without limit, so its data is not deleted automatically.',
+  'billing.cancel.ended.exportReports': 'Export reports',
+  'billing.cancel.ended.exportArchive': 'Download conversations from the archive',
+  'billing.cancel.dialog.title': 'Cancel the subscription?',
+  'billing.cancel.dialog.reason': 'Why are you cancelling?',
+  'billing.cancel.dialog.consequences': 'What happens next',
+  'billing.cancel.dialog.untilPeriodEnd':
+    'Everything keeps working until the end of the current period.',
+  'billing.cancel.dialog.readOnly': 'When the period ends, the workspace becomes read-only.',
+  'billing.cancel.dialog.export': 'You can read and export its data for 30 days after that.',
+  'billing.cancel.dialog.deletion':
+    'Then the data is deleted following the workspace’s retention setting (longer if you chose a longer retention).',
+  'billing.cancel.dialog.noRefund': 'The rest of the period is not refunded.',
+  'billing.cancel.dialog.confirm': 'Type {name} to confirm',
+  'billing.cancel.dialog.keep': 'Keep subscription',
+  'billing.cancel.dialog.submit': 'Cancel at period end',
+  'billing.cancel.reason.too_expensive': 'It is too expensive',
+  'billing.cancel.reason.missing_features': 'A feature we need is missing',
+  'billing.cancel.reason.switching_provider': 'We are moving to another product',
+  'billing.cancel.reason.not_using': 'We do not use it enough',
+  'billing.cancel.reason.business_closed': 'Our business is closing or pausing',
+  'billing.cancel.reason.other': 'Something else',
+  'billing.cancel.error.confirmation': 'The name does not match the workspace name.',
+  'billing.cancel.error.ended':
+    'The subscription has already ended. Subscribing again is a new purchase.',
+  'billing.cancel.error.noSubscription': 'This workspace has no subscription to cancel.',
+  'billing.cancel.error.generic': 'The change could not be saved. Try again.',
 };

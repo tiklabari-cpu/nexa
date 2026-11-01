@@ -36,6 +36,7 @@ import { enumLabel } from '../../lib/enum-label.js';
 import { cardLast4, compose, FieldError, required, useForm } from '../../lib/form.js';
 import { newAttemptKey } from './attempt-key.js';
 import { BillingProfileSection } from './BillingProfile.js';
+import { CancelSubscriptionSection, type SubscriptionCancellation } from './CancelSubscription.js';
 import {
   PaymentHistorySection,
   PaymentOptionsSection,
@@ -80,6 +81,8 @@ interface Subscription {
   estimated_total_cents: number;
   annual_savings_cents: number;
   provider: string;
+  /** The owner's cancellation (tm 384). Optional so an older server's view still renders. */
+  cancellation?: SubscriptionCancellation;
 }
 
 /** One tier of the plan catalogue (FR-MOD-10.1.1), from `/billing/entitlements`. */
@@ -528,6 +531,10 @@ export function BillingPage(): ReactElement {
       <BillingProfileSection canEdit={canManage} />
 
       <InvoicesSection />
+
+      {sub.cancellation && (
+        <CancelSubscriptionSection cancellation={sub.cancellation} canManage={canManage} />
+      )}
 
       <p className="text-2xs text-content-tertiary">
         {t('billing.page.providerNotice', {

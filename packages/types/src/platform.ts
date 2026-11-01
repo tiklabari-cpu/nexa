@@ -359,7 +359,8 @@ export const IMPERSONATION_FORBIDDEN_PATHS: readonly ImpersonationForbiddenRule[
       /^\/billing\/(payments\/(swift|stripe\/checkout)|crypto-requests(\/[^/]+\/(txid|cancel))?)$/,
     category: 'payment',
   },
-  { pattern: /^\/billing\/subscription$/, category: 'subscription' },
+  // The owner's cancellation and its resume (tm 384) change the subscription too.
+  { pattern: /^\/billing\/subscription(\/(cancel|resume))?$/, category: 'subscription' },
   { pattern: /^\/settings\/compliance\/baa$/, category: 'baa' },
   { pattern: /^\/customers\/[^/]+\/erase$/, category: 'data_deletion' },
   { pattern: /^\/settings\/retention$/, category: 'data_deletion' },

@@ -50,6 +50,7 @@ import { usageConfig } from './billing-views.js';
 import { INVOICE_CURRENCY } from './invoice-service.js';
 import { currentPeriod, usageSummary } from './metering.js';
 import type { PaymentProvider } from './payment-provider.js';
+import { reopenedFields } from './subscription-cancel.js';
 import {
   priceSeats,
   pricingForPlan,
@@ -399,6 +400,9 @@ export async function settlePayment(
     await tx.subscription.update({
       where: { id: subscription.id },
       data: {
+        // A subscription that had ended (tm 384) is bought again: the
+        // cancellation and its dates go.
+        ...reopenedFields(subscription),
         status: 'active',
         currentPeriodEnd: termEnd,
         trialEndsAt: null,

@@ -348,6 +348,7 @@ describe('buildSchedulerJobs', () => {
         sensitiveFiles: 0,
         mailFiles: 0,
         auditEntries: 0,
+        canceledWorkspaces: 0,
       });
     });
 
@@ -399,7 +400,14 @@ describe('buildSchedulerJobs', () => {
         (j) => j.name === 'invoice_close',
       );
       const outcome = await job?.run(context());
-      expect(outcome?.counts).toEqual({ tenants: 0, issued: 0, reconstructed: 0, skipped: 0 });
+      expect(outcome?.counts).toEqual({
+        tenants: 0,
+        issued: 0,
+        reconstructed: 0,
+        skipped: 0,
+        subscriptions_ended: 0,
+        workspaces_closed: 0,
+      });
     });
 
     it('billing_dunning on the mock processor charges nothing and reports zeros', async () => {

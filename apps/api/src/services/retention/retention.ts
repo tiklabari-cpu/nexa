@@ -142,6 +142,12 @@ export interface RetentionReport {
     sensitiveFiles: number;
     mailFiles: number;
     auditEntries: number;
+    /**
+     * Workspaces deleted whole because their subscription ended and its
+     * deletion date passed (tm 384 · BL-03, `subscription_cancel_purge`).
+     * Counted, not deleted, in a dry-run.
+     */
+    canceledWorkspaces: number;
   };
 }
 
@@ -188,6 +194,10 @@ export class RetentionRunner {
     const now = options.now ?? new Date();
     const startedAt = now.toISOString();
 
+    // First the workspaces that go whole, so the sweep below does not spend a
+    // pass on rows about to be deleted with their licence.
+    const canceledWorkspaces = await this.#purgeCanceledWorkspaces(dryRun);
+
     const tenants = await this.#listTenants();
     const results: TenantPruneResult[] = [];
     for (const tenant of tenants) {
@@ -225,8 +235,34 @@ export class RetentionRunner {
         sensitiveFiles: results.reduce((sum, r) => sum + r.sensitiveFiles, 0),
         mailFiles,
         auditEntries,
+        canceledWorkspaces,
       },
     };
+  }
+
+  /**
+   * A canceled workspace whose deletion date has passed (tm 384 · BL-03): the
+   * export window, or the longer retention it chose. Deleted whole through
+   * `subscription_cancel_purge`, which re-checks under the licence lock and
+   * reads the real clock — never `now` from here — and goes through the
+   * platform's own purge, so "delete a workspace" has one definition. A busy
+   * row raises; the next pass tries again.
+   */
+  async #purgeCanceledWorkspaces(dryRun: boolean): Promise<number> {
+    const due = await this.#db.$queryRaw<Array<{ license_id: bigint }>>`
+      SELECT license_id FROM subscription_cancel_purge_due()`;
+    if (dryRun) return due.length;
+    let purged = 0;
+    for (const row of due) {
+      try {
+        const [result] = await this.#db.$queryRaw<Array<{ purged: boolean }>>`
+          SELECT subscription_cancel_purge(${row.license_id}::bigint) AS purged`;
+        if (result?.purged) purged += 1;
+      } catch {
+        // Locked by a request this moment (NOWAIT): the next pass purges it.
+      }
+    }
+    return purged;
   }
 
   /**

@@ -4155,10 +4155,21 @@ model Subscription {
   trialEndsAt           DateTime? @map("trial_ends_at") @db.Timestamptz(6)
   currentPeriodEnd      DateTime? @map("current_period_end") @db.Timestamptz(6)
   /// The subscription ends when its period does (tm 389.10, the platform's
-  /// cancellation; #384 adds the owner's own and the period-end step). Until
+  /// cancellation; tm 384 the owner's own and the period-end step). Until
   /// then nothing changes, and resuming clears both.
   cancelAtPeriodEnd     Boolean   @default(false) @map("cancel_at_period_end")
   canceledAt            DateTime? @map("canceled_at") @db.Timestamptz(6)
+  /// Why the owner cancelled (`@siyahtus/types` CANCEL_REASONS); null for the
+  /// platform's cancellation. `subscriptions_cancel_reason_check`.
+  cancelReason          String?   @map("cancel_reason")
+  /// When the period ended and the subscription became `canceled` (tm 384).
+  endedAt               DateTime? @map("ended_at") @db.Timestamptz(6)
+  /// Read-only and exportable until then (ended_at + 30 days), closed after.
+  exportUntil           DateTime? @map("export_until") @db.Timestamptz(6)
+  /// When the retention sweep deletes the workspace; null when it chose to
+  /// keep its conversations without limit. Both dates need `ended_at`
+  /// (`subscriptions_cancellation_dates_check`).
+  dataDeletionAt        DateTime? @map("data_deletion_at") @db.Timestamptz(6)
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   /// How the last term was paid (tm 382 · ADR-13a): `swift_manual`,
   /// `crypto_manual` or `stripe`, null before the first payment. Only `stripe`

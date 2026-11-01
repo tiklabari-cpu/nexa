@@ -1,0 +1,103 @@
+# Billing profile and invoice PDF (tm 383 · BL-02 · K24): who the workspace
+# is on its invoices, and the informational PDF stored when each statement is
+# issued. The issuer's own details are the root panel's (tm 389.18).
+
+billingProfile:
+  get:
+    tags: [Billing]
+    operationId: getBillingProfile
+    summary: Read the workspace's billing profile
+    description: |
+      The legal name, address, country, tax office, tax number, VAT number and
+      invoice e-mail printed on the workspace's invoices, or `profile: null`
+      when none was entered yet — statements are then issued under the
+      workspace name and marked incomplete.
+
+      Admins and the owner (a billing read scope and at least the admin role).
+    responses:
+      "200":
+        description: The profile, or null
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [profile]
+              properties:
+                profile:
+                  oneOf:
+                    - { $ref: "../openapi.yaml#/components/schemas/BillingProfile" }
+                    - { type: "null" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  put:
+    tags: [Billing]
+    operationId: saveBillingProfile
+    summary: Create or replace the billing profile
+    description: |
+      Saved as given, trimmed; the country upper case, tax and VAT numbers
+      without spaces, dots or dashes. The next statement issued carries it —
+      every statement already issued keeps the copy it was issued with, and so
+      does its PDF.
+
+      Rules (`400 validation`, `error.details.field` and `error.details.reason`):
+      `country_invalid` (not two letters); `tax_id_invalid` (Turkey: a 10-digit
+      VKN or an 11-digit TCKN with valid check digits; elsewhere 2–32 letters
+      and digits); `tax_id_required` (a company in Turkey must give one);
+      `vat_id_invalid` (a two-letter prefix and 2–13 letters or digits);
+      `invoice_email_invalid`.
+
+      **Owner only** (K7) and writable while the workspace is read-only.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/BillingProfileInput" }
+    responses:
+      "200":
+        description: The saved profile
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [profile]
+              properties:
+                profile: { $ref: "../openapi.yaml#/components/schemas/BillingProfile" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+invoicePdf:
+  get:
+    tags: [Billing]
+    operationId: downloadInvoicePdf
+    summary: Download one issued invoice as PDF
+    description: |
+      The informational PDF stored when the period's statement was issued
+      (K24): issuer and customer as they stood then, the gapless number, the
+      lines and totals, how the period was paid and its reference (SWIFT
+      reference, TXID or Stripe payment id), and "Bilgi amaçlıdır / For
+      information only" on its face — it is not a legal invoice. The same
+      bytes every time; editing the billing profile does not change it.
+
+      `404` for the open period (not issued yet) and for a statement issued
+      before PDFs existed (`pdf_available: false` on the list) — the CSV
+      download still serves those.
+    parameters:
+      - name: period
+        in: path
+        required: true
+        description: "Billing period as `yyyymm`."
+        schema: { type: string, pattern: "^[0-9]{6}$" }
+    responses:
+      "200":
+        description: The stored PDF
+        content:
+          application/pdf:
+            schema: { type: string, format: binary }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

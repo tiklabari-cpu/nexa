@@ -66,6 +66,9 @@ function invoice(overrides: Partial<Invoice> & { period: string }): Invoice {
     line_items: [{ description: 'Growth plan · 5 seats', amount_cents: 49500 }],
     subtotal_cents: 49500,
     total_cents: 49500,
+    pdf_available: false,
+    payment_method: null,
+    payment_reference: null,
     ...overrides,
   };
 }

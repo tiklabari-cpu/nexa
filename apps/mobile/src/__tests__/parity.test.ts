@@ -1153,7 +1153,10 @@ describe('module parity matrix — what is still owed', () => {
       // `/billing/webhooks/stripe` (tm 382) — paying for the subscription (BL-01) on the
       // web Billing screen, and Stripe's signed callback (called by Stripe, never by a
       // person). The handset has no Billing screen, and nothing here re-scopes.
-      contractEndpoints: 383,
+      // 383 -> 385 with `/billing/profile` and `/billing/invoices/{period}/pdf` (tm 383) —
+      // the company details printed on invoices and the issued invoice's PDF, both on the
+      // web Billing screen; the handset has none, and nothing here re-scopes.
+      contractEndpoints: 385,
       scopeBoundaries: 1,
     });
   });

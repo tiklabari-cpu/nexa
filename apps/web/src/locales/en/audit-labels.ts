@@ -71,6 +71,7 @@ export const auditLabels: Messages = {
   'audit.action.settings.ip_allowlist_removed': 'IP allowlist entry removed',
   'audit.action.billing.subscription_updated': 'Subscription updated',
   'audit.action.billing.payment_method_updated': 'Payment method updated',
+  'audit.action.billing.profile_updated': 'Billing details updated',
   'audit.action.billing.license_activated': 'Plan activated',
   'audit.action.billing.payment_started': 'Payment started',
   'audit.action.billing.payment_succeeded': 'Payment received',

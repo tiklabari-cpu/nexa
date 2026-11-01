@@ -35,6 +35,7 @@ import { formatCount, formatDate, formatMoney, formatPeriod } from '../../lib/fo
 import { enumLabel } from '../../lib/enum-label.js';
 import { cardLast4, compose, FieldError, required, useForm } from '../../lib/form.js';
 import { newAttemptKey } from './attempt-key.js';
+import { BillingProfileSection } from './BillingProfile.js';
 import {
   PaymentHistorySection,
   PaymentOptionsSection,
@@ -118,6 +119,11 @@ interface Invoice {
   line_items: InvoiceLineItem[];
   subtotal_cents: number;
   total_cents: number;
+  /** An informational PDF was stored at issue (tm 383 · K24). Absent on old fixtures. */
+  pdf_available?: boolean;
+  /** How the period was paid, frozen at issue (K16). */
+  payment_method?: 'swift_manual' | 'crypto_manual' | 'stripe' | null;
+  payment_reference?: string | null;
 }
 
 interface PaymentMethod {
@@ -518,6 +524,8 @@ export function BillingPage(): ReactElement {
       )}
 
       <PaymentHistorySection />
+
+      <BillingProfileSection canEdit={canManage} />
 
       <InvoicesSection />
 
@@ -1725,15 +1733,25 @@ function InvoicesSection(): ReactElement {
     queryFn: () => api.get<{ invoices: Invoice[] }>('/billing/invoices'),
   });
 
-  const download = async (invoice: Invoice): Promise<void> => {
-    setDownloading(invoice.period);
+  // One downloader for both formats: the CSV every statement has, and the
+  // informational PDF stored when a statement was issued (tm 383 · K24).
+  const download = async (invoice: Invoice, format: 'csv' | 'pdf' = 'csv'): Promise<void> => {
+    setDownloading(`${invoice.period}:${format}`);
     setDownloadError(null);
     try {
-      const blob = await api.getBlob(`/billing/invoices/${invoice.period}/download`);
+      // Two literal paths, not one built from the format: the endpoint audit
+      // reads the client's calls as written.
+      const blob =
+        format === 'pdf'
+          ? await api.getBlob(`/billing/invoices/${invoice.period}/pdf`)
+          : await api.getBlob(`/billing/invoices/${invoice.period}/download`);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `siyahtus-invoice-${invoice.period}.csv`;
+      link.download =
+        format === 'pdf'
+          ? `siyahtus-invoice-${invoice.number}.pdf`
+          : `siyahtus-invoice-${invoice.period}.csv`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -1852,19 +1870,36 @@ function InvoicesSection(): ReactElement {
                       {formatMoney(invoice.total_cents, invoice.currency.toUpperCase())}
                     </td>
                     <td className="px-4 py-2 text-right">
-                      <button
-                        type="button"
-                        aria-label={t('billing.invoices.downloadAriaLabel', {
-                          number: invoice.number,
-                        })}
-                        disabled={downloading === invoice.period}
-                        onClick={() => void download(invoice)}
-                        className="rounded-md border border-border px-2 py-1 text-2xs font-medium text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-40"
-                      >
-                        {downloading === invoice.period
-                          ? t('billing.invoices.downloading')
-                          : t('billing.invoices.table.download')}
-                      </button>
+                      <div className="flex justify-end gap-1">
+                        {invoice.pdf_available ? (
+                          <button
+                            type="button"
+                            aria-label={t('billing.invoices.downloadPdfAriaLabel', {
+                              number: invoice.number,
+                            })}
+                            disabled={downloading === `${invoice.period}:pdf`}
+                            onClick={() => void download(invoice, 'pdf')}
+                            className="rounded-md border border-border px-2 py-1 text-2xs font-medium text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-40"
+                          >
+                            {downloading === `${invoice.period}:pdf`
+                              ? t('billing.invoices.downloading')
+                              : t('billing.invoices.downloadPdf')}
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          aria-label={t('billing.invoices.downloadAriaLabel', {
+                            number: invoice.number,
+                          })}
+                          disabled={downloading === `${invoice.period}:csv`}
+                          onClick={() => void download(invoice)}
+                          className="rounded-md border border-border px-2 py-1 text-2xs font-medium text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-40"
+                        >
+                          {downloading === `${invoice.period}:csv`
+                            ? t('billing.invoices.downloading')
+                            : t('billing.invoices.table.download')}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

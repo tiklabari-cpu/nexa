@@ -44,6 +44,9 @@ interface InvoiceOpt {
   line_items: { description: string; amount_cents: number }[];
   subtotal_cents: number;
   total_cents: number;
+  pdf_available?: boolean;
+  payment_method?: 'swift_manual' | 'crypto_manual' | 'stripe' | null;
+  payment_reference?: string | null;
 }
 
 interface PaymentMethodOpt {
@@ -276,6 +279,8 @@ function mockBilling(opts: UsageOpts): void {
     }
     if (path === '/billing/payments') return Promise.resolve({ payments: [] });
     if (path === '/billing/crypto-requests') return Promise.resolve({ requests: [] });
+    // Billing details (tm 383): none on file unless a test says otherwise.
+    if (path === '/billing/profile') return Promise.resolve({ profile: null });
     return Promise.reject(new Error(`unexpected ${path}`));
   });
 }
@@ -1011,6 +1016,42 @@ describe('BillingPage — invoices (FR-MOD-10.3)', () => {
 
     expect(api.getBlob).toHaveBeenCalledWith('/billing/invoices/202607/download');
     expect(createObjectURL).toHaveBeenCalled();
+    expect(click).toHaveBeenCalled();
+    click.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it('downloads an issued invoice as its stored PDF, and offers none for the open period (FR-MOD-10.3)', async () => {
+    const user = userEvent.setup();
+    const createObjectURL = vi.fn(() => 'blob:invoice');
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL: vi.fn() });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    api.getBlob.mockResolvedValue(new Blob(['%PDF-1.7'], { type: 'application/pdf' }));
+
+    mockBilling({
+      invoices: [
+        { ...DEFAULT_INVOICE, pdf_available: false },
+        {
+          ...DEFAULT_INVOICE,
+          number: '2026-000042',
+          period: '202606',
+          period_label: 'June 2026',
+          origin: 'issued',
+          status: 'paid',
+          pdf_available: true,
+          payment_method: 'swift_manual',
+          payment_reference: 'ST-AAAA-BBBB',
+        },
+      ],
+    });
+    renderBilling(<BillingPage />);
+
+    const [open, issued] = await screen.findAllByTestId('invoice-row');
+    expect(within(open!).queryByRole('button', { name: /as PDF/ })).not.toBeInTheDocument();
+    await user.click(
+      within(issued!).getByRole('button', { name: 'Download invoice 2026-000042 as PDF' }),
+    );
+    expect(api.getBlob).toHaveBeenCalledWith('/billing/invoices/202606/pdf');
     expect(click).toHaveBeenCalled();
     click.mockRestore();
     vi.unstubAllGlobals();

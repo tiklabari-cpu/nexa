@@ -350,6 +350,8 @@ export const IMPERSONATION_FORBIDDEN_PATHS: readonly ImpersonationForbiddenRule[
   // workspace they belong to, not this one's daily work.
   { pattern: /^\/agents\/me$/, category: 'membership' },
   { pattern: /^\/billing\/(payment-method|api-packages|ai-packages)$/, category: 'payment' },
+  // Who the workspace is on its invoices (tm 383 · BL-02): legal name, tax number.
+  { pattern: /^\/billing\/profile$/, category: 'payment' },
   // Starting a payment of any method (tm 382): a SWIFT reference, a hosted card
   // checkout, a crypto request and its TXID or withdrawal.
   {

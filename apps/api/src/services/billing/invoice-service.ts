@@ -27,7 +27,7 @@
  * it. A second copy would be how a period's invoice comes to price its overage
  * differently from the usage endpoint that produced it.
  */
-import { findApiPackage } from '@siyahtus/types';
+import { findApiPackage, isPaymentMethodId, type PaymentMethodId } from '@siyahtus/types';
 import type { Env } from '../../config/env.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { currentPeriod, trialState } from './metering.js';
@@ -68,7 +68,11 @@ export type InvoiceStatus = 'paid' | 'open' | 'trial';
 export type InvoiceOrigin = 'issued' | 'reconstructed' | 'estimate';
 
 export interface Invoice {
-  /** Human invoice number, `SIYAHTUS-<yyyymm>`. */
+  /**
+   * The issued number, `<year>-<serial>` (tm 383 · BL-02), gapless per year.
+   * The open estimate has none yet and reads `SIYAHTUS-<yyyymm>`, as does a
+   * statement frozen before numbering existed.
+   */
   number: string;
   /** Billing period as `yyyymm`. */
   period: string;
@@ -91,6 +95,12 @@ export interface Invoice {
   line_items: InvoiceLineItem[];
   subtotal_cents: number;
   total_cents: number;
+  /** An informational PDF was stored when the statement was issued (K24). */
+  pdf_available: boolean;
+  /** How the period was paid (K16), frozen at issue; null when nothing was. */
+  payment_method: PaymentMethodId | null;
+  /** The SWIFT reference, TXID or Stripe payment id. */
+  payment_reference: string | null;
 }
 
 /** `July 2026` from `202607`. */
@@ -301,10 +311,16 @@ export function toInvoice(
     line_items: composed.line_items,
     subtotal_cents: composed.subtotal_cents,
     total_cents: composed.total_cents,
+    pdf_available: false,
+    payment_method: null,
+    payment_reference: null,
   };
 }
 
-/** The invoice number for a period. Per workspace, as the derived path was. */
+/**
+ * The reference an open estimate carries — it has no issued number yet. Also
+ * what every statement frozen before numbering (tm 383) kept.
+ */
 export function invoiceNumber(period: string): string {
   return `SIYAHTUS-${period}`;
 }
@@ -367,6 +383,9 @@ export interface StoredInvoice {
   currency: string;
   subtotalCents: number;
   totalCents: number;
+  pdfStorageKey: string | null;
+  paymentMethod: string | null;
+  paymentReference: string | null;
   lineItems: { description: string; amountCents: number }[];
 }
 
@@ -387,6 +406,9 @@ export function serialiseStored(row: StoredInvoice): Invoice {
     })),
     subtotal_cents: row.subtotalCents,
     total_cents: row.totalCents,
+    pdf_available: row.pdfStorageKey !== null,
+    payment_method: isPaymentMethodId(row.paymentMethod) ? row.paymentMethod : null,
+    payment_reference: row.paymentReference,
   };
 }
 

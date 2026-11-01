@@ -587,6 +587,25 @@ export const settings: Messages = {
   'settings.channels.telegram.liveDescription':
     '@BotFather’ın verdiği token’ı yapıştırın. Telegram ile doğrulanır, bot adı Telegram’dan alınır ve token şifreli saklanır.',
   'settings.channels.live': 'Gerçek',
+  'settings.channels.whatsapp.live.description':
+    "Bir WhatsApp Business numarasını Meta üzerinden bağlayın. Meta'nın penceresi açılır; WhatsApp Business hesabınızı ve numaranızı orada seçin ya da oluşturun.",
+  'settings.channels.whatsapp.live.connectCta': 'Meta ile bağla',
+  'settings.channels.whatsapp.live.reconnectCta': 'Meta ile yeniden bağla',
+  'settings.channels.whatsapp.live.waiting': 'Meta penceresindeki adımları tamamlayın…',
+  'settings.channels.whatsapp.live.connecting': 'Bağlanıyor…',
+  'settings.channels.whatsapp.live.popupBlocked':
+    'Tarayıcı Meta penceresini engelledi. Bu site için açılır pencerelere izin verip yeniden deneyin.',
+  'settings.channels.whatsapp.live.cancelled': 'WhatsApp kaydı bitmeden kapatıldı.',
+  'settings.channels.whatsapp.live.incomplete':
+    'Meta hangi numaranın seçildiğini bildirmedi. Kaydı yeniden başlatın.',
+  'settings.channels.whatsapp.live.notInAccount':
+    'Bu numara, giriş yaptığınız WhatsApp Business hesabında değil.',
+  'settings.channels.whatsapp.reconnectNeeded': 'Yeniden bağlanmalı',
+  'settings.channels.whatsapp.reconnectHint':
+    'Meta bu bağlantıyı artık kabul etmiyor. Yeniden bağlayana kadar ajan yanıtları müşterilere ulaşmaz.',
+  'settings.channels.whatsapp.callback.done': 'Tamamlandı. Bu pencereyi kapatabilirsiniz.',
+  'settings.channels.whatsapp.callback.orphan':
+    "Bu sayfa, Ayarlar → Kanallar'da başlatılan bir WhatsApp kaydını tamamlar. Bağlamak için oraya dönün.",
 
   // Web sitesi widget'ları — WebsiteWidgets.tsx
   'settings.websiteWidgets.title': "Web sitesi widget'ları",

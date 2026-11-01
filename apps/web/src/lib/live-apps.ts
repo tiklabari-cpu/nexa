@@ -7,15 +7,20 @@ import type { DeploymentConfig } from '@siyahtus/types';
 
 /**
  * The Apps data cards this deployment runs live (tm 263) — `live_apps` less
- * `telegram`, which is a channel. Under `pilot_mode` these are the whole
+ * `telegram` and `whatsapp` (tm 380), which are channels. Under `pilot_mode` these are the whole
  * marketplace; none means the pilot has no marketplace at all, as before.
  * Read by truthiness: an older server sends no `live_apps`.
  */
 export function liveDataApps(config: DeploymentConfig): string[] {
-  return (config.live_apps ?? []).filter((id) => id !== 'telegram');
+  return (config.live_apps ?? []).filter((id) => id !== 'telegram' && id !== 'whatsapp');
 }
 
 /** Whether Telegram runs as a real channel here (tm 263). */
 export function isTelegramLive(config: DeploymentConfig): boolean {
   return (config.live_apps ?? []).includes('telegram');
+}
+
+/** Whether WhatsApp runs as a real Cloud API channel here (tm 380). */
+export function isWhatsAppLive(config: DeploymentConfig): boolean {
+  return (config.live_apps ?? []).includes('whatsapp');
 }

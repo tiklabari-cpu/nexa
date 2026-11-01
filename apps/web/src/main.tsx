@@ -6,6 +6,10 @@ import { App } from './App.js';
 import { DeploymentGate } from './components/DeploymentGate.js';
 import { ApiClientError } from './lib/api-client.js';
 import { NOTICE_QUERY_KEY } from './lib/notice.js';
+import {
+  WHATSAPP_CALLBACK_PATH,
+  WhatsAppSignupCallback,
+} from './features/whatsapp/WhatsAppSignupCallback.js';
 // Bundled, not fetched from a font CDN: the panel ships self-hosted and its CSP
 // allows no third-party origins. Only the subsets a page uses are downloaded.
 import '@fontsource-variable/inter';
@@ -42,10 +46,16 @@ createRoot(container).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        {/* Nothing draws before this deployment's settings are in (tm 259.4). */}
-        <DeploymentGate>
-          <App />
-        </DeploymentGate>
+        {window.location.pathname === WHATSAPP_CALLBACK_PATH ? (
+          // Meta's signup pop-up coming back (tm 380): it relays the code to the
+          // card that opened it and closes — no session, no panel around it.
+          <WhatsAppSignupCallback />
+        ) : (
+          // Nothing draws before this deployment's settings are in (tm 259.4).
+          <DeploymentGate>
+            <App />
+          </DeploymentGate>
+        )}
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,

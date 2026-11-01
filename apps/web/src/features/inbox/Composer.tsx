@@ -57,6 +57,7 @@ import { cannedValuesOf } from './cannedValues.js';
 import { claimComposerFocus } from './composerFocus.js';
 import { COMPOSER_FIELD_ATTRIBUTE, useShortcut } from '../../lib/shortcuts.js';
 import { useCustomerContext } from './useCustomerContext.js';
+import { ReplyWindowBand, replyWindowClosed, useReplyWindow } from './ReplyWindowBand.js';
 import { EMOJI_CATEGORIES, insertAtCaret } from './emoji.js';
 import { applyBulletPrefix, wrapSelection } from './richText.js';
 import { Dropdown } from '../../components/ui/Dropdown.js';
@@ -148,6 +149,8 @@ export function Composer({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const send = useSendMessage(chatId);
+  // WhatsApp's 24-hour window (tm 380): past it a reply cannot reach the customer.
+  const replyWindow = useReplyWindow(chatId);
   // The same Copilot draft endpoint the Copilot panel calls (FR-MOD-12.3) —
   // Reply Suggestions is a faster door onto it, not a second AI path.
   const copilotReply = useCopilotReply(chatId);
@@ -208,7 +211,12 @@ export function Composer({
 
   const isNote = mode === 'agents';
   const canSend =
-    (text.trim().length > 0 || attachment !== null) && !disabled && !send.isPending && !uploading;
+    (text.trim().length > 0 || attachment !== null) &&
+    !disabled &&
+    !send.isPending &&
+    !uploading &&
+    // A note never leaves the workspace, so the window never holds it back.
+    (isNote || !replyWindowClosed(replyWindow));
 
   // Live typing preview (FR-MOD-02.9). One "start" per burst, then a trailing
   // "stop" a few seconds after the last keystroke — both edges matter so the
@@ -792,6 +800,8 @@ export function Composer({
           </button>
         </div>
       )}
+
+      {!isNote && <ReplyWindowBand window={replyWindow} />}
 
       {suggestions !== null && !isNote && (
         <div

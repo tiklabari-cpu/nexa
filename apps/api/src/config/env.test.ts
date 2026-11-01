@@ -1667,6 +1667,38 @@ describe('Apps live providers and their credential key (tm 263 · FR-MOD-09.2)',
       expect(env.appsLiveWarnings.join(' ')).toMatch(/64 hexadecimal/);
     }
   });
+
+  // tm 380: a live WhatsApp needs its Meta app; without it the channel stays the mock.
+  it('keeps WhatsApp a demo until the four WHATSAPP_* values are set, and names the missing ones', () => {
+    const META = {
+      WHATSAPP_APP_ID: '1234567890',
+      WHATSAPP_APP_SECRET: 'app-secret',
+      WHATSAPP_VERIFY_TOKEN: 'verify-token',
+      WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID: '998877',
+    };
+    const live = parseEnv({
+      ...BASE,
+      APPS_CREDENTIAL_KEY: KEY,
+      APPS_LIVE_PROVIDERS: 'whatsapp',
+      ...META,
+    });
+    expect(live.APPS_LIVE_PROVIDERS).toEqual(['whatsapp']);
+    expect(live.WHATSAPP_GRAPH_VERSION).toBe('v21.0');
+    expect(live.appsLiveWarnings).toEqual([]);
+
+    const partial = parseEnv({
+      ...BASE,
+      APPS_CREDENTIAL_KEY: KEY,
+      APPS_LIVE_PROVIDERS: 'brevo,whatsapp',
+      WHATSAPP_APP_ID: '1234567890',
+      WHATSAPP_APP_SECRET: '',
+    });
+    expect(partial.APPS_LIVE_PROVIDERS).toEqual(['brevo']);
+    expect(partial.appsLiveWarnings.join(' ')).toMatch(
+      /WHATSAPP_APP_SECRET, WHATSAPP_VERIFY_TOKEN, WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID are not set/,
+    );
+    expect(() => parseEnv({ ...BASE, WHATSAPP_GRAPH_VERSION: 'latest' })).toThrow(/v21.0/);
+  });
 });
 
 describe('DATABASE_POOL_SIZE', () => {

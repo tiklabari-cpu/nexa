@@ -42,7 +42,13 @@ export const COMPONENTS_NOT_IN_THIS_BUILD: ReadonlyArray<{
 }> = [
   { key: 'knowledge_jobs', detail: 'knowledge job queue (tm 312) is not part of this build' },
   { key: 'doc_worker', detail: 'document worker (tm 313) is not part of this build' },
-  { key: 'channel_whatsapp', detail: 'WhatsApp live adapter (tm 380) is not part of this build' },
+  // Written only where nothing reported (`hsetnx`): a live WhatsApp (tm 380) reports
+  // itself from the signed webhook (`ok` + its last delivery), which this never replaces.
+  {
+    key: 'channel_whatsapp',
+    detail:
+      'WhatsApp is not live here (APPS_LIVE_PROVIDERS), or no signed delivery has arrived yet',
+  },
   {
     key: 'channel_meta',
     detail: 'Messenger/Instagram live adapter (tm 381) is not part of this build',

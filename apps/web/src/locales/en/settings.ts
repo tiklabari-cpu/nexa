@@ -594,6 +594,26 @@ export const settings: Messages = {
   'settings.channels.telegram.liveDescription':
     'Paste the token @BotFather gave you. It is checked with Telegram, the bot name comes from Telegram, and the token is stored encrypted.',
   'settings.channels.live': 'Live',
+  'settings.channels.whatsapp.live.description':
+    'Connect a WhatsApp Business number through Meta. A window from Meta opens; pick or create your WhatsApp Business account and number there.',
+  'settings.channels.whatsapp.live.connectCta': 'Connect with Meta',
+  'settings.channels.whatsapp.live.reconnectCta': 'Reconnect with Meta',
+  'settings.channels.whatsapp.live.waiting': 'Finish the steps in the Meta window…',
+  'settings.channels.whatsapp.live.connecting': 'Connecting…',
+  'settings.channels.whatsapp.live.popupBlocked':
+    'The browser blocked the Meta window. Allow pop-ups for this site and try again.',
+  'settings.channels.whatsapp.live.cancelled':
+    'The WhatsApp sign-up was closed before it finished.',
+  'settings.channels.whatsapp.live.incomplete':
+    'Meta did not say which number was chosen. Start the sign-up again.',
+  'settings.channels.whatsapp.live.notInAccount':
+    'That number is not in the WhatsApp Business account you signed in with.',
+  'settings.channels.whatsapp.reconnectNeeded': 'Reconnect needed',
+  'settings.channels.whatsapp.reconnectHint':
+    'Meta no longer accepts this connection. Agent replies do not reach customers until you reconnect.',
+  'settings.channels.whatsapp.callback.done': 'Done. You can close this window.',
+  'settings.channels.whatsapp.callback.orphan':
+    'This page finishes a WhatsApp sign-up started in Settings → Channels. Go back there to connect.',
 
   // Website widgets — WebsiteWidgets.tsx
   'settings.websiteWidgets.title': 'Website widgets',

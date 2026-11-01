@@ -485,6 +485,10 @@ export const AUDIT_ACTIONS = [
   // `channels` row already; the entry names only the channel type and brand.
   'channel.connected',
   'channel.disconnected',
+  // The provider refused a live channel's credential (tm 380 — Meta's Graph
+  // error 190 on a WhatsApp business token): written as the system's, once
+  // per lapse, beside the admins' e-mail (channel-reconnect-notice.ts).
+  'channel.reconnect_required',
   // A forwarding address was opened or closed (FR-MOD-08.5.3). Its own pair
   // rather than folding into `channel.*`: those record a provider being wired
   // up, this records a new door customer mail can arrive through. The address

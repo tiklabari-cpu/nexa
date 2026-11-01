@@ -1935,6 +1935,10 @@ export interface ConnectedChannel {
   created_at: string;
   /** Connected to the real provider (tm 263 — a live Telegram bot). Absent from older servers. */
   live?: boolean;
+  /** The address as a person reads it (tm 380 — a live WhatsApp number). */
+  display_address?: string | null;
+  /** The provider refused the live credential (tm 380): reconnect. */
+  needs_reconnect?: boolean;
 }
 
 /**

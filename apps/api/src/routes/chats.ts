@@ -22,13 +22,9 @@ import { ApiError } from '../lib/api-error.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
 import { maskForWrite, sensitiveAuthorOf } from '../lib/sensitive-mask.js';
 import { ChatService, type ChatAiModeResult } from '../services/chat/chat-service.js';
-import { ChannelService } from '../services/channels/channel-service.js';
-import { createLiveTelegram } from '../services/channels/telegram-live.js';
-import { createSafeHttp, type SafeHttp } from '../lib/safe-fetch.js';
-import {
-  DEFAULT_PROVIDER_ENDPOINTS,
-  type ProviderEndpoints,
-} from '../services/apps/verifiers/types.js';
+import { buildChannelService } from '../services/channels/channel-service-factory.js';
+import type { SafeHttp } from '../lib/safe-fetch.js';
+import type { ProviderEndpoints } from '../services/apps/verifiers/types.js';
 import { hasChatScope } from '../services/chat/access.js';
 import { messageSearchWordsOrThrow, spendMessageSearch } from '../services/chat/event-search.js';
 import { readCustomerContext } from '../services/customers/customer-context.js';
@@ -255,12 +251,15 @@ export default async function chatRoutes(
   const store = createObjectStore(env.STORAGE_PROVIDER, env.storage);
   // Agent replies leave through the conversation's channel; a live Telegram
   // sends them for real (tm 263).
-  const channels = new ChannelService(
-    createLiveTelegram(env, {
-      http: appsHttp ?? createSafeHttp(),
-      endpoints: appsEndpoints ?? DEFAULT_PROVIDER_ENDPOINTS,
-    }),
-  );
+  const channels = buildChannelService(env, {
+    ...(appsHttp ? { http: appsHttp } : {}),
+    ...(appsEndpoints ? { endpoints: appsEndpoints } : {}),
+    // A live WhatsApp whose token Meta refused tells the admins (tm 380).
+    mailer: app.backgroundMail.asMailer((_message, outcome) =>
+      logUnsentMail(app.log, 'channel.reconnect_notice', outcome),
+    ),
+    log: app.log,
+  });
   const chats = new ChatService(
     app.db,
     app.redis,
@@ -281,6 +280,9 @@ export default async function chatRoutes(
     {
       dispatchAgentReply: (tenant, chatId, text) =>
         channels.dispatchAgentReply(app.db, tenant, chatId, text, app.log),
+      // A live WhatsApp past its 24-hour window takes no reply (tm 380): refused
+      // before the message is written, not dropped after.
+      assertReplyAllowed: (tx, customerId) => channels.assertReplyAllowed(tx, customerId),
     },
     automations,
   );

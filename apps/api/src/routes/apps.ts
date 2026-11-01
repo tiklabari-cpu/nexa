@@ -114,8 +114,10 @@ export default async function appRoutes(
       endpoints: options.appsEndpoints ?? DEFAULT_PROVIDER_ENDPOINTS,
     },
   });
-  // The data cards this deployment runs live (telegram is a channel, not listed here).
-  const pilotCards = liveAppIds(env.APPS_LIVE_PROVIDERS).filter((id) => id !== 'telegram');
+  // The data cards this deployment runs live (telegram and whatsapp are channels, not listed here).
+  const pilotCards = liveAppIds(env.APPS_LIVE_PROVIDERS).filter(
+    (id) => id !== 'telegram' && id !== 'whatsapp',
+  );
 
   app.get(
     '/settings/apps',

@@ -193,10 +193,21 @@ channelConnect:
       is `503` with `details.reason: "app_provider_unavailable"`. The response
       carries `live: true`.
 
+      **Live WhatsApp (tm 380).** With `whatsapp` in `live_apps`, WhatsApp is a
+      real Cloud API channel connected through Meta's embedded signup
+      (`GET /channels/whatsapp/signup-config`): the body is the signup's
+      one-time `code` with the `waba_id` and `phone_number_id` chosen. The code
+      becomes the business token (stored encrypted), the number must be one of
+      that account's (`400`, `details.reason: "whatsapp_number_not_in_account"`
+      otherwise), and the app is subscribed to the account's webhooks. A code
+      Meta refuses is `400` with `details.reason: "app_credentials_invalid"`;
+      Meta not answering is `503` `app_provider_unavailable`. The channel's
+      `address` is Meta's phone number id; `display_address` is the number.
+
       In the public pilot (`pilot_mode` on `GET /deployment`) this is refused for
       every caller with `403 not_allowed` and `error.details.reason:
       "pilot_mode"`, before the body is read: the pilot offers no adapter
-      channels — except a live Telegram, which it serves.
+      channels — except a live Telegram or WhatsApp, which it serves.
     requestBody:
       required: true
       content:
@@ -479,6 +490,101 @@ telegramLiveWebhook:
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+whatsappCloudWebhook:
+  get:
+    tags: [Configuration]
+    operationId: verifyWhatsAppWebhook
+    summary: Meta's webhook subscription handshake (tm 380)
+    description: |
+      Meta calls this once when the app's webhook is configured: with
+      `hub.mode=subscribe` and the deployment's `WHATSAPP_VERIFY_TOKEN` it
+      answers `hub.challenge` as plain text; anything else is `403`. `404`
+      unless the deployment runs WhatsApp live (`live_apps`).
+    security: []
+    parameters:
+      - { name: hub.mode, in: query, required: true, schema: { type: string } }
+      - { name: hub.verify_token, in: query, required: true, schema: { type: string } }
+      - { name: hub.challenge, in: query, required: true, schema: { type: string } }
+    responses:
+      "200":
+        description: The challenge, echoed
+        content:
+          text/plain:
+            schema: { type: string }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+  post:
+    tags: [Configuration]
+    operationId: ingestWhatsAppWebhook
+    summary: Receive WhatsApp Cloud API deliveries (tm 380)
+    description: |
+      The one webhook for the deployment's Meta app (FR-MOD-08.5.6, tm 380).
+      Public — Meta has no session — but authenticated: `X-Hub-Signature-256`
+      must be `sha256=` and the HMAC-SHA256 of the raw body under the app
+      secret, compared in constant time. A missing or wrong signature is `401`
+      and nothing is written.
+
+      The business number each change names (`metadata.phone_number_id`)
+      resolves the workspace. Messages and statuses are queued durably and
+      the answer is a quick `200`; the chat write (card numbers masked, a
+      first contact spam-screened, a file kept only under the workspace's
+      file-sharing rules) happens after it. A message id delivered twice is
+      taken in once. A number no live channel answers to is acknowledged and
+      dropped, so one stale number cannot make Meta retry everyone's.
+
+      `404` unless the deployment runs WhatsApp live (`live_apps`).
+    security: []
+    parameters:
+      - name: X-Hub-Signature-256
+        in: header
+        required: true
+        schema: { type: string, example: "sha256=5f2b…" }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            description: "A WhatsApp Business Account webhook (`object` is `whatsapp_business_account`)."
+            additionalProperties: true
+    responses:
+      "200":
+        description: Received and queued
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, queued]
+              properties:
+                status: { type: string, enum: [received] }
+                queued:
+                  type: integer
+                  description: New messages and statuses written (a redelivery adds none).
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+whatsappSignupConfig:
+  get:
+    tags: [Configuration]
+    operationId: getWhatsAppSignupConfig
+    summary: What the embedded signup needs (tm 380)
+    description: |
+      The deployment's Meta app id, embedded-signup configuration id, Graph
+      version and the redirect the dialog returns to — what the Settings →
+      Channels card opens Meta's dialog with. `404` unless the deployment
+      runs WhatsApp live (`live_apps`).
+    responses:
+      "200":
+        description: The signup configuration
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/WhatsAppSignupConfig" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
 emailAddresses:
   get:

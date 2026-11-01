@@ -366,6 +366,8 @@ export const IMPERSONATION_FORBIDDEN_PATHS: readonly ImpersonationForbiddenRule[
   { pattern: /^\/customer\//, category: 'not_a_member_surface' },
   { pattern: /^\/channels\/[^/]+\/webhook$/, category: 'not_a_member_surface' },
   { pattern: /^\/channels\/telegram\/webhook\/[^/]+$/, category: 'not_a_member_surface' },
+  // Meta's signed WhatsApp delivery callback (tm 380): the caller is Meta, never a member.
+  { pattern: /^\/channels\/whatsapp\/cloud-webhook$/, category: 'not_a_member_surface' },
   { pattern: /^\/channels\/email\/inbound$/, category: 'not_a_member_surface' },
 ];
 

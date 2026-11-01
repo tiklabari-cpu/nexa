@@ -36,10 +36,11 @@ import { useCloseGuard } from '../../lib/dirty-guard.js';
 import { FieldError, compose, phoneNumber, required, useForm } from '../../lib/form.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { useDeployment } from '../../lib/deployment.js';
-import { isTelegramLive } from '../../lib/live-apps.js';
+import { isTelegramLive, isWhatsAppLive } from '../../lib/live-apps.js';
 import { liveConnectErrorText } from '../apps/live-errors.js';
 import { useConnectedChannels, type ConnectedChannel } from '../inbox/useInbox.js';
 import { canReadChannels } from '../inbox/views.js';
+import { WhatsAppLiveConnect } from '../whatsapp/WhatsAppLiveConnect.js';
 
 /** Origin serving the widget and its hosted Chat page. */
 const WIDGET_URL =
@@ -73,6 +74,8 @@ export interface Channel {
   address?: string | null;
   /** Connected to the real provider (tm 263 — a live Telegram bot). */
   live?: boolean;
+  /** The provider refused the live credential (tm 380 — a WhatsApp token Meta revoked). */
+  needsReconnect?: boolean;
 }
 
 const STATUS_META: Record<ChannelStatus, { tone: StatusTone; labelKey: string }> = {
@@ -145,13 +148,15 @@ function ctaText(t: TFunction, cta: string): string {
  * In the public pilot (`pilotMode`, tm 257.3) the grid is the first two cards
  * only: Website and Chat page are real, and everything after them is a mock
  * provider or the e-mail channel, which the pilot does not run — except a
- * Telegram the deployment runs live (`telegramLive`, tm 263), which is real.
+ * Telegram the deployment runs live (`telegramLive`, tm 263), which is real,
+ * and the same for a live WhatsApp (`whatsappLive`, tm 380).
  */
 export function channelsFor(
   websites: WebsiteStatusRow[],
   connectedChannels: ConnectedChannel[] = [],
   pilotMode = false,
   telegramLive = false,
+  whatsappLive = false,
 ): Channel[] {
   const connected = websites.filter((w) => w.status === 'connected').length;
   const websiteStatus: ChannelStatus =
@@ -191,7 +196,11 @@ export function channelsFor(
   ];
   return pilotMode
     ? all.filter(
-        (c) => c.id === 'website' || c.id === 'chat-page' || (telegramLive && c.id === 'telegram'),
+        (c) =>
+          c.id === 'website' ||
+          c.id === 'chat-page' ||
+          (telegramLive && c.id === 'telegram') ||
+          (whatsappLive && c.id === 'whatsapp'),
       )
     : all;
 }
@@ -236,7 +245,10 @@ function whatsappChannel(connectedChannels: ConnectedChannel[]): Channel {
     description: 'Answer WhatsApp messages.',
     status: isConnected ? 'connected' : 'not_connected',
     cta: isConnected ? 'Disconnect' : 'Connect',
-    address: isConnected ? (row?.address ?? null) : undefined,
+    // A live number's routing key is Meta's id (tm 380); people read the number.
+    address: isConnected ? (row?.display_address ?? row?.address ?? null) : undefined,
+    live: isConnected && row?.live === true,
+    needsReconnect: isConnected && row?.needs_reconnect === true,
   };
 }
 
@@ -609,7 +621,8 @@ export function ChannelsGrid(): ReactElement {
   const deployment = useDeployment();
   const pilotMode = deployment.pilot_mode;
   const telegramLive = isTelegramLive(deployment);
-  const canChannels = canReadChannels(scopes) && (!pilotMode || telegramLive);
+  const whatsappLive = isWhatsAppLive(deployment);
+  const canChannels = canReadChannels(scopes) && (!pilotMode || telegramLive || whatsappLive);
 
   const websites = useQuery({
     queryKey: ['settings', 'websites', brandId],
@@ -631,6 +644,7 @@ export function ChannelsGrid(): ReactElement {
     connectedChannels.data?.items ?? [],
     pilotMode,
     telegramLive,
+    whatsappLive,
   );
 
   return (
@@ -1261,6 +1275,8 @@ function WhatsappChannelAction({ channel, cta }: { channel: Channel; cta: string
   const api = useApiClient();
   const client = useQueryClient();
   const [open, setOpen] = useState(false);
+  // Live (tm 380): Meta's embedded signup instead of the mock form.
+  const live = isWhatsAppLive(useDeployment());
 
   const connect = useMutation({
     mutationFn: (body: { waba_id: string; phone_number: string }) =>
@@ -1310,7 +1326,29 @@ function WhatsappChannelAction({ channel, cta }: { channel: Channel; cta: string
     return (
       <div className="flex flex-col gap-1">
         {channel.address && (
-          <code className="truncate text-2xs text-content-tertiary">{channel.address}</code>
+          <div className="flex items-center gap-1.5">
+            <code className="min-w-0 truncate text-2xs text-content-tertiary">
+              {channel.address}
+            </code>
+            {channel.live && !channel.needsReconnect && (
+              <span className="shrink-0 rounded-sm bg-success/10 px-1.5 text-2xs font-medium text-success">
+                {t('settings.channels.live')}
+              </span>
+            )}
+            {channel.needsReconnect && (
+              <span className="shrink-0 rounded-sm bg-warning/10 px-1.5 text-2xs font-medium text-warning">
+                {t('settings.channels.whatsapp.reconnectNeeded')}
+              </span>
+            )}
+          </div>
+        )}
+        {channel.needsReconnect && live && (
+          <>
+            <p className="text-2xs text-content-secondary">
+              {t('settings.channels.whatsapp.reconnectHint')}
+            </p>
+            <WhatsAppLiveConnect label={t('settings.channels.whatsapp.live.reconnectCta')} />
+          </>
         )}
         <button
           type="button"
@@ -1324,6 +1362,17 @@ function WhatsappChannelAction({ channel, cta }: { channel: Channel; cta: string
         >
           {disconnect.isPending ? t('settings.channels.disconnecting') : cta}
         </button>
+      </div>
+    );
+  }
+
+  if (live) {
+    return (
+      <div className="flex flex-col gap-1">
+        <p className="text-2xs text-content-tertiary">
+          {t('settings.channels.whatsapp.live.description')}
+        </p>
+        <WhatsAppLiveConnect label={t('settings.channels.whatsapp.live.connectCta')} />
       </div>
     );
   }

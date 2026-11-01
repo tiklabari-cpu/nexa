@@ -22,6 +22,8 @@ export interface ProviderEndpoints {
   brevo: string;
   freshdesk: (subdomain: string) => string;
   telegram: string;
+  /** The Graph API (tm 380 — the live WhatsApp channel). */
+  whatsapp: string;
 }
 
 export const DEFAULT_PROVIDER_ENDPOINTS: ProviderEndpoints = {
@@ -30,6 +32,7 @@ export const DEFAULT_PROVIDER_ENDPOINTS: ProviderEndpoints = {
   // gets here, so this can only ever name a host under freshdesk.com.
   freshdesk: (subdomain) => `https://${subdomain}.freshdesk.com`,
   telegram: 'https://api.telegram.org',
+  whatsapp: 'https://graph.facebook.com',
 };
 
 export interface ProviderContext {
@@ -55,7 +58,8 @@ export interface ChatField {
 }
 
 export interface AppVerifier {
-  appId: Exclude<LiveAppId, 'telegram'>;
+  /** The live channels (Telegram, WhatsApp — tm 380) are connected in Settings → Channels, not here. */
+  appId: Exclude<LiveAppId, 'telegram' | 'whatsapp'>;
   credentialFields: readonly AppCredentialField[];
   verify(credentials: AppCredentials, context: ProviderContext): Promise<VerifyResult>;
   /**

@@ -1698,6 +1698,34 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/chats/{chatId}/reply-window': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Whether the chat's customer may be written to now (tm 380)
+     * @description A live WhatsApp chat answers its 24-hour customer-service window: open
+     *     until 24 hours after the customer's last WhatsApp message, closed after
+     *     it (and for a customer who has not written since the channel went live).
+     *     Every other chat is `open` with no `closes_at`. The composer reads this
+     *     to show its "24-hour window closed" band; the send path enforces the
+     *     same rule (`400`, `details.reason: "channel_window_closed"`).
+     *
+     *     Behind the chat's visibility like its transcript: a chat the caller may
+     *     not see, or another workspace's, is `404`.
+     */
+    get: operations['getChatReplyWindow'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/chats/{chatId}/timeline': {
     parameters: {
       query?: never;
@@ -10283,10 +10311,21 @@ export interface paths {
      *     is `503` with `details.reason: "app_provider_unavailable"`. The response
      *     carries `live: true`.
      *
+     *     **Live WhatsApp (tm 380).** With `whatsapp` in `live_apps`, WhatsApp is a
+     *     real Cloud API channel connected through Meta's embedded signup
+     *     (`GET /channels/whatsapp/signup-config`): the body is the signup's
+     *     one-time `code` with the `waba_id` and `phone_number_id` chosen. The code
+     *     becomes the business token (stored encrypted), the number must be one of
+     *     that account's (`400`, `details.reason: "whatsapp_number_not_in_account"`
+     *     otherwise), and the app is subscribed to the account's webhooks. A code
+     *     Meta refuses is `400` with `details.reason: "app_credentials_invalid"`;
+     *     Meta not answering is `503` `app_provider_unavailable`. The channel's
+     *     `address` is Meta's phone number id; `display_address` is the number.
+     *
      *     In the public pilot (`pilot_mode` on `GET /deployment`) this is refused for
      *     every caller with `403 not_allowed` and `error.details.reason:
      *     "pilot_mode"`, before the body is read: the pilot offers no adapter
-     *     channels — except a live Telegram, which it serves.
+     *     channels — except a live Telegram or WhatsApp, which it serves.
      */
     post: operations['connectChannel'];
     delete?: never;
@@ -10474,6 +10513,70 @@ export interface paths {
      *     in the public pilot: it is authenticated, and only exists when live.
      */
     post: operations['ingestTelegramUpdate'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/channels/whatsapp/cloud-webhook': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Meta's webhook subscription handshake (tm 380)
+     * @description Meta calls this once when the app's webhook is configured: with
+     *     `hub.mode=subscribe` and the deployment's `WHATSAPP_VERIFY_TOKEN` it
+     *     answers `hub.challenge` as plain text; anything else is `403`. `404`
+     *     unless the deployment runs WhatsApp live (`live_apps`).
+     */
+    get: operations['verifyWhatsAppWebhook'];
+    put?: never;
+    /**
+     * Receive WhatsApp Cloud API deliveries (tm 380)
+     * @description The one webhook for the deployment's Meta app (FR-MOD-08.5.6, tm 380).
+     *     Public — Meta has no session — but authenticated: `X-Hub-Signature-256`
+     *     must be `sha256=` and the HMAC-SHA256 of the raw body under the app
+     *     secret, compared in constant time. A missing or wrong signature is `401`
+     *     and nothing is written.
+     *
+     *     The business number each change names (`metadata.phone_number_id`)
+     *     resolves the workspace. Messages and statuses are queued durably and
+     *     the answer is a quick `200`; the chat write (card numbers masked, a
+     *     first contact spam-screened, a file kept only under the workspace's
+     *     file-sharing rules) happens after it. A message id delivered twice is
+     *     taken in once. A number no live channel answers to is acknowledged and
+     *     dropped, so one stale number cannot make Meta retry everyone's.
+     *
+     *     `404` unless the deployment runs WhatsApp live (`live_apps`).
+     */
+    post: operations['ingestWhatsAppWebhook'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/channels/whatsapp/signup-config': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What the embedded signup needs (tm 380)
+     * @description The deployment's Meta app id, embedded-signup configuration id, Graph
+     *     version and the redirect the dialog returns to — what the Settings →
+     *     Channels card opens Meta's dialog with. `404` unless the deployment
+     *     runs WhatsApp live (`live_apps`).
+     */
+    get: operations['getWhatsAppSignupConfig'];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -18510,9 +18613,55 @@ export interface components {
       created_at: string;
       /**
        * @description Connected to the real provider (tm 263 — a live Telegram bot, whose
-       *     token is held encrypted); false for every mock channel.
+       *     token is held encrypted; tm 380 — a live WhatsApp number); false for
+       *     every mock channel.
        */
       live?: boolean;
+      /**
+       * @description The address as a person reads it, where it differs from `address`
+       *     (tm 380 — a live WhatsApp number, whose `address` is Meta's phone
+       *     number id). Null otherwise and while off.
+       */
+      display_address?: string | null;
+      /**
+       * @description The provider refused the live credential (tm 380 — Meta's Graph
+       *     error 190 on a WhatsApp business token). Replies are refused until
+       *     the channel is connected again; the admins were e-mailed once.
+       */
+      needs_reconnect?: boolean;
+    };
+    /**
+     * @description What the Settings card needs to open Meta's embedded signup for this
+     *     deployment (tm 380). The app id and configuration id are public — Meta
+     *     shows them in the dialog's URL; the app secret never leaves the server.
+     */
+    WhatsAppSignupConfig: {
+      app_id: string;
+      config_id: string;
+      /** @example v21.0 */
+      graph_version: string;
+      /** @description Where Meta's dialog sends the browser back with the code. */
+      redirect_uri: string;
+    };
+    /**
+     * @description Whether an agent may write to a chat's customer now (tm 380). Only a
+     *     live WhatsApp has a window: free text for 24 hours after the customer's
+     *     last message, and no templates in this release — so past it the
+     *     composer is locked and a reply is refused with `400`
+     *     `details.reason: "channel_window_closed"`. Every other chat is `open`.
+     */
+    ReplyWindow: {
+      chat_id: string;
+      /** @description The channel the customer is reached on; null for a Website chat. */
+      channel: string | null;
+      /** @description The channel runs on its real provider. */
+      live: boolean;
+      open: boolean;
+      /**
+       * Format: date-time
+       * @description When the window closes (or closed); null where there is none.
+       */
+      closes_at: string | null;
     };
     /**
      * @description A forwarding address the workspace's support mail arrives at
@@ -27640,6 +27789,33 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+    };
+  };
+  getChatReplyWindow: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The reply window */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReplyWindow'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
     };
   };
   getChatTimeline: {
@@ -40595,6 +40771,92 @@ export interface operations {
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       404: components['responses']['NotFound'];
+    };
+  };
+  verifyWhatsAppWebhook: {
+    parameters: {
+      query: {
+        'hub.mode': string;
+        'hub.verify_token': string;
+        'hub.challenge': string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The challenge, echoed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/plain': string;
+        };
+      };
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  ingestWhatsAppWebhook: {
+    parameters: {
+      query?: never;
+      header: {
+        'X-Hub-Signature-256': string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          [key: string]: unknown;
+        };
+      };
+    };
+    responses: {
+      /** @description Received and queued */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @enum {string} */
+            status: 'received';
+            /** @description New messages and statuses written (a redelivery adds none). */
+            queued: number;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  getWhatsAppSignupConfig: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The signup configuration */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['WhatsAppSignupConfig'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
     };
   };
   ingestInboundEmail: {

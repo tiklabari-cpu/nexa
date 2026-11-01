@@ -225,6 +225,63 @@ describe('routing', () => {
       expect((await route({ url: '/pricing', countryCode: 'FR' })).groupIds).toEqual([supportId]);
     });
 
+    it('matches several countries, and sends a visitor of unknown country on to the next rule (AU-02)', async () => {
+      await addAgent({ groupId: salesId });
+      await addAgent({ groupId: supportId });
+      await owner.routingRule.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          kind: 'chat',
+          isFallback: true,
+          targetGroupId: supportId,
+        },
+      });
+      await owner.routingRule.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          kind: 'chat',
+          conditions: { country_codes: ['TR', 'AZ'] },
+          targetGroupId: salesId,
+          priority: 5,
+        },
+      });
+
+      expect((await route({ countryCode: 'TR' })).groupIds).toEqual([salesId]);
+      expect((await route({ countryCode: 'az' })).groupIds).toEqual([salesId]);
+      expect((await route({ countryCode: 'DE' })).groupIds).toEqual([supportId]);
+      // No country on the visit: a country rule never matches it.
+      expect((await route({ url: '/pricing' })).groupIds).toEqual([supportId]);
+    });
+
+    it('compares "URL is exactly" with query, fragment, host case and trailing slash set aside (AU-02)', async () => {
+      await addAgent({ groupId: salesId });
+      await addAgent({ groupId: supportId });
+      await owner.routingRule.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          kind: 'chat',
+          isFallback: true,
+          targetGroupId: supportId,
+        },
+      });
+      await owner.routingRule.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          kind: 'chat',
+          conditions: { url_equals: ['https://site.com/tr/para-yatir', 'https://site.com/en/'] },
+          targetGroupId: salesId,
+          priority: 5,
+        },
+      });
+
+      const to = async (url: string) => (await route({ url })).groupIds;
+      expect(await to('https://site.com/tr/para-yatir')).toEqual([salesId]);
+      expect(await to('https://SITE.com/tr/para-yatir/?utm_campaign=a#form')).toEqual([salesId]);
+      expect(await to('https://site.com/en')).toEqual([salesId]);
+      expect(await to('https://site.com/tr/para-yatir/gecmis')).toEqual([supportId]);
+      expect(await to('http://site.com/tr/para-yatir')).toEqual([supportId]);
+    });
+
     it('honours an explicitly requested team', async () => {
       await addAgent({ groupId: salesId });
       expect((await route({ requestedGroupId: salesId })).groupIds).toEqual([salesId]);

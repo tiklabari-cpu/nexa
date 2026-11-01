@@ -117,6 +117,7 @@ import { dayBoundaryFromRow, type DayBoundaryRow } from '../services/chat/day-bo
 import { readVerifiedMailDomains } from '../services/chat/transcript-request.js';
 import type { Mailer } from '../services/mail/mailer.js';
 import { deliver, isCapRefusal, mailFailureFields } from '../services/mail/delivery.js';
+import { normalisePageUrls } from '../services/routing/page-url.js';
 import { secondsUntilUtcMidnight } from '../services/ai/ai-daily-budget.js';
 import {
   readSiemExportRow,
@@ -4001,8 +4002,14 @@ async function resolveRuleConditions(
 
   return {
     ...(conditions.url_contains ? { url_contains: conditions.url_contains } : {}),
-    ...(conditions.url_equals ? { url_equals: conditions.url_equals } : {}),
-    ...(conditions.country_codes ? { country_codes: conditions.country_codes } : {}),
+    ...(conditions.url_equals ? { url_equals: normalisePageUrls(conditions.url_equals) } : {}),
+    ...(conditions.country_codes
+      ? {
+          country_codes: [
+            ...new Set(conditions.country_codes.map((code) => code.trim().toUpperCase())),
+          ].filter(Boolean),
+        }
+      : {}),
     ...(expertiseIds.length > 0 ? { expertise_ids: expertiseIds.map((id) => Number(id)) } : {}),
   };
 }

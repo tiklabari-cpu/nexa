@@ -21,6 +21,7 @@ import { useApiClient } from '../../lib/auth-store.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { optimisticCacheUpdate } from '../../lib/optimistic.js';
+import { ChipInput, CountryPicker } from '../../components/settings/RoutingConditionFields.js';
 
 interface RoutingRule {
   id: string;
@@ -45,6 +46,40 @@ interface Expertise {
 interface Team {
   id: number;
   name: string;
+}
+
+/** What a rule's condition lists look like in the form (AU-02 · tm 373). */
+interface ConditionLists {
+  url_contains: string[];
+  url_equals: string[];
+  country_codes: string[];
+}
+
+const NO_CONDITIONS: ConditionLists = { url_contains: [], url_equals: [], country_codes: [] };
+
+/**
+ * A stored condition value as a list. The API stores arrays, but a rule written
+ * by an older client (or by hand) may hold a bare string — it reads and edits
+ * exactly like a one-value list.
+ */
+function asList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((item) => String(item)).filter(Boolean);
+  if (typeof value === 'string' && value.trim()) return [value];
+  return [];
+}
+
+function listsOf(conditions: Record<string, unknown>): ConditionLists {
+  return {
+    url_contains: asList(conditions.url_contains),
+    url_equals: asList(conditions.url_equals),
+    country_codes: asList(conditions.country_codes).map((code) => code.toUpperCase()),
+  };
+}
+
+/** Adds the text still in a chip box, unless it is already a chip. */
+function withDraft(values: readonly string[], draft: string): string[] {
+  const value = draft.trim();
+  return value && !values.includes(value) ? [...values, value] : [...values];
 }
 
 export function RoutingRules({ canEdit }: { canEdit: boolean }): ReactElement {
@@ -82,11 +117,28 @@ export function RoutingRules({ canEdit }: { canEdit: boolean }): ReactElement {
   const create = useMutation({
     mutationFn: (body: {
       name: string;
-      conditions?: { url_contains: string[] };
+      conditions?: Partial<ConditionLists>;
       target_group_id: number;
       priority: number;
       is_fallback: boolean;
     }) => api.post<RoutingRule>('/settings/routing-rules', body),
+    onSuccess: invalidate,
+  });
+
+  // An edit sends the conditions whole — the server replaces the stored object —
+  // so `expertise_ids` (managed under Skills, not on this form) rides along.
+  const update = useMutation({
+    mutationFn: ({
+      id,
+      body,
+    }: {
+      id: string;
+      body: {
+        conditions?: Record<string, unknown>;
+        target_group_id: number;
+        priority: number;
+      };
+    }) => api.patch<RoutingRule>(`/settings/routing-rules/${id}`, body),
     onSuccess: invalidate,
   });
 
@@ -122,12 +174,35 @@ export function RoutingRules({ canEdit }: { canEdit: boolean }): ReactElement {
   // conditions at all, which is the whole of what makes it the fallback.
   const [asFallback, setAsFallback] = useState(false);
 
+  // The values already added as chips (AU-02 · tm 373). The text still typed in
+  // a box lives in the form (`url_contains`, `equalsDraft`) and is added on submit.
+  const [lists, setLists] = useState<ConditionLists>(NO_CONDITIONS);
+  const [equalsDraft, setEqualsDraft] = useState('');
+  // The rule being edited, or null while the form adds a new one. Name and kind
+  // are fixed once created; team, priority and conditions can change.
+  const [editing, setEditing] = useState<RoutingRule | null>(null);
+
   const form = useForm({
     initial: { name: '', url_contains: '', target_group_id: '', priority: '0' },
     validators: {
-      name: required(t('settings.routing.form.nameError')),
+      // A rule keeps the name it was created with; the fallback may have none.
+      ...(editing ? {} : { name: required(t('settings.routing.form.nameError')) }),
       target_group_id: required(t('settings.routing.form.teamError')),
-      ...(asFallback ? {} : { url_contains: required(t('settings.routing.form.urlError')) }),
+      // A conditional rule needs at least one condition, in any of the three
+      // kinds — a rule with none would catch everything, which only the
+      // fallback is meant to do.
+      ...(asFallback
+        ? {}
+        : {
+            url_contains: (value: string) =>
+              value.trim() ||
+              equalsDraft.trim() ||
+              lists.url_contains.length > 0 ||
+              lists.url_equals.length > 0 ||
+              lists.country_codes.length > 0
+                ? null
+                : t('settings.routing.form.urlError'),
+          }),
     },
     onSubmit: async (values, { setSubmitError, setFieldError, reset }) => {
       const priority = Number(values.priority);
@@ -135,28 +210,90 @@ export function RoutingRules({ canEdit }: { canEdit: boolean }): ReactElement {
         setFieldError('priority', t('settings.routing.form.priorityError'));
         return;
       }
+      const conditions: ConditionLists = {
+        url_contains: withDraft(lists.url_contains, values.url_contains),
+        url_equals: withDraft(lists.url_equals, equalsDraft),
+        country_codes: lists.country_codes,
+      };
+      // Only the kinds that have values: an empty list stored would read as a
+      // condition on the rule that is not there.
+      const sent: Partial<ConditionLists> = {};
+      if (conditions.url_contains.length > 0) sent.url_contains = conditions.url_contains;
+      if (conditions.url_equals.length > 0) sent.url_equals = conditions.url_equals;
+      if (conditions.country_codes.length > 0) sent.country_codes = conditions.country_codes;
       try {
-        await create.mutateAsync({
-          name: values.name.trim(),
-          // The fallback's conditions stay empty — that is what makes it catch
-          // everything, so sending one would quietly stop it being the fallback.
-          ...(asFallback ? {} : { conditions: { url_contains: [values.url_contains.trim()] } }),
-          target_group_id: Number(values.target_group_id),
-          priority,
-          is_fallback: asFallback,
-        });
+        if (editing) {
+          await update.mutateAsync({
+            id: editing.id,
+            body: {
+              // The fallback's conditions stay empty; sending none leaves them so.
+              ...(editing.is_fallback
+                ? {}
+                : {
+                    conditions: {
+                      ...sent,
+                      ...(editing.conditions.expertise_ids !== undefined
+                        ? { expertise_ids: editing.conditions.expertise_ids }
+                        : {}),
+                    },
+                  }),
+              target_group_id: Number(values.target_group_id),
+              priority,
+            },
+          });
+        } else {
+          await create.mutateAsync({
+            name: values.name.trim(),
+            // The fallback's conditions stay empty — that is what makes it catch
+            // everything, so sending one would quietly stop it being the fallback.
+            ...(asFallback ? {} : { conditions: sent }),
+            target_group_id: Number(values.target_group_id),
+            priority,
+            is_fallback: asFallback,
+          });
+        }
         reset();
+        setLists(NO_CONDITIONS);
+        setEqualsDraft('');
         setAsFallback(false);
+        setEditing(null);
       } catch (error) {
         setSubmitError(t(errorMessageKey(error)));
       }
     },
   });
-  useSettingsLeaveGuard(form.isDirty, form.isSubmitting);
+  const formDirty =
+    form.isDirty ||
+    equalsDraft !== '' ||
+    lists.url_contains.length > 0 ||
+    lists.url_equals.length > 0 ||
+    lists.country_codes.length > 0;
+  useSettingsLeaveGuard(formDirty, form.isSubmitting);
   const nameError = form.errorFor('name');
   const urlError = form.errorFor('url_contains');
   const teamError = form.errorFor('target_group_id');
   const priorityError = form.errorFor('priority');
+
+  const startEdit = (rule: RoutingRule): void => {
+    setEditing(rule);
+    setAsFallback(rule.is_fallback);
+    setLists(listsOf(rule.conditions));
+    form.setValue('name', rule.name ?? '');
+    form.setValue('url_contains', '');
+    setEqualsDraft('');
+    form.setValue(
+      'target_group_id',
+      rule.target_group_id === null ? '' : String(rule.target_group_id),
+    );
+    form.setValue('priority', String(rule.priority));
+  };
+  const cancelEdit = (): void => {
+    form.reset();
+    setLists(NO_CONDITIONS);
+    setEqualsDraft('');
+    setAsFallback(false);
+    setEditing(null);
+  };
 
   return (
     <Section title={t('settings.routing.title')} description={t('settings.routing.description')}>
@@ -190,29 +327,45 @@ export function RoutingRules({ canEdit }: { canEdit: boolean }): ReactElement {
                       aria-invalid={nameError ? true : undefined}
                       aria-describedby={nameError ? 'routing-name-error' : undefined}
                       maxLength={120}
-                      className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
+                      readOnly={editing !== null}
+                      className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary read-only:opacity-60"
                     />
                     <FieldError id="routing-name-error" message={nameError} />
                   </label>
 
-                  <label htmlFor="routing-url" className="flex min-w-48 flex-1 flex-col gap-1">
-                    <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                      {t('settings.routing.form.urlLabel')}
-                    </span>
-                    <input
-                      id="routing-url"
-                      value={form.values.url_contains}
-                      onChange={(event) => form.setValue('url_contains', event.target.value)}
-                      onBlur={() => form.blur('url_contains')}
-                      disabled={asFallback}
-                      aria-invalid={urlError ? true : undefined}
-                      aria-describedby={urlError ? 'routing-url-error' : undefined}
-                      placeholder={asFallback ? t('settings.routing.anything') : '/pricing'}
-                      maxLength={2048}
-                      className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary disabled:opacity-50"
-                    />
-                    <FieldError id="routing-url-error" message={urlError} />
-                  </label>
+                  <ChipInput
+                    id="routing-url"
+                    label={t('settings.routing.form.urlLabel')}
+                    values={lists.url_contains}
+                    draft={form.values.url_contains}
+                    placeholder={asFallback ? t('settings.routing.anything') : '/pricing'}
+                    disabled={asFallback}
+                    error={urlError}
+                    onValues={(next) => setLists((current) => ({ ...current, url_contains: next }))}
+                    onDraft={(next) => form.setValue('url_contains', next)}
+                    onBlur={() => form.blur('url_contains')}
+                  />
+
+                  <ChipInput
+                    id="routing-url-equals"
+                    label={t('settings.routing.form.urlEqualsLabel')}
+                    values={lists.url_equals}
+                    draft={equalsDraft}
+                    placeholder="https://site.com/tr/para-yatir"
+                    disabled={asFallback}
+                    onValues={(next) => setLists((current) => ({ ...current, url_equals: next }))}
+                    onDraft={setEqualsDraft}
+                  />
+
+                  <CountryPicker
+                    id="routing-country"
+                    label={t('settings.routing.form.countryLabel')}
+                    values={lists.country_codes}
+                    disabled={asFallback}
+                    onValues={(next) =>
+                      setLists((current) => ({ ...current, country_codes: next }))
+                    }
+                  />
 
                   <label htmlFor="routing-team" className="flex w-40 flex-col gap-1">
                     <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
@@ -263,11 +416,29 @@ export function RoutingRules({ canEdit }: { canEdit: boolean }): ReactElement {
                   >
                     {form.isSubmitting
                       ? t('settings.saving')
-                      : t('settings.routing.form.addButton')}
+                      : editing
+                        ? t('settings.routing.form.saveButton')
+                        : t('settings.routing.form.addButton')}
                   </button>
+                  {editing && (
+                    <button
+                      type="button"
+                      onClick={cancelEdit}
+                      className="mt-5 rounded-md border border-border px-3 py-1.5 text-sm text-content-secondary transition-colors hover:bg-surface-2"
+                    >
+                      {t('settings.routing.form.cancelEdit')}
+                    </button>
+                  )}
                 </div>
 
-                {!hasFallback && (
+                {!asFallback && (
+                  <p className="text-2xs text-content-tertiary">
+                    {t('settings.routing.form.semantics')}{' '}
+                    {t('settings.routing.form.unknownCountry')}
+                  </p>
+                )}
+
+                {!hasFallback && !editing && (
                   <label className="flex items-center gap-2 text-2xs text-content-secondary">
                     <input
                       type="checkbox"
@@ -320,6 +491,16 @@ export function RoutingRules({ canEdit }: { canEdit: boolean }): ReactElement {
 
                   {canEdit && (
                     <>
+                      <button
+                        type="button"
+                        aria-label={t('settings.routing.editAriaLabel', {
+                          name: ruleLabel(t, rule),
+                        })}
+                        onClick={() => startEdit(rule)}
+                        className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+                      >
+                        {t('settings.routing.edit')}
+                      </button>
                       <button
                         type="button"
                         // The fallback cannot be turned off — conversations that
@@ -389,6 +570,9 @@ function ruleLabel(t: TFunction, rule: Pick<RoutingRule, 'name' | 'is_fallback'>
 
 /**
  * Renders the condition JSON as something an admin can read at a glance.
+ * Several kinds on one rule all have to hold; several values of one kind are
+ * alternatives, so they are joined with "or" and the kinds with "and" — the way
+ * the engine reads them (AU-02 · tm 373).
  * `expertise_ids` (FR-MOD-08.6.3) is resolved to skill names via `skillNameById`
  * rather than shown as raw ids; an id with no matching skill (deleted since the
  * rule was written) falls back to `#<id>` instead of disappearing silently.
@@ -402,13 +586,29 @@ function describeConditions(
   conditions: Record<string, unknown>,
   skillNameById: Map<number, string> = new Map(),
 ): string {
-  const entries = Object.entries(conditions ?? {});
+  const entries = Object.entries(conditions ?? {}).filter(
+    ([, value]) => !Array.isArray(value) || value.length > 0,
+  );
   if (entries.length === 0) return t('settings.routing.anything');
+  const orJoiner = t('settings.routing.orJoiner');
   return entries
     .map(([key, value]) => {
       if (key === 'expertise_ids' && Array.isArray(value)) {
         const names = value.map((id: unknown) => skillNameById.get(Number(id)) ?? `#${String(id)}`);
         return t('settings.routing.conditionSkill', { names: names.join(', ') });
+      }
+      if (key === 'url_contains') {
+        return t('settings.routing.conditionUrlContains', { values: asList(value).join(orJoiner) });
+      }
+      if (key === 'url_equals') {
+        return t('settings.routing.conditionUrlEquals', { values: asList(value).join(orJoiner) });
+      }
+      if (key === 'country_codes') {
+        return t('settings.routing.conditionCountry', {
+          values: asList(value)
+            .map((code) => code.toUpperCase())
+            .join(orJoiner),
+        });
       }
       return `${key.replace(/_/g, ' ')} ${String(value)}`;
     })

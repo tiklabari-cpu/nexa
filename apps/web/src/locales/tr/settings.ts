@@ -1339,7 +1339,7 @@ export const settings: Messages = {
   // Talep kuralları — TicketRules.tsx
   'settings.ticketRules.title': 'Talep kuralları',
   'settings.ticketRules.description':
-    'Bir talep açıldığında, ilk eşleşen kural önceliğini belirler veya bir etiket uygular.',
+    'Bir talep açıldığında, güncellendiğinde, durumu değiştiğinde veya mesaj aldığında eşleşen kurallar önceliğini belirler veya etiket uygular. Bir kuralın kendi değişikliği kuralları yeniden çalıştırmaz.',
   'settings.ticketRules.loadError': 'Talep kuralları yüklenemedi.',
   'settings.ticketRules.ruleNameLabel': 'Kural adı',
   'settings.ticketRules.ruleNameError': 'Kurala bir ad verin.',
@@ -1381,6 +1381,45 @@ export const settings: Messages = {
   'settings.ticketRules.insideHoursCondition': 'mesai içinde',
   'settings.ticketRules.sendTemplateAction': '“{template}” şablonunu oyuncuya e-postayla gönder',
   'settings.ticketRules.sendTemplateActionUnknown': 'oyuncuya bir şablon e-postası gönder',
+  'settings.ticketRules.onLabel': 'Ne zaman',
+  'settings.ticketRules.on.created': 'Açıldığında',
+  'settings.ticketRules.on.updated': 'Güncellendiğinde',
+  'settings.ticketRules.on.status_changed': 'Durumu değiştiğinde',
+  'settings.ticketRules.on.message_added': 'Mesaj eklendiğinde',
+  'settings.ticketRules.statusToLabel': 'Yeni durum',
+  'settings.ticketRules.statusToAny': 'Herhangi bir durum',
+  'settings.ticketRules.status.open': 'Açık',
+  'settings.ticketRules.status.pending': 'Beklemede',
+  'settings.ticketRules.status.solved': 'Çözüldü',
+  'settings.ticketRules.status.closed': 'Kapatıldı',
+  'settings.ticketRules.status.spam': 'Spam',
+  'settings.ticketRules.authorLabel': 'Yazan',
+  'settings.ticketRules.authorAny': 'Herkes',
+  'settings.ticketRules.authorPlayer': 'Oyuncu',
+  'settings.ticketRules.authorTeam': 'Ekip',
+  'settings.ticketRules.minPriorityLabel': 'Öncelik en az',
+  'settings.ticketRules.minPriorityError':
+    'En düşük öncelik için 0 veya daha büyük tam bir sayı girin.',
+  'settings.ticketRules.statusToCondition': 'durum {status} olduğunda',
+  'settings.ticketRules.fromPlayerCondition': 'oyuncu yazdığında',
+  'settings.ticketRules.fromTeamCondition': 'ekip yazdığında',
+  'settings.ticketRules.minPriorityCondition': 'öncelik {priority} veya üstü',
+
+  // Kötü puan otomasyonu (AU-03) — ChatTimeout.tsx
+  'settings.badRating.heading': 'Oyuncu sohbete kötü puan verdiğinde',
+  'settings.badRating.description':
+    'Oyuncu bir konuşmaya kötü puan verdiği anda olanlar. Puana sonradan eklenen yorum bunu yeniden çalıştırmaz.',
+  'settings.badRating.notify_team_leads.label': 'Ekip liderlerine haber ver',
+  'settings.badRating.notify_team_leads.hint':
+    'Konuşmanın ekibinin liderleri panelde bir bildirim görür; lideri olmayan ekipte yöneticiler.',
+  'settings.badRating.add_to_qa_queue.label': 'AI kalite kontrolüne gönder',
+  'settings.badRating.add_to_qa_queue.hint':
+    'Yalnız AI’ın tek başına yanıtladığı kapanmış konuşma; bir kişinin yanıtladığı konuşma AI incelemesi değildir.',
+  'settings.badRating.open_ticket.label': 'Takip talebi aç',
+  'settings.badRating.open_ticket.hint':
+    'Konuşmanın ekibinde bir talep; konuşmanın çözülmemiş bir talebi zaten varsa açılmaz.',
+  'settings.badRating.webhookNote':
+    'Kendi sistemlerinize göndermek için Geliştiriciler altında “Sohbet puanlandı” olayına bir webhook bağlayın.',
 
   // İki adımlı doğrulama — TwoFactor.tsx
   'settings.twoFactor.title': 'İki adımlı doğrulama',

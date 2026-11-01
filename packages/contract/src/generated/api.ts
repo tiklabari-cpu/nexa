@@ -8368,7 +8368,10 @@ export interface paths {
     /**
      * Create a ticket rule
      * @description Both a condition and an action are required (FR-MOD-08.6.2): a rule that
-     *     could match nobody, or that would do nothing, is rejected. An action that
+     *     could match nobody, or that would do nothing, is rejected. `on` defaults
+     *     to `created`; a condition or action the moment cannot have (`status_to`
+     *     on `created`/`message_added`, `from_requester` off `message_added`,
+     *     `send_template_id` off `created`) is a 400. An action that
      *     assigns to an agent or team is validated against the tenant now, so a rule
      *     cannot be saved pointing at nothing.
      */
@@ -9210,6 +9213,7 @@ export interface paths {
      *     long for a person's first reply. When on it must be below the transfer,
      *     inactive and auto-close windows that are on, or the save is a 400.
      *     `ask_email_when_offline` asks at once while nobody is accepting chats.
+     *     `bad_rating_actions` (AU-03): what the player's bad vote sets off.
      */
     put: operations['setChatTimeout'];
     post?: never;
@@ -18504,6 +18508,15 @@ export interface components {
      *
      *     `risk_flag_raised` / `risk_flag_cleared` (AI-27-S4) carry what the flag
      *     is, the chat and the member key — never a word anyone wrote.
+     *
+     *     AU-03: `chat_rated` is a new vote or a changed one (a comment added to
+     *     a vote is not a second judgement), its comment masked.
+     *     `ticket_updated` names the fields a person changed (`changed`), the
+     *     ticket rules' own changes counted in; `ticket_status_changed` carries
+     *     `from` and `to`; `ticket_assigned` the new and the previous assignee
+     *     and team; `ticket_message_added` a reply, an internal note or the
+     *     player's message, by id, kind and author type — no text. Every one is
+     *     sent after its transaction committed, once per change.
      * @enum {string}
      */
     WebhookAction:
@@ -18514,7 +18527,12 @@ export interface components {
       | 'ticket_created'
       | 'thread_started'
       | 'risk_flag_raised'
-      | 'risk_flag_cleared';
+      | 'risk_flag_cleared'
+      | 'chat_rated'
+      | 'ticket_updated'
+      | 'ticket_status_changed'
+      | 'ticket_assigned'
+      | 'ticket_message_added';
     /**
      * @description A registered outbound webhook (FR-MOD-08.8.4). The signing secret is
      *     deliberately absent — it is returned only once, by the register call
@@ -19195,8 +19213,27 @@ export interface components {
       transcript_forward_to?: string[];
       /** @description Whether the forwarded copy is the team's, internal notes marked, rather than the player's. Only addresses at the workspace's verified SSO domains may receive it. False unless turned on. */
       transcript_forward_include_notes?: boolean;
+      bad_rating_actions?: components['schemas']['BadRatingActions'];
       /** Format: date-time */
       updated_at: string | null;
+    };
+    /**
+     * @description What the player's bad vote on a connection sets off in this brand
+     *     (AU-03): the team's leads are told in the panel
+     *     (`chat_bad_rating_alert`; a team nobody leads, its admins and up), the
+     *     connection goes to the AI QA queue (AI-24, reason `low_bsat` — only a
+     *     closed connection the AI answered alone, as the sampler's own rule
+     *     reads) and, when chosen, a follow-up ticket opens for it. A changed
+     *     vote to bad counts; a comment added to it does not act again. The
+     *     webhook is not a switch here: a `chat_rated` subscription is.
+     */
+    BadRatingActions: {
+      /** @description True unless turned off. */
+      notify_team_leads: boolean;
+      /** @description True unless turned off. */
+      add_to_qa_queue: boolean;
+      /** @description False unless turned on. */
+      open_ticket: boolean;
     };
     /**
      * @description Per-license widget appearance (FR-MOD-11.7, `widget_settings`). A
@@ -20594,6 +20631,21 @@ export interface components {
        *     work schedule counts as in hours.
        */
       outside_business_hours?: boolean;
+      /**
+       * @description The status the ticket moved to (AU-03). Only the transition
+       *     matches — a `status_changed` or `updated` rule fires as the
+       *     ticket becomes this status, not on a later edit of a ticket already
+       *     in it. Refused on a `created` or `message_added` rule.
+       * @enum {string}
+       */
+      status_to?: 'open' | 'pending' | 'solved' | 'closed' | 'spam';
+      /** @description The ticket's priority after the event is at least this (AU-03). */
+      priority_at_least?: number;
+      /**
+       * @description `true`: the message is the ticket's player's; `false`: the team's —
+       *     a reply or a note (AU-03). Only on a `message_added` rule.
+       */
+      from_requester?: boolean;
     };
     /**
      * @description What a matching rule does (FR-MOD-08.6.2): assign, prioritise, tag — or
@@ -20622,11 +20674,23 @@ export interface components {
        */
       send_template_id?: string;
     };
+    /**
+     * @description When a ticket rule runs (AU-03): `created` — the ticket was opened
+     *     (every rule saved before AU-03); `updated` — a person changed its
+     *     subject, status, priority, assignee or team; `status_changed` — its
+     *     status moved; `message_added` — a reply, a note or the player's
+     *     message landed on it. A rule's own change never runs the rules again
+     *     (depth 1), so "when solved, tag it" tags once. An acknowledgement
+     *     template (`send_template_id`) is for `created` only.
+     * @enum {string}
+     */
+    TicketRuleEvent: 'created' | 'updated' | 'status_changed' | 'message_added';
     /** @description Condition + action automation over tickets (FR-MOD-08.6.2). */
     TicketRule: {
       /** Format: uuid */
       id: string;
       name: string;
+      on: components['schemas']['TicketRuleEvent'];
       conditions: components['schemas']['TicketRuleConditions'];
       actions: components['schemas']['TicketRuleActions'];
       /** @description Whether the rule fires. Off keeps it configured without acting. */
@@ -37231,6 +37295,7 @@ export interface operations {
       content: {
         'application/json': {
           name: string;
+          on?: components['schemas']['TicketRuleEvent'];
           conditions: components['schemas']['TicketRuleConditions'];
           actions: components['schemas']['TicketRuleActions'];
           /** @description Whether the rule fires; defaults to true. */
@@ -37293,6 +37358,7 @@ export interface operations {
       content: {
         'application/json': {
           name?: string;
+          on?: components['schemas']['TicketRuleEvent'];
           conditions?: components['schemas']['TicketRuleConditions'];
           actions?: components['schemas']['TicketRuleActions'];
           enabled?: boolean;
@@ -38578,6 +38644,12 @@ export interface operations {
           transcript_forward_to?: string[];
           /** @description Forward the team's copy, internal notes marked. Refused (400, `reason: domain_not_verified`, nothing saved) while any forwarding address — as this save leaves the list — is outside the workspace's verified SSO domains. Left out, the stored value stays. */
           transcript_forward_include_notes?: boolean;
+          /** @description The bad-rating automation (AU-03). Each switch is optional; a switch left out keeps its stored value (or its default). */
+          bad_rating_actions?: {
+            notify_team_leads?: boolean;
+            add_to_qa_queue?: boolean;
+            open_ticket?: boolean;
+          };
         };
       };
     };

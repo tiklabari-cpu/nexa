@@ -243,6 +243,26 @@ describe('availability the system changed', () => {
     );
   });
 
+  it('shows a lead the bad vote the API addressed to them (AU-03 · tm 374)', async () => {
+    renderShell();
+    await connected();
+    const login = FakeWebSocket.last.sent.find((frame) => frame.action === 'login');
+    const subscribed = (login?.payload['pushes'] as Record<string, string[]>)['3.6'];
+    expect(subscribed).toContain('chat_bad_rating_alert');
+
+    act(() =>
+      FakeWebSocket.last.push('chat_bad_rating_alert', {
+        chat_id: 'c-7',
+        thread_id: 't-7',
+        rating_id: 'r-7',
+        group_id: 3,
+        ticket_id: null,
+      }),
+    );
+    expect(await screen.findByText('A player rated a chat bad')).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Open the conversation' })).toBeVisible();
+  });
+
   it('takes a push about this agent into the switch and says why; a teammate’s says nothing', async () => {
     renderShell();
     await connected();

@@ -31,6 +31,12 @@ export const shell: Messages = {
     'Yeni bir sohbet art arda {count} ajan tarafından yanıtsız bırakıldı. Kararınız için ekibin kuyruğunun başında bekliyor.',
   'shell.presence.alert.unclaimed':
     'Manuel atamalı bir ekibin kuyruğundaki sohbeti kimse almadı. Hâlâ orada bekliyor.',
+  'shell.badRating.title': 'Bir oyuncu sohbete kötü puan verdi',
+  'shell.badRating.body': 'Ekibinizin bir konuşması kötü puan aldı. Tazeyken okuyun.',
+  'shell.badRating.withTicket':
+    'Ekibinizin bir konuşması kötü puan aldı ve onun için bir takip talebi açıldı.',
+  'shell.badRating.open': 'Konuşmayı aç',
+  'shell.badRating.openTicket': 'Talebi aç',
   'shell.presence.alert.someone': 'Bir ajan',
   'shell.presence.alert.open': 'Sohbeti aç',
   'shell.modules': 'Modüller',

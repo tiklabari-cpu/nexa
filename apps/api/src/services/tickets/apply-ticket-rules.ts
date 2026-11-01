@@ -1,5 +1,8 @@
 /**
- * The ticket-rule engine, applied when a ticket is opened (FR-MOD-08.6.2).
+ * The ticket-rule engine (FR-MOD-08.6.2), applied when a ticket is opened and,
+ * since AU-03 (tm 374), at the later moments a rule can name — an update, a
+ * status change, a new message (`ticket-events.ts` decides which an event is).
+ * Only the rules whose `on` is one of the run's moments are read.
  *
  * Every enabled rule whose condition matches the new ticket runs, in `position`
  * order, and applies its action: assign the ticket, set its priority, tag it.
@@ -21,7 +24,7 @@
  * mails it after the commit.
  */
 import type { Prisma } from '@prisma/client';
-import type { TicketRuleActions, TicketRuleConditions } from '@siyahtus/types';
+import type { TicketRuleActions, TicketRuleConditions, TicketRuleEvent } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 import { isOpenAt } from '../sla/business-hours.js';
 import { readBusinessWeek } from '../sla/sla-service.js';
@@ -41,18 +44,70 @@ export interface PendingAck {
  */
 const ACK_SOURCES: ReadonlySet<TicketRuleContext['source']> = new Set(['email', 'widget']);
 
+/** Which rules a run answers (AU-03 · tm 374). */
+export interface TicketRuleRun {
+  /** The moments of the event — `created` at the opening. */
+  on: readonly TicketRuleEvent[];
+  /**
+   * The change being answered was a rule's own: nothing runs (depth 1). What
+   * this run writes is never answered by another run — the caller does not
+   * start one for it.
+   */
+  triggeredByRule?: boolean;
+  /**
+   * The workspace's rules, read once by a caller answering many tickets in one
+   * gesture (a bulk action) — filtered here by `on`, so the read is not
+   * repeated per row. Absent, the run reads its own.
+   */
+  rules?: readonly TicketRuleRow[];
+}
+
+/** A rule as the engine reads it. */
+export interface TicketRuleRow {
+  name: string;
+  on: string;
+  conditions: Prisma.JsonValue;
+  actions: Prisma.JsonValue;
+}
+
+/** The enabled rules of these moments, in evaluation order. */
+export function readTicketRules(
+  tx: TenantClient,
+  licenseId: bigint,
+  on: readonly TicketRuleEvent[],
+): Promise<TicketRuleRow[]> {
+  return tx.ticketRule.findMany({
+    where: { licenseId, enabled: true, on: { in: [...on] } },
+    orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+    select: { name: true, on: true, conditions: true, actions: true },
+  });
+}
+
+/** What the rules wrote, so the caller's event can report the final state. */
+export interface TicketRuleChanges {
+  /** True when a rule wrote anything — an assignment, a priority or a tag. */
+  touched: boolean;
+  assigneeId?: string;
+  groupId?: bigint;
+  priority?: number;
+  tags: string[];
+}
+
+const NO_CHANGES: TicketRuleChanges = Object.freeze({ touched: false, tags: [] });
+
 export async function applyTicketRules(
   tx: TenantClient,
   licenseId: bigint,
   ticketId: string,
   ctx: TicketRuleContext,
-): Promise<{ ack: PendingAck | null }> {
-  const rules = await tx.ticketRule.findMany({
-    where: { licenseId, enabled: true },
-    orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
-    select: { name: true, conditions: true, actions: true },
-  });
-  if (rules.length === 0) return { ack: null };
+  run: TicketRuleRun = { on: ['created'] },
+): Promise<{ ack: PendingAck | null; changes: TicketRuleChanges }> {
+  if (run.triggeredByRule || run.on.length === 0) return { ack: null, changes: NO_CHANGES };
+  const rules = run.rules
+    ? run.rules.filter((rule) => (run.on as readonly string[]).includes(rule.on))
+    : await readTicketRules(tx, licenseId, run.on);
+  if (rules.length === 0) return { ack: null, changes: NO_CHANGES };
+  const opening = run.on.includes('created');
 
   // The work schedules are read once, and only when a rule asks about hours.
   const asksHours = rules.some(
@@ -65,6 +120,7 @@ export async function applyTicketRules(
       : ctx;
 
   const update: Prisma.TicketUpdateInput = {};
+  const changes: TicketRuleChanges = { touched: false, tags: [] };
   const tagNames = new Set<string>();
   let touched = false;
   let ack: PendingAck | null = null;
@@ -76,6 +132,7 @@ export async function applyTicketRules(
 
     if (actions.assign_agent_id && (await isActiveAgent(tx, licenseId, actions.assign_agent_id))) {
       update.assigneeId = actions.assign_agent_id;
+      changes.assigneeId = actions.assign_agent_id;
       touched = true;
     }
     if (
@@ -83,16 +140,18 @@ export async function applyTicketRules(
       (await groupExists(tx, licenseId, actions.assign_group_id))
     ) {
       update.groupId = BigInt(actions.assign_group_id);
+      changes.groupId = BigInt(actions.assign_group_id);
       touched = true;
     }
     if (actions.priority != null) {
       update.priority = actions.priority;
+      changes.priority = actions.priority;
       touched = true;
     }
     const tag = actions.add_tag?.trim();
     if (tag) tagNames.add(tag);
     // One acknowledgement per ticket: the first matching rule's.
-    if (!ack && actions.send_template_id && ACK_SOURCES.has(context.source)) {
+    if (opening && !ack && actions.send_template_id && ACK_SOURCES.has(context.source)) {
       ack = { templateId: actions.send_template_id, ruleName: rule.name };
     }
   }
@@ -103,7 +162,9 @@ export async function applyTicketRules(
   for (const name of tagNames) {
     await applyTag(tx, licenseId, ticketId, name);
   }
-  return { ack };
+  changes.tags = [...tagNames];
+  changes.touched = touched || tagNames.size > 0;
+  return { ack, changes };
 }
 
 /**

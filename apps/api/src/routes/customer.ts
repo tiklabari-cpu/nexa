@@ -78,6 +78,7 @@ import { fireCampaignsAtVisitor } from '../services/campaigns/campaign-trigger.j
 import { createGoalConversionRecorder } from '../services/goals/goal-triggers.js';
 import { AiResponder } from '../services/ai/ai-responder.js';
 import { HumanRequestService } from '../services/ai/human-request.js';
+import { RatingAnnouncer } from '../services/ratings/rating-announce.js';
 import { recordRating } from '../services/ratings/rating-service.js';
 import type { AiJobRun } from '../services/ai/ai-job-worker.js';
 import {
@@ -431,6 +432,14 @@ export default async function customerRoutes(
   // Only ever entered through `createFromWidget` from here: the visitor has no
   // principal, so none of the scope-guarded methods on it are reachable.
   const tickets = new TicketService();
+  // A judgement's webhook and, for a bad vote, the brand's automation (AU-03 · tm 374).
+  const ratings = new RatingAnnouncer({
+    db: app.db,
+    publisher,
+    automations,
+    tickets,
+    logger: app.log,
+  });
   // The acknowledgement a ticket rule asks for on a message left in the widget
   // (tm 359 · HD-04); it shares the ticket reply's mail settings (K23).
   const autoAck = new TicketAutoAck(new TicketMessageService(), {
@@ -1914,7 +1923,9 @@ export default async function customerRoutes(
   /**
    * Customer satisfaction rating (FR-MOD-11 · AR-03 · WG-11): one per
    * connection — a second call writes onto it (`services/ratings`), and the
-   * chat's agents are told (`chat_rated`).
+   * chat's agents are told (`chat_rated`). A judgement — a new vote or a
+   * changed one — is also delivered to `chat_rated` subscribers and, when bad,
+   * runs the brand's bad-rating automation (AU-03 · tm 374).
    */
   app.post(
     '/customer/chat/rating',
@@ -1935,6 +1946,18 @@ export default async function customerRoutes(
       );
       if (rating.threadId !== null) {
         await chats.announceRated(tenant, { chatId: rating.chatId, threadId: rating.threadId });
+        // After the commit, once per judgement: a comment added to the vote is
+        // not a second one (AU-03 · tm 374). Never throws.
+        if (rating.judged) {
+          await ratings.announce(tenant, {
+            id: rating.id,
+            chatId: rating.chatId,
+            threadId: rating.threadId,
+            value: rating.value,
+            comment: rating.comment,
+            ratedAt: rating.ratedAt,
+          });
+        }
       }
 
       return reply.status(rating.created ? 201 : 200).send({

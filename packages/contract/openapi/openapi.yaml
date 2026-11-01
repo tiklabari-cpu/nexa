@@ -8460,6 +8460,15 @@ components:
 
         `risk_flag_raised` / `risk_flag_cleared` (AI-27-S4) carry what the flag
         is, the chat and the member key — never a word anyone wrote.
+
+        AU-03: `chat_rated` is a new vote or a changed one (a comment added to
+        a vote is not a second judgement), its comment masked.
+        `ticket_updated` names the fields a person changed (`changed`), the
+        ticket rules' own changes counted in; `ticket_status_changed` carries
+        `from` and `to`; `ticket_assigned` the new and the previous assignee
+        and team; `ticket_message_added` a reply, an internal note or the
+        player's message, by id, kind and author type — no text. Every one is
+        sent after its transaction committed, once per change.
       enum:
         - chat_started
         - chat_deactivated
@@ -8469,6 +8478,11 @@ components:
         - thread_started
         - risk_flag_raised
         - risk_flag_cleared
+        - chat_rated
+        - ticket_updated
+        - ticket_status_changed
+        - ticket_assigned
+        - ticket_message_added
 
     Webhook:
       type: object
@@ -9437,7 +9451,25 @@ components:
             Whether the forwarded copy is the team's, internal notes marked,
             rather than the player's. Only addresses at the workspace's
             verified SSO domains may receive it. False unless turned on.
+        bad_rating_actions: { $ref: "#/components/schemas/BadRatingActions" }
         updated_at: { type: string, format: date-time, nullable: true }
+
+    BadRatingActions:
+      type: object
+      description: |
+        What the player's bad vote on a connection sets off in this brand
+        (AU-03): the team's leads are told in the panel
+        (`chat_bad_rating_alert`; a team nobody leads, its admins and up), the
+        connection goes to the AI QA queue (AI-24, reason `low_bsat` — only a
+        closed connection the AI answered alone, as the sampler's own rule
+        reads) and, when chosen, a follow-up ticket opens for it. A changed
+        vote to bad counts; a comment added to it does not act again. The
+        webhook is not a switch here: a `chat_rated` subscription is.
+      required: [notify_team_leads, add_to_qa_queue, open_ticket]
+      properties:
+        notify_team_leads: { type: boolean, description: "True unless turned off." }
+        add_to_qa_queue: { type: boolean, description: "True unless turned off." }
+        open_ticket: { type: boolean, description: "False unless turned on." }
 
     WidgetSettings:
       type: object
@@ -11317,6 +11349,24 @@ components:
             `true`: only while the team is out of hours when the ticket opens;
             `false`: only while it is in (HD-04). A workspace with no saved
             work schedule counts as in hours.
+        status_to:
+          type: string
+          enum: [open, pending, solved, closed, spam]
+          description: |
+            The status the ticket moved to (AU-03). Only the transition
+            matches — a `status_changed` or `updated` rule fires as the
+            ticket becomes this status, not on a later edit of a ticket already
+            in it. Refused on a `created` or `message_added` rule.
+        priority_at_least:
+          type: integer
+          minimum: 0
+          maximum: 1000
+          description: The ticket's priority after the event is at least this (AU-03).
+        from_requester:
+          type: boolean
+          description: |
+            `true`: the message is the ticket's player's; `false`: the team's —
+            a reply or a note (AU-03). Only on a `message_added` rule.
 
     TicketRuleActions:
       type: object
@@ -11352,13 +11402,26 @@ components:
             automatic reply, a spam-flagged sender or one whose SPF/DMARC failed.
             The template must exist on this workspace.
 
+    TicketRuleEvent:
+      type: string
+      enum: [created, updated, status_changed, message_added]
+      description: |
+        When a ticket rule runs (AU-03): `created` — the ticket was opened
+        (every rule saved before AU-03); `updated` — a person changed its
+        subject, status, priority, assignee or team; `status_changed` — its
+        status moved; `message_added` — a reply, a note or the player's
+        message landed on it. A rule's own change never runs the rules again
+        (depth 1), so "when solved, tag it" tags once. An acknowledgement
+        template (`send_template_id`) is for `created` only.
+
     TicketRule:
       type: object
       description: Condition + action automation over tickets (FR-MOD-08.6.2).
-      required: [id, name, conditions, actions, enabled, position, created_at]
+      required: [id, name, on, conditions, actions, enabled, position, created_at]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
+        on: { $ref: "#/components/schemas/TicketRuleEvent" }
         conditions: { $ref: "#/components/schemas/TicketRuleConditions" }
         actions: { $ref: "#/components/schemas/TicketRuleActions" }
         enabled:

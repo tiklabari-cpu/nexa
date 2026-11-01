@@ -36,6 +36,16 @@ export interface RecordedRating {
   hasComment: boolean;
   /** False when an existing rating was written onto. */
   created: boolean;
+  /**
+   * A judgement (AU-03 · tm 374): the vote is new, or its value changed. A
+   * comment added to a vote already sent is not one — `chat_rated` and the
+   * bad-rating automation answer a judgement once.
+   */
+  judged: boolean;
+  /** The comment as stored — masked; null without one. */
+  comment: string | null;
+  /** The rating's time (`created_at`, moved by a changed value). */
+  ratedAt: Date;
 }
 
 export async function recordRating(
@@ -68,12 +78,19 @@ export async function recordRating(
           ...(changed ? { value: input.value, subject, createdAt: new Date() } : {}),
           ...(comment !== undefined ? { comment } : {}),
         },
-        select: { id: true, value: true, chatId: true, threadId: true, comment: true },
+        select: {
+          id: true,
+          value: true,
+          chatId: true,
+          threadId: true,
+          comment: true,
+          createdAt: true,
+        },
       });
       if (changed && subject) {
         await recordOutcomeRating(tx, target.threadId, subject, input.value);
       }
-      return toRecorded(updated, false);
+      return toRecorded(updated, false, changed);
     }
   }
 
@@ -89,12 +106,12 @@ export async function recordRating(
       subject,
       ...(comment !== undefined ? { comment } : {}),
     },
-    select: { id: true, value: true, chatId: true, threadId: true, comment: true },
+    select: { id: true, value: true, chatId: true, threadId: true, comment: true, createdAt: true },
   });
   if (target.threadId && subject) {
     await recordOutcomeRating(tx, target.threadId, subject, input.value);
   }
-  return toRecorded(created, true);
+  return toRecorded(created, true, true);
 }
 
 /**
@@ -132,8 +149,10 @@ function toRecorded(
     chatId: string;
     threadId: string | null;
     comment: string | null;
+    createdAt: Date;
   },
   created: boolean,
+  judged: boolean,
 ): RecordedRating {
   return {
     id: row.id,
@@ -142,6 +161,9 @@ function toRecorded(
     threadId: row.threadId,
     hasComment: hasRatingComment(row.comment),
     created,
+    judged,
+    comment: hasRatingComment(row.comment) ? row.comment : null,
+    ratedAt: row.createdAt,
   };
 }
 

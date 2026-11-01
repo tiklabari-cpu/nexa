@@ -13,6 +13,7 @@ import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import {
+  readBadRatingActions,
   COMPANY_ADDRESS_MAX_LENGTH,
   COMPANY_SECTORS,
   COMPANY_SIZES,
@@ -691,6 +692,16 @@ const updateChatTimeoutBody = z.object({
   // (WG-06 · tm 345). Optional the same way; checked together below.
   transcript_forward_to: z.array(z.string().min(3).max(254)).max(TRANSCRIPT_FORWARD_MAX).optional(),
   transcript_forward_include_notes: z.boolean().optional(),
+  // What a bad vote sets off (AU-03 · tm 374). Each switch optional: one left
+  // out keeps what is stored, or its default.
+  bad_rating_actions: z
+    .object({
+      notify_team_leads: z.boolean().optional(),
+      add_to_qa_queue: z.boolean().optional(),
+      open_ticket: z.boolean().optional(),
+    })
+    .strict()
+    .optional(),
 });
 
 /**
@@ -3164,6 +3175,16 @@ export default async function settingsRoutes(
             );
           }
         }
+        // The bad-rating switches as this save leaves them, stored whole.
+        const badRating =
+          body.bad_rating_actions === undefined
+            ? {}
+            : {
+                badRatingActions: {
+                  ...readBadRatingActions(stored?.badRatingActions),
+                  ...body.bad_rating_actions,
+                },
+              };
         const row = await tx.inboxSettings.upsert({
           where,
           create: {
@@ -3175,6 +3196,7 @@ export default async function settingsRoutes(
             ...dayBoundary,
             ...pauseAndReopen,
             ...forward,
+            ...badRating,
           },
           update: {
             chatTimeoutSeconds: body.chat_timeout_seconds,
@@ -3183,6 +3205,7 @@ export default async function settingsRoutes(
             ...dayBoundary,
             ...pauseAndReopen,
             ...forward,
+            ...badRating,
           },
         });
         const after = dayBoundaryFromRow(row);
@@ -3206,6 +3229,7 @@ export default async function settingsRoutes(
             ],
             transcript_forward_count: row.transcriptForwardTo.length,
             transcript_forward_include_notes: row.transcriptForwardIncludeNotes,
+            bad_rating_actions: readBadRatingActions(row.badRatingActions),
             day_boundary_timezone: after.timezone,
             day_boundary_hour: after.hour,
             // Only when it moved: a timeout-only save is not a boundary change,
@@ -4122,6 +4146,7 @@ function serialiseInbox(
         transcriptAllowedDomains: string[];
         transcriptForwardTo: string[];
         transcriptForwardIncludeNotes: boolean;
+        badRatingActions: Prisma.JsonValue | null;
         updatedAt: Date;
       })
     | null,
@@ -4148,6 +4173,8 @@ function serialiseInbox(
     transcript_allowed_domains: row?.transcriptAllowedDomains ?? [],
     transcript_forward_to: row?.transcriptForwardTo ?? [],
     transcript_forward_include_notes: row?.transcriptForwardIncludeNotes ?? false,
+    // No row, or a switch never saved: the decision's defaults (AU-03).
+    bad_rating_actions: readBadRatingActions(row?.badRatingActions),
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
 }

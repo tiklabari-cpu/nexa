@@ -31,6 +31,12 @@ export const shell: Messages = {
     'A new chat has gone unanswered by {count} agents in a row. It is waiting at the front of the team’s queue for you to decide.',
   'shell.presence.alert.unclaimed':
     'A chat has waited in a manual team’s queue and nobody has taken it. It is still waiting there.',
+  'shell.badRating.title': 'A player rated a chat bad',
+  'shell.badRating.body': 'A conversation of your team was rated bad. Read it while it is fresh.',
+  'shell.badRating.withTicket':
+    'A conversation of your team was rated bad, and a follow-up ticket was opened for it.',
+  'shell.badRating.open': 'Open the conversation',
+  'shell.badRating.openTicket': 'Open the ticket',
   'shell.presence.alert.someone': 'An agent',
   'shell.presence.alert.open': 'Open chat',
   'shell.modules': 'Modules',

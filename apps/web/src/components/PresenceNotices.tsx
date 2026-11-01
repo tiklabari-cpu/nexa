@@ -11,6 +11,9 @@
  * Every notice says what happened and offers the one way on: accept chats
  * again (never done for them — see `apps/rtm/src/presence.ts`), or open the
  * chat. A dismiss only hides it; nothing is undone.
+ *
+ * And, for a lead, a conversation of the team the player voted bad (AU-03 ·
+ * tm 374): open it in the archive, or the follow-up ticket when one opened.
  */
 import { useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
@@ -19,9 +22,11 @@ import type { RoutingStatus } from '@siyahtus/types';
 import { useAuth } from '../lib/auth-store.js';
 import { useTranslate, type TFunction } from '../lib/i18n.js';
 import {
+  dismissBadRatingAlert,
   dismissSelfStatusNotice,
   dismissUnansweredAlert,
   usePresenceNotices,
+  type BadRatingAlert,
   type SelfStatusNotice,
   type UnansweredAlert,
 } from '../lib/presence-notice.js';
@@ -59,14 +64,17 @@ function selfMessage(t: TFunction, notice: SelfStatusNotice): string {
 }
 
 export function PresenceNotices(): ReactElement | null {
-  const { self, alerts } = usePresenceNotices();
-  if (!self && alerts.length === 0) return null;
+  const { self, alerts, badRatings } = usePresenceNotices();
+  if (!self && alerts.length === 0 && badRatings.length === 0) return null;
 
   return (
     <div className="flex flex-col gap-2 border-b border-border px-4 py-2">
       {self && <SelfNotice notice={self} />}
       {alerts.map((alert) => (
         <AlertNotice key={alert.id} alert={alert} />
+      ))}
+      {badRatings.map((alert) => (
+        <BadRatingNotice key={alert.id} alert={alert} />
       ))}
     </div>
   );
@@ -150,6 +158,36 @@ function AlertNotice({ alert }: { alert: UnansweredAlert }): ReactElement {
             ? t('shell.presence.alert.unclaimed')
             : t('shell.presence.alert.noAgent', { agent })}
       </p>
+    </Banner>
+  );
+}
+
+function BadRatingNotice({ alert }: { alert: BadRatingAlert }): ReactElement {
+  const t = useTranslate();
+  const link =
+    alert.ticketId !== null
+      ? `/app/inbox?ticket=${encodeURIComponent(alert.ticketId)}`
+      : `/app/archive?c=${encodeURIComponent(alert.threadId)}`;
+
+  return (
+    <Banner
+      tone="warning"
+      role="status"
+      title={t('shell.badRating.title')}
+      dismissible
+      dismissLabel={t('shell.presence.dismiss')}
+      onDismiss={() => dismissBadRatingAlert(alert.id)}
+      cta={
+        <Link
+          to={link}
+          onClick={() => dismissBadRatingAlert(alert.id)}
+          className="inline-flex min-h-6 items-center rounded-md border border-border bg-surface px-3 py-1 text-xs font-medium text-content hover:bg-surface-2"
+        >
+          {alert.ticketId !== null ? t('shell.badRating.openTicket') : t('shell.badRating.open')}
+        </Link>
+      }
+    >
+      <p>{alert.ticketId !== null ? t('shell.badRating.withTicket') : t('shell.badRating.body')}</p>
     </Banner>
   );
 }

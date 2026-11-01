@@ -27,6 +27,7 @@ export * from './procedure.js';
 export * from './resolution.js';
 export * from './entitlements.js';
 export * from './integrations.js';
+export * from './ticket-triggers.js';
 export * from './errors.js';
 export * from './scopes.js';
 export * from './role-scopes.js';

@@ -29,7 +29,8 @@ import type { Principal } from '../auth/principal.js';
 import { seesPlayerContact } from '../customers/player-contact.js';
 import { readCustomFieldValues } from '../custom-fields/custom-field-service.js';
 import { evaluate, evaluateSubject, readClock } from '../sla/sla-service.js';
-import { applyTicketRules, type PendingAck } from './apply-ticket-rules.js';
+import { applyTicketRules, readTicketRules, type PendingAck } from './apply-ticket-rules.js';
+import { answerTicketEvent, type TicketSignals } from './ticket-events.js';
 import { breachedFirstResponses, refreshFirstResponseDue, ticketSlaOf } from './ticket-sla.js';
 
 export const TICKET_STATUSES = ['open', 'pending', 'solved', 'closed', 'spam'] as const;
@@ -431,6 +432,49 @@ export class TicketService {
     return { ...created, ack: input.sourceChatId ? null : ack };
   }
 
+  /**
+   * The bad-rating automation's follow-up ticket (AU-03 · tm 374), when the
+   * brand chose it: the conversation the player voted bad gets a ticket for
+   * the team to come back to, in the connection's team, through the
+   * `created` rules like any ticket opened from a chat. No principal — the
+   * player's vote is what opened it — and so no assignee and no priority of
+   * its own. A conversation that already has an unresolved ticket gets no
+   * second one: null.
+   */
+  async createFromBadRating(
+    tx: TenantClient,
+    tenant: TenantContext,
+    input: { chatId: string; threadId: string; customerId: string; groupId: bigint | null },
+  ): Promise<TicketSummary | null> {
+    const existing = await tx.ticket.findFirst({
+      where: { sourceChatId: input.chatId, status: { in: UNRESOLVED } },
+      select: { id: true },
+    });
+    if (existing) return null;
+    const subject = `Bad rating — conversation ${input.threadId}`;
+    const created = await tx.ticket.create({
+      data: {
+        id: await allocateId(tx),
+        licenseId: tenant.licenseId,
+        subject,
+        status: 'open',
+        customerId: input.customerId,
+        sourceChatId: input.chatId,
+        sourceThreadId: input.threadId,
+        groupId: input.groupId,
+        lastMessageAt: new Date(),
+      },
+      select: { id: true },
+    });
+    await applyTicketRules(tx, tenant.licenseId, created.id, { subject, source: 'chat' });
+    await refreshFirstResponseDue(tx, tenant, { id: created.id });
+    const row = await tx.ticket.findUniqueOrThrow({
+      where: { id: created.id },
+      include: TICKET_INCLUDE,
+    });
+    return toDetail(tx, row);
+  }
+
   async update(
     tx: TenantClient,
     tenant: TenantContext,
@@ -438,6 +482,8 @@ export class TicketService {
     audit: AuditContext,
     ticketId: string,
     patch: UpdateInput,
+    /** Where the change's webhook deliveries are collected for after the commit (AU-03). */
+    signals?: TicketSignals,
   ): Promise<TicketDetail> {
     const visibility = await resolveVisibility(tx, principal, 'write');
     const existing = await loadVisible(tx, visibility, ticketId);
@@ -481,18 +527,36 @@ export class TicketService {
     // a trail anybody can reason from.
     await writeTicketChangeAudit(tx, audit, ticketId, existing, patch);
 
+    // The rules of this change's moments (AU-03 · tm 374) — `updated`, and
+    // `status_changed` when the status moved — once; what they write is part
+    // of this change and runs no rule again. Before the clocks: a rule may set
+    // the priority the first-response target hangs on.
+    const event = await answerTicketEvent(
+      tx,
+      tenant,
+      { before: existing, after: updated },
+      signals,
+    );
+    const current = event.ruleChanged
+      ? await tx.ticket.findUniqueOrThrow({ where: { id: ticketId }, include: TICKET_INCLUDE })
+      : updated;
+
     // The resolution clock stops when the ticket leaves the unresolved set.
     //
     // A ticket's *first response* is an agent's reply (HD-01), measured by
     // `ticket-sla.ts` (HD-05): a new priority moves its due moment, a status
     // leaving open/pending stops it, coming back resumes it from the creation.
     await stopResolutionClock(tx, tenant, existing, patch.status);
-    if (patch.priority !== undefined || patch.status !== undefined) {
+    if (
+      patch.priority !== undefined ||
+      patch.status !== undefined ||
+      current.priority !== updated.priority
+    ) {
       const due = await refreshFirstResponseDue(tx, tenant, { id: ticketId });
-      updated.firstResponseDueAt = due.get(ticketId) ?? null;
+      current.firstResponseDueAt = due.get(ticketId) ?? null;
     }
 
-    return toDetail(tx, updated);
+    return toDetail(tx, current);
   }
 
   /**
@@ -531,6 +595,8 @@ export class TicketService {
     audit: AuditContext,
     ticketIds: string[],
     patch: UpdateInput,
+    /** Where each row's webhook deliveries are collected for after the commit (AU-03). */
+    signals?: TicketSignals,
   ): Promise<BulkUpdateResult> {
     const visibility = await resolveVisibility(tx, principal, 'write');
 
@@ -538,11 +604,14 @@ export class TicketService {
       where: { id: { in: ticketIds } },
       select: {
         id: true,
+        subject: true,
         status: true,
         priority: true,
         assigneeId: true,
         groupId: true,
         mergedIntoId: true,
+        sourceChatId: true,
+        inboundAddressId: true,
         createdAt: true,
       },
     });
@@ -607,6 +676,31 @@ export class TicketService {
         await writeTicketChangeAudit(tx, audit, row.id, row, patch);
       }
 
+      // Each row is its own event to the rules (AU-03 · tm 374): one ticket
+      // solved in a sweep of fifty is solved as surely as one solved alone.
+      // A row the patch leaves as it was is no event. The rules are read once
+      // for the gesture, not per row.
+      const rules = await readTicketRules(tx, tenant.licenseId, ['updated', 'status_changed']);
+      const rulePriority = new Set<string>();
+      for (const row of eligible) {
+        const after = {
+          ...row,
+          ...(patch.status !== undefined ? { status: patch.status } : {}),
+          ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
+          ...(patch.assignee_id !== undefined ? { assigneeId: patch.assignee_id } : {}),
+          ...(patch.group_id !== undefined
+            ? { groupId: patch.group_id != null ? BigInt(patch.group_id) : null }
+            : {}),
+        };
+        const event = await answerTicketEvent(
+          tx,
+          tenant,
+          { before: row, after, at: now, rules },
+          signals,
+        );
+        if (event.final.priority !== after.priority) rulePriority.add(row.id);
+      }
+
       // The resolution clock stops when a ticket leaves the unresolved set
       // (FR-MOD-11.5 · 11.5-d). The calendar is read once for the batch and
       // handed to `evaluate`, which is why `evaluateSubject` is not called in
@@ -637,11 +731,18 @@ export class TicketService {
       }
 
       // The first-response due moments, in one read and one write for the batch.
-      if (patch.priority !== undefined || patch.status !== undefined) {
+      if (patch.priority !== undefined || patch.status !== undefined || rulePriority.size > 0) {
         await refreshFirstResponseDue(
           tx,
           tenant,
-          { id: { in: eligible.map((row) => row.id) } },
+          {
+            id: {
+              in:
+                patch.priority !== undefined || patch.status !== undefined
+                  ? eligible.map((row) => row.id)
+                  : [...rulePriority],
+            },
+          },
           { at: now },
         );
       }

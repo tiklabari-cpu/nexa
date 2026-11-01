@@ -53,6 +53,7 @@ import {
   resolveAttachments,
   type TicketReplyOutbound,
 } from '../services/tickets/ticket-message-service.js';
+import { TicketSignals } from '../services/tickets/ticket-events.js';
 import { TicketReplyAddresses } from '../services/tickets/ticket-reply-address.js';
 
 const READ_SCOPES = ['tickets--all:ro', 'tickets--access:ro', 'tickets--all:rw'];
@@ -389,15 +390,26 @@ export default async function ticketRoutes(
     const tenant = request.tenant();
     const principal = request.requirePrincipal();
     const audit = request.auditContext();
+    const signals = new TicketSignals();
 
     const result = await request.withTenant((tx) =>
-      tickets.bulkUpdate(tx, tenant, principal, audit, body.ticket_ids, {
-        ...(body.status !== undefined ? { status: body.status } : {}),
-        ...(body.priority !== undefined ? { priority: body.priority } : {}),
-        ...(body.assignee_id !== undefined ? { assignee_id: body.assignee_id } : {}),
-        ...(body.group_id !== undefined ? { group_id: body.group_id } : {}),
-      }),
+      tickets.bulkUpdate(
+        tx,
+        tenant,
+        principal,
+        audit,
+        body.ticket_ids,
+        {
+          ...(body.status !== undefined ? { status: body.status } : {}),
+          ...(body.priority !== undefined ? { priority: body.priority } : {}),
+          ...(body.assignee_id !== undefined ? { assignee_id: body.assignee_id } : {}),
+          ...(body.group_id !== undefined ? { group_id: body.group_id } : {}),
+        },
+        signals,
+      ),
     );
+    // Each row's change to subscribers, after the commit (AU-03 · tm 374).
+    await signals.emit(automations, tenant);
 
     return reply.send(result);
   });
@@ -424,6 +436,7 @@ export default async function ticketRoutes(
       const principal = request.requirePrincipal();
       const audit = request.auditContext();
       const templateId = body.email_template_id;
+      const signals = new TicketSignals();
 
       const { ticket, notice, arrival } = await request.withTenant(async (tx) => {
         // Handing a ticket to somebody is news to them (IN-10): note who held it.
@@ -467,13 +480,21 @@ export default async function ticketRoutes(
           });
         }
 
-        const updated = await tickets.update(tx, tenant, principal, audit, ticketId, {
-          ...(body.subject !== undefined ? { subject: body.subject } : {}),
-          ...(body.status !== undefined ? { status: body.status } : {}),
-          ...(body.priority !== undefined ? { priority: body.priority } : {}),
-          ...(body.assignee_id !== undefined ? { assignee_id: body.assignee_id } : {}),
-          ...(body.group_id !== undefined ? { group_id: body.group_id } : {}),
-        });
+        const updated = await tickets.update(
+          tx,
+          tenant,
+          principal,
+          audit,
+          ticketId,
+          {
+            ...(body.subject !== undefined ? { subject: body.subject } : {}),
+            ...(body.status !== undefined ? { status: body.status } : {}),
+            ...(body.priority !== undefined ? { priority: body.priority } : {}),
+            ...(body.assignee_id !== undefined ? { assignee_id: body.assignee_id } : {}),
+            ...(body.group_id !== undefined ? { group_id: body.group_id } : {}),
+          },
+          signals,
+        );
 
         if (mail) {
           // The template and the *names* of the variables it drew on — never a
@@ -509,6 +530,8 @@ export default async function ticketRoutes(
       if (arrival) {
         await publisher.publish(tenant, 'incoming_ticket', arrival.audience, arrival.payload);
       }
+      // The change to subscribers, after the commit (AU-03 · tm 374).
+      await signals.emit(automations, tenant);
 
       // After the commit, never inside it: a mail must not be able to hold a
       // transaction open or be undone by a rollback. Handed off rather than
@@ -684,15 +707,24 @@ export default async function ticketRoutes(
       // The files first, outside the transaction: the store may be a bucket
       // across the network, and nothing about it needs the ticket locked.
       const attachments = await resolveAttachments(store, tenant.licenseId, body.attachment_keys);
+      const signals = new TicketSignals();
 
       const written = await request.withTenant((tx) =>
-        messages.createFromComposer(tx, tenant, principal, audit, ticketId, {
-          kind: body.kind,
-          text: body.text,
-          attachments,
-          idempotencyKey: body.idempotency_key,
-          ...(body.set_status !== undefined ? { setStatus: body.set_status } : {}),
-        }),
+        messages.createFromComposer(
+          tx,
+          tenant,
+          principal,
+          audit,
+          ticketId,
+          {
+            kind: body.kind,
+            text: body.text,
+            attachments,
+            idempotencyKey: body.idempotency_key,
+            ...(body.set_status !== undefined ? { setStatus: body.set_status } : {}),
+          },
+          signals,
+        ),
       );
 
       // After the commit (see `RealtimePublisher`): announced inside the
@@ -709,6 +741,9 @@ export default async function ticketRoutes(
       // Only a reply just stored `queued` carries one — never a note, a replay
       // or a reply this deployment does not mail (K23).
       if (written.outbound) mailReply(request.log, tenant, written.outbound);
+      // The message (and a status it moved) to subscribers (AU-03 · tm 374). A
+      // replay collected nothing: the first attempt already said it.
+      await signals.emit(automations, tenant);
 
       return reply.code(written.replayed ? 200 : 201).send(written.message);
     },

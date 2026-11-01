@@ -1,8 +1,10 @@
 # Ticket rules — condition + action automation over tickets (FR-MOD-08.6.2).
 #
-# A rule is a trigger (subject substring, origin) plus an action (assign, set
-# priority, tag). When a ticket is opened, every enabled rule whose condition
-# matches applies its action, in `position` order. Both a condition and an
+# A rule is a moment (`on`, AU-03: opened, updated, status changed, message
+# added) and a trigger (subject substring, origin, status reached, priority,
+# who wrote) plus an action (assign, set priority, tag). At that moment, every
+# enabled rule for it whose condition matches applies its action, in
+# `position` order; a rule's own change never runs the rules again. Both a condition and an
 # action are required (KK "koşul+eylem zorunlu"): a rule that could match nobody,
 # or that would do nothing, is rejected rather than saved inert.
 #
@@ -39,7 +41,10 @@ ticketRules:
     summary: Create a ticket rule
     description: |
       Both a condition and an action are required (FR-MOD-08.6.2): a rule that
-      could match nobody, or that would do nothing, is rejected. An action that
+      could match nobody, or that would do nothing, is rejected. `on` defaults
+      to `created`; a condition or action the moment cannot have (`status_to`
+      on `created`/`message_added`, `from_requester` off `message_added`,
+      `send_template_id` off `created`) is a 400. An action that
       assigns to an agent or team is validated against the tenant now, so a rule
       cannot be saved pointing at nothing.
     requestBody:
@@ -51,6 +56,8 @@ ticketRules:
             required: [name, conditions, actions]
             properties:
               name: { type: string, minLength: 1, maxLength: 120 }
+              on:
+                $ref: "../openapi.yaml#/components/schemas/TicketRuleEvent"
               conditions: { $ref: "../openapi.yaml#/components/schemas/TicketRuleConditions" }
               actions: { $ref: "../openapi.yaml#/components/schemas/TicketRuleActions" }
               enabled:
@@ -95,6 +102,8 @@ ticketRule:
             minProperties: 1
             properties:
               name: { type: string, minLength: 1, maxLength: 120 }
+              on:
+                $ref: "../openapi.yaml#/components/schemas/TicketRuleEvent"
               conditions: { $ref: "../openapi.yaml#/components/schemas/TicketRuleConditions" }
               actions: { $ref: "../openapi.yaml#/components/schemas/TicketRuleActions" }
               enabled: { type: boolean }

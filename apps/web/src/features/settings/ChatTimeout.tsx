@@ -56,6 +56,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement, type ReactNode } from 'react';
 import {
+  DEFAULT_BAD_RATING_ACTIONS,
+  type BadRatingActions,
   CHAT_INACTIVITY_ORDER_PROBLEMS,
   DEFAULT_DAY_BOUNDARY,
   askEmailText,
@@ -99,6 +101,8 @@ interface ChatTimeoutSettings {
   /** Absent only from a server that predates tm 345 (WG-06): read as none / off. */
   transcript_forward_to?: string[];
   transcript_forward_include_notes?: boolean;
+  /** Absent only from a server that predates tm 374 (AU-03): read as the defaults. */
+  bad_rating_actions?: BadRatingActions;
   updated_at: string | null;
 }
 
@@ -116,7 +120,12 @@ interface ChatTimeoutBody {
   transcript_allowed_domains?: string[];
   transcript_forward_to?: string[];
   transcript_forward_include_notes?: boolean;
+  bad_rating_actions?: Partial<BadRatingActions>;
 }
+
+/** The bad-rating switches (AU-03), in the order the screen lists them. */
+const BAD_RATING_SWITCHES = ['notify_team_leads', 'add_to_qa_queue', 'open_ticket'] as const;
+type BadRatingSwitch = (typeof BAD_RATING_SWITCHES)[number];
 
 type DurationUnit = 'minutes' | 'hours';
 /** The four windows, in the order a conversation goes quiet. */
@@ -134,7 +143,8 @@ type FormValues = Record<
   | 'hour'
   | 'domains'
   | 'forwardTo'
-  | 'forwardNotes',
+  | 'forwardNotes'
+  | BadRatingSwitch,
   string
 >;
 
@@ -353,6 +363,7 @@ function ChatTimeoutForm({
   const savedDomains = config.transcript_allowed_domains ?? [];
   const savedForwardTo = config.transcript_forward_to ?? [];
   const savedForwardNotes = config.transcript_forward_include_notes ?? false;
+  const savedBadRating = config.bad_rating_actions ?? DEFAULT_BAD_RATING_ACTIONS;
   // The zone search narrows the list; it is not part of what is saved, so it
   // lives outside the form and never makes the form dirty.
   const [zoneSearch, setZoneSearch] = useState('');
@@ -379,6 +390,7 @@ function ChatTimeoutForm({
   initial.domains = savedDomains.join('\n');
   initial.forwardTo = savedForwardTo.join('\n');
   initial.forwardNotes = String(savedForwardNotes);
+  for (const key of BAD_RATING_SWITCHES) initial[key] = String(savedBadRating[key]);
 
   const form = useForm<FormValues>({
     initial,
@@ -461,6 +473,13 @@ function ChatTimeoutForm({
       if ((values.forwardNotes === 'true') !== savedForwardNotes) {
         body.transcript_forward_include_notes = values.forwardNotes === 'true';
       }
+      // Only the switches that moved: one left out keeps what is stored.
+      const badRating: Partial<BadRatingActions> = {};
+      for (const key of BAD_RATING_SWITCHES) {
+        if ((values[key] === 'true') !== savedBadRating[key])
+          badRating[key] = values[key] === 'true';
+      }
+      if (Object.keys(badRating).length > 0) body.bad_rating_actions = badRating;
       try {
         await save.mutateAsync(body);
       } catch (error_) {
@@ -772,6 +791,35 @@ function ChatTimeoutForm({
             {t('settings.transcriptForward.notesWarning')}
           </p>
         )}
+      </fieldset>
+
+      <fieldset
+        disabled={!canEdit}
+        aria-labelledby="bad-rating-heading"
+        className="flex flex-col gap-2 border-0 border-t border-border p-0 pt-5"
+      >
+        <div>
+          <h3 id="bad-rating-heading" className="text-sm font-medium">
+            {t('settings.badRating.heading')}
+          </h3>
+          <p className="text-2xs text-content-tertiary">{t('settings.badRating.description')}</p>
+        </div>
+        {BAD_RATING_SWITCHES.map((key) => (
+          <label key={key} className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              checked={form.values[key] === 'true'}
+              onChange={(event) => form.setValue(key, String(event.target.checked))}
+            />
+            <span className="text-sm">
+              {t(`settings.badRating.${key}.label`)}
+              <span className="block text-2xs text-content-tertiary">
+                {t(`settings.badRating.${key}.hint`)}
+              </span>
+            </span>
+          </label>
+        ))}
+        <p className="text-2xs text-content-tertiary">{t('settings.badRating.webhookNote')}</p>
       </fieldset>
 
       {canEdit && (

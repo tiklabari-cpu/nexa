@@ -2,7 +2,7 @@
  * Ticket rules — condition + action automation over tickets (FR-MOD-08.6.2).
  *
  * This is the CRUD half: list, create, edit and delete the rules a workspace
- * configures. The engine that *applies* them when a ticket is opened lives in
+ * configures — each with its moment (`on`, AU-03 · tm 374). The engine that *applies* them when a ticket is opened lives in
  * `apply-ticket-rules.ts`; keeping the two apart means the settings surface and
  * the creation hot-path share only the pure matcher, not each other.
  *
@@ -14,14 +14,22 @@
  * cannot be saved pointing at nothing.
  */
 import type { Prisma } from '@prisma/client';
-import type { TicketRule, TicketRuleActions, TicketRuleConditions } from '@siyahtus/types';
+import {
+  isTicketRuleEvent,
+  type TicketRule,
+  type TicketRuleActions,
+  type TicketRuleConditions,
+  type TicketRuleEvent,
+} from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { type AuditContext, writeAuditEntry } from '../audit/audit-log.js';
-import { hasAction, hasCondition } from './ticket-rule-matching.js';
+import { hasAction, hasCondition, ruleShapeProblem } from './ticket-rule-matching.js';
 
 export interface TicketRuleInput {
   name: string;
+  /** When it runs (AU-03); `created` when left out. */
+  on?: TicketRuleEvent;
   conditions: TicketRuleConditions;
   actions: TicketRuleActions;
   enabled?: boolean;
@@ -30,6 +38,7 @@ export interface TicketRuleInput {
 
 export interface TicketRulePatch {
   name?: string;
+  on?: TicketRuleEvent;
   conditions?: TicketRuleConditions;
   actions?: TicketRuleActions;
   enabled?: boolean;
@@ -39,6 +48,7 @@ export interface TicketRulePatch {
 interface TicketRuleRow {
   id: string;
   name: string;
+  on: string;
   conditions: Prisma.JsonValue;
   actions: Prisma.JsonValue;
   enabled: boolean;
@@ -73,12 +83,16 @@ export class TicketRuleService {
     if (!hasAction(input.actions)) {
       throw ApiError.validation('actions: a rule needs an action.');
     }
+    const on = input.on ?? 'created';
+    const shape = ruleShapeProblem(on, input.conditions, input.actions);
+    if (shape) throw ApiError.validation(shape);
     await assertActionsResolvable(tx, tenant, input.actions);
 
     const created = await tx.ticketRule.create({
       data: {
         licenseId: tenant.licenseId,
         name,
+        on,
         conditions: input.conditions as Prisma.InputJsonValue,
         actions: input.actions as Prisma.InputJsonValue,
         enabled: input.enabled ?? true,
@@ -110,6 +124,11 @@ export class TicketRuleService {
     if (!hasAction(actions)) {
       throw ApiError.validation('actions: a rule needs an action.');
     }
+    // The moment as this edit leaves it: a rule moved to `message_added` cannot
+    // keep a `status_to` it will never see, any more than a new one can.
+    const on = patch.on ?? (isTicketRuleEvent(existing.on) ? existing.on : 'created');
+    const shape = ruleShapeProblem(on, conditions, actions);
+    if (shape) throw ApiError.validation(shape);
     if (patch.actions !== undefined) await assertActionsResolvable(tx, tenant, actions);
 
     const data: Prisma.TicketRuleUpdateInput = {};
@@ -118,6 +137,7 @@ export class TicketRuleService {
       if (!name) throw ApiError.validation('name: a rule needs a name.');
       data.name = name;
     }
+    if (patch.on !== undefined) data.on = patch.on;
     if (patch.conditions !== undefined) data.conditions = patch.conditions as Prisma.InputJsonValue;
     if (patch.actions !== undefined) data.actions = patch.actions as Prisma.InputJsonValue;
     if (patch.enabled !== undefined) data.enabled = patch.enabled;
@@ -194,6 +214,8 @@ function toDto(row: TicketRuleRow): TicketRule {
   return {
     id: row.id,
     name: row.name,
+    // The CHECK holds the list; a value outside it cannot be read back.
+    on: isTicketRuleEvent(row.on) ? row.on : 'created',
     conditions: (row.conditions ?? {}) as TicketRuleConditions,
     actions: (row.actions ?? {}) as TicketRuleActions,
     enabled: row.enabled,

@@ -1489,6 +1489,8 @@ model TicketRule {
   id         String   @id @default(uuid()) @db.Uuid
   licenseId  BigInt   @map("license_id")
   name       String
+  /// When the rule runs (AU-03 · tm 374): `TICKET_RULE_EVENTS`, CHECK in the migration.
+  on         String   @default("created")
   conditions Json     @default("{}")
   actions    Json     @default("{}")
   enabled    Boolean  @default(true)
@@ -3974,6 +3976,9 @@ model InboxSettings {
   /// Whether the forwarded copy is the team's, notes marked (WG-06). Only set
   /// while every forwarding address is at a verified SSO domain (the endpoint).
   transcriptForwardIncludeNotes Boolean @default(false) @map("transcript_forward_include_notes")
+  /// What a bad vote sets off (AU-03 · tm 374), `BadRatingActions`. Null: the
+  /// defaults; a missing switch reads its default (`readBadRatingActions`).
+  badRatingActions Json? @map("bad_rating_actions")
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)

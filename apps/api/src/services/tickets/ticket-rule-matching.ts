@@ -6,7 +6,13 @@
  * can pin down exactly. The service around this reads the rules, loads the
  * ticket, and writes the assignment / priority / tag.
  */
-import type { TicketRuleActions, TicketRuleConditions, TicketRuleSource } from '@siyahtus/types';
+import type {
+  TicketRuleActions,
+  TicketRuleConditions,
+  TicketRuleEvent,
+  TicketRuleSource,
+  TicketStatus,
+} from '@siyahtus/types';
 
 /**
  * What a ticket looks like to a rule at the moment it is opened. `source` widens
@@ -27,6 +33,15 @@ export interface TicketRuleContext {
    * can match.
    */
   outsideBusinessHours?: boolean;
+  /** The ticket's priority after the event (AU-03); absent, no `priority_at_least` matches. */
+  priority?: number;
+  /**
+   * The status this event moved the ticket to (AU-03) — set only when the
+   * status actually changed in it. Absent, no `status_to` condition matches.
+   */
+  statusTo?: TicketStatus;
+  /** On `message_added`: whether the player wrote it (AU-03). */
+  fromRequester?: boolean;
 }
 
 /**
@@ -39,7 +54,33 @@ export function hasCondition(conditions: TicketRuleConditions): boolean {
   if (conditions.source) return true;
   // `false` is a condition too: "while the team is in".
   if (typeof conditions.outside_business_hours === 'boolean') return true;
+  if (conditions.status_to) return true;
+  if (conditions.priority_at_least != null) return true;
+  if (typeof conditions.from_requester === 'boolean') return true;
   return false;
+}
+
+/**
+ * Why a rule cannot run at its moment (AU-03 · tm 374), or null when it can.
+ * A condition the moment never carries would match nobody, silently; an
+ * acknowledgement belongs to the ticket's opening only. Refused at save so the
+ * settings screen says so rather than the rule doing nothing.
+ */
+export function ruleShapeProblem(
+  on: TicketRuleEvent,
+  conditions: TicketRuleConditions,
+  actions: TicketRuleActions,
+): string | null {
+  if (conditions.status_to && (on === 'created' || on === 'message_added')) {
+    return 'conditions.status_to: only an "updated" or "status_changed" rule sees a status change.';
+  }
+  if (typeof conditions.from_requester === 'boolean' && on !== 'message_added') {
+    return 'conditions.from_requester: only a "message_added" rule has a message to ask about.';
+  }
+  if (actions.send_template_id && on !== 'created') {
+    return 'actions.send_template_id: an acknowledgement is sent only when a ticket opens.';
+  }
+  return null;
 }
 
 /**
@@ -79,6 +120,15 @@ export function matchesTicketRule(
   }
   if (typeof conditions.outside_business_hours === 'boolean') {
     checks.push(ctx.outsideBusinessHours === conditions.outside_business_hours);
+  }
+  if (conditions.status_to) {
+    checks.push(ctx.statusTo === conditions.status_to);
+  }
+  if (conditions.priority_at_least != null) {
+    checks.push(ctx.priority !== undefined && ctx.priority >= conditions.priority_at_least);
+  }
+  if (typeof conditions.from_requester === 'boolean') {
+    checks.push(ctx.fromRequester === conditions.from_requester);
   }
 
   if (checks.length === 0) return false;

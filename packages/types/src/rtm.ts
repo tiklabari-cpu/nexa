@@ -154,6 +154,9 @@ export const RTM_PUSH_ACTIONS = [
   // tm 337, `ChatRatedPush`): to the chat's agents and teams. Ids only — what
   // a caller may see of the rating is the server's call (`ratings.view`).
   'chat_rated',
+  // The player voted a connection bad (AU-03 · tm 374, `ChatBadRatingAlertPush`):
+  // to the leads of its team, when the brand's bad-rating automation says so.
+  'chat_bad_rating_alert',
   // The player has read up to a point (IN-05 · tm 362, `CustomerSeenPush`): to
   // the chat's agents, for the "Read · 14:32" line under the last team message.
   'customer_seen',

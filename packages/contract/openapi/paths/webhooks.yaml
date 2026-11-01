@@ -15,6 +15,7 @@ webhooks:
   get:
     tags: [Webhooks]
     operationId: listWebhooks
+    x-public: true
     summary: Webhooks registered for the workspace
     description: |
       Never includes the signing secret — that is shown only once, when the
@@ -38,6 +39,7 @@ webhooks:
   post:
     tags: [Webhooks]
     operationId: registerWebhook
+    x-public: true
     summary: Register an outbound webhook
     description: |
       The `url` must be a public `http(s)` address; a private, loopback or
@@ -113,6 +115,7 @@ webhook:
   delete:
     tags: [Webhooks]
     operationId: unregisterWebhook
+    x-public: true
     summary: Unregister a webhook
     description: |
       Stops all future deliveries to this endpoint. Past delivery log entries
@@ -127,6 +130,7 @@ webhook:
   patch:
     tags: [Webhooks]
     operationId: updateWebhook
+    x-public: true
     summary: Switch a webhook on or off
     description: |
       Only `enabled` can change (KN-03): a switched-off webhook receives no new
@@ -165,6 +169,7 @@ webhookDeliveries:
   get:
     tags: [Webhooks]
     operationId: listWebhookDeliveries
+    x-public: true
     summary: The delivery log of one webhook
     description: |
       One row per **attempt**, newest first, by `next_cursor` (KN-03). A row
@@ -216,6 +221,7 @@ webhookRedeliver:
   post:
     tags: [Webhooks]
     operationId: redeliverWebhookDelivery
+    x-public: true
     summary: Send a delivery again
     description: |
       Re-sends the stored payload of a queued or exhausted delivery through the
@@ -249,6 +255,7 @@ webhookTest:
   post:
     tags: [Webhooks]
     operationId: testWebhook
+    x-public: true
     summary: Send a signed test event
     description: |
       POSTs a signed ping to the webhook — `{"action": …, "test": true, "data":

@@ -110,6 +110,7 @@ export const apps: Messages = {
   'apps.developers.notAvailable.description':
     'Uygulama kaydetmek, bu çalışma alanının erişim kurallarında yazma yetkisi olan sahip ve yöneticilerle sınırlıdır.',
   'apps.developers.registerApp': 'Uygulama kaydet',
+  'apps.developers.docsLink': 'API dokümanı',
 
   'apps.developers.tablistLabel': 'Geliştirici portalı',
   'apps.developers.tabs.apps': 'Uygulamalar',

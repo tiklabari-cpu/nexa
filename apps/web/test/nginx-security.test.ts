@@ -310,3 +310,33 @@ describe("the panel's inline theme boot is pinned by hash, not waved through", (
     expect(mapDefault(WEB_CONF, 'siyahtus_csp')).not.toContain(raw);
   });
 });
+
+describe('the public API documentation is served without the SPA fallback', () => {
+  const blocks = locationBlocks(WEB_CONF);
+  const docs = blocks.find((block) => block.match === '/developers/docs/');
+  const bare = blocks.find((block) => block.match === '= /developers/docs');
+  const html = read('apps/web/developers/docs/index.html');
+
+  it('has a location of its own, that falls back to a 404 and never to the panel shell', () => {
+    // `location /` answers an unknown path with /index.html — the panel, behind a
+    // sign-in. A documentation address must be the documentation or an honest 404.
+    expect(docs, 'no location /developers/docs/').toBeDefined();
+    expect(docs!.body).toMatch(/try_files\s+\$uri\s+\$uri\/index\.html\s+=404;/);
+    expect(docs!.body).not.toMatch(/\/index\.html;\s*$/m);
+  });
+
+  it('sends the address without a slash to the one with it, relative to the host asked', () => {
+    expect(bare, 'no location = /developers/docs').toBeDefined();
+    expect(bare!.body).toMatch(/absolute_redirect\s+off;/);
+    expect(bare!.body).toMatch(/return\s+301\s+\/developers\/docs\/;/);
+  });
+
+  it('runs the page under the policy the panel has, which allows no inline script', () => {
+    // The page needs nothing wider: a same-origin module script and stylesheet, and a
+    // fetch of the JSON beside it. If it ever grows an inline script, the policy would
+    // refuse it — this keeps that from being discovered in a browser.
+    expect(html).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>\s*\S/);
+    expect(html).not.toMatch(/\sstyle=|<style/i);
+    expect(html).not.toMatch(/\son[a-z]+=/i);
+  });
+});

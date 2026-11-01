@@ -12,6 +12,7 @@ brands:
   get:
     tags: [Brands]
     operationId: listBrands
+    x-public: true
     summary: The license's brands
     description: |
       Every brand of the caller's license, the default brand first. A
@@ -84,6 +85,7 @@ brand:
   get:
     tags: [Brands]
     operationId: getBrand
+    x-public: true
     summary: One brand
     responses:
       "200":

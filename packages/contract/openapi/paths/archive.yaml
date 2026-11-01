@@ -2,6 +2,7 @@ conversations:
   get:
     tags: [Archive]
     operationId: listArchiveConversations
+    x-public: true
     summary: List past conversations, one row per connection
     description: |
       The archive screen's list (AR-01). A row is one **connection** — panel
@@ -199,6 +200,7 @@ conversation:
   get:
     tags: [Archive]
     operationId: getArchiveConversation
+    x-public: true
     summary: One past connection
     description: |
       The archive's detail for one connection: its row, the rating with its

@@ -1,4 +1,6 @@
+import { resolve } from 'node:path';
 import react from '@vitejs/plugin-react';
+import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 
 const API_TARGET = process.env['API_BASE_URL'] ?? 'http://localhost:4000';
@@ -24,8 +26,31 @@ const VENDOR_CHUNKS: Record<string, string> = {
   '@tanstack/query-core': 'query',
 };
 
+/**
+ * The API documentation lives at `/developers/docs/` (KN-04). nginx sends the
+ * address without its slash to the one with it; the dev server would otherwise
+ * answer it with the panel's shell, so a developer typing the short address
+ * locally would see the panel and not the page.
+ */
+function docsTrailingSlash(): Plugin {
+  return {
+    name: 'siyahtus-docs-trailing-slash',
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        if (request.url?.split('?')[0] === '/developers/docs') {
+          response.statusCode = 301;
+          response.setHeader('Location', '/developers/docs/');
+          response.end();
+          return;
+        }
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), docsTrailingSlash()],
   // A second dev server beside the usual one (the pilot e2e stack,
   // `apps/e2e/playwright.pilot.config.ts`) needs its own dependency cache, or
   // its optimizer rewrites `.vite/deps` under the running one. Unset, Vite's
@@ -45,6 +70,12 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: SOURCEMAPS,
     rollupOptions: {
+      // Two pages: the panel, and the public API documentation (KN-04), which is
+      // served at /developers/docs/ without a sign-in and shares nothing with the panel's bundle.
+      input: {
+        main: resolve(import.meta.dirname, 'index.html'),
+        docs: resolve(import.meta.dirname, 'developers/docs/index.html'),
+      },
       output: {
         // Matched by package directory, not listed by import name. Since v7,
         // react-router-dom only re-exports react-router, which this app does not

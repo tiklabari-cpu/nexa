@@ -15,7 +15,9 @@
   "scripts": {
     "bundle": "tsx scripts/bundle.ts",
     "bundle:platform": "tsx scripts/bundle.ts --entry platform/openapi.yaml --out dist/platform-openapi.json",
-    "generate": "pnpm bundle && pnpm bundle:platform && openapi-typescript dist/openapi.json -o src/generated/api.ts && openapi-typescript dist/platform-openapi.json -o src/generated/platform.ts && prettier --write src/generated/api.ts src/generated/platform.ts",
+    "generate": "pnpm bundle && pnpm bundle:platform && openapi-typescript dist/openapi.json -o src/generated/api.ts && openapi-typescript dist/platform-openapi.json -o src/generated/platform.ts && prettier --write src/generated/api.ts src/generated/platform.ts && pnpm publish:docs",
+    "publish:docs": "tsx scripts/publish-docs.ts",
+    "publish:docs:check": "tsx scripts/publish-docs.ts --check",
     "build": "pnpm bundle && pnpm bundle:platform",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src scripts",

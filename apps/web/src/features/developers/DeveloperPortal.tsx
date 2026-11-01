@@ -75,6 +75,27 @@ function redirectUrisRequired(message: string): Validator {
   return (value) => (splitList(value).length > 0 ? null : message);
 }
 
+/**
+ * The public API documentation (KN-04 · tm 376). A plain address, not a route of
+ * this app: the page is a second entry of the same build, served without a sign-in
+ * (`apps/web/nginx.conf`), so it opens in its own tab like any external page.
+ */
+export const API_DOCS_PATH = '/developers/docs/';
+
+function ApiDocsLink(): ReactElement {
+  const t = useTranslate();
+  return (
+    <a
+      href={API_DOCS_PATH}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-content transition-colors hover:bg-surface-2"
+    >
+      {t('apps.developers.docsLink')}
+    </a>
+  );
+}
+
 export function DeveloperPortalPage(): ReactElement {
   const t = useTranslate();
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
@@ -85,6 +106,7 @@ export function DeveloperPortalPage(): ReactElement {
       <Page
         title={t('apps.developers.page.title')}
         description={t('apps.developers.page.description')}
+        actions={<ApiDocsLink />}
       >
         <EmptyState
           title={t('apps.developers.notAvailable.title')}
@@ -127,7 +149,12 @@ function DeveloperPortalContent(): ReactElement {
     <Page
       title={t('apps.developers.page.title')}
       description={t('apps.developers.page.description')}
-      actions={tab === 'apps' ? registerButton : undefined}
+      actions={
+        <div className="flex items-center gap-2">
+          <ApiDocsLink />
+          {tab === 'apps' ? registerButton : null}
+        </div>
+      }
     >
       <div
         role="tablist"

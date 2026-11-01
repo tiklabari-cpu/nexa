@@ -91,6 +91,16 @@ describe('DeveloperPortal', () => {
     expect(screen.getByText(/Register an OAuth client to let a script/)).toBeInTheDocument();
   });
 
+  it('links to the public API documentation, in a new tab', async () => {
+    api.get.mockResolvedValue({ items: [] });
+    renderPortal();
+
+    const link = await screen.findByRole('link', { name: 'API documentation' });
+    expect(link).toHaveAttribute('href', '/developers/docs/');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link.getAttribute('rel')).toContain('noopener');
+  });
+
   it('disables Register until a name is entered, with a field-under error', async () => {
     api.get.mockResolvedValue({ items: [] });
     renderPortal();
@@ -398,6 +408,11 @@ describe('DeveloperPortal', () => {
       expect(screen.getByText('Developer portal not available')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Register app' })).not.toBeInTheDocument();
       expect(api.get).not.toHaveBeenCalled();
+      // The documentation is public, so the gate does not hide the way to it (KN-04).
+      expect(screen.getByRole('link', { name: 'API documentation' })).toHaveAttribute(
+        'href',
+        '/developers/docs/',
+      );
     });
 
     it('hides the Developers nav entry for a caller without access_rules:rw', () => {
@@ -430,5 +445,6 @@ describe('DeveloperPortal localisation (NFR-I18N2)', () => {
     expect(await screen.findByText('Henüz ortak uygulama yok')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Geliştiriciler' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Uygulama kaydet' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'API dokümanı' })).toBeInTheDocument();
   });
 });

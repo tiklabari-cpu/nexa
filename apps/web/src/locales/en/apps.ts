@@ -132,6 +132,7 @@ export const apps: Messages = {
   'apps.developers.notAvailable.description':
     "Registering apps is limited to owners and admins with write access to this workspace's access rules.",
   'apps.developers.registerApp': 'Register app',
+  'apps.developers.docsLink': 'API documentation',
 
   // Tabs
   'apps.developers.tablistLabel': 'Developer portal',

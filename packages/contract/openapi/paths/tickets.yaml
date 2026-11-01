@@ -14,6 +14,7 @@ tickets:
   get:
     tags: [Tickets]
     operationId: listTickets
+    x-public: true
     summary: List tickets, newest activity first by default
     description: |
       Ordered by `sort` + `order` over the **whole** collection, not over the
@@ -99,6 +100,7 @@ tickets:
   post:
     tags: [Tickets]
     operationId: createTicket
+    x-public: true
     summary: Create a ticket, optionally from a chat
     description: |
       Two ways in. From a chat (`source_chat_id`) — the PRD's "Create ticket"
@@ -258,6 +260,7 @@ ticket:
   get:
     tags: [Tickets]
     operationId: getTicket
+    x-public: true
     summary: One ticket
     responses:
       "200":
@@ -273,6 +276,7 @@ ticket:
   patch:
     tags: [Tickets]
     operationId: updateTicket
+    x-public: true
     summary: Change status, assignee, team or subject
     description: |
       Assigning to an agent outside the licence, or to a team that does not
@@ -467,6 +471,7 @@ ticketCustomFields:
   put:
     tags: [Tickets]
     operationId: setTicketCustomFields
+    x-public: true
     summary: Set this ticket's custom field values
     description: |
       A map of definition id → value (FR-MOD-08.7.6), where null clears a field.
@@ -504,6 +509,7 @@ ticketMessages:
   get:
     tags: [Tickets]
     operationId: listTicketMessages
+    x-public: true
     summary: The ticket's conversation, oldest first
     description: |
       Replies, internal notes, what the player wrote and the product's own
@@ -547,6 +553,7 @@ ticketMessages:
   post:
     tags: [Tickets]
     operationId: createTicketMessage
+    x-public: true
     summary: Reply to the player, or add an internal note
     description: |
       `kind: reply` stores the reply, then — after the commit — e-mails it to

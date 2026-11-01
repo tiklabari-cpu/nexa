@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <title>SiyahTuş API documentation</title>
+    <!--
+      The public API documentation (KN-04). Served at /developers/docs/ with no
+      sign-in. No inline script or style on purpose: the page runs under the
+      panel's Content-Security-Policy as it is, and `docs-site/main.ts` builds
+      every view from the published openapi.json beside it.
+    -->
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="top">
+      <a class="brand" href="#/">SiyahTuş <span>API</span></a>
+      <span id="version" class="version"></span>
+      <label class="search">
+        <span class="visually-hidden">Search the API</span>
+        <input id="search" type="search" placeholder="Search operations (press / to focus)" autocomplete="off" spellcheck="false" />
+      </label>
+    </header>
+    <div class="layout">
+      <nav id="nav" class="nav" aria-label="API reference"></nav>
+      <main id="main" class="main" tabindex="-1">
+        <noscript>This documentation needs JavaScript to render the API reference.</noscript>
+        Loading…
+      </main>
+    </div>
+    <script type="module" src="/docs-site/main.ts"></script>
+  </body>
+</html>

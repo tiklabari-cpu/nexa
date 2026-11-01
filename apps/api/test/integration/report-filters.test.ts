@@ -225,10 +225,36 @@ describe('report filters (RP-01 · tm 368)', () => {
       topic: 'withdrawal',
       rating: 'good',
     });
-    await connection({ teams: [teamA, teamB], agent: agentY, tags: [kyc], rating: 'bad' });
-    await connection({ teams: [teamB], agent: agentX, tags: [bonus], topic: 'deposit' });
+    const c2 = await connection({
+      teams: [teamA, teamB],
+      agent: agentY,
+      tags: [kyc],
+      rating: 'bad',
+    });
+    const c3 = await connection({ teams: [teamB], agent: agentX, tags: [bonus], topic: 'deposit' });
     await connection({ teams: [teamB], agent: agentY });
     await connection({ teams: [teamA], agent: agentX, at: inBaseline });
+
+    // RP-04 (tm 371): three queue stays on three of the connections.
+    const stay = (
+      threadId: string,
+      groupId: bigint,
+      waitSeconds: number,
+      outcome: 'assigned' | 'abandoned',
+    ) =>
+      owner.queueEntry.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          threadId,
+          groupId,
+          enteredAt: inWindow,
+          leftAt: new Date(inWindow.getTime() + waitSeconds * 1000),
+          outcome,
+        },
+      });
+    await stay(c1, teamA, 120, 'assigned');
+    await stay(c2, teamB, 60, 'abandoned');
+    await stay(c3, teamB, 240, 'assigned');
 
     await owner.ticket.create({
       data: {
@@ -392,6 +418,27 @@ describe('report filters (RP-01 · tm 368)', () => {
         const lines = dataLines(await csv(`group=engagement&${q}`));
         expect(lines.reduce((total, line) => total + Number(line[3] ?? 0), 0)).toBe(0);
       },
+      // RP-04 (tm 371).
+      queue: async () => {
+        const body = await json(`/reports/queue?${q}`);
+        expect((body.totals as Json).entries).toBe(0);
+        expect(body.by_day).toEqual([]);
+        expect(body.by_team).toEqual([]);
+        expect(sum(body.heatmap as Json[], 'entries')).toBe(0);
+        expect((body.previous_period as Json).entries).toBe(0);
+        const lines = dataLines(await csv(`group=queue&${q}`));
+        expect(lines.find((line) => line[0] === 'total')?.[3]).toBe('0');
+        expect(lines.filter((line) => line[0] !== 'total')).toEqual([]);
+      },
+      'queue-abandonment': async () => {
+        const body = await json(`/reports/queue-abandonment?${q}`);
+        expect((body.totals as Json).abandoned).toBe(0);
+        expect(sum(body.by_wait as Json[], 'abandoned')).toBe(0);
+        expect(body.by_team).toEqual([]);
+        expect(sum(body.heatmap as Json[], 'abandoned')).toBe(0);
+        const lines = dataLines(await csv(`group=queue-abandonment&${q}`));
+        expect(lines.find((line) => line[0] === 'total')?.[3]).toBe('0');
+      },
     };
     // A conversation group added to the list without a check here fails.
     expect(Object.keys(checks).sort()).toEqual([...REPORT_FILTERABLE_GROUPS].sort());
@@ -404,6 +451,8 @@ describe('report filters (RP-01 · tm 368)', () => {
     expect(((await json('/reports/reviews')).csat as Json).responses).toBe(2);
     expect(((await json('/reports/missed')).totals as Json).closed).toBe(4);
     expect(((await json('/reports/engagement')).totals as Json).chats).toBe(4);
+    expect(((await json('/reports/queue')).totals as Json).entries).toBe(3);
+    expect(((await json('/reports/queue-abandonment')).totals as Json).abandoned).toBe(1);
   });
 
   it('refuses a filter on every report that is not counted from conversations, rather than ignoring it', async () => {

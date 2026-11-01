@@ -828,6 +828,10 @@ paths:
     $ref: "./paths/reports.yaml#/missed"
   /reports/engagement:
     $ref: "./paths/reports.yaml#/engagement"
+  /reports/queue:
+    $ref: "./paths/reports.yaml#/queue"
+  /reports/queue-abandonment:
+    $ref: "./paths/reports.yaml#/queueAbandonment"
   /reports/availability:
     $ref: "./paths/reports.yaml#/availability"
   /reports/agent-activity:
@@ -15329,6 +15333,187 @@ components:
           type: string
           format: uuid
           nullable: true
+
+    QueueCounts:
+      type: object
+      description: |
+        The stays in the routing queue of one set (RP-04) — the whole window, a
+        local day, an hour of the week, a team's queue. A stay is one row of
+        `queue_entries`: a connection that waited twice counts twice.
+      required:
+        - entries
+        - assigned
+        - abandoned
+        - closed_by_agent
+        - transferred
+        - timeout
+        - waiting
+        - avg_wait_seconds
+        - p80_wait_seconds
+        - max_wait_seconds
+        - abandon_avg_wait_seconds
+      properties:
+        entries: { type: integer, description: Stays that began in the set. }
+        assigned:
+          { type: integer, description: Stays that ended with an agent getting the connection. }
+        abandoned:
+          type: integer
+          description: Stays that ended because the player closed the chat or it closed for inactivity.
+        closed_by_agent:
+          { type: integer, description: Stays an agent or a bot archived while they waited. }
+        transferred: { type: integer, description: Stays handed to a named agent or another team. }
+        timeout:
+          type: integer
+          description: Stays the system ended with nobody choosing to (the day rolled over, or the sweep's safety net).
+        waiting: { type: integer, description: Stays still in the queue. }
+        avg_wait_seconds:
+          type: integer
+          nullable: true
+          description: Mean wait, in whole seconds, of the `assigned` stays; null when none.
+        p80_wait_seconds:
+          type: integer
+          nullable: true
+          description: 80th-percentile wait of the `assigned` stays; null when none.
+        max_wait_seconds:
+          type: integer
+          nullable: true
+          description: Longest wait of the `assigned` stays; null when none.
+        abandon_avg_wait_seconds:
+          type: integer
+          nullable: true
+          description: Mean wait, in whole seconds, of the `abandoned` stays; null when none.
+
+    QueueReportBody:
+      type: object
+      description: The figures both queue reports carry (RP-04).
+      required: [range, timezone, totals, by_day, heatmap, by_team, previous_period]
+      properties:
+        filters:
+          description: |
+            The filter that was applied (RP-01), after the team bound of a
+            `reports_read--groups` caller. Absent when nothing narrowed the report.
+          allOf:
+            - $ref: "#/components/schemas/ReportFilter"
+        range:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+        timezone:
+          type: string
+          description: The IANA zone `by_day` and `heatmap` are counted in — the workspace's (ID-04).
+        totals:
+          allOf:
+            - $ref: "#/components/schemas/QueueCounts"
+            - type: object
+              required: [assigned_rate, abandonment_rate]
+              properties:
+                assigned_rate:
+                  type: number
+                  nullable: true
+                  description: "`assigned / entries`, 0..1 to four places; null when nothing entered."
+                abandonment_rate:
+                  type: number
+                  nullable: true
+                  description: "`abandoned / entries`, 0..1 to four places; null when nothing entered."
+        by_day:
+          type: array
+          description: Per local day (of when the stay began) with a stay, oldest first.
+          items:
+            allOf:
+              - $ref: "#/components/schemas/QueueCounts"
+              - type: object
+                required: [date]
+                properties:
+                  date: { type: string, format: date }
+        heatmap:
+          type: array
+          description: |
+            All 168 hour × weekday cells of when a stay began, Monday 00:00
+            first, zero-filled, in the workspace's zone.
+          items:
+            allOf:
+              - $ref: "#/components/schemas/QueueCounts"
+              - type: object
+                required: [weekday, hour]
+                properties:
+                  weekday:
+                    type: integer
+                    minimum: 1
+                    maximum: 7
+                    description: ISO weekday, 1 Monday … 7 Sunday.
+                  hour: { type: integer, minimum: 0, maximum: 23 }
+        by_team:
+          type: array
+          description: |
+            Per team queue (`queue_entries.group_id`), busiest first; `team_id:
+            null` is a stay that waited for no team. Each team has its own
+            averages. Adds up to `totals.entries`.
+          items:
+            allOf:
+              - $ref: "#/components/schemas/QueueCounts"
+              - type: object
+                required: [team_id, name, assigned_rate, abandonment_rate]
+                properties:
+                  team_id: { type: integer, nullable: true }
+                  name: { type: string, nullable: true }
+                  assigned_rate: { type: number, nullable: true }
+                  abandonment_rate: { type: number, nullable: true }
+        previous_period:
+          allOf:
+            - $ref: "#/components/schemas/BenchmarkWindow"
+            - type: object
+              required:
+                - entries
+                - assigned
+                - abandoned
+                - avg_wait_seconds
+                - p80_wait_seconds
+                - assigned_rate
+                - abandonment_rate
+              properties:
+                entries: { type: integer }
+                assigned: { type: integer }
+                abandoned: { type: integer }
+                avg_wait_seconds: { type: integer, nullable: true }
+                p80_wait_seconds: { type: integer, nullable: true }
+                assigned_rate: { type: number, nullable: true }
+                abandonment_rate: { type: number, nullable: true }
+
+    ReportsQueue:
+      description: The queue report (RP-04) — see `GET /reports/queue`.
+      allOf:
+        - $ref: "#/components/schemas/QueueReportBody"
+
+    QueueWaitBand:
+      type: object
+      description: How many players gave up after waiting within one band.
+      required: [key, from_seconds, to_seconds, abandoned]
+      properties:
+        key:
+          type: string
+          enum: [under_30s, 30s_to_1m, 1m_to_2m, 2m_to_5m, 5m_to_10m, over_10m]
+        from_seconds: { type: integer, description: Inclusive lower bound of the wait. }
+        to_seconds:
+          type: integer
+          nullable: true
+          description: Exclusive upper bound of the wait; null for the last band.
+        abandoned: { type: integer }
+
+    ReportsQueueAbandonment:
+      description: The queue-abandonment report (RP-04) — see `GET /reports/queue-abandonment`.
+      allOf:
+        - $ref: "#/components/schemas/QueueReportBody"
+        - type: object
+          required: [by_wait]
+          properties:
+            by_wait:
+              type: array
+              description: |
+                All six wait bands in order, zeros included; they partition
+                `totals.abandoned`.
+              items: { $ref: "#/components/schemas/QueueWaitBand" }
 
     ReportFilter:
       type: object

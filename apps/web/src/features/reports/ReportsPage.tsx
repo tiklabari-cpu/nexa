@@ -59,8 +59,15 @@ import { ReviewComments } from './ReviewComments.js';
 import { roleAtLeast } from '../team/RoleMenu.js';
 import { ReportFilterBar } from './ReportFilterBar.js';
 import { HourGrid } from './HourGrid.js';
+import { CountDelta, Delta, DurationDelta, RateDelta } from './ReportDeltas.js';
 import { MissedHeatmap, type MissedHeatCell } from './MissedHeatmap.js';
 import { AgentActivityTab, AvailabilityTab } from './PresenceReports.js';
+import {
+  QueueAbandonmentTab,
+  QueueTab,
+  type ReportsQueue,
+  type ReportsQueueAbandonment,
+} from './QueueReports.js';
 import {
   parseReportFilter,
   reportFilterKey,
@@ -356,6 +363,8 @@ const TABS = [
   { id: 'staffing' },
   { id: 'missed' },
   { id: 'engagement' },
+  { id: 'queue' },
+  { id: 'queue-abandonment' },
   { id: 'availability' },
   { id: 'agent-activity' },
   { id: 'topics' },
@@ -386,6 +395,8 @@ const GROUP_GATED_TABS = new Set<TabId>([
   'team-performance',
   'missed',
   'engagement',
+  'queue',
+  'queue-abandonment',
 ]);
 
 /**
@@ -438,7 +449,10 @@ type CategoryId = 'performance' | 'automation' | 'team' | 'business';
  * in the type system can notice an omission.
  */
 const TAB_CATEGORIES: ReadonlyArray<{ id: CategoryId; tabs: readonly TabId[] }> = [
-  { id: 'performance', tabs: ['overview', 'breakdown', 'reviews', 'engagement'] },
+  {
+    id: 'performance',
+    tabs: ['overview', 'breakdown', 'reviews', 'engagement', 'queue', 'queue-abandonment'],
+  },
   { id: 'automation', tabs: ['ai-agent', 'topics'] },
   {
     id: 'team',
@@ -897,6 +911,15 @@ function ReportsPageBody({
             <MissedTab rangeKey={rangeKey} range={range} baseline={baseline} filter={filter} />
           ) : tab === 'engagement' ? (
             <EngagementTab rangeKey={rangeKey} range={range} baseline={baseline} filter={filter} />
+          ) : tab === 'queue' ? (
+            <QueueTabEntry rangeKey={rangeKey} range={range} baseline={baseline} filter={filter} />
+          ) : tab === 'queue-abandonment' ? (
+            <QueueAbandonmentTabEntry
+              rangeKey={rangeKey}
+              range={range}
+              baseline={baseline}
+              filter={filter}
+            />
           ) : tab === 'availability' && range ? (
             <AvailabilityTab rangeKey={rangeKey} range={range} filter={filter} />
           ) : tab === 'agent-activity' ? (
@@ -2994,59 +3017,6 @@ function RangeControls({
 }
 
 /**
- * The change from the previous equal-length window (FR-MOD-07.3.1). Neutral by
- * design: an arrow and the magnitude, with no green/red judgement — "up" is good
- * for resolutions and bad for negative ratings, so colour here would mislead. The
- * baseline itself stays on the card, this only annotates the movement. Renders
- * nothing when either side is unknown, so an empty window shows no phantom delta.
- */
-function Delta({
-  current,
-  previous,
-  format,
-}: {
-  current: number | null | undefined;
-  previous: number | null | undefined;
-  format: (value: number | null | undefined) => string | null;
-}): ReactElement | null {
-  const t = useTranslate();
-  if (current == null || previous == null) return null;
-  const diff = Math.round((current - previous) * 1000) / 1000;
-  if (diff === 0) {
-    return (
-      <span className="text-2xs text-content-tertiary">{t('reports.common.delta.noChange')}</span>
-    );
-  }
-  return (
-    <span className="text-2xs text-content-tertiary" title={t('reports.common.delta.tooltip')}>
-      {diff > 0 ? '↑' : '↓'}{' '}
-      {t('reports.common.delta.suffix', { value: format(Math.abs(diff)) ?? '' })}
-    </span>
-  );
-}
-
-function CountDelta(props: {
-  current: number | null;
-  previous: number | null;
-}): ReactElement | null {
-  return <Delta {...props} format={formatCount} />;
-}
-
-function DurationDelta(props: {
-  current: number | null;
-  previous: number | null;
-}): ReactElement | null {
-  return <Delta {...props} format={formatDuration} />;
-}
-
-function RateDelta(props: {
-  current: number | null;
-  previous: number | null;
-}): ReactElement | null {
-  return <Delta {...props} format={formatRate} />;
-}
-
-/**
  * Hint under a resolution KPI: its share of *closed* conversations, or a plain
  * note when nothing closed. A rate is null (not 0%) for an empty window, and
  * "0% of closed" would read as a failure rather than as an absence of data.
@@ -3294,6 +3264,23 @@ function MissedTab(props: TabProps): ReactElement {
       )}
     </>
   );
+}
+
+/** Queue (RP-04 · tm 371): the fetch; the layout is `QueueReports.tsx`. */
+function QueueTabEntry(props: TabProps): ReactElement {
+  const api = useApiClient();
+  const { data, isPending, error } = useReport<ReportsQueue>('queue', api, props);
+  return <QueueTab data={data} isPending={isPending} error={error} />;
+}
+
+function QueueAbandonmentTabEntry(props: TabProps): ReactElement {
+  const api = useApiClient();
+  const { data, isPending, error } = useReport<ReportsQueueAbandonment>(
+    'queue-abandonment',
+    api,
+    props,
+  );
+  return <QueueAbandonmentTab data={data} isPending={isPending} error={error} />;
 }
 
 /** A label column plus the missed total and its three reasons. */

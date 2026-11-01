@@ -3135,6 +3135,8 @@ describe('reports and billing', () => {
           'campaigns',
           'missed',
           'engagement',
+          'queue',
+          'queue-abandonment',
         ]);
         expect(groups[0]).toEqual({ id: 'overview', label: 'Overview' });
       });
@@ -3713,7 +3715,7 @@ describe('reports and billing', () => {
       const groups = (await server.get('/reports/groups', auth)).json().groups;
       expect(groups.map((group: { id: string }) => group.id)).toEqual(GROUP_IDS);
       // Guards the guard: a matrix over an empty catalogue would pass vacuously.
-      expect(GROUP_IDS.length).toBe(13);
+      expect(GROUP_IDS.length).toBe(15);
     });
 
     it.each(GROUP_IDS)(

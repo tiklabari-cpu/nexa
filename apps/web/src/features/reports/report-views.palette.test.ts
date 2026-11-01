@@ -21,6 +21,8 @@ const TR: Record<ReportTabId, string> = {
   staffing: 'Kadro',
   missed: 'Kaçan sohbetler',
   engagement: 'Etkileşim',
+  queue: 'Kuyruk',
+  'queue-abandonment': 'Kuyruk terki',
   availability: 'Uygunluk',
   'agent-activity': 'Ajan aktivitesi',
   topics: 'Sohbet konuları',

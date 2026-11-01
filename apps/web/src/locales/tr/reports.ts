@@ -17,6 +17,8 @@ export const reports: Messages = {
   'reports.tabs.availability': 'Uygunluk',
   'reports.tabs.agentActivity': 'Ajan aktivitesi',
   'reports.tabs.engagement': 'Etkileşim',
+  'reports.tabs.queue': 'Kuyruk',
+  'reports.tabs.queueAbandonment': 'Kuyruk terki',
   'reports.tabs.topics': 'Sohbet Konuları',
   'reports.tabs.cases': 'Talepler',
   'reports.tabs.leads': 'Potansiyel Müşteriler',
@@ -478,6 +480,85 @@ export const reports: Messages = {
     'Her UTC hafta günü ve saati için gereken ile planlanan temsilci sayısı',
   'reports.staffing.cellUnknown': 'Yeterli veri yok',
   'reports.staffing.cellTitle': 'Gereken {required} · Planlanan {scheduled} · Fark {gap}',
+
+  // Kuyruk ve kuyruk terki (RP-04 · tm 371)
+  'reports.queue.error':
+    'Kuyruk raporu yüklenemedi. API’ye ulaşılabildiğini kontrol edip yeniden deneyin.',
+  'reports.queue.summary.title': 'Kuyruk',
+  'reports.queue.summary.description':
+    'Bir ajanı bekleyen sohbetler. İki kez bekleyen sohbet (başka ekibe aktarma) iki kez sayılır. Bekleme süresi, sonra bir ajana atanan sohbetler üzerinden ölçülür.',
+  'reports.queue.kpi.entries': 'Kuyruğa giren',
+  'reports.queue.kpi.entriesHint': '{waiting} hâlâ bekliyor',
+  'reports.queue.kpi.assignedRate': 'Atanan',
+  'reports.queue.kpi.assignedRateHint': '{count} sohbet bir ajana ulaştı',
+  'reports.queue.kpi.avgWait': 'Ortalama bekleme',
+  'reports.queue.kpi.waitHint': 'Bir ajan sohbeti alana kadar',
+  'reports.queue.kpi.p80Wait': '80. yüzdelik bekleme',
+  'reports.queue.kpi.p80Hint': 'Her 10 sohbetten 8’i bu süre içinde atandı',
+  'reports.queue.kpi.maxWait': 'En uzun bekleme',
+  'reports.queue.kpi.abandoned': 'Kuyruktan ayrılan',
+  'reports.queue.kpi.abandonedHint': 'Kuyruğa girenlerin {rate}',
+  'reports.queue.emptyTitle': 'Bu aralıkta kimse beklemedi',
+  'reports.queue.emptyDescription': 'Her sohbet açıldığı anda atandı ya da hiç sohbet açılmadı.',
+  'reports.queue.heatmap.title': 'Kuyruk ne zaman doluyor',
+  'reports.queue.heatmap.description':
+    'Kuyruğa giren sohbetler gün ve saate göre, çalışma alanı saat diliminde ({timezone}).',
+  'reports.queue.heatmap.caption.entries': 'Gün ve saate göre kuyruğa giren sohbetler, {timezone}',
+  'reports.queue.heatmap.caption.abandoned':
+    'Gün ve saate göre kuyrukta terk edilen sohbetler, {timezone}',
+  'reports.queue.heatmap.cellTitle.entries': '{count} girdi',
+  'reports.queue.heatmap.cellTitle.abandoned': '{count} terk',
+  'reports.queue.byDay.description':
+    'Kuyrukta en az bir sohbet olan günler, çalışma alanı saat diliminde sayılır ({timezone}).',
+  'reports.queue.byDay.caption': 'Güne göre kuyruğa girişler',
+  'reports.queue.byTeam.title': 'Ekibe göre',
+  'reports.queue.byTeam.description':
+    'Her sohbetin beklediği ekip kuyruğu. Her ekibin kendi ortalaması vardır.',
+  'reports.queue.byTeam.caption': 'Ekibe göre kuyruğa giriş, atanma ve bekleme',
+  'reports.queue.column.entries': 'Giren',
+  'reports.queue.column.assigned': 'Atanan',
+  'reports.queue.column.assignedRate': 'Atanan %',
+  'reports.queue.column.abandoned': 'Terk',
+  'reports.queue.column.avgWait': 'Ort. bekleme',
+  'reports.queue.column.p80Wait': '80. yüzdelik',
+  'reports.queue.column.maxWait': 'En uzun',
+  'reports.queueAbandonment.error':
+    'Kuyruk terki raporu yüklenemedi. API’ye ulaşılabildiğini kontrol edip yeniden deneyin.',
+  'reports.queueAbandonment.summary.title': 'Kuyruk terki',
+  'reports.queueAbandonment.summary.description':
+    'Oyuncunun beklerken bıraktığı sohbetler: sohbeti kapattı ya da sohbet hareketsizlikten kapandı. Yalnızca sohbet penceresini kapatmak sayılmaz.',
+  'reports.queueAbandonment.kpi.abandoned': 'Terk edilen',
+  'reports.queueAbandonment.kpi.rate': 'Terk oranı',
+  'reports.queueAbandonment.kpi.rateHint': 'Kuyruğa giren {entries} sohbetin',
+  'reports.queueAbandonment.kpi.rateNone': 'Bu aralıkta kuyruğa kimse girmedi',
+  'reports.queueAbandonment.kpi.avgWait': 'Ayrılmadan önce ortalama bekleme',
+  'reports.queueAbandonment.kpi.avgWaitHint': 'Oyuncu ayrılana kadar kuyrukta geçen süre',
+  'reports.queueAbandonment.kpi.entries': 'Kuyruğa giren',
+  'reports.queueAbandonment.emptyTitle': 'Bu aralıkta kuyruktan kimse ayrılmadı',
+  'reports.queueAbandonment.emptyDescription':
+    'Bekleyen her sohbet atandı, aktarıldı ya da bir ajan tarafından kapatıldı.',
+  'reports.queueAbandonment.byWait.title': 'Ne kadar beklediler',
+  'reports.queueAbandonment.byWait.description':
+    'Terk edilen sohbetler, oyuncunun ayrılmadan önce beklediği süreye göre.',
+  'reports.queueAbandonment.byWait.caption': 'Beklenen süreye göre terk edilen sohbetler',
+  'reports.queueAbandonment.byWait.column': 'Beklenen süre',
+  'reports.queueAbandonment.byWait.bar': 'En kalabalık aralığa oranı',
+  'reports.queueAbandonment.band.under_30s': '30 sn’den az',
+  'reports.queueAbandonment.band.30s_to_1m': '30 sn – 1 dk',
+  'reports.queueAbandonment.band.1m_to_2m': '1 – 2 dk',
+  'reports.queueAbandonment.band.2m_to_5m': '2 – 5 dk',
+  'reports.queueAbandonment.band.5m_to_10m': '5 – 10 dk',
+  'reports.queueAbandonment.band.over_10m': '10 dk’dan fazla',
+  'reports.queueAbandonment.heatmap.title': 'Oyuncular ne zaman ayrılıyor',
+  'reports.queueAbandonment.heatmap.description':
+    'Terk edilen sohbetler, kuyruğa girdikleri gün ve saate göre, çalışma alanı saat diliminde ({timezone}).',
+  'reports.queueAbandonment.byDay.description':
+    'Kuyrukta en az bir sohbet olan günler, çalışma alanı saat diliminde sayılır ({timezone}).',
+  'reports.queueAbandonment.byDay.caption': 'Güne göre kuyruk terki',
+  'reports.queueAbandonment.byTeam.description': 'Her sohbetin beklediği ekip kuyruğu.',
+  'reports.queueAbandonment.byTeam.caption': 'Ekibe göre kuyruk terki',
+  'reports.queueAbandonment.column.rate': 'Terk %',
+  'reports.queueAbandonment.column.avgWait': 'Ayrılmadan önce ort. bekleme',
 
   // Kaçan sohbetler (RP-02 · tm 369.2)
   'reports.missed.error':

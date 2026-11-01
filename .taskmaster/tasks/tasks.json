@@ -15473,10 +15473,10 @@
         "description": "WebhookDelivery modeli var ama arayüz yok; operatörün geliştiricisi teslimin neden düştüğünü göremiyor; webhook kapatılamıyor (PATCH yok). Kaynak: KN-03.",
         "details": "KAYNAK: SiyahTus-Analiz 03-eklenebilecekler.md / 04-gerekceler-ve-sorular.md (Karar kaydı K1–K27 ve \"Kararların maddelere etkisi\" madde içi varsayılanların önüne geçer) / 05-uygulama-rehberi.md — maddeler: KN-03. Eşleme: SiyahTus-Analiz/07-gorev-plani.md.\nTERİM EŞLEMESİ (K1=A): ekranda \"Thread ID\" = nexa Chat (kod/DB/API alanı chat_id, günlük kapsayıcı); ekranda \"Chat ID\" = nexa Thread (kod alanı thread_id, tek bağlantı). Kod adları değişmez; çeviri yalnız sunum katmanında.\nSIRA (contract-first): OpenAPI (packages/contract) → pnpm contract:generate (@siyahtus/types) → Prisma migration (genişlet → taşı → daralt; CONCURRENTLY kendi dosyasında tek ifade) → API servis + birim test → RTM → web/widget/mobil → entegrasyon/E2E.\nPROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → close); CONVENTIONS.md §1 (DoD), §2 (git), §3 (HANDOFF), §5, §6.3 (migration), §7 (test başlığında gereksinim etiketi); CLAUDE.md sınırları (production/DNS/TLS/gerçek secret/kart/ödeme YOK; dış servisler mock).\nNOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.\nDALGA: Dalga 6 — widget, engage, helpdesk, raporlar, kanallar, faturalama, GV.\n\nKOD: WebhookDelivery schema:2048-2075; webhooks.ts:132/:148/:192/:143 (PATCH yok); webhook-dispatcher.ts; jobs.ts:220; WebhookSubscriptions.tsx.\ncontract/api: GET /webhooks/{id}/deliveries?state=&cursor= (yeniden eskiye), POST …/deliveries/{deliveryId}/redeliver (normal gönderici yolu: SSRF koruması, imza, nonce; yeni deneme satırı), POST /webhooks/{id}/test (imzalı ping, test:true, dakikada birkaç), PATCH /webhooks/{id} enabled.\nSAKLAMA: terminal teslimde payload bugün siliniyor; exhausted satırlarda kısa süre (ör. 72 saat) tutma ya da event_id'den yeniden üretme — kodlayan seçer, gerekçe HANDOFF'a; \"teslim edilmiş payload kalıcı kopya bırakmaz\" ilkesi korunur; teslim satırları retention sweep'ine dahil.\nHata metni gösterilmeden önce temizlenir (sır/belirteç/uzun gövde yok, ≤500).\nindeks: (license_id, webhook_id, created_at) (gerekirse CONCURRENTLY).\nweb: çekmece tablo (zaman, olay, deneme, durum, HTTP kodu, kısa hata), filtre, eylemler.\n\nKABUL KRİTERLERİ:\n- Başarısız teslim HTTP kodu ve hata özetiyle görünür.\n- \"Tekrar gönder\" yeni deneme üretir ve sonucu tabloya düşer.\n- \"Test\" imzalı ping gönderir.\n- Kapatılan webhook olay almaz.\n- Başka kiracının teslimi görünmez.\n\nKULLANILAN VARSAYIMLAR:\n- KN-03'te açık soru yok.\n\nPANEL YERLEŞİMİ (tm 389 root panel · docs/platform-admin/gorev-yerlesimi.md · 2026-10-14): W+R. Workspace paneli: teslim günlüğü arayüzü. ROOT panel (389.14): kiracılar arası birikim/başarısızlık oranı SAYILARI (`webhook_deliveries` üzerinden; bu görev değişmez).",
         "testStrategy": "Entegrasyon (kiracılar arası, test imzası, yeniden gönderim satırı); `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-11-01T05:04:01.586Z",
+        "updatedAt": "2026-11-01T06:24:53.120Z",
         "subtasks": []
       },
       {
@@ -16146,9 +16146,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-01T05:04:01.587Z",
+      "lastModified": "2026-11-01T06:24:53.121Z",
       "taskCount": 390,
-      "completedCount": 369,
+      "completedCount": 370,
       "tags": [
         "master"
       ]

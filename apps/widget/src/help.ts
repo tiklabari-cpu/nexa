@@ -331,6 +331,7 @@ export function openHelp(host: HelpHost): HelpView {
     }
     let hits: HelpHit[];
     try {
+      // url-pii-ok: API request, not the address bar; the server log masks the value
       const params = new URLSearchParams({
         q,
         locale: host.locale,

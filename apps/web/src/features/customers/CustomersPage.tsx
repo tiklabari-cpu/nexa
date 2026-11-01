@@ -69,6 +69,7 @@ function customersUrl(
     order: sort.order,
     limit: String(CUSTOMERS_PAGE_SIZE),
   });
+  // url-pii-ok: API request, not the address bar; the server log masks the value
   if (query) params.set('query', query);
   for (const [key, value] of buildCustomerParams(conditions)) params.append(key, value);
   if (pageId) params.set('page_id', pageId);

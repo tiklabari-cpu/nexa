@@ -30,6 +30,9 @@ doğrulanır; "gözle baktım oldu" geçersizdir.
 - [ ] **Log anahtarları snake_case** — `pnpm audit:log-keys` (exit 0; CI'da "Log keys" adımı,
       tm 288.1). `apps/api` + `apps/rtm` log çağrısında `chatId`/`licenseId`/`reqId` gibi bir
       kimlik anahtarı kırmızı verir; doğru yazım `LOG_KEYS` (`@siyahtus/types`).
+- [ ] **Adreste kişisel veri yok** — `pnpm audit:url-pii` (exit 0; CI'da "URL personal data" adımı,
+      tm 386 · GV-05). `apps/*/src` + `packages/*/src`'de adrese `email`/`name`/`username`/`phone`/
+      `query`/`q`/`search` yazan satır kırmızı verir; API isteği `// url-pii-ok: <neden>` ile geçer.
 - [ ] **PLAN.md gereksinim satırı güncellendi** — task'ın PRD kodundaki satır(lar) `⬜`/`◐` → `✅`.
       Doğrulama: `grep -n '| <PRD kodu>' PLAN.md` çıktısındaki **durum damgalı** satırlarda `⬜`
       kalmamalı. Bir task birden çok satır kapatıyorsa hepsi. Kısmen karşılandıysa `◐` + eksik

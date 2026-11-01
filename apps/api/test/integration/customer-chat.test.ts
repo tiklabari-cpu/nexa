@@ -280,6 +280,45 @@ describe('customer chat api', () => {
       expect(cameFrom).not.toContain('robin@example.test');
     });
 
+    it("masks the personal half of a visited page's query, and keeps the rest (GV-05 · NFR-S9)", async () => {
+      // An operator's own pages carry the player in the address
+      // (`/account?email=…`); the visit's page list is shown to every agent and
+      // kept for the retention period, so the value is masked before the write —
+      // through the chat route and through the page-view route alike. A harmless
+      // key (`tab=`, `utm_source=`) survives: campaign rules may target it.
+      const { token, customer_id } = await widgetToken();
+
+      await server.post(
+        '/customer/chat/events',
+        { text: 'Hi', url: 'https://shop.test/account?email=jane%40example.test&tab=bonus' },
+        auth(token),
+      );
+      const visitResponse = await server.post(
+        '/customer/visit',
+        { url: 'https://shop.test/search?q=jane+roe&utm_source=mail#name=jane@example.test' },
+        auth(token),
+      );
+      expect(visitResponse.statusCode).toBeLessThan(300);
+
+      const pages = (await lastVisit(customer_id)).pages as { url: string }[];
+      expect(pages.map((page) => page.url)).toEqual([
+        'https://shop.test/account?email=[redacted]&tab=bonus',
+        'https://shop.test/search?q=[redacted]&utm_source=mail#name=[redacted]',
+      ]);
+      const stored = JSON.stringify(
+        await owner.visit.findMany({
+          where: { customerId: customer_id },
+          select: { pages: true, cameFrom: true },
+        }),
+      );
+      expect(stored).not.toContain('jane');
+      // The AI job queue keeps the page for the rule bot — masked the same way.
+      const jobs = await owner.aiJob.findMany({
+        where: { licenseId: fx.a.licenseId, pageUrl: { contains: 'jane' } },
+      });
+      expect(jobs).toEqual([]);
+    });
+
     it('keeps the arrival referrer when a later page continues the same visit', async () => {
       // "Came from" is a property of the arrival. Letting the second page
       // overwrite it would replace the search engine that brought them with

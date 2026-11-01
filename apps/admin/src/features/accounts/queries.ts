@@ -25,6 +25,7 @@ export function useAccountSearch(q: string) {
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams();
+      // url-pii-ok: API request, not the address bar; the server log masks the value
       if (q) params.set('q', q);
       params.set('limit', String(ACCOUNT_PAGE_SIZE));
       if (pageParam) params.set('cursor', pageParam);

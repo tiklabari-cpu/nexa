@@ -31,6 +31,7 @@ import {
   type SortOrder,
 } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
+import { visitedPageUrl } from '../../lib/log-redact.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import {
   FIELD_ORDER,
@@ -317,7 +318,9 @@ export class CustomerService {
       select: { id: true, pages: true },
     });
 
-    const entry = { url: input.url.slice(0, 2048), at: new Date().toISOString() };
+    // The query is masked before the write (tm 386 · GV-05): an `email=` on the
+    // page's address is the player's, and this list is shown to every agent.
+    const entry = { url: visitedPageUrl(input.url).slice(0, 2048), at: new Date().toISOString() };
 
     if (current) {
       const pages = Array.isArray(current.pages) ? (current.pages as unknown[]) : [];

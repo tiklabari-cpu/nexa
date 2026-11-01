@@ -37,6 +37,7 @@ export function useBlocklist(kind: PlatformBlocklistKind | '', q: string) {
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams();
       if (kind) params.set('kind', kind);
+      // url-pii-ok: API request, not the address bar; the server log masks the value
       if (q) params.set('q', q);
       params.set('limit', String(BLOCKLIST_PAGE_SIZE));
       if (pageParam) params.set('cursor', pageParam);

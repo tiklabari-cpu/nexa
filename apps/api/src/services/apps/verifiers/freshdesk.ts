@@ -82,6 +82,7 @@ export const freshdeskVerifier: AppVerifier = {
     try {
       answer = await http.request({
         method: 'GET',
+        // url-pii-ok: server-to-provider call; Freshdesk looks tickets up by e-mail only
         url: `${base}/api/v2/tickets?email=${encodeURIComponent(email)}&per_page=30`,
         headers: { authorization: basic(apiKey) },
       });

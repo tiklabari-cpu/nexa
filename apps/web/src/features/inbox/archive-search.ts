@@ -44,6 +44,7 @@ export function archiveSearchUrl(
   request: ArchiveSearchRequest,
   pageId: string | undefined,
 ): string {
+  // url-pii-ok: API request, not the address bar; the server log masks the value
   const params = new URLSearchParams({ query: request.query });
   params.set('limit', String(SEARCH_PAGE_SIZE));
   if (pageId) params.set('page_id', pageId);

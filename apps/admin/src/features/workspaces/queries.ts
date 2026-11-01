@@ -53,6 +53,7 @@ export const WORKSPACE_PAGE_SIZE = 25;
 
 function listQuery(filters: WorkspaceFilters, cursor: string | null): string {
   const params = new URLSearchParams();
+  // url-pii-ok: API request, not the address bar; the server log masks the value
   if (filters.q.trim()) params.set('q', filters.q.trim());
   if (filters.status) params.set('status', filters.status);
   if (filters.plan) params.set('plan', filters.plan);

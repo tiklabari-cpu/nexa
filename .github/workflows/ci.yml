@@ -125,6 +125,11 @@ jobs:
       - name: Log keys
         run: pnpm audit:log-keys
 
+      # No personal data in an address (GV-05 · tm 386): a search box or an e-mail
+      # written into a URL lands in history, access logs and the next site's Referer.
+      - name: URL personal data
+        run: pnpm audit:url-pii
+
       - name: Build
         run: pnpm build
 

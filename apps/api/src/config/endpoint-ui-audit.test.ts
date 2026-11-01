@@ -434,7 +434,7 @@ describe('the platform pair (tm 389.3)', () => {
     ]);
   });
 
-  it('finds the sign-in surface (tm 389.6), the dashboard (tm 389.8), the workspace pages (tm 389.9) and their actions (tm 389.10), the account pages and their actions (tm 389.11), billing and usage (tm 389.12), the settings page (tm 389.13), the Operations page (tm 389.14), the Security page (tm 389.16), the alert preferences (tm 389.20), enter-as-customer and its open sessions (tm 389.15) called, and nothing else of the platform contract', () => {
+  it('finds the sign-in surface (tm 389.6), the dashboard (tm 389.8), the workspace pages (tm 389.9) and their actions (tm 389.10), the account pages and their actions (tm 389.11), billing and usage (tm 389.12) and the payment operations (tm 389.18), the settings page (tm 389.13), the Operations page (tm 389.14), the Security page (tm 389.16), the alert preferences (tm 389.20), enter-as-customer and its open sessions (tm 389.15) called, and nothing else of the platform contract', () => {
     const analysis = withRepoRoot(() => load().analysePlatform());
 
     expect(analysis.called.map((operation) => operation.op).sort()).toEqual(
@@ -507,6 +507,22 @@ describe('the platform pair (tm 389.3)', () => {
         'GET /billing/credits',
         'POST /billing/credits',
         'POST /billing/manual-subscription',
+        // Payment operations (tm 389.18): Billing › Payment queue / Payment settings, and the
+        // statement row's PDF and refund.
+        'GET /billing/invoices/{invoiceId}/pdf',
+        'GET /billing/payment-requests',
+        'POST /billing/payment-requests/{requestId}/send-address',
+        'POST /billing/payment-requests/{requestId}/confirm-txid',
+        'POST /billing/payment-requests/{requestId}/cancel',
+        'GET /billing/swift-payments',
+        'POST /billing/swift-payments/{paymentId}/mark-paid',
+        'GET /billing/providers',
+        'PUT /billing/providers',
+        'GET /billing/bank-details',
+        'PUT /billing/bank-details',
+        'GET /billing/issuer-profile',
+        'PUT /billing/issuer-profile',
+        'POST /billing/refund-approvals',
         'GET /usage/global',
         'GET /usage/workspaces',
         'GET /usage/workspaces/{licenseId}',

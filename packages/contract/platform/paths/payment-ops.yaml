@@ -1,0 +1,380 @@
+# Payment operations — the root panel's side of #382/#383/#384 (tm 389.18 ·
+# FR-ADMIN-14 · design.md §C billing). `x-platform-*` as in auth.yaml.
+#
+# The queues the SiyahTuş team works: crypto payment requests (send the wallet
+# address, confirm the TXID, reject) and bank transfers waiting to be matched
+# (mark paid). Confirming either ends where a card payment does — the
+# subscription `active`, the term paid (`settlePayment`). Plus the payment
+# settings the tenant API reads through `platform_billing_settings()`: which
+# methods workspaces are offered, the bank account the SWIFT screen shows, and
+# the issuer statements are issued by. Every write takes a `reason` and is
+# recorded in the platform chain; the ones about one workspace also in its own
+# trail (`platform.billing_<verb>`, without the reason). No workspace content:
+# billing facts and identities only. `billing.manage` writes (billing,
+# superadmin); `billing.read` reads (every role — support only reads).
+
+invoicePdf:
+  get:
+    tags: [Billing]
+    operationId: downloadPlatformInvoicePdf
+    summary: One statement's PDF
+    description: |
+      The PDF stored when the statement was issued (#383) — the same bytes the
+      workspace downloads; nothing is rendered again. A statement frozen
+      before PDFs existed has none (404, the CSV still works).
+    x-platform-permission: billing.read
+    parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      "200":
+        description: The statement
+        content:
+          application/pdf:
+            schema: { type: string, format: binary }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+paymentRequests:
+  get:
+    tags: [Billing]
+    operationId: listPlatformPaymentRequests
+    summary: The crypto payment request queue
+    description: |
+      Every workspace's crypto payment requests, oldest first (the queue
+      order), keyset-paged. `state=open` (the default) keeps the two the team
+      still has to act on — `requested` and `address_sent`; `all` keeps every one.
+    x-platform-permission: billing.read
+    parameters:
+      - name: state
+        in: query
+        schema:
+          type: string
+          enum: [open, requested, address_sent, paid, rejected, canceled, all]
+          default: open
+      - name: license_id
+        in: query
+        schema: { type: string, pattern: "^[1-9][0-9]{0,18}$" }
+      - { name: cursor, in: query, schema: { type: string, maxLength: 512 } }
+      - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+    responses:
+      "200":
+        description: One page
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformPaymentRequestList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+sendAddress:
+  post:
+    tags: [Billing]
+    operationId: sendPlatformPaymentAddress
+    summary: Send the wallet address for a request
+    description: |
+      The request moves to `address_sent` and its owners are mailed that the
+      address is waiting in Billing (the mail does not carry it — they read it
+      signed in). Replaceable until the owner writes a TXID. The audit entry
+      keeps the address masked (first 6, last 4).
+    x-platform-permission: billing.manage
+    x-platform-audit: billing.payment_address_sent
+    parameters:
+      - name: requestId
+        in: path
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformSendAddressRequest" }
+    responses:
+      "200":
+        description: The request after it
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformPaymentRequestEnvelope" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+
+confirmTxid:
+  post:
+    tags: [Billing]
+    operationId: confirmPlatformPaymentTxid
+    summary: Confirm a request's transfer
+    description: |
+      The team found the transfer on the chain: the request is `paid`, the
+      term paid and the workspace's subscription `active` — the same result as
+      a card payment. A TXID is accepted once across every workspace.
+    x-platform-permission: billing.manage
+    x-platform-audit: billing.payment_confirmed
+    parameters:
+      - name: requestId
+        in: path
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformConfirmTxidRequest" }
+    responses:
+      "200":
+        description: The request after it
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformPaymentRequestEnvelope" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+
+cancelRequest:
+  post:
+    tags: [Billing]
+    operationId: cancelPlatformPaymentRequest
+    summary: Refuse an open request
+    description: |
+      The request is closed as `rejected`, the reason kept on it for the
+      owner to read. A paid or closed request is 409 `platform_payment_state`.
+    x-platform-permission: billing.manage
+    x-platform-audit: billing.payment_request_cancelled
+    parameters:
+      - name: requestId
+        in: path
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformReasonRequest" }
+    responses:
+      "200":
+        description: The request after it
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformPaymentRequestEnvelope" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+
+swiftPayments:
+  get:
+    tags: [Billing]
+    operationId: listPlatformSwiftPayments
+    summary: Bank transfers by state
+    description: |
+      Every workspace's bank-transfer references, oldest first, keyset-paged.
+      `state=pending` (the default) is the list to match against the bank
+      statement; `all` keeps every one.
+    x-platform-permission: billing.read
+    parameters:
+      - name: state
+        in: query
+        schema:
+          type: string
+          enum: [pending, succeeded, failed, canceled, disputed, all]
+          default: pending
+      - name: license_id
+        in: query
+        schema: { type: string, pattern: "^[1-9][0-9]{0,18}$" }
+      - { name: cursor, in: query, schema: { type: string, maxLength: 512 } }
+      - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+    responses:
+      "200":
+        description: One page
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformSwiftPaymentList" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+markSwiftPaid:
+  post:
+    tags: [Billing]
+    operationId: markPlatformSwiftPaid
+    summary: Mark a bank transfer paid
+    description: |
+      The transfer arrived with this reference: the term is paid and the
+      subscription `active` — the same result as a card payment. Already paid
+      is 409 `platform_payment_state` (`already_settled`).
+    x-platform-permission: billing.manage
+    x-platform-audit: billing.swift_marked_paid
+    parameters:
+      - name: paymentId
+        in: path
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformMarkSwiftPaidRequest" }
+    responses:
+      "200":
+        description: The transfer after it
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformSwiftPaymentEnvelope" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+
+providers:
+  get:
+    tags: [Billing]
+    operationId: getPlatformPaymentProviders
+    summary: Which payment methods workspaces are offered
+    x-platform-permission: billing.read
+    responses:
+      "200":
+        description: The switches
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformPaymentProviders" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+  put:
+    tags: [Billing]
+    operationId: setPlatformPaymentProviders
+    summary: Turn payment methods on or off
+    description: |
+      A method switched off disappears from every workspace's billing screen
+      and its new payments are refused (400 `method_unavailable`). A reference
+      already issued or a request already open is finished regardless, and
+      subscriptions already paid are not touched.
+    x-platform-permission: billing.manage
+    x-platform-audit: billing.providers_updated
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformPaymentProvidersRequest" }
+    responses:
+      "200":
+        description: The switches after it
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformPaymentProviders" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+bankDetails:
+  get:
+    tags: [Billing]
+    operationId: getPlatformBankDetails
+    summary: The bank account the SWIFT screen shows
+    x-platform-permission: billing.read
+    responses:
+      "200":
+        description: The account
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformBankDetails" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+  put:
+    tags: [Billing]
+    operationId: setPlatformBankDetails
+    summary: Set the bank account
+    description: |
+      What every workspace's SWIFT screen shows beside its reference. The
+      audit entry names the fields that changed, never their values.
+    x-platform-permission: billing.manage
+    x-platform-audit: billing.bank_details_updated
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformBankDetailsRequest" }
+    responses:
+      "200":
+        description: The account after it
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformBankDetails" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+issuerProfile:
+  get:
+    tags: [Billing]
+    operationId: getPlatformIssuerProfile
+    summary: The issuer statements are issued by
+    x-platform-permission: billing.read
+    responses:
+      "200":
+        description: The issuer
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformIssuerProfile" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+  put:
+    tags: [Billing]
+    operationId: setPlatformIssuerProfile
+    summary: Set the issuer
+    description: |
+      The seller every statement issued from now on carries
+      (`invoices.seller_snapshot`); a statement already issued, and its PDF,
+      keep the issuer they were issued with.
+    x-platform-permission: billing.manage
+    x-platform-audit: billing.issuer_profile_updated
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformIssuerProfileRequest" }
+    responses:
+      "200":
+        description: The issuer after it
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformIssuerProfile" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+refundApprovals:
+  post:
+    tags: [Billing]
+    operationId: approvePlatformRefund
+    summary: Approve a refund — as a credit
+    description: |
+      Nothing is paid back (BL-03: no refunds); an approved refund — an annual
+      exception, say — is a credit on the workspace's next statement, linked to
+      the statement it answers for. At most that statement's total, in its
+      currency. Recorded as `billing.credit_granted`.
+    x-platform-permission: billing.manage
+    x-platform-audit: billing.credit_granted
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PlatformRefundApprovalRequest" }
+    responses:
+      "201":
+        description: The credit
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PlatformCreditEnvelope" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }

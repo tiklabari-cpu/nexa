@@ -202,6 +202,7 @@ export function handleBilling(
           credit_cents: 2_500,
           total_cents: 27_200,
           issued_at: '2026-09-30T00:00:00.000Z',
+          pdf_available: true,
         },
       ],
       next_cursor: null,

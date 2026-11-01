@@ -2015,6 +2015,252 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/billing/invoices/{invoiceId}/pdf': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One statement's PDF
+     * @description The PDF stored when the statement was issued (#383) — the same bytes the
+     *     workspace downloads; nothing is rendered again. A statement frozen
+     *     before PDFs existed has none (404, the CSV still works).
+     */
+    get: operations['downloadPlatformInvoicePdf'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/payment-requests': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The crypto payment request queue
+     * @description Every workspace's crypto payment requests, oldest first (the queue
+     *     order), keyset-paged. `state=open` (the default) keeps the two the team
+     *     still has to act on — `requested` and `address_sent`; `all` keeps every one.
+     */
+    get: operations['listPlatformPaymentRequests'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/payment-requests/{requestId}/send-address': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send the wallet address for a request
+     * @description The request moves to `address_sent` and its owners are mailed that the
+     *     address is waiting in Billing (the mail does not carry it — they read it
+     *     signed in). Replaceable until the owner writes a TXID. The audit entry
+     *     keeps the address masked (first 6, last 4).
+     */
+    post: operations['sendPlatformPaymentAddress'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/payment-requests/{requestId}/confirm-txid': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Confirm a request's transfer
+     * @description The team found the transfer on the chain: the request is `paid`, the
+     *     term paid and the workspace's subscription `active` — the same result as
+     *     a card payment. A TXID is accepted once across every workspace.
+     */
+    post: operations['confirmPlatformPaymentTxid'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/payment-requests/{requestId}/cancel': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Refuse an open request
+     * @description The request is closed as `rejected`, the reason kept on it for the
+     *     owner to read. A paid or closed request is 409 `platform_payment_state`.
+     */
+    post: operations['cancelPlatformPaymentRequest'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/swift-payments': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Bank transfers by state
+     * @description Every workspace's bank-transfer references, oldest first, keyset-paged.
+     *     `state=pending` (the default) is the list to match against the bank
+     *     statement; `all` keeps every one.
+     */
+    get: operations['listPlatformSwiftPayments'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/swift-payments/{paymentId}/mark-paid': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Mark a bank transfer paid
+     * @description The transfer arrived with this reference: the term is paid and the
+     *     subscription `active` — the same result as a card payment. Already paid
+     *     is 409 `platform_payment_state` (`already_settled`).
+     */
+    post: operations['markPlatformSwiftPaid'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/providers': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Which payment methods workspaces are offered */
+    get: operations['getPlatformPaymentProviders'];
+    /**
+     * Turn payment methods on or off
+     * @description A method switched off disappears from every workspace's billing screen
+     *     and its new payments are refused (400 `method_unavailable`). A reference
+     *     already issued or a request already open is finished regardless, and
+     *     subscriptions already paid are not touched.
+     */
+    put: operations['setPlatformPaymentProviders'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/bank-details': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The bank account the SWIFT screen shows */
+    get: operations['getPlatformBankDetails'];
+    /**
+     * Set the bank account
+     * @description What every workspace's SWIFT screen shows beside its reference. The
+     *     audit entry names the fields that changed, never their values.
+     */
+    put: operations['setPlatformBankDetails'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/issuer-profile': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The issuer statements are issued by */
+    get: operations['getPlatformIssuerProfile'];
+    /**
+     * Set the issuer
+     * @description The seller every statement issued from now on carries
+     *     (`invoices.seller_snapshot`); a statement already issued, and its PDF,
+     *     keep the issuer they were issued with.
+     */
+    put: operations['setPlatformIssuerProfile'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/refund-approvals': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Approve a refund — as a credit
+     * @description Nothing is paid back (BL-03: no refunds); an approved refund — an annual
+     *     exception, say — is a credit on the workspace's next statement, linked to
+     *     the statement it answers for. At most that statement's total, in its
+     *     currency. Recorded as `billing.credit_granted`.
+     */
+    post: operations['approvePlatformRefund'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/usage/global': {
     parameters: {
       query?: never;
@@ -4100,6 +4346,8 @@ export interface components {
       total_cents: number;
       /** Format: date-time */
       issued_at: string;
+      /** @description Whether the statement has its PDF (#383) — older ones have only the CSV. */
+      pdf_available: boolean;
     };
     PlatformInvoiceList: {
       data: components['schemas']['PlatformInvoiceRow'][];
@@ -4186,6 +4434,185 @@ export interface components {
       seats?: number;
       /** @enum {string} */
       billing_cycle?: 'monthly' | 'annual';
+      reason: string;
+    };
+    /**
+     * @description A crypto request's state (`CRYPTO_REQUEST_STATUSES`, tm 382).
+     * @enum {string}
+     */
+    PlatformPaymentRequestState: 'requested' | 'address_sent' | 'paid' | 'rejected' | 'canceled';
+    /** @enum {string} */
+    PlatformCryptoNetwork: 'usdt_trc20' | 'usdt_erc20';
+    /**
+     * @description One crypto payment request — the queue the team works from. Billing
+     *     facts only: the amount, the network, the invoicing name the owner gave,
+     *     the address the team sent and the TXID the owner wrote.
+     */
+    PlatformPaymentRequest: {
+      /** Format: uuid */
+      id: string;
+      license_id: string;
+      organization_name: string;
+      network: components['schemas']['PlatformCryptoNetwork'];
+      status: components['schemas']['PlatformPaymentRequestState'];
+      amount_minor: number;
+      currency: string;
+      /** @enum {string} */
+      billing_cycle: 'monthly' | 'annual';
+      billing_name: string;
+      wallet_address: string | null;
+      /** Format: date-time */
+      address_sent_at: string | null;
+      txid: string | null;
+      /** Format: date-time */
+      txid_submitted_at: string | null;
+      closed_reason: string | null;
+      /** @description The operator who last acted on it. */
+      handled_by_email: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      closed_at: string | null;
+    };
+    PlatformPaymentRequestList: {
+      data: components['schemas']['PlatformPaymentRequest'][];
+      next_cursor: string | null;
+    };
+    PlatformPaymentRequestEnvelope: {
+      request: components['schemas']['PlatformPaymentRequest'];
+    };
+    PlatformSendAddressRequest: {
+      /** @description Must be the request's own network — another is 400 `network_mismatch`. */
+      network: components['schemas']['PlatformCryptoNetwork'];
+      /** @description TRC-20 `T` + 33 base58, ERC-20 `0x` + 40 hex; anything else is 400 `address_invalid`. */
+      address: string;
+      reason: string;
+    };
+    PlatformConfirmTxidRequest: {
+      /**
+       * @description The transaction found on the chain. When the owner already wrote one
+       *     it must be the same (400 `txid_mismatch`); one used on another
+       *     payment is 409 `platform_payment_state` (`txid_used`).
+       */
+      txid: string;
+      reason: string;
+    };
+    /** @enum {string} */
+    PlatformSwiftPaymentState: 'pending' | 'succeeded' | 'failed' | 'canceled' | 'disputed';
+    PlatformSwiftPayment: {
+      /** Format: uuid */
+      id: string;
+      license_id: string;
+      organization_name: string;
+      /** @description The code the transfer's description carries (`ST-XXXX-XXXX`). */
+      reference: string;
+      status: components['schemas']['PlatformSwiftPaymentState'];
+      amount_minor: number;
+      currency: string;
+      /** @enum {string} */
+      billing_cycle: 'monthly' | 'annual';
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      settled_at: string | null;
+      handled_by_email: string | null;
+    };
+    PlatformSwiftPaymentList: {
+      data: components['schemas']['PlatformSwiftPayment'][];
+      next_cursor: string | null;
+    };
+    PlatformSwiftPaymentEnvelope: {
+      payment: components['schemas']['PlatformSwiftPayment'];
+    };
+    PlatformMarkSwiftPaidRequest: {
+      /** @description The reference read off the bank statement — must be this transfer's (400 `reference_mismatch`). */
+      reference: string;
+      reason: string;
+    };
+    PlatformPaymentProviderSwitches: {
+      swift_manual: boolean;
+      crypto_manual: boolean;
+      stripe: boolean;
+    };
+    PlatformPaymentProviders: {
+      providers: components['schemas']['PlatformPaymentProviderSwitches'];
+      /** @description False while no row exists — the defaults (both manual methods on, Stripe off) apply. */
+      stored: boolean;
+      /**
+       * @description Whether the deployment's card processor can take a card on its own
+       *     page. While it cannot (the mock), no workspace is offered Stripe,
+       *     whatever its switch says.
+       */
+      stripe_card_ready: boolean;
+      /** Format: date-time */
+      updated_at: string | null;
+    };
+    PlatformPaymentProvidersRequest: {
+      swift_manual: boolean;
+      crypto_manual: boolean;
+      stripe: boolean;
+      reason: string;
+    };
+    PlatformSwiftBankDetails: {
+      beneficiary: string;
+      bank_name: string;
+      iban: string;
+      swift_bic: string;
+      bank_address: string | null;
+    };
+    PlatformBankDetails: {
+      /** @description Null until set — the workspaces' SWIFT screen then has no account to show. */
+      details: components['schemas']['PlatformSwiftBankDetails'] | null;
+      /** Format: date-time */
+      updated_at: string | null;
+    };
+    PlatformBankDetailsRequest: {
+      beneficiary: string;
+      bank_name: string;
+      /** @description Two letters, two digits, 11–30 letters or digits; spaces are dropped. */
+      iban: string;
+      /** @description 8 or 11 characters (`AAAABBCC` / `AAAABBCCDDD`). */
+      swift_bic: string;
+      bank_address?: string | null;
+      reason: string;
+    };
+    PlatformIssuerParty: {
+      legal_name: string;
+      address_lines: string[];
+      country: string | null;
+      tax_office: string | null;
+      tax_id: string | null;
+      vat_id: string | null;
+      email: string | null;
+      tax_note: string | null;
+    };
+    PlatformIssuerProfile: {
+      /**
+       * @description Null until set — statements then carry the placeholder issuer. A
+       *     statement already issued keeps the issuer it was issued with
+       *     (`invoices.seller_snapshot`, #383).
+       */
+      profile: components['schemas']['PlatformIssuerParty'] | null;
+      /** Format: date-time */
+      updated_at: string | null;
+    };
+    PlatformIssuerProfileRequest: {
+      legal_name: string;
+      address_lines?: string[];
+      country?: string | null;
+      tax_office?: string | null;
+      tax_id?: string | null;
+      vat_id?: string | null;
+      email?: string | null;
+      tax_note?: string | null;
+      reason: string;
+    };
+    PlatformRefundApprovalRequest: {
+      license_id: string;
+      /** Format: uuid */
+      invoice_id: string;
+      /** @description At most the statement's total (400 `amount_exceeds_invoice`). */
+      amount_minor: number;
       reason: string;
     };
     /** @enum {string} */
@@ -4855,7 +5282,8 @@ export interface components {
      * @description `platform_last_superadmin`, `account_exists`, `two_factor_already_enabled` or
      *     `platform_workspace_state` (`details.reason`, tm 389.10) or
      *     `platform_account_state` (`details.reason`, tm 389.11) or
-     *     `platform_operation_running` (tm 389.17) — the request was fine, the
+     *     `platform_operation_running` (tm 389.17) or `platform_payment_state`
+     *     (`details.reason`, tm 389.18) — the request was fine, the
      *     state refused it.
      */
     Conflict: {
@@ -7579,6 +8007,386 @@ export interface operations {
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       409: components['responses']['Conflict'];
+    };
+  };
+  downloadPlatformInvoicePdf: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        invoiceId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The statement */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/pdf': string;
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  listPlatformPaymentRequests: {
+    parameters: {
+      query?: {
+        state?: 'open' | 'requested' | 'address_sent' | 'paid' | 'rejected' | 'canceled' | 'all';
+        license_id?: string;
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformPaymentRequestList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  sendPlatformPaymentAddress: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformSendAddressRequest'];
+      };
+    };
+    responses: {
+      /** @description The request after it */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformPaymentRequestEnvelope'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  confirmPlatformPaymentTxid: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformConfirmTxidRequest'];
+      };
+    };
+    responses: {
+      /** @description The request after it */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformPaymentRequestEnvelope'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  cancelPlatformPaymentRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        requestId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description The request after it */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformPaymentRequestEnvelope'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  listPlatformSwiftPayments: {
+    parameters: {
+      query?: {
+        state?: 'pending' | 'succeeded' | 'failed' | 'canceled' | 'disputed' | 'all';
+        license_id?: string;
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformSwiftPaymentList'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  markPlatformSwiftPaid: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        paymentId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformMarkSwiftPaidRequest'];
+      };
+    };
+    responses: {
+      /** @description The transfer after it */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformSwiftPaymentEnvelope'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  getPlatformPaymentProviders: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The switches */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformPaymentProviders'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  setPlatformPaymentProviders: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformPaymentProvidersRequest'];
+      };
+    };
+    responses: {
+      /** @description The switches after it */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformPaymentProviders'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformBankDetails: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The account */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformBankDetails'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  setPlatformBankDetails: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformBankDetailsRequest'];
+      };
+    };
+    responses: {
+      /** @description The account after it */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformBankDetails'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  getPlatformIssuerProfile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The issuer */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformIssuerProfile'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  setPlatformIssuerProfile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformIssuerProfileRequest'];
+      };
+    };
+    responses: {
+      /** @description The issuer after it */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformIssuerProfile'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  approvePlatformRefund: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformRefundApprovalRequest'];
+      };
+    };
+    responses: {
+      /** @description The credit */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformCreditEnvelope'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
     };
   };
   getPlatformGlobalUsage: {

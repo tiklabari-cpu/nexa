@@ -7,8 +7,11 @@
  * number, linked to its page. The writes are `billing.manage` (billing and superadmin); the
  * buttons are hidden from a role without it, and the server refuses it either way. Revenue is
  * the closed statements exactly; the open period is shown apart, as what was already bought.
+ *
+ * Two more tabs (tm 389.18 · FR-ADMIN-14): the payment queue (crypto requests, bank transfers)
+ * and the payment settings; a statement's PDF and a refund approved as a credit sit on its row.
  */
-import { useState, type ReactElement, type ReactNode } from 'react';
+import { useState, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
 import { SUBSCRIPTION_STATUSES } from '@siyahtus/types';
 import { Link } from 'react-router-dom';
 import { LoadError } from '../../components/LoadError.js';
@@ -19,6 +22,7 @@ import { ApiClientError } from '../../lib/api-client.js';
 import { hasPermission, useAuth } from '../../lib/auth-store.js';
 import { formatCount, formatDate, formatMoney, formatPeriod } from '../../lib/format.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
+import type { PlatformInvoiceList } from '../../lib/platform-types.js';
 import { saveBlob } from '../workspaces/WorkspaceTabs.js';
 import {
   Cell,
@@ -42,11 +46,18 @@ import {
   useSubscriptions,
   type SubscriptionFilters,
 } from './queries.js';
+import { downloadInvoicePdf, useApproveRefund } from './payment-queries.js';
+import { PaymentQueue } from './PaymentQueue.js';
+import { PaymentSettings } from './PaymentSettings.js';
 
 const PLANS = ['growth', 'enterprise'] as const;
 const LICENSE_RE = /^[1-9]\d{0,18}$/;
 
-type Dialog = 'credit' | 'manual' | null;
+type InvoiceRow = PlatformInvoiceList['data'][number];
+type Dialog = 'credit' | 'manual' | { refund: InvoiceRow } | null;
+
+export const BILLING_TABS = ['overview', 'queue', 'settings'] as const;
+type BillingTab = (typeof BILLING_TABS)[number];
 interface Notice {
   tone: 'success' | 'info';
   message: string;
@@ -58,6 +69,19 @@ export function BillingPage(): ReactElement {
   const canManage = hasPermission(me, 'billing.manage');
   const [dialog, setDialog] = useState<Dialog>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [tab, setTab] = useState<BillingTab>('overview');
+
+  function onTabKey(event: KeyboardEvent, name: BillingTab): void {
+    const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+    if (step === 0) return;
+    event.preventDefault();
+    const next =
+      BILLING_TABS[
+        (BILLING_TABS.indexOf(name) + step + BILLING_TABS.length) % BILLING_TABS.length
+      ]!;
+    setTab(next);
+    document.getElementById(`billing-tab-${next}`)?.focus();
+  }
 
   const actions = canManage ? (
     <div className="flex gap-2">
@@ -81,11 +105,63 @@ export function BillingPage(): ReactElement {
           {notice.message}
         </Banner>
       )}
-      <RevenueSection />
-      <SubscriptionsSection />
-      <InvoicesSection />
-      <CreditsSection />
-      <CatalogueSection />
+      <div
+        role="tablist"
+        aria-label={t('billing.tabs.label')}
+        className="flex flex-wrap gap-1 border-b border-border"
+      >
+        {BILLING_TABS.map((name) => (
+          <button
+            key={name}
+            type="button"
+            role="tab"
+            id={`billing-tab-${name}`}
+            aria-selected={tab === name}
+            aria-controls={`billing-panel-${name}`}
+            tabIndex={tab === name ? 0 : -1}
+            onClick={() => setTab(name)}
+            onKeyDown={(event) => onTabKey(event, name)}
+            className={`-mb-px inline-block border-b-2 px-3 py-2 text-sm ${
+              tab === name
+                ? 'border-brand-600 font-medium text-content'
+                : 'border-transparent text-content-secondary hover:text-content'
+            }`}
+          >
+            {t(`billing.tabs.${name}`)}
+          </button>
+        ))}
+      </div>
+      <div
+        role="tabpanel"
+        id={`billing-panel-${tab}`}
+        aria-labelledby={`billing-tab-${tab}`}
+        className="space-y-6"
+      >
+        {tab === 'overview' && (
+          <>
+            <RevenueSection />
+            <SubscriptionsSection />
+            <InvoicesSection
+              canManage={canManage}
+              onRefund={(invoice) => setDialog({ refund: invoice })}
+            />
+            <CreditsSection />
+            <CatalogueSection />
+          </>
+        )}
+        {tab === 'queue' && <PaymentQueue />}
+        {tab === 'settings' && <PaymentSettings />}
+      </div>
+      {dialog !== null && typeof dialog === 'object' && (
+        <RefundDialog
+          invoice={dialog.refund}
+          onClose={() => setDialog(null)}
+          onDone={() => {
+            setDialog(null);
+            setNotice({ tone: 'success', message: t('billing.refund.done') });
+          }}
+        />
+      )}
       {dialog === 'credit' && (
         <CreditDialog
           onClose={() => setDialog(null)}
@@ -344,7 +420,13 @@ function SubscriptionsSection(): ReactElement {
 
 // --- Invoices ----------------------------------------------------------------
 
-function InvoicesSection(): ReactElement {
+function InvoicesSection({
+  canManage,
+  onRefund,
+}: {
+  canManage: boolean;
+  onRefund: (invoice: InvoiceRow) => void;
+}): ReactElement {
   const t = useTranslate();
   const [draft, setDraft] = useState('');
   const [licenseId, setLicenseId] = useState('');
@@ -356,6 +438,15 @@ function InvoicesSection(): ReactElement {
     setFailed(null);
     try {
       saveBlob(await downloadInvoice(id), `invoice-${number}-${period}.csv`);
+    } catch {
+      setFailed(number);
+    }
+  }
+
+  async function downloadPdf(id: string, number: string): Promise<void> {
+    setFailed(null);
+    try {
+      saveBlob(await downloadInvoicePdf(id), `siyahtus-invoice-${number}.pdf`);
     } catch {
       setFailed(number);
     }
@@ -426,13 +517,29 @@ function InvoicesSection(): ReactElement {
               <Cell>{row.credit_cents > 0 ? money(row.credit_cents, row.currency) : null}</Cell>
               <Cell>{money(row.total_cents, row.currency)}</Cell>
               <Cell>
-                <button
-                  type="button"
-                  className={LINK_CLASS}
-                  onClick={() => void download(row.id, row.number, row.period)}
-                >
-                  {t('billing.invoices.download', { number: row.number })}
-                </button>
+                <div className="flex flex-col items-start gap-1">
+                  <button
+                    type="button"
+                    className={LINK_CLASS}
+                    onClick={() => void download(row.id, row.number, row.period)}
+                  >
+                    {t('billing.invoices.download', { number: row.number })}
+                  </button>
+                  {row.pdf_available && (
+                    <button
+                      type="button"
+                      className={LINK_CLASS}
+                      onClick={() => void downloadPdf(row.id, row.number)}
+                    >
+                      {t('billing.invoices.downloadPdf', { number: row.number })}
+                    </button>
+                  )}
+                  {canManage && row.total_cents > 0 && (
+                    <button type="button" className={LINK_CLASS} onClick={() => onRefund(row)}>
+                      {t('billing.refund.open', { number: row.number })}
+                    </button>
+                  )}
+                </div>
               </Cell>
             </tr>
           ))}
@@ -811,6 +918,62 @@ function ManualSubscriptionDialog({
           className={FIELD_CLASS}
           value={seats}
           onChange={(event) => setSeats(event.target.value)}
+        />
+      </Field>
+    </ReasonDialog>
+  );
+}
+
+/** A refund approved as a credit (BL-03: nothing is paid back), at most the statement's total. */
+function RefundDialog({
+  invoice,
+  onClose,
+  onDone,
+}: {
+  invoice: InvoiceRow;
+  onClose: () => void;
+  onDone: () => void;
+}): ReactElement {
+  const t = useTranslate();
+  const approve = useApproveRefund();
+  const [amount, setAmount] = useState('');
+  const cents = parseAmount(amount);
+  const valid = cents !== null && !Number.isNaN(cents) && cents <= invoice.total_cents;
+
+  return (
+    <ReasonDialog
+      title={t('billing.refund.title', { number: invoice.number })}
+      description={t('billing.refund.body', {
+        workspace: invoice.organization_name,
+        total: money(invoice.total_cents, invoice.currency),
+      })}
+      confirmLabel={t('billing.refund.confirm')}
+      confirmDisabled={!valid}
+      extraDirty={amount !== ''}
+      describeError={(error) =>
+        error instanceof ApiClientError && error.details?.['reason'] === 'amount_exceeds_invoice'
+          ? t('billing.refund.tooMuch')
+          : describe(t)(error)
+      }
+      onCancel={onClose}
+      onDone={onDone}
+      onConfirm={({ reason }) =>
+        approve.mutateAsync({
+          license_id: invoice.license_id,
+          invoice_id: invoice.id,
+          amount_minor: cents ?? 0,
+          reason,
+        })
+      }
+    >
+      <Field id="refund-amount" label={t('billing.credit.amount')} hint={t('billing.refund.hint')}>
+        <input
+          id="refund-amount"
+          inputMode="decimal"
+          className={FIELD_CLASS}
+          value={amount}
+          aria-describedby="refund-amount-hint"
+          onChange={(event) => setAmount(event.target.value)}
         />
       </Field>
     </ReasonDialog>

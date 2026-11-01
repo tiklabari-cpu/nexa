@@ -732,6 +732,66 @@ export function subscriptionCancelMail(
 }
 
 /**
+ * The SiyahTuş team answered a crypto payment request (tm 389.18 · FR-ADMIN-14
+ * · ADR-13a §3): the wallet address is waiting on the request in Billing. The
+ * mail does not carry the address — a reader confirms where to send money
+ * signed in, on the request itself, never from a message anyone could forge.
+ */
+export function paymentAddressSentMail(
+  ctx: MailContext,
+  input: { workspaceName: string; network: string; amount: string; billingUrl: string | null },
+): RenderedEmail {
+  const t = tr(ctx.locale);
+  const name = input.workspaceName;
+  const blocks: EmailBlock[] = [
+    {
+      type: 'paragraph',
+      text: t
+        ? `${name} çalışma alanının kripto ödeme talebine yanıt verdik: ${input.network} ağı için cüzdan adresi Faturalandırma sayfasındaki talebinizde sizi bekliyor. Ödenecek tutar ${input.amount}.`
+        : `We answered the crypto payment request of the workspace ${name}: the wallet address for ${input.network} is waiting on your request on the Billing page. The amount to send is ${input.amount}.`,
+    },
+    {
+      type: 'paragraph',
+      text: t
+        ? 'Transferi yaptıktan sonra işlem kimliğini (TXID) aynı talebe yazın; ekibimiz işlemi zincirde doğruladığında aboneliğiniz etkinleşir.'
+        : 'Once you have made the transfer, write its transaction id (TXID) on the same request; your subscription is active as soon as our team has found it on the chain.',
+    },
+    {
+      type: 'note',
+      text: t
+        ? 'Güvenliğiniz için adresi bu e-postaya yazmadık. Adresi yalnızca oturum açıp talebinizde görün; başka bir yoldan gelen adrese ödeme yapmayın.'
+        : 'For your safety this email does not carry the address. Read it only on your request, signed in, and never pay to an address that reached you any other way.',
+    },
+  ];
+  if (input.billingUrl) {
+    blocks.push({
+      type: 'button',
+      label: t ? 'Faturalandırmayı aç' : 'Open billing',
+      url: input.billingUrl,
+      fallback: fallback(ctx),
+    });
+  }
+  return renderEmail({
+    locale: ctx.locale,
+    homeUrl: ctx.appUrl ?? '',
+    eyebrow: name,
+    subject: t ? `${name}: ödeme adresiniz hazır` : `${name}: your payment address is ready`,
+    preheader: t
+      ? 'Cüzdan adresi Faturalandırma sayfasındaki talebinizde.'
+      : 'The wallet address is on your request on the Billing page.',
+    icon: ICON.receipt,
+    heading: t ? 'Ödeme adresiniz hazır' : 'Your payment address is ready',
+    blocks,
+    footer: [
+      t
+        ? 'Bu e-postayı, bu çalışma alanının Kurucusu olduğunuz için aldınız.'
+        : 'You received this email because you are the owner of this workspace.',
+      signature(ctx),
+    ],
+  });
+}
+
+/**
  * SiyahTuş moved a workspace's ownership by hand (tm 389.10 · FR-ADMIN-09 —
  * the forced transfer, when the owner could not be reached). Everyone with a
  * stake hears it: the new owner, the previous one, and every admin — so a

@@ -363,6 +363,94 @@ describe('the platform audit chain (tm 389.5)', () => {
       }),
     );
 
+    // Payment operations (tm 389.18), on B: a crypto request answered and confirmed, another
+    // refused, a bank transfer marked paid, the three payment settings, a refund approved.
+    const cryptoRequest = () =>
+      owner.cryptoPaymentRequest.create({
+        data: {
+          licenseId: fx.b.licenseId,
+          network: 'usdt_trc20',
+          amountMinor: 19_800,
+          currency: 'usd',
+          billingCycle: 'monthly',
+          billingName: 'Org B',
+        },
+      });
+    const paidRequest = await cryptoRequest();
+    ok(
+      await billing('POST', `/billing/payment-requests/${paidRequest.id}/send-address`, {
+        network: 'usdt_trc20',
+        address: 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb',
+      }),
+    );
+    ok(
+      await billing('POST', `/billing/payment-requests/${paidRequest.id}/confirm-txid`, {
+        txid: 'a'.repeat(64),
+      }),
+    );
+    const refusedRequest = await cryptoRequest();
+    ok(await billing('POST', `/billing/payment-requests/${refusedRequest.id}/cancel`, {}));
+    const transfer = await owner.paymentTransaction.create({
+      data: {
+        licenseId: fx.b.licenseId,
+        provider: 'swift_manual',
+        kind: 'checkout',
+        reference: 'ST-AUDT-0001',
+        amountMinor: 19_800,
+        currency: 'usd',
+        period: '202601',
+        billingCycle: 'monthly',
+      },
+    });
+    ok(
+      await billing('POST', `/billing/swift-payments/${transfer.id}/mark-paid`, {
+        reference: 'ST-AUDT-0001',
+      }),
+    );
+    ok(
+      await billing('PUT', '/billing/providers', {
+        swift_manual: true,
+        crypto_manual: true,
+        stripe: true,
+      }),
+    );
+    ok(
+      await billing('PUT', '/billing/bank-details', {
+        beneficiary: 'Example Beneficiary',
+        bank_name: 'Example Bank',
+        iban: 'XX00TEST000000000001',
+        swift_bic: 'EXMPXX00',
+      }),
+    );
+    ok(await billing('PUT', '/billing/issuer-profile', { legal_name: 'Example Issuer Ltd' }));
+    const statement = await owner.invoice.create({
+      data: {
+        licenseId: fx.b.licenseId,
+        number: 'SIYAHTUS-202601',
+        period: '202601',
+        periodStart: new Date('2026-01-01T00:00:00Z'),
+        periodEnd: new Date('2026-02-01T00:00:00Z'),
+        issuedAt: new Date('2026-01-31T23:59:59Z'),
+        origin: 'issued',
+        status: 'paid',
+        currency: 'usd',
+        subtotalCents: 19_800,
+        totalCents: 19_800,
+      },
+    });
+    ok(
+      await billing('POST', '/billing/refund-approvals', {
+        license_id: b,
+        invoice_id: statement.id,
+        amount_minor: 5_000,
+      }),
+    );
+    await owner.platformSetting.deleteMany({
+      where: {
+        key: { in: ['billing.providers', 'billing.swift_bank_details', 'billing.issuer_profile'] },
+      },
+    });
+
     // Every account action (tm 389.11), on B's agent — A's agent owns A by now.
     const person = fx.b.agentAccountId;
     const onAccount = (path: string, body: Record<string, unknown> = {}) =>

@@ -40,6 +40,7 @@ import redis from './plugins/redis.js';
 import telemetryPlugin from './plugins/telemetry.js';
 import platformAccountsRoutes from './routes/platform/accounts.js';
 import platformBillingRoutes from './routes/platform/billing.js';
+import platformPaymentOpsRoutes from './routes/platform/payment-ops.js';
 import platformUsageRoutes from './routes/platform/usage.js';
 import platformAdminsRoutes from './routes/platform/admins.js';
 import platformAuditRoutes from './routes/platform/audit.js';
@@ -243,6 +244,7 @@ export async function buildPlatformServer({
       await api.register(platformSupportRoutes, { env, platform, mailer });
       await api.register(platformAccountsRoutes, { env, mailer, ...(now ? { now } : {}) });
       await api.register(platformBillingRoutes, { env, ...(now ? { now } : {}) });
+      await api.register(platformPaymentOpsRoutes, { env, mailer, ...(now ? { now } : {}) });
       await api.register(platformUsageRoutes, { env, ...(now ? { now } : {}) });
       await api.register(platformSettingsRoutes, { ...(now ? { now } : {}) });
       await api.register(platformAiSettingsRoutes, { env, platform, operations: aiOperations });

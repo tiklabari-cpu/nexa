@@ -80,6 +80,8 @@ export const common: Messages = {
     'This would leave the platform without an active superadmin.',
   'common.errors.platform_operation_running':
     'This operation is already running — try again once it has finished.',
+  'common.errors.platform_payment_state':
+    'The payment’s current state does not allow this — refresh the list and look again.',
   'common.errors.platform_reason_required':
     'Say why you are doing this (3 to 500 characters) — it goes into the audit log.',
   'common.errors.platform_recent_totp_required':

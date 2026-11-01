@@ -19,6 +19,7 @@ import {
   ownershipTransferredMail,
   passwordChangedMail,
   passwordResetMail,
+  paymentAddressSentMail,
   permissionsChangedMail,
   platformAlertMail,
   platformInvitationMail,
@@ -242,6 +243,12 @@ function everyMail(locale: MailLocale): Record<string, RenderedEmail> {
       workspaceName: 'Acme',
       billingUrl: null,
     }),
+    paymentAddressSent: paymentAddressSentMail(ctx, {
+      workspaceName: 'Acme',
+      network: 'USDT (TRC-20)',
+      amount: '$198.00',
+      billingUrl: APP + '/app/billing',
+    }),
     cancelEnded: subscriptionCancelMail(ctx, {
       kind: 'ended',
       workspaceName: 'Acme',
@@ -254,9 +261,9 @@ function everyMail(locale: MailLocale): Record<string, RenderedEmail> {
 
 describe('every message, in both languages (tm 265)', () => {
   for (const locale of ['en', 'tr'] as const) {
-    it(`renders all twenty-nine in ${locale}: subject, text and HTML, in that language`, () => {
+    it(`renders all thirty in ${locale}: subject, text and HTML, in that language`, () => {
       const mails = everyMail(locale);
-      expect(Object.keys(mails)).toHaveLength(29);
+      expect(Object.keys(mails)).toHaveLength(30);
       for (const [name, mail] of Object.entries(mails)) {
         expect(mail.subject, name).toBeTruthy();
         expect(mail.body, name).toBeTruthy();

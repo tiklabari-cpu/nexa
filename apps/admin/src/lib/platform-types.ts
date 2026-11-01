@@ -68,6 +68,17 @@ export type PlatformRevenue = Schemas['PlatformRevenue'];
 export type PlatformCredit = Schemas['PlatformCredit'];
 export type PlatformCreditList = Schemas['PlatformCreditList'];
 export type PlatformCreditEnvelope = Schemas['PlatformCreditEnvelope'];
+export type PlatformPaymentRequest = Schemas['PlatformPaymentRequest'];
+export type PlatformPaymentRequestList = Schemas['PlatformPaymentRequestList'];
+export type PlatformPaymentRequestEnvelope = Schemas['PlatformPaymentRequestEnvelope'];
+export type PlatformSwiftPayment = Schemas['PlatformSwiftPayment'];
+export type PlatformSwiftPaymentList = Schemas['PlatformSwiftPaymentList'];
+export type PlatformSwiftPaymentEnvelope = Schemas['PlatformSwiftPaymentEnvelope'];
+export type PlatformPaymentProviders = Schemas['PlatformPaymentProviders'];
+export type PlatformBankDetails = Schemas['PlatformBankDetails'];
+export type PlatformSwiftBankDetails = Schemas['PlatformSwiftBankDetails'];
+export type PlatformIssuerProfile = Schemas['PlatformIssuerProfile'];
+export type PlatformIssuerParty = Schemas['PlatformIssuerParty'];
 
 export type PlatformGlobalUsage = Schemas['PlatformGlobalUsage'];
 export type PlatformTopUsage = Schemas['PlatformTopUsage'];

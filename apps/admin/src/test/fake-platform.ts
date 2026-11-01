@@ -25,6 +25,7 @@ import {
   type FakeImpersonationState,
 } from './fake-impersonations.js';
 import { handleBilling, initialBillingState } from './fake-billing.js';
+import { handlePayments, initialPaymentsState, type FakePaymentsState } from './fake-payments.js';
 
 export interface RecordedRequest {
   method: string;
@@ -538,6 +539,7 @@ export interface FakePlatform {
   aiState: FakeAiState;
   /** The operator's alert preferences (tm 389.20). */
   alertPrefsState: FakeAlertPrefsState;
+  paymentsState: FakePaymentsState;
 }
 
 export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatform {
@@ -565,6 +567,7 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
   const settingsState = initialSettingsState();
   const securityState = initialSecurityState();
   const aiState = initialAiState();
+  const paymentsState = initialPaymentsState();
   const alertPrefsState = initialAlertPrefsState();
   const impersonationState = initialImpersonationState({
     id: WORKSPACE_ID,
@@ -765,6 +768,18 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     );
     if (impersonationResponse) return impersonationResponse;
 
+    const paymentsResponse = handlePayments(
+      method,
+      path,
+      body,
+      search,
+      role,
+      paymentsState,
+      json,
+      problem,
+    );
+    if (paymentsResponse) return paymentsResponse;
+
     const billingResponse = handleBilling(
       method,
       path,
@@ -808,5 +823,6 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     securityState,
     aiState,
     alertPrefsState,
+    paymentsState,
   };
 }

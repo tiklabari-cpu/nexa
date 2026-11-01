@@ -44,6 +44,12 @@ export interface SafeRequest {
   headers?: Record<string, string>;
   /** A JSON body; sent with `content-type: application/json`. */
   json?: unknown;
+  /**
+   * This call's body cap, in place of the client's — a media download (tm
+   * 380, a WhatsApp image) is bigger than any API answer. Only ever the
+   * caller's own bound: the workspace's file-size rule, never a provider's claim.
+   */
+  maxBytes?: number;
 }
 
 export interface SafeResponse {
@@ -52,6 +58,8 @@ export interface SafeResponse {
   text: string;
   /** The body parsed as JSON, or `undefined` when it is not JSON. */
   json: unknown;
+  /** The body as received, for a binary answer (tm 380 — media). */
+  bytes: Buffer;
 }
 
 /**
@@ -129,7 +137,13 @@ export function createSafeHttp(options: SafeHttpOptions = {}): SafeHttp {
       }
       if (target.url.protocol !== 'https:') throw new SafeHttpError('blocked', 'not_https');
 
-      return send(target, request, Math.max(1, deadline - Date.now()), maxBytes, options.ca);
+      return send(
+        target,
+        request,
+        Math.max(1, deadline - Date.now()),
+        request.maxBytes ?? maxBytes,
+        options.ca,
+      );
     },
   };
 }
@@ -200,14 +214,15 @@ function send(
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        const text = Buffer.concat(chunks).toString('utf8');
+        const bytes = Buffer.concat(chunks);
+        const text = bytes.toString('utf8');
         let json: unknown;
         try {
           json = text === '' ? undefined : JSON.parse(text);
         } catch {
           json = undefined;
         }
-        resolve({ status, text, json });
+        resolve({ status, text, json, bytes });
       });
     };
 

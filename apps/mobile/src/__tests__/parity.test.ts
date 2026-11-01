@@ -1137,7 +1137,17 @@ describe('module parity matrix — what is still owed', () => {
       // the summary e-mails (RP-05), a card in the web Settings → Notifications;
       // the personal switches ride the existing `/agents/me/notification-preferences`,
       // and nothing here re-scopes.
-      contractEndpoints: 369,
+      // 369 -> 372 with `/webhooks/{webhookId}/deliveries`, `…/deliveries/{deliveryId}/redeliver`
+      // and `/webhooks/{webhookId}/test` (tm 375) — the web Developers delivery log; the
+      // handset has no webhook screen. Counted late: this file reads the YAML from outside
+      // its package, so turbo replayed the mobile suite from cache and the number stood still.
+      // 372 -> 375 with `/channels/whatsapp/cloud-webhook`, `/channels/whatsapp/signup-config`
+      // and `/chats/{chatId}/reply-window` (tm 380) — the live WhatsApp channel: Meta's
+      // signed webhook (called by Meta, never by a person), the web Settings card's
+      // embedded-signup configuration, and the web composer's 24-hour window band. The
+      // app manages no channels and its composer sends through the same refused path,
+      // so nothing here re-scopes.
+      contractEndpoints: 375,
       scopeBoundaries: 1,
     });
   });

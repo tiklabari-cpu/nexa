@@ -143,6 +143,10 @@ describe('webhooksProbe', () => {
 });
 
 describe('COMPONENTS_NOT_IN_THIS_BUILD', () => {
+  it('marks a WhatsApp that is not live as not installed (tm 380)', () => {
+    expect(COMPONENTS_NOT_IN_THIS_BUILD.map((entry) => entry.key)).toContain('channel_whatsapp');
+  });
+
   it('names real component keys, each once', () => {
     const keys = COMPONENTS_NOT_IN_THIS_BUILD.map((entry) => entry.key);
     expect(new Set(keys).size).toBe(keys.length);

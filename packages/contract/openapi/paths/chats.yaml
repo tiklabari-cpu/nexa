@@ -829,6 +829,34 @@ aiConversation:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
 
+replyWindow:
+  get:
+    tags: [Chats]
+    operationId: getChatReplyWindow
+    summary: Whether the chat's customer may be written to now (tm 380)
+    description: |
+      A live WhatsApp chat answers its 24-hour customer-service window: open
+      until 24 hours after the customer's last WhatsApp message, closed after
+      it (and for a customer who has not written since the channel went live).
+      Every other chat is `open` with no `closes_at`. The composer reads this
+      to show its "24-hour window closed" band; the send path enforces the
+      same rule (`400`, `details.reason: "channel_window_closed"`).
+
+      Behind the chat's visibility like its transcript: a chat the caller may
+      not see, or another workspace's, is `404`.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+    responses:
+      "200":
+        description: The reply window
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ReplyWindow" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 customerContext:
   get:
     tags: [Chats]

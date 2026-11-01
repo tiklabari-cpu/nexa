@@ -390,6 +390,7 @@ export const envSchema = z.object({
    * boot warning, never a refusal (owner, 2026-10-10). Under `PILOT_MODE=true`
    * these are also the only cards the pilot opens (`plugins/pilot-gate.ts`).
    * Read the resolved list from `Env` — `parseEnv` drops what cannot run live.
+   * `whatsapp` (tm 380) also needs the four `WHATSAPP_*` values below.
    */
   APPS_LIVE_PROVIDERS: z
     .string()
@@ -402,6 +403,39 @@ export const envSchema = z.object({
           .filter(Boolean),
       ),
     ]),
+
+  /**
+   * The Meta app behind a live WhatsApp channel (tm 380 · KN-01): its id, its
+   * secret (which signs every webhook Meta sends — `X-Hub-Signature-256` — and
+   * exchanges an embedded-signup code for a business token), the token Meta
+   * presents when the webhook is subscribed, and the embedded-signup
+   * configuration the Settings card opens. All four or none: `whatsapp` in
+   * `APPS_LIVE_PROVIDERS` without them stays on the mock with a boot warning,
+   * never a refusal. The app secret is a deployment secret — like
+   * `APPS_CREDENTIAL_KEY`, never stored in the database. No real values in
+   * this repository; tests run against a local stand-in for the Graph API.
+   */
+  WHATSAPP_APP_ID: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().optional(),
+  ),
+  WHATSAPP_APP_SECRET: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().optional(),
+  ),
+  WHATSAPP_VERIFY_TOKEN: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().optional(),
+  ),
+  WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().optional(),
+  ),
+  /** The Graph API version every WhatsApp call names (`v21.0`). */
+  WHATSAPP_GRAPH_VERSION: z
+    .string()
+    .regex(/^v[0-9]{1,3}\.[0-9]{1,2}$/, 'must look like v21.0')
+    .default('v21.0'),
 
   ACCESS_TOKEN_TTL: z.coerce.number().int().positive().max(3600).default(3600),
   REFRESH_TOKEN_TTL: z.coerce.number().int().positive().default(2_592_000),
@@ -1917,6 +1951,26 @@ function resolveAppsLive(env: z.infer<typeof envSchema>): {
       'APPS_CREDENTIAL_KEY is the published development value; it is ignored in production.',
     );
     credentialKey = undefined;
+  }
+
+  // A live WhatsApp needs its Meta app (tm 380): without the four values the
+  // webhook could not be verified or the signup opened, so the channel stays
+  // the mock it was and the boot says which value is missing.
+  if (providers.includes('whatsapp')) {
+    const missing = (
+      [
+        'WHATSAPP_APP_ID',
+        'WHATSAPP_APP_SECRET',
+        'WHATSAPP_VERIFY_TOKEN',
+        'WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID',
+      ] as const
+    ).filter((key) => !env[key]);
+    if (missing.length > 0) {
+      warnings.push(
+        `APPS_LIVE_PROVIDERS names whatsapp but ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} not set; WhatsApp stays a demo.`,
+      );
+      providers = providers.filter((id) => id !== 'whatsapp');
+    }
   }
 
   if (providers.length > 0 && !credentialKey) {

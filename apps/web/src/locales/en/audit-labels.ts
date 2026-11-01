@@ -110,6 +110,7 @@ export const auditLabels: Messages = {
   'audit.action.app.connected': 'App connected',
   'audit.action.channel.connected': 'Channel connected',
   'audit.action.channel.disconnected': 'Channel disconnected',
+  'audit.action.channel.reconnect_required': 'Channel needs reconnecting',
   'audit.action.email_address.created': 'Email address added',
   'audit.action.email_address.deleted': 'Email address removed',
   'audit.action.pat.created': 'Personal access token created',

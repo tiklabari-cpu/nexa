@@ -134,6 +134,9 @@ import { ScheduledReportSweeper } from '../reports/scheduled-report-sweeper.js';
 import { resolveRetentionPolicy } from '../retention/policy.js';
 import { RetentionRunner } from '../retention/retention.js';
 import { createObjectStore } from '../storage/object-store.js';
+import { createVirusScanner } from '../storage/virus-scanner.js';
+import { buildChannelService } from '../channels/channel-service-factory.js';
+import { WhatsAppInbound } from '../channels/whatsapp-inbound.js';
 import { SlaSweeper } from '../sla/sla-sweep.js';
 import { WebhookRedeliverer } from '../webhooks/redelivery.js';
 import { createHttpWebhookSender } from '../webhooks/webhook-dispatcher.js';
@@ -262,6 +265,19 @@ export function buildSchedulerJobs({
     undefined,
     automations,
   );
+  // The live WhatsApp webhook's queue (tm 380), swept for what a crash or a
+  // restart left behind; built only when the deployment runs WhatsApp live.
+  const whatsappChannels = buildChannelService(env, { mailer });
+  const whatsappInbound = whatsappChannels.liveWhatsApp
+    ? new WhatsAppInbound({
+        db,
+        chats: aiChats,
+        channels: whatsappChannels,
+        store: createObjectStore(env.STORAGE_PROVIDER, env.storage),
+        scanner: createVirusScanner(env.VIRUS_SCANNER),
+        auditChainSecret: env.AUDIT_CHAIN_SECRET,
+      })
+    : null;
 
   return [
     {
@@ -380,6 +396,11 @@ export function buildSchedulerJobs({
           auditChainSecret: env.AUDIT_CHAIN_SECRET,
           maxAttempts: env.WEBHOOK_MAX_ATTEMPTS,
         }).run({ signal: context.signal });
+        // Inbound WhatsApp rows left due (tm 380) ride this job: the same minute
+        // that carries an outbound delivery past its request carries an inbound
+        // one past a crash — a job of its own would be a second lock, `/health`
+        // row and interval key for the same kind of work.
+        const whatsapp = whatsappInbound ? await whatsappInbound.sweep() : null;
         return {
           counts: {
             tenants: report.totals.tenants,
@@ -388,6 +409,15 @@ export function buildSchedulerJobs({
             requeued: report.totals.requeued,
             exhausted: report.totals.exhausted,
             skipped: report.totals.skipped,
+            ...(whatsapp
+              ? {
+                  whatsapp_tenants: whatsapp.tenants,
+                  whatsapp_done: whatsapp.done,
+                  whatsapp_retried: whatsapp.retried,
+                  whatsapp_failed: whatsapp.failed,
+                  whatsapp_pruned: whatsapp.pruned,
+                }
+              : {}),
           },
         };
       },

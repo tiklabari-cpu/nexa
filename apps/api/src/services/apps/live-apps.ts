@@ -11,7 +11,7 @@
  * on — keeps the mock behaviour it had before this existed: the key is checked
  * for shape, hashed, and the chat panel shows the deterministic demo record.
  */
-export const LIVE_APP_IDS = ['brevo', 'freshdesk', 'telegram'] as const;
+export const LIVE_APP_IDS = ['brevo', 'freshdesk', 'telegram', 'whatsapp'] as const;
 export type LiveAppId = (typeof LIVE_APP_IDS)[number];
 
 export function isLiveAppId(value: string): value is LiveAppId {

@@ -1832,6 +1832,57 @@ export function knowledgeStaleMail(
 }
 
 /**
+ * A live channel the provider stopped accepting (tm 380 · KN-01): Meta refused
+ * the WhatsApp business token (Graph error 190 — expired, revoked, a password
+ * change). Replies on it stop until someone reconnects it in Settings →
+ * Channels. Sent once per lapse to the workspace's owners, vice-owners and
+ * admins; no customer, number or message in it.
+ */
+export function channelReconnectMail(
+  ctx: MailContext,
+  input: { workspaceName: string; channelName: string; channelsUrl: string | null },
+): RenderedEmail {
+  const t = tr(ctx.locale);
+  const blocks: EmailBlock[] = [
+    {
+      type: 'paragraph',
+      text: t
+        ? `${input.workspaceName} çalışma alanının ${input.channelName} kanalı artık mesaj gönderemiyor: sağlayıcı bağlantı yetkisini geri çevirdi. Gelen mesajlar yine de alınır; ajan yanıtları kanal yeniden bağlanana kadar müşteriye ulaşmaz.`
+        : `${input.workspaceName}'s ${input.channelName} channel can no longer send: the provider refused its connection. Incoming messages are still taken in; agent replies do not reach the customer until the channel is reconnected.`,
+    },
+  ];
+  if (input.channelsUrl) {
+    blocks.push({
+      type: 'button',
+      label: t ? 'Kanalı yeniden bağla' : 'Reconnect the channel',
+      url: input.channelsUrl,
+      fallback: fallback(ctx),
+    });
+  }
+  return renderEmail({
+    locale: ctx.locale,
+    homeUrl: ctx.appUrl ?? '',
+    eyebrow: input.workspaceName,
+    subject: t
+      ? `SiyahTuş: ${input.channelName} kanalını yeniden bağlayın`
+      : `SiyahTuş: reconnect ${input.channelName}`,
+    preheader: t
+      ? 'Ajan yanıtları kanal yeniden bağlanana kadar gitmez.'
+      : 'Agent replies do not go out until it is reconnected.',
+    icon: ICON.alarm,
+    tone: 'brand',
+    heading: t ? 'Kanalın yeniden bağlanması gerekiyor' : 'A channel needs reconnecting',
+    blocks,
+    footer: [
+      t
+        ? 'Bu e-postayı, bu çalışma alanının sahibi, yardımcı sahibi ya da yöneticisi olduğunuz için aldınız.'
+        : 'You received this email because you are an owner, vice-owner or admin of this workspace.',
+      signature(ctx),
+    ],
+  });
+}
+
+/**
  * A scheduled AI configuration publication the system refused at its time
  * (tm 316.6 · AI-20-S4): the approval, the compliance pack or the base no
  * longer held, so the version was rejected instead of going live. Sent to the

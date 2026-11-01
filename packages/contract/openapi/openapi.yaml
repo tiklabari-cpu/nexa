@@ -246,6 +246,8 @@ paths:
     $ref: "./paths/chats.yaml#/aiConversation"
   /chats/{chatId}/customer-context:
     $ref: "./paths/chats.yaml#/customerContext"
+  /chats/{chatId}/reply-window:
+    $ref: "./paths/chats.yaml#/replyWindow"
   /chats/{chatId}/timeline:
     $ref: "./paths/chats.yaml#/timeline"
   /chats/{chatId}/timeline/export:
@@ -790,6 +792,10 @@ paths:
     $ref: "./paths/channels.yaml#/channelWebhook"
   /channels/telegram/webhook/{channelId}:
     $ref: "./paths/channels.yaml#/telegramLiveWebhook"
+  /channels/whatsapp/cloud-webhook:
+    $ref: "./paths/channels.yaml#/whatsappCloudWebhook"
+  /channels/whatsapp/signup-config:
+    $ref: "./paths/channels.yaml#/whatsappSignupConfig"
   /channels/email/inbound:
     $ref: "./paths/channels.yaml#/emailInbound"
   /channels/email/addresses:
@@ -8354,7 +8360,61 @@ components:
           type: boolean
           description: |
             Connected to the real provider (tm 263 — a live Telegram bot, whose
-            token is held encrypted); false for every mock channel.
+            token is held encrypted; tm 380 — a live WhatsApp number); false for
+            every mock channel.
+        display_address:
+          type: string
+          nullable: true
+          description: |
+            The address as a person reads it, where it differs from `address`
+            (tm 380 — a live WhatsApp number, whose `address` is Meta's phone
+            number id). Null otherwise and while off.
+        needs_reconnect:
+          type: boolean
+          description: |
+            The provider refused the live credential (tm 380 — Meta's Graph
+            error 190 on a WhatsApp business token). Replies are refused until
+            the channel is connected again; the admins were e-mailed once.
+
+    WhatsAppSignupConfig:
+      type: object
+      description: |
+        What the Settings card needs to open Meta's embedded signup for this
+        deployment (tm 380). The app id and configuration id are public — Meta
+        shows them in the dialog's URL; the app secret never leaves the server.
+      required: [app_id, config_id, graph_version, redirect_uri]
+      properties:
+        app_id: { type: string }
+        config_id: { type: string }
+        graph_version: { type: string, example: v21.0 }
+        redirect_uri:
+          type: string
+          description: Where Meta's dialog sends the browser back with the code.
+
+    ReplyWindow:
+      type: object
+      description: |
+        Whether an agent may write to a chat's customer now (tm 380). Only a
+        live WhatsApp has a window: free text for 24 hours after the customer's
+        last message, and no templates in this release — so past it the
+        composer is locked and a reply is refused with `400`
+        `details.reason: "channel_window_closed"`. Every other chat is `open`.
+      required: [chat_id, channel, live, open, closes_at]
+      properties:
+        chat_id: { type: string }
+        channel:
+          type: string
+          nullable: true
+          description: The channel the customer is reached on; null for a Website chat.
+        live:
+          type: boolean
+          description: The channel runs on its real provider.
+        open: { type: boolean }
+        closes_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the window closes (or closed); null where there is none.
 
     InboundEmailAddress:
       type: object

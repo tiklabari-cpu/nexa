@@ -39,13 +39,14 @@ import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { TicketService } from '../services/tickets/ticket-service.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
-import { ChannelService, type InboundAudit } from '../services/channels/channel-service.js';
-import { createLiveTelegram } from '../services/channels/telegram-live.js';
-import { createSafeHttp, type SafeHttp } from '../lib/safe-fetch.js';
-import {
-  DEFAULT_PROVIDER_ENDPOINTS,
-  type ProviderEndpoints,
-} from '../services/apps/verifiers/types.js';
+import type { InboundAudit } from '../services/channels/channel-service.js';
+import { buildChannelService } from '../services/channels/channel-service-factory.js';
+import { WhatsAppInbound } from '../services/channels/whatsapp-inbound.js';
+import { parseWhatsAppWebhook, whatsAppConnectError } from '../services/channels/whatsapp-live.js';
+import { logUnsentMail } from '../services/mail/delivery.js';
+import { reportComponentStatus } from '../services/ops/component-status.js';
+import type { SafeHttp } from '../lib/safe-fetch.js';
+import type { ProviderEndpoints } from '../services/apps/verifiers/types.js';
 import { isChannelType, type ChannelType } from '../services/channels/channel-adapter.js';
 import {
   inboundAttachmentsAllSensitive,
@@ -209,6 +210,26 @@ function secretMatches(provided: string | undefined, expected: string): boolean 
 }
 
 /**
+ * A live WhatsApp connect (tm 380): what Meta's embedded signup hands the card —
+ * the one-time `code`, the business account and the number chosen. The ids
+ * are checked against the account the code opens; none is trusted alone.
+ */
+const whatsappLiveConnectBody = z.object({
+  code: z.string().trim().min(1).max(2048),
+  waba_id: z
+    .string()
+    .trim()
+    .regex(/^[0-9]{1,32}$/, 'must be a WhatsApp Business account id'),
+  phone_number_id: z
+    .string()
+    .trim()
+    .regex(/^[0-9]{1,32}$/, 'must be a WhatsApp phone number id'),
+});
+
+/** The webhook's ceiling: Meta batches at most a few hundred small items. */
+const WHATSAPP_WEBHOOK_BODY_LIMIT = 1024 * 1024;
+
+/**
  * A live Telegram connect (tm 263): the token alone. The bot's username comes
  * from Telegram's `getMe`; one sent here is ignored rather than trusted.
  */
@@ -237,13 +258,17 @@ export default async function channelRoutes(
   // Where an e-mailed file is kept and what scans it — the ones every upload uses.
   const store = createObjectStore(env.STORAGE_PROVIDER, env.storage);
   const scanner = createVirusScanner(env.VIRUS_SCANNER);
-  const channels = new ChannelService(
-    createLiveTelegram(env, {
-      http: options.appsHttp ?? createSafeHttp(),
-      endpoints: options.appsEndpoints ?? DEFAULT_PROVIDER_ENDPOINTS,
-    }),
-  );
+  const channels = buildChannelService(env, {
+    ...(options.appsHttp ? { http: options.appsHttp } : {}),
+    ...(options.appsEndpoints ? { endpoints: options.appsEndpoints } : {}),
+    // A live WhatsApp whose token Meta refused tells the admins (tm 380).
+    mailer: app.backgroundMail.asMailer((_message, outcome) =>
+      logUnsentMail(app.log, 'channel.reconnect_notice', outcome),
+    ),
+    log: app.log,
+  });
   const telegramLive = channels.liveTelegram;
+  const whatsappLive = channels.liveWhatsApp;
   const emailAddresses = new InboundEmailAddressService(env.INBOUND_EMAIL_DOMAIN);
   const replyAddresses = new TicketReplyAddresses(
     env.CUSTOMER_TOKEN_SECRET,
@@ -285,6 +310,19 @@ export default async function channelRoutes(
     undefined,
     automations,
   );
+  // The live WhatsApp webhook's queue (tm 380): written in the request, taken
+  // in after the answer, and swept again by the scheduler after a crash.
+  const whatsappInbound = whatsappLive
+    ? new WhatsAppInbound({
+        db: app.db,
+        chats,
+        channels,
+        store,
+        scanner,
+        auditChainSecret: env.AUDIT_CHAIN_SECRET,
+        log: app.log,
+      })
+    : null;
 
   // --- Adapter channels: connect / list / disconnect (the `channels` consumer)
 
@@ -322,6 +360,45 @@ export default async function channelRoutes(
             username,
             token: body.bot_token,
             secret,
+          });
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'channel.connected',
+            target: `channel:${type}`,
+            metadata: { type, brand_id: result.brand_id, live: true },
+          });
+          return result;
+        });
+        return reply.send(channel);
+      }
+      if (type === 'whatsapp' && whatsappLive) {
+        // Live WhatsApp (tm 380): Meta first, the row last, so no transaction
+        // waits on Meta — the code becomes the business token, the number must
+        // be one of that account's, the app is subscribed to its webhooks.
+        const body = parse(whatsappLiveConnectBody, request.body);
+        let token: string;
+        let number: { display_phone_number: string; verified_name: string | null };
+        try {
+          token = await whatsappLive.exchangeCode(body.code);
+          const numbers = await whatsappLive.phoneNumbers(token, body.waba_id);
+          const found = numbers.find((candidate) => candidate.id === body.phone_number_id);
+          if (!found) {
+            throw ApiError.validation(
+              'That number is not in the WhatsApp Business account the sign-up opened.',
+              { reason: 'whatsapp_number_not_in_account' },
+            );
+          }
+          number = found;
+          await whatsappLive.subscribeApp(token, body.waba_id);
+        } catch (error) {
+          throw whatsAppConnectError(error);
+        }
+        const channel = await request.withTenant(async (tx) => {
+          const result = await channels.storeWhatsAppLive(tx, tenant, {
+            wabaId: body.waba_id,
+            phoneNumberId: body.phone_number_id,
+            displayPhoneNumber: number.display_phone_number,
+            verifiedName: number.verified_name,
+            token,
           });
           await writeAuditEntry(tx, request.auditContext(), {
             action: 'channel.connected',
@@ -434,14 +511,20 @@ export default async function channelRoutes(
       const body = parse(outboundBody, request.body);
       const tenant = request.tenant();
 
-      const result = await request.withTenant((tx) =>
-        channels.sendOutbound(tx, tenant, type, {
-          text: body.text,
-          ...(body.chat_id ? { chatId: body.chat_id } : {}),
-          ...(body.external_id ? { externalId: body.external_id } : {}),
-        }),
-      );
-      return reply.send(result);
+      try {
+        const result = await request.withTenant((tx) =>
+          channels.sendOutbound(tx, tenant, type, {
+            text: body.text,
+            ...(body.chat_id ? { chatId: body.chat_id } : {}),
+            ...(body.external_id ? { externalId: body.external_id } : {}),
+          }),
+        );
+        return reply.send(result);
+      } catch (error) {
+        // A token Meta refused marks the channel after the failed transaction (tm 380).
+        await channels.noteSendFailure(app.db, tenant, error);
+        throw error;
+      }
     },
   );
 
@@ -464,8 +547,10 @@ export default async function channelRoutes(
     async (request, reply) => {
       const type = channelTypeParam(request.params.type);
       // A live Telegram takes updates only on its own, secret-checked path
-      // below; this flat mock door authenticates nobody (tm 263).
+      // below; this flat mock door authenticates nobody (tm 263). A live
+      // WhatsApp the same: Meta's signed webhook is the only door (tm 380).
       if (type === 'telegram' && telegramLive) throw ApiError.notFound('Not found.');
+      if (type === 'whatsapp' && whatsappLive) throw ApiError.notFound('Not found.');
       // The outcome carries its own status now: a message the spam filter drops
       // is `ignored`, and — like the e-mail path — still a 200, so the provider
       // does not retry something that was refused on purpose.
@@ -504,6 +589,119 @@ export default async function channelRoutes(
         inboundAudit(request),
       );
       return reply.send(result);
+    },
+  );
+
+  // --- Live WhatsApp (tm 380 · KN-01) ---------------------------------------
+
+  /**
+   * What the Settings card needs to open Meta's embedded signup: this
+   * deployment's app id and signup configuration (both public — Meta shows
+   * them in the dialog's URL) and where the dialog sends the browser back.
+   * 404 unless the deployment runs WhatsApp live.
+   */
+  app.get(
+    '/channels/whatsapp/signup-config',
+    { config: { scopes: ['channels--all:rw'] } },
+    async (_request, reply) => {
+      if (!whatsappLive) throw ApiError.notFound('Not found.');
+      return reply.send(whatsappLive.signupConfig());
+    },
+  );
+
+  /**
+   * Meta's subscription handshake for the app-level webhook: `hub.mode=subscribe`
+   * with this deployment's verify token answers `hub.challenge` as plain text;
+   * anything else is 403. 404 unless WhatsApp runs live.
+   */
+  app.get<{ Querystring: Record<string, string | undefined> }>(
+    '/channels/whatsapp/cloud-webhook',
+    { config: { public: true } },
+    async (request, reply) => {
+      if (!whatsappLive) throw ApiError.notFound('Not found.');
+      const challenge = whatsappLive.verifySubscription(
+        request.query['hub.mode'],
+        request.query['hub.verify_token'],
+        request.query['hub.challenge'],
+      );
+      if (challenge === null) throw ApiError.authorization('Webhook verification failed.');
+      return reply.type('text/plain; charset=utf-8').send(challenge);
+    },
+  );
+
+  /**
+   * The live WhatsApp webhook (tm 380): one door for the whole Meta app. The
+   * raw body is read as bytes so `X-Hub-Signature-256` is checked against what
+   * Meta signed; a missing or wrong signature is 401 before anything is parsed
+   * or written. Then the deliveries go into the durable queue
+   * (`WhatsAppInbound.accept`) and the answer is a quick 200 — the chat write
+   * and any media download run after it. Not `pilotRefused`: it is
+   * authenticated, and only exists when WhatsApp runs live.
+   */
+  await app.register(async (signed) => {
+    signed.addContentTypeParser(
+      'application/json',
+      { parseAs: 'buffer', bodyLimit: WHATSAPP_WEBHOOK_BODY_LIMIT },
+      (_request, body, done) => done(null, body),
+    );
+    signed.post(
+      '/channels/whatsapp/cloud-webhook',
+      { config: { public: true }, bodyLimit: WHATSAPP_WEBHOOK_BODY_LIMIT },
+      async (request, reply) => {
+        if (!whatsappLive || !whatsappInbound) throw ApiError.notFound('Not found.');
+        const raw = Buffer.isBuffer(request.body) ? request.body : Buffer.alloc(0);
+        const header = request.headers['x-hub-signature-256'];
+        if (!whatsappLive.signatureMatches(raw, Array.isArray(header) ? header[0] : header)) {
+          throw ApiError.authentication('Invalid webhook signature.');
+        }
+        let body: unknown;
+        try {
+          body = JSON.parse(raw.toString('utf8'));
+        } catch {
+          throw ApiError.validation('The webhook body is not JSON.');
+        }
+        const accepted = await whatsappInbound.accept(parseWhatsAppWebhook(body));
+        // The root panel's tile (389.14): when Meta last reached this deployment.
+        // Best effort by construction — `reportComponentStatus` never throws.
+        await reportComponentStatus(
+          app.redis,
+          'channel_whatsapp',
+          { state: 'ok', detail: `last signed delivery ${new Date().toISOString()}` },
+          request.log,
+        );
+        // After the answer, not awaited: Meta is not kept waiting on a media
+        // download or the chat core, and a crash here leaves the rows for the
+        // sweep (`webhook_redelivery`), not lost.
+        setImmediate(() => {
+          for (const tenant of accepted.tenants) {
+            whatsappInbound.drain(tenant).catch((error: unknown) => {
+              request.log.error(
+                { err: error, license_id: String(tenant.licenseId) },
+                'whatsapp inbound drain failed',
+              );
+            });
+          }
+        });
+        return reply.send({ status: 'received', queued: accepted.written });
+      },
+    );
+  });
+
+  /**
+   * Whether an agent may write to this chat's customer now (tm 380): a live
+   * WhatsApp answers its 24-hour window, every other chat an open one. Behind
+   * the chat read scopes and the chat's own visibility (404 like the chat).
+   */
+  app.get<{ Params: { chatId: string } }>(
+    '/chats/:chatId/reply-window',
+    { config: { scopes: ['chats--all:ro', 'chats--access:ro'] } },
+    async (request, reply) => {
+      const tenant = request.tenant();
+      const chat = await chats.get(tenant, request.requirePrincipal(), request.params.chatId);
+      const window = await request.withTenant((tx) =>
+        channels.replyWindowFor(tx, chat.customer_id),
+      );
+      return reply.send({ chat_id: chat.id, ...window });
     },
   );
 

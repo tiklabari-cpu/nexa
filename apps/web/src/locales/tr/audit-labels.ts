@@ -103,6 +103,7 @@ export const auditLabels: Messages = {
   'audit.action.app.connected': 'Uygulama bağlandı',
   'audit.action.channel.connected': 'Kanal bağlandı',
   'audit.action.channel.disconnected': 'Kanal bağlantısı kesildi',
+  'audit.action.channel.reconnect_required': 'Kanalın yeniden bağlanması gerekiyor',
   'audit.action.email_address.created': 'E-posta adresi eklendi',
   'audit.action.email_address.deleted': 'E-posta adresi kaldırıldı',
   'audit.action.pat.created': 'Kişisel erişim belirteci oluşturuldu',

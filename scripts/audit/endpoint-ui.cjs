@@ -187,6 +187,18 @@ const HEADLESS = [
       'by the `X-Telegram-Bot-Api-Secret-Token` registered with `setWebhook`, not a browser.',
   },
   {
+    op: 'GET /channels/whatsapp/cloud-webhook',
+    reason:
+      "Meta's webhook subscription handshake for the live WhatsApp channel (tm 380). The caller " +
+      'is Meta, presenting `WHATSAPP_VERIFY_TOKEN`, once when the app webhook is configured.',
+  },
+  {
+    op: 'POST /channels/whatsapp/cloud-webhook',
+    reason:
+      'the live WhatsApp Cloud API delivery callback (tm 380). The caller is Meta, authenticated ' +
+      'by `X-Hub-Signature-256` (HMAC of the body under the app secret), not a browser.',
+  },
+  {
     op: 'GET /channels/{type}/messages',
     reason:
       'the wire-level message log (M-CHOBS-a). Its own handler says what it is for: the table ' +

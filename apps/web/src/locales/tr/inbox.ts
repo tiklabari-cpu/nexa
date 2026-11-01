@@ -198,6 +198,9 @@ export const inbox: Messages = {
   'inbox.composer.mode.reply': 'Yanıt',
   'inbox.composer.mode.note': 'Dahili not',
   'inbox.composer.noteHint': 'Bunu yalnızca ekibiniz görecek.',
+  'inbox.composer.replyWindow.title': '24 saatlik pencere kapandı',
+  'inbox.composer.replyWindow.body':
+    'WhatsApp yalnızca müşterinin son mesajından sonraki 24 saat içinde yanıt vermenize izin verir. Müşteri yeniden yazdığında yazabilirsiniz; iç notlar çalışmaya devam eder.',
   'inbox.composer.replyLabel': 'Müşteriye yanıt ver',
   'inbox.composer.attachment.remove': 'Eki kaldır',
   'inbox.composer.copilotOverwrite.message':

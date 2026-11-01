@@ -56,6 +56,7 @@ function endpoints(base: string): ProviderEndpoints {
     brevo: `${base}/brevo`,
     freshdesk: (sub) => `${base}/freshdesk/${sub}`,
     telegram: `${base}/telegram`,
+    whatsapp: `${base}/graph`,
   };
 }
 

@@ -27,10 +27,16 @@
  * channel row, sends replies through the real Bot API, and resolves the live
  * webhook by channel id (`channel_webhook_target`). Without one it is exactly
  * the mock it was.
+ *
+ * WhatsApp can run live the same way (tm 380, `whatsapp-live.ts`): the
+ * business token kept encrypted, replies sent through the Cloud API inside
+ * the 24-hour window and refused past it, inbound recorded in the message's
+ * own transaction so a redelivered wamid is taken in once
+ * (`whatsapp-inbound.ts` owns the webhook's queue).
  */
 import { randomUUID } from 'node:crypto';
 import { Prisma, type PrismaClient } from '@prisma/client';
-import { isLicenseClosed } from '@siyahtus/types';
+import { isLicenseClosed, type SensitiveType } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import {
   channelCredentialAad,
@@ -45,7 +51,17 @@ import type { CustomerPrincipal } from '../auth/principal.js';
 import { evaluateSpam, isSpamFilterEnabled } from '../security/spam-filter.js';
 import { getAdapter } from './registry.js';
 import type { ChannelType, NormalizedInbound } from './channel-adapter.js';
+import {
+  markChannelReconnectRequired,
+  type ReconnectNoticeOptions,
+} from './channel-reconnect-notice.js';
 import { hashWebhookSecret, type TelegramLive } from './telegram-live.js';
+import {
+  WHATSAPP_REPLY_WINDOW_MS,
+  WhatsAppGraphError,
+  WhatsAppUnreachableError,
+  type WhatsAppLive,
+} from './whatsapp-live.js';
 
 /** The channel `status` values the `channels_status_check` constraint allows
  *  that matter here: `connected` (on) and `off`. */
@@ -65,6 +81,18 @@ function addressTaken(): ApiError {
   return ApiError.validation('That channel address is already connected.');
 }
 
+/**
+ * A reply past WhatsApp's 24-hour window (tm 380). `validation` with its own
+ * reason, as every channel refusal here: the closed `ErrorType` vocabulary has
+ * no "conflict", and the composer reads the reason to show its band.
+ */
+function windowClosed(closesAt: string | null): ApiError {
+  return ApiError.validation(
+    'The WhatsApp 24-hour window is closed: WhatsApp only takes free text within 24 hours of the customer’s last message. You can reply when they write again.',
+    { reason: 'channel_window_closed', ...(closesAt ? { closed_at: closesAt } : {}) },
+  );
+}
+
 /** A unique-index violation, as Prisma reports it (same probe as websites.ts). */
 function isUniqueViolation(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
@@ -81,6 +109,13 @@ export interface ConnectedChannel {
   created_at: string;
   /** True for a channel connected to its real provider (tm 263 — a live Telegram bot). */
   live: boolean;
+  /**
+   * The address as a person reads it, when that differs from the routing key
+   * (tm 380 — a live WhatsApp number, whose key is Meta's phone number id).
+   */
+  display_address: string | null;
+  /** The provider refused the live credential (tm 380 — Graph error 190): reconnect it. */
+  needs_reconnect: boolean;
 }
 
 interface ChannelRow {
@@ -90,6 +125,7 @@ interface ChannelRow {
   config: Prisma.JsonValue;
   createdAt: Date;
   credentialCiphertext: string | null;
+  reconnectRequiredAt: Date | null;
 }
 
 const CHANNEL_SELECT = {
@@ -99,7 +135,69 @@ const CHANNEL_SELECT = {
   config: true,
   createdAt: true,
   credentialCiphertext: true,
+  reconnectRequiredAt: true,
 } as const;
+
+/** The live WhatsApp this service runs, when the deployment switched it on (tm 380). */
+export interface LiveWhatsAppOptions {
+  live: WhatsAppLive;
+  /** `APPS_CREDENTIAL_KEY`. */
+  credentialKey: string;
+}
+
+export interface ChannelServiceOptions {
+  whatsapp?: LiveWhatsAppOptions | null;
+  /**
+   * How a credential the provider refused is announced (tm 380): the mark,
+   * the audit entry and the admins' e-mail. Absent, a refusal is still an
+   * error to the caller but nothing is marked.
+   */
+  reconnect?: ReconnectNoticeOptions;
+}
+
+/**
+ * Whether an agent may write to the customer of a chat now (tm 380). Only a
+ * live WhatsApp has a window: free text is allowed for 24 hours after the
+ * customer's last message, and F1 sends no templates, so past it nothing goes.
+ */
+export interface ReplyWindow {
+  /** The channel the customer is reached on, or null for a Website chat. */
+  channel: string | null;
+  /** The channel runs on its real provider. */
+  live: boolean;
+  open: boolean;
+  /** When the window closes (or closed); null where there is none. */
+  closes_at: string | null;
+}
+
+/**
+ * A reply the provider refused because the channel's credential is gone
+ * (Graph error 190). Raised inside the caller's transaction; the caller marks
+ * the channel after it (`ChannelService.noteSendFailure`), since a mark written
+ * in the failing transaction would roll back with it.
+ */
+export class ChannelCredentialRefusedError extends ApiError {
+  constructor(readonly channelType: ChannelType) {
+    super(
+      'validation',
+      'Reconnect WhatsApp in Settings → Channels: Meta no longer accepts this channel’s connection.',
+      { details: { reason: 'channel_needs_reconnect' } },
+    );
+  }
+}
+
+/** What an inbound message brings beyond its text (tm 380 — a live WhatsApp). */
+export interface InboundExtras {
+  /** The provider's id for it; with `channelId`, the message is taken in once. */
+  providerMessageId?: string;
+  channelId?: string;
+  /** A file already screened and stored (`/api/v1/uploads/<key>`). */
+  attachmentUrl?: string;
+  /** When the customer sent it — the reply window runs from here. */
+  sentAt?: Date;
+  /** What was masked before the text reached this service (the queue holds it masked). */
+  sensitiveTypes?: readonly SensitiveType[];
+}
 
 /** The live Telegram channel this service runs, when the deployment switched it on (tm 263). */
 export interface LiveTelegramOptions {
@@ -131,7 +229,7 @@ export type InboundAudit = (tenant: TenantContext, customerId: string) => AuditC
 
 export type InboundOutcome =
   | { status: 'accepted'; chat_id: string; customer_id: string }
-  | { status: 'ignored'; reason: 'spam' };
+  | { status: 'ignored'; reason: 'spam' | 'duplicate' };
 
 export interface OutboundOutcome {
   provider_message_id: string;
@@ -173,11 +271,23 @@ const MESSAGES_DEFAULT_LIMIT = 25;
 const MESSAGES_MAX_LIMIT = 100;
 
 export class ChannelService {
-  constructor(private readonly telegram: LiveTelegramOptions | null = null) {}
+  private readonly whatsapp: LiveWhatsAppOptions | null;
+
+  constructor(
+    private readonly telegram: LiveTelegramOptions | null = null,
+    private readonly options: ChannelServiceOptions = {},
+  ) {
+    this.whatsapp = options.whatsapp ?? null;
+  }
 
   /** The live Telegram, when this deployment runs one. */
   get liveTelegram(): TelegramLive | null {
     return this.telegram?.live ?? null;
+  }
+
+  /** The live WhatsApp, when this deployment runs one (tm 380). */
+  get liveWhatsApp(): WhatsAppLive | null {
+    return this.whatsapp?.live ?? null;
   }
 
   // -------------------------------------------------------------------------
@@ -297,9 +407,171 @@ export class ChannelService {
       where: { type, status: { not: OFF } },
       // A live channel's token and webhook secret go with it: an off channel
       // has nothing left to authenticate or to send with (tm 263).
-      data: { status: OFF, credentialCiphertext: null, webhookSecretHash: null },
+      data: {
+        status: OFF,
+        credentialCiphertext: null,
+        webhookSecretHash: null,
+        reconnectRequiredAt: null,
+      },
     });
     return count;
+  }
+
+  // -------------------------------------------------------------------------
+  // Live WhatsApp (tm 380)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Store a WhatsApp number the embedded signup connected: the business token
+   * encrypted to this row, Meta's phone number id as the routing key
+   * (`config.address`), the number as people read it beside it. Refuses a
+   * number another workspace has connected, as every channel's connect does,
+   * and clears an earlier "reconnect needed".
+   */
+  async storeWhatsAppLive(
+    tx: TenantClient,
+    tenant: TenantContext,
+    input: {
+      wabaId: string;
+      phoneNumberId: string;
+      displayPhoneNumber: string;
+      verifiedName: string | null;
+      token: string;
+    },
+  ): Promise<ConnectedChannel> {
+    const whatsapp = this.requireLiveWhatsApp();
+    const brandId = tenant.brandId ?? (await this.defaultBrandId(tx));
+    await this.assertAddressFree(tx, 'whatsapp', input.phoneNumberId, tenant.licenseId, brandId);
+    const existing = await tx.channel.findFirst({
+      where: { licenseId: tenant.licenseId, brandId, type: 'whatsapp' },
+      select: { id: true },
+    });
+    const channelId = existing?.id ?? randomUUID();
+    const config = {
+      address: input.phoneNumberId,
+      phone_number_id: input.phoneNumberId,
+      waba_id: input.wabaId,
+      display_phone_number: input.displayPhoneNumber,
+      verified_name: input.verifiedName,
+      live: true,
+    };
+    const data = {
+      status: CONNECTED,
+      config: config as Prisma.InputJsonValue,
+      credentialCiphertext: encryptCredential(
+        input.token,
+        whatsapp.credentialKey,
+        channelCredentialAad(String(tenant.licenseId), channelId),
+      ),
+      webhookSecretHash: null,
+      reconnectRequiredAt: null,
+    };
+    try {
+      const row = await tx.channel.upsert({
+        where: {
+          licenseId_brandId_type: { licenseId: tenant.licenseId, brandId, type: 'whatsapp' },
+        },
+        create: { id: channelId, licenseId: tenant.licenseId, brandId, type: 'whatsapp', ...data },
+        update: data,
+        select: { ...CHANNEL_SELECT, id: true },
+      });
+      // The token was encrypted to the row read above; a concurrent connect
+      // that replaced it would leave a token this row cannot decrypt.
+      if (row.id !== channelId) throw addressTaken();
+      return this.serialise(row);
+    } catch (error) {
+      if (isUniqueViolation(error)) throw addressTaken();
+      throw error;
+    }
+  }
+
+  /**
+   * The business token of a live WhatsApp channel, decrypted, or null when the
+   * row holds none (a mock connect) or it no longer decrypts (the key rotated).
+   */
+  whatsAppToken(
+    tenant: TenantContext,
+    channel: { id: string; credentialCiphertext: string | null },
+  ): string | null {
+    if (!this.whatsapp || !channel.credentialCiphertext) return null;
+    try {
+      return decryptCredential(
+        channel.credentialCiphertext,
+        this.whatsapp.credentialKey,
+        channelCredentialAad(String(tenant.licenseId), channel.id),
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Whether an agent may write to this customer now (tm 380). The window is
+   * the customer's last message on the channel plus 24 hours; a customer whose
+   * last message predates the live channel has none, which is a closed window
+   * — the same answer Meta would give.
+   */
+  async replyWindowFor(
+    tx: TenantClient,
+    customerId: string,
+    now: Date = new Date(),
+  ): Promise<ReplyWindow> {
+    const identity = await tx.channelIdentity.findFirst({
+      where: { customerId },
+      select: { channelType: true, lastCustomerMessageAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!identity) return { channel: null, live: false, open: true, closes_at: null };
+    if (identity.channelType !== 'whatsapp' || !this.whatsapp) {
+      return { channel: identity.channelType, live: false, open: true, closes_at: null };
+    }
+    const channel = await tx.channel.findFirst({
+      where: { type: 'whatsapp', status: CONNECTED },
+      select: { credentialCiphertext: true },
+    });
+    if (!channel?.credentialCiphertext) {
+      return { channel: 'whatsapp', live: false, open: true, closes_at: null };
+    }
+    const last = identity.lastCustomerMessageAt;
+    const closesAt = last ? new Date(last.getTime() + WHATSAPP_REPLY_WINDOW_MS) : null;
+    return {
+      channel: 'whatsapp',
+      live: true,
+      open: closesAt !== null && closesAt.getTime() > now.getTime(),
+      closes_at: closesAt ? closesAt.toISOString() : null,
+    };
+  }
+
+  /**
+   * The gate an agent's reply passes before it is written (tm 380): a live
+   * WhatsApp chat past its 24-hour window takes no free text, so the message
+   * is refused rather than committed and then silently never delivered.
+   */
+  async assertReplyAllowed(tx: TenantClient, customerId: string): Promise<void> {
+    const window = await this.replyWindowFor(tx, customerId);
+    if (window.live && !window.open) throw windowClosed(window.closes_at);
+  }
+
+  /**
+   * After a send failed: a credential the provider refused marks the channel
+   * "reconnect needed" and tells the admins, once (`channel-reconnect-notice.ts`).
+   * Never throws — the caller is already handling the failure.
+   */
+  async noteSendFailure(db: PrismaClient, tenant: TenantContext, error: unknown): Promise<void> {
+    if (!(error instanceof ChannelCredentialRefusedError) || !this.options.reconnect) return;
+    try {
+      await markChannelReconnectRequired(db, tenant, error.channelType, this.options.reconnect);
+    } catch (markError) {
+      this.options.reconnect.log?.warn(
+        { err: markError, license_id: String(tenant.licenseId) },
+        'channel reconnect mark failed',
+      );
+    }
+  }
+
+  private requireLiveWhatsApp(): LiveWhatsAppOptions {
+    if (!this.whatsapp) throw ApiError.notFound('Not found.');
+    return this.whatsapp;
   }
 
   // -------------------------------------------------------------------------
@@ -485,7 +757,29 @@ export class ChannelService {
     audit: InboundAudit,
   ): Promise<InboundOutcome> {
     const tenant = await this.resolveLicense(db, type, normalized.address);
+    return this.ingestForTenant(db, chats, tenant, type, normalized, audit);
+  }
 
+  /**
+   * {@link ingestNormalized} once the workspace is known — the live WhatsApp
+   * queue resolves it at the webhook (tm 380) and comes in here with what the
+   * message brings besides its text ({@link InboundExtras}).
+   *
+   * With a provider message id and a channel id, the message-log row is
+   * written in the chat event's own transaction (the `outbox`), under the
+   * `(channel_id, provider_message_id)` unique index: a second delivery of the
+   * same message rolls its event back and answers `duplicate`, so a customer's
+   * message is in the chat exactly once however often the provider sends it.
+   */
+  async ingestForTenant(
+    db: PrismaClient,
+    chats: ChatService,
+    tenant: TenantContext,
+    type: ChannelType,
+    normalized: NormalizedInbound,
+    audit: InboundAudit,
+    extras: InboundExtras = {},
+  ): Promise<InboundOutcome> {
     // Mask before anything reads the text, so the masked value is what the spam
     // classifier sees, what the event stores, what realtime pushes and what the
     // message log keeps — the order `routes/customer.ts` and `email-inbound.ts`
@@ -493,6 +787,8 @@ export class ChannelService {
     // Every sensitive type a player can type (AI-26 · tm 300.2), not only a card.
     const masked = maskForWrite(normalized.text, 'customer');
     const maskedText = masked.text;
+    const sensitiveTypes = [...new Set([...masked.types, ...(extras.sensitiveTypes ?? [])])];
+    const keyed = extras.providerMessageId !== undefined && extras.channelId !== undefined;
 
     // Looked up, not created: the spam gate below must be able to refuse without
     // leaving a trace, and `resolveCustomer` would already have written a
@@ -538,31 +834,79 @@ export class ChannelService {
     // and written in one transaction, so a burst of messages cannot open two.
     // A conversation that arrived here stays open across midnight unless the
     // workspace set a timeout, the idle sweep's rule (`rolloverIdleSeconds`).
-    const { chat } = await chats.openOrContinueConnection(tenant, principal, {
-      customerId,
-      event: {
-        type: 'message',
-        text: maskedText,
-        recipients: 'all',
-        ...(masked.types.length > 0 ? { sensitiveTypes: masked.types } : {}),
-      },
-      // A connection this opens was started through the channel (RP-02).
-      initiatedBy: 'channel',
-      audit: audit(tenant, customerId),
-    });
-    const chatId = chat.id;
+    // When the customer wrote — never later than now, so a provider clock
+    // ahead of ours cannot stretch the reply window.
+    const sentAt = new Date(Math.min((extras.sentAt ?? new Date()).getTime(), Date.now()));
+    let connection;
+    try {
+      connection = await chats.openOrContinueConnection(tenant, principal, {
+        customerId,
+        event: {
+          type: 'message',
+          ...(maskedText || !extras.attachmentUrl ? { text: maskedText } : {}),
+          recipients: 'all',
+          ...(sensitiveTypes.length > 0 ? { sensitiveTypes } : {}),
+          ...(extras.attachmentUrl ? { attachmentUrl: extras.attachmentUrl } : {}),
+        },
+        // A connection this opens was started through the channel (RP-02).
+        initiatedBy: 'channel',
+        audit: audit(tenant, customerId),
+        ...(keyed
+          ? {
+              // The log row and the window move with the event, or not at all.
+              outbox: async (tx: TenantClient, written: { chatId: string }) => {
+                await this.record(tx, tenant, {
+                  channelType: type,
+                  direction: 'inbound',
+                  externalId: normalized.externalId,
+                  chatId: written.chatId,
+                  text: maskedText,
+                  providerMessageId: extras.providerMessageId!,
+                  channelId: extras.channelId!,
+                });
+                await this.touchCustomerWindow(tx, tenant, type, normalized.externalId, sentAt);
+              },
+            }
+          : {}),
+      });
+    } catch (error) {
+      if (keyed && isUniqueViolation(error)) return { status: 'ignored', reason: 'duplicate' };
+      throw error;
+    }
+    const chatId = connection.chat.id;
 
-    await withTenant(db, tenant, (tx) =>
-      this.record(tx, tenant, {
-        channelType: type,
-        direction: 'inbound',
-        externalId: normalized.externalId,
-        chatId,
-        text: maskedText,
-      }),
-    );
+    if (!keyed) {
+      await withTenant(db, tenant, (tx) =>
+        this.record(tx, tenant, {
+          channelType: type,
+          direction: 'inbound',
+          externalId: normalized.externalId,
+          chatId,
+          text: maskedText,
+        }),
+      );
+    }
 
     return { status: 'accepted', chat_id: chatId, customer_id: customerId };
+  }
+
+  /** Forward only: the window runs from the customer's latest message, never an older one. */
+  private async touchCustomerWindow(
+    tx: TenantClient,
+    tenant: TenantContext,
+    type: ChannelType,
+    externalId: string,
+    sentAt: Date,
+  ): Promise<void> {
+    await tx.channelIdentity.updateMany({
+      where: {
+        licenseId: tenant.licenseId,
+        channelType: type,
+        externalId,
+        OR: [{ lastCustomerMessageAt: null }, { lastCustomerMessageAt: { lt: sentAt } }],
+      },
+      data: { lastCustomerMessageAt: sentAt },
+    });
   }
 
   /**
@@ -739,6 +1083,9 @@ export class ChannelService {
         { err: error, chat_id: chatId, license_id: String(tenant.licenseId) },
         'channel reply delivery failed',
       );
+      // A credential the provider refused (tm 380): marked after the failed
+      // transaction, so the next reply is refused up front and the admins know.
+      await this.noteSendFailure(db, tenant, error);
     }
   }
 
@@ -758,14 +1105,27 @@ export class ChannelService {
     // license and — under a brand context — to that one brand's channel.
     const channel = await tx.channel.findFirst({
       where: { type },
-      select: { id: true, status: true, config: true, credentialCiphertext: true },
+      select: {
+        id: true,
+        status: true,
+        config: true,
+        credentialCiphertext: true,
+        reconnectRequiredAt: true,
+      },
     });
     if (!channel || channel.status !== CONNECTED) {
       throw ApiError.validation('That channel is not connected.');
     }
 
-    const externalId = input.externalId ?? (await this.externalIdForChat(tx, type, input.chatId!));
     const config = (channel.config ?? {}) as Record<string, unknown>;
+
+    // A live WhatsApp (tm 380): its own path end to end — the window, the token,
+    // Meta's refusals — and the log row keyed by the wamid Meta answers with.
+    if (type === 'whatsapp' && this.whatsapp) {
+      return this.#sendWhatsApp(tx, tenant, channel, config, input);
+    }
+
+    const externalId = input.externalId ?? (await this.externalIdForChat(tx, type, input.chatId!));
 
     // A Telegram connected while it was a mock has no token to send with: once
     // the channel is live, a "sent" mock id would be a reply nobody receives.
@@ -809,6 +1169,113 @@ export class ChannelService {
       external_id: externalId,
       chat_id: input.chatId ?? null,
     };
+  }
+
+  /**
+   * An agent's reply over a live WhatsApp (tm 380). Refused before Meta is
+   * asked when it could only fail there: a channel connected while it was a
+   * mock (no token), one Meta already refused (reconnect needed), a customer
+   * past the 24-hour window. Meta's own refusals map the same way — a token
+   * error 190 is {@link ChannelCredentialRefusedError} (the caller marks the
+   * channel after its transaction), a re-engagement error is the window.
+   */
+  async #sendWhatsApp(
+    tx: TenantClient,
+    tenant: TenantContext,
+    channel: { id: string; credentialCiphertext: string | null; reconnectRequiredAt: Date | null },
+    config: Record<string, unknown>,
+    input: { chatId?: string; externalId?: string; text: string },
+  ): Promise<OutboundOutcome> {
+    const whatsapp = this.requireLiveWhatsApp();
+    const token = this.whatsAppToken(tenant, channel);
+    if (!token) {
+      throw ApiError.validation(
+        'Reconnect WhatsApp: this channel was connected before it went live.',
+        { reason: 'channel_needs_reconnect' },
+      );
+    }
+    if (channel.reconnectRequiredAt) throw new ChannelCredentialRefusedError('whatsapp');
+    const phoneNumberId =
+      typeof config.phone_number_id === 'string' ? config.phone_number_id : null;
+    if (!phoneNumberId) {
+      throw ApiError.validation('Reconnect WhatsApp: the channel has no business number.', {
+        reason: 'channel_needs_reconnect',
+      });
+    }
+
+    const identity = input.externalId
+      ? await tx.channelIdentity.findFirst({
+          where: { channelType: 'whatsapp', externalId: input.externalId },
+          select: { externalId: true, customerId: true },
+        })
+      : await this.identityForChat(tx, 'whatsapp', input.chatId!);
+    if (!identity) throw ApiError.validation('This chat has no identity on that channel.');
+    const window = await this.replyWindowFor(tx, identity.customerId);
+    if (!window.open) throw windowClosed(window.closes_at);
+
+    let providerMessageId: string;
+    try {
+      providerMessageId = await whatsapp.live.sendText(
+        token,
+        phoneNumberId,
+        identity.externalId,
+        input.text,
+      );
+    } catch (error) {
+      if (error instanceof WhatsAppGraphError && error.tokenInvalid) {
+        throw new ChannelCredentialRefusedError('whatsapp');
+      }
+      if (error instanceof WhatsAppGraphError && error.windowClosed) {
+        throw windowClosed(window.closes_at);
+      }
+      if (error instanceof WhatsAppGraphError && error.httpStatus < 500) {
+        throw ApiError.validation(
+          error.providerMessage
+            ? `WhatsApp refused the message: ${error.providerMessage}`
+            : 'WhatsApp refused the message.',
+          {
+            reason: 'app_provider_refused',
+            ...(error.code !== null ? { provider_code: error.code } : {}),
+          },
+        );
+      }
+      if (error instanceof WhatsAppGraphError || error instanceof WhatsAppUnreachableError) {
+        throw new ApiError('service_unavailable', 'WhatsApp could not be reached. Try again.', {
+          details: { reason: 'app_provider_unavailable' },
+        });
+      }
+      throw error;
+    }
+
+    await this.record(tx, tenant, {
+      channelType: 'whatsapp',
+      direction: 'outbound',
+      externalId: identity.externalId,
+      chatId: input.chatId ?? null,
+      text: input.text,
+      providerMessageId,
+      channelId: channel.id,
+      status: 'sent',
+    });
+    return {
+      provider_message_id: providerMessageId,
+      external_id: identity.externalId,
+      chat_id: input.chatId ?? null,
+    };
+  }
+
+  /** The customer of `chatId` as known on this channel, or null. */
+  private async identityForChat(
+    tx: TenantClient,
+    type: ChannelType,
+    chatId: string,
+  ): Promise<{ externalId: string; customerId: string } | null> {
+    const chat = await tx.chat.findUnique({ where: { id: chatId }, select: { customerId: true } });
+    if (!chat) throw ApiError.notFound('Chat not found.');
+    return tx.channelIdentity.findFirst({
+      where: { channelType: type, customerId: chat.customerId },
+      select: { externalId: true, customerId: true },
+    });
   }
 
   /** The sender identity to reply to: the customer of `chatId` as known on this
@@ -932,6 +1399,10 @@ export class ChannelService {
       chatId: string | null;
       text: string;
       providerMessageId?: string;
+      /** The channel row (tm 380); with the provider id, the message's unique key. */
+      channelId?: string;
+      /** An outbound message's first status (tm 380 — `sent` once Meta took it). */
+      status?: 'sent';
     },
   ): Promise<void> {
     await tx.channelMessage.create({
@@ -943,23 +1414,32 @@ export class ChannelService {
         chatId: row.chatId,
         text: row.text,
         providerMessageId: row.providerMessageId ?? null,
+        ...(row.channelId ? { channelId: row.channelId } : {}),
+        ...(row.status ? { status: row.status, statusAt: new Date() } : {}),
       },
     });
   }
 
   private serialise(row: ChannelRow): ConnectedChannel {
-    const config = (row.config ?? {}) as { address?: unknown };
+    const config = (row.config ?? {}) as { address?: unknown; display_phone_number?: unknown };
     const address = typeof config.address === 'string' ? config.address : null;
+    const connected = row.status === CONNECTED;
+    const display =
+      typeof config.display_phone_number === 'string' && config.display_phone_number
+        ? config.display_phone_number
+        : null;
     return {
       type: row.type,
       brand_id: row.brandId,
       status: row.status,
       // The address is only meaningful while connected; a disconnected channel
       // reports none.
-      address: row.status === CONNECTED ? address : null,
-      connected: row.status === CONNECTED,
+      address: connected ? address : null,
+      connected,
       created_at: row.createdAt.toISOString(),
-      live: row.status === CONNECTED && row.credentialCiphertext !== null,
+      live: connected && row.credentialCiphertext !== null,
+      display_address: connected ? display : null,
+      needs_reconnect: connected && row.reconnectRequiredAt !== null,
     };
   }
 }

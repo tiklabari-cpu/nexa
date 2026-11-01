@@ -217,6 +217,7 @@ describe('pilot mode: Apps marketplace and sample data (tm 257.18)', () => {
             brevo: `${provider.base}/brevo`,
             freshdesk: (sub) => `${provider.base}/freshdesk/${sub}`,
             telegram: `${provider.base}/telegram`,
+            whatsapp: `${provider.base}/graph`,
           },
         },
       );

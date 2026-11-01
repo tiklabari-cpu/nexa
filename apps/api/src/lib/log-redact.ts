@@ -113,6 +113,11 @@ export const SMTP_SECRET_LOG_PATHS = [
 export const APPS_SECRET_LOG_PATHS = [
   'APPS_CREDENTIAL_KEY',
   '*.APPS_CREDENTIAL_KEY',
+  // The live WhatsApp's Meta app secret and webhook verify token (tm 380).
+  'WHATSAPP_APP_SECRET',
+  '*.WHATSAPP_APP_SECRET',
+  'WHATSAPP_VERIFY_TOKEN',
+  '*.WHATSAPP_VERIFY_TOKEN',
   'apiKey',
   '*.apiKey',
   'credentials.apiKey',

@@ -448,6 +448,14 @@ interface ResumeOutcome {
  */
 export interface ChannelDispatcher {
   dispatchAgentReply(tenant: TenantContext, chatId: string, text: string): Promise<void>;
+  /**
+   * The one question asked *before* an agent's reply is written (tm 380): may
+   * this customer be written to now? A live WhatsApp past its 24-hour window
+   * may not — throwing here refuses the message in its own transaction, so the
+   * agent sees the refusal instead of a reply that was stored and never
+   * delivered. Unlike `dispatchAgentReply`, this one throws by design.
+   */
+  assertReplyAllowed?(tx: TenantClient, customerId: string): Promise<void>;
 }
 
 /**
@@ -1682,6 +1690,12 @@ export class ChatService {
 
       const authorType = authorTypeOf(principal);
       const recipients = recipientsFor(principal, input.recipients);
+
+      // A reply the channel cannot carry is refused before it exists (tm 380):
+      // only what reaches the customer — an internal note is never dispatched.
+      if (authorType === 'agent' && recipients === 'all') {
+        await this.channels?.assertReplyAllowed?.(tx, chat.customerId);
+      }
 
       const event = await this.#appendEvent(tx, {
         licenseId: tenant.licenseId,

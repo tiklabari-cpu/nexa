@@ -123,6 +123,7 @@ paths:
     get:
       tags: [System]
       operationId: getHealth
+      x-public: true
       summary: Liveness and dependency check
       description: |
         Reports the process plus each backing store. Returns 200 only when every

@@ -11,6 +11,7 @@ customers:
   get:
     tags: [Customers]
     operationId: listCustomers
+    x-public: true
     summary: List customers
     description: |
       Ordered by `sort` + `order` over the **whole** collection, not the page —
@@ -115,6 +116,7 @@ customer:
   get:
     tags: [Customers]
     operationId: getCustomer
+    x-public: true
     summary: One customer, with their history
     description: |
       Includes recent visits and conversations. A customer in another tenant
@@ -133,6 +135,7 @@ customer:
   patch:
     tags: [Customers]
     operationId: updateCustomer
+    x-public: true
     summary: Edit customer details
     description: |
       Only the fields present in the body are changed, so two agents editing
@@ -172,6 +175,7 @@ ban:
   post:
     tags: [Customers]
     operationId: banCustomer
+    x-public: true
     summary: Ban a customer
     description: |
       Blocks new conversations and refuses to mint further widget tokens for
@@ -195,6 +199,7 @@ ban:
   delete:
     tags: [Customers]
     operationId: unbanCustomer
+    x-public: true
     summary: Lift a ban
     responses:
       "200":
@@ -217,6 +222,7 @@ customerCustomFields:
   put:
     tags: [Customers]
     operationId: setCustomerCustomFields
+    x-public: true
     summary: Set this contact's custom field values
     description: |
       A map of definition id → value (FR-MOD-08.7.6), where null clears a field.

@@ -17,8 +17,9 @@ doğrulanır; "gözle baktım oldu" geçersizdir.
 - [ ] Build başarılı — `pnpm -w build` (exit 0)
 - [ ] İlgili E2E/smoke geçiyor — `pnpm -w test:e2e` (task'ın kapsadığı akış)
 - [ ] Kontrat (OpenAPI) değiştiyse üretilen tipler günceldir — `pnpm -w contract:generate`
-      sonrası `git status --short packages/contract/src/generated` boş (CI aynı adımı zorunlu
-      tutar, ci.yml "Verify generated types are in sync with the spec")
+      sonrası `git status --short packages/contract/src/generated apps/web/public/developers/docs` boş
+      (yayımlanan API dokümanı verisi `x-public` damgalı operasyonlardan aynı komutla üretilir, KN-04;
+      CI aynı adımı zorunlu tutar, ci.yml "Verify generated types are in sync with the spec")
 - [ ] Migration eklendiyse şema sürüklenmesi yok — `pnpm -w db:check-drift` (exit 0)
 - [ ] Task'ın kendi kabul kriteri (Task Master'daki test stratejisi / PRD FR KK) karşılandı
 - [ ] Yeni kod için test yazıldı (kapsam anlamlı; çıplak endpoint/servis testsiz kalmaz)

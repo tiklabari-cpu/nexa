@@ -1,0 +1,14 @@
+# Changelog of the published API (KN-04 · tm 376) — newest first.
+#
+# `surface` is the fingerprint of WHICH operations are published (method + path +
+# operationId; `surfaceFingerprint` in src/public-spec.ts). A test compares the
+# first entry with the contract: adding or removing a published operation changes
+# the fingerprint, and the test fails until an entry names the change. The first
+# entry's `version` must equal `info.version` of openapi.yaml.
+- version: 1.0.0
+  date: "2026-11-01"
+  surface: "9fd61d62020fa1c6"
+  summary: First publication of the API documentation.
+  changes:
+    - Chats, customers, tickets, webhooks (with delivery log), uploads, archive, agents and groups are documented.
+    - Personal access tokens and webhook signatures are described with runnable examples.

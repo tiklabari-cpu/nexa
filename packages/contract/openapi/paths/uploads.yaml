@@ -2,6 +2,7 @@ issueUpload:
   post:
     tags: [Uploads]
     operationId: createUpload
+    x-public: true
     summary: Ask permission to upload an attachment
     description: |
       The rules from `security_settings` (FR-MOD-08.9.4) are enforced here,
@@ -80,6 +81,7 @@ uploadPolicy:
   get:
     tags: [Uploads]
     operationId: getUploadPolicy
+    x-public: true
     summary: Whether file sharing is on for this licence
     description: |
       Just the on/off switch from `security_settings` (FR-MOD-08.9.4) — not the
@@ -112,6 +114,7 @@ uploadObject:
   put:
     tags: [Uploads]
     operationId: putUpload
+    x-public: true
     summary: Send the bytes for a granted upload
     description: |
       Authorised by the signature in the query string, not by a session — it is
@@ -178,6 +181,7 @@ uploadObject:
   get:
     tags: [Uploads]
     operationId: getUpload
+    x-public: true
     summary: Fetch a stored attachment
     description: |
       Authorised by session, and the licence inside the key has to match the

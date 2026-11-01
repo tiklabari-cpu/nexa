@@ -24,3 +24,22 @@ export {
   loadPlatformOpenApiDocument,
 } from './document.js';
 export type { OpenApiDocument } from './document.js';
+
+export {
+  PUBLISHED_RATE_LIMITS,
+  WEBHOOK_EXAMPLE_PATH,
+  WEBHOOK_TEST_VECTOR,
+  buildPublicGuides,
+  isPublicErrorType,
+  publicErrorTypes,
+} from './public-guide.js';
+export {
+  INTERNAL_OPERATION_PATTERNS,
+  PUBLIC_MARKER,
+  buildPublicSpec,
+  internalReason,
+  publicOperations,
+  scrubInternalReferences,
+  surfaceFingerprint,
+} from './public-spec.js';
+export type { ChangelogEntry, GuideSection, PublicOperation, PublicSpec } from './public-spec.js';

@@ -277,6 +277,7 @@ agents:
   get:
     tags: [Configuration]
     operationId: listAgents
+    x-public: true
     summary: List agents on the license
     description: |
       Defaults to the active roster: suspended agents are omitted, because they
@@ -598,6 +599,7 @@ groups:
   get:
     tags: [Configuration]
     operationId: listGroups
+    x-public: true
     summary: List teams and their members
     description: |
       Teams are the unit of chat visibility: an agent sees a conversation because

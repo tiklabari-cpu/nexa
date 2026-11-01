@@ -17,6 +17,7 @@ chats:
   get:
     tags: [Chats]
     operationId: listChats
+    x-public: true
     summary: List conversations
     description: |
       Returns chats the caller may see. An agent sees a chat only through a team
@@ -186,6 +187,7 @@ chats:
   post:
     tags: [Chats]
     operationId: startChat
+    x-public: true
     summary: Start a conversation with a customer
     description: |
       Reuses the customer's existing active chat if there is one — a second
@@ -237,6 +239,7 @@ chat:
   get:
     tags: [Chats]
     operationId: getChat
+    x-public: true
     summary: Fetch one conversation with its current thread
     description: |
       `thread` is the newest connection; `connections` lists the day's
@@ -257,6 +260,7 @@ events:
   get:
     tags: [Chats]
     operationId: listEvents
+    x-public: true
     summary: Read the transcript
     description: |
       Ordered oldest-first within a thread by default. `after_event_id` replays
@@ -322,6 +326,7 @@ events:
   post:
     tags: [Chats]
     operationId: sendEvent
+    x-public: true
     summary: Send a message, internal note or system event
     description: |
       Idempotent when `idempotency_key` is supplied: retrying after a timeout
@@ -360,6 +365,7 @@ event:
   put:
     tags: [Chats]
     operationId: updateEvent
+    x-public: true
     summary: Correct a message after it was sent
     description: |
       Rewrites the text of a message the caller sent themselves, within
@@ -420,6 +426,7 @@ deactivate:
   post:
     tags: [Chats]
     operationId: deactivateChat
+    x-public: true
     summary: Close the active thread
     description: |
       Archives the conversation. The chat itself persists so the customer's
@@ -443,6 +450,7 @@ resume:
   post:
     tags: [Chats]
     operationId: resumeChat
+    x-public: true
     summary: Reopen an archived conversation
     description: |
       Opens a **new thread** (`opened_via: agent_reopen`), assigned to the
@@ -479,6 +487,7 @@ transfer:
   post:
     tags: [Chats]
     operationId: transferChat
+    x-public: true
     summary: Hand the conversation to another team or agent
     description: |
       A hand-off to a team replaces the chat's `access` with that team and
@@ -969,6 +978,7 @@ transcript:
   get:
     tags: [Chats]
     operationId: getThreadTranscript
+    x-public: true
     summary: Download one connection's transcript
     description: |
       One connection's transcript as a file (AR-04), streamed:
@@ -1145,6 +1155,7 @@ tags:
   post:
     tags: [Chats]
     operationId: tagThread
+    x-public: true
     summary: Tag the current thread
     description: Tags describe a thread, not a chat — what a conversation is about can change between visits.
     parameters:
@@ -1175,6 +1186,7 @@ tag:
   delete:
     tags: [Chats]
     operationId: untagThread
+    x-public: true
     summary: Remove a tag from the current thread
     parameters:
       - $ref: "../openapi.yaml#/components/parameters/ChatId"
@@ -1190,6 +1202,7 @@ seen:
   post:
     tags: [Chats]
     operationId: markEventsAsSeen
+    x-public: true
     summary: Record how far the caller has read
     parameters:
       - $ref: "../openapi.yaml#/components/parameters/ChatId"

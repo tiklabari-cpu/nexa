@@ -11,6 +11,7 @@ websites:
   get:
     tags: [Websites]
     operationId: listWebsites
+    x-public: true
     summary: Sites the widget is installed on
     parameters:
       - $ref: "../openapi.yaml#/components/parameters/BrandHeader"
@@ -84,6 +85,7 @@ website:
   get:
     tags: [Websites]
     operationId: getWebsite
+    x-public: true
     summary: One website, with its install snippet
     responses:
       "200":

@@ -2,6 +2,7 @@ live:
   get:
     tags: [System]
     operationId: getHealthLive
+    x-public: true
     summary: Liveness probe
     description: |
       Answers as soon as the process is accepting connections — no dependency
@@ -21,6 +22,7 @@ ready:
   get:
     tags: [System]
     operationId: getHealthReady
+    x-public: true
     summary: Readiness probe
     description: |
       Probes Postgres and Redis for real and returns 503 when either is

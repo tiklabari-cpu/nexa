@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint src",
+    "lint": "eslint src docs-site",
     "test": "vitest run --passWithNoTests --maxWorkers=4",
     "test:unit": "vitest run --passWithNoTests --maxWorkers=4"
   },

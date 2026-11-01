@@ -414,6 +414,7 @@ me:
   get:
     tags: [Auth]
     operationId: getCurrentPrincipal
+    x-public: true
     summary: Describe the caller
     responses:
       "200":
@@ -880,6 +881,7 @@ personalAccessTokens:
   get:
     tags: [Auth]
     operationId: listPersonalAccessTokens
+    x-public: true
     summary: List the caller's personal access tokens
     responses:
       "200":
@@ -898,6 +900,7 @@ personalAccessTokens:
   post:
     tags: [Auth]
     operationId: createPersonalAccessToken
+    x-public: true
     summary: Create a personal access token
     description: |
       The plaintext token is in this response and nowhere else — only its hash
@@ -944,6 +947,7 @@ personalAccessToken:
   delete:
     tags: [Auth]
     operationId: deletePersonalAccessToken
+    x-public: true
     summary: Revoke a personal access token
     parameters:
       - name: tokenId

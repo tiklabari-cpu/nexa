@@ -12,6 +12,11 @@
  * never out of reach: a number the team cannot read off the screen is a number
  * they cannot say to each other (tm 259.12 · UX audit O3 + O4 · tm 286.4 · ID-05
  * tm 329). Wide, they sit in the header, each with its own copy button.
+ *
+ * Below the desktop layout (GV-04 · tm 385) the header wraps: the name and its
+ * numbers keep the first row, the actions — 44 px finger targets — the next.
+ * On a phone, where the transcript replaces the list, it leads with the way
+ * back to the list (`onBack`).
  */
 import { useState, type ReactElement } from 'react';
 import { hasAnyScope } from '@siyahtus/types';
@@ -44,6 +49,7 @@ export function ThreadHeader({
   onShowDetails,
   chat = null,
   onTransferred,
+  onBack,
 }: {
   chatId: string;
   /** The newest connection (`ids.chat`); null when the chat has none. */
@@ -58,6 +64,8 @@ export function ThreadHeader({
   chat?: ChatDetail | null;
   /** After a hand-off from `Transfer…` (IN-04): its notice, and whether the chat left the caller's sight. */
   onTransferred?: (outcome: { notice: TransferNotice; left: boolean }) => void;
+  /** On a phone: back to the conversation list the transcript replaced. */
+  onBack?: () => void;
 }): ReactElement {
   const t = useTranslate();
   const [ref, narrow] = useNarrow<HTMLElement>(NARROW_BELOW);
@@ -66,10 +74,21 @@ export function ThreadHeader({
   return (
     <header
       ref={ref}
-      className={`relative flex h-topbar shrink-0 items-center border-b border-border bg-surface ${
+      className={`relative flex h-topbar shrink-0 items-center border-b border-border bg-surface max-lg:h-auto max-lg:min-h-topbar max-lg:flex-wrap max-lg:py-1.5 ${
         narrow ? 'gap-1.5 px-2' : 'gap-3 px-4'
       }`}
     >
+      {onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label={t('inbox.thread.back')}
+          title={t('inbox.thread.back')}
+          className={actionClass(true)}
+        >
+          <span aria-hidden="true">←</span>
+        </button>
+      )}
       <h2 title={name} className="min-w-0 flex-1 truncate text-sm font-semibold">
         {name}
       </h2>
@@ -89,6 +108,8 @@ export function ThreadHeader({
         tone={active ? 'success' : 'neutral'}
         label={active ? t('inbox.thread.statusActive') : t('inbox.thread.statusArchived')}
       />
+      {/* Below the desktop layout the actions start a row of their own. */}
+      <span aria-hidden="true" className="hidden max-lg:block max-lg:basis-full" />
       {chat && <RiskChips chatId={chatId} customerId={chat.customer_id} compact={narrow} />}
       {chat && <AiModeControls chat={chat} chatId={chatId} compact={narrow} />}
       {chat && active && (

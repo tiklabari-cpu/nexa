@@ -52,7 +52,8 @@ export function Panel({
                 type="button"
                 onClick={onCollapse}
                 aria-label={collapseLabel ?? t('common.actions.collapsePanel')}
-                className="rounded-md p-1 text-content-tertiary hover:bg-surface-2 hover:text-content"
+                // A finger's 44 px below the desktop layout (GV-04 · tm 385).
+                className="rounded-md p-1 text-content-tertiary hover:bg-surface-2 hover:text-content max-lg:flex max-lg:min-h-11 max-lg:min-w-11 max-lg:items-center max-lg:justify-center"
               >
                 <span aria-hidden="true">⇥</span>
               </button>

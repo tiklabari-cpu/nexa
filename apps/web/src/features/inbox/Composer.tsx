@@ -1034,7 +1034,8 @@ export function Composer({
             type="button"
             onClick={submit}
             disabled={!canSend}
-            className="rounded-md bg-brand-500 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+            // 44 px for a finger below the desktop layout (GV-04 · tm 385).
+            className="rounded-md bg-brand-500 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50 max-lg:min-h-11"
           >
             {send.isPending ? t('inbox.composer.send.pending') : t('inbox.composer.send.cta')}
           </button>

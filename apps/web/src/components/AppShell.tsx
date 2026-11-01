@@ -11,7 +11,7 @@
  * so that branch is gone rather than kept as untested code.
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { useEffect, type ReactElement } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useApiClient, useAuth, useBrand } from '../lib/auth-store.js';
 import { useDeployment } from '../lib/deployment.js';
@@ -21,6 +21,12 @@ import { LOCALES, LOCALE_NAMES, useLocale, useTranslate } from '../lib/i18n.js';
 import { enumLabel } from '../lib/enum-label.js';
 import { useNavPinned } from '../lib/nav-store.js';
 import { THEMES, THEME_NAMES, useTheme, type Theme } from '../lib/theme.js';
+import {
+  APP_HEIGHT_VAR,
+  isNarrowLayout,
+  useViewportLayout,
+  useVisualViewportHeight,
+} from '../lib/viewport.js';
 import { FontPicker } from './FontPicker.js';
 import { InviteTeammates, usePendingInvitations } from '../features/team/InviteTeammates.js';
 import { CreateTeamButton } from '../features/team/CreateTeamButton.js';
@@ -56,11 +62,10 @@ export function AppShell(): ReactElement {
   const t = useTranslate();
   const narrow = useNarrowScreenNotice();
   const { maintenance } = useNotice();
-  // Mounted the first time it is shown, then kept: a window that narrows later
-  // hides the console behind the notice rather than unmounting it, so a draft,
-  // an open chat or a scroll position survive a turned tablet (tm 259.25 · O6).
-  const [mounted, setMounted] = useState(!narrow.show);
-  if (!narrow.show && !mounted) setMounted(true);
+  // Below the desktop layout the shell is as tall as what is visible, so the
+  // composer stays above an on-screen keyboard (GV-04 · tm 385).
+  const narrowLayout = isNarrowLayout(useViewportLayout());
+  useVisualViewportHeight(narrowLayout);
 
   // The Copilot drawer (IN-09) opens from every screen: the key lives here, in
   // the one component that is on every screen. Its conversation is dropped with
@@ -69,72 +74,65 @@ export function AppShell(): ReactElement {
   useShortcut('copilot.toggle-drawer', toggleCopilot);
   useEffect(() => resetCopilotDrawer, []);
 
-  // Past the notice, focus lands where the skip link would put it.
-  const noticeWasShown = useRef(narrow.show);
-  useEffect(() => {
-    if (noticeWasShown.current && !narrow.show) document.getElementById(MAIN_ID)?.focus();
-    noticeWasShown.current = narrow.show;
-  }, [narrow.show]);
-
   // Full maintenance (tm 389.13): nothing in the console would work, so it is
   // not drawn; the notice is polled, and the console returns when it ends.
   if (maintenance?.mode === 'full') return <MaintenancePage />;
 
   return (
-    <>
-      {narrow.show && <NarrowScreenNotice onContinue={narrow.continueAnyway} />}
-      {mounted && (
-        <div className={narrow.show ? 'hidden' : 'flex h-full flex-col bg-canvas text-content'}>
-          {/* First stop of the Tab order: a keyboard user would otherwise walk the whole
+    <div
+      className="flex h-full flex-col bg-canvas text-content"
+      style={narrowLayout ? { height: `var(${APP_HEIGHT_VAR}, 100%)` } : undefined}
+    >
+      {/* First stop of the Tab order: a keyboard user would otherwise walk the whole
           rail before reaching the page. Focus is moved by hand rather than left to
           the `#main` fragment, which would also rewrite the address bar. */}
-          <a
-            href={`#${MAIN_ID}`}
-            onClick={(event) => {
-              event.preventDefault();
-              document.getElementById(MAIN_ID)?.focus();
-            }}
-            className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-50 focus:rounded-md focus:bg-surface focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-content focus:shadow-lg"
-          >
-            {t('shell.skipToContent')}
-          </a>
-          {/* An operator signed in as this member (tm 389.15): first, above everything. */}
-          <ImpersonationBanner />
-          <NoticeBar />
-          <SandboxBadge />
-          <TrialBanner />
-          {/* Why your availability changed, and chats a lead must look at (WG-03). */}
-          <PresenceNotices />
-          <div className="flex min-h-0 flex-1">
-            <IconRail />
-            {/* The page is a flex child of this region exactly as it was of the row
+      <a
+        href={`#${MAIN_ID}`}
+        onClick={(event) => {
+          event.preventDefault();
+          document.getElementById(MAIN_ID)?.focus();
+        }}
+        className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-50 focus:rounded-md focus:bg-surface focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-content focus:shadow-lg"
+      >
+        {t('shell.skipToContent')}
+      </a>
+      {/* An operator signed in as this member (tm 389.15): first, above everything. */}
+      <ImpersonationBanner />
+      <NoticeBar />
+      <SandboxBadge />
+      <TrialBanner />
+      {/* Why your availability changed, and chats a lead must look at (WG-03). */}
+      <PresenceNotices />
+      {/* A screen not yet laid out below 1024 px says so, above itself (GV-04). */}
+      {narrow.show && <NarrowScreenNotice onContinue={narrow.continueAnyway} />}
+      <div className="flex min-h-0 flex-1">
+        <IconRail />
+        {/* The page is a flex child of this region exactly as it was of the row
             above, so every module keeps its box. Below the desktop breakpoint a
-            module wider than the window (the inbox's fixed columns) scrolls
+            module wider than the window (a fixed menu, a wide table) scrolls
             sideways in here rather than sliding the whole page (tm 259.25 · O6).
             `relative` makes it the containing block of the absolutely placed
             things inside (every `sr-only` label): with `<body>` as theirs they
             sat at their scrolled-away x and widened the document by up to 331 px. */}
-            <main
-              id={MAIN_ID}
-              tabIndex={-1}
-              className="flex min-h-0 min-w-0 flex-1 outline-none max-lg:relative max-lg:overflow-x-auto"
-            >
-              <Outlet />
-            </main>
-            {/* Beside the page, not over it: it stays open across navigation. */}
-            <CopilotDrawer />
-          </div>
-          {/* Reachable from every module: ⌘K opens it, and it lives outside the
+        <main
+          id={MAIN_ID}
+          tabIndex={-1}
+          className="flex min-h-0 min-w-0 flex-1 outline-none max-lg:relative max-lg:overflow-x-auto"
+        >
+          <Outlet />
+        </main>
+        {/* Beside the page, not over it: it stays open across navigation. */}
+        <CopilotDrawer />
+      </div>
+      {/* Reachable from every module: ⌘K opens it, and it lives outside the
           scrolling area so it overlays whatever is on screen. */}
-          <CommandPalette />
-          {/* The one key listener, and the "?" window it opens (IN-08). */}
-          <ShortcutsHost />
-          <RealtimeOwner />
-          {/* A chime the browser would not play yet (IN-10). */}
-          <AudioUnlockHint />
-        </div>
-      )}
-    </>
+      <CommandPalette />
+      {/* The one key listener, and the "?" window it opens (IN-08). */}
+      <ShortcutsHost />
+      <RealtimeOwner />
+      {/* A chime the browser would not play yet (IN-10). */}
+      <AudioUnlockHint />
+    </div>
   );
 }
 
@@ -342,7 +340,11 @@ function IconRail(): ReactElement {
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
   const accountId = useAuth((s) => s.agent?.account_id);
   const role = useAuth((s) => s.agent?.role ?? null);
-  const { pinned, setPinned } = useNavPinned(accountId);
+  const { pinned: pinnedChoice, setPinned } = useNavPinned(accountId);
+  // Below 1024 px the rail is the icon column whatever was chosen on a desktop:
+  // a 240 px menu would take a phone's whole width (GV-04 · tm 385).
+  const narrowLayout = isNarrowLayout(useViewportLayout());
+  const pinned = pinnedChoice && !narrowLayout;
   // `POST /invitations` requires `accounts--all:rw` (ADMIN_SCOPES) — an agent
   // role never carries it, so the rail hides the door rather than showing one
   // that only 403s (FR-MOD-01.1.5).
@@ -362,7 +364,7 @@ function IconRail(): ReactElement {
     >
       <AppMenu />
 
-      <NavPinToggle pinned={pinned} onToggle={() => setPinned(!pinned)} />
+      {!narrowLayout && <NavPinToggle pinned={pinned} onToggle={() => setPinned(!pinned)} />}
 
       {MODULES.filter((item) => isNavVisible(item, scopes, pilotMode, role)).map((item) => (
         <RailButton

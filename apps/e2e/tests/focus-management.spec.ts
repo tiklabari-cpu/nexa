@@ -225,9 +225,12 @@ test.describe('scrolling regions are reachable and their focus ring is visible',
   test('the inbox transcript on a phone can be scrolled from the keyboard', async ({
     agentPage,
   }, testInfo) => {
-    await agentPage.setViewportSize({ width: 390, height: 844 });
+    // A phone held sideways-short: since GV-04 the transcript has the phone's
+    // whole width, so a seeded two-message conversation only outgrows a low window.
+    await agentPage.setViewportSize({ width: 390, height: 420 });
     await agentPage.goto('/app/inbox');
-    await continuePastNarrowNotice(agentPage);
+    // A phone shows the list first; the transcript replaces it once a row is opened (GV-04).
+    await agentPage.locator('button[data-chat-row]').first().click();
     const log = agentPage.getByRole('log', { name: 'Conversation transcript' });
     await expect(log).toBeVisible();
 

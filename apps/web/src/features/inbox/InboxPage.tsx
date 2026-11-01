@@ -19,7 +19,8 @@ import { useRealtimeStatus } from '../../lib/realtime-status.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { EmptyState } from '../../components/EmptyState.js';
-import { Banner } from '../../components/ui/index.js';
+import { Banner, Modal } from '../../components/ui/index.js';
+import { useViewportLayout } from '../../lib/viewport.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { Composer } from './Composer.js';
 import { DetailsPanel } from './DetailsPanel.js';
@@ -225,6 +226,35 @@ export function InboxPage(): ReactElement {
    */
   const [queueTeam, setQueueTeam] = useState<number | null>(null);
 
+  /**
+   * The width class (GV-04 · tm 385): ≥1280 every pane with Details open,
+   * 1024–1279 the same with Details closed until asked for, 768–1023 the list
+   * and the transcript with Details and Copilot as a sheet from below, and
+   * under 768 one pane at a time — the list, or the conversation opened from it.
+   */
+  const layout = useViewportLayout();
+  const narrowLayout = layout === 'tablet' || layout === 'phone';
+  const phone = layout === 'phone';
+  /** On a phone: which of the two the screen shows. A conversation opened by hand, or a link. */
+  const [phonePane, setPhonePane] = useState<'list' | 'thread'>('list');
+  /** Below 1024 px the Views menu slides in over the list instead of standing beside it. */
+  const [viewsOpen, setViewsOpen] = useState(false);
+  /**
+   * Details / Copilot under 1280 px, where they start closed: this width's own
+   * choice, not the desktop's remembered one, and forgotten when the width class
+   * changes (a turned tablet starts from its own default again).
+   */
+  const [panelOpenHere, setPanelOpenHere] = useState(false);
+  useEffect(() => {
+    setPanelOpenHere(false);
+    setViewsOpen(false);
+  }, [layout]);
+  /** Open a conversation the agent chose: on a phone the transcript takes the screen. */
+  const openChat = (id: string): void => {
+    setSelectedId(id);
+    setPhonePane('thread');
+  };
+
   // A deep link opens a specific chat or ticket (from the command palette or a
   // shared URL). The record's own detail query loads it regardless of which
   // list view is showing, so all this has to do is point the selection at it
@@ -240,7 +270,7 @@ export function InboxPage(): ReactElement {
     if (chatId || ticketId) {
       if (chatId) {
         setSelection({ kind: 'chat', view: 'all' });
-        setSelectedId(chatId);
+        openChat(chatId);
         const threadId = searchParams.get('thread');
         const eventId = searchParams.get('event');
         setFocus(threadId || eventId ? { chatId, threadId, eventId } : null);
@@ -391,7 +421,7 @@ export function InboxPage(): ReactElement {
   const searchActive = view === 'archived' && archiveSearch !== null;
   const search = useArchiveSearch(searchActive ? archiveSearch : null);
   const openFound = (hit: ArchiveSearchHit, atMessage: boolean): void => {
-    setSelectedId(hit.id);
+    openChat(hit.id);
     setFocus(
       atMessage
         ? {
@@ -442,6 +472,14 @@ export function InboxPage(): ReactElement {
   // Whether the right-hand Details panel is shown or collapsed to give the
   // transcript the full width. The choice is remembered across reloads.
   const rightPanel = useRightPanel();
+  // Wide, the remembered choice; narrower, this width's own (above).
+  const panelOpen = layout === 'wide' ? !rightPanel.expanded : panelOpenHere;
+  const setPanelOpen = (open: boolean): void => {
+    if (layout === 'wide') rightPanel.setExpanded(!open);
+    else setPanelOpenHere(open);
+  };
+  // A view picked from the sliding menu closes it: the list it chose is the point.
+  useEffect(() => setViewsOpen(false), [selection, activeChannel, queueTeam]);
 
   // The "Views" group (FR-MOD-02.1.4): channel views and custom saved views.
   // Channel state is owner/admin-only, so an ordinary agent never fires the
@@ -553,7 +591,10 @@ export function InboxPage(): ReactElement {
   // and the one handed off is never read again, which would be a 404.
   const onTransferred = ({ notice, left }: { notice: TransferNotice; left: boolean }): void => {
     setTransferNotice(notice);
-    if (left) setSelectedId(null);
+    if (left) {
+      setSelectedId(null);
+      setPhonePane('list');
+    }
   };
 
   const ticketItems = tickets.items;
@@ -608,23 +649,76 @@ export function InboxPage(): ReactElement {
   }, [ticketItems, selectedTicketId, onTickets, ticketsLoaded, tickets.hasNext]);
 
   return (
-    // Below the desktop breakpoint the three panes keep their desktop width and
-    // the shell's <main> scrolls sideways: squeezed, the transcript would get
-    // what the fixed rail and list leave over — nothing at 390 px (tm 259.25 · O6).
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col max-lg:min-w-[calc(1024px-theme(spacing.rail))]">
+    // Every width has its own layout (GV-04 · tm 385, see `layout` above): the
+    // panes no longer keep their desktop width and scroll sideways under 1024 px.
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {/* Take tour (FR-MOD-01.4, 02.2.3): above both the ticket grid and the
           chat panes, since it is a whole-module offer, not a chat-view one. */}
       <TakeTourBanner />
       <AiConfigPublishedBand />
-      <div className="flex min-h-0 min-w-0 flex-1">
+      {/* Below 1024 px the module's name and the way to its views, over the panes.
+          A phone reading a conversation gives this row to the transcript. */}
+      {narrowLayout && !(phone && phonePane === 'thread') && (
+        <div className="flex h-topbar shrink-0 items-center gap-2 border-b border-border bg-surface px-2">
+          <button
+            type="button"
+            onClick={() => setViewsOpen(true)}
+            aria-expanded={viewsOpen}
+            aria-controls={VIEWS_NAV_ID}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-border px-3 text-sm font-medium text-content-secondary hover:bg-surface-2"
+          >
+            <span aria-hidden="true">☰</span>
+            {t('inbox.rail.open')}
+          </button>
+          <h1 className="min-w-0 flex-1 truncate text-lg font-semibold">{t('inbox.rail.title')}</h1>
+          <ConnectionBadge status={rtmStatus} />
+        </div>
+      )}
+      <div className="relative flex min-h-0 min-w-0 flex-1">
+        {/* Below 1024 px the menu lies over the list; a tap beside it closes it. */}
+        {narrowLayout && viewsOpen && (
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-label={t('inbox.rail.close')}
+            onClick={() => setViewsOpen(false)}
+            className="absolute inset-0 z-30 bg-black/40"
+          />
+        )}
         {/* Views */}
         <nav
+          id={VIEWS_NAV_ID}
           aria-label={t('inbox.rail.ariaLabel')}
-          className="flex w-sidebar shrink-0 flex-col overflow-y-auto border-r border-border bg-surface"
+          onKeyDown={(event) => {
+            if (narrowLayout && event.key === 'Escape') setViewsOpen(false);
+          }}
+          className={`flex w-sidebar shrink-0 flex-col overflow-y-auto border-r border-border bg-surface ${
+            narrowLayout
+              ? viewsOpen
+                ? 'absolute inset-y-0 left-0 z-40 max-w-[85%] shadow-lg'
+                : 'hidden'
+              : ''
+          }`}
         >
           <header className="flex h-topbar items-center justify-between px-4">
-            <h1 className="text-lg font-semibold">{t('inbox.rail.title')}</h1>
-            <ConnectionBadge status={rtmStatus} />
+            {narrowLayout ? (
+              <>
+                <h2 className="text-lg font-semibold">{t('inbox.rail.ariaLabel')}</h2>
+                <button
+                  type="button"
+                  onClick={() => setViewsOpen(false)}
+                  aria-label={t('inbox.rail.close')}
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-content-tertiary hover:bg-surface-2 hover:text-content"
+                >
+                  <span aria-hidden="true">✕</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <h1 className="text-lg font-semibold">{t('inbox.rail.title')}</h1>
+                <ConnectionBadge status={rtmStatus} />
+              </>
+            )}
           </header>
 
           <ul className="flex flex-col gap-0.5 px-2">
@@ -814,7 +908,15 @@ export function InboxPage(): ReactElement {
             {/* Conversation list */}
             <section
               aria-label={t('inbox.list.ariaLabel')}
-              className="flex w-list shrink-0 flex-col border-r border-border bg-surface"
+              className={`flex shrink-0 flex-col border-r border-border bg-surface ${
+                phone
+                  ? phonePane === 'list'
+                    ? 'w-full border-r-0'
+                    : 'hidden'
+                  : layout === 'tablet'
+                    ? 'w-72'
+                    : 'w-list'
+              }`}
             >
               <header className="flex h-topbar items-center justify-between gap-2 border-b border-border px-4">
                 <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">
@@ -990,7 +1092,7 @@ export function InboxPage(): ReactElement {
                             <button
                               type="button"
                               data-chat-row=""
-                              onClick={() => setSelectedId(item.id)}
+                              onClick={() => openChat(item.id)}
                               aria-current={selectedId === item.id ? 'true' : undefined}
                               className={`flex w-full flex-col gap-1 border-b border-border px-4 py-3 text-left transition-colors ${
                                 selectedId === item.id
@@ -1093,7 +1195,7 @@ export function InboxPage(): ReactElement {
                                   customerName={
                                     item.customer_name ?? t('inbox.list.item.visitorFallback')
                                   }
-                                  onOpen={setSelectedId}
+                                  onOpen={openChat}
                                 />
                               )}
                             {view === 'team' && (
@@ -1104,7 +1206,7 @@ export function InboxPage(): ReactElement {
                                 }
                                 assigneeId={item.assignee_id}
                                 canTakeover={item.active && canTakeOverTeamRow}
-                                onOpen={setSelectedId}
+                                onOpen={openChat}
                               />
                             )}
                           </li>
@@ -1131,152 +1233,200 @@ export function InboxPage(): ReactElement {
               )}
             </section>
 
-            {/* Transcript */}
-            <div className="flex min-w-0 flex-1 flex-col bg-canvas">
-              {transferNotice && (
-                <Banner
-                  tone={transferNotice.tone}
-                  role="status"
-                  dismissible
-                  dismissLabel={t('inbox.transfer.dismiss')}
-                  onDismiss={() => setTransferNotice(null)}
-                  className="m-2"
-                >
-                  {t(transferNotice.key, transferNotice.params)}
-                </Banner>
-              )}
-              {selectedId && chat.data ? (
-                <>
-                  <ThreadHeader
-                    chatId={selectedId}
-                    chat={chat.data}
-                    threadId={chat.data.thread?.id ?? null}
-                    customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
-                    active={chat.data.active}
-                    onOpenTicket={(ticketId) => {
-                      setSelection({ kind: 'ticket' });
-                      setSelectedTicketId(ticketId);
-                      // A stale filter (e.g. `solved`) could hide the ticket
-                      // just created once the agent backs out of its pane.
-                      if (hasTicketViewParam(searchParams)) {
-                        setSearchParams(clearTicketView(searchParams), { replace: true });
-                      }
-                    }}
-                    // Copilot (FR-MOD-12.1): opens the assist panel for this chat,
-                    // bringing the right panel back if it was collapsed.
-                    onOpenCopilot={() => {
-                      panelTab.showCopilot();
-                      rightPanel.setExpanded(false);
-                    }}
-                    // When the panel is open it is collapsed from its own header
-                    // (the transcript header is tight at this width); when it is
-                    // hidden, this is the way back to it.
-                    onShowDetails={rightPanel.expanded ? () => rightPanel.setExpanded(false) : null}
-                    onTransferred={onTransferred}
-                  />
-
-                  {/* An empty thread with a live reply box is how a failed read used
-                      to look (tm 259.5); say it failed, and hold the composer. */}
-                  {transcript.isError ? (
-                    <ThreadLoadError
-                      title={t('inbox.thread.transcriptError.title')}
-                      error={transcript.error}
-                      retryLabel={t('inbox.thread.transcriptError.retry')}
-                      onRetry={transcript.refetch}
-                    />
-                  ) : (
-                    <Transcript
+            {/* Transcript. On a phone it is not drawn behind the list: drawn hidden, it
+                would pin itself to the newest line at no height and open at the top. */}
+            {!(phone && phonePane === 'list') && (
+              <div className="flex min-w-0 flex-1 flex-col bg-canvas">
+                {transferNotice && (
+                  <Banner
+                    tone={transferNotice.tone}
+                    role="status"
+                    dismissible
+                    dismissLabel={t('inbox.transfer.dismiss')}
+                    onDismiss={() => setTransferNotice(null)}
+                    className="m-2"
+                  >
+                    {t(transferNotice.key, transferNotice.params)}
+                  </Banner>
+                )}
+                {selectedId && chat.data ? (
+                  <>
+                    <ThreadHeader
                       chatId={selectedId}
-                      events={transcript.events}
-                      connections={connectionLabels}
-                      focus={focus?.chatId === selectedId ? focus : undefined}
-                      loading={transcript.isPending}
-                      currentAgentId={agent?.account_id ?? null}
-                      customerSeenUpTo={
-                        chat.data.users.find((u) => u.user_type === 'customer')?.seen_up_to ?? null
-                      }
-                      hasOlder={transcript.hasOlder}
-                      isLoadingOlder={transcript.isLoadingOlder}
-                      onLoadOlder={transcript.loadOlder}
-                      failedSends={failedSends}
-                      onRetry={(entry) => retrySend.mutate(entry.input)}
-                      canSuggest
-                      {...(chat.data.active
-                        ? {
-                            onEdit: (eventId: string, text: string) =>
-                              editMessage.mutateAsync({ eventId, text }),
-                          }
-                        : {})}
+                      chat={chat.data}
+                      threadId={chat.data.thread?.id ?? null}
+                      customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
+                      active={chat.data.active}
+                      onOpenTicket={(ticketId) => {
+                        setSelection({ kind: 'ticket' });
+                        setSelectedTicketId(ticketId);
+                        // A stale filter (e.g. `solved`) could hide the ticket
+                        // just created once the agent backs out of its pane.
+                        if (hasTicketViewParam(searchParams)) {
+                          setSearchParams(clearTicketView(searchParams), { replace: true });
+                        }
+                      }}
+                      // Copilot (FR-MOD-12.1): opens the assist panel for this chat,
+                      // bringing the right panel back if it was collapsed.
+                      onOpenCopilot={() => {
+                        panelTab.showCopilot();
+                        setPanelOpen(true);
+                      }}
+                      // When the panel is open it is collapsed from its own header
+                      // (the transcript header is tight at this width); when it is
+                      // hidden, this is the way back to it.
+                      onShowDetails={panelOpen ? null : () => setPanelOpen(true)}
+                      onTransferred={onTransferred}
+                      {...(phone ? { onBack: () => setPhonePane('list') } : {})}
                     />
-                  )}
 
-                  <TypingIndicator
-                    chatId={selectedId}
-                    customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
-                  />
-                  <ConflictBanner chatId={selectedId} />
+                    {/* An empty thread with a live reply box is how a failed read used
+                      to look (tm 259.5); say it failed, and hold the composer. */}
+                    {transcript.isError ? (
+                      <ThreadLoadError
+                        title={t('inbox.thread.transcriptError.title')}
+                        error={transcript.error}
+                        retryLabel={t('inbox.thread.transcriptError.retry')}
+                        onRetry={transcript.refetch}
+                      />
+                    ) : (
+                      <Transcript
+                        chatId={selectedId}
+                        events={transcript.events}
+                        connections={connectionLabels}
+                        focus={focus?.chatId === selectedId ? focus : undefined}
+                        loading={transcript.isPending}
+                        currentAgentId={agent?.account_id ?? null}
+                        customerSeenUpTo={
+                          chat.data.users.find((u) => u.user_type === 'customer')?.seen_up_to ??
+                          null
+                        }
+                        hasOlder={transcript.hasOlder}
+                        isLoadingOlder={transcript.isLoadingOlder}
+                        onLoadOlder={transcript.loadOlder}
+                        failedSends={failedSends}
+                        onRetry={(entry) => retrySend.mutate(entry.input)}
+                        canSuggest
+                        {...(chat.data.active
+                          ? {
+                              onEdit: (eventId: string, text: string) =>
+                                editMessage.mutateAsync({ eventId, text }),
+                            }
+                          : {})}
+                      />
+                    )}
 
-                  {/* Keyed on the open chat (tm 277.1): the text, attachment,
+                    <TypingIndicator
+                      chatId={selectedId}
+                      customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
+                    />
+                    <ConflictBanner chatId={selectedId} />
+
+                    {/* Keyed on the open chat (tm 277.1): the text, attachment,
                     mode and chips are this component's state, and without the
                     key a switch to a chat already in the cache kept them — what
                     was written to A sat in B's box, one Enter from B. */}
-                  <Composer
-                    key={selectedId}
-                    chatId={selectedId}
-                    disabled={!chat.data.active || transcript.isError}
-                    {...(chat.data.active && transcript.isError
-                      ? { disabledNotice: t('inbox.composer.unavailableNotice') }
-                      : {})}
-                    tags={chat.data.thread?.tags ?? []}
+                    <Composer
+                      key={selectedId}
+                      chatId={selectedId}
+                      disabled={!chat.data.active || transcript.isError}
+                      {...(chat.data.active && transcript.isError
+                        ? { disabledNotice: t('inbox.composer.unavailableNotice') }
+                        : {})}
+                      tags={chat.data.thread?.tags ?? []}
+                    />
+                  </>
+                ) : selectedId && chat.isError ? (
+                  <ThreadLoadError
+                    title={t('inbox.thread.error.title')}
+                    error={chat.error}
+                    retryLabel={t('inbox.thread.error.retry')}
+                    onRetry={() => void chat.refetch()}
                   />
-                </>
-              ) : selectedId && chat.isError ? (
-                <ThreadLoadError
-                  title={t('inbox.thread.error.title')}
-                  error={chat.error}
-                  retryLabel={t('inbox.thread.error.retry')}
-                  onRetry={() => void chat.refetch()}
-                />
-              ) : (
-                <EmptyState
-                  title={t('inbox.thread.empty.title')}
-                  description={t('inbox.thread.empty.description')}
-                />
-              )}
-            </div>
+                ) : (
+                  <EmptyState
+                    title={t('inbox.thread.empty.title')}
+                    description={t('inbox.thread.empty.description')}
+                  />
+                )}
+              </div>
+            )}
 
             {/* Right panel — Details or Copilot. Hidden in Expand mode so the
-              transcript takes the full width (FR-MOD-01.3 / 12.1). */}
-            {selectedId &&
-              chat.data &&
-              !rightPanel.expanded &&
-              (panelTab.tab === 'copilot' ? (
-                <CopilotPanel
-                  chatId={selectedId}
-                  canDraft={chat.data.active}
-                  onShowDetails={panelTab.showDetails}
-                  onCollapse={() => rightPanel.setExpanded(true)}
-                />
-              ) : (
-                <DetailsPanel
-                  chat={chat.data}
-                  chatId={selectedId}
-                  onCollapse={() => rightPanel.setExpanded(true)}
-                  // Where a Reopen landed when it was another chat (ID-02-S6) —
-                  // opened under "All", as a deep link is, so the selection
-                  // check finds it whichever view the agent reopened from.
-                  onOpenChat={(id) => {
-                    setSelection({ kind: 'chat', view: 'all' });
-                    setSelectedId(id);
-                  }}
-                  onOpenTimeline={() => navigate(timelineAddress(selectedId))}
-                  onTransferred={onTransferred}
-                />
-              ))}
+              transcript takes the full width (FR-MOD-01.3 / 12.1). Below 1024 px
+              there is no room beside the transcript: a sheet from below (GV-04). */}
+            {selectedId && chat.data && panelOpen && (
+              <RightPanelFrame
+                sheet={narrowLayout}
+                label={
+                  panelTab.tab === 'copilot'
+                    ? t('inbox.copilot.panelLabel')
+                    : t('inbox.details.panelLabel')
+                }
+                onClose={() => setPanelOpen(false)}
+              >
+                {panelTab.tab === 'copilot' ? (
+                  <CopilotPanel
+                    chatId={selectedId}
+                    canDraft={chat.data.active}
+                    onShowDetails={panelTab.showDetails}
+                    onCollapse={() => setPanelOpen(false)}
+                  />
+                ) : (
+                  <DetailsPanel
+                    chat={chat.data}
+                    chatId={selectedId}
+                    onCollapse={() => setPanelOpen(false)}
+                    // Where a Reopen landed when it was another chat (ID-02-S6) —
+                    // opened under "All", as a deep link is, so the selection
+                    // check finds it whichever view the agent reopened from.
+                    onOpenChat={(id) => {
+                      setSelection({ kind: 'chat', view: 'all' });
+                      openChat(id);
+                      if (narrowLayout) setPanelOpen(false);
+                    }}
+                    onOpenTimeline={() => navigate(timelineAddress(selectedId))}
+                    onTransferred={onTransferred}
+                  />
+                )}
+              </RightPanelFrame>
+            )}
           </>
         )}
       </div>
     </div>
+  );
+}
+
+/** The Views menu's id, for the button that opens it below 1024 px. */
+const VIEWS_NAV_ID = 'inbox-views';
+
+/**
+ * Where Details / Copilot sit: beside the transcript on a desktop, or a sheet
+ * from below the desktop layout (GV-04 · tm 385) — the same panel either way,
+ * stretched to the sheet's width.
+ */
+function RightPanelFrame({
+  sheet,
+  label,
+  onClose,
+  children,
+}: {
+  sheet: boolean;
+  label: string;
+  onClose: () => void;
+  children: ReactElement;
+}): ReactElement {
+  if (!sheet) return children;
+  return (
+    <Modal
+      dock="bottom"
+      label={label}
+      onClose={onClose}
+      className="[&>aside]:w-full [&>aside]:min-h-0 [&>aside]:flex-1 [&>aside]:border-l-0"
+    >
+      {children}
+    </Modal>
   );
 }
 

@@ -47,9 +47,9 @@ export const shell: Messages = {
   'shell.notFound.back': 'Gelen kutusuna git',
   'shell.narrow.title': 'Panel masaüstü için tasarlandı',
   'shell.narrow.body':
-    'Bu ekran panelin düzeninden dar; bazı sütunlar sığmayacak ve sayfanın bir kısmı yana kaydırma gerektirebilir.',
+    'Bu ekran henüz dar pencereye göre düzenlenmedi; bazı sütunlar sığmayacak ve bir kısmı yana kaydırma gerektirebilir. Gelen kutusu bu genişlikte çalışır.',
   'shell.narrow.mobileApp':
-    'Telefonda sohbetleri yanıtlamak için SiyahTuş mobil uygulaması daha uygundur.',
+    'Telefonda sohbetleri yanıtlamanın bir başka yolu SiyahTuş mobil uygulamasıdır.',
   'shell.narrow.continue': 'Yine de devam et',
   'shell.maintenance.readOnly':
     'Bakım sürüyor — konsol şimdilik salt okunur, değişiklikler kaydedilmez.',

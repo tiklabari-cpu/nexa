@@ -54,6 +54,12 @@ export interface NavDestination {
    * the accessible name reads "Inbox, 3 unread" rather than a bare digit.
    */
   badge?: { count: number; ariaLabel: string };
+  /**
+   * The module is laid out for a narrow window (GV-04 · tm 385): below 1024 px
+   * it gets no "designed for desktop" band. Marked only once the screen has
+   * been measured at 375 and 768 px — `narrow-inbox.spec.ts` holds the inbox to it.
+   */
+  responsive?: true;
 }
 
 /**
@@ -97,6 +103,7 @@ export const MODULES: NavDestination[] = [
     // `DEFAULT_AGENT_SCOPES` carries `chats--access:rw`, which implies the `:ro`
     // half here.
     scope: ['chats--all:ro', 'chats--access:ro'],
+    responsive: true,
   },
   {
     to: '/app/archive',
@@ -191,6 +198,25 @@ export const FOOTER: NavDestination[] = [
 ];
 
 export const NAV_DESTINATIONS: NavDestination[] = [...MODULES, ...FOOTER];
+
+/**
+ * Screens laid out for a narrow window that are not a rail destination of
+ * their own: the conversation timeline opens from the inbox's Details (ID-09).
+ */
+const RESPONSIVE_SUBPATHS: readonly string[] = ['/app/inbox/timeline'];
+
+/**
+ * Whether the screen at `pathname` works below 1024 px (GV-04 · tm 385). Exact
+ * paths only: a module's other pages (`/app/customers/goals` under Customers)
+ * are adapted one by one, not inherited.
+ */
+export function isResponsiveRoute(pathname: string): boolean {
+  const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
+  return (
+    NAV_DESTINATIONS.some((dest) => dest.responsive && dest.to === path) ||
+    RESPONSIVE_SUBPATHS.includes(path)
+  );
+}
 
 /**
  * A door the command palette offers that the rail does not (tm 390.2): the AI

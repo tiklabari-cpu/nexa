@@ -5,6 +5,8 @@ export const inbox: Messages = {
   // Views rail
   'inbox.rail.ariaLabel': 'Gelen kutusu görünümleri',
   'inbox.rail.title': 'Gelen Kutusu',
+  'inbox.rail.open': 'Görünümler',
+  'inbox.rail.close': 'Görünümleri kapat',
   'inbox.rail.view.all': 'Tümü',
   'inbox.rail.view.my': 'Sohbetlerim',
   'inbox.rail.view.team': 'Ekibim',
@@ -152,6 +154,7 @@ export const inbox: Messages = {
   'inbox.thread.copied': 'Kopyalandı',
   'inbox.thread.ids': 'Konuşma numaraları',
   'inbox.thread.showDetails': 'Ayrıntılar panelini göster',
+  'inbox.thread.back': 'Sohbetlere dön',
   'inbox.thread.detailsLabel': 'Ayrıntılar',
   'inbox.thread.copilotLabel': 'Copilot',
   // Who answers the conversation (AI-11) — the header's badge and its actions

@@ -59,8 +59,13 @@ interface ModalProps {
    * alongside a live list rather than a centred interruption of it. `align`
    * is meaningless in this mode (there is no vertical position to choose)
    * and is ignored.
+   *
+   * `'bottom'` is a sheet that slides up from the lower edge, full width: the
+   * inbox's Details and Copilot below 1024 px (GV-04 · tm 385), where there is
+   * no room beside the transcript. The sheet draws no padding of its own — its
+   * content is a whole panel with a header.
    */
-  dock?: 'center' | 'right';
+  dock?: 'center' | 'right' | 'bottom';
 }
 
 export function Modal({
@@ -160,7 +165,9 @@ export function Modal({
         'fixed inset-0 z-50 flex bg-black/40',
         dock === 'right'
           ? 'justify-end'
-          : cn('justify-center p-6', align === 'top' ? 'items-start pt-[12vh]' : 'items-center'),
+          : dock === 'bottom'
+            ? 'items-end'
+            : cn('justify-center p-6', align === 'top' ? 'items-start pt-[12vh]' : 'items-center'),
       )}
       // A mousedown on the backdrop dismisses; stopped on the panel so a drag
       // ending outside is not counted as a dismiss.
@@ -177,7 +184,9 @@ export function Modal({
         className={cn(
           dock === 'right'
             ? 'h-full w-full max-w-md overflow-y-auto border-l border-border bg-surface p-5 shadow-md outline-none'
-            : 'w-full max-w-md rounded-lg border border-border bg-surface p-5 shadow-md outline-none',
+            : dock === 'bottom'
+              ? 'flex max-h-[85%] min-h-[50%] w-full flex-col overflow-hidden rounded-t-xl border-t border-border bg-surface shadow-md outline-none'
+              : 'w-full max-w-md rounded-lg border border-border bg-surface p-5 shadow-md outline-none',
           className,
         )}
       >

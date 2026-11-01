@@ -1,33 +1,31 @@
 /**
- * The console on a narrow screen (tm 259.25 · O6).
+ * The "designed for desktop" band (tm 259.25 · O6, made per-screen by GV-04 · tm 385).
  *
- * The panel is laid out for a desktop — a 3-pane inbox, fixed-width menus — and
- * at 390 px the inbox measured ~1415 px wide. Until the owner decides between a
- * fully responsive console and "use the mobile app on a phone" (PLAN §D207), a
- * window narrower than {@link NARROW_SCREEN_MAX} is told so and offered the way
- * on, rather than handed a page that slides sideways.
+ * Below 1024 px most of the console still keeps its desktop layout — fixed-width
+ * menus, wide tables — and scrolls sideways inside `<main>` rather than sliding
+ * the whole page. A screen that has been laid out for a narrow window says so
+ * in its navigation entry (`responsive: true`, `isResponsiveRoute`) and gets no
+ * band; every other screen gets this band above it, never in place of it, so
+ * the console is always reachable.
  *
- * "Continue anyway" is remembered for the tab's session (`sessionStorage`): a
- * reload does not ask again, a new tab does. Storage can be unavailable (a
- * privacy mode, a sandboxed frame) — then the choice lasts as long as the page.
+ * "Continue anyway" dismisses the band for the tab's session (`sessionStorage`):
+ * a reload does not show it again, a new tab does. Storage can be unavailable
+ * (a privacy mode, a sandboxed frame) — then the choice lasts as long as the page.
  *
  * The decision follows the window, not the first paint: turning a tablet, or
- * narrowing a desktop window, decides again (`resize`). The shell stays mounted
- * underneath, so turning back finds the console exactly where it was.
+ * narrowing a desktop window, decides again.
  */
-import { useEffect, useRef, useState, type ReactElement } from 'react';
-import { BASE_TITLE } from '../lib/document-title.js';
+import { useState, type ReactElement } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useTranslate } from '../lib/i18n.js';
+import { isNarrowLayout, useViewportLayout } from '../lib/viewport.js';
+import { isResponsiveRoute } from './navigation.js';
 
-/** Narrower than this, the console asks first. The breakpoint Tailwind calls `lg`. */
+/** Narrower than this, an unadapted screen shows the band. The breakpoint Tailwind calls `lg`. */
 export const NARROW_SCREEN_MAX = 1024;
 
 /** The tab's "Continue anyway". */
 export const NARROW_SCREEN_KEY = 'siyahtus.narrow_screen.continue';
-
-function isNarrow(): boolean {
-  return typeof window !== 'undefined' && window.innerWidth < NARROW_SCREEN_MAX;
-}
 
 function readContinued(): boolean {
   try {
@@ -45,19 +43,14 @@ function writeContinued(): void {
   }
 }
 
-/** Should the notice stand in for the console right now, and the way past it. */
+/** Should the band show over the screen at hand, and the way to dismiss it. */
 export function useNarrowScreenNotice(): { show: boolean; continueAnyway: () => void } {
-  const [narrow, setNarrow] = useState(isNarrow);
+  const narrow = isNarrowLayout(useViewportLayout());
+  const { pathname } = useLocation();
   const [continued, setContinued] = useState(readContinued);
 
-  useEffect(() => {
-    const onResize = (): void => setNarrow(isNarrow());
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
-
   return {
-    show: narrow && !continued,
+    show: narrow && !continued && !isResponsiveRoute(pathname),
     continueAnyway: () => {
       writeContinued();
       setContinued(true);
@@ -67,41 +60,24 @@ export function useNarrowScreenNotice(): { show: boolean; continueAnyway: () => 
 
 export function NarrowScreenNotice({ onContinue }: { onContinue: () => void }): ReactElement {
   const t = useTranslate();
-  const headingRef = useRef<HTMLHeadingElement>(null);
-
-  // Whatever held focus may have just been hidden with the console (a turned
-  // tablet); the notice is what a screen reader should be reading now.
-  useEffect(() => {
-    headingRef.current?.focus();
-  }, []);
-
   return (
-    <main className="auth-stage flex min-h-full items-center justify-center bg-canvas p-6 text-content">
-      <div className="w-full max-w-sm">
-        <div className="mb-6 flex items-center gap-2.5">
-          <span
-            aria-hidden="true"
-            className="brand-mark flex h-10 w-10 items-center justify-center rounded-lg bg-brand-500 text-base font-bold text-white"
-          >
-            S
-          </span>
-          <span className="text-lg font-semibold">{BASE_TITLE}</span>
-        </div>
-        <div className="auth-card flex flex-col gap-3 rounded-xl border border-border bg-surface p-6">
-          <h1 ref={headingRef} tabIndex={-1} className="text-lg font-semibold">
-            {t('shell.narrow.title')}
-          </h1>
-          <p className="text-sm text-content-secondary">{t('shell.narrow.body')}</p>
-          <p className="text-sm text-content-secondary">{t('shell.narrow.mobileApp')}</p>
-          <button
-            type="button"
-            onClick={onContinue}
-            className="mt-2 w-full rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white"
-          >
-            {t('shell.narrow.continue')}
-          </button>
-        </div>
-      </div>
-    </main>
+    <section
+      aria-label={t('shell.narrow.title')}
+      className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-surface-2 px-3 py-2 text-sm"
+    >
+      <p className="min-w-0 flex-1 basis-64">
+        <strong className="font-semibold">{t('shell.narrow.title')}</strong>{' '}
+        <span className="text-content-secondary">
+          {t('shell.narrow.body')} {t('shell.narrow.mobileApp')}
+        </span>
+      </p>
+      <button
+        type="button"
+        onClick={onContinue}
+        className="min-h-11 shrink-0 rounded-md bg-brand-500 px-3 text-sm font-medium text-white hover:bg-brand-600"
+      >
+        {t('shell.narrow.continue')}
+      </button>
+    </section>
   );
 }

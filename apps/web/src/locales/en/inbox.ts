@@ -20,6 +20,9 @@ export const inbox: Messages = {
   // Views rail
   'inbox.rail.ariaLabel': 'Inbox views',
   'inbox.rail.title': 'Inbox',
+  // Below 1024 px the views slide in over the list (GV-04 · tm 385).
+  'inbox.rail.open': 'Views',
+  'inbox.rail.close': 'Close views',
   'inbox.rail.view.all': 'All',
   'inbox.rail.view.my': 'My chats',
   'inbox.rail.view.team': 'My team',
@@ -168,6 +171,8 @@ export const inbox: Messages = {
   'inbox.thread.copied': 'Copied',
   'inbox.thread.ids': 'Conversation numbers',
   'inbox.thread.showDetails': 'Show details panel',
+  // A phone shows the list or the transcript, not both (GV-04 · tm 385).
+  'inbox.thread.back': 'Back to conversations',
   'inbox.thread.detailsLabel': 'Details',
   'inbox.thread.copilotLabel': 'Copilot',
   // Who answers the conversation (AI-11) — the header's badge and its actions

@@ -112,6 +112,45 @@ function logTo(name: string | undefined): string {
   return ` > "${join(dir, `${name}-${SHARD_DIR}.log`)}"`;
 }
 
+/**
+ * A private stack's Chromium resolves the usual origins onto the shard's ports
+ * (above); every project launches it the same way.
+ */
+const STACK_LAUNCH = PRIVATE
+  ? {
+      launchOptions: {
+        args: [
+          '--host-resolver-rules=' +
+            [
+              `MAP localhost:${USUAL_PORTS.api} localhost:${PORTS.api}`,
+              `MAP localhost:${USUAL_PORTS.rtm} localhost:${PORTS.rtm}`,
+              `MAP localhost:${USUAL_PORTS.web} localhost:${PORTS.web}`,
+              `MAP localhost:${USUAL_PORTS.admin} localhost:${PORTS.admin}`,
+              `MAP localhost:${USUAL_PORTS.widget} localhost:${PORTS.widget}`,
+              `MAP *.localhost:${USUAL_PORTS.widget} localhost:${PORTS.widget}`,
+            ].join(', '),
+        ],
+      },
+    }
+  : {};
+
+/** Specs written for the narrow projects, run at 375 and 768 px instead of the desktop. */
+const NARROW_SPECS = ['**/narrow-inbox.spec.ts'];
+
+/**
+ * Inbox specs that already drive the list, the transcript and the composer only
+ * and so also run at 768 px, two panes (GV-04 · tm 385: the existing inbox
+ * flows on the tablet layout too). Not every inbox spec can: one that sets the
+ * agent's availability reaches for the Views menu, which slides in below
+ * 1024 px; one that reads the header's numbers finds them folded into a menu.
+ */
+const TABLET_TOO_SPECS = [
+  '**/inbox-draft.spec.ts',
+  '**/inbox-ordering.spec.ts',
+  '**/inbox-tabs.spec.ts',
+  '**/inbox-unread.spec.ts',
+];
+
 export default defineConfig({
   testDir: './tests',
   // The public pilot's spec needs an API started with `PILOT_MODE=true`, which
@@ -174,25 +213,31 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testIgnore: NARROW_SPECS,
+      use: { ...devices['Desktop Chrome'], ...STACK_LAUNCH },
+    },
+    // The console below the desktop layout (GV-04 · tm 385): a phone held upright
+    // and a tablet held upright, with touch. Only the specs written for a narrow
+    // window run here — the rest of the suite drives the desktop layout and
+    // would only be measuring that the inbox drops panes.
+    {
+      name: 'narrow-375',
+      testMatch: NARROW_SPECS,
       use: {
         ...devices['Desktop Chrome'],
-        ...(PRIVATE
-          ? {
-              launchOptions: {
-                args: [
-                  '--host-resolver-rules=' +
-                    [
-                      `MAP localhost:${USUAL_PORTS.api} localhost:${PORTS.api}`,
-                      `MAP localhost:${USUAL_PORTS.rtm} localhost:${PORTS.rtm}`,
-                      `MAP localhost:${USUAL_PORTS.web} localhost:${PORTS.web}`,
-                      `MAP localhost:${USUAL_PORTS.admin} localhost:${PORTS.admin}`,
-                      `MAP localhost:${USUAL_PORTS.widget} localhost:${PORTS.widget}`,
-                      `MAP *.localhost:${USUAL_PORTS.widget} localhost:${PORTS.widget}`,
-                    ].join(', '),
-                ],
-              },
-            }
-          : {}),
+        viewport: { width: 375, height: 812 },
+        hasTouch: true,
+        ...STACK_LAUNCH,
+      },
+    },
+    {
+      name: 'narrow-768',
+      testMatch: [...NARROW_SPECS, ...TABLET_TOO_SPECS],
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 768, height: 1024 },
+        hasTouch: true,
+        ...STACK_LAUNCH,
       },
     },
   ],

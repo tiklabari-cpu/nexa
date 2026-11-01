@@ -46,12 +46,11 @@ export const shell: Messages = {
   'shell.notFound.description':
     'There is no page at this address. It may have moved, or the link may be mistyped.',
   'shell.notFound.back': 'Go to the inbox',
-  // A window under 1024 px (tm 259.25): the console asks before it opens.
+  // A window under 1024 px on a screen not yet laid out for it (tm 259.25 · GV-04).
   'shell.narrow.title': 'The console is designed for desktop',
   'shell.narrow.body':
-    'This screen is narrower than the console’s layout, so some columns will not fit and parts of a page may need sideways scrolling.',
-  'shell.narrow.mobileApp':
-    'On a phone, the SiyahTuş mobile app is the better way to answer chats.',
+    'This screen is not laid out for a narrow window yet, so some columns will not fit and parts of it may need sideways scrolling. The inbox works at this width.',
+  'shell.narrow.mobileApp': 'The SiyahTuş mobile app is another way to answer chats on a phone.',
   'shell.narrow.continue': 'Continue anyway',
   // The root panel's maintenance mode (tm 389.13), when the operator wrote no
   // message of their own. Read-only is a band; full replaces the console.

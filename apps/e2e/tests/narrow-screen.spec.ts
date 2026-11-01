@@ -1,12 +1,12 @@
 /**
- * The console on a narrow screen (tm 259.25 · O6).
+ * The console on a narrow screen (tm 259.25 · O6, per screen since GV-04 · tm 385).
  *
- * The panel is laid out for a desktop: at 390 px the inbox measured ~1415 px
- * wide and the whole page slid sideways. Until the owner decides on a fully
- * responsive console, a window under 1024 px is told the console is designed
- * for desktop and offered the mobile app; "Continue anyway" opens the console
- * for the rest of the tab's session, and the page body never scrolls sideways —
- * the fixed-width columns scroll inside the module instead.
+ * Most of the panel is still laid out for a desktop. Below 1024 px a screen not
+ * yet adapted shows a "designed for desktop" band above itself (the mobile app
+ * named as another way); "Continue anyway" dismisses it for the rest of the
+ * tab's session, and the page body never scrolls sideways — fixed-width columns
+ * scroll inside the module instead. The inbox is adapted and shows no band:
+ * `narrow-inbox.spec.ts` drives it at 375 and 768 px.
  *
  * A screenshot proves nothing here: every claim is a measurement
  * (`scrollWidth <= clientWidth`, a box's width), the PNGs are only evidence.
@@ -28,46 +28,54 @@ async function sidewaysOverflow(page: Page): Promise<number> {
   });
 }
 
-test.describe('narrow screen notice', () => {
-  test('a phone sees the notice instead of the inbox; Continue anyway opens it without sideways scroll', async ({
+test.describe('narrow screen band', () => {
+  test('a phone sees the band above an unadapted screen; Continue anyway dismisses it for the tab', async ({
     agentPage,
   }) => {
     await agentPage.setViewportSize(PHONE);
-    await agentPage.goto('/app/inbox');
+    await agentPage.goto('/app/settings/notifications');
 
-    const notice = agentPage.getByRole('heading', { name: NOTICE, level: 1 });
-    await expect(notice).toBeVisible();
-    await expect(agentPage.getByText(/mobile app/)).toBeVisible();
-    await expect(agentPage.getByRole('link', { name: 'Inbox' })).toBeHidden();
+    const band = agentPage.getByRole('region', { name: NOTICE });
+    await expect(band).toBeVisible();
+    await expect(band).toContainText(/mobile app/);
+    // A band, not a stand-in: the rail and the screen are there with it.
+    await expect(agentPage.getByRole('link', { name: 'Inbox' })).toBeVisible();
+    await expect(agentPage.getByRole('heading', { name: 'Notifications', level: 1 })).toBeVisible();
     await expect(agentPage.getByRole('main')).toHaveCount(1);
     expect(await sidewaysOverflow(agentPage)).toBe(0);
+    // The fixed settings menu did not vanish: the module scrolls inside, the body does not.
+    const inner = await agentPage
+      .getByRole('main')
+      .evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth }));
+    expect(inner.scroll).toBeGreaterThan(inner.client);
     await agentPage.screenshot({ path: 'kanit/259.25-narrow-notice.png' });
 
     await agentPage.getByRole('button', { name: 'Continue anyway' }).click();
-    await expect(notice).toHaveCount(0);
-    await expect(agentPage.getByRole('link', { name: 'Inbox' })).toBeVisible();
-    await expect(agentPage.getByRole('main')).toBeFocused();
+    await expect(band).toHaveCount(0);
     expect(await sidewaysOverflow(agentPage)).toBe(0);
 
-    // The columns did not vanish: the module scrolls inside, the body does not.
-    const main = agentPage.getByRole('main');
-    const inner = await main.evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth }));
-    expect(inner.scroll).toBeGreaterThan(inner.client);
-    await agentPage.screenshot({ path: 'kanit/259.25-narrow-inbox-continued.png' });
-
-    // Remembered for the tab's session: a reload does not ask again.
+    // Remembered for the tab's session: a reload does not show it again.
     await agentPage.reload();
     await expect(agentPage.getByRole('link', { name: 'Inbox' })).toBeVisible();
-    await expect(agentPage.getByRole('heading', { name: NOTICE })).toHaveCount(0);
+    await expect(agentPage.getByRole('heading', { name: 'Notifications', level: 1 })).toBeVisible();
+    await expect(agentPage.getByRole('region', { name: NOTICE })).toHaveCount(0);
+  });
+
+  test('the inbox on a phone shows no band (GV-04)', async ({ agentPage }) => {
+    await agentPage.setViewportSize(PHONE);
+    await agentPage.goto('/app/inbox');
+    await expect(agentPage.getByRole('heading', { name: 'Inbox', level: 1 })).toBeVisible();
+    await expect(agentPage.getByRole('region', { name: NOTICE })).toHaveCount(0);
+    expect(await sidewaysOverflow(agentPage)).toBe(0);
   });
 
   test('after Continue anyway, no module scrolls the page body sideways', async ({ agentPage }) => {
     await agentPage.setViewportSize(PHONE);
-    await agentPage.goto('/app/inbox');
+    await agentPage.goto('/app/customers');
     await continuePastNarrowNotice(agentPage);
 
     const pages = [
-      { path: '/app/inbox', heading: null },
+      { path: '/app/inbox', heading: 'Inbox' },
       { path: '/app/customers', heading: 'Customers' },
       { path: '/app/billing', heading: 'Billing' },
       { path: '/app/settings/widget', heading: null },
@@ -101,11 +109,11 @@ test.describe('narrow screen notice', () => {
     await agentPage.screenshot({ path: 'kanit/259.25-narrow-customers-continued.png' });
   });
 
-  test('a desktop window never sees the notice', async ({ agentPage }) => {
+  test('a desktop window never sees the band', async ({ agentPage }) => {
     await agentPage.setViewportSize(DESKTOP);
-    await agentPage.goto('/app/inbox');
-    await expect(agentPage.getByRole('link', { name: 'Inbox' })).toBeVisible();
-    await expect(agentPage.getByRole('heading', { name: NOTICE })).toHaveCount(0);
+    await agentPage.goto('/app/customers');
+    await expect(agentPage.getByRole('heading', { name: 'Customers', level: 1 })).toBeVisible();
+    await expect(agentPage.getByRole('region', { name: NOTICE })).toHaveCount(0);
   });
 
   test('turning a tablet decides again, and the console keeps its place', async ({ agentPage }) => {
@@ -114,11 +122,11 @@ test.describe('narrow screen notice', () => {
     await expect(agentPage.getByRole('heading', { name: 'Customers', level: 1 })).toBeVisible();
 
     await agentPage.setViewportSize({ width: 800, height: 1280 });
-    await expect(agentPage.getByRole('heading', { name: NOTICE, level: 1 })).toBeVisible();
-    await expect(agentPage.getByRole('heading', { name: 'Customers', level: 1 })).toBeHidden();
+    await expect(agentPage.getByRole('region', { name: NOTICE })).toBeVisible();
+    await expect(agentPage.getByRole('heading', { name: 'Customers', level: 1 })).toBeVisible();
 
     await agentPage.setViewportSize(DESKTOP);
-    await expect(agentPage.getByRole('heading', { name: NOTICE })).toHaveCount(0);
+    await expect(agentPage.getByRole('region', { name: NOTICE })).toHaveCount(0);
     await expect(agentPage.getByRole('heading', { name: 'Customers', level: 1 })).toBeVisible();
     await expect(agentPage).toHaveURL(/\/app\/customers$/);
   });
@@ -126,20 +134,18 @@ test.describe('narrow screen notice', () => {
   test('the Turkish console says it in Turkish', async ({ agentPage }) => {
     await agentPage.addInitScript(() => localStorage.setItem('siyahtus.locale', 'tr'));
     await agentPage.setViewportSize(PHONE);
-    await agentPage.goto('/app/inbox');
+    await agentPage.goto('/app/customers');
     await expect(
-      agentPage.getByRole('heading', { name: 'Panel masaüstü için tasarlandı', level: 1 }),
+      agentPage.getByRole('region', { name: 'Panel masaüstü için tasarlandı' }),
     ).toBeVisible();
     await expect(agentPage.getByRole('button', { name: 'Yine de devam et' })).toBeVisible();
   });
 
-  test('the sign-in page at 375 px is untouched: no notice, no sideways scroll', async ({
-    page,
-  }) => {
+  test('the sign-in page at 375 px is untouched: no band, no sideways scroll', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto('/');
     await expect(page.getByRole('button', { name: /^Sign in/ }).first()).toBeVisible();
-    await expect(page.getByRole('heading', { name: NOTICE })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: NOTICE })).toHaveCount(0);
     expect(await sidewaysOverflow(page)).toBe(0);
   });
 });

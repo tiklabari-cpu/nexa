@@ -54,6 +54,7 @@ describe('buildSchedulerJobs', () => {
       'webhook_redelivery',
       'knowledge_refresh',
       'invoice_close',
+      'billing_dunning',
       'unverified_signups',
       'ai_stall',
       'ai_sandbox_sessions',
@@ -84,6 +85,7 @@ describe('buildSchedulerJobs', () => {
       SCHEDULE_WEBHOOK_REDELIVERY_MS: '66000',
       SCHEDULE_KNOWLEDGE_REFRESH_MS: '77000',
       SCHEDULE_INVOICE_CLOSE_MS: '88000',
+      SCHEDULE_BILLING_DUNNING_MS: '89000',
       SCHEDULE_UNVERIFIED_SIGNUPS_MS: '99000',
       SCHEDULE_AI_STALL_MS: '12000',
       SCHEDULE_AI_SANDBOX_SESSIONS_MS: '13000',
@@ -111,6 +113,7 @@ describe('buildSchedulerJobs', () => {
     expect(intervalOf('webhook_redelivery')).toBe(66_000);
     expect(intervalOf('knowledge_refresh')).toBe(77_000);
     expect(intervalOf('invoice_close')).toBe(88_000);
+    expect(intervalOf('billing_dunning')).toBe(89_000);
     expect(intervalOf('unverified_signups')).toBe(99_000);
     expect(intervalOf('ai_stall')).toBe(12_000);
     expect(intervalOf('ai_sandbox_sessions')).toBe(13_000);
@@ -397,6 +400,21 @@ describe('buildSchedulerJobs', () => {
       );
       const outcome = await job?.run(context());
       expect(outcome?.counts).toEqual({ tenants: 0, issued: 0, reconstructed: 0, skipped: 0 });
+    });
+
+    it('billing_dunning on the mock processor charges nothing and reports zeros', async () => {
+      const job = buildSchedulerJobs({ db, env: testEnv(), mailer: new NullMailer() }).find(
+        (j) => j.name === 'billing_dunning',
+      );
+      const outcome = await job?.run(context());
+      expect(outcome?.counts).toEqual({
+        tenants: 0,
+        charged: 0,
+        succeeded: 0,
+        failed: 0,
+        read_only: 0,
+        skipped: 0,
+      });
     });
 
     it('unverified_signups, once SIGNUP_EMAIL_VERIFICATION is on, finds nothing to purge in one batch', async () => {

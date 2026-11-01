@@ -174,7 +174,10 @@ import {
   getPaymentMethod,
   upsertPaymentMethod,
 } from '../services/billing/payment-method-service.js';
-import { createPaymentProvider } from '../services/billing/payment-provider.js';
+import {
+  createPaymentProvider,
+  type PaymentProvider,
+} from '../services/billing/payment-provider.js';
 import { activateIfPaid } from '../services/billing/license-activation.js';
 import {
   purchaseApiPackage,
@@ -1798,12 +1801,12 @@ export async function buildStaffingForecastReport(
  */
 export default async function reportRoutes(
   app: FastifyInstance,
-  options: { env: Env },
+  options: { env: Env; payments?: PaymentProvider },
 ): Promise<void> {
   const { env } = options;
-  // The processor `STRIPE_PROVIDER` names (M-PROV-a). Built once per plugin
-  // registration, like `uploads.ts` builds its scanner.
-  const payments = createPaymentProvider(env.STRIPE_PROVIDER);
+  // The processor `STRIPE_PROVIDER` names (M-PROV-a): the server's, resolved
+  // once at boot (tm 382); a registration without one gets the mock.
+  const payments = options.payments ?? createPaymentProvider('mock');
 
   app.get(
     '/reports/overview',

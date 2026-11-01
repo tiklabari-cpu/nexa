@@ -160,9 +160,9 @@ export class PlatformDashboard {
   }
 
   /**
-   * The manual crypto payment queue (tm 382) — 0 until its table exists. The
-   * table is looked up, not assumed: the dashboard ships before the queue, and
-   * a missing relation must not be a 500 on the landing page.
+   * The manual crypto payment queue (tm 382): requests waiting for the team —
+   * an address to send, or a submitted TXID to confirm. The table is looked up,
+   * not assumed: a missing relation must not be a 500 on the landing page.
    */
   async #pendingPaymentRequests(): Promise<number> {
     try {
@@ -170,7 +170,8 @@ export class PlatformDashboard {
         SELECT to_regclass('public.crypto_payment_requests') IS NOT NULL AS present`;
       if (!exists[0]?.present) return 0;
       const rows = await this.#db.$queryRaw<Array<{ n: number }>>`
-        SELECT count(*)::int AS n FROM crypto_payment_requests WHERE status = 'pending'`;
+        SELECT count(*)::int AS n FROM crypto_payment_requests
+        WHERE status = 'requested' OR (status = 'address_sent' AND txid IS NOT NULL)`;
       return rows[0]?.n ?? 0;
     } catch {
       return 0;

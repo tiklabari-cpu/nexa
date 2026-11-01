@@ -1147,7 +1147,13 @@ describe('module parity matrix — what is still owed', () => {
       // embedded-signup configuration, and the web composer's 24-hour window band. The
       // app manages no channels and its composer sends through the same refused path,
       // so nothing here re-scopes.
-      contractEndpoints: 375,
+      // 375 -> 383 with `/billing/payment-options`, `/billing/payments`,
+      // `/billing/payments/swift`, `/billing/payments/stripe/checkout`,
+      // `/billing/crypto-requests`, `…/{requestId}/txid`, `…/{requestId}/cancel` and
+      // `/billing/webhooks/stripe` (tm 382) — paying for the subscription (BL-01) on the
+      // web Billing screen, and Stripe's signed callback (called by Stripe, never by a
+      // person). The handset has no Billing screen, and nothing here re-scopes.
+      contractEndpoints: 383,
       scopeBoundaries: 1,
     });
   });

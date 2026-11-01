@@ -1,0 +1,283 @@
+# Payment methods (tm 382 · BL-01 · ADR-13a): SWIFT bank transfer, crypto
+# "request an address", Stripe hosted checkout. The platform's half — marking a
+# transfer paid, sending a wallet address, confirming a TXID, provider
+# visibility — is the root panel's (tm 389.18), not this contract's.
+
+paymentOptions:
+  get:
+    tags: [Billing]
+    operationId: getPaymentOptions
+    summary: How this workspace can pay, what is due, and where its payments stand
+    description: |
+      The payment methods the platform has switched on for this deployment
+      (`methods`, display order), the amount one term of the subscription
+      costs, the SWIFT bank details with any reference already issued, and the
+      payment state the "payment failed" band reads.
+
+      `stripe` is listed only when the platform shows it **and** the deployment
+      runs a real card processor (`STRIPE_PROVIDER=stripe` with its keys); on
+      the mock processor the masked card form (`PUT /billing/payment-method`)
+      stays the card path and `card_form` is `true`.
+
+      `amount_due` is `null` on a quoted plan (Enterprise): its price is in a
+      contract this deployment never sees, so there is nothing to pay here.
+    responses:
+      "200":
+        description: Payment methods, amount due and payment state
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PaymentOptions" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+swiftPayment:
+  post:
+    tags: [Billing]
+    operationId: startSwiftPayment
+    summary: Issue (or return) this term's bank-transfer reference
+    description: |
+      The reference the owner writes in the transfer description. One per
+      term: calling again returns the same reference, with the amount brought
+      up to date if the plan changed since. The SiyahTuş team matches the
+      transfer to it and marks it paid; the subscription is active from then.
+      Nothing is charged here.
+
+      **Owner only** (K7) and writable while the workspace is read-only —
+      paying is how a read-only workspace comes back. `400 validation` with
+      `error.details.reason`: `method_unavailable` (the platform switched SWIFT
+      off) or `quoted_plan`.
+    responses:
+      "200":
+        description: The pending transfer
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SwiftPayment" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+stripeCheckout:
+  post:
+    tags: [Billing]
+    operationId: startStripeCheckout
+    summary: Open a hosted card checkout for one term
+    description: |
+      Creates a pending payment and a hosted checkout session at the card
+      processor and returns its address; the browser goes there and the card
+      never touches SiyahTuş (PCI SAQ A). The processor's signed webhook
+      (`POST /billing/webhooks/stripe`) settles the payment; the card it saves
+      renews the next term.
+
+      **Owner only** (K7), writable while read-only. `400 validation` with
+      `error.details.reason`: `method_unavailable` (Stripe is not shown, or the
+      deployment runs the mock processor) or `quoted_plan`. `503 service_unavailable`
+      (`error.details.reason: payment_provider_unavailable`) when the processor
+      does not answer; nothing is left pending.
+    responses:
+      "200":
+        description: Where to send the browser
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, reference]
+              properties:
+                url: { type: string, format: uri }
+                reference: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503": { $ref: "../openapi.yaml#/components/responses/PaymentProviderUnavailable" }
+
+payments:
+  get:
+    tags: [Billing]
+    operationId: listPayments
+    summary: Payment history
+    description: |
+      Every payment attempt for this workspace, newest first, at most 50: how
+      it was paid, its reference, amount, outcome and the term it paid.
+    responses:
+      "200":
+        description: Payment history
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payments]
+              properties:
+                payments:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/PaymentTransaction" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+cryptoRequests:
+  get:
+    tags: [Billing]
+    operationId: listCryptoPaymentRequests
+    summary: Crypto payment requests
+    description: |
+      This workspace's "request an address" requests, newest first, at most 20.
+      `wallet_address` is set only once the SiyahTuş team has sent one — it is
+      never shown by itself (ADR-13a §3).
+    responses:
+      "200":
+        description: Requests
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requests]
+              properties:
+                requests:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/CryptoPaymentRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    tags: [Billing]
+    operationId: createCryptoPaymentRequest
+    summary: Ask for a wallet address to pay one term in crypto
+    description: |
+      Opens a request in the platform's billing queue: the network, the
+      billing name and details. The amount is the term's (`amount_due`) — no
+      discount, no exchange rate, USDT read 1:1 from US cents. The team answers
+      with an address on the request; the owner then submits the TXID.
+
+      **Owner only** (K7), writable while read-only. `400 validation` with
+      `error.details.reason`: `method_unavailable`, `quoted_plan`, or
+      `request_open` (one open request per workspace).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/CryptoPaymentRequestInput" }
+    responses:
+      "201":
+        description: The request
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CryptoPaymentRequest" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+cryptoRequestTxid:
+  post:
+    tags: [Billing]
+    operationId: submitCryptoPaymentTxid
+    summary: Submit the transfer's TXID
+    description: |
+      The transaction hash of the transfer to the address the team sent: 64
+      hex characters on TRON, `0x` and 64 on Ethereum. The team checks it on
+      the chain and confirms the payment; the subscription is active from then.
+      A TXID is accepted once. Replaces an earlier TXID on the same request
+      until it is confirmed.
+
+      **Owner only** (K7), writable while read-only. `400 validation` with
+      `error.details.reason`: `txid_invalid`, `txid_used` or `not_awaiting_txid`
+      (no address sent yet, or the request is closed). `404` for a request of
+      another workspace.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/CryptoRequestId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [txid]
+            additionalProperties: false
+            properties:
+              txid: { type: string, minLength: 64, maxLength: 66 }
+    responses:
+      "200":
+        description: The request
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CryptoPaymentRequest" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+cryptoRequestCancel:
+  post:
+    tags: [Billing]
+    operationId: cancelCryptoPaymentRequest
+    summary: Withdraw an open crypto request
+    description: |
+      Closes a request that is still waiting for an address or a TXID
+      confirmation. A paid, rejected or already withdrawn request cannot be
+      withdrawn (`400 validation`, `error.details.reason: not_cancellable`).
+
+      **Owner only** (K7), writable while read-only.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/CryptoRequestId"
+    responses:
+      "200":
+        description: The request
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CryptoPaymentRequest" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+stripeWebhook:
+  post:
+    tags: [Billing]
+    operationId: receiveStripeWebhook
+    summary: The card processor's signed event callback
+    description: |
+      Called by Stripe, never by a member. The raw body is checked against
+      `Stripe-Signature` (HMAC-SHA256 over `<t>.<body>` with
+      `STRIPE_WEBHOOK_SECRET`, five minutes' tolerance) before anything is
+      parsed; a missing, wrong or stale signature is `401` and nothing is
+      written. `payment_intent.succeeded` settles the payment it names,
+      `payment_intent.payment_failed` records the failure,
+      `charge.dispute.created` marks the payment disputed; every other event is
+      acknowledged and ignored. An event is taken in once: a redelivery answers
+      `duplicate: true` and changes nothing.
+
+      `404` unless the deployment runs the real card processor.
+    security: []
+    parameters:
+      - name: Stripe-Signature
+        in: header
+        required: true
+        schema: { type: string, example: "t=1700000000,v1=5f2b…" }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            description: "A Stripe event (`id`, `type`, `data.object`)."
+            additionalProperties: true
+    responses:
+      "200":
+        description: Received
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [received, duplicate]
+              properties:
+                received: { type: boolean, enum: [true] }
+                duplicate:
+                  type: boolean
+                  description: The event had already been taken in; nothing changed.
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }

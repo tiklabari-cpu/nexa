@@ -176,19 +176,20 @@ describe('the platform dashboard (tm 389.8)', () => {
       });
     });
 
-    it('counts the manual payment queue once its table exists, and is 0 before', async () => {
+    it('counts the crypto requests waiting for the team — an address to send, a TXID to confirm (tm 382)', async () => {
       expect((await get('/dashboard/kpis')).json().pending_payment_requests).toBe(0);
-      await owner.$executeRawUnsafe(
-        'CREATE TABLE IF NOT EXISTS crypto_payment_requests (status text)',
-      );
-      try {
-        await owner.$executeRawUnsafe(
-          "INSERT INTO crypto_payment_requests (status) VALUES ('pending'), ('pending'), ('confirmed')",
-        );
-        expect((await get('/dashboard/kpis')).json().pending_payment_requests).toBe(2);
-      } finally {
-        await owner.$executeRawUnsafe('DROP TABLE IF EXISTS crypto_payment_requests');
-      }
+      const insert = (licenseId: bigint, status: string, sent: boolean, txid: boolean) =>
+        owner.$executeRaw`INSERT INTO crypto_payment_requests
+            (license_id, network, amount_minor, currency, billing_cycle, billing_name, status,
+             wallet_address, address_sent_at, txid, txid_submitted_at, closed_at)
+          VALUES (${licenseId}, 'usdt_trc20', 9900, 'usd', 'monthly', 'Billing name', ${status},
+            ${sent ? 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb' : null}, ${sent ? new Date() : null},
+            ${txid ? 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' : null}, ${txid ? new Date() : null},
+            ${status === 'canceled' ? new Date() : null})`;
+      await insert(fx.a.licenseId, 'requested', false, false);
+      await insert(fx.a.licenseId, 'canceled', false, false);
+      await insert(fx.b.licenseId, 'address_sent', true, true);
+      expect((await get('/dashboard/kpis')).json().pending_payment_requests).toBe(2);
     });
 
     it('names no workspace, account or message anywhere in the body', async () => {

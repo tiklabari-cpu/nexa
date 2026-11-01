@@ -256,6 +256,26 @@ function mockBilling(opts: UsageOpts): void {
     if (path === '/billing/api-packages/purchases') {
       return Promise.resolve({ items: opts.apiPackagePurchases ?? [] });
     }
+    // Paying (tm 382): the mock processor's defaults — two manual methods, nothing yet.
+    if (path === '/billing/payment-options') {
+      return Promise.resolve({
+        methods: ['swift_manual', 'crypto_manual'],
+        card_form: true,
+        amount_due: { amount_minor: 29700, currency: 'usd', billing_cycle: 'monthly', seats: 3 },
+        swift: { bank: null, pending: null },
+        state: {
+          license_status: access === 'trialing' ? 'trialing' : 'active',
+          provider: null,
+          paid_through: null,
+          past_due_since: null,
+          read_only_after: null,
+          next_retry_at: null,
+          last_failure: null,
+        },
+      });
+    }
+    if (path === '/billing/payments') return Promise.resolve({ payments: [] });
+    if (path === '/billing/crypto-requests') return Promise.resolve({ requests: [] });
     return Promise.reject(new Error(`unexpected ${path}`));
   });
 }
@@ -823,7 +843,9 @@ describe('BillingPage — trial and read-only banners (FR-MOD-10.2 · ADR-10)', 
     expect(banner).toHaveTextContent('This workspace is read-only.');
     expect(banner).toHaveTextContent(/trial has ended/i);
     expect(banner).toHaveTextContent(/nothing has been deleted/i);
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    // No trial countdown beside it. Asked of the countdown's own words: the page
+    // has other live regions (the AI pack total), which load at their own pace.
+    expect(screen.queryByText(/left in your trial/i)).not.toBeInTheDocument();
   });
 
   it('notes that a payment method can still be updated while read-only', async () => {

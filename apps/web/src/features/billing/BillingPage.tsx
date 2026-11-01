@@ -35,6 +35,12 @@ import { formatCount, formatDate, formatMoney, formatPeriod } from '../../lib/fo
 import { enumLabel } from '../../lib/enum-label.js';
 import { cardLast4, compose, FieldError, required, useForm } from '../../lib/form.js';
 import { newAttemptKey } from './attempt-key.js';
+import {
+  PaymentHistorySection,
+  PaymentOptionsSection,
+  PaymentStatusBand,
+  usePaymentOptions,
+} from './PaymentMethods.js';
 
 interface UsageSummary {
   period: string;
@@ -225,6 +231,11 @@ export function BillingPage(): ReactElement {
     queryFn: () => api.get<Usage>('/billing/usage'),
   });
 
+  // Which card path the deployment runs (tm 382): the masked form on the mock
+  // processor, the hosted checkout (inside the payment section) on a real one.
+  const paymentOptions = usePaymentOptions();
+  const cardForm = paymentOptions.data?.card_form ?? true;
+
   const queryClient = useQueryClient();
   const change = useMutation({
     mutationFn: (body: { plan?: string; billing_cycle?: string; seats?: number }) =>
@@ -244,6 +255,8 @@ export function BillingPage(): ReactElement {
       queryClient.setQueryData(['billing', 'subscription'], updated);
       void queryClient.invalidateQueries({ queryKey: ['billing', 'usage'] });
       void queryClient.invalidateQueries({ queryKey: ['billing', 'invoices'] });
+      // What one term costs follows the plan, seats and cycle (tm 382).
+      void queryClient.invalidateQueries({ queryKey: ['billing', 'payment-options'] });
     },
   });
 
@@ -298,6 +311,8 @@ export function BillingPage(): ReactElement {
           {t('billing.ownerOnly.description')}
         </Banner>
       )}
+
+      <PaymentStatusBand />
 
       {sub.access === 'trialing' && sub.trial.days_remaining !== null && (
         <div role="status" className="rounded-lg border border-border bg-surface p-4">
@@ -496,7 +511,13 @@ export function BillingPage(): ReactElement {
 
       <ApiPackagePurchasesSection />
 
-      <PaymentMethodSection readOnly={sub.access === 'read_only'} canEdit={canManage} />
+      <PaymentOptionsSection canManage={canManage} />
+
+      {cardForm && (
+        <PaymentMethodSection readOnly={sub.access === 'read_only'} canEdit={canManage} />
+      )}
+
+      <PaymentHistorySection />
 
       <InvoicesSection />
 

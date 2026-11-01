@@ -104,3 +104,4 @@ export * from './missed-engagement.js';
 export * from './presence-activity.js';
 export * from './queue-report.js';
 export * from './igaming-platforms.js';
+export * from './billing-payments.js';

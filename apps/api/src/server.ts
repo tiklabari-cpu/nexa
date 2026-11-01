@@ -88,6 +88,8 @@ import { RiskFlagAnnouncer } from './services/risk/risk-announce.js';
 import type { WebhookSender } from './services/webhooks/webhook-dispatcher.js';
 import { createPushProvider, type PushProvider } from './services/push/push-provider.js';
 import reportRoutes from './routes/reports.js';
+import billingPaymentRoutes from './routes/billing-payments.js';
+import { resolvePaymentProvider } from './services/billing/payment-provider.js';
 import scheduledReportRoutes from './routes/scheduled-reports.js';
 import homeRoutes from './routes/home.js';
 import settingsRoutes from './routes/settings.js';
@@ -244,6 +246,12 @@ export interface BuildServerOptions {
    */
   captchaFetch?: (input: string, init: RequestInit) => Promise<Response>;
   /**
+   * How the Stripe adapter reaches `api.stripe.com` (tm 382). Omitted, the
+   * global `fetch`; a test passes a stand-in, so no suite needs a key or a
+   * network.
+   */
+  stripeFetch?: typeof fetch;
+  /**
    * Who fetches a website knowledge source's pages (tm 312.3 · AI-17).
    * Omitted, `CRAWLER_PROVIDER`'s; a test passes a mock site
    * (`createMockCrawlFetcher`) or the real fetcher with a stubbed resolver.
@@ -272,6 +280,7 @@ export async function buildServer({
   crawlFetcher,
   geo: injectedGeo,
   captchaFetch,
+  stripeFetch,
 }: BuildServerOptions): Promise<FastifyInstance> {
   const telemetryInstance =
     telemetry !== undefined
@@ -419,6 +428,13 @@ export async function buildServer({
   // leaves it off and says so, the boot goes on (owner, 2026-10-10).
   const captcha = resolveCaptcha(env, captchaFetch);
   for (const warning of captcha.warnings) app.log.warn({ event: 'captcha.disabled' }, warning);
+  // The card processor (tm 382 · ADR-13a): `stripe` without its keys stays on
+  // the mock and says so — bank transfer and crypto work either way.
+  const paymentProcessor = resolvePaymentProvider(env, stripeFetch ? { fetch: stripeFetch } : {});
+  for (const warning of paymentProcessor.warnings) {
+    app.log.warn({ event: 'payments.stripe_disabled' }, warning);
+  }
+  const payments = paymentProcessor.provider;
   app.decorate(
     'abuseGuard',
     new AbuseGuard(app.redis, captcha.verifier, {
@@ -526,6 +542,7 @@ export async function buildServer({
     inference: () => aiProviders.inference(),
     geo,
     captchaUsable: captcha.verifier !== null,
+    payments,
   });
   // Mail a response must not wait for — the password reset's (tm 255.4), so its
   // answer cannot depend on the carrier, and since tm 256.4 the assignee notice,
@@ -681,7 +698,8 @@ export async function buildServer({
         ...(appsHttp ? { appsHttp } : {}),
         ...(appsEndpoints ? { appsEndpoints } : {}),
       });
-      await api.register(reportRoutes, { env });
+      await api.register(reportRoutes, { env, payments });
+      await api.register(billingPaymentRoutes, { env, payments });
       await api.register(scheduledReportRoutes);
       await api.register(homeRoutes);
       await api.register(settingsRoutes, { env, mailer });

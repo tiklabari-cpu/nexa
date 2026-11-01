@@ -112,17 +112,9 @@ describe('operator alerts (tm 389.20)', () => {
     clock = new TestClock(Date.now());
     mailer = new FlakyMailer();
     platform = await buildPlatformTestServer({}, { now: clock.read, mailer });
-    // The payment queue's table belongs to a later task (tm 389.18); the scan reads it when it
-    // exists, so this suite stands one in with the columns the scan reads.
-    await owner.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS crypto_payment_requests (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      license_id bigint NOT NULL,
-      status text NOT NULL,
-      created_at timestamptz NOT NULL DEFAULT now())`);
   });
 
   afterAll(async () => {
-    await owner.$executeRawUnsafe('DROP TABLE IF EXISTS crypto_payment_requests');
     await platform?.close();
     await db?.$disconnect();
   });
@@ -143,14 +135,34 @@ describe('operator alerts (tm 389.20)', () => {
     await clearAlertState();
   });
 
+  /**
+   * A crypto payment request as tm 382's queue keeps it: `requested` waits for
+   * the team's address, `address_sent` with a TXID for the team's confirmation,
+   * `address_sent` without one for the customer, `canceled` for nobody.
+   */
+  async function cryptoRequest(
+    licenseId: bigint,
+    status: 'requested' | 'address_sent' | 'canceled',
+    createdAt: Date,
+    txidAt: Date | null = null,
+  ): Promise<void> {
+    const sent = status === 'address_sent';
+    await owner.$executeRaw`INSERT INTO crypto_payment_requests
+        (license_id, network, amount_minor, currency, billing_cycle, billing_name, status,
+         wallet_address, address_sent_at, txid, txid_submitted_at, created_at, closed_at)
+      VALUES (${licenseId}, 'usdt_trc20', 9900, 'usd', 'monthly', 'Billing name', ${status},
+        ${sent ? 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb' : null}, ${sent ? createdAt : null},
+        ${txidAt ? 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' : null}, ${txidAt}, ${createdAt},
+        ${status === 'canceled' ? createdAt : null})`;
+  }
+
   /** Trial ending in two days (a), a crypto request waiting 25 hours (b), a stale snapshot. */
   async function threeConditions(): Promise<void> {
     await owner.license.update({
       where: { id: fx.a.licenseId },
       data: { trialEndsAt: new Date(clock.now + 2 * DAY) },
     });
-    await owner.$executeRaw`INSERT INTO crypto_payment_requests (license_id, status, created_at)
-      VALUES (${fx.b.licenseId}, 'pending', ${new Date(clock.now - 25 * HOUR)})`;
+    await cryptoRequest(fx.b.licenseId, 'requested', new Date(clock.now - 25 * HOUR));
     await publishHealth('ok', clock.now - 10 * 60_000);
   }
 
@@ -210,10 +222,25 @@ describe('operator alerts (tm 389.20)', () => {
     });
 
     it('does not report a payment request younger than 24 hours or one already handled', async () => {
-      await owner.$executeRaw`INSERT INTO crypto_payment_requests (license_id, status, created_at)
-        VALUES (${fx.a.licenseId}, 'pending', ${new Date(clock.now - 23 * HOUR)}),
-               (${fx.b.licenseId}, 'confirmed', ${new Date(clock.now - 48 * HOUR)})`;
+      await cryptoRequest(fx.a.licenseId, 'requested', new Date(clock.now - 23 * HOUR));
+      await cryptoRequest(fx.b.licenseId, 'canceled', new Date(clock.now - 48 * HOUR));
+      // Address sent two days ago and no TXID yet: the customer's turn, not the team's.
+      await cryptoRequest(fx.b.licenseId, 'address_sent', new Date(clock.now - 48 * HOUR));
       expect(await scan()).toMatchObject({ found: 0 });
+    });
+
+    it('reports a submitted TXID left unconfirmed for 24 hours, timed from the submission (tm 382)', async () => {
+      await cryptoRequest(
+        fx.a.licenseId,
+        'address_sent',
+        new Date(clock.now - 72 * HOUR),
+        new Date(clock.now - 23 * HOUR),
+      );
+      expect(await scan()).toMatchObject({ found: 0 });
+      await owner.$executeRaw`UPDATE crypto_payment_requests
+        SET txid_submitted_at = ${new Date(clock.now - 25 * HOUR)} WHERE license_id = ${fx.a.licenseId}`;
+      expect(await scan()).toMatchObject({ found: 1, mailed: 1 });
+      expect(mailer.sent.map((m) => m.subject)).toEqual(['[OPS] Payment request waiting: Org A']);
     });
 
     it('is quiet while the payment queue does not exist yet', async () => {

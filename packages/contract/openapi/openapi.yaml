@@ -895,6 +895,22 @@ paths:
     $ref: "./paths/reports.yaml#/aiPackages"
   /billing/entitlements:
     $ref: "./paths/reports.yaml#/entitlements"
+  /billing/payment-options:
+    $ref: "./paths/billing-payments.yaml#/paymentOptions"
+  /billing/payments:
+    $ref: "./paths/billing-payments.yaml#/payments"
+  /billing/payments/swift:
+    $ref: "./paths/billing-payments.yaml#/swiftPayment"
+  /billing/payments/stripe/checkout:
+    $ref: "./paths/billing-payments.yaml#/stripeCheckout"
+  /billing/crypto-requests:
+    $ref: "./paths/billing-payments.yaml#/cryptoRequests"
+  /billing/crypto-requests/{requestId}/txid:
+    $ref: "./paths/billing-payments.yaml#/cryptoRequestTxid"
+  /billing/crypto-requests/{requestId}/cancel:
+    $ref: "./paths/billing-payments.yaml#/cryptoRequestCancel"
+  /billing/webhooks/stripe:
+    $ref: "./paths/billing-payments.yaml#/stripeWebhook"
 
   /audit-log:
     $ref: "./paths/audit-log.yaml#/auditLog"
@@ -13592,6 +13608,215 @@ components:
         holder_name: { type: string }
         updated_at: { type: string, format: date-time }
 
+    PaymentMethodId:
+      type: string
+      description: |
+        A way to pay (ADR-13a): a bank transfer the SiyahTuş team marks paid,
+        a crypto transfer confirmed by its TXID, or a Stripe card charge.
+      enum: [swift_manual, crypto_manual, stripe]
+
+    PaymentOptions:
+      type: object
+      description: How this workspace can pay, what one term costs, and its payment state.
+      required: [methods, card_form, amount_due, swift, state]
+      properties:
+        methods:
+          type: array
+          description: The methods shown to this workspace, in display order.
+          items: { $ref: "#/components/schemas/PaymentMethodId" }
+        card_form:
+          type: boolean
+          description: |
+            The deployment runs the mock card processor, so the masked card
+            form (`PUT /billing/payment-method`) is the card path rather than a
+            hosted checkout.
+        amount_due:
+          description: One term of the subscription, or null on a quoted plan.
+          oneOf:
+            - type: object
+              required: [amount_minor, currency, billing_cycle, seats]
+              properties:
+                amount_minor: { type: integer, minimum: 1 }
+                currency: { type: string, enum: [usd] }
+                billing_cycle: { type: string, enum: [monthly, annual] }
+                seats: { type: integer, minimum: 1 }
+            - type: "null"
+        swift:
+          type: object
+          required: [bank, pending]
+          properties:
+            bank:
+              description: The platform's bank details, or null until the team has entered them.
+              oneOf:
+                - $ref: "#/components/schemas/SwiftBankDetails"
+                - type: "null"
+            pending:
+              description: The reference already issued for this term, if any.
+              oneOf:
+                - $ref: "#/components/schemas/SwiftPayment"
+                - type: "null"
+        state: { $ref: "#/components/schemas/PaymentState" }
+
+    PaymentState:
+      type: object
+      description: |
+        Where the workspace's payments stand. A renewal that fails puts the
+        licence `past_due` (still writable) and the card is tried again on the
+        1st, 3rd and 7th day; when the last try fails the workspace turns
+        read-only (`read_only_after` is that day).
+      required:
+        [
+          license_status,
+          provider,
+          paid_through,
+          past_due_since,
+          read_only_after,
+          next_retry_at,
+          last_failure,
+        ]
+      properties:
+        license_status: { type: string }
+        provider:
+          description: How the last term was paid, or null before the first payment.
+          oneOf:
+            - $ref: "#/components/schemas/PaymentMethodId"
+            - type: "null"
+        paid_through: { type: [string, "null"], format: date-time }
+        past_due_since: { type: [string, "null"], format: date-time }
+        read_only_after: { type: [string, "null"], format: date-time }
+        next_retry_at: { type: [string, "null"], format: date-time }
+        last_failure:
+          description: The newest attempt, when it failed and nothing has succeeded since.
+          oneOf:
+            - type: object
+              required: [reference, failure_code, at]
+              properties:
+                reference: { type: string }
+                failure_code: { type: [string, "null"] }
+                at: { type: string, format: date-time }
+            - type: "null"
+
+    SwiftBankDetails:
+      type: object
+      description: The account a transfer goes to, as the platform set it (`billing.swift_bank_details`).
+      required: [beneficiary, bank_name, iban, swift_bic]
+      properties:
+        beneficiary: { type: string }
+        bank_name: { type: string }
+        iban: { type: string }
+        swift_bic: { type: string }
+        bank_address: { type: [string, "null"] }
+
+    SwiftPayment:
+      type: object
+      required: [reference, amount_minor, currency, billing_cycle, created_at]
+      properties:
+        reference:
+          type: string
+          description: Written in the transfer description so the team can match it.
+          example: ST-7K2M-Q9TB
+        amount_minor: { type: integer, minimum: 1 }
+        currency: { type: string, enum: [usd] }
+        billing_cycle: { type: string, enum: [monthly, annual] }
+        created_at: { type: string, format: date-time }
+
+    PaymentTransaction:
+      type: object
+      description: One payment attempt and, once it succeeded, the term it paid.
+      required:
+        [
+          id,
+          reference,
+          provider,
+          kind,
+          status,
+          amount_minor,
+          currency,
+          billing_cycle,
+          attempt,
+          failure_code,
+          term_start,
+          term_end,
+          created_at,
+          settled_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        reference: { type: string }
+        provider: { $ref: "#/components/schemas/PaymentMethodId" }
+        kind:
+          type: string
+          enum: [checkout, renewal]
+          description: Started by the owner, or the saved card charged for the next term.
+        status: { type: string, enum: [pending, succeeded, failed, canceled, disputed] }
+        amount_minor: { type: integer }
+        currency: { type: string }
+        billing_cycle: { type: string, enum: [monthly, annual] }
+        attempt: { type: integer, minimum: 1 }
+        failure_code: { type: [string, "null"] }
+        term_start: { type: [string, "null"], format: date-time }
+        term_end: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        settled_at: { type: [string, "null"], format: date-time }
+
+    CryptoNetwork:
+      type: string
+      description: The asset and chain — USDT on TRON (TRC-20) or on Ethereum (ERC-20).
+      enum: [usdt_trc20, usdt_erc20]
+
+    CryptoPaymentRequestInput:
+      type: object
+      required: [network, billing_name]
+      additionalProperties: false
+      properties:
+        network: { $ref: "#/components/schemas/CryptoNetwork" }
+        billing_name: { type: string, minLength: 1, maxLength: 200 }
+        billing_details:
+          type: [string, "null"]
+          maxLength: 1000
+          description: Address, tax number — whatever the invoice should carry.
+
+    CryptoPaymentRequest:
+      type: object
+      required:
+        [
+          id,
+          network,
+          status,
+          amount_minor,
+          currency,
+          billing_cycle,
+          billing_name,
+          billing_details,
+          wallet_address,
+          address_sent_at,
+          txid,
+          txid_submitted_at,
+          closed_reason,
+          created_at,
+          closed_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        network: { $ref: "#/components/schemas/CryptoNetwork" }
+        status:
+          type: string
+          enum: [requested, address_sent, paid, rejected, canceled]
+        amount_minor: { type: integer }
+        currency: { type: string }
+        billing_cycle: { type: string, enum: [monthly, annual] }
+        billing_name: { type: string }
+        billing_details: { type: [string, "null"] }
+        wallet_address:
+          type: [string, "null"]
+          description: Set only once the SiyahTuş team sent it.
+        address_sent_at: { type: [string, "null"], format: date-time }
+        txid: { type: [string, "null"] }
+        txid_submitted_at: { type: [string, "null"], format: date-time }
+        closed_reason: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        closed_at: { type: [string, "null"], format: date-time }
+
     ApiPackage:
       type: object
       description: |
@@ -16587,6 +16812,15 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+    PaymentProviderUnavailable:
+      description: |
+        The card processor did not answer in time, or answered with an error
+        of its own (`service_unavailable`, tm 382): `error.details.reason` is
+        `payment_provider_unavailable`. Nothing was charged and nothing is
+        left pending; the request can simply be repeated.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     MessageSearchTimedOut:
       description: |
         The message text search ran out of time (`service_unavailable`,
@@ -16706,6 +16940,12 @@ components:
       required: false
       description: Opaque keyset cursor from the previous page.
       schema: { type: string }
+    CryptoRequestId:
+      name: requestId
+      in: path
+      required: true
+      description: A crypto payment request's id.
+      schema: { type: string, format: uuid }
     ChatId:
       name: chatId
       in: path

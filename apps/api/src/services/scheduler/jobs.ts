@@ -118,6 +118,8 @@ import {
   UnverifiedSignupSweeper,
 } from '../auth/unverified-signup-sweep.js';
 import { InvoiceCloseSweeper } from '../billing/invoice-close-sweep.js';
+import { createPaymentProvider, type PaymentProvider } from '../billing/payment-provider.js';
+import { BillingDunning } from '../billing/stripe-payments.js';
 import { QaConsistency } from '../qa/consistency.js';
 import { QaPrescorer } from '../qa/prescore.js';
 import { QaSampler } from '../qa/sampler.js';
@@ -206,6 +208,11 @@ export interface SchedulerJobsOptions {
    * Omitted, the environment's.
    */
   inference?: () => { llm: InferenceProvider; embedding: InferenceProvider };
+  /**
+   * The card processor `billing_dunning` charges through (tm 382) — the
+   * server's, resolved at boot. Omitted, the mock, on which nothing renews.
+   */
+  payments?: PaymentProvider;
 }
 
 /**
@@ -228,6 +235,7 @@ export function buildSchedulerJobs({
     embeddings: createMeteredEmbeddings(db, env),
     retrievalThreshold: env.RETRIEVAL_THRESHOLD,
   }),
+  payments = createPaymentProvider('mock'),
 }: SchedulerJobsOptions): JobDefinition[] {
   const intervals = jobIntervals(env);
   // The unresolved questions' providers (tm 317.2): the knowledge service's
@@ -486,6 +494,32 @@ export function buildSchedulerJobs({
             issued: report.totals.issued,
             reconstructed: report.totals.reconstructed,
             skipped: report.totals.skipped,
+          },
+        };
+      },
+    },
+    {
+      // Renews a card-paid subscription when its term runs out and runs the
+      // dunning plan (tm 382 · BL-01): a retry on the 1st, 3rd and 7th day,
+      // then read-only. No `--apply` either — it is the renewal itself, and on
+      // the mock processor (the default) it charges nothing and does nothing.
+      name: 'billing_dunning',
+      intervalMs: intervals.billing_dunning,
+      async run(context) {
+        const report = await new BillingDunning({
+          db,
+          env,
+          payments,
+          logger: context.logger,
+        }).run();
+        return {
+          counts: {
+            tenants: report.tenants,
+            charged: report.charged,
+            succeeded: report.succeeded,
+            failed: report.failed,
+            read_only: report.readOnly,
+            skipped: report.skipped,
           },
         };
       },

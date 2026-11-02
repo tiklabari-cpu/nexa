@@ -248,6 +248,32 @@ export const settings: Messages = {
   'settings.cannedResponses.fallbackSave': 'Save phrase',
   'settings.cannedResponses.fallbackHint':
     'Used for a variable the conversation has no value for, such as a player who gave no name. The agent sees it selected and can change it.',
+  // Suggested replies (IN-07): which saved reply is offered as a chip on which chat event.
+  'settings.suggestedReplies.title': 'Suggested replies',
+  'settings.suggestedReplies.description':
+    'Offer a saved reply as a chip above the reply box when something happens in a conversation. The chip only fills the box — nothing is sent for the agent. Chips appear while the box is empty, once per event, at most four at a time.',
+  'settings.suggestedReplies.show': 'Set up',
+  'settings.suggestedReplies.hide': 'Hide',
+  'settings.suggestedReplies.empty': 'You have no saved replies you can bind to an event yet.',
+  'settings.suggestedReplies.eventsLegend': 'Events for #{shortcut}',
+  'settings.suggestedReplies.eventAria': '#{shortcut}: suggest when {event}',
+  'settings.suggestedReplies.event.chat_started': 'Chat started',
+  'settings.suggestedReplies.event.chat_transferred': 'Chat transferred to the agent',
+  'settings.suggestedReplies.event.customer_idle': 'Player went quiet',
+  'settings.suggestedReplies.event.rated_good': 'Rated good',
+  'settings.suggestedReplies.event.rated_bad': 'Rated bad',
+  'settings.suggestedReplies.orderLabel': 'Order',
+  'settings.suggestedReplies.orderAria': 'Order of #{shortcut} among its chips',
+  'settings.suggestedReplies.categoryLabel': 'Category',
+  'settings.suggestedReplies.categoryAria': 'Category of #{shortcut}',
+  'settings.suggestedReplies.category.general': 'General',
+  'settings.suggestedReplies.category.promotion': 'Promotion / bonus',
+  'settings.suggestedReplies.promotionHint':
+    'Never suggested while the player is kept from promotions.',
+  'settings.suggestedReplies.idleLabel': 'Player is quiet after (seconds)',
+  'settings.suggestedReplies.idleHint':
+    'How long a player may stay silent after the agent’s message before the “went quiet” chips appear. {seconds} seconds unless set.',
+  'settings.suggestedReplies.idleInvalid': 'Enter a whole number from {min} to {max}.',
   'settings.cannedResponses.searchLabel': 'Search saved replies',
   'settings.cannedResponses.searchPlaceholder': 'Search shortcuts and text…',
   'settings.cannedResponses.searchEmpty': 'No saved reply matches.',

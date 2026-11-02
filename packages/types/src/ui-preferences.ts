@@ -13,6 +13,12 @@ export interface UiPreferences {
   /** The Settings side navigation is shown pinned (`true`) or folded away. */
   settings_nav_pinned: boolean;
   /**
+   * Chips that follow a chat event (started, handed over, silent player, rated)
+   * are offered above the reply box (IN-07 · tm 364). Off: "close event
+   * suggestions for me" — the shortcut chips and Copilot's draft stay.
+   */
+  suggestions_event_enabled: boolean;
+  /**
    * The panel font this member chose (owner, 2026-10-13); `null` = follow the
    * workspace default. Whether it applies is `/auth/me`'s `appearance` answer:
    * the later of this and the workspace default wins.
@@ -23,7 +29,7 @@ export interface UiPreferences {
 }
 
 /** The on/off switches. `font_preset` is written alongside them, not one of them. */
-export const UI_PREFERENCE_KEYS = ['settings_nav_pinned'] as const;
+export const UI_PREFERENCE_KEYS = ['settings_nav_pinned', 'suggestions_event_enabled'] as const;
 export type UiPreferenceKey = (typeof UI_PREFERENCE_KEYS)[number];
 
 /** What `PUT /agents/me/ui-preferences` accepts. */
@@ -36,6 +42,7 @@ export type UiPreferencesPatch = Partial<Pick<UiPreferences, UiPreferenceKey | '
  */
 export const DEFAULT_UI_PREFERENCES: UiPreferences = {
   settings_nav_pinned: true,
+  suggestions_event_enabled: true,
   font_preset: null,
   font_preset_set_at: null,
 };

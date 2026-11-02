@@ -35,12 +35,18 @@ export function CannedPicker({
   onHighlight,
   onPick,
   label,
+  eventSuggestions,
 }: {
   matches: CannedResponse[];
   highlighted: number;
   onHighlight: (index: number) => void;
   onPick: (item: CannedResponse) => void;
   label: string;
+  /**
+   * The picker's gear (IN-07): the member's own switch for the chips that follow
+   * a chat event. Left out where there is no such chip (the ticket composer).
+   */
+  eventSuggestions?: { enabled: boolean; onToggle: () => void };
 }): ReactElement {
   const t = useTranslate();
   return (
@@ -84,6 +90,26 @@ export function CannedPicker({
           </button>
         )}
       />
+      {eventSuggestions && (
+        <div className="flex justify-end border-t border-border bg-surface-2 px-2 py-1">
+          <button
+            type="button"
+            data-testid="event-suggestions-toggle"
+            aria-pressed={!eventSuggestions.enabled}
+            // `onMouseDown`, like a row: a click would blur the textarea and close the picker.
+            onMouseDown={(event) => {
+              event.preventDefault();
+              eventSuggestions.onToggle();
+            }}
+            className="inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-2xs text-content-secondary hover:bg-surface hover:text-content"
+          >
+            <span aria-hidden="true">⚙</span>
+            {eventSuggestions.enabled
+              ? t('inbox.composer.picker.eventsOff')
+              : t('inbox.composer.picker.eventsOn')}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

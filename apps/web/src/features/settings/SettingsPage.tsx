@@ -156,7 +156,11 @@ export const SECTION_ELEMENTS: Record<string, (p: SectionPermissions) => ReactEl
   'ticket-rules': (p) => <TicketRules canEdit={p.canManageTicketRules} />,
   sla: (p) => <SlaPolicy canEdit={p.canManageAccess} />,
   'canned-responses': (p) => (
-    <CannedResponses canEdit={p.canManageReplies} canWritePersonal={p.canWritePersonalReplies} />
+    <CannedResponses
+      canEdit={p.canManageReplies}
+      canWritePersonal={p.canWritePersonalReplies}
+      canConfigureIdle={p.canManageAccess}
+    />
   ),
   tags: (p) => <Tags canEdit={p.canManageTags} />,
   'chat-timeout': (p) => <ChatTimeout canEdit={p.canManageAccess} />,

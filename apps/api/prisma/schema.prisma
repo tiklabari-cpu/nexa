@@ -414,6 +414,9 @@ model AgentMembership {
   /// "Unpin side navigation"). Per user and per license, like the notify_*
   /// columns above, and read by `/agents/me/ui-preferences`.
   settingsNavPinned    Boolean   @default(true) @map("settings_nav_pinned")
+  /// "Close event suggestions for me" (IN-07 · tm 364): off hides the chips that
+  /// follow a chat event (started, transferred, silent player, rated).
+  suggestionsEventEnabled Boolean @default(true) @map("suggestions_event_enabled")
   /// This member's own panel font (owner, 2026-10-13; `@siyahtus/types` ·
   /// `PANEL_FONT_PRESETS`). NULL = follow the workspace default. The later of
   /// this and `workspace_appearance_settings.font_preset_set_at` applies.
@@ -1962,6 +1965,13 @@ model CannedResponse {
   /// The author of a personal reply (`visibility = 'private'`, IN-06 · tm 363);
   /// null on a shared one (CHECK `canned_responses_visibility_check`).
   ownerAccountId String? @map("owner_account_id") @db.Uuid
+  /// The events this reply is offered as a chip on (IN-07 · tm 364), `SUGGEST_EVENTS`;
+  /// empty = never suggested. Ordered among one event's chips by `suggestOrder`.
+  suggestOn  String[] @default([]) @map("suggest_on")
+  suggestOrder Int    @default(0) @map("suggest_order")
+  /// `general` | `promotion` (`CANNED_CATEGORIES`): a promotion reply is not suggested
+  /// to a player kept from promotions (EN-01).
+  category   String   @default("general")
   updatedBy  String?  @map("updated_by")
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -4061,6 +4071,9 @@ model InboxSettings {
   /// What a bad vote sets off (AU-03 · tm 374), `BadRatingActions`. Null: the
   /// defaults; a missing switch reads its default (`readBadRatingActions`).
   badRatingActions Json? @map("bad_rating_actions")
+  /// Seconds the player may stay silent after the agent's last message before the
+  /// `customer_idle` event suggestion fires (IN-07 · tm 364). Null: 180.
+  customerIdleSeconds Int? @map("customer_idle_seconds")
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)

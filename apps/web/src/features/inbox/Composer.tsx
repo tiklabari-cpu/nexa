@@ -40,11 +40,14 @@ import {
 import {
   replySuggestionIds,
   withCopilotDraft,
+  withEventChips,
   type ReplyChip,
   type ReplySuggestionId,
   type SuggestionTurn,
 } from './replySuggestions.js';
 import { useCopilotReply } from './useCopilot.js';
+import { useEventChips, useEventSuggestionsPreference } from './useEventChips.js';
+import { useEventSuggestionStore } from './eventSuggestionState.js';
 import {
   activeShortcutQuery,
   insertCannedReply,
@@ -217,6 +220,40 @@ export function Composer({
     !uploading &&
     // A note never leaves the workspace, so the window never holds it back.
     (isNote || !replyWindowClosed(replyWindow));
+
+  // Event-bound suggested replies (IN-07 · tm 364): saved replies the workspace
+  // bound to something that just happened — the chat started, was handed to this
+  // agent, the player went quiet, the player rated it. Detected here from the
+  // transcript; shown above the box only while it is empty; never sent by
+  // themselves, and each occurrence is offered once.
+  const eventChips = useEventChips({
+    chatId,
+    replies: canned.data,
+    values: cannedValues,
+    fallback: cannedFallback,
+    enabled: !disabled,
+  });
+  const eventPreference = useEventSuggestionsPreference();
+  const consumeEvents = useEventSuggestionStore((s) => s.consume);
+  // The occurrences this composer has put on screen, to be marked done when the
+  // agent picks, dismisses, types over or walks away from them.
+  const shownEventKeys = useRef(new Set<string>());
+  const eventRowVisible =
+    eventChips.chips.length > 0 && text.length === 0 && !isNote && suggestions === null;
+  useEffect(() => {
+    if (eventRowVisible) for (const key of eventChips.keys) shownEventKeys.current.add(key);
+  }, [eventRowVisible, eventChips.keys]);
+  const finishEvents = useCallback((): void => {
+    const keys = [...shownEventKeys.current];
+    shownEventKeys.current.clear();
+    if (keys.length > 0) consumeEvents(keys);
+  }, [consumeEvents]);
+  // Typing is an answer to the event as much as a click is.
+  useEffect(() => {
+    if (text.length > 0) finishEvents();
+  }, [text, finishEvents]);
+  // Leaving the chat leaves its chips behind: they do not return on the way back.
+  useEffect(() => finishEvents, [finishEvents]);
 
   // Live typing preview (FR-MOD-02.9). One "start" per burst, then a trailing
   // "stop" a few seconds after the last keystroke — both edges matter so the
@@ -613,8 +650,16 @@ export function Composer({
       }));
 
     const request = (suggestionRequest.current += 1);
+    // Event chips lead the row (IN-07): event, then Copilot, then template.
+    for (const key of eventChips.keys) shownEventKeys.current.add(key);
     setSuggestions(
-      replySuggestionIds(turns).map((id) => ({ text: suggestionText(id), source: 'template' })),
+      withEventChips(
+        replySuggestionIds(turns).map((id) => ({
+          text: suggestionText(id),
+          source: 'template' as const,
+        })),
+        eventChips.chips,
+      ),
     );
     requestCopilotDraft(request);
   };
@@ -625,6 +670,7 @@ export function Composer({
   const applySuggestion = (suggestion: string): void => {
     setText(suggestion);
     setMode('all');
+    finishEvents();
     closeSuggestions();
     setShortcut(null);
     requestAnimationFrame(() => {
@@ -646,7 +692,13 @@ export function Composer({
     }
     if (event.key === 'Escape' && suggestions !== null && !pickerOpen) {
       event.preventDefault();
+      finishEvents();
       closeSuggestions();
+      return;
+    }
+    if (event.key === 'Escape' && eventRowVisible && !pickerOpen) {
+      event.preventDefault();
+      finishEvents();
       return;
     }
 
@@ -803,6 +855,42 @@ export function Composer({
 
       {!isNote && <ReplyWindowBand window={replyWindow} />}
 
+      {eventRowVisible && (
+        <div
+          role="group"
+          data-testid="event-suggestions"
+          aria-label={t('inbox.composer.eventSuggestions.ariaLabel')}
+          className="mb-2 flex flex-wrap items-start gap-1.5"
+        >
+          {eventChips.chips.map((chip) => (
+            <button
+              key={chip.text}
+              type="button"
+              onClick={() => applySuggestion(chip.text)}
+              // Why the chip is here, on hover: the accessible name stays the
+              // text the agent is about to insert.
+              title={
+                chip.event ? t(`inbox.composer.eventSuggestions.event.${chip.event}`) : undefined
+              }
+              className="max-w-full truncate rounded-full border border-brand-500 bg-brand-100 px-3 py-1 text-left text-2xs text-content transition-colors dark:bg-brand-950"
+            >
+              {chip.text}
+            </button>
+          ))}
+          <button
+            type="button"
+            aria-label={t('inbox.composer.eventSuggestions.dismiss')}
+            onClick={() => {
+              finishEvents();
+              requestAnimationFrame(() => inputRef.current?.focus());
+            }}
+            className="rounded-full px-2 py-1 text-2xs text-content-tertiary hover:text-content"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {suggestions !== null && !isNote && (
         <div
           role="group"
@@ -818,14 +906,18 @@ export function Composer({
               // its accessible name: the name has to stay the text the agent is
               // about to insert, which is what they are choosing between.
               title={
-                chip.source === 'copilot' ? t('inbox.composer.suggestions.fromCopilot') : undefined
+                chip.source === 'copilot'
+                  ? t('inbox.composer.suggestions.fromCopilot')
+                  : chip.source === 'event' && chip.event
+                    ? t(`inbox.composer.eventSuggestions.event.${chip.event}`)
+                    : undefined
               }
               // The Copilot chip wears the row's own hover state as its resting
               // one — `brand-100` / `brand-950` on `text-content`, the exact
               // pairing every chip here already lands on under the cursor, so
               // it needs no colour the design system has not already cleared.
               className={`max-w-full truncate rounded-full border px-3 py-1 text-left text-2xs transition-colors hover:bg-brand-100 hover:text-content dark:hover:bg-brand-950 ${
-                chip.source === 'copilot'
+                chip.source !== 'template'
                   ? 'border-brand-500 bg-brand-100 text-content dark:bg-brand-950'
                   : 'border-border bg-inset text-content-secondary'
               }`}
@@ -856,6 +948,7 @@ export function Composer({
             type="button"
             aria-label={t('inbox.composer.suggestions.dismiss')}
             onClick={() => {
+              finishEvents();
               closeSuggestions();
               requestAnimationFrame(() => inputRef.current?.focus());
             }}
@@ -874,6 +967,11 @@ export function Composer({
             onHighlight={setHighlighted}
             onPick={insert}
             label={t('inbox.composer.picker.ariaLabel')}
+            eventSuggestions={
+              eventPreference.canToggle
+                ? { enabled: eventPreference.enabled, onToggle: eventPreference.toggle }
+                : undefined
+            }
           />
         )}
 

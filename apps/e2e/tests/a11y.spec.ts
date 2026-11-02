@@ -1655,6 +1655,9 @@ test.describe('WCAG 2.1 AA (axe)', () => {
       '/app/reports/ai-quality/:reviewId',
       '/app/billing',
       '/app/playbook',
+      // The offer's e-mail leads here; scanned in both themes (and the Danger zone
+      // and banner with it) in ownership-transfer.spec.ts (RL-05 · tm 328.2).
+      '/app/ownership-transfer',
       '/app/settings',
       '/app/settings/audit-log',
       // Every section's address — scanned one by one in the settings test.

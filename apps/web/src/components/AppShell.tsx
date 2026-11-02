@@ -40,6 +40,7 @@ import { ShortcutsHost } from './ShortcutsModal.js';
 import { NarrowScreenNotice, useNarrowScreenNotice } from './NarrowScreenNotice.js';
 import { MaintenancePage, NoticeBar } from './NoticeBar.js';
 import { ImpersonationBanner } from './ImpersonationBanner.js';
+import { OwnershipTransferBanner } from '../features/ownership/OwnershipTransferBanner.js';
 import { useNotice } from '../lib/notice.js';
 import { PresenceAvatars } from './PresenceAvatars.js';
 import { PresenceNotices } from './PresenceNotices.js';
@@ -101,6 +102,8 @@ export function AppShell(): ReactElement {
       <NoticeBar />
       <SandboxBadge />
       <TrialBanner />
+      {/* A workspace changing hands, for the three people it concerns (RL-05). */}
+      <OwnershipTransferBanner />
       {/* Why your availability changed, and chats a lead must look at (WG-03). */}
       <PresenceNotices />
       {/* A screen not yet laid out below 1024 px says so, above itself (GV-04). */}

@@ -1873,4 +1873,94 @@ export const settings: Messages = {
   'settings.widgetPhrases.key.offline.submit': 'Çevrimdışı form düğmesi',
   'settings.widgetPhrases.key.offline.thanks': 'Çevrimdışı form teşekkürü',
   'settings.widgetPhrases.key.chat.end.closedMessage': 'Sohbet sona erdi',
+  // Çalışma alanının devri (RL-05 · tm 328.2): Ayarlar › Şirket "Tehlikeli bölge",
+  // teklif e-postasının açtığı kabul sayfası ve bekleyen teklif bandı.
+  'settings.ownership.title': 'Tehlikeli bölge',
+  'settings.ownership.description':
+    'Bu çalışma alanını kimin yönettiğini değiştiren işlemler. Yalnızca Kurucu yapabilir.',
+  'settings.ownership.loadError':
+    'Sahiplik devri yüklenemedi. Yeniden denemek için sayfayı yenileyin.',
+  'settings.ownership.heading': 'Sahipliği devret',
+  'settings.ownership.body':
+    'Çalışma alanını başka bir üyeye teklif edin. Kabul etmesi için 72 saati var; kabul ettiğinde Kurucu o olur, siz Yönetici olursunuz. O ana kadar hiçbir şey değişmez.',
+  'settings.ownership.offerButton': 'Sahipliği devret…',
+  'settings.ownership.pendingTitle': 'Sahiplik {name} kişisine teklif edildi',
+  'settings.ownership.pendingBody':
+    '{email} adresine bir bağlantı gönderdik. Teklif {expires} tarihinde sona erer; kabul edene kadar Kurucu sizsiniz.',
+  'settings.ownership.cancelButton': 'Teklifi iptal et',
+  'settings.ownership.cancelConfirmTitle': '{name} kişisine yapılan teklif geri alınsın mı?',
+  'settings.ownership.cancelConfirmBody':
+    'E-postasındaki bağlantı çalışmaz olur ve teklifin geri alındığı kendisine bildirilir. Kurucu olarak kalırsınız ve çalışma alanını yeniden teklif edebilirsiniz.',
+  'settings.ownership.cancelConfirmButton': 'Teklifi iptal et',
+  'settings.ownership.cancelFailed': 'Teklif iptal edilemedi.',
+  'settings.ownership.mailSent': 'Bağlantı {email} adresine gönderildi.',
+  'settings.ownership.mailFailed':
+    'Teklif kaydedildi ama {email} adresine e-posta gönderilemedi. Teklifi iptal edip yeniden yapın.',
+  'settings.ownership.modalTitle': 'Sahipliği devret',
+  'settings.ownership.modalBody':
+    'Seçtiğiniz üye kabul ettiğinde Kurucu olur, siz Yönetici olursunuz. 72 saati vardır. Devam etmek için kimliğinizi doğrulayın.',
+  'settings.ownership.membersError': 'Üyeler yüklenemedi.',
+  'settings.ownership.targetLabel': 'Yeni Kurucu',
+  'settings.ownership.targetPlaceholder': 'Bir üye seçin',
+  'settings.ownership.targetRequired': 'Kurucu olacak kişiyi seçin.',
+  'settings.ownership.passwordLabel': 'Parolanız',
+  'settings.ownership.totpLabel': 'Doğrulayıcı ya da kurtarma kodu',
+  'settings.ownership.totpHint':
+    'İki adımlı doğrulama kullanıyorsanız ya da parolanız yoksa gerekir.',
+  'settings.ownership.confirmNameLabel': 'Çalışma alanı adı',
+  'settings.ownership.confirmNameHint': 'Onaylamak için “{name}” yazın.',
+  'settings.ownership.confirmNameMismatch': 'Çalışma alanı adını gösterildiği gibi yazın.',
+  'settings.ownership.credentialRequired': 'Parolanızı girin; parolanız yoksa kodu girin.',
+  'settings.ownership.wrongCredential': 'Parola ya da kod doğru değil.',
+  'settings.ownership.offering': 'Teklif gönderiliyor…',
+  'settings.ownership.offerConfirm': 'Sahipliği teklif et',
+  'settings.ownership.reason.pending_exists':
+    'Bekleyen bir teklif var. Yenisini yapmadan önce onu iptal edin.',
+  'settings.ownership.reason.target_suspended':
+    'Bu üye askıda ya da engelli olduğu için çalışma alanını devralamaz.',
+  'settings.ownership.reason.target_unverified': 'Bu üye e-posta adresini henüz doğrulamadı.',
+  'settings.ownership.reason.target_two_factor_required':
+    'Bu çalışma alanı iki adımlı doğrulamayı zorunlu tutuyor ve bu üye onu kurmadı.',
+  'settings.ownership.reason.target_is_owner': 'Çalışma alanının Kurucusu zaten sizsiniz.',
+  'settings.ownership.reason.session_required':
+    'Çalışma alanını erişim jetonuyla değil, oturum açarak devredin.',
+  'settings.ownership.reason.reauthentication_unavailable':
+    'Bu hesapta parola ve ikinci adım yok; kimliğinizi doğrulayamıyoruz. Önce iki adımlı doğrulamayı kurun.',
+  'settings.ownership.reason.not_pending': 'Bu teklif artık açık değil.',
+  'settings.ownership.reason.owner_changed':
+    'Çalışma alanının Kurucusu değişmiş, bu yüzden teklif iptal edildi.',
+  'settings.ownership.reason.invalid_token':
+    'Bu jeton e-postadakiyle aynı değil. Kontrol edip yeniden deneyin.',
+  'settings.ownership.accept.title': 'Çalışma alanını devral',
+  'settings.ownership.accept.description': 'Size bu çalışma alanının sahipliği teklif edildi.',
+  'settings.ownership.accept.wrongAccount':
+    'Bu teklif {email} için, siz ise {current} olarak oturum açtınız. Çıkış yapıp bağlantıyı doğru hesapla yeniden açın.',
+  'settings.ownership.accept.closed':
+    'Bu teklif artık açık değil. Kabul edilmiş, geri alınmış ya da süresi dolmuş olabilir; ya da size yapılmamıştır.',
+  'settings.ownership.accept.offer':
+    '{name} ({email}) size bu çalışma alanının sahipliğini teklif ediyor.',
+  'settings.ownership.accept.consequence':
+    'Kabul ederseniz Kurucu siz olursunuz, {name} Yönetici olur. Teklif {expires} tarihinde sona erer.',
+  'settings.ownership.accept.sso':
+    'Bu çalışma alanı üyeleri bir kimlik sağlayıcı üzerinden oturum açtırıyor. Kurucunun parola ile girişi sizde kalır; {name} bundan sonra kimlik sağlayıcı üzerinden girecek.',
+  'settings.ownership.accept.tokenLabel': 'E-postadaki jeton',
+  'settings.ownership.accept.tokenHint': 'E-postadaki bağlantı bunu sizin için doldurur.',
+  'settings.ownership.accept.tokenRequired': 'E-postadaki jetonu yapıştırın.',
+  'settings.ownership.accept.accepting': 'Kabul ediliyor…',
+  'settings.ownership.accept.button': 'Sahipliği kabul et',
+  'settings.ownership.accept.doneTitle': 'Artık Kurucusunuz',
+  'settings.ownership.accept.done': 'Artık bu çalışma alanının Kurucusunuz.',
+  'settings.ownership.accept.doneRoles': '{name} artık Yönetici.',
+  'settings.ownership.accept.billingMoved': 'Fatura e-posta adresi artık sizin adresiniz.',
+  'settings.ownership.accept.billingKept':
+    'Fatura e-postası hâlâ başka bir adrese gidiyor. Sizin adresiniz olup olmayacağına karar verin.',
+  'settings.ownership.accept.billingLink': 'Fatura e-postasını gözden geçir',
+  'settings.ownership.banner.offeredToYou':
+    '{from} size bu çalışma alanının sahipliğini teklif ediyor. Teklif {expires} tarihinde sona erer.',
+  'settings.ownership.banner.offeredByYou':
+    'Bu çalışma alanının sahipliğini {to} kişisine teklif ettiniz. Teklif {expires} tarihinde sona erer.',
+  'settings.ownership.banner.pending':
+    '{from}, bu çalışma alanını {to} kişisine devrediyor. Teklif {expires} tarihinde sona erer.',
+  'settings.ownership.banner.review': 'Teklifi incele',
+  'settings.ownership.banner.manage': 'Teklifi gör',
 };

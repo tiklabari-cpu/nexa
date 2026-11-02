@@ -13807,6 +13807,14 @@ export interface components {
        */
       terms_version: string | null;
       /**
+       * Format: uri
+       * @description The installation guide the panel links to from the setup wizard and
+       *     the website widgets screen (`INSTALL_GUIDE_URL`, WG-15), an
+       *     `https` address; `null` when the deployment names none, in which
+       *     case the panel links to the guide it ships.
+       */
+      install_guide_url?: string | null;
+      /**
        * @description The Apps cards and channels this deployment connects to their real
        *     provider (tm 263, `APPS_LIVE_PROVIDERS`). Under `pilot_mode` these
        *     are the only ones served. Names only — never a key.
@@ -19100,7 +19108,10 @@ export interface components {
        * @description The code to paste before `</body>`. Sets `window.__siyahtus` and loads
        *     the async widget loader. Identical across a workspace's sites — the
        *     embedding origin is resolved at runtime — so "get code" per row shows
-       *     this same value.
+       *     this same value. It ends with a `<noscript>` link to the hosted Chat
+       *     page (`/chat.html?organization_id=…`, WG-15) whose text follows the
+       *     workspace's widget language from a fixed list; a snippet pasted
+       *     before that line existed is not changed.
        */
       snippet: string;
     };

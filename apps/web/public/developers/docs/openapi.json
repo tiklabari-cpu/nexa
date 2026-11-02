@@ -5523,7 +5523,7 @@
           },
           "snippet": {
             "type": "string",
-            "description": "The code to paste before `</body>`. Sets `window.__siyahtus` and loads\nthe async widget loader. Identical across a workspace's sites — the\nembedding origin is resolved at runtime — so \"get code\" per row shows\nthis same value.\n"
+            "description": "The code to paste before `</body>`. Sets `window.__siyahtus` and loads\nthe async widget loader. Identical across a workspace's sites — the\nembedding origin is resolved at runtime — so \"get code\" per row shows\nthis same value. It ends with a `<noscript>` link to the hosted Chat\npage (`/chat.html?organization_id=…`, WG-15) whose text follows the\nworkspace's widget language from a fixed list; a snippet pasted\nbefore that line existed is not changed.\n"
           }
         }
       },

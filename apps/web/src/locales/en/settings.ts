@@ -648,6 +648,7 @@ export const settings: Messages = {
   'settings.websiteWidgets.footerHintPrefix': 'Paste the snippet immediately before',
   'settings.websiteWidgets.footerHintSuffix': 'on every page.',
   'settings.websiteWidgets.customizeWidget': 'Customize widget',
+  'settings.websiteWidgets.installGuide': 'Installation guide',
   'settings.websiteWidgets.snippet.reportSale':
     'To report a sale once checkout completes, call the tracking code from your own script:',
   'settings.websiteWidgets.snippet.signOut':

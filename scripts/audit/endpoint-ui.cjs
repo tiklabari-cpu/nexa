@@ -235,7 +235,6 @@ const HEADLESS = [
       'either client lists the others, and the roster is read by support and by the API.',
   },
   { op: 'GET /brands/{brandId}', reason: BY_ID_READ },
-  { op: 'GET /websites/{websiteId}', reason: BY_ID_READ },
   { op: 'GET /partner/apps/{clientId}', reason: BY_ID_READ },
   { op: 'GET /kb-articles/{articleId}', reason: BY_ID_READ },
   { op: 'GET /public/kb/{workspaceSlug}/articles', reason: PUBLIC_KB },

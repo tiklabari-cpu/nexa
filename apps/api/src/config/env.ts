@@ -796,6 +796,15 @@ export const envSchema = z.object({
   TERMS_VERSION: z.string().min(1).max(64).regex(/^\S+$/, 'must not contain whitespace').optional(),
 
   /**
+   * The installation guide the panel links to from the setup wizard and from
+   * Settings → Website widgets (WG-15 · tm 349), an `https` address. Optional and
+   * never required: unset, the panel links to the guide it ships itself
+   * (`/help/install-guide.html`), so a deployment only sets this to point at its
+   * own help centre. Served to the panel by `GET /deployment`.
+   */
+  INSTALL_GUIDE_URL: httpsUrl.optional(),
+
+  /**
    * The offline IP → country database (GEOIP-COUNTRY · tm 330): a MaxMind DB
    * file (DB-IP Lite or GeoLite2), read once at boot. A visitor's address is
    * looked up inside the process and never stored by the lookup; only the

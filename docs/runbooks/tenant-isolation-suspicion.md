@@ -100,6 +100,41 @@ superusers and a check run as the owner would tell you nothing
      | grep -i x-siyahtus-export-chain-ok
    ```
 
+6. **Was it the platform side? Telling the root panel's role and impersonation apart from
+   an RLS gap** (tm 389.21). Two legitimate paths show a workspace's data to someone who is
+   not its member, and both leave a mark. Rule them in or out before treating the report as a
+   policy failure:
+
+   - **Operator impersonation** ("enter as the customer", runbook
+     [`platform-admin-ops.md`](platform-admin-ops.md) §11.2). The workspace's own trail from
+     step 5 carries entries with `actor_type: "platform"` (shown to members as "SiyahTuş
+     support"); while an operator was signed in as a member, each also has `on_behalf_of` (that
+     member's account). `jq 'select(.actor_type == "platform")'` over the export finds them.
+     Read-only sessions refuse writes (403 `impersonation_read_only`) and every session
+     refuses password, 2FA, token, billing and deletion paths, so a _write_ by a platform
+     actor outside those lists is itself a finding. The workspace owner is mailed when a
+     session starts, and the session lives 30 minutes.
+   - **The platform role** (`siyahtus_platform`, BYPASSRLS). Only the `platform-api` process
+     connects as it, with `DATABASE_PLATFORM_URL`; it shows operators counts and states, never
+     messages. Each entry written to the workspace's trail carries `platform_seq` in its
+     metadata, which is the position in the platform's own chain. With an operator token:
+     `GET /platform/v1/audit/workspaces/{licenseId}` for the workspace's view, then
+     `GET /platform/v1/audit` filtered by `license_id` for the operator, the reason and the
+     address; `GET /platform/v1/support/impersonations?license_id={licenseId}` lists every
+     session (who, mode, when it ended). Run `POST /platform/v1/audit/verify` too: a chain that
+     does not verify is a different incident ([`platform-audit.md`](platform-audit.md)).
+   - **Prove the tenant side is still closed.** The tenant API must not serve the platform
+     surface: `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4000/platform/v1/health/live`
+     answers 404 or 401, never 200, and `DATABASE_PLATFORM_URL` is not what the `api`
+     container uses (`DATABASE_APP_URL` is, step 1). `SELECT rolname, rolbypassrls FROM
+pg_roles WHERE rolname IN ('siyahtus_app', 'siyahtus_platform')` shows `f` for the
+     runtime role and `t` for the platform one; a `t` on `siyahtus_app` is the gap.
+
+   If an entry matches an operator's legitimate ticket, the report is explained; record the
+   operator, the reason and the session id in the incident note. If it does not — a
+   `platform` entry with no ticket, a session nobody started, a role that bypasses RLS where it
+   should not — it is an operator-account compromise: Response, below.
+
 ## Response
 
 - **Cut access first, investigate second.** Revoke/rotate the specific
@@ -107,6 +142,12 @@ superusers and a check run as the owner would tell you nothing
   path is a specific route rather than a specific credential, be prepared to
   take that route out of service rather than leave a confirmed gap open while
   gathering more evidence.
+- **If step 6 points at an operator account,** cut it first: end any open impersonation
+  (`POST /platform/v1/support/impersonations/{id}/end`), then, as another superadmin,
+  revoke the operator's sessions and disable the account (`/admins/{adminId}/revoke-sessions`,
+  `/disable`; runbook §2), and reset the workspace members' sessions the operator could have
+  used. Disabling never deletes the operator, so the audit attribution survives. Export the
+  platform chain (runbook §13.2) before changing anything else.
 - **Do not repair and move on without confirming scope.** If diagnosis step 2
   or 3 finds a table/partition genuinely missing RLS, determine how long it's
   been that way (migration history, `git log` on the relevant migration) —

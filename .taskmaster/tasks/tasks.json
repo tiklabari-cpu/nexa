@@ -15766,7 +15766,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-11-02T00:28:23.081Z",
+        "updatedAt": "2026-11-02T01:52:43.007Z",
         "subtasks": [
           {
             "id": 1,
@@ -16069,7 +16069,7 @@
             "description": "Panel bittiğinde SiyahTuş ekibinin elinde her operasyon için adım listesi ve kanıt olsun.",
             "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → close). DoD kapısı CONVENTIONS.md §1 (entegrasyon testleri paralel, `pnpm test:gate` arka planda — log yolunu ilk satırdan al, bitince son satırları oku; turbo `--force` ve çıktıda \"0 cached\"; önce `docker info`; e2e ve db:migrate için kök .env source); git §2 (`feat/<slug>` → main, force-push yok); handoff §3; kapsam disiplini §5; migration §6.3; gereksinim etiketi §7 (test başlığında YALNIZ prd-uyum-denetimi.md Ek A kimlikleri — FR-ADMIN-nn kodları etiket DEĞİLDİR). Sınırlar CLAUDE.md: gerçek sır/anahtar, deploy, DNS, TLS, kart/ödeme yok; dış servisler mock; `pnpm db:reset` yasak (`SIYAHTUS_SEED_RESET=1 pnpm db:seed`).\n\nBAĞLAM (önce oku, sırayla): (1) docs/platform-admin/design.md — bu epiğin tek tasarım kaynağı (bölüm harfleri aşağıda); (2) docs/platform-admin/requirements.md — FR-ADMIN kodları ve kabul kriterleri; (3) docs/platform-admin/gorev-yerlesimi.md — hangi iş workspace panelinde, hangisi root panelde; (4) epik tm 389 details (Task Master) — sıra, ortak kurallar; (5) `head -60 HANDOFF.md` — önceki 389.x pencerelerinin notları; (6) PLAN.md §D218 (`grep -n \"D218\" PLAN.md`). Bu alt görevin tasarım bölümü: design.md §E docs.\n\nORTAK KURALLAR:\n- Platform rotaları YALNIZ platform-api sürecinde yüklenir; kiracı API (`buildServer`) `/platform/*` için 404 kalır (test: platform-rls/platform-isolation). Kiracı API'de boot'u durduran YENİ kural yok (sahip kuralı 2026-10-10): platform ayarı okunamazsa env ile devam + uyarı.\n- Her platform mutasyonu `{reason}` ister ve `platform_audit_log` zincirine yazar; kiracıya dokunanlar ayrıca kiracı `audit_log`'una `actor_type='platform'` ile (çift audit).\n- Kiracı içeriği (mesaj, oyuncu verisi, KB) platform ekranlarında ve platform API yanıtlarında YOK; yalnız sayı/durum/kimlik. Kiracı adına bakmak yalnız 389.15 impersonation ile.\n- Dağıtım sırları env'de kalır; panelde saklanan tek sır AI anahtarlarıdır (389.17, şifreli). Hiçbir yanıt/log/audit düz anahtar taşımaz.\n- Kontrat-first: `packages/contract/platform/openapi.yaml` → `pnpm contract:generate` → migration → servis + test → SPA. Kiracı kontratına yeni yol eklenirse `apps/mobile` parity sayısı yorumla bump edilir (hafıza: openapi-path-breaks-mobile-parity-count).\n- `prisma format` ÇALIŞTIRMA (ilgisiz modelleri hizalar); `prisma generate` dev API açıkken EPERM verebilir, TS istemcisi yine üretilir.\n- Türkçe metin (PLAN, HANDOFF, i18n) Write/Edit ile; heredoc ve `node -e` Türkçe karakteri bozar. Mutasyon testlerinde dosyayı turun başındaki kopyadan geri yükle (`git checkout --` değil).\n- Yeni web/admin bileşeni `t()` çağırıyorsa i18n kayıt listesine girer (apps/admin kendi `TRANSLATED_FILES`'ını taşır).\n- PLAN: tablo hücresine kanıt yazılmaz; FR-ADMIN maddeleri Ek A'da olmadığından req-coverage etiketi yazılmaz; kanıt HANDOFF bloğu + §D218 altına tek satır madde.\n- Döngü penceresi 10 dk komut tavanı: uzun komutlar `run_in_background`.\n\nAMAÇ: Runbook `docs/runbooks/platform-admin-ops.md`: her operasyon için \"panelde nerede / hangi rol / TOTP gerekli mi / audit eylemi / geri alma\"; eski psql yolları \"acil durum\" ekinde. `docs/platform-admin/requirements.md`'ye \"Durum\" sütunu (FR-ADMIN-nn → alt görev → test dosyası). `docs/production-checklist.md` §9 Back office son hali (bootstrap, Cloudflare Access, BYPASSRLS notu, yedek kapsamı). README mimari şeması (6 servis). `docs/runbooks/tenant-isolation-suspicion.md`'ye \"platform rolü ve impersonation izleri nasıl ayıklanır\" paragrafı. HANDOFF: epik özet bloğu (ölçümler, kararlar, açık riskler). PLAN §D218 altındaki alt görev kanıt satırlarının eksiksizliği (389.1–389.20 her biri tek satır).\n\nKODDA BUGÜN (HEAD'de oku, satırlar kayabilir):\n- docs/runbooks/*.md (biçim kalıbı), docs/production-checklist.md §1/§9, README.md, docs/runbooks/tenant-isolation-suspicion.md, PLAN.md §D218, HANDOFF.md.\n\nKARARLAR (pencere ölçülmüş gerekçeyle değiştirebilir):\n1) Runbook TR; komut blokları top-level (liste içinde fenced code prettier idempotence tuzağı).\n2) Eski psql komutları silinmez, \"acil durum\" ekine taşınır.\n\nKAPSAM DIŞI: Kod değişikliği (yalnız docs; kod bulgusu varsa yeni görev olarak Task Master'a yazılır).\nTUZAKLAR: Prettier `proseWrap: preserve`, printWidth 90 — tablolar uzun satır olabilir (prettier tabloya dokunmaz). PLAN tablo hücresine yazma. HANDOFF canlı dosyada son 5 görev kuralı: eski blokları arşive taşı (CONVENTIONS §3).",
             "testStrategy": "Kabul: `pnpm -w format:check` yeşil; runbook her FR-ADMIN modülü için bölüm içerir (başlık listesi testi yok — gözle + HANDOFF'a liste); requirements.md durum sütunu dolu; PLAN §D218 alt satırları 389.1–389.20 var (`grep -c \"tm 389\\.\" PLAN.md` ≥ 20); HANDOFF özeti. Kod dokunulmadı (`git diff --stat` yalnız docs/*.md, PLAN.md, HANDOFF.md). DoD: CONVENTIONS §1 tamamı — `pnpm test:gate` (arka planda; log son satırları `Tasks:`/`Failed:`/`exit`), `db:check-drift`, `contract:generate` sonrası generated temiz, `audit:req-coverage` exit 0, HANDOFF bloğu + PLAN §D218 altına tek satır kanıt maddesi.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "389.10",
               "389.11",
@@ -16085,7 +16085,7 @@
             ],
             "parentId": "389",
             "priority": "high",
-            "updatedAt": "2026-11-02T00:28:23.081Z"
+            "updatedAt": "2026-11-02T01:52:43.007Z"
           },
           {
             "id": 22,
@@ -16188,7 +16188,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-02T00:28:23.081Z",
+      "lastModified": "2026-11-02T01:52:43.008Z",
       "taskCount": 393,
       "completedCount": 378,
       "tags": [

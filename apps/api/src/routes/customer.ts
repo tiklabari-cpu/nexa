@@ -27,6 +27,8 @@ import {
   isIdentityTrust,
   readHumanButtonLabel,
   ASK_EMAIL_ADDRESS_MAX_LENGTH,
+  CUSTOM_EVENT_NAME_RE,
+  CUSTOM_EVENT_VALUE_MAX_LENGTH,
   humanButtonText,
   RATING_COMMENT_MAX,
   REFERRER_MAX_LENGTH,
@@ -75,6 +77,7 @@ import {
   markCampaignInitiated,
 } from '../services/campaigns/campaign-engagement.js';
 import { fireCampaignsAtVisitor } from '../services/campaigns/campaign-trigger.js';
+import { VISITOR_EVENT_LIMIT_PER_CUSTOMER } from '../services/goals/goal-service.js';
 import { createGoalConversionRecorder } from '../services/goals/goal-triggers.js';
 import { AiResponder } from '../services/ai/ai-responder.js';
 import { HumanRequestService } from '../services/ai/human-request.js';
@@ -254,6 +257,19 @@ const contactEmailSchema = z
   .strict();
 /** Answers to the e-mail card one visitor may send in an hour. */
 const CONTACT_EMAILS_PER_HOUR = 10;
+
+/**
+ * A page event for goal conversions (EN-06). Not `.strict()`, like
+ * {@link trackSaleSchema}: an `amount` (or a `license_id`) sent by a hostile page
+ * is stripped before the handler sees it, never stored and never an error worth
+ * probing. The name has the shape goals are defined with.
+ */
+const trackEventSchema = z.object({
+  name: z.string().regex(CUSTOM_EVENT_NAME_RE, 'must be 1-40 of a-z, 0-9 and _'),
+  value: z.string().trim().max(CUSTOM_EVENT_VALUE_MAX_LENGTH).optional(),
+});
+/** Events one visitor may report in a minute (EN-06): a page loop, not a funnel. */
+const TRACK_EVENTS_PER_MINUTE = 20;
 
 /** "E-mail me the transcript" (WG-06): where to, else the address given before. */
 const transcriptRequestSchema = z
@@ -1971,6 +1987,58 @@ export default async function customerRoutes(
       });
     },
   );
+
+  /**
+   * Report a page event (EN-06) — `siyahtus('trackEvent', …)` — the write a goal
+   * that names an event converts on.
+   *
+   * Unverified browser data, so what it can do is small: it is remembered as a
+   * name plus an optional short label (there is no amount to state), it is
+   * deduplicated per visitor, bounded per visitor, rate limited, and the only
+   * thing that reads it is the goal matcher. The workspace and the visitor come
+   * from the token (NFR-S5). Always answers 204 for a well-formed event, whether
+   * it was new, a repeat or past the per-visitor cap: the page has nothing to
+   * act on, and a different answer for each would let it probe the table.
+   */
+  app.post('/customer/events', { config: { principals: ['customer'] } }, async (request, reply) => {
+    const principal = request.requirePrincipal();
+    if (principal.kind !== 'customer') throw ApiError.notFound('Resource not found.');
+
+    const body = parse(trackEventSchema, request.body);
+    await consumePressBudget(request, principal, {
+      key: 'customer-event',
+      limit: TRACK_EVENTS_PER_MINUTE,
+      windowMs: 60_000,
+      message: 'Events are sent too often — try again in a moment.',
+    });
+
+    const tenant = request.tenant();
+    await request.withTenant(async (tx) => {
+      const known = await tx.visitorEvent.count({
+        where: { licenseId: tenant.licenseId, customerId: principal.customerId },
+      });
+      if (known >= VISITOR_EVENT_LIMIT_PER_CUSTOMER) return;
+      // The unique key makes a repeat a no-op decided by the database, so two
+      // concurrent identical events cannot both insert.
+      await tx.visitorEvent.createMany({
+        data: [
+          {
+            licenseId: tenant.licenseId,
+            customerId: principal.customerId,
+            name: body.name,
+            value: body.value ?? '',
+          },
+        ],
+        skipDuplicates: true,
+      });
+    });
+
+    // After the commit, so the matcher sees the row. Also on a repeat: a goal
+    // created after the first report can still be reached, and the achievement's
+    // own unique key means a repeat can never convert the visitor twice.
+    await goals.record(tenant, principal.customerId);
+    return reply.status(204).send();
+  });
 
   /**
    * Report a completed order (FR-MOD-13.5) — the write the Ecommerce report is

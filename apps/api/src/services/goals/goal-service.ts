@@ -21,7 +21,13 @@ import type { Prisma } from '@prisma/client';
 import type { Goal, GoalDefinition, GoalFilter } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
-import { goalRequires, hasGoalTrigger, matchesGoal, type GoalFacts } from './goal-matching.js';
+import {
+  customEventNeedle,
+  goalRequires,
+  hasGoalTrigger,
+  matchesGoal,
+  type GoalFacts,
+} from './goal-matching.js';
 
 /** The columns a DTO needs. */
 const GOAL_SELECT = {
@@ -31,6 +37,13 @@ const GOAL_SELECT = {
   active: true,
   createdAt: true,
 } satisfies Prisma.GoalSelect;
+
+/**
+ * Most distinct events one visitor is remembered for (EN-06). A page can name
+ * events freely, so the table is bounded per visitor rather than trusted: past
+ * this the ingest endpoint stores nothing and the matcher reads no more.
+ */
+export const VISITOR_EVENT_LIMIT_PER_CUSTOMER = 200;
 
 type GoalRow = Prisma.GoalGetPayload<{ select: typeof GOAL_SELECT }>;
 
@@ -264,6 +277,26 @@ export class GoalService {
         select: { id: true },
       });
       facts.chatResolved = archived !== null;
+    }
+
+    // The events the visitor's page has reported, narrowed to the names a goal
+    // here actually waits for. Bounded by the ingest cap, so the read cannot grow
+    // with a hostile page.
+    const eventNames = [
+      ...new Set(
+        definitions.flatMap((definition) => {
+          const needle = customEventNeedle(definition);
+          return needle ? [needle.name] : [];
+        }),
+      ),
+    ];
+    if (eventNames.length > 0) {
+      const events = await tx.visitorEvent.findMany({
+        where: { licenseId: tenant.licenseId, customerId, name: { in: eventNames } },
+        select: { name: true, value: true },
+        take: VISITOR_EVENT_LIMIT_PER_CUSTOMER,
+      });
+      facts.customEvents = events;
     }
 
     return facts;

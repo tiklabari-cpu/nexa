@@ -32,6 +32,7 @@ import {
   WidgetApiError,
   type ChallengeHandler,
   type MintedAppearance,
+  type TrackEventInput,
   type TrackSaleInput,
   type WidgetEvent,
   type WidgetState,
@@ -2163,14 +2164,32 @@ export function mount(doc: Document = document, win: Window = window): () => voi
    * contract (13.5-g KK): the host page must never see this feature break it.
    */
   async function trackSale(payload: unknown): Promise<void> {
-    const sale = asTrackSaleInput(payload);
-    if (!sale) return;
+    await track('trackSale', asTrackSaleInput(payload), (sale) => api.trackSale(sale));
+  }
+
+  /**
+   * `siyahtus('trackEvent', {name, value?})` (EN-06): a page event a goal can
+   * convert on. Same contract as `trackSale` — reshaped, dropped when the name is
+   * wrong, silent on failure — and nothing but the name and the short label is
+   * ever sent, so an `amount` the page adds never leaves the widget.
+   */
+  async function trackEvent(payload: unknown): Promise<void> {
+    await track('trackEvent', asTrackEventInput(payload), (event) => api.trackEvent(event));
+  }
+
+  /** The shared tail of the page's tracking commands: connect if need be, send, never throw. */
+  async function track<T>(
+    command: string,
+    input: T | null,
+    send: (input: T) => Promise<void>,
+  ): Promise<void> {
+    if (!input) return;
     if (!api.authenticated) await connect();
     if (!api.authenticated) return; // connect already logged its own failure
     try {
-      await api.trackSale(sale);
+      await send(input);
     } catch (error) {
-      console.warn('siyahtus widget: trackSale failed', error);
+      console.warn(`siyahtus widget: ${command} failed`, error);
     }
   }
 
@@ -3015,6 +3034,8 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       if (data?.type === 'siyahtus:host-close') setOpen(false);
       if (data?.type === 'siyahtus:command' && data.command === 'trackSale')
         void trackSale(data.payload);
+      if (data?.type === 'siyahtus:command' && data.command === 'trackEvent')
+        void trackEvent(data.payload);
       // Only from the page the widget is embedded in: another frame on that page
       // can reach this one too, and must not sign its visitor out or open it.
       if (data?.type === 'siyahtus:command' && event.source === win.parent && !config.chatPage) {
@@ -4592,6 +4613,21 @@ function asTrackSaleInput(payload: unknown): TrackSaleInput | null {
   if (typeof amount_cents !== 'number' || !Number.isFinite(amount_cents)) return null;
   if (typeof currency !== 'string' || currency.length !== 3) return null;
   return { external_order_id, amount_cents, currency };
+}
+
+/**
+ * Narrow an untrusted `siyahtus('trackEvent', …)` payload (EN-06): a name of the
+ * shape goals use, and a value only when it is a short string. A bad name drops
+ * the whole call; a bad value just goes missing. Nothing else is copied, so a
+ * figure the page tucks into the payload cannot travel.
+ */
+function asTrackEventInput(payload: unknown): TrackEventInput | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const { name, value } = payload as Record<string, unknown>;
+  if (typeof name !== 'string' || !/^[a-z0-9_]{1,40}$/.test(name)) return null;
+  return typeof value === 'string' && value.trim() && value.length <= 100
+    ? { name, value: value.trim() }
+    : { name };
 }
 
 /** Map the API's snake_case identity to the widget's shape. */

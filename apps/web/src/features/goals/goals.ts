@@ -4,6 +4,7 @@
  * unit test can pin down — the same split campaigns.ts draws for its list.
  */
 import {
+  CUSTOM_EVENT_NAME_RE,
   GOAL_FILTERS,
   type Goal,
   type GoalDefinition,
@@ -38,8 +39,8 @@ export function goalCounts(goals: readonly Goal[]): Record<GoalFilter, number> {
 }
 
 /**
- * The funnel a goal can be defined against (FR-MOD-13.3) — exactly the four
- * predicates {@link GoalDefinition} carries, in the order the builder offers
+ * The funnel a goal can be defined against (FR-MOD-13.3, EN-06) — exactly the
+ * five predicates {@link GoalDefinition} carries, in the order the builder offers
  * them and the list describes them. A goal is defined by exactly one of
  * these; combining several in one definition is possible at the data layer
  * (204.1's matcher ANDs whatever is set) but not a shape this form offers —
@@ -50,6 +51,7 @@ export const GOAL_TRIGGER_TYPES = [
   'sale_completed',
   'lead_captured',
   'chat_resolved',
+  'custom_event',
 ] as const;
 
 export type GoalTriggerType = (typeof GOAL_TRIGGER_TYPES)[number];
@@ -60,26 +62,54 @@ export const GOAL_TRIGGER_TYPE_LABEL_KEY: Record<GoalTriggerType, string> = {
   sale_completed: 'goals.builder.type.saleCompleted',
   lead_captured: 'goals.builder.type.leadCaptured',
   chat_resolved: 'goals.builder.type.chatResolved',
+  custom_event: 'goals.builder.type.customEvent',
 };
 
-const FLAG_DEFINITIONS: Record<Exclude<GoalTriggerType, 'url_contains'>, GoalDefinition> = {
+const FLAG_DEFINITIONS: Record<
+  Exclude<GoalTriggerType, 'url_contains' | 'custom_event'>,
+  GoalDefinition
+> = {
   sale_completed: { sale_completed: true },
   lead_captured: { lead_captured: true },
   chat_resolved: { chat_resolved: true },
 };
 
+/** What the builder's "custom event" fields hold (EN-06). */
+export interface GoalEventInput {
+  name: string;
+  value: string;
+}
+
+/**
+ * Is this a name the page's `siyahtus('trackEvent', …)` and the API both accept?
+ * The same shape the server enforces, so the form can never offer a goal that
+ * waits for an event nothing could send.
+ */
+export function isCustomEventName(name: string): boolean {
+  return CUSTOM_EVENT_NAME_RE.test(name);
+}
+
 /**
  * The definition body to submit for a chosen trigger type. `url_contains`
- * carries the typed needle; the other three are flags, so choosing one *is*
- * setting it — there is nothing further to type in.
+ * carries the typed needle and `custom_event` the typed name (and optional
+ * value); the other three are flags, so choosing one *is* setting it — there is
+ * nothing further to type in.
  */
-export function buildGoalDefinition(type: GoalTriggerType, urlContains: string): GoalDefinition {
+export function buildGoalDefinition(
+  type: GoalTriggerType,
+  urlContains: string,
+  event: GoalEventInput = { name: '', value: '' },
+): GoalDefinition {
   if (type === 'url_contains') return { url_contains: urlContains.trim() };
+  if (type === 'custom_event') {
+    const value = event.value.trim();
+    return { custom_event: { name: event.name.trim(), ...(value ? { value_equals: value } : {}) } };
+  }
   return FLAG_DEFINITIONS[type];
 }
 
 /** One predicate a goal's definition sets, ready to render — a translation
- *  key plus the interpolation params it needs (only `url_contains` has one). */
+ *  key plus the interpolation params it needs (only the page and event kinds have any). */
 export interface GoalTriggerDescriptor {
   key: string;
   params?: Record<string, string>;
@@ -104,6 +134,21 @@ export function describeGoalTriggers(definition: unknown): GoalTriggerDescriptor
   if (raw.sale_completed === true) out.push({ key: 'goals.page.trigger.saleCompleted' });
   if (raw.lead_captured === true) out.push({ key: 'goals.page.trigger.leadCaptured' });
   if (raw.chat_resolved === true) out.push({ key: 'goals.page.trigger.chatResolved' });
+
+  const event = raw.custom_event;
+  if (event && typeof event === 'object') {
+    const { name, value_equals: valueEquals } = event as Record<string, unknown>;
+    if (typeof name === 'string' && name) {
+      if (typeof valueEquals === 'string' && valueEquals) {
+        out.push({
+          key: 'goals.page.trigger.customEventValue',
+          params: { name, value: valueEquals },
+        });
+      } else {
+        out.push({ key: 'goals.page.trigger.customEvent', params: { name } });
+      }
+    }
+  }
 
   return out;
 }

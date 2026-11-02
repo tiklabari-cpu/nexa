@@ -9,6 +9,7 @@
  * can see the goals but not change them.
  */
 import type { FastifyInstance } from 'fastify';
+import { CUSTOM_EVENT_NAME_RE, CUSTOM_EVENT_VALUE_MAX_LENGTH } from '@siyahtus/types';
 import { z } from 'zod';
 import { ApiError } from '../lib/api-error.js';
 import { GoalService, type GoalInput, type GoalPatch } from '../services/goals/goal-service.js';
@@ -32,6 +33,15 @@ const definitionSchema = z
     sale_completed: z.boolean().optional(),
     lead_captured: z.boolean().optional(),
     chat_resolved: z.boolean().optional(),
+    // A page event (EN-06). The name has the same shape the ingest endpoint
+    // accepts, so a goal can never wait for an event that endpoint would refuse.
+    custom_event: z
+      .object({
+        name: z.string().regex(CUSTOM_EVENT_NAME_RE, 'must be 1-40 of a-z, 0-9 and _'),
+        value_equals: z.string().trim().min(1).max(CUSTOM_EVENT_VALUE_MAX_LENGTH).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

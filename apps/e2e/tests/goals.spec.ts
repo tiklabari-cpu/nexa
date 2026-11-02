@@ -188,4 +188,81 @@ test.describe('goals', () => {
     expect(after.funnel.conversions).toBe(before.funnel.conversions);
     expect(after.by_goal.find((goal) => goal.name === name)?.conversions).toBe(0);
   });
+
+  test('a page event the site reports converts a visitor once, and a bad one breaks nothing (EN-06)', async ({
+    agentPage,
+    browser,
+    request,
+    organizationId,
+  }) => {
+    const stamp = Date.now().toString().slice(-6);
+    const name = `Registered ${stamp}`;
+    const eventName = `registration_completed_${stamp}`;
+    const site = tenantSubdomain(`evt-${stamp}`);
+    const token = await ownerAccessToken(request);
+
+    // --- The goal is defined from the screen, under "Page event (advanced)" ---
+    await agentPage.goto('/app/customers/goals');
+    await agentPage.getByRole('button', { name: 'New goal' }).click();
+    const dialog = agentPage.getByRole('dialog', { name: 'New goal' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel('Name').fill(name);
+    await dialog.getByText('Page event (advanced)').click();
+    // The same shape the page's call and the API accept: a bad name holds Submit back.
+    await dialog.getByLabel('Event name').fill('Not A Name');
+    await dialog.getByLabel('Event name').blur();
+    await expect(dialog.getByText(/lowercase letters, digits and _ only/i)).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Create goal' })).toBeDisabled();
+    await dialog.getByLabel('Event name').fill(eventName);
+    await dialog.getByRole('button', { name: 'Create goal' }).click();
+    const card = agentPage.getByRole('listitem').filter({ hasText: name });
+    await expect(card).toBeVisible();
+    await expect(card).toContainText(`Page event ${eventName}`);
+
+    const conversionsOf = async (): Promise<number> =>
+      (await goalsReport(request, token)).by_goal.find((goal) => goal.name === name)?.conversions ??
+      0;
+    expect(await conversionsOf()).toBe(0);
+
+    const visitorContext = await browser.newContext();
+    const visitor = await visitorContext.newPage();
+    try {
+      await openWidget(visitor, organizationId, { host: site.origin });
+      await visitor.waitForFunction(
+        () => typeof (window as unknown as { siyahtus?: unknown }).siyahtus === 'function',
+      );
+      const track = (payload: unknown): Promise<void> =>
+        visitor.evaluate((body) => {
+          (window as unknown as { siyahtus: (c: string, p: unknown) => void }).siyahtus(
+            'trackEvent',
+            body,
+          );
+        }, payload);
+
+      // --- A bad name, a missing payload and an amount: nothing breaks -------
+      await track({ name: 'Not A Name' });
+      await track(undefined);
+      await track({ name: 'something_else', amount_cents: 4990 });
+      await expect.poll(conversionsOf, { timeout: 5_000 }).toBe(0);
+      await expect(visitor.locator('#siyahtus-widget-frame')).toBeVisible();
+
+      // --- The event the goal names converts the visitor — without a chat -----
+      await track({ name: eventName });
+      await expect.poll(conversionsOf, { timeout: 20_000 }).toBe(1);
+
+      // --- The page repeats it: the conversion count does not move -----------
+      const reported = visitor.waitForResponse(
+        (response) => response.url().includes('/customer/events') && response.status() === 204,
+      );
+      await track({ name: eventName });
+      await reported;
+      await track({ name: eventName });
+      await expect.poll(conversionsOf, { timeout: 5_000 }).toBe(1);
+
+      await agentPage.reload();
+      await expect(card).toBeVisible();
+    } finally {
+      await visitorContext.close();
+    }
+  });
 });

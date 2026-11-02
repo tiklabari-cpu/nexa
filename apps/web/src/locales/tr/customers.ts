@@ -528,6 +528,8 @@ export const customers: Messages = {
   'goals.page.trigger.saleCompleted': 'Satış tamamlandı',
   'goals.page.trigger.leadCaptured': 'Lead yakalandı',
   'goals.page.trigger.chatResolved': 'Sohbet çözüldü',
+  'goals.page.trigger.customEvent': 'Sayfa olayı {name}',
+  'goals.page.trigger.customEventValue': 'Sayfa olayı {name} = {value}',
   'goals.page.trigger.none': 'Tetikleyici tanımlanmamış',
 
   // Goal builder — GoalBuilder.tsx
@@ -541,6 +543,15 @@ export const customers: Messages = {
   'goals.builder.type.saleCompleted': 'Satış tamamlandı',
   'goals.builder.type.leadCaptured': 'Lead yakalandı',
   'goals.builder.type.chatResolved': 'Sohbet çözüldü',
+  'goals.builder.type.customEvent': 'Sayfa olayı (gelişmiş)',
+  'goals.builder.eventNameLabel': 'Olay adı',
+  'goals.builder.eventNameHint':
+    "Siteniz siyahtus('trackEvent', {name: 'registration_completed'}) ile gönderir. Küçük harf, rakam ve _, en çok 40 karakter.",
+  'goals.builder.eventNameRequired': 'Sitenizin gönderdiği olay adını yazın.',
+  'goals.builder.eventNameInvalid': 'Yalnız küçük harf, rakam ve _ kullanın (1–40 karakter).',
+  'goals.builder.eventValueLabel': 'Yalnız değer şuysa (isteğe bağlı)',
+  'goals.builder.eventValueHint':
+    'Olayı her değerle saymak için boş bırakın. Olay ziyaretçinin tarayıcısından gelir ve doğrulanmaz.',
   'goals.builder.triggerLabel': 'Tetikleyici — sayfa URL’si şunu içerir',
   'goals.builder.triggerHint':
     'ör. /thank-you — eşleşen bir sayfaya ulaşan ziyaretçi dönüşüm sayılır.',

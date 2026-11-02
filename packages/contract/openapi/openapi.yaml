@@ -301,6 +301,8 @@ paths:
     $ref: "./paths/customer-chat.yaml#/rating"
   /customer/chat/sale:
     $ref: "./paths/customer-chat.yaml#/sale"
+  /customer/events:
+    $ref: "./paths/customer-chat.yaml#/customEvent"
   /customer/ticket:
     $ref: "./paths/customer-chat.yaml#/leaveTicket"
   /customer/visit:
@@ -11383,6 +11385,25 @@ components:
         chat_resolved:
           type: boolean
           description: Require a conversation with this visitor to have been archived.
+        custom_event:
+          type: object
+          description: >-
+            Require the visitor's page to have reported this event with
+            `siyahtus('trackEvent', …)` (EN-06). The event comes from the
+            visitor's browser and is not verified: it feeds the goal report,
+            never billing or authorisation. A goal that names it converts a
+            visitor once, however often the page repeats the event.
+          required: [name]
+          additionalProperties: false
+          properties:
+            name:
+              type: string
+              pattern: "^[a-z0-9_]{1,40}$"
+              description: The event name, for example `registration_completed`.
+            value_equals:
+              type: string
+              maxLength: 100
+              description: When set, only an event reported with exactly this value counts.
 
     Goal:
       type: object
@@ -16748,6 +16769,28 @@ components:
           description: |
             True when this request handed the connection over; false when a
             person or the queue had it already (or another press was doing it).
+
+    TrackEventRequest:
+      type: object
+      description: |
+        One event a host page reports about its visitor (EN-06) — a
+        registration finished, a first deposit page reached.
+
+        Deliberately a name and an optional label. There is **no amount field**:
+        a figure the visitor's browser states is not stored by this endpoint, and
+        one sent anyway is ignored like any other unknown property, so a page
+        cannot use an event to move revenue. Which workspace and which visitor
+        come from the customer token, never the body.
+      required: [name]
+      properties:
+        name:
+          type: string
+          pattern: "^[a-z0-9_]{1,40}$"
+          description: Lowercase letters, digits and underscores, 1–40 characters.
+        value:
+          type: string
+          maxLength: 100
+          description: An optional short label, for example a plan name. Not a number to sum.
 
     TrackSaleRequest:
       type: object

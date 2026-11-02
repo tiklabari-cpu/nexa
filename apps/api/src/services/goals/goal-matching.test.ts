@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { visitorPageUrls } from '../campaigns/campaign-matching.js';
-import { goalRequires, hasGoalTrigger, matchesGoal } from './goal-matching.js';
+import { customEventNeedle, goalRequires, hasGoalTrigger, matchesGoal } from './goal-matching.js';
 
 /** A visitor of whom nothing beyond their pages is known. */
 const NOTHING_HAPPENED = { saleCompleted: false, leadCaptured: false, chatResolved: false };
@@ -200,5 +200,80 @@ describe('matchesGoal on the funnel predicates (FR-MOD-13.3)', () => {
     expect(() => matchesGoal({ sale_completed: 'true' }, [], facts)).not.toThrow();
     expect(matchesGoal({ sale_completed: 'true' }, [], facts)).toBe(false);
     expect(matchesGoal({ chat_resolved: null }, [], facts)).toBe(false);
+  });
+});
+
+describe('the custom event predicate (EN-06)', () => {
+  const registered = { custom_event: { name: 'registration_completed' } };
+
+  it('reads the predicate defensively — anything unreadable is a goal nobody reaches', () => {
+    expect(customEventNeedle(registered)).toEqual({
+      name: 'registration_completed',
+      valueEquals: null,
+    });
+    expect(customEventNeedle({ custom_event: { name: 'plan', value_equals: 'pro' } })).toEqual({
+      name: 'plan',
+      valueEquals: 'pro',
+    });
+    // A blank value means "any value", the same as an absent one.
+    expect(
+      customEventNeedle({ custom_event: { name: 'plan', value_equals: '' } })?.valueEquals,
+    ).toBe(null);
+    for (const bad of [
+      null,
+      'x',
+      {},
+      { custom_event: null },
+      { custom_event: 'registration_completed' },
+      { custom_event: {} },
+      { custom_event: { name: '' } },
+      { custom_event: { name: 7 } },
+    ]) {
+      expect(customEventNeedle(bad), JSON.stringify(bad)).toBeNull();
+      expect(hasGoalTrigger(bad), JSON.stringify(bad)).toBe(false);
+    }
+  });
+
+  it('is a trigger on its own', () => {
+    expect(hasGoalTrigger(registered)).toBe(true);
+  });
+
+  it('matches only a visitor whose page reported that event — with no pages at all', () => {
+    expect(matchesGoal(registered, [], { customEvents: [] })).toBe(false);
+    expect(matchesGoal(registered, [], {})).toBe(false);
+    expect(
+      matchesGoal(registered, [], { customEvents: [{ name: 'something_else', value: '' }] }),
+    ).toBe(false);
+    expect(
+      matchesGoal(registered, [], {
+        customEvents: [{ name: 'registration_completed', value: '' }],
+      }),
+    ).toBe(true);
+  });
+
+  it('with value_equals, counts only that exact value (case-sensitive)', () => {
+    const pro = { custom_event: { name: 'plan_chosen', value_equals: 'pro' } };
+    const seen = (value: string) => ({ customEvents: [{ name: 'plan_chosen', value }] });
+    expect(matchesGoal(pro, [], seen('pro'))).toBe(true);
+    expect(matchesGoal(pro, [], seen('Pro'))).toBe(false);
+    expect(matchesGoal(pro, [], seen('free'))).toBe(false);
+    expect(matchesGoal(pro, [], seen(''))).toBe(false);
+    // The visitor reported two plans over time: one matching row is enough.
+    expect(
+      matchesGoal(pro, [], {
+        customEvents: [
+          { name: 'plan_chosen', value: 'free' },
+          { name: 'plan_chosen', value: 'pro' },
+        ],
+      }),
+    ).toBe(true);
+  });
+
+  it('keeps AND semantics with the other predicates', () => {
+    const both = { url_contains: '/welcome', ...registered };
+    const event = { customEvents: [{ name: 'registration_completed', value: '' }] };
+    expect(matchesGoal(both, ['https://shop.example/welcome'], event)).toBe(true);
+    expect(matchesGoal(both, ['https://shop.example/pricing'], event)).toBe(false);
+    expect(matchesGoal(both, ['https://shop.example/welcome'], {})).toBe(false);
   });
 });

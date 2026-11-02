@@ -292,6 +292,7 @@ model License {
   salesTrackerSettings   SalesTrackerSettings?
   appearanceSettings     WorkspaceAppearanceSettings?
   trackedSales           TrackedSale[]
+  visitorEvents          VisitorEvent[]
   slaPolicy              SlaPolicy?
   slaBreaches            SlaBreach[]
   bots                   Bot[]
@@ -569,6 +570,7 @@ model Customer {
   customFieldValues CustomFieldValue[]
   goalAchievements  GoalAchievement[]
   trackedSales      TrackedSale[]
+  visitorEvents     VisitorEvent[]
   aiDecisionLogs    AiDecisionLog[]
   riskFlags         RiskFlag[]
   aiCustomerDailyUsage AiCustomerDailyUsage[]
@@ -2191,6 +2193,31 @@ model TrackedSale {
   @@unique([licenseId, externalOrderId])
   @@index([licenseId, createdAt])
   @@map("tracked_sales")
+}
+
+/// A page event the host site reported with siyahtus('trackEvent', …) (EN-06).
+///
+/// Unverified browser data, kept for one purpose — letting a goal that names
+/// the event convert the visitor. There is deliberately no amount column: the
+/// endpoint stores a name and a short label only, so an event can never move
+/// a revenue figure. `value` is the empty string when the page sent none, which
+/// keeps the unique key below a plain column list (NULLs would never collide).
+model VisitorEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  licenseId  BigInt   @map("license_id")
+  customerId String   @map("customer_id") @db.Uuid
+  name       String   @db.VarChar(40)
+  value      String   @default("") @db.VarChar(100)
+  occurredAt DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+
+  license  License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  /// The same event repeated by the page records nothing new, so the table is
+  /// bounded by what a visitor can say distinctly, not by how often they say it.
+  /// It also serves the matcher's lookup (license, customer, name) by prefix.
+  @@unique([licenseId, customerId, name, value])
+  @@map("visitor_events")
 }
 
 /// Browsing telemetry behind the real-time visitor list.

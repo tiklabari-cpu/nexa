@@ -158,9 +158,12 @@ describe('GoalsPage', () => {
         goal(true, 'Bought something', { definition: { sale_completed: true } }),
         goal(true, 'Became a lead', { definition: { lead_captured: true } }),
         goal(true, 'Got helped', { definition: { chat_resolved: true } }),
+        goal(true, 'Registered', {
+          definition: { custom_event: { name: 'registration_completed' } },
+        }),
         goal(true, 'Hand-edited row', { definition: {} }),
       ],
-      total: 5,
+      total: 6,
     });
     renderPage();
 
@@ -168,6 +171,7 @@ describe('GoalsPage', () => {
     expect(screen.getByText('Sale completed')).toBeInTheDocument();
     expect(screen.getByText('Lead captured')).toBeInTheDocument();
     expect(screen.getByText('Chat resolved')).toBeInTheDocument();
+    expect(screen.getByText('Page event registration_completed')).toBeInTheDocument();
     expect(screen.getByText('No trigger defined')).toBeInTheDocument();
   });
 
@@ -270,6 +274,51 @@ describe('GoalsPage', () => {
           expect(api.post).toHaveBeenCalledWith('/goals', { name: 'Converted', definition });
         },
       );
+
+      it('creates a page-event goal from the typed event name (EN-06)', async () => {
+        api.post.mockResolvedValue(goal(true, 'Signed up'));
+        renderPage();
+        await userEvent.click(await screen.findByRole('button', { name: 'New goal' }));
+
+        await userEvent.type(screen.getByLabelText('Name'), 'Signed up');
+        await userEvent.click(screen.getByRole('radio', { name: 'Page event (advanced)' }));
+        expect(screen.queryByLabelText(/Trigger/)).not.toBeInTheDocument();
+
+        const submit = screen.getByRole('button', { name: 'Create goal' });
+        expect(submit).toBeDisabled();
+
+        await userEvent.type(screen.getByLabelText('Event name'), 'Registration Done');
+        await userEvent.tab();
+        expect(await screen.findByText(/Use lowercase letters, digits and _ only/)).toBeVisible();
+        expect(submit).toBeDisabled();
+
+        await userEvent.clear(screen.getByLabelText('Event name'));
+        await userEvent.type(screen.getByLabelText('Event name'), 'registration_completed');
+        expect(submit).not.toBeDisabled();
+        await userEvent.click(submit);
+
+        expect(api.post).toHaveBeenCalledWith('/goals', {
+          name: 'Signed up',
+          definition: { custom_event: { name: 'registration_completed' } },
+        });
+      });
+
+      it('sends the optional value of a page-event goal when one is typed (EN-06)', async () => {
+        api.post.mockResolvedValue(goal(true, 'Pro plan'));
+        renderPage();
+        await userEvent.click(await screen.findByRole('button', { name: 'New goal' }));
+
+        await userEvent.type(screen.getByLabelText('Name'), 'Pro plan');
+        await userEvent.click(screen.getByRole('radio', { name: 'Page event (advanced)' }));
+        await userEvent.type(screen.getByLabelText('Event name'), 'plan_chosen');
+        await userEvent.type(screen.getByLabelText(/Only when the value is/), 'pro');
+        await userEvent.click(screen.getByRole('button', { name: 'Create goal' }));
+
+        expect(api.post).toHaveBeenCalledWith('/goals', {
+          name: 'Pro plan',
+          definition: { custom_event: { name: 'plan_chosen', value_equals: 'pro' } },
+        });
+      });
 
       it('switching back to "Page reached" brings the URL field and its requirement back', async () => {
         renderPage();

@@ -77,6 +77,12 @@ export interface TrackSaleInput {
   currency: string;
 }
 
+/** What `POST /customer/events` accepts (EN-06): a name and an optional label, no amount. */
+export interface TrackEventInput {
+  name: string;
+  value?: string;
+}
+
 /**
  * A message left when nobody is available (FR-MOD-08.7.7). The two answer maps
  * are kept apart because their destinations are: `ticket_fields` are about the
@@ -710,6 +716,11 @@ export class WidgetApi {
    */
   async trackSale(input: TrackSaleInput): Promise<void> {
     await this.#request('POST', '/customer/chat/sale', input);
+  }
+
+  /** Report a page event a goal can convert on (EN-06); fire-and-forget like `trackSale`. */
+  async trackEvent(input: TrackEventInput): Promise<void> {
+    await this.#request('POST', '/customer/events', input);
   }
 
   async #request<T>(method: string, path: string, body?: unknown): Promise<T> {

@@ -91,6 +91,7 @@ import reportRoutes from './routes/reports.js';
 import billingPaymentRoutes from './routes/billing-payments.js';
 import billingProfileRoutes from './routes/billing-profile.js';
 import billingCancelRoutes from './routes/billing-cancel.js';
+import ownershipTransferRoutes from './routes/ownership-transfers.js';
 import { resolvePaymentProvider } from './services/billing/payment-provider.js';
 import scheduledReportRoutes from './routes/scheduled-reports.js';
 import homeRoutes from './routes/home.js';
@@ -704,6 +705,7 @@ export async function buildServer({
       await api.register(billingPaymentRoutes, { env, payments });
       await api.register(billingProfileRoutes, { env });
       await api.register(billingCancelRoutes, { env, mailer });
+      await api.register(ownershipTransferRoutes, { env, mailer });
       await api.register(scheduledReportRoutes);
       await api.register(homeRoutes);
       await api.register(settingsRoutes, { env, mailer });

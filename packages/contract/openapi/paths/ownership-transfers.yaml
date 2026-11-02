@@ -1,0 +1,195 @@
+# Handing the workspace over (RL-05 · tm 328): the owner (Kurucu) names an
+# active, verified member, re-enters the password (and the second factor when
+# one is on), and that member accepts within 72 hours with the token mailed to
+# them. On acceptance, in one transaction, the previous owner becomes an admin
+# and the member becomes the owner. When the owner cannot be reached there is
+# no panel path here: SiyahTuş support's verified manual process does it from
+# the root panel (`POST /platform/v1/workspaces/{id}/force-ownership-transfer`).
+
+ownershipTransfers:
+  post:
+    tags: [Configuration]
+    operationId: startOwnershipTransfer
+    summary: Offer the workspace's ownership to a member
+    description: |
+      Starts a transfer to `target_agent_id` and mails that member a link with
+      a single-use token, valid for 72 hours. Nothing changes until they
+      accept; the owner may cancel meanwhile. One transfer is pending per
+      workspace at a time.
+
+      **Owner only** — everyone else gets `403`. From a signed-in session
+      only: a personal access token or a support session is refused (`403
+      not_allowed`, `details.reason` `session_required`). The owner proves it
+      again: `password` (401 when wrong), and when the account has two-factor
+      authentication on, `totp` too — a current authenticator code or one of
+      the account's recovery codes (`401 two_factor_required` when missing,
+      `401` when wrong). An account without a password proves the second
+      factor instead. Every attempt, right or wrong, counts against a budget of
+      10 per account per hour (429).
+
+      The member must belong to this workspace (404 otherwise), not be its
+      owner (`400 validation`, `details.reason` `target_is_owner`), and be
+      able to hold it — refused with `409 ownership_transfer_state` and
+      `details.reason`: `target_suspended` (suspended, awaiting approval or
+      blocked by SiyahTuş), `target_unverified` (e-mail address not
+      confirmed), `target_two_factor_required` (the workspace requires
+      two-factor authentication and the member has not set it up), or
+      `pending_exists` (`details.transfer_id` names the pending one).
+
+      Writable while the workspace is read-only. The mail is sent after the
+      transfer is recorded; `mail` says whether it went.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [target_agent_id]
+            properties:
+              target_agent_id:
+                type: string
+                format: uuid
+                description: The member to make the owner.
+              password:
+                type: string
+                maxLength: 512
+                description: The owner's current password. Required when the account has one.
+              totp:
+                type: string
+                maxLength: 64
+                description: |
+                  A current authenticator code or a recovery code. Required when
+                  the owner has two-factor authentication on, or has no password.
+    responses:
+      "201":
+        description: The pending transfer
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [transfer, mail]
+              properties:
+                transfer: { $ref: "../openapi.yaml#/components/schemas/OwnershipTransfer" }
+                mail:
+                  type: string
+                  enum: [sent, failed]
+                  description: Whether the member's link was handed to the mail provider.
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+currentOwnershipTransfer:
+  get:
+    tags: [Configuration]
+    operationId: getCurrentOwnershipTransfer
+    summary: The workspace's pending ownership transfer
+    description: |
+      The pending transfer, or `null` when there is none. Shown to the owner,
+      the workspace's admins and the member it is offered to; anyone else
+      reads `null`. A transfer whose 72 hours ran out is recorded as expired
+      (audit `ownership.transfer_expired`) when it is next looked at, and is
+      not returned.
+    responses:
+      "200":
+        description: The pending transfer, if any
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [transfer]
+              properties:
+                transfer:
+                  nullable: true
+                  allOf:
+                    - $ref: "../openapi.yaml#/components/schemas/OwnershipTransfer"
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+ownershipTransfer:
+  delete:
+    tags: [Configuration]
+    operationId: cancelOwnershipTransfer
+    summary: Cancel a pending ownership transfer
+    description: |
+      **Owner only.** The member's link stops working and they are told by
+      mail. A transfer no longer pending — accepted, cancelled or expired —
+      is refused with `409 ownership_transfer_state` (`details.reason`
+      `not_pending`, `details.state` its state). From a signed-in session
+      only, like starting one.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/OwnershipTransferId"
+    responses:
+      "204": { description: Cancelled }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+
+acceptOwnershipTransfer:
+  post:
+    tags: [Configuration]
+    operationId: acceptOwnershipTransfer
+    summary: Accept the workspace's ownership
+    description: |
+      The member the transfer names, signed in to this workspace, presents the
+      token from their mail. In one transaction the previous owner becomes an
+      admin and the caller becomes the owner; every admin and both parties
+      are told by mail. Anyone else gets `403`; a wrong token `403
+      not_allowed` (`details.reason` `invalid_token`).
+
+      Refused with `409 ownership_transfer_state` and `details.reason`:
+      `not_pending` (`details.state`: accepted, cancelled or expired — 72
+      hours passed), `owner_changed` (the workspace's owner is no longer the
+      one who offered it; the transfer is cancelled), or the member's own
+      state as at the start (`target_suspended`, `target_unverified`,
+      `target_two_factor_required`).
+
+      When the workspace signs its members in through an identity provider
+      (`sso_enforced`), the new owner keeps the password sign-in owners have,
+      and the previous owner signs in through the provider from now on.
+      `billing_contact` says what happened to the invoice e-mail on the
+      billing profile: `moved` (it was the previous owner's address and is now
+      the new owner's), `kept` (another address — the new owner decides) or
+      `none` (no billing profile or no invoice address). Billing mail itself
+      always goes to whoever is the owner.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/OwnershipTransferId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [token]
+            properties:
+              token:
+                type: string
+                minLength: 1
+                maxLength: 256
+                description: The token from the transfer mail.
+    responses:
+      "200":
+        description: The accepted transfer
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [transfer, billing_contact]
+              properties:
+                transfer: { $ref: "../openapi.yaml#/components/schemas/OwnershipTransfer" }
+                billing_contact:
+                  type: string
+                  enum: [moved, kept, none]
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }

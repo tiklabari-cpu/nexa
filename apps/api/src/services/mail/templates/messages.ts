@@ -792,6 +792,158 @@ export function paymentAddressSentMail(
 }
 
 /**
+ * The owner's own handover (RL-05 · tm 328), in three moments:
+ *
+ *   - `offer` — to the member the owner named: accept within `hours` with
+ *     the link (its token is single-use; signing in to the workspace is part
+ *     of accepting, so the link alone takes nothing over);
+ *   - `cancelled` — to the same member: the owner took the offer back;
+ *   - `accepted` — to both parties and every admin, so a transfer nobody
+ *     expected cannot pass unnoticed. `part` says which one the reader is;
+ *     `ssoEnforced` adds what changes at sign-in (the owner keeps password
+ *     sign-in, the previous owner signs in through the identity provider).
+ */
+export function ownershipTransferMail(
+  ctx: MailContext,
+  input:
+    | { kind: 'offer'; workspaceName: string; ownerName: string; url: string; hours: number }
+    | { kind: 'cancelled'; workspaceName: string; ownerName: string }
+    | {
+        kind: 'accepted';
+        workspaceName: string;
+        newOwner: string;
+        previousOwner: string;
+        part: 'new_owner' | 'previous_owner' | 'admin';
+        ssoEnforced: boolean;
+      },
+): RenderedEmail {
+  const t = tr(ctx.locale);
+  const ws = input.workspaceName;
+  if (input.kind === 'offer') {
+    const ttl = hoursText(ctx.locale, input.hours);
+    return renderEmail({
+      locale: ctx.locale,
+      homeUrl: ctx.appUrl ?? '',
+      eyebrow: ws,
+      subject: t
+        ? `${input.ownerName} size ${ws} çalışma alanının sahipliğini devretmek istiyor`
+        : `${input.ownerName} wants to make you the owner of ${ws}`,
+      preheader: t
+        ? `Kabul ederseniz Kurucu siz olursunuz; ${input.ownerName} Yönetici olur.`
+        : `If you accept, you become the owner and ${input.ownerName} becomes an admin.`,
+      icon: ICON.key,
+      heading: t ? 'Sahiplik devri teklifi' : 'An offer of ownership',
+      blocks: [
+        {
+          type: 'paragraph',
+          text: t
+            ? `${input.ownerName}, ${ws} çalışma alanının sahipliğini (Kurucu rolünü) size devretmek istiyor. Kabul ettiğinizde fatura, güvenlik ve çalışma alanının yalnız Kurucuya açık bütün ayarları sizde olur; ${input.ownerName} Yönetici olarak kalır.`
+            : `${input.ownerName} wants to hand the ownership of the workspace ${ws} to you. Once you accept, billing, security and every setting only the owner can change are yours; ${input.ownerName} stays on as an admin.`,
+        },
+        {
+          type: 'button',
+          label: t ? 'Devri incele ve kabul et' : 'Review and accept',
+          url: input.url,
+          fallback: fallback(ctx),
+        },
+        {
+          type: 'note',
+          text: t
+            ? `Bağlantı ${ttl} geçerlidir ve yalnızca bir kez kullanılabilir. Kabul etmek için çalışma alanında kendi hesabınızla oturum açmanız gerekir. Beklemediğiniz bir teklifse bu e-postayı yok sayabilirsiniz; süre dolunca devir düşer.`
+            : `The link expires in ${ttl} and works once. You accept it signed in to the workspace with your own account. If you were not expecting this, you can ignore this email; the offer lapses when the time runs out.`,
+        },
+      ],
+      footer: [
+        t
+          ? `Bu e-postayı, ${ws} çalışma alanının Kurucusu sizi yeni Kurucu olarak seçtiği için aldınız.`
+          : `You received this email because the owner of ${ws} chose you as its next owner.`,
+        signature(ctx),
+      ],
+    });
+  }
+  if (input.kind === 'cancelled') {
+    return renderEmail({
+      locale: ctx.locale,
+      homeUrl: ctx.appUrl ?? '',
+      eyebrow: ws,
+      subject: t
+        ? `${ws} çalışma alanının sahiplik devri iptal edildi`
+        : `The ownership transfer of ${ws} was cancelled`,
+      preheader: t
+        ? 'Size gönderilen bağlantı artık çalışmıyor.'
+        : 'The link you were sent no longer works.',
+      icon: ICON.key,
+      heading: t ? 'Devir iptal edildi' : 'Transfer cancelled',
+      blocks: [
+        {
+          type: 'paragraph',
+          text: t
+            ? `${input.ownerName}, ${ws} çalışma alanının sahipliğini size devretme teklifini geri aldı. Size gönderilen bağlantı artık çalışmıyor; rolünüz değişmedi.`
+            : `${input.ownerName} has taken back the offer to make you the owner of ${ws}. The link you were sent no longer works, and your role has not changed.`,
+        },
+      ],
+      footer: [
+        t
+          ? `Bu e-postayı, size ${ws} çalışma alanının sahipliği teklif edildiği için aldınız.`
+          : `You received this email because you were offered the ownership of ${ws}.`,
+        signature(ctx),
+      ],
+    });
+  }
+  const lead = (): string => {
+    switch (input.part) {
+      case 'new_owner':
+        return t
+          ? `Devri kabul ettiniz: artık ${ws} çalışma alanının Kurucususunuz. ${input.previousOwner} Yönetici olarak devam ediyor.`
+          : `You accepted the transfer: you are now the owner of the workspace ${ws}. ${input.previousOwner} continues as an admin.`;
+      case 'previous_owner':
+        return t
+          ? `${input.newOwner} devri kabul etti ve ${ws} çalışma alanının Kurucusu oldu. Siz artık bu çalışma alanında Yöneticisiniz.`
+          : `${input.newOwner} accepted the transfer and is now the owner of the workspace ${ws}. You are an admin of it from now on.`;
+      case 'admin':
+        return t
+          ? `${ws} çalışma alanının sahipliği ${input.previousOwner} kişisinden ${input.newOwner} kişisine devredildi. ${input.previousOwner} Yönetici olarak devam ediyor.`
+          : `Ownership of the workspace ${ws} has passed from ${input.previousOwner} to ${input.newOwner}. ${input.previousOwner} continues as an admin.`;
+    }
+  };
+  const blocks: EmailBlock[] = [{ type: 'paragraph', text: lead() }];
+  if (input.ssoEnforced) {
+    blocks.push({
+      type: 'note',
+      text: t
+        ? `Bu çalışma alanında oturum kimlik sağlayıcısı üzerinden açılıyor. Kurucu şifreyle oturum açabilmeye devam eder; ${input.previousOwner} bundan sonra kimlik sağlayıcısı üzerinden oturum açar.`
+        : `This workspace signs its members in through an identity provider. The owner can still sign in with a password; ${input.previousOwner} signs in through the identity provider from now on.`,
+    });
+  }
+  blocks.push({
+    type: 'note',
+    text: t
+      ? 'Bu devri beklemiyorsanız hemen çalışma alanınızın Kurucusuyla ya da destek ekibimizle iletişime geçin.'
+      : 'If you did not expect this transfer, contact the workspace owner or our support team straight away.',
+  });
+  return renderEmail({
+    locale: ctx.locale,
+    homeUrl: ctx.appUrl ?? '',
+    eyebrow: ws,
+    subject: t
+      ? `${ws} çalışma alanının yeni Kurucusu ${input.newOwner}`
+      : `${input.newOwner} is now the owner of ${ws}`,
+    preheader: t
+      ? `${input.previousOwner} artık Yönetici.`
+      : `${input.previousOwner} is now an admin.`,
+    icon: ICON.lock,
+    heading: t ? 'Sahiplik devredildi' : 'Ownership transferred',
+    blocks,
+    footer: [
+      t
+        ? 'Bu e-postayı, bu çalışma alanında Kurucu ya da Yönetici olduğunuz için aldınız.'
+        : 'You received this email because you are an owner or admin of this workspace.',
+      signature(ctx),
+    ],
+  });
+}
+
+/**
  * SiyahTuş moved a workspace's ownership by hand (tm 389.10 · FR-ADMIN-09 —
  * the forced transfer, when the owner could not be reached). Everyone with a
  * stake hears it: the new owner, the previous one, and every admin — so a

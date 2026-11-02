@@ -262,6 +262,7 @@ model License {
   paymentMethod          PaymentMethod?
   billingProfile         BillingProfile?
   invoiceESubmissions    InvoiceESubmission[]
+  ownershipTransfers     OwnershipTransfer[]
   paymentTransactions    PaymentTransaction[]
   cryptoPaymentRequests  CryptoPaymentRequest[]
   auditEntries           AuditLogEntry[]
@@ -367,6 +368,9 @@ model Account {
   qaCalibrationScores   QaCalibrationScore[]
   /// Personal saved replies this member authored (IN-06 · tm 363).
   cannedResponsesOwned  CannedResponse[] @relation("CannedResponseOwner")
+  /// Ownership transfers this member offered, and was offered (RL-05 · tm 328).
+  ownershipTransfersFrom OwnershipTransfer[] @relation("OwnershipTransferFrom")
+  ownershipTransfersTo   OwnershipTransfer[] @relation("OwnershipTransferTo")
 
   @@map("accounts")
 }
@@ -4674,6 +4678,36 @@ model BillingProfile {
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 
   @@map("billing_profiles")
+}
+
+/// One offer of a workspace's ownership (RL-05 · tm 328): the owner names a
+/// member and that member accepts within 72 hours with the token mailed to
+/// them. At most one is pending per licence — a partial unique index Prisma
+/// cannot express (`uq_ownership_transfers_pending`, see the migration). A row
+/// is never deleted: who offered the workspace to whom stays beside the audit
+/// log. The swap itself is `applyOwnershipSwap` (services/team).
+model OwnershipTransfer {
+  id            String    @id @default(uuid()) @db.Uuid
+  licenseId     BigInt    @map("license_id")
+  fromAccountId String    @map("from_account_id") @db.Uuid
+  toAccountId   String    @map("to_account_id") @db.Uuid
+  /// SHA-256 of the mailed token (`hashToken`); the token itself is never stored.
+  tokenHash     String    @map("token_hash")
+  /// `pending` | `accepted` | `cancelled` | `expired` (CHECK `ownership_transfers_state_check`).
+  state         String    @default("pending")
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// When it stopped being pending; null exactly while it is.
+  decidedAt     DateTime? @map("decided_at") @db.Timestamptz(6)
+
+  license     License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  fromAccount Account @relation("OwnershipTransferFrom", fields: [fromAccountId], references: [id], onDelete: Cascade)
+  toAccount   Account @relation("OwnershipTransferTo", fields: [toAccountId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, createdAt])
+  @@index([fromAccountId])
+  @@index([toAccountId])
+  @@map("ownership_transfers")
 }
 
 /// The last serial each issuer gave out in each year (tm 383 · BL-02). One

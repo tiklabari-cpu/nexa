@@ -74,6 +74,8 @@ export const common: Messages = {
   'common.errors.platform_workspace_state': 'Çalışma alanının şu anki durumu buna izin vermiyor.',
   'common.errors.recipient_not_allowed':
     'Döküm yalnız oyuncunun kendi adresine ya da çalışma alanının izin verdiği alan adlarına gönderilebilir.',
+  'common.errors.ownership_transfer_state':
+    'Bu sahiplik devri şu anki durumunda sürdürülemiyor — son durumu görmek için sayfayı yenileyin.',
   'common.errors.request_timeout': 'Bu işlem çok uzun sürdü — yeniden deneyin.',
   'common.errors.sandbox_exists': 'Bu çalışma alanında zaten bir kum havuzu var.',
   'common.errors.service_unavailable': 'Servis geçici olarak kullanılamıyor — birazdan deneyin.',

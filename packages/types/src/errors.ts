@@ -188,6 +188,14 @@ export const ERROR_TYPES = [
   'platform_recent_totp_required',
   'platform_totp_required',
   'platform_workspace_state',
+  // SiyahTuş addition — handing the workspace over (RL-05 · tm 328). A transfer
+  // a state refuses: one already pending, one no longer pending, an owner who
+  // changed meanwhile, or a member who cannot hold the workspace (suspended,
+  // unconfirmed address, no second factor where the workspace requires one) —
+  // `details.reason` says which. 409 and narrow: the request was allowed, the
+  // transfer's or the member's state refused it, and each screen answers it
+  // differently from a generic `validation`.
+  'ownership_transfer_state',
   // SiyahTuş addition — a transcript mailed on demand (AR-04 · tm 338): an
   // address that is neither the player's own nor at one of the workspace's
   // allowed domains (AR-04-S3). 403 like `message_rejected`: the caller may
@@ -310,6 +318,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   // Enumeration protection (NFR-S5): unknown *and* out-of-tenant resources
   // both surface as 404, never 403.
   not_found: 404,
+  ownership_transfer_state: 409,
   pending_requests_limit_reached: 429,
   platform_account_state: 409,
   platform_last_superadmin: 409,

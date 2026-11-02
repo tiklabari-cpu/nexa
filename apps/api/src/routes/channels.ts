@@ -43,6 +43,15 @@ import type { InboundAudit } from '../services/channels/channel-service.js';
 import { buildChannelService } from '../services/channels/channel-service-factory.js';
 import { WhatsAppInbound } from '../services/channels/whatsapp-inbound.js';
 import { parseWhatsAppWebhook, whatsAppConnectError } from '../services/channels/whatsapp-live.js';
+import {
+  META_SELECTION_TTL_SECONDS,
+  isMetaMessagingChannel,
+  metaConnectError,
+  pageChoice,
+  parseMetaMessagingWebhook,
+  type MetaPage,
+} from '../services/channels/meta-messaging-live.js';
+import { generateToken } from '../lib/crypto.js';
 import { logUnsentMail } from '../services/mail/delivery.js';
 import { reportComponentStatus } from '../services/ops/component-status.js';
 import type { SafeHttp } from '../lib/safe-fetch.js';
@@ -226,6 +235,32 @@ const whatsappLiveConnectBody = z.object({
     .regex(/^[0-9]{1,32}$/, 'must be a WhatsApp phone number id'),
 });
 
+/**
+ * A live Messenger / Instagram connect (tm 381): a page from the selection a
+ * Facebook Login opened (`POST /channels/meta/pages`). The page's token never
+ * crosses the browser; only its id does, checked against the selection.
+ */
+const metaLiveConnectBody = z.object({
+  selection_id: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9_-]{16,64}$/, 'must be a page selection id'),
+  page_id: z
+    .string()
+    .trim()
+    .regex(/^[0-9]{1,32}$/, 'must be a Facebook Page id'),
+});
+
+/** The login's one-time code (tm 381). */
+const metaPagesBody = z.object({ code: z.string().trim().min(1).max(2048) }).strict();
+
+/** Where a page selection waits in Redis: per workspace, used once (tm 381). */
+function metaSelectionKey(licenseId: bigint, selectionId: string): string {
+  return `meta-login-selection:${String(licenseId)}:${selectionId}`;
+}
+
+const META_LABEL = { messenger: 'Messenger', instagram: 'Instagram' } as const;
+
 /** The webhook's ceiling: Meta batches at most a few hundred small items. */
 const WHATSAPP_WEBHOOK_BODY_LIMIT = 1024 * 1024;
 
@@ -269,6 +304,7 @@ export default async function channelRoutes(
   });
   const telegramLive = channels.liveTelegram;
   const whatsappLive = channels.liveWhatsApp;
+  const metaLive = channels.liveMeta;
   const emailAddresses = new InboundEmailAddressService(env.INBOUND_EMAIL_DOMAIN);
   const replyAddresses = new TicketReplyAddresses(
     env.CUSTOMER_TOKEN_SECRET,
@@ -407,6 +443,49 @@ export default async function channelRoutes(
           });
           return result;
         });
+        return reply.send(channel);
+      }
+      if (isMetaMessagingChannel(type) && metaLive?.runs(type)) {
+        // Live Messenger / Instagram (tm 381): the page comes from the
+        // selection the login opened — its token from the server's copy,
+        // never the browser — the app is subscribed to the page, then the row.
+        const body = parse(metaLiveConnectBody, request.body);
+        const key = metaSelectionKey(tenant.licenseId, body.selection_id);
+        const sealed = await app.redis.get(key);
+        const pages = sealed ? channels.openMetaSelection(tenant, body.selection_id, sealed) : null;
+        const page: MetaPage | undefined = pages?.find(
+          (candidate) => candidate.id === body.page_id,
+        );
+        if (!page) {
+          throw ApiError.validation(
+            'That page is not in a current Facebook login. Log in with Facebook again.',
+            { reason: 'meta_selection_invalid' },
+          );
+        }
+        if (type === 'instagram' && !page.instagram) {
+          throw ApiError.validation(
+            'That page has no Instagram professional account linked to it.',
+            {
+              reason: 'instagram_account_not_linked',
+            },
+          );
+        }
+        try {
+          await metaLive.subscribePage(page.accessToken, page.id);
+        } catch (error) {
+          throw metaConnectError(error, META_LABEL[type]);
+        }
+        const channel = await request.withTenant(async (tx) => {
+          const result = await channels.storeMetaLive(tx, tenant, type, page);
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'channel.connected',
+            target: `channel:${type}`,
+            metadata: { type, brand_id: result.brand_id, live: true },
+          });
+          return result;
+        });
+        // Used once: the tokens it holds have done their work.
+        await app.redis.del(key);
         return reply.send(channel);
       }
       const channel = await request.withTenant(async (tx) => {
@@ -551,6 +630,10 @@ export default async function channelRoutes(
       // WhatsApp the same: Meta's signed webhook is the only door (tm 380).
       if (type === 'telegram' && telegramLive) throw ApiError.notFound('Not found.');
       if (type === 'whatsapp' && whatsappLive) throw ApiError.notFound('Not found.');
+      // And a live Messenger / Instagram: its signed webhook only (tm 381).
+      if (isMetaMessagingChannel(type) && metaLive?.runs(type)) {
+        throw ApiError.notFound('Not found.');
+      }
       // The outcome carries its own status now: a message the spam filter drops
       // is `ignored`, and — like the e-mail path — still a 200, so the provider
       // does not retry something that was refused on purpose.
@@ -629,6 +712,69 @@ export default async function channelRoutes(
     },
   );
 
+  // --- Live Messenger / Instagram (tm 381 · KN-02) ---------------------------
+
+  /**
+   * What the Settings cards need to open Facebook Login: the app id (public
+   * — Meta shows it in the dialog's URL), the Graph version, the redirect and
+   * each channel's permissions. 404 unless Messenger or Instagram runs live.
+   */
+  app.get(
+    '/channels/meta/login-config',
+    { config: { scopes: ['channels--all:rw'] } },
+    async (_request, reply) => {
+      if (!metaLive) throw ApiError.notFound('Not found.');
+      return reply.send(metaLive.loginConfig());
+    },
+  );
+
+  /**
+   * The login's code → the pages the person manages, to choose one from. The
+   * code is exchanged here (with the app secret) and made long-lived; the
+   * pages' tokens wait sealed in Redis for ten minutes under a fresh
+   * selection id, bound to this workspace; the answer carries none.
+   */
+  app.post(
+    '/channels/meta/pages',
+    { config: { scopes: ['channels--all:rw'] } },
+    async (request, reply) => {
+      if (!metaLive) throw ApiError.notFound('Not found.');
+      const body = parse(metaPagesBody, request.body);
+      const tenant = request.tenant();
+      let pages: MetaPage[];
+      try {
+        const userToken = await metaLive.userTokenFromCode(body.code);
+        pages = await metaLive.pages(userToken);
+      } catch (error) {
+        throw metaConnectError(error, 'Facebook');
+      }
+      const selectionId = generateToken(24);
+      await app.redis.set(
+        metaSelectionKey(tenant.licenseId, selectionId),
+        channels.sealMetaSelection(tenant, selectionId, pages),
+        'EX',
+        META_SELECTION_TTL_SECONDS,
+      );
+      return reply.send({ selection_id: selectionId, pages: pages.map(pageChoice) });
+    },
+  );
+
+  /** Meta's subscription handshake for the `page` / `instagram` webhook. 404 unless live. */
+  app.get<{ Querystring: Record<string, string | undefined> }>(
+    '/channels/meta/messaging-webhook',
+    { config: { public: true } },
+    async (request, reply) => {
+      if (!metaLive) throw ApiError.notFound('Not found.');
+      const challenge = metaLive.verifySubscription(
+        request.query['hub.mode'],
+        request.query['hub.verify_token'],
+        request.query['hub.challenge'],
+      );
+      if (challenge === null) throw ApiError.authorization('Webhook verification failed.');
+      return reply.type('text/plain; charset=utf-8').send(challenge);
+    },
+  );
+
   /**
    * The live WhatsApp webhook (tm 380): one door for the whole Meta app. The
    * raw body is read as bytes so `X-Hub-Signature-256` is checked against what
@@ -683,6 +829,54 @@ export default async function channelRoutes(
           }
         });
         return reply.send({ status: 'received', queued: accepted.written });
+      },
+    );
+
+    /**
+     * The live Messenger / Instagram webhook (tm 381): signed like WhatsApp's
+     * (same app secret, same check, 401 before anything is read). Each item
+     * is taken in within the request — text only, no download to wait on —
+     * keyed by its `mid`, so Meta's redelivery of an item is a `duplicate`
+     * and never a second message. Not `pilotRefused`: authenticated, and
+     * only there when Messenger or Instagram runs live.
+     */
+    signed.post(
+      '/channels/meta/messaging-webhook',
+      { config: { public: true }, bodyLimit: WHATSAPP_WEBHOOK_BODY_LIMIT },
+      async (request, reply) => {
+        if (!metaLive) throw ApiError.notFound('Not found.');
+        const raw = Buffer.isBuffer(request.body) ? request.body : Buffer.alloc(0);
+        const header = request.headers['x-hub-signature-256'];
+        if (!metaLive.signatureMatches(raw, Array.isArray(header) ? header[0] : header)) {
+          throw ApiError.authentication('Invalid webhook signature.');
+        }
+        let body: unknown;
+        try {
+          body = JSON.parse(raw.toString('utf8'));
+        } catch {
+          throw ApiError.validation('The webhook body is not JSON.');
+        }
+        const messages = parseMetaMessagingWebhook(body);
+        const counts = { accepted: 0, duplicates: 0, ignored: 0 };
+        for (const message of messages) {
+          const outcome = await channels.ingestMetaMessage(
+            app.db,
+            chats,
+            message,
+            inboundAudit(request),
+          );
+          if (outcome.status === 'accepted') counts.accepted += 1;
+          else if (outcome.reason === 'duplicate') counts.duplicates += 1;
+          else counts.ignored += 1;
+        }
+        // The root panel's tile (389.14), as WhatsApp's: when Meta last reached us.
+        await reportComponentStatus(
+          app.redis,
+          'channel_meta',
+          { state: 'ok', detail: `last signed delivery ${new Date().toISOString()}` },
+          request.log,
+        );
+        return reply.send({ status: 'received', ...counts });
       },
     );
   });

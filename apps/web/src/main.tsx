@@ -10,6 +10,7 @@ import {
   WHATSAPP_CALLBACK_PATH,
   WhatsAppSignupCallback,
 } from './features/whatsapp/WhatsAppSignupCallback.js';
+import { META_CALLBACK_PATH, MetaLoginCallback } from './features/meta/MetaLoginCallback.js';
 // Bundled, not fetched from a font CDN: the panel ships self-hosted and its CSP
 // allows no third-party origins. Only the subsets a page uses are downloaded.
 import '@fontsource-variable/inter';
@@ -50,6 +51,9 @@ createRoot(container).render(
           // Meta's signup pop-up coming back (tm 380): it relays the code to the
           // card that opened it and closes — no session, no panel around it.
           <WhatsAppSignupCallback />
+        ) : window.location.pathname === META_CALLBACK_PATH ? (
+          // Facebook Login's pop-up coming back (tm 381), the same way.
+          <MetaLoginCallback />
         ) : (
           // Nothing draws before this deployment's settings are in (tm 259.4).
           <DeploymentGate>

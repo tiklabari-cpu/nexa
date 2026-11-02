@@ -33,6 +33,10 @@
  * the 24-hour window and refused past it, inbound recorded in the message's
  * own transaction so a redelivered wamid is taken in once
  * (`whatsapp-inbound.ts` owns the webhook's queue).
+ *
+ * Messenger and Instagram can run live too (tm 381, `meta-messaging-live.ts`):
+ * the page token kept encrypted, replies sent through the page inside the
+ * same 24-hour window, inbound keyed by the message's `mid` the same way.
  */
 import { randomUUID } from 'node:crypto';
 import { Prisma, type PrismaClient } from '@prisma/client';
@@ -62,6 +66,27 @@ import {
   WhatsAppUnreachableError,
   type WhatsAppLive,
 } from './whatsapp-live.js';
+import { MetaGraphError, MetaGraphUnreachableError } from './meta-graph.js';
+import {
+  META_REPLY_WINDOW_MS,
+  isMetaMessagingChannel,
+  type MetaInboundMessage,
+  type MetaMessagingChannel,
+  type MetaMessagingLive,
+  type MetaPage,
+} from './meta-messaging-live.js';
+
+/** A live channel's name as an error says it. */
+const LIVE_CHANNEL_LABEL: Readonly<Record<string, string>> = {
+  whatsapp: 'WhatsApp',
+  messenger: 'Messenger',
+  instagram: 'Instagram',
+  telegram: 'Telegram',
+};
+
+function channelLabel(type: string): string {
+  return LIVE_CHANNEL_LABEL[type] ?? type;
+}
 
 /** The channel `status` values the `channels_status_check` constraint allows
  *  that matter here: `connected` (on) and `off`. */
@@ -86,11 +111,17 @@ function addressTaken(): ApiError {
  * reason, as every channel refusal here: the closed `ErrorType` vocabulary has
  * no "conflict", and the composer reads the reason to show its band.
  */
-function windowClosed(closesAt: string | null): ApiError {
+function windowClosed(closesAt: string | null, type = 'whatsapp'): ApiError {
+  const label = channelLabel(type);
   return ApiError.validation(
-    'The WhatsApp 24-hour window is closed: WhatsApp only takes free text within 24 hours of the customer’s last message. You can reply when they write again.',
+    `The ${label} 24-hour window is closed: ${label} only takes free text within 24 hours of the customer’s last message. You can reply when they write again.`,
     { reason: 'channel_window_closed', ...(closesAt ? { closed_at: closesAt } : {}) },
   );
+}
+
+/** What a sealed page selection is bound to (tm 381): the workspace and the selection. */
+function metaSelectionAad(tenant: TenantContext, selectionId: string): string {
+  return `meta-login-selection:${String(tenant.licenseId)}:${selectionId}`;
 }
 
 /** A unique-index violation, as Prisma reports it (same probe as websites.ts). */
@@ -145,8 +176,21 @@ export interface LiveWhatsAppOptions {
   credentialKey: string;
 }
 
+/** The live Messenger / Instagram this service runs, when the deployment switched either on (tm 381). */
+export interface LiveMetaMessagingOptions {
+  live: MetaMessagingLive;
+  /** `APPS_CREDENTIAL_KEY`. */
+  credentialKey: string;
+}
+
+/** What a Messenger / Instagram webhook item became (tm 381). */
+export type MetaInboundOutcome =
+  InboundOutcome | { status: 'ignored'; reason: 'unknown_recipient' };
+
 export interface ChannelServiceOptions {
   whatsapp?: LiveWhatsAppOptions | null;
+  /** Live Messenger / Instagram (tm 381). */
+  meta?: LiveMetaMessagingOptions | null;
   /**
    * How a credential the provider refused is announced (tm 380): the mark,
    * the audit entry and the admins' e-mail. Absent, a refusal is still an
@@ -180,7 +224,7 @@ export class ChannelCredentialRefusedError extends ApiError {
   constructor(readonly channelType: ChannelType) {
     super(
       'validation',
-      'Reconnect WhatsApp in Settings → Channels: Meta no longer accepts this channel’s connection.',
+      `Reconnect ${channelLabel(channelType)} in Settings → Channels: Meta no longer accepts this channel’s connection.`,
       { details: { reason: 'channel_needs_reconnect' } },
     );
   }
@@ -272,12 +316,24 @@ const MESSAGES_MAX_LIMIT = 100;
 
 export class ChannelService {
   private readonly whatsapp: LiveWhatsAppOptions | null;
+  private readonly meta: LiveMetaMessagingOptions | null;
 
   constructor(
     private readonly telegram: LiveTelegramOptions | null = null,
     private readonly options: ChannelServiceOptions = {},
   ) {
     this.whatsapp = options.whatsapp ?? null;
+    this.meta = options.meta ?? null;
+  }
+
+  /** The live Messenger / Instagram, when this deployment runs either (tm 381). */
+  get liveMeta(): MetaMessagingLive | null {
+    return this.meta?.live ?? null;
+  }
+
+  /** Whether `type` runs as a live Meta messaging channel here (tm 381). */
+  private metaRuns(type: string): type is MetaMessagingChannel {
+    return this.meta !== null && this.meta.live.runs(type);
   }
 
   /** The live Telegram, when this deployment runs one. */
@@ -522,20 +578,25 @@ export class ChannelService {
       orderBy: { createdAt: 'asc' },
     });
     if (!identity) return { channel: null, live: false, open: true, closes_at: null };
-    if (identity.channelType !== 'whatsapp' || !this.whatsapp) {
-      return { channel: identity.channelType, live: false, open: true, closes_at: null };
+    const type = identity.channelType;
+    // A window is Meta's rule: a live WhatsApp (tm 380), a live Messenger or
+    // Instagram (tm 381). Every other channel — and these as mocks — is open.
+    const windowed = (type === 'whatsapp' && this.whatsapp !== null) || this.metaRuns(type);
+    if (!windowed) {
+      return { channel: type, live: false, open: true, closes_at: null };
     }
     const channel = await tx.channel.findFirst({
-      where: { type: 'whatsapp', status: CONNECTED },
+      where: { type, status: CONNECTED },
       select: { credentialCiphertext: true },
     });
     if (!channel?.credentialCiphertext) {
-      return { channel: 'whatsapp', live: false, open: true, closes_at: null };
+      return { channel: type, live: false, open: true, closes_at: null };
     }
+    const span = type === 'whatsapp' ? WHATSAPP_REPLY_WINDOW_MS : META_REPLY_WINDOW_MS;
     const last = identity.lastCustomerMessageAt;
-    const closesAt = last ? new Date(last.getTime() + WHATSAPP_REPLY_WINDOW_MS) : null;
+    const closesAt = last ? new Date(last.getTime() + span) : null;
     return {
-      channel: 'whatsapp',
+      channel: type,
       live: true,
       open: closesAt !== null && closesAt.getTime() > now.getTime(),
       closes_at: closesAt ? closesAt.toISOString() : null,
@@ -549,7 +610,8 @@ export class ChannelService {
    */
   async assertReplyAllowed(tx: TenantClient, customerId: string): Promise<void> {
     const window = await this.replyWindowFor(tx, customerId);
-    if (window.live && !window.open) throw windowClosed(window.closes_at);
+    if (window.live && !window.open)
+      throw windowClosed(window.closes_at, window.channel ?? undefined);
   }
 
   /**
@@ -572,6 +634,271 @@ export class ChannelService {
   private requireLiveWhatsApp(): LiveWhatsAppOptions {
     if (!this.whatsapp) throw ApiError.notFound('Not found.');
     return this.whatsapp;
+  }
+
+  // -------------------------------------------------------------------------
+  // Live Messenger / Instagram (tm 381)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Store the page a Facebook Login connected: its token encrypted to this
+   * row, the routing key (`config.address`) the page id for Messenger and the
+   * linked Instagram account id for Instagram, the name a person reads beside
+   * it. Refuses an address another workspace has connected, as every
+   * channel's connect does, and clears an earlier "reconnect needed".
+   */
+  async storeMetaLive(
+    tx: TenantClient,
+    tenant: TenantContext,
+    type: MetaMessagingChannel,
+    page: MetaPage,
+  ): Promise<ConnectedChannel> {
+    const meta = this.requireLiveMeta(type);
+    if (type === 'instagram' && !page.instagram) {
+      throw ApiError.validation('That page has no Instagram professional account linked to it.', {
+        reason: 'instagram_account_not_linked',
+      });
+    }
+    const address = type === 'instagram' ? page.instagram!.id : page.id;
+    const display =
+      type === 'instagram'
+        ? page.instagram!.username
+          ? `@${page.instagram!.username}`
+          : page.name
+        : page.name;
+    const brandId = tenant.brandId ?? (await this.defaultBrandId(tx));
+    await this.assertAddressFree(tx, type, address, tenant.licenseId, brandId);
+    const existing = await tx.channel.findFirst({
+      where: { licenseId: tenant.licenseId, brandId, type },
+      select: { id: true },
+    });
+    const channelId = existing?.id ?? randomUUID();
+    const config = {
+      address,
+      page_id: page.id,
+      page_name: page.name,
+      ...(type === 'instagram'
+        ? { ig_user_id: page.instagram!.id, username: page.instagram!.username }
+        : {}),
+      display_name: display,
+      live: true,
+    };
+    const data = {
+      status: CONNECTED,
+      config: config as Prisma.InputJsonValue,
+      credentialCiphertext: encryptCredential(
+        page.accessToken,
+        meta.credentialKey,
+        channelCredentialAad(String(tenant.licenseId), channelId),
+      ),
+      webhookSecretHash: null,
+      reconnectRequiredAt: null,
+    };
+    try {
+      const row = await tx.channel.upsert({
+        where: { licenseId_brandId_type: { licenseId: tenant.licenseId, brandId, type } },
+        create: { id: channelId, licenseId: tenant.licenseId, brandId, type, ...data },
+        update: data,
+        select: { ...CHANNEL_SELECT, id: true },
+      });
+      // The token was encrypted to the row read above; a concurrent connect
+      // that replaced it would leave a token this row cannot decrypt.
+      if (row.id !== channelId) throw addressTaken();
+      return this.serialise(row);
+    } catch (error) {
+      if (isUniqueViolation(error)) throw addressTaken();
+      throw error;
+    }
+  }
+
+  /**
+   * One Messenger / Instagram message from the signed webhook (tm 381). The
+   * recipient resolves the workspace (pre-tenant, as every channel), then the
+   * live channel row there — a page connected as a mock, or since turned off,
+   * takes nothing in. The message log row is keyed by `(channel, mid)`, so a
+   * redelivery is `duplicate` and the customer's message is in the chat once.
+   */
+  async ingestMetaMessage(
+    db: PrismaClient,
+    chats: ChatService,
+    message: MetaInboundMessage,
+    audit: InboundAudit,
+  ): Promise<MetaInboundOutcome> {
+    if (!this.metaRuns(message.channel)) {
+      return { status: 'ignored', reason: 'unknown_recipient' };
+    }
+    let tenant: TenantContext;
+    try {
+      tenant = await this.resolveLicense(db, message.channel, message.address);
+    } catch (error) {
+      if (error instanceof ApiError && error.type === 'not_found') {
+        return { status: 'ignored', reason: 'unknown_recipient' };
+      }
+      throw error;
+    }
+    const channel = await withTenant(db, tenant, (tx) =>
+      tx.channel.findFirst({
+        where: { type: message.channel, status: CONNECTED, credentialCiphertext: { not: null } },
+        select: { id: true, config: true },
+      }),
+    );
+    const config = (channel?.config ?? {}) as { address?: unknown };
+    if (!channel || config.address !== message.address) {
+      return { status: 'ignored', reason: 'unknown_recipient' };
+    }
+    return this.ingestForTenant(
+      db,
+      chats,
+      tenant,
+      message.channel,
+      {
+        address: message.address,
+        externalId: message.senderId,
+        senderName: null,
+        text: message.text,
+      },
+      audit,
+      { providerMessageId: message.mid, channelId: channel.id, sentAt: new Date(message.at) },
+    );
+  }
+
+  /**
+   * An agent's reply over a live Messenger / Instagram (tm 381): the page
+   * token, the 24-hour window, `messaging_type: RESPONSE`. Refused before
+   * Meta is asked where it could only fail there, and Meta's own refusals
+   * mapped as WhatsApp's are (190 → reconnect, outside the window → closed).
+   */
+  async #sendMeta(
+    tx: TenantClient,
+    tenant: TenantContext,
+    type: MetaMessagingChannel,
+    channel: { id: string; credentialCiphertext: string | null; reconnectRequiredAt: Date | null },
+    config: Record<string, unknown>,
+    input: { chatId?: string; externalId?: string; text: string },
+  ): Promise<OutboundOutcome> {
+    const meta = this.requireLiveMeta(type);
+    const label = channelLabel(type);
+    let token: string | null = null;
+    if (channel.credentialCiphertext) {
+      try {
+        token = decryptCredential(
+          channel.credentialCiphertext,
+          meta.credentialKey,
+          channelCredentialAad(String(tenant.licenseId), channel.id),
+        );
+      } catch {
+        token = null;
+      }
+    }
+    const pageId = typeof config.page_id === 'string' ? config.page_id : null;
+    if (!token || !pageId) {
+      throw ApiError.validation(
+        `Reconnect ${label}: this channel was connected before it went live.`,
+        {
+          reason: 'channel_needs_reconnect',
+        },
+      );
+    }
+    if (channel.reconnectRequiredAt) throw new ChannelCredentialRefusedError(type);
+
+    const identity = input.externalId
+      ? await tx.channelIdentity.findFirst({
+          where: { channelType: type, externalId: input.externalId },
+          select: { externalId: true, customerId: true },
+        })
+      : await this.identityForChat(tx, type, input.chatId!);
+    if (!identity) throw ApiError.validation('This chat has no identity on that channel.');
+    const window = await this.replyWindowFor(tx, identity.customerId);
+    if (!window.open) throw windowClosed(window.closes_at, type);
+
+    let providerMessageId: string;
+    try {
+      providerMessageId = await meta.live.sendText(
+        token,
+        pageId,
+        type,
+        identity.externalId,
+        input.text,
+      );
+    } catch (error) {
+      if (error instanceof MetaGraphError && error.tokenInvalid) {
+        throw new ChannelCredentialRefusedError(type);
+      }
+      if (error instanceof MetaGraphError && error.windowClosed) {
+        throw windowClosed(window.closes_at, type);
+      }
+      if (error instanceof MetaGraphError && error.httpStatus < 500) {
+        throw ApiError.validation(
+          error.providerMessage
+            ? `${label} refused the message: ${error.providerMessage}`
+            : `${label} refused the message.`,
+          {
+            reason: 'app_provider_refused',
+            ...(error.code !== null ? { provider_code: error.code } : {}),
+          },
+        );
+      }
+      if (error instanceof MetaGraphError || error instanceof MetaGraphUnreachableError) {
+        throw new ApiError('service_unavailable', `${label} could not be reached. Try again.`, {
+          details: { reason: 'app_provider_unavailable' },
+        });
+      }
+      throw error;
+    }
+
+    await this.record(tx, tenant, {
+      channelType: type,
+      direction: 'outbound',
+      externalId: identity.externalId,
+      chatId: input.chatId ?? null,
+      text: input.text,
+      providerMessageId,
+      channelId: channel.id,
+      status: 'sent',
+    });
+    return {
+      provider_message_id: providerMessageId,
+      external_id: identity.externalId,
+      chat_id: input.chatId ?? null,
+    };
+  }
+
+  /**
+   * The pages a login opened, sealed for the few minutes they wait to be
+   * chosen from (tm 381): encrypted under `APPS_CREDENTIAL_KEY`, bound to the
+   * workspace and the selection id, so a selection read back anywhere else
+   * does not open.
+   */
+  sealMetaSelection(tenant: TenantContext, selectionId: string, pages: MetaPage[]): string {
+    const meta = this.requireAnyLiveMeta();
+    return encryptCredential(
+      JSON.stringify(pages),
+      meta.credentialKey,
+      metaSelectionAad(tenant, selectionId),
+    );
+  }
+
+  /** {@link sealMetaSelection} undone, or null when it does not open (another workspace, a rotated key). */
+  openMetaSelection(tenant: TenantContext, selectionId: string, sealed: string): MetaPage[] | null {
+    const meta = this.requireAnyLiveMeta();
+    try {
+      const pages = JSON.parse(
+        decryptCredential(sealed, meta.credentialKey, metaSelectionAad(tenant, selectionId)),
+      ) as unknown;
+      return Array.isArray(pages) ? (pages as MetaPage[]) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private requireAnyLiveMeta(): LiveMetaMessagingOptions {
+    if (!this.meta) throw ApiError.notFound('Not found.');
+    return this.meta;
+  }
+
+  private requireLiveMeta(type: string): LiveMetaMessagingOptions {
+    if (!this.meta || !this.meta.live.runs(type)) throw ApiError.notFound('Not found.');
+    return this.meta;
   }
 
   // -------------------------------------------------------------------------
@@ -1124,6 +1451,10 @@ export class ChannelService {
     if (type === 'whatsapp' && this.whatsapp) {
       return this.#sendWhatsApp(tx, tenant, channel, config, input);
     }
+    // A live Messenger / Instagram (tm 381): the same shape, through the page.
+    if (isMetaMessagingChannel(type) && this.metaRuns(type)) {
+      return this.#sendMeta(tx, tenant, type, channel, config, input);
+    }
 
     const externalId = input.externalId ?? (await this.externalIdForChat(tx, type, input.chatId!));
 
@@ -1421,13 +1752,22 @@ export class ChannelService {
   }
 
   private serialise(row: ChannelRow): ConnectedChannel {
-    const config = (row.config ?? {}) as { address?: unknown; display_phone_number?: unknown };
+    const config = (row.config ?? {}) as {
+      address?: unknown;
+      display_phone_number?: unknown;
+      display_name?: unknown;
+    };
     const address = typeof config.address === 'string' ? config.address : null;
     const connected = row.status === CONNECTED;
+    // A live WhatsApp's number (tm 380); a live page's name or @username (tm 381).
     const display =
       typeof config.display_phone_number === 'string' && config.display_phone_number
         ? config.display_phone_number
-        : null;
+        : row.credentialCiphertext !== null &&
+            typeof config.display_name === 'string' &&
+            config.display_name
+          ? config.display_name
+          : null;
     return {
       type: row.type,
       brand_id: row.brandId,

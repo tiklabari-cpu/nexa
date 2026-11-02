@@ -390,7 +390,9 @@ export const envSchema = z.object({
    * boot warning, never a refusal (owner, 2026-10-10). Under `PILOT_MODE=true`
    * these are also the only cards the pilot opens (`plugins/pilot-gate.ts`).
    * Read the resolved list from `Env` — `parseEnv` drops what cannot run live.
-   * `whatsapp` (tm 380) also needs the four `WHATSAPP_*` values below.
+   * `whatsapp` (tm 380) also needs the four `WHATSAPP_*` values below;
+   * `messenger` and `instagram` (tm 381) the same Meta app's id, secret and
+   * verify token (not the embedded-signup configuration).
    */
   APPS_LIVE_PROVIDERS: z
     .string()
@@ -414,6 +416,8 @@ export const envSchema = z.object({
    * never a refusal. The app secret is a deployment secret — like
    * `APPS_CREDENTIAL_KEY`, never stored in the database. No real values in
    * this repository; tests run against a local stand-in for the Graph API.
+   * A live Messenger or Instagram (tm 381) is the same Meta app: its id,
+   * secret and verify token are these, under these names.
    */
   WHATSAPP_APP_ID: z.preprocess(
     (value) => (value === '' ? undefined : value),
@@ -1993,6 +1997,22 @@ function resolveAppsLive(env: z.infer<typeof envSchema>): {
         `APPS_LIVE_PROVIDERS names whatsapp but ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} not set; WhatsApp stays a demo.`,
       );
       providers = providers.filter((id) => id !== 'whatsapp');
+    }
+  }
+
+  // A live Messenger / Instagram is the same Meta app (tm 381): without its
+  // id, secret and verify token the login could not open nor the webhook be
+  // verified, so each stays the mock it was.
+  for (const channel of ['messenger', 'instagram'] as const) {
+    if (!providers.includes(channel)) continue;
+    const missing = (
+      ['WHATSAPP_APP_ID', 'WHATSAPP_APP_SECRET', 'WHATSAPP_VERIFY_TOKEN'] as const
+    ).filter((key) => !env[key]);
+    if (missing.length > 0) {
+      warnings.push(
+        `APPS_LIVE_PROVIDERS names ${channel} but ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} not set; ${channel === 'messenger' ? 'Messenger' : 'Instagram'} stays a demo.`,
+      );
+      providers = providers.filter((id) => id !== channel);
     }
   }
 

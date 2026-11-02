@@ -222,6 +222,8 @@ export const inbox: Messages = {
   'inbox.composer.replyWindow.title': '24-hour window closed',
   'inbox.composer.replyWindow.body':
     "WhatsApp only lets you reply within 24 hours of the customer's last message. You can write again when they do; internal notes still work.",
+  'inbox.composer.replyWindow.bodyMeta':
+    "{channel} only lets you reply within 24 hours of the customer's last message. You can write again when they do; internal notes still work.",
   'inbox.composer.replyLabel': 'Reply to the customer',
   'inbox.composer.attachment.remove': 'Remove attachment',
   'inbox.composer.copilotOverwrite.message':

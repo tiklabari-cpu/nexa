@@ -1167,7 +1167,12 @@ describe('module parity matrix — what is still owed', () => {
       // 391 -> 392 with `POST /customer/events` (tm 355) — the visitor's page reporting an
       // event for goal conversions (EN-06), sent by the website widget with the visitor's
       // own token; the handset is the agent's app and never calls the customer surface.
-      contractEndpoints: 392,
+      // 392 -> 395 with `/channels/meta/login-config`, `/channels/meta/pages` and
+      // `/channels/meta/messaging-webhook` (tm 381) — live Messenger / Instagram: the web
+      // Settings cards' Facebook Login and page choice, and Meta's signed webhook (called
+      // by Meta, never by a person). The app manages no channels and its composer sends
+      // through the same window-checked path, so nothing here re-scopes.
+      contractEndpoints: 395,
       scopeBoundaries: 1,
     });
   });

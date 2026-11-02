@@ -19,7 +19,7 @@ import { useEffect, type ReactElement } from 'react';
 import { useApiClient } from '../../lib/auth-store.js';
 import { useDeployment } from '../../lib/deployment.js';
 import { useTranslate } from '../../lib/i18n.js';
-import { isWhatsAppLive } from '../../lib/live-apps.js';
+import { hasReplyWindowChannels } from '../../lib/live-apps.js';
 
 export interface ReplyWindow {
   chat_id: string;
@@ -37,7 +37,8 @@ export function replyWindowKey(chatId: string): readonly unknown[] {
 export function useReplyWindow(chatId: string): ReplyWindow | null {
   const api = useApiClient();
   const client = useQueryClient();
-  const live = isWhatsAppLive(useDeployment());
+  // WhatsApp (tm 380), Messenger and Instagram (tm 381) — whichever runs live.
+  const live = hasReplyWindowChannels(useDeployment());
   const query = useQuery({
     queryKey: replyWindowKey(chatId),
     queryFn: () => api.get<ReplyWindow>(`/chats/${chatId}/reply-window`),
@@ -81,7 +82,13 @@ export function ReplyWindowBand({ window }: { window: ReplyWindow | null }): Rea
       className="mb-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-content"
     >
       <p className="font-medium">{t('inbox.composer.replyWindow.title')}</p>
-      <p className="text-2xs text-content-secondary">{t('inbox.composer.replyWindow.body')}</p>
+      <p className="text-2xs text-content-secondary">
+        {window?.channel === 'messenger' || window?.channel === 'instagram'
+          ? t('inbox.composer.replyWindow.bodyMeta', {
+              channel: window.channel === 'messenger' ? 'Messenger' : 'Instagram',
+            })
+          : t('inbox.composer.replyWindow.body')}
+      </p>
     </div>
   );
 }

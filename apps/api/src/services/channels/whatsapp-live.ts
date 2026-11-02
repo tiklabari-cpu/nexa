@@ -30,25 +30,25 @@
  * bounded, and no URL in an error — the code exchange carries the app secret in
  * its query string.
  */
-import { createHmac } from 'node:crypto';
 import { z } from 'zod';
 import { ApiError } from '../../lib/api-error.js';
-import { constantTimeEqual } from '../../lib/crypto.js';
 import { SafeHttpError } from '../../lib/safe-fetch.js';
-import { sanitiseProviderMessage } from '../apps/verifiers/provider-message.js';
 import type { ProviderContext } from '../apps/verifiers/types.js';
+import {
+  MetaGraphClient,
+  MetaGraphError,
+  MetaGraphUnreachableError,
+  metaSignatureMatches,
+  verifyMetaSubscription,
+} from './meta-graph.js';
+
+export { GRAPH_INVALID_TOKEN, GRAPH_REENGAGEMENT_REQUIRED } from './meta-graph.js';
 
 /** Meta's ceiling for one text message; a longer reply goes out in parts. */
 export const WHATSAPP_TEXT_MAX = 4096;
 
 /** How long a business may answer freely after the customer's last message. */
 export const WHATSAPP_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
-
-/** Graph's "the access token is no longer valid" (expired, revoked, password changed). */
-export const GRAPH_INVALID_TOKEN = 190;
-
-/** Graph's "more than 24 hours since the customer last replied". */
-export const GRAPH_REENGAGEMENT_REQUIRED = 131047;
 
 /** The deployment's Meta app, as `config/env.ts` resolved it. */
 export interface WhatsAppAppConfig {
@@ -105,33 +105,16 @@ export interface WhatsAppWebhookBatch {
   statuses: WhatsAppStatusUpdate[];
 }
 
-/** A Graph call Meta refused, with Meta's own code (190 = the token is gone). */
-export class WhatsAppGraphError extends Error {
-  constructor(
-    readonly httpStatus: number,
-    readonly code: number | null,
-    readonly providerMessage: string | undefined,
-  ) {
-    super(`whatsapp graph error ${code ?? 'unknown'} (http ${httpStatus})`);
-    this.name = 'WhatsAppGraphError';
-  }
-
-  get tokenInvalid(): boolean {
-    return this.code === GRAPH_INVALID_TOKEN;
-  }
-
-  get windowClosed(): boolean {
-    return this.code === GRAPH_REENGAGEMENT_REQUIRED;
-  }
-}
+/**
+ * A Graph call Meta refused, with Meta's own code (190 = the token is gone) —
+ * the one error every Meta channel shares since tm 381 (`meta-graph.ts`).
+ */
+export const WhatsAppGraphError = MetaGraphError;
+export type WhatsAppGraphError = MetaGraphError;
 
 /** Graph could not be reached at all: timeout, DNS, TLS, a redirect, too large. */
-export class WhatsAppUnreachableError extends Error {
-  constructor(readonly kind: string) {
-    super(`whatsapp graph unreachable: ${kind}`);
-    this.name = 'WhatsAppUnreachableError';
-  }
-}
+export const WhatsAppUnreachableError = MetaGraphUnreachableError;
+export type WhatsAppUnreachableError = MetaGraphUnreachableError;
 
 // --- Webhook body ------------------------------------------------------------
 
@@ -322,21 +305,21 @@ export function parseWhatsAppWebhook(body: unknown): WhatsAppWebhookBatch[] {
 
 // --- The Graph client ----------------------------------------------------------
 
-/** What a Graph answer looks like when it fails. */
-interface GraphErrorEnvelope {
-  error?: { message?: unknown; code?: unknown };
-}
-
 /** Hosts Meta serves media downloads from (`lookaside.fbsbx.com` today). */
 const META_MEDIA_HOSTS = /(^|\.)(fbsbx\.com|facebook\.com|fbcdn\.net|whatsapp\.net)$/i;
 
 export class WhatsAppLive {
+  /** The shared Graph client (tm 381): the call, its errors, the code exchange. */
+  readonly graph: MetaGraphClient;
+
   constructor(
     private readonly context: ProviderContext,
     readonly config: WhatsAppAppConfig,
     /** `WEB_APP_URL` — where Meta's dialog sends the browser back. */
     private readonly webAppUrl: string,
-  ) {}
+  ) {
+    this.graph = new MetaGraphClient(context, config.appSecret, config.graphVersion);
+  }
 
   /** The browser's way back from Meta's dialog: a page of the panel, which posts the code to the card. */
   get redirectUri(): string {
@@ -362,11 +345,7 @@ export class WhatsAppLive {
     token: string | undefined,
     challenge: string | undefined,
   ): string | null {
-    if (mode !== 'subscribe' || !token || challenge === undefined) return null;
-    if (!constantTimeEqual(token, this.config.verifyToken)) return null;
-    // Meta's challenge is a number; anything else is not Meta, and echoing an
-    // arbitrary string back would make this an open reflector.
-    return /^[0-9A-Za-z_-]{1,128}$/.test(challenge) ? challenge : null;
+    return verifyMetaSubscription(this.config.verifyToken, mode, token, challenge);
   }
 
   /**
@@ -374,28 +353,12 @@ export class WhatsAppLive {
    * under the app secret — the bytes Meta sent, not a re-serialised parse.
    */
   signatureMatches(rawBody: Buffer, header: string | undefined): boolean {
-    if (!header || !header.startsWith('sha256=')) return false;
-    const provided = header.slice('sha256='.length).trim().toLowerCase();
-    if (!/^[0-9a-f]{64}$/.test(provided)) return false;
-    const expected = createHmac('sha256', this.config.appSecret).update(rawBody).digest('hex');
-    return constantTimeEqual(provided, expected);
+    return metaSignatureMatches(this.config.appSecret, rawBody, header);
   }
 
   /** The embedded signup's one-time code → the business's access token. */
   async exchangeCode(code: string): Promise<string> {
-    const query = new URLSearchParams({
-      client_id: this.config.appId,
-      client_secret: this.config.appSecret,
-      redirect_uri: this.redirectUri,
-      code,
-    });
-    const answer = (await this.#call('GET', `/oauth/access_token?${query.toString()}`, null, [
-      code,
-    ])) as { access_token?: unknown };
-    if (typeof answer?.access_token !== 'string' || !answer.access_token) {
-      throw new WhatsAppGraphError(200, null, 'no access_token in the answer');
-    }
-    return answer.access_token;
+    return this.graph.exchangeCode(this.config.appId, this.redirectUri, code);
   }
 
   /**
@@ -503,48 +466,23 @@ export class WhatsAppLive {
       if (error instanceof SafeHttpError && error.kind === 'too_large') return { tooLarge: true };
       throw new WhatsAppUnreachableError(error instanceof SafeHttpError ? error.kind : 'network');
     }
-    if (answer.status !== 200) throw this.#graphError(answer.status, answer.json, [token]);
+    if (answer.status !== 200) {
+      throw this.graph.error(answer.status, answer.json, [token, this.config.appSecret]);
+    }
     return {
       bytes: answer.bytes,
       mime: typeof info.mime_type === 'string' ? info.mime_type : 'application/octet-stream',
     };
   }
 
-  async #call(
+  #call(
     method: 'GET' | 'POST',
     path: string,
     token: string | null,
     secrets: readonly string[] = [],
     json?: unknown,
   ): Promise<unknown> {
-    const base = this.context.endpoints.whatsapp.replace(/\/+$/, '');
-    let answer;
-    try {
-      answer = await this.context.http.request({
-        method,
-        url: `${base}/${this.config.graphVersion}${path}`,
-        ...(token ? { headers: { authorization: `Bearer ${token}` } } : {}),
-        ...(json !== undefined ? { json } : {}),
-      });
-    } catch (error) {
-      throw new WhatsAppUnreachableError(error instanceof SafeHttpError ? error.kind : 'network');
-    }
-    if (answer.status >= 200 && answer.status < 300) return answer.json;
-    throw this.#graphError(answer.status, answer.json, [
-      ...secrets,
-      this.config.appSecret,
-      ...(token ? [token] : []),
-    ]);
-  }
-
-  #graphError(status: number, body: unknown, secrets: readonly string[]): WhatsAppGraphError {
-    const envelope = body as GraphErrorEnvelope | undefined;
-    const code = typeof envelope?.error?.code === 'number' ? envelope.error.code : null;
-    return new WhatsAppGraphError(
-      status,
-      code,
-      sanitiseProviderMessage(envelope?.error?.message, secrets),
-    );
+    return this.graph.call(method, path, token, secrets, json);
   }
 }
 

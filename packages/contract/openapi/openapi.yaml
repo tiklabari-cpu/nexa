@@ -798,6 +798,12 @@ paths:
     $ref: "./paths/channels.yaml#/whatsappCloudWebhook"
   /channels/whatsapp/signup-config:
     $ref: "./paths/channels.yaml#/whatsappSignupConfig"
+  /channels/meta/login-config:
+    $ref: "./paths/channels.yaml#/metaLoginConfig"
+  /channels/meta/pages:
+    $ref: "./paths/channels.yaml#/metaPages"
+  /channels/meta/messaging-webhook:
+    $ref: "./paths/channels.yaml#/metaMessagingWebhook"
   /channels/email/inbound:
     $ref: "./paths/channels.yaml#/emailInbound"
   /channels/email/addresses:
@@ -8443,20 +8449,22 @@ components:
           type: boolean
           description: |
             Connected to the real provider (tm 263 — a live Telegram bot, whose
-            token is held encrypted; tm 380 — a live WhatsApp number); false for
-            every mock channel.
+            token is held encrypted; tm 380 — a live WhatsApp number; tm 381 — a
+            live Messenger page or Instagram account); false for every mock channel.
         display_address:
           type: string
           nullable: true
           description: |
             The address as a person reads it, where it differs from `address`
             (tm 380 — a live WhatsApp number, whose `address` is Meta's phone
-            number id). Null otherwise and while off.
+            number id; tm 381 — a live page's name or an Instagram @username).
+            Null otherwise and while off.
         needs_reconnect:
           type: boolean
           description: |
             The provider refused the live credential (tm 380 — Meta's Graph
-            error 190 on a WhatsApp business token). Replies are refused until
+            error 190 on a WhatsApp business token; tm 381 — on a page token).
+            Replies are refused until
             the channel is connected again; the admins were e-mailed once.
 
     WhatsAppSignupConfig:
@@ -8474,13 +8482,69 @@ components:
           type: string
           description: Where Meta's dialog sends the browser back with the code.
 
+    MetaLoginConfig:
+      type: object
+      description: |
+        What the Settings card needs to open Facebook Login for a live
+        Messenger or Instagram channel (tm 381 · KN-02). The app id is public
+        — Meta shows it in the dialog's URL; the app secret never leaves the
+        server. `scopes` are the permissions each channel asks for.
+      required: [app_id, graph_version, redirect_uri, scopes]
+      properties:
+        app_id: { type: string }
+        graph_version: { type: string, example: v21.0 }
+        redirect_uri:
+          type: string
+          description: Where Meta's dialog sends the browser back with the code.
+        scopes:
+          type: object
+          required: [messenger, instagram]
+          properties:
+            messenger: { type: array, items: { type: string } }
+            instagram: { type: array, items: { type: string } }
+
+    MetaPageChoice:
+      type: object
+      description: |
+        One Facebook Page the person who logged in manages (tm 381), with the
+        Instagram professional account linked to it, if any. No token: the
+        page's access token stays on the server until the page is connected.
+      required: [id, name, instagram]
+      properties:
+        id: { type: string, description: The page id (Messenger's channel address). }
+        name: { type: string }
+        instagram:
+          type: object
+          nullable: true
+          required: [id, username]
+          properties:
+            id:
+              type: string
+              description: The Instagram professional account id (Instagram's channel address).
+            username: { type: string, nullable: true }
+
+    MetaPageSelection:
+      type: object
+      description: |
+        The pages a Facebook Login opened (tm 381), to choose one from. The
+        choice is posted to `POST /channels/{type}/connect` as
+        `{ selection_id, page_id }` within ten minutes; the selection is
+        bound to this workspace and used once.
+      required: [selection_id, pages]
+      properties:
+        selection_id: { type: string }
+        pages:
+          type: array
+          items: { $ref: "#/components/schemas/MetaPageChoice" }
+
     ReplyWindow:
       type: object
       description: |
-        Whether an agent may write to a chat's customer now (tm 380). Only a
-        live WhatsApp has a window: free text for 24 hours after the customer's
-        last message, and no templates in this release — so past it the
-        composer is locked and a reply is refused with `400`
+        Whether an agent may write to a chat's customer now (tm 380). A live
+        WhatsApp, Messenger or Instagram (tm 381) has a window: free text for
+        24 hours after the customer's last message, and no templates or
+        message tags in this release — so past it the composer is locked and
+        a reply is refused with `400`
         `details.reason: "channel_window_closed"`. Every other chat is `open`.
       required: [chat_id, channel, live, open, closes_at]
       properties:

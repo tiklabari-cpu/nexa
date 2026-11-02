@@ -58,8 +58,11 @@ export interface ChatField {
 }
 
 export interface AppVerifier {
-  /** The live channels (Telegram, WhatsApp — tm 380) are connected in Settings → Channels, not here. */
-  appId: Exclude<LiveAppId, 'telegram' | 'whatsapp'>;
+  /**
+   * The live channels (Telegram, WhatsApp — tm 380, Messenger and Instagram —
+   * tm 381) are connected in Settings → Channels, not here.
+   */
+  appId: Exclude<LiveAppId, 'telegram' | 'whatsapp' | 'messenger' | 'instagram'>;
   credentialFields: readonly AppCredentialField[];
   verify(credentials: AppCredentials, context: ProviderContext): Promise<VerifyResult>;
   /**

@@ -644,6 +644,35 @@ export const settings: Messages = {
   'settings.channels.whatsapp.callback.done': 'Done. You can close this window.',
   'settings.channels.whatsapp.callback.orphan':
     'This page finishes a WhatsApp sign-up started in Settings → Channels. Go back there to connect.',
+  // tm 381: live Messenger / Instagram through Facebook Login.
+  'settings.channels.messenger.live.description':
+    'Connect a Facebook Page. A Facebook window opens; log in and allow access, then choose the page here.',
+  'settings.channels.instagram.live.description':
+    'Connect an Instagram professional account through the Facebook Page it is linked to. A Facebook window opens; log in, then choose the account here.',
+  'settings.channels.meta.connectCta': 'Connect with Facebook',
+  'settings.channels.meta.reconnectCta': 'Reconnect with Facebook',
+  'settings.channels.meta.waiting': 'Finish the steps in the Facebook window…',
+  'settings.channels.meta.loadingPages': 'Reading your pages…',
+  'settings.channels.meta.connecting': 'Connecting…',
+  'settings.channels.meta.popupBlocked':
+    'The browser blocked the Facebook window. Allow pop-ups for this site and try again.',
+  'settings.channels.meta.cancelled': 'The Facebook login was closed before it finished.',
+  'settings.channels.meta.choosePage': 'Choose the page',
+  'settings.channels.meta.chooseAccount': 'Choose the Instagram account',
+  'settings.channels.meta.chooseHint': 'Messages sent to it will arrive in the inbox.',
+  'settings.channels.meta.connectPage': 'Connect',
+  'settings.channels.meta.cancel': 'Cancel',
+  'settings.channels.meta.noPages':
+    'This Facebook account manages no pages. Log in with an account that manages the page.',
+  'settings.channels.meta.noInstagramPages':
+    'None of your pages has an Instagram professional account linked. Link one to a page in Meta Business Suite, then try again.',
+  'settings.channels.meta.noInstagram':
+    'That page has no Instagram professional account linked to it.',
+  'settings.channels.meta.selectionExpired':
+    'That choice is no longer valid. Connect with Facebook again.',
+  'settings.channels.meta.callback.done': 'Done. You can close this window.',
+  'settings.channels.meta.callback.orphan':
+    'This page finishes a Facebook login started in Settings → Channels. Go back there to connect.',
 
   // Website widgets — WebsiteWidgets.tsx
   'settings.websiteWidgets.title': 'Website widgets',

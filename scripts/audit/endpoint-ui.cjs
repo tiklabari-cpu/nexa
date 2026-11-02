@@ -199,6 +199,18 @@ const HEADLESS = [
       'by `X-Hub-Signature-256` (HMAC of the body under the app secret), not a browser.',
   },
   {
+    op: 'GET /channels/meta/messaging-webhook',
+    reason:
+      "Meta's webhook subscription handshake for live Messenger / Instagram (tm 381). The " +
+      'caller is Meta, presenting the app verify token, once when the page webhook is configured.',
+  },
+  {
+    op: 'POST /channels/meta/messaging-webhook',
+    reason:
+      'the live Messenger / Instagram delivery callback (tm 381). The caller is Meta, ' +
+      'authenticated by `X-Hub-Signature-256` (HMAC of the body under the app secret).',
+  },
+  {
     op: 'POST /billing/webhooks/stripe',
     reason:
       "the card processor's event callback (tm 382). The caller is Stripe, authenticated by " +

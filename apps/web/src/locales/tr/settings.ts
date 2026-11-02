@@ -633,6 +633,34 @@ export const settings: Messages = {
   'settings.channels.whatsapp.reconnectHint':
     'Meta bu bağlantıyı artık kabul etmiyor. Yeniden bağlayana kadar ajan yanıtları müşterilere ulaşmaz.',
   'settings.channels.whatsapp.callback.done': 'Tamamlandı. Bu pencereyi kapatabilirsiniz.',
+  // tm 381: Facebook Girişi ile canlı Messenger / Instagram.
+  'settings.channels.messenger.live.description':
+    'Bir Facebook Sayfası bağlayın. Bir Facebook penceresi açılır; giriş yapıp izin verin, ardından sayfayı burada seçin.',
+  'settings.channels.instagram.live.description':
+    'Bir Instagram profesyonel hesabını bağlı olduğu Facebook Sayfası üzerinden bağlayın. Bir Facebook penceresi açılır; giriş yapın, ardından hesabı burada seçin.',
+  'settings.channels.meta.connectCta': 'Facebook ile bağla',
+  'settings.channels.meta.reconnectCta': 'Facebook ile yeniden bağla',
+  'settings.channels.meta.waiting': 'Facebook penceresindeki adımları tamamlayın…',
+  'settings.channels.meta.loadingPages': 'Sayfalarınız okunuyor…',
+  'settings.channels.meta.connecting': 'Bağlanıyor…',
+  'settings.channels.meta.popupBlocked':
+    'Tarayıcı Facebook penceresini engelledi. Bu site için açılır pencerelere izin verip yeniden deneyin.',
+  'settings.channels.meta.cancelled': 'Facebook girişi tamamlanmadan kapatıldı.',
+  'settings.channels.meta.choosePage': 'Sayfayı seçin',
+  'settings.channels.meta.chooseAccount': 'Instagram hesabını seçin',
+  'settings.channels.meta.chooseHint': 'Buraya gönderilen mesajlar gelen kutusuna düşer.',
+  'settings.channels.meta.connectPage': 'Bağla',
+  'settings.channels.meta.cancel': 'Vazgeç',
+  'settings.channels.meta.noPages':
+    'Bu Facebook hesabı hiçbir sayfayı yönetmiyor. Sayfayı yöneten bir hesapla giriş yapın.',
+  'settings.channels.meta.noInstagramPages':
+    'Sayfalarınızın hiçbirine bağlı bir Instagram profesyonel hesabı yok. Meta Business Suite’te bir sayfaya bağlayıp yeniden deneyin.',
+  'settings.channels.meta.noInstagram': 'Bu sayfaya bağlı bir Instagram profesyonel hesabı yok.',
+  'settings.channels.meta.selectionExpired':
+    'Bu seçim artık geçerli değil. Yeniden Facebook ile bağlayın.',
+  'settings.channels.meta.callback.done': 'Tamam. Bu pencereyi kapatabilirsiniz.',
+  'settings.channels.meta.callback.orphan':
+    'Bu sayfa, Ayarlar → Kanallar’da başlatılan bir Facebook girişini tamamlar. Bağlamak için oraya dönün.',
   'settings.channels.whatsapp.callback.orphan':
     "Bu sayfa, Ayarlar → Kanallar'da başlatılan bir WhatsApp kaydını tamamlar. Bağlamak için oraya dönün.",
 

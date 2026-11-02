@@ -108,6 +108,8 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/inbox/ReplyWindowBand.tsx',
   'src/features/whatsapp/WhatsAppLiveConnect.tsx',
   'src/features/whatsapp/WhatsAppSignupCallback.tsx',
+  'src/features/meta/MetaLiveConnect.tsx',
+  'src/features/meta/MetaLoginCallback.tsx',
   'src/features/inbox/SuggestModal.tsx',
   'src/features/inbox/SendToQaModal.tsx',
   'src/features/inbox/ThreadHeader.tsx',

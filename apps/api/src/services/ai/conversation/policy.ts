@@ -31,7 +31,9 @@
  */
 import {
   DEFAULT_CLARIFY_THRESHOLDS,
+  detectLanguage,
   isPersonaLanguage,
+  normaliseLanguage,
   personaLanguageVerdict,
   type ClarifyThresholds,
   type LanguageVerdict,
@@ -262,6 +264,14 @@ const CLARIFY_PHRASES: Readonly<
     one: (a) => `Para asegurarme: ¿se trata de «${a}»?`,
     two: (a, b) => `Para asegurarme: ¿se trata de «${a}» o de «${b}»?`,
   },
+  ru: {
+    one: (a) => `Уточню: речь идёт о «${a}»?`,
+    two: (a, b) => `Уточню: речь идёт о «${a}» или о «${b}»?`,
+  },
+  az: {
+    one: (a) => `Dəqiqləşdirim: söhbət «${a}» barədədir?`,
+    two: (a, b) => `Dəqiqləşdirim: söhbət «${a}», yoxsa «${b}» barədədir?`,
+  },
 };
 
 /**
@@ -276,14 +286,182 @@ const CLARIFY_PHRASES: Readonly<
 export function languageVerdict(
   message: string,
   persona: Persona,
-  understood: string | null | undefined,
+  understood: LanguageInput,
+  conversation?: ConversationLanguage,
 ): LanguageVerdict {
+  if (conversation) return conversationVerdict(message, persona, understood, conversation);
+  const model = languageReadingOf(understood).language;
   const rule = personaLanguageVerdict(message, persona);
-  if (!understood || isPersonaLanguage(understood) || rule.detected !== null) return rule;
-  if (persona.languages.length > 0 && !persona.languages.includes(understood)) {
+  if (!model || isPersonaLanguage(model) || rule.detected !== null) return rule;
+  if (persona.languages.length > 0 && !persona.languages.includes(model)) {
     return { detected: null, answerIn: null, unsupported: true };
   }
   return rule;
+}
+
+// ---------------------------------------------------------------------------
+// The conversation's language (tm 387 · AI-30).
+// ---------------------------------------------------------------------------
+
+/** Where the conversation's language is kept between turns (`ai_conversations.signals`). */
+export const LANGUAGE_SIGNAL = 'language';
+
+/** Below this the understanding's reading of the language is no reading (AI-30 §1). */
+export const LANGUAGE_CONFIDENCE_MIN = 0.7;
+
+/** A message shorter than this says nothing about its language ("ok", "tamam"). */
+export const LANGUAGE_WORDS_MIN = 3;
+
+/**
+ * The conversation's language as kept: `current` the one it is in (null:
+ * the player has not shown one yet), `pending` a different one the last
+ * confident message was in — a second one in a row switches to it.
+ */
+export interface LanguageTrack {
+  readonly current: string | null;
+  readonly pending: string | null;
+}
+
+export const NO_LANGUAGE_TRACK: LanguageTrack = Object.freeze({ current: null, pending: null });
+
+/** What a turn knows of the conversation's language before it reads the message. */
+export interface ConversationLanguage {
+  readonly track: LanguageTrack;
+  /** The visitor's widget language (`customers.locale`), when the turn knows it. */
+  readonly visitor?: string | null;
+}
+
+/** The understanding's reading, as it reaches a verdict: the code alone, or with its confidence. */
+export type LanguageInput =
+  | string
+  | { readonly language?: string | null; readonly language_confidence?: number | null }
+  | null
+  | undefined;
+
+export interface LanguageReading {
+  readonly language: string | null;
+  readonly confidence: number | null;
+}
+
+export function languageReadingOf(input: LanguageInput): LanguageReading {
+  if (!input) return { language: null, confidence: null };
+  if (typeof input === 'string') return { language: input, confidence: null };
+  return { language: input.language ?? null, confidence: input.language_confidence ?? null };
+}
+
+export function readLanguageTrack(signals: AiStateObject): LanguageTrack {
+  const raw = signals[LANGUAGE_SIGNAL];
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return NO_LANGUAGE_TRACK;
+  const { current, pending } = raw as Record<string, unknown>;
+  const code = (value: unknown) => (typeof value === 'string' ? normaliseLanguage(value) : null);
+  return { current: code(current), pending: code(pending) };
+}
+
+export function languageSignal(track: LanguageTrack): AiStateObject {
+  return { current: track.current, pending: track.pending };
+}
+
+function wordCount(message: string): number {
+  return message.split(/[^\p{L}\p{M}\p{N}']+/u).filter(Boolean).length;
+}
+
+/**
+ * The language one message is confidently in, or null (AI-30 §1). The
+ * persona rule first — it knows the languages it speaks and needs two of
+ * their small words; the understanding's reading for the rest, when it is
+ * sure enough. A model reading with no confidence counts only for a
+ * language the rule does not know (the reading before tm 387). Under three
+ * words, nothing.
+ */
+export function confidentLanguage(message: string, understood: LanguageInput): string | null {
+  if (wordCount(message) < LANGUAGE_WORDS_MIN) return null;
+  const rule = detectLanguage(message);
+  if (rule !== null) return rule;
+  const { language, confidence } = languageReadingOf(understood);
+  const code = normaliseLanguage(language);
+  if (code === null) return null;
+  if (confidence === null) return isPersonaLanguage(code) ? null : code;
+  return confidence >= LANGUAGE_CONFIDENCE_MIN ? code : null;
+}
+
+/**
+ * The track after one message: a first confident language is the
+ * conversation's at once; a different one replaces it only when two
+ * confident messages in a row are in it. A message with no confident
+ * language changes nothing.
+ */
+export function nextLanguageTrack(track: LanguageTrack, language: string | null): LanguageTrack {
+  if (language === null) return track;
+  if (track.current === null || track.current === language || track.pending === language) {
+    return { current: language, pending: null };
+  }
+  return { current: track.current, pending: language };
+}
+
+/**
+ * The language a conversation with no confident message yet is answered in:
+ * the visitor's widget language when the persona speaks it, the persona's
+ * default, else its first declared language it can phrase (the fallback
+ * before tm 387).
+ */
+export function startingLanguage(
+  persona: Persona,
+  visitor?: string | null,
+): PersonaLanguage | null {
+  const widget = normaliseLanguage(visitor ?? null);
+  if (isPersonaLanguage(widget) && persona.languages.includes(widget)) return widget;
+  if (persona.defaultLanguage && isPersonaLanguage(persona.defaultLanguage)) {
+    return persona.defaultLanguage;
+  }
+  return persona.languages.find(isPersonaLanguage) ?? null;
+}
+
+function conversationVerdict(
+  message: string,
+  persona: Persona,
+  understood: LanguageInput,
+  conversation: ConversationLanguage,
+): LanguageVerdict {
+  const track = nextLanguageTrack(conversation.track, confidentLanguage(message, understood));
+  return verdictInLanguage(persona, track.current, conversation.visitor);
+}
+
+/**
+ * The verdict for a conversation in `language` (null: none shown yet) —
+ * what {@link languageVerdict} gives once the message has moved the track.
+ */
+export function verdictInLanguage(
+  persona: Persona,
+  language: string | null,
+  visitor?: string | null,
+): LanguageVerdict {
+  if (language === null) {
+    return { detected: null, answerIn: startingLanguage(persona, visitor), unsupported: false };
+  }
+  const detected = isPersonaLanguage(language) ? language : null;
+  if (persona.languages.length > 0 && !persona.languages.includes(language)) {
+    return { detected, answerIn: null, unsupported: true };
+  }
+  return {
+    detected,
+    answerIn: detected ?? startingLanguage(persona, visitor),
+    unsupported: false,
+  };
+}
+
+/**
+ * The verdict a finished turn stands on, for the words said around it (the
+ * after-hours line, the AI disclosure): the language the turn kept in
+ * `signals`; a turn that kept none reads the message as before.
+ */
+export function turnLanguageVerdict(
+  message: string,
+  persona: Persona,
+  result: { nextState: { signals: AiStateObject }; decisions: { understood?: LanguageInput } },
+): LanguageVerdict {
+  const { current } = readLanguageTrack(result.nextState.signals);
+  if (current !== null) return verdictInLanguage(persona, current);
+  return languageVerdict(message, persona, result.decisions.understood);
 }
 
 /**

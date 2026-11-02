@@ -121,6 +121,7 @@ function playerOf(value: unknown): AiHandoffPlayer {
     email: stringOrNull(raw['email']),
     basis: 'declared',
     recognized_device: raw['recognized_device'] === true,
+    ...(typeof raw['language'] === 'string' ? { language: raw['language'] } : {}),
   };
 }
 

@@ -92,8 +92,11 @@ export function mockUnderstanding(grounding: UnderstandGrounding): UnderstandRep
   const answers = grounding.pending !== null && extracted.length > 0;
 
   const yes = parseBooleanTr(text);
+  const language = detectLanguage(text);
   return {
-    language: detectLanguage(text),
+    language,
+    // The rule's detection is a confident one, or none (tm 387 · AI-30).
+    language_confidence: language === null ? null : 1,
     relates_to_previous: null,
     wants_human: { value: false, explicit: false },
     intent: {

@@ -673,6 +673,7 @@ export const inbox: Messages = {
   'inbox.handoffCard.playerUnknown': 'Belirtilmedi',
   'inbox.handoffCard.declared': 'Oyuncu beyanı, doğrulanmadı',
   'inbox.handoffCard.recognizedDevice': 'Tanınan cihaz',
+  'inbox.handoffCard.language': 'Yazdığı dil: {language}',
   'inbox.handoffCard.accepted': '{time} itibarıyla devralındı',
   'inbox.handoffCard.showDetails': 'Ayrıntıları göster',
   'inbox.handoffCard.hideDetails': 'Ayrıntıları gizle',

@@ -141,6 +141,20 @@ export const RESOLUTION_PHRASES: Readonly<
     },
     thanks: '¡Me alegro! Si necesita algo más, escríbanos.',
   },
+  ru: {
+    confirm: {
+      resolved: 'Ваша проблема решена?',
+      resolved_waiting: 'Эта информация была вам полезна?',
+    },
+    thanks: 'Рад это слышать! Если понадобится что-то ещё, просто напишите нам.',
+  },
+  az: {
+    confirm: {
+      resolved: 'Probleminiz həll olundu?',
+      resolved_waiting: 'Bu məlumat sizə faydalı oldu?',
+    },
+    thanks: 'Buna şadam! Başqa bir sualınız olarsa, sadəcə bizə yazın.',
+  },
 };
 
 /**

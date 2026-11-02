@@ -163,6 +163,8 @@ interface Figure {
   raw: string;
   values: number[];
   unit: FigureUnit;
+  /** A currency figure's currency, when the text names one (tm 387): "100 TL" is `TRY`. */
+  currency: string | null;
   start: number;
   end: number;
 }
@@ -171,17 +173,45 @@ const NUMBER = String.raw`\d+(?:[.,]\d+)*`;
 
 /** A unit after the number; a short one must not run on into a word ("10 xyz"). */
 const UNIT_AFTER: ReadonlyArray<[FigureUnit, string]> = [
-  ['currency', String.raw`(?:tl|try|lira|usdt|usd|eur|euro|₺|\$|€)(?![\p{L}\d])`],
+  [
+    'currency',
+    String.raw`(?:tl|try|lira|usdt|usd|eur|euro|azn|rub|₺|\$|€|₽|₼)(?![\p{L}\d])|(?:лир|руб|доллар|евро|манат|manat)\p{L}*`,
+  ],
   ['percent', String.raw`%`],
-  ['minute', String.raw`(?:dk|dak|min|mins)(?![\p{L}])|dakika\p{L}*|minutes?(?![\p{L}])`],
-  ['hour', String.raw`(?:sa|h|hr|hrs)(?![\p{L}])|saat\p{L}*|hours?(?![\p{L}])`],
-  ['day', String.raw`(?:iş\s+)?gün\p{L}*|(?:business\s+)?days?(?![\p{L}])`],
+  [
+    'minute',
+    String.raw`(?:dk|dak|min|mins|мин)(?![\p{L}])|dakika\p{L}*|minutes?(?![\p{L}])|минут\p{L}*|dəqiqə\p{L}*`,
+  ],
+  ['hour', String.raw`(?:sa|h|hr|hrs|ч)(?![\p{L}])|saat\p{L}*|hours?(?![\p{L}])|час\p{L}*`],
+  [
+    'day',
+    String.raw`(?:iş\s+)?gün\p{L}*|(?:business\s+)?days?(?![\p{L}])|(?:рабоч\p{L}*\s+)?(?:дн(?:я|ей|и)|день|сут\p{L}*)(?![\p{L}])`,
+  ],
   ['multiplier', String.raw`(?:x|kat\p{L}*|times)(?![\p{L}])`],
 ];
 
+/**
+ * The currency a currency figure names, by its written unit (tm 387 · AI-30):
+ * "100 TL", "₺100" and "100 лир" are one currency; "100 руб" is another.
+ * USDT before USD, which it starts with.
+ */
+const CURRENCY_CODES: ReadonlyArray<[string, RegExp]> = [
+  ['USDT', /usdt/u],
+  ['TRY', /tl|try|lira|₺|лир/u],
+  ['USD', /usd|\$|доллар/u],
+  ['EUR', /eur|€|евро/u],
+  ['RUB', /rub|₽|руб/u],
+  ['AZN', /azn|₼|manat|манат/u],
+];
+
+function currencyOf(raw: string): string | null {
+  for (const [code, re] of CURRENCY_CODES) if (re.test(raw)) return code;
+  return null;
+}
+
 /** A unit before the number: "₺100", "%10", "yüzde 10", "x30". */
 const UNIT_BEFORE: ReadonlyArray<[FigureUnit, string]> = [
-  ['currency', String.raw`[₺$€]`],
+  ['currency', String.raw`[₺$€₽₼]`],
   ['percent', String.raw`%|yüzde\s`],
   ['multiplier', String.raw`(?<![\p{L}])x`],
 ];
@@ -211,7 +241,14 @@ function figuresIn(text: string): Figure[] {
       const start = match.index;
       const end = start + match[0].length;
       if (taken(start, end)) continue;
-      found.push({ raw: match[0].trim(), values: numberValues(match[1]!), unit, start, end });
+      found.push({
+        raw: match[0].trim(),
+        values: numberValues(match[1]!),
+        unit,
+        currency: unit === 'currency' ? currencyOf(match[0]) : null,
+        start,
+        end,
+      });
     }
   }
   for (const [unit, pattern] of UNIT_BEFORE) {
@@ -220,7 +257,14 @@ function figuresIn(text: string): Figure[] {
       const start = match.index;
       const end = start + match[0].length;
       if (taken(start, end)) continue;
-      found.push({ raw: match[0].trim(), values: numberValues(match[1]!), unit, start, end });
+      found.push({
+        raw: match[0].trim(),
+        values: numberValues(match[1]!),
+        unit,
+        currency: unit === 'currency' ? currencyOf(match[0]) : null,
+        start,
+        end,
+      });
     }
   }
   return found;
@@ -271,16 +315,22 @@ export function inventedFigures(reply: string, sources: readonly string[]): stri
     return [
       ...figures.map((figure) => ({
         unit: figure.unit as FigureUnit | null,
+        currency: figure.currency,
         values: figure.values,
       })),
-      { unit: null, values: bareNumbers(text, figures) },
+      { unit: null, currency: null, values: bareNumbers(text, figures) },
     ];
   });
   const invented: string[] = [];
   for (const figure of figuresIn(reply)) {
+    // A currency is kept as well as the amount (tm 387 · AI-30): a source's
+    // "100 TL" does not give "100 RUB" — the translation's commonest slip.
     const known = given.some(
       (candidate) =>
         (candidate.unit === null || candidate.unit === figure.unit) &&
+        (candidate.currency === null ||
+          figure.currency === null ||
+          candidate.currency === figure.currency) &&
         candidate.values.some((value) => figure.values.includes(value)),
     );
     if (!known && !invented.includes(figure.raw)) invented.push(figure.raw);
@@ -389,6 +439,19 @@ export function noAnswerCategory(
   return 'other';
 }
 
+/**
+ * Whether a translated answer is about money, a bonus or the account — where
+ * a figure it changed is not sent at all (tm 387 · AI-30 §3): read off the
+ * question and the passages the answer is drawn from, since a question in a
+ * language the stems are not written in still cites a Turkish passage.
+ */
+export function criticalTopic(texts: readonly string[]): boolean {
+  return texts.some((text) => {
+    const category = noAnswerCategory(text, null);
+    return category === 'money' || category === 'bonus' || category === 'account';
+  });
+}
+
 export interface NoAnswerPhrases {
   /** "I cannot answer this; a person will" — the hand-over at once. */
   handoff: string;
@@ -439,6 +502,20 @@ export const NO_ANSWER_PHRASES: Readonly<Record<PersonaLanguage, NoAnswerPhrases
     handingOver: 'Le paso con uno de nuestros agentes.',
     declined: 'De acuerdo. ¿Puedo ayudarle con algo más?',
     offer: 'Para más detalles, puedo pasarle con uno de nuestros agentes.',
+  },
+  ru: {
+    handoff: 'Я не могу дать вам точный ответ по этому вопросу. Передаю вас нашему оператору.',
+    ask: 'Я не могу дать вам точный ответ по этому вопросу. Передать вас нашему оператору?',
+    handingOver: 'Передаю вас нашему оператору.',
+    declined: 'Хорошо. Могу ли я помочь вам с чем-то ещё?',
+    offer: 'За подробностями я могу передать вас нашему оператору.',
+  },
+  az: {
+    handoff: 'Bu barədə sizə dəqiq məlumat verə bilmirəm. Sizi əməkdaşımıza ötürürəm.',
+    ask: 'Bu barədə sizə dəqiq məlumat verə bilmirəm. Sizi əməkdaşımıza ötürüm?',
+    handingOver: 'Sizi əməkdaşımıza ötürürəm.',
+    declined: 'Yaxşı. Başqa bir məsələdə sizə kömək edə bilərəm?',
+    offer: 'Ətraflı məlumat üçün sizi əməkdaşımıza ötürə bilərəm.',
   },
 };
 

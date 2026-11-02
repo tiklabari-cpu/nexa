@@ -399,6 +399,10 @@ const CASES: LexiconCase[] = [
       'I promise.',
       'It will be credited within 5 minutes.',
       'Within 24 hours it will be credited.',
+      // Russian (tm 387 · AI-30): "garanti" and "kesin yatar" in a translated reply.
+      'Мы гарантируем зачисление депозита.',
+      'Деньги точно поступят на ваш счёт сегодня.',
+      'Обещаю, что всё будет в порядке.',
     ],
     misses: [
       'Size garanti veremiyoruz.',
@@ -412,6 +416,9 @@ const CASES: LexiconCase[] = [
       'We cannot guarantee the time.',
       'There is no guarantee.',
       'It is usually credited within 5 minutes.',
+      'Мы не можем гарантировать сроки зачисления.',
+      'Гарантий нет, но обычно это занимает 30 минут.',
+      'Без гарантии бонус не начисляется.',
     ],
   },
   {
@@ -729,8 +736,8 @@ describe('platform guardrail catalogue (AI-08)', () => {
     // update both values here. Every turn records the version, so a silent change to a
     // locked rule would leave the record lying about what ran.
     expect({ version: PLATFORM_GUARDRAILS_VERSION, fingerprint: fingerprint() }).toEqual({
-      version: '2026-10-19.1',
-      fingerprint: '6829fed5',
+      version: '2026-11-02.1',
+      fingerprint: 'cba9bd46',
     });
   });
 });
@@ -829,8 +836,8 @@ describe('lexicons — hits and near misses', () => {
       for (const stage of ['input', 'output'] as const) {
         const lexicon = stage === 'input' ? rule.input : rule.output;
         if (!lexicon) continue;
-        for (const lang of ['tr', 'en'] as const) {
-          lexicon[lang].forEach((pattern, index) => {
+        for (const lang of ['tr', 'en', 'ru'] as const) {
+          lexicon[lang]?.forEach((pattern, index) => {
             const key = `${rule.id} ${stage} ${lang} ${index}`;
             if (!seen.has(key)) missing.push(`${key}: ${pattern.re.source}`);
           });

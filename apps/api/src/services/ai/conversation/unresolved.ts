@@ -32,6 +32,7 @@ import {
 } from '@siyahtus/types';
 import type { EmbeddedQuery } from '../knowledge-service.js';
 import type { UnansweredReason } from './knowledge-answer.js';
+import { readLanguageTrack } from './policy.js';
 import {
   tookTurn,
   turnAgentId,
@@ -111,7 +112,11 @@ export function unresolvedOf(input: {
     aiAgentId,
     brandId: ctx.brandId ?? null,
     configVersionId: ctx.configVersionId,
-    language: decisions.unanswered?.language ?? understood?.language ?? null,
+    // The conversation's language when the turn read none of its own (tm 387 · AI-30).
+    language:
+      decisions.unanswered?.language ??
+      understood?.language ??
+      readLanguageTrack(result.nextState.signals).current,
     intentGuess: understood?.procedure_key ?? understood?.alternatives[0]?.key ?? null,
     embedding: vector && embedded ? { space: embedded.query.space, vector } : null,
   };

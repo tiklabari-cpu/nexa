@@ -311,6 +311,12 @@ export interface TurnContext {
    * works under (`tenant.brandId`), else not known.
    */
   readonly brandId?: string | null;
+  /**
+   * The visitor's widget language (`customers.locale`, tm 387 · AI-30): what a
+   * conversation is answered in before the player has written a message
+   * whose language can be told — when the persona speaks it. Absent: not known.
+   */
+  readonly visitorLanguage?: string | null;
   /** The configuration version the turn runs on — null on the editing tables (tm 316.3). */
   readonly configVersionId: string | null;
   readonly config: TurnConfig;
@@ -522,6 +528,8 @@ export interface UnderstoodRecord {
   confidence: number;
   alternatives: Array<{ key: string; confidence: number }>;
   language: string | null;
+  /** How sure the call was of the language (tm 387 · AI-30); absent when not given. */
+  language_confidence?: number;
   /** 2 when the first reply failed the schema. */
   tries: 1 | 2;
   /** How the catalogue was narrowed first (tm 297.3) — absent at 15 procedures or fewer. */

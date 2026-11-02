@@ -809,6 +809,8 @@ describe('procedure skills on the live path (AI-03)', () => {
           confidence: 0,
           alternatives: [],
           language: 'en',
+          // How sure the reading is (tm 387 · AI-30): the mock's rule detection is sure.
+          language_confidence: 1,
           tries: 1,
         },
         policy: { step: 5, rule: 'knowledge', high: 0.7, low: 0.4 },

@@ -286,6 +286,14 @@ export const HANDOFF_PHRASES: Readonly<Record<PersonaLanguage, HandoffPhrases>> 
     topic: 'Para pasarle al equipo adecuado, ¿podría decirme brevemente de qué se trata?',
     offer: '¿Quiere que le pase con uno de nuestros agentes?',
   },
+  ru: {
+    topic: 'Чтобы я передал вас нужной команде, кратко опишите, о чём ваш вопрос.',
+    offer: 'Хотите, я передам вас одному из наших операторов?',
+  },
+  az: {
+    topic: 'Sizi düzgün komandaya ötürə bilməyim üçün mövzunu qısaca yaza bilərsiniz?',
+    offer: 'Sizi əməkdaşlarımızdan birinə ötürməyimi istəyirsiniz?',
+  },
 };
 
 /** A reply the engine says for any hand-over — what the workspace's own message replaces. */
@@ -719,8 +727,10 @@ export function settleHandoffTurn(input: {
         ? ruleTarget(routed)
         : {};
     const own = isMessageReason(primary) ? config.messages[primary] : null;
-    // A language the persona does not speak is told in English, the likelier read.
-    const lang = primary === 'unsupported_language' ? 'en' : answerIn;
+    // A language the persona does not speak is told in that language when the
+    // template has it — the engine passes it as answerIn — else in English, the
+    // likelier read (tm 387 · AI-30).
+    const lang = primary === 'unsupported_language' ? (answerIn ?? 'en') : answerIn;
     let reply = out.reply;
     if (reply === null) {
       // A stored risk flag says a person answers (AI-27): silent, unless the

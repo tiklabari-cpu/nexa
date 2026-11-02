@@ -699,6 +699,7 @@ export const inbox: Messages = {
   'inbox.handoffCard.playerUnknown': 'Not given',
   'inbox.handoffCard.declared': 'Player’s own claim, not verified',
   'inbox.handoffCard.recognizedDevice': 'Recognised device',
+  'inbox.handoffCard.language': 'Writes in {language}',
   'inbox.handoffCard.accepted': 'Taken up at {time}',
   'inbox.handoffCard.showDetails': 'Show details',
   'inbox.handoffCard.hideDetails': 'Hide details',

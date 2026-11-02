@@ -374,7 +374,8 @@ describe('the input scan hands over before any model is asked (AI-08 §1–§3)'
         priority: 'normal',
       }),
     ]);
-    expect(result.nextState.signals).toEqual({});
+    // Only the conversation's language is kept (tm 387 · AI-30).
+    expect(result.nextState.signals).toEqual({ language: { current: 'tr', pending: null } });
   });
 
   it('G16: asked for a person, the AI hands over and says so', async () => {

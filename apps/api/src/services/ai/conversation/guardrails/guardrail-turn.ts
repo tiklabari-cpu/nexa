@@ -50,6 +50,8 @@ const SAFE_TEXTS: Readonly<Record<PersonaLanguage, string>> = {
   de: 'Ich leite Ihre Angaben an das zuständige Team weiter.',
   fr: 'Je transmets vos informations à l’équipe concernée.',
   es: 'Paso sus datos al equipo que se encarga de esto.',
+  ru: 'Я передаю ваши данные команде, которая этим занимается.',
+  az: 'Məlumatlarınızı bu məsələ ilə məşğul olan komandaya ötürürəm.',
 };
 
 export function safeText(lang: PersonaLanguage | null): string {
@@ -63,6 +65,8 @@ const ABUSE_WARNINGS: Readonly<Record<PersonaLanguage, string>> = {
   de: 'Ich möchte Ihnen helfen; bitte lassen Sie uns respektvoll bleiben.',
   fr: 'Je souhaite vous aider ; restons courtois, s’il vous plaît.',
   es: 'Quiero ayudarle; por favor, mantengamos un tono respetuoso.',
+  ru: 'Я хочу вам помочь; пожалуйста, давайте общаться уважительно.',
+  az: 'Sizə kömək etmək istəyirəm; xahiş edirəm, hörmətli dildə davam edək.',
 };
 
 export function abuseWarning(lang: PersonaLanguage | null): string {

@@ -313,6 +313,28 @@ const RECALL: Readonly<
       resolved_waiting: 'el resultado estaba pendiente',
     },
   },
+  ru: {
+    topic: (topic, ended) => `Сегодня вы уже писали нам по теме «${topic}»; ${ended}.`,
+    plain: (ended) => `Сегодня вы уже писали нам; ${ended}.`,
+    ask: 'Вы уже писали нам сегодня?',
+    ended: {
+      resolved: 'вам ответили',
+      handed_off: 'вопрос передали нашей команде',
+      abandoned: 'разговор остался незавершённым',
+      resolved_waiting: 'ожидался результат',
+    },
+  },
+  az: {
+    topic: (topic, ended) => `Bu gün artıq «${topic}» mövzusunda bizə yazmışdınız; ${ended}.`,
+    plain: (ended) => `Bu gün artıq bizə yazmışdınız; ${ended}.`,
+    ask: 'Bu gün artıq bizə yazmışdınız?',
+    ended: {
+      resolved: 'cavab verilmişdi',
+      handed_off: 'məsələ komandamıza ötürülmüşdü',
+      abandoned: 'söhbət yarımçıq qalmışdı',
+      resolved_waiting: 'nəticə gözlənilirdi',
+    },
+  },
 };
 
 /**

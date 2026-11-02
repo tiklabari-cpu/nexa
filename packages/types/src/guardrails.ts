@@ -46,7 +46,7 @@
 import { THREAD_PRIORITIES, type ThreadPriority } from './team-queues.js';
 
 /** Bump with any change to the catalogue below — a rule, a line, a pattern. */
-export const PLATFORM_GUARDRAILS_VERSION = '2026-10-19.1';
+export const PLATFORM_GUARDRAILS_VERSION = '2026-11-02.1';
 
 export const GUARDRAIL_IDS = [
   'G1',
@@ -110,6 +110,15 @@ export type GuardrailStage = (typeof GUARDRAIL_STAGES)[number];
 /** The languages a rule's title, line and lexicons are written in. */
 export const GUARDRAIL_LANGS = ['tr', 'en'] as const;
 export type GuardrailLang = (typeof GUARDRAIL_LANGS)[number];
+
+/**
+ * The languages a scan reads (tm 387 · AI-30): the two every rule is written
+ * in, and Russian — the lexicons some output rules carry for a translated
+ * reply (G7's promise and guarantee). Russian is read through
+ * {@link normalizeGuardrailText}'s transliteration, so its patterns are ASCII.
+ */
+export const GUARDRAIL_SCAN_LANGS = ['tr', 'en', 'ru'] as const;
+export type GuardrailScanLang = (typeof GUARDRAIL_SCAN_LANGS)[number];
 
 /**
  * The hand-over's priority (AI-12 §3, `threads.priority`): `urgent` for self-
@@ -219,7 +228,10 @@ export interface GuardrailPattern {
   readonly unless?: RegExp;
 }
 
-export type GuardrailLexicon = Readonly<Record<GuardrailLang, readonly GuardrailPattern[]>>;
+export type GuardrailLexicon = Readonly<Record<GuardrailLang, readonly GuardrailPattern[]>> & {
+  /** A Russian lexicon, on transliterated text (tm 387); most rules have none. */
+  readonly ru?: readonly GuardrailPattern[];
+};
 
 export interface PlatformGuardrail {
   readonly id: GuardrailId;
@@ -295,6 +307,40 @@ const KEPT = /[a-z0-9%]/;
 const LETTERS: Readonly<Record<string, string>> = {
   ı: 'i',
   ə: 'e',
+  // Russian, transliterated (tm 387 · AI-30): Cyrillic would otherwise fold to
+  // nothing, and neither a Russian lexicon nor a workspace's Russian forbidden
+  // phrase could match. "й" and "ё" reach here as "и" and "е" (NFD).
+  а: 'a',
+  б: 'b',
+  в: 'v',
+  г: 'g',
+  д: 'd',
+  е: 'e',
+  ж: 'zh',
+  з: 'z',
+  и: 'i',
+  к: 'k',
+  л: 'l',
+  м: 'm',
+  н: 'n',
+  о: 'o',
+  п: 'p',
+  р: 'r',
+  с: 's',
+  т: 't',
+  у: 'u',
+  ф: 'f',
+  х: 'kh',
+  ц: 'ts',
+  ч: 'ch',
+  ш: 'sh',
+  щ: 'shch',
+  ъ: '',
+  ы: 'y',
+  ь: '',
+  э: 'e',
+  ю: 'yu',
+  я: 'ya',
   ß: 'ss',
   æ: 'ae',
   œ: 'oe',
@@ -431,10 +477,11 @@ function rx(...parts: ReadonlyArray<string | RegExp>): RegExp {
 function lexicon(
   tr: ReadonlyArray<RegExp | GuardrailPattern>,
   en: ReadonlyArray<RegExp | GuardrailPattern>,
+  ru?: ReadonlyArray<RegExp | GuardrailPattern>,
 ): GuardrailLexicon {
   const wrap = (list: ReadonlyArray<RegExp | GuardrailPattern>) =>
     Object.freeze(list.map((p) => Object.freeze(p instanceof RegExp ? { re: p } : { ...p })));
-  return Object.freeze({ tr: wrap(tr), en: wrap(en) });
+  return Object.freeze({ tr: wrap(tr), en: wrap(en), ...(ru ? { ru: wrap(ru) } : {}) });
 }
 
 /** Up to n words in between, within one clause. */
@@ -841,6 +888,14 @@ const G7: PlatformGuardrail = {
         re: rx(/\b(within|in) /, DURATION_EN, /( [a-z]+){0,4} will (be )?/, LANDS_EN),
         unless: HEDGE_EN,
       },
+    ],
+    [
+      // "гарантируем", "гарантия" (the Russian forms: Turkish "garanti" is not one) — not "не (можем) гарантировать", "без гарантии", "гарантий нет".
+      /(?<!\b(ne|bez)( [a-z]+){0,1} )\bgarant(ir[a-z]*|iya|ii|iyu|iey|iy)\b(?! net\b)/,
+      // "точно / обязательно / 100% поступят, зачислят, придут, выплатят, одобрят, выиграете".
+      /\b(tochno|obyazatelno|navernyaka|100 ?%)( [a-z]+){0,2} (postup|zachisl|prid|vyplat|odobr|vern|poluch|vyigra)[a-z]*/,
+      // "обещаю", "обещаем".
+      /\bobeshcha(yu|em)\b/,
     ],
   ),
 };
@@ -1338,7 +1393,7 @@ export function platformGuardrail(id: GuardrailId): PlatformGuardrail {
 export interface GuardrailMatch {
   readonly rule: GuardrailId;
   readonly stage: GuardrailStage;
-  readonly lang: GuardrailLang;
+  readonly lang: GuardrailScanLang;
   /** The pattern's place in the rule's lexicon for this stage and language (lexicon upkeep, AI-24). */
   readonly pattern: number;
   /** The matched range in the original text, `[start, end)`. */
@@ -1351,8 +1406,8 @@ export interface GuardrailMatch {
 export interface GuardrailScanOptions {
   /** Only these rules; every rule with a lexicon for the stage by default. */
   readonly rules?: readonly GuardrailId[];
-  /** Only these languages' lexicons; both by default — a player may switch language mid-sentence. */
-  readonly langs?: readonly GuardrailLang[];
+  /** Only these languages' lexicons; all by default — a player may switch language mid-sentence. */
+  readonly langs?: readonly GuardrailScanLang[];
 }
 
 const GLOBAL = /* @__PURE__ */ new WeakMap<RegExp, RegExp>();
@@ -1390,14 +1445,14 @@ export function scanGuardrails(
   const normalized = normalizeGuardrailText(text);
   const folded = normalized.text;
   if (folded === '') return [];
-  const langs = options.langs ?? GUARDRAIL_LANGS;
+  const langs = options.langs ?? GUARDRAIL_SCAN_LANGS;
   const matches: GuardrailMatch[] = [];
   for (const rule of PLATFORM_GUARDRAILS) {
     if (options.rules && !options.rules.includes(rule.id)) continue;
     const lex = stage === 'input' ? rule.input : rule.output;
     if (!lex) continue;
     for (const lang of langs) {
-      lex[lang].forEach((pattern, index) => {
+      lex[lang]?.forEach((pattern, index) => {
         for (const found of folded.matchAll(globalOf(pattern.re))) {
           const at = found.index ?? 0;
           let last = at + found[0].length - 1;

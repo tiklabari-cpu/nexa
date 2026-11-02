@@ -196,6 +196,21 @@ aiAgent:
                 maxLength: 40
                 nullable: true
                 description: The widget's "Talk to an agent" button text (AI-29-S1). Null or blank clears it.
+              default_language:
+                type: string
+                enum: [en, tr, de, fr, es, ru, az, null]
+                nullable: true
+                description: The language a conversation starts in (AI-30). Null clears it.
+              translate_from_knowledge:
+                type: object
+                additionalProperties: { type: boolean }
+                description: |
+                  Per language code (`en`, `tr`, `de`, `fr`, `es`, `ru`, `az`):
+                  whether a translated answer is allowed (AI-30-S1). Merged into
+                  the stored map; the languages left out keep their value.
+              disclaimer_on_translation:
+                type: boolean
+                description: A translated answer ends with a note saying so (AI-30).
     responses:
       "200":
         description: Updated

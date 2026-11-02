@@ -218,7 +218,7 @@ export function understandGrounding(input: UnderstandContextInput): UnderstandGr
 const INSTRUCTIONS = [
   'You read the latest message a customer wrote in a live support chat and describe it for the support system. You do not reply to the customer.',
   'Answer with one JSON object that matches the schema. Each field is a reading of the message, never an action:',
-  '- language: the ISO 639-1 code of the language the latest message is written in; null when it cannot be told.',
+  '- language: the ISO 639-1 code of the language the latest message is written in; null when it cannot be told. language_confidence: 0 to 1, how sure; null with a null language.',
   '- relates_to_previous: whether the latest message is about the same matter as the earlier messages; null when there are none.',
   '- wants_human.value: the customer asks for, or clearly wants, a person instead of the assistant; wants_human.explicit: they said so in words.',
   '- intent.procedure_key: the key of the one procedure in "catalogue" the message is about, or null; intent.confidence: 0 to 1, how sure; intent.alternatives: up to 3 other catalogue procedures it could be about, with their confidence. Use only keys from "catalogue"; judge by when_to_use and the examples, whatever the spelling.',
@@ -312,6 +312,7 @@ export const UNDERSTAND_SCHEMA: JsonSchema = {
   type: 'object',
   properties: {
     language: nullable('string', 'ISO 639-1 code.'),
+    language_confidence: { type: ['number', 'null'], minimum: 0, maximum: 1 },
     relates_to_previous: nullable('boolean', 'About the same matter as the earlier messages.'),
     wants_human: {
       type: 'object',
@@ -388,6 +389,7 @@ export const UNDERSTAND_SCHEMA: JsonSchema = {
   },
   required: [
     'language',
+    'language_confidence',
     'relates_to_previous',
     'wants_human',
     'intent',
@@ -411,6 +413,8 @@ export const UNDERSTAND_RESPONSE_FORMAT: LlmResponseFormat = {
 /** A reply that passed {@link UNDERSTAND_SCHEMA} — the model's words, not yet checked against the turn. */
 export interface UnderstandReply {
   language: string | null;
+  /** How sure the language reading is (tm 387 · AI-30). */
+  language_confidence: number | null;
   relates_to_previous: boolean | null;
   wants_human: { value: boolean; explicit: boolean };
   intent: {
@@ -438,6 +442,11 @@ export interface UnderstandReply {
 /** The understanding a turn acts on: the reply, checked against what the call was given. */
 export interface Understanding extends ProcedureUnderstanding {
   readonly language: string | null;
+  /**
+   * How sure the language reading is (tm 387 · AI-30): below 0.7 it does not
+   * move the conversation's language. Absent: not given.
+   */
+  readonly language_confidence?: number | null;
   readonly relates_to_previous: boolean | null;
   readonly wants_human: { readonly value: boolean; readonly explicit: boolean };
   readonly intent: UnderstandReply['intent'];
@@ -516,6 +525,10 @@ export function readUnderstanding(
   return {
     understanding: {
       language: language !== null && LANGUAGE_CODE.test(language) ? language : null,
+      language_confidence:
+        language !== null && LANGUAGE_CODE.test(language)
+          ? (reply.language_confidence ?? null)
+          : null,
       relates_to_previous: reply.relates_to_previous,
       wants_human: { value: reply.wants_human.value, explicit: reply.wants_human.explicit },
       intent: {
@@ -550,6 +563,9 @@ export function understoodRecord(understanding: Understanding, tries: 1 | 2): Un
       confidence: round(alt.confidence),
     })),
     language: understanding.language,
+    ...(understanding.language_confidence != null
+      ? { language_confidence: round(understanding.language_confidence) }
+      : {}),
     tries,
   };
 }

@@ -54,6 +54,11 @@ export interface AnswerGrounding {
   answerLength: AnswerLength | null;
   /** The language to answer in, when the persona settled one. */
   answerIn: PersonaLanguage | null;
+  /**
+   * The passages' language when the answer translates them (tm 387 · AI-30):
+   * absent when they are in `answerIn` already, or their language is not known.
+   */
+  translateFrom?: string;
 }
 
 export interface AnswerPromptInput {
@@ -62,6 +67,8 @@ export interface AnswerPromptInput {
   passages: readonly string[];
   persona: Persona;
   answerIn: PersonaLanguage | null;
+  /** The passages' language, when the reply is a translation of them (tm 387 · AI-30). */
+  translateFrom?: string | null;
   /** The conversation before `message` (`TurnHistory`); none on a first message. */
   history?: AnswerHistory;
   /**
@@ -103,6 +110,7 @@ export function buildAnswerPrompt(
     tone: input.persona.tone,
     answerLength: input.persona.answerLength,
     answerIn: input.answerIn,
+    ...(input.translateFrom ? { translateFrom: input.translateFrom } : {}),
   };
 
   const budget = grounding.answerLength ? ANSWER_BUDGETS[grounding.answerLength] : null;
@@ -126,6 +134,12 @@ export function buildAnswerPrompt(
       : input.reader === 'agent'
         ? 'Reply in the language the question is written in.'
         : 'Reply in the language the customer wrote in.',
+    // AI-30 (tm 387): a faithful translation, every figure as the passage gives it.
+    ...(grounding.translateFrom && grounding.answerIn
+      ? [
+          `The passages are written in ${grounding.translateFrom}; the reply is a faithful translation of them into ${grounding.answerIn}. Keep every number, currency, limit, duration and payment-method name exactly as the passages give them, and add nothing they do not say.`,
+        ]
+      : []),
     ...(input.cite
       ? [
           'Reply with one JSON object. reply: the answer, as plain text — no markdown, no links the passages do not contain. grounded: "full" when the passages answer the whole question, "partial" when they answer part of it, "none" when they do not answer it (reply is then empty). cited_ids: the ids of the passages the reply is drawn from.',
@@ -212,12 +226,16 @@ export function readAnswerGrounding(system: string): AnswerGrounding | null {
     return null;
   }
 
+  const translateFrom = candidate['translateFrom'];
+  if (translateFrom !== undefined && typeof translateFrom !== 'string') return null;
+
   return {
     passages: passages as string[],
     ...(ids ? { ids: ids as string[] } : {}),
     tone,
     answerLength,
     answerIn,
+    ...(translateFrom ? { translateFrom } : {}),
   };
 }
 

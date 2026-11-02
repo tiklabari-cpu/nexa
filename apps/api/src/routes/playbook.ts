@@ -71,6 +71,8 @@ import {
   SKILL_MODES,
   procedureProblemDetails,
   readBatchWindowSeconds,
+  PERSONA_LANGUAGES,
+  readPersonaLanguagePolicy,
   readDailyMemory,
   readNoAnswerSettings,
   splitSkillProcedure,
@@ -747,6 +749,13 @@ const updateAgentBody = z
     // The opening words and the button's wording (tm 308 · AI-29); null or blank clears.
     welcome_message: z.string().max(AI_WELCOME_MESSAGE_MAX).nullable().optional(),
     human_button_label: z.string().max(HUMAN_BUTTON_LABEL_MAX).nullable().optional(),
+    // The language settings (tm 387 · AI-30); the translation map merges.
+    default_language: z.enum(PERSONA_LANGUAGES).nullable().optional(),
+    translate_from_knowledge: z
+      .record(z.enum(PERSONA_LANGUAGES), z.boolean())
+      .refine((map) => Object.keys(map).length > 0, 'at least one language is required')
+      .optional(),
+    disclaimer_on_translation: z.boolean().optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -1184,7 +1193,10 @@ export default async function playbookRoutes(
           body.emoji !== undefined ||
           body.max_questions_per_message !== undefined ||
           body.welcome_message !== undefined ||
-          body.human_button_label !== undefined
+          body.human_button_label !== undefined ||
+          body.default_language !== undefined ||
+          body.translate_from_knowledge !== undefined ||
+          body.disclaimer_on_translation !== undefined
         ) {
           const current =
             existing.persona &&
@@ -1227,6 +1239,20 @@ export default async function playbookRoutes(
             if (text === '') delete next[key];
             else next[key] = text;
           }
+          // AI-30 (tm 387): the language a conversation starts in, the
+          // translation switch per language (merged), the note on a translation.
+          if (body.default_language === null) delete next['defaultLanguage'];
+          else if (body.default_language !== undefined) {
+            next['defaultLanguage'] = body.default_language;
+          }
+          if (body.translate_from_knowledge !== undefined) {
+            next['translateFromKnowledge'] = {
+              ...readPersonaLanguagePolicy(current).translateFromKnowledge,
+              ...body.translate_from_knowledge,
+            };
+          }
+          if (body.disclaimer_on_translation === false) delete next['disclaimerOnTranslation'];
+          else if (body.disclaimer_on_translation) next['disclaimerOnTranslation'] = true;
           persona = next as Prisma.InputJsonValue;
         }
 
@@ -3511,6 +3537,7 @@ function serialiseAgent(agent: {
       : {};
   const answerLength = persona['answerLength'];
   const style = readPersonaStyle(persona);
+  const languagePolicy = readPersonaLanguagePolicy(persona);
   return {
     id: agent.id,
     name: agent.name,
@@ -3527,6 +3554,9 @@ function serialiseAgent(agent: {
     max_questions_per_message: style.maxQuestionsPerMessage,
     welcome_message: readAiWelcome(persona),
     human_button_label: readHumanButtonLabel(persona),
+    default_language: languagePolicy.defaultLanguage,
+    translate_from_knowledge: languagePolicy.translateFromKnowledge,
+    disclaimer_on_translation: languagePolicy.disclaimerOnTranslation,
     active: agent.active,
     skills_count: agent._count.skills,
   };

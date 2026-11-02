@@ -44,6 +44,7 @@ import { readPendingChecks } from '../procedure/pending-checks.js';
 import { fillTemplate, variableText, type TemplateContext } from '../procedure/templates.js';
 import { slotCardLines, slotRecord } from '../slots/extract.js';
 import { readRiskFlags } from '../guardrails/guardrail-turn.js';
+import { readLanguageTrack } from '../policy.js';
 import type { TurnDecisions, TurnState } from '../turn.js';
 import { redactPlayerContact } from '../../../customers/player-contact.js';
 
@@ -170,12 +171,15 @@ export function buildHandoffCard(source: HandoffCardSource): HandoffCard {
   const filledHint = hint ? fillTemplate(hint, ctx) : null;
   const suggestedNextStep = filledHint?.ok ? filledHint.text : null;
 
+  const language = state ? readLanguageTrack(state.signals).current : null;
   const player: AiHandoffPlayer = {
     username: source.player.username,
     name: source.player.name,
     email: source.player.email,
     basis: 'declared',
     recognized_device: source.trust === 'verified',
+    // The conversation's language (tm 387 · AI-30): the agent knows what to answer in.
+    ...(language ? { language } : {}),
   };
   const aiStatements = source.statements.slice(-AI_HANDOFF_STATEMENTS_MAX);
   const outputCheckFlags = outputFlags([
@@ -365,6 +369,21 @@ function cardChecks(
   return lines;
 }
 
+/** Turkish names of the languages the AI speaks, with the code beside (tm 387). */
+const LANGUAGE_NAMES_TR: Readonly<Record<string, string>> = {
+  en: 'İngilizce',
+  de: 'Almanca',
+  fr: 'Fransızca',
+  es: 'İspanyolca',
+  ru: 'Rusça',
+  az: 'Azerbaycan Türkçesi',
+};
+
+function languageName(code: string): string {
+  const name = LANGUAGE_NAMES_TR[code];
+  return name ? `${name} (${code})` : code;
+}
+
 /** The card as plain text — the agents-only line and the archive (Turkish, like the research card). */
 function cardText(card: Omit<HandoffCard, 'cardText' | 'noteText'>): string {
   const lines: string[] = [];
@@ -380,6 +399,11 @@ function cardText(card: Omit<HandoffCard, 'cardText' | 'noteText'>): string {
       card.player.recognized_device ? '; tanınan cihaz' : ''
     })`,
   );
+  // Another language than the card's own (tm 387 · AI-30): said once, so the
+  // agent answers in it; the card's words stay Turkish.
+  if (card.player.language && card.player.language !== 'tr') {
+    lines.push(`Oyuncu dili: ${languageName(card.player.language)}`);
+  }
   if (card.slots.length > 0) {
     lines.push(
       `Toplanan bilgiler: ${card.slots

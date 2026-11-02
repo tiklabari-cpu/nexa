@@ -39,6 +39,7 @@ import { LlmProviderError } from '../provider/llm-error.js';
 import type { LlmCompletionRequest, LlmProvider } from '../provider/llm-provider.js';
 import { MockLlmProvider } from '../provider/mock-llm-provider.js';
 import { ConversationEngine } from './conversation-engine.js';
+import { NO_ANSWER_PHRASES } from './knowledge-answer.js';
 import { procedureHash } from './procedure/executor.js';
 import { mockUnderstanding } from './understand-mock.js';
 import { readUnderstandGrounding, type UnderstandReply } from './understand.js';
@@ -1631,7 +1632,8 @@ describe('the decision order through the engine (AI-05 §4–§5 · tm 297.2)', 
         },
       }),
     );
-    expect(result.reply).toBe(DEFAULT_HANDOFF_MESSAGES.unsupported_language.en);
+    // The template in the language the player wrote (tm 387 · AI-30), not English.
+    expect(result.reply).toBe(NO_ANSWER_PHRASES.ru.handingOver);
     expect(result.decisions).toMatchObject({
       outcome: 'handed_off',
       skillId: 'deposit',

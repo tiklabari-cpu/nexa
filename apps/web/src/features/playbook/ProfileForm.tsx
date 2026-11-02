@@ -48,6 +48,9 @@ const LANGUAGE_OPTIONS: [string, string][] = [
   ['de', 'Deutsch'],
   ['fr', 'Français'],
   ['es', 'Español'],
+  // The AI answers in Russian and Azerbaijani; the widget's own words stay in its eight (K25).
+  ['ru', 'Русский'],
+  ['az', 'Azərbaycanca'],
 ];
 
 /** 1…10 — 0 is its own option ("answer at once") and the empty one is the default. */
@@ -120,7 +123,15 @@ export function ProfileForm({
   // the one-string-per-field primitive; every other field is a plain string
   // and goes through `useForm` for its "required name" validation and errors.
   const [languages, setLanguages] = useState<string[]>(agent.languages);
-  const languagesDirty = JSON.stringify(languages) !== JSON.stringify(agent.languages);
+  // Per answer language, whether a translated answer is allowed (tm 387 · AI-30-S1);
+  // a language not in the map is allowed, as the API reads it.
+  const storedTranslate = agent.translate_from_knowledge ?? {};
+  const [translate, setTranslate] = useState<Record<string, boolean>>(storedTranslate);
+  const translateDirty = LANGUAGE_OPTIONS.some(
+    ([code]) => (translate[code] ?? true) !== (storedTranslate[code] ?? true),
+  );
+  const languagesDirty =
+    JSON.stringify(languages) !== JSON.stringify(agent.languages) || translateDirty;
 
   const save = useMutation({
     mutationFn: (body: {
@@ -137,6 +148,9 @@ export function ProfileForm({
       max_questions_per_message?: number | null;
       welcome_message?: string | null;
       human_button_label?: string | null;
+      default_language?: string | null;
+      translate_from_knowledge?: Record<string, boolean>;
+      disclaimer_on_translation?: boolean;
     }) => api.patch<AiAgent>(`/ai-agents/${agent.id}`, body),
     onSuccess: onSaved,
   });
@@ -164,6 +178,9 @@ export function ProfileForm({
     // The opening words and the button's wording (tm 308 · AI-29); '' is unset.
     welcome: agent.welcome_message ?? '',
     humanButton: agent.human_button_label ?? '',
+    // The language settings (tm 387 · AI-30); '' is "the first allowed language".
+    defaultLanguage: agent.default_language ?? '',
+    translationNote: agent.disclaimer_on_translation ? 'on' : 'off',
   };
 
   const form = useForm({
@@ -224,6 +241,13 @@ export function ProfileForm({
         ...(values.humanButton !== initialValues.humanButton
           ? { human_button_label: values.humanButton.trim() || null }
           : {}),
+        ...(values.defaultLanguage !== initialValues.defaultLanguage
+          ? { default_language: values.defaultLanguage || null }
+          : {}),
+        ...(values.translationNote !== initialValues.translationNote
+          ? { disclaimer_on_translation: values.translationNote === 'on' }
+          : {}),
+        ...(translateDirty ? { translate_from_knowledge: translate } : {}),
       });
     },
   });
@@ -235,6 +259,10 @@ export function ProfileForm({
       : null;
   const dirty = form.isDirty || languagesDirty;
   const canSave = canEdit && form.isValid && clarifyError === null && dirty && !save.isPending;
+
+  function toggleTranslate(code: string): void {
+    setTranslate((current) => ({ ...current, [code]: !(current[code] ?? true) }));
+  }
 
   function toggleLanguage(code: string): void {
     setLanguages((current) =>
@@ -318,6 +346,82 @@ export function ProfileForm({
               })}
             </div>
           </fieldset>
+
+          {/* AI-30 (tm 387): where a conversation starts, and whether an answer may be
+              translated from knowledge written in another language. */}
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="persona-default-language"
+              className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+            >
+              {t('playbook.profile.defaultLanguage')}
+            </label>
+            <select
+              id="persona-default-language"
+              value={form.values.defaultLanguage}
+              disabled={!canEdit}
+              onChange={(event) => form.setValue('defaultLanguage', event.target.value)}
+              className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm text-content outline-none disabled:opacity-60"
+            >
+              <option value="">{t('playbook.profile.defaultLanguageFirst')}</option>
+              {LANGUAGE_OPTIONS.map(([code, label]) => (
+                <option key={code} value={code}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {languages.length > 0 && (
+            <fieldset className="flex flex-col gap-1.5" disabled={!canEdit}>
+              <legend className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+                {t('playbook.profile.translate')}
+              </legend>
+              <p className="text-2xs text-content-tertiary">
+                {t('playbook.profile.translateHint')}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {LANGUAGE_OPTIONS.filter(([code]) => languages.includes(code)).map(
+                  ([code, label]) => {
+                    const on = translate[code] ?? true;
+                    // A checkbox, not a switch: the language chips above are the
+                    // switches named by the language, and these must not answer to it.
+                    return (
+                      <label
+                        key={code}
+                        className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-2xs text-content-secondary"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          disabled={!canEdit}
+                          onChange={() => toggleTranslate(code)}
+                        />
+                        {label}
+                      </label>
+                    );
+                  },
+                )}
+              </div>
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="persona-translation-note"
+                  className="text-2xs text-content-secondary"
+                >
+                  {t('playbook.profile.translationNote')}
+                </label>
+                <select
+                  id="persona-translation-note"
+                  value={form.values.translationNote}
+                  onChange={(event) => form.setValue('translationNote', event.target.value)}
+                  className="w-36 rounded-md border border-border bg-inset px-2 py-1.5 text-sm text-content outline-none disabled:opacity-60"
+                >
+                  <option value="off">{t('playbook.profile.translationNoteOff')}</option>
+                  <option value="on">{t('playbook.profile.translationNoteOn')}</option>
+                </select>
+              </div>
+            </fieldset>
+          )}
 
           {/* Sibling label: wrapping a <select> would fold its option text into
               the accessible name, so "Answer length" alone would not find it. */}

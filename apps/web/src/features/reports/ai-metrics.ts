@@ -56,6 +56,12 @@ export interface AiQualityBreakdownWire {
   by: AiMetricsBreakdownDimension;
   total: AiQualityWire;
   rows: Array<{ key: string | null; label: string | null; quality: AiQualityRatesWire }>;
+  /**
+   * "Handed over because it could not be checked automatically" (AI-28 ·
+   * tm 321): per tool, the hand-overs whose card asked a person to make the
+   * check — no tool is connected yet. Most first.
+   */
+  pending_checks: Array<{ tool: string; handoffs: number }>;
 }
 
 export interface AiMetricConversationRow {

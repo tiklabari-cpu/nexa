@@ -415,6 +415,43 @@ export async function readAiQualityBreakdown(
   });
 }
 
+/** One tool and the hand-overs whose card asked a person to make its check (AI-28). */
+export interface AiPendingCheckCount {
+  tool: string;
+  handoffs: number;
+}
+
+/** How many tools the count lists, at most — the catalogue has seven. */
+const PENDING_CHECK_TOOLS_MAX = 50;
+
+/**
+ * "Otomatik kontrol edilemediği için devredilen" (tm 321 · AI-28): per tool,
+ * the window's hand-overs whose card lists a check no tool could make — the
+ * connections the breakdown counts (same window, same filters, same reach),
+ * joined to their cards. A card's `checks` entry is `{ tool, text }`; a bare
+ * string is an older card's tool key. Most first: what F2 should connect first.
+ */
+export async function readPendingCheckCounts(
+  tx: TenantClient,
+  from: Date,
+  to: Date,
+  filter: AiMetricsFilter,
+): Promise<AiPendingCheckCount[]> {
+  const rows = await tx.$queryRaw<Array<{ tool: string; handoffs: number }>>`
+    SELECT c.tool, count(DISTINCT h.id)::int AS handoffs
+      FROM ai_conversation_outcomes o
+      JOIN ai_handoffs h ON h.thread_id = o.thread_id AND h.license_id = o.license_id
+      CROSS JOIN LATERAL (
+        SELECT CASE jsonb_typeof(e) WHEN 'string' THEN e #>> '{}' ELSE e ->> 'tool' END AS tool
+          FROM jsonb_array_elements(h.checks) e
+      ) c
+     WHERE ${windowSql(from, to)} AND ${filterSql(filter)} AND c.tool IS NOT NULL
+     GROUP BY c.tool
+     ORDER BY handoffs DESC, c.tool
+     LIMIT ${PENDING_CHECK_TOOLS_MAX}`;
+  return rows.map((row) => ({ tool: row.tool, handoffs: Number(row.handoffs) }));
+}
+
 // ---------------------------------------------------------------------------
 // The list behind a figure
 // ---------------------------------------------------------------------------

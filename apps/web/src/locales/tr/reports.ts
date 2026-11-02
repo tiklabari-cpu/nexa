@@ -284,6 +284,12 @@ export const reports: Messages = {
   'reports.aiMetrics.reasons.empty': 'Bu aralıkta devir yok.',
   'reports.aiMetrics.reasons.noKnowledge':
     '“Bilgi tabanında cevap yok” Playbook’taki cevapsız sorular listesine işaret eder.',
+  'reports.aiMetrics.pendingChecks.title': 'Otomatik kontrol edilemediği için devredilen',
+  'reports.aiMetrics.pendingChecks.empty': 'Bu dönemde sistem kontrolü bırakılan devir yok.',
+  'reports.aiMetrics.pendingChecks.tool': 'Sistem kontrolü',
+  'reports.aiMetrics.pendingChecks.handoffs': 'Devir',
+  'reports.aiMetrics.pendingChecks.note':
+    'Henüz bağlı sistem yok; bunlar bir kişinin yaptığı kontroller. En sık olanı ilk bağlanacak olandır.',
   'reports.aiMetrics.violations.title': 'Zorunlu devir ihlalleri',
   'reports.aiMetrics.violations.empty': 'Bu aralıkta yok.',
   'reports.aiMetrics.violations.rule': 'Kural',

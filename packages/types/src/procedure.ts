@@ -42,6 +42,15 @@ import {
   authorPatternProblem,
   validateSlotDefs,
 } from './slots.js';
+import {
+  TOOL_ON_ERROR,
+  TOOL_ON_UNAVAILABLE,
+  igamingTool,
+  toolOutputValueFits,
+  type ToolOnError,
+  type ToolOnUnavailable,
+  type ToolOutputValue,
+} from './igaming-tools.js';
 
 // ---------------------------------------------------------------------------
 // Steps.
@@ -63,8 +72,10 @@ import {
  *                               procedure ends.
  *   - `resolve`               — mark the outcome; the procedure ends.
  *   - `tag`                   — tag the conversation.
- *   - `tool`                  — where a system lookup will go (AI-28, ADR-14a
- *                               §2.6). Passive in F1: skipped and logged.
+ *   - `tool`                  — a system lookup (AI-28 "call_tool", ADR-14a
+ *                               §2.6; `igaming-tools.ts`). Passive in F1:
+ *                               nothing is called — a pending check, and
+ *                               `on_unavailable` says what follows.
  */
 export const PROC_STEP_TYPES = [
   'say',
@@ -158,15 +169,36 @@ export interface ProcTagStep extends ProcStepBase {
 }
 
 /**
- * A system lookup (AI-28): `inputs` maps the tool's input names to slot names.
- * F1 has no tools — `active` is `false`, the engine skips the step and logs it,
- * and the card lists it as something to check.
+ * A system lookup (AI-28 — the analysis calls it `call_tool`; the stored type
+ * stays `tool`, the name tm 296 fixed): `tool_key` names a catalogue tool
+ * (`IGAMING_TOOL_CATALOG`), `inputs` maps its input names to slot names.
+ *
+ * F1 has no tools — `active` is `false`. The engine calls nothing: it records
+ * `tool_not_connected`, keeps a pending check for the card, and goes on
+ * (`on_unavailable: 'continue'`, the default) or hands over (`'handoff'`).
+ * A simulation scenario's `tool_outputs` stand in the tool's output: the
+ * first of `branches` whose output field equals its value is taken, none —
+ * the next step; an output that is not an object is `on_error` (a hand-over).
  */
 export interface ProcToolStep extends ProcStepBase {
   type: 'tool';
   tool_key: string;
   inputs: Record<string, string>;
   active: false;
+  /** Absent: `continue`. */
+  on_unavailable?: ToolOnUnavailable;
+  /** Absent: `handoff` — the only choice in this release. */
+  on_error?: ToolOnError;
+  branches?: ProcToolBranch[];
+}
+
+/** Where a tool's output takes the procedure: `output.<field> == equals` → `goto`. */
+export interface ProcToolBranch {
+  /** A field of the tool's `output_schema`. */
+  output: string;
+  /** A value the field may hold (its type, its enum). */
+  equals: ToolOutputValue;
+  goto: string;
 }
 
 export type ProcStep =
@@ -458,6 +490,7 @@ export const PROCEDURE_INSTRUCTION_MAX = 1000;
 export const PROCEDURE_QUERY_HINT_MAX = 300;
 export const PROCEDURE_TAG_MAX = 64;
 export const PROCEDURE_TOOL_INPUTS_MAX = 10;
+export const PROCEDURE_TOOL_BRANCHES_MAX = 8;
 export const PROCEDURE_TEMPLATES_MAX = 30;
 export const PROCEDURE_TEMPLATE_TEXT_MAX = 2000;
 export const PROCEDURE_HANDOFF_CONDITIONS_MAX = 10;
@@ -583,6 +616,11 @@ export type ProcedureSection = (typeof PROCEDURE_SECTIONS)[number];
  *                                         a fact or a function.
  *   - `procedure_unknown_target`        — a team (or topic) the license does not have.
  *   - `procedure_tool_must_be_inactive` — a tool step marked active; F1 has none.
+ *   - `procedure_unknown_tool`          — a `tool_key` the catalogue does not have.
+ *   - `procedure_tool_unknown_input`    — an input name the tool does not take.
+ *   - `procedure_tool_missing_input`    — a required input of the tool left unmapped.
+ *   - `procedure_tool_unknown_output`   — a branch on a field the tool does not
+ *                                         return, or on a value the field cannot hold.
  *   - `procedure_locked_change`         — a locked procedure's structure changed;
  *                                         only its texts and its team may.
  *   - `procedure_fallback_taken`        — the skill is marked the fallback and
@@ -611,6 +649,10 @@ export const PROCEDURE_PROBLEM_CODES = [
   'procedure_unknown_goto',
   'procedure_loop_without_collect',
   'procedure_tool_must_be_inactive',
+  'procedure_unknown_tool',
+  'procedure_tool_unknown_input',
+  'procedure_tool_missing_input',
+  'procedure_tool_unknown_output',
   'procedure_bad_condition',
   'procedure_condition_too_deep',
   'procedure_bad_comparison',
@@ -734,7 +776,7 @@ const STEP_FIELDS: Readonly<Record<ProcStepType, readonly string[]>> = {
   handoff: ['reason_code', 'target'],
   resolve: ['outcome', 'followup_template'],
   tag: ['tag'],
-  tool: ['tool_key', 'inputs', 'active'],
+  tool: ['tool_key', 'inputs', 'active', 'on_unavailable', 'on_error', 'branches'],
 };
 
 const COND_KEYS: ReadonlySet<string> = new Set(['all', 'any', 'not', 'slot', 'fact', 'fn', 'ai']);
@@ -763,7 +805,7 @@ interface StepFlow {
   /** A `collect` without `when` — it stops the turn while anything it asks is missing. */
   waits: boolean;
   /** The step's `goto`s that jump to itself or an earlier step. */
-  backward: Array<{ field: 'then' | 'else'; target: number }>;
+  backward: Array<{ field: 'then' | 'else' | 'branches'; target: number }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -1780,6 +1822,20 @@ function stepProblems(
     push(code, field, message, extra),
   );
 
+  // A tool's output branches (AI-28): no match goes on to the next step.
+  const toolKey = value['tool_key'];
+  const toolBranches =
+    type === 'tool' && value['branches'] !== undefined
+      ? toolBranchProblems(
+          value['branches'],
+          index,
+          typeof toolKey === 'string' ? igamingTool(toolKey) : undefined,
+          scope,
+          flow,
+          push,
+        )
+      : undefined;
+
   if (type === 'collect') flow.waits = when === undefined;
   if (PROC_TERMINAL_STEP_TYPES.includes(type) && when === undefined) flow.next = [];
 
@@ -1815,6 +1871,7 @@ function stepProblems(
     ...(when !== undefined ? { when: when as Cond } : {}),
     ...body,
     ...(branches ?? {}),
+    ...(toolBranches !== undefined ? { branches: toolBranches } : {}),
   } as ProcStep;
   return { step, flow };
 }
@@ -1954,12 +2011,17 @@ function actionProblems(
     }
     case 'tool': {
       const key = value['tool_key'];
+      const tool = typeof key === 'string' ? igamingTool(key) : undefined;
       if (typeof key !== 'string' || !PROCEDURE_KEY_PATTERN.test(key)) {
         push(
           'procedure_step_bad_option',
           'tool_key',
           'tool_key must be lower snake_case, at most 40 characters',
         );
+      } else if (tool === undefined) {
+        push('procedure_unknown_tool', 'tool_key', `${key} is not a tool of the catalogue`, {
+          reference: key,
+        });
       }
       const inputs = value['inputs'] ?? {};
       if (
@@ -1975,12 +2037,27 @@ function actionProblems(
           `inputs maps at most ${PROCEDURE_TOOL_INPUTS_MAX} input names to slot names`,
         );
       } else {
-        for (const slot of Object.values(inputs) as string[]) {
+        for (const [name, slot] of Object.entries(inputs) as Array<[string, string]>) {
+          if (tool !== undefined && !Object.hasOwn(tool.input_schema.properties, name)) {
+            push('procedure_tool_unknown_input', 'inputs', `${tool.key} takes no input ${name}`, {
+              reference: name,
+            });
+          }
           if (!scope.slots.has(slot)) {
             push('slot_unknown_reference', 'inputs', `${slot} is not a slot of this procedure`, {
               slot,
               reference: slot,
             });
+          }
+        }
+        for (const name of tool?.input_schema.required ?? []) {
+          if (!Object.hasOwn(inputs, name)) {
+            push(
+              'procedure_tool_missing_input',
+              'inputs',
+              `${tool?.key} needs its ${name} input mapped to a slot`,
+              { reference: name },
+            );
           }
         }
       }
@@ -1991,7 +2068,25 @@ function actionProblems(
           'a tool step is passive in F1 (active: false)',
         );
       }
-      return { tool_key: key, inputs: isPlainObject(inputs) ? { ...inputs } : {}, active: false };
+      const onUnavailable = value['on_unavailable'];
+      if (onUnavailable !== undefined && !isOneOf(TOOL_ON_UNAVAILABLE, onUnavailable)) {
+        push(
+          'procedure_step_bad_option',
+          'on_unavailable',
+          'on_unavailable must be continue or handoff',
+        );
+      }
+      const onError = value['on_error'];
+      if (onError !== undefined && !isOneOf(TOOL_ON_ERROR, onError)) {
+        push('procedure_step_bad_option', 'on_error', 'on_error must be handoff');
+      }
+      return {
+        tool_key: key,
+        inputs: isPlainObject(inputs) ? { ...inputs } : {},
+        active: false,
+        ...(onUnavailable !== undefined ? { on_unavailable: onUnavailable } : {}),
+        ...(onError !== undefined ? { on_error: onError } : {}),
+      };
     }
     case 'check':
       return {};
@@ -2069,6 +2164,67 @@ function branchProblems(
     ...(nonEmptyString(instruction) ? { instruction: instruction.trim() } : {}),
     ...body,
   } as ProcInlineStep;
+}
+
+/**
+ * A tool step's `branches` (AI-28): `{ output, equals, goto }` each, on a field
+ * the tool returns and a value it can hold; the targets join the flow.
+ */
+function toolBranchProblems(
+  raw: unknown,
+  index: number,
+  tool: ReturnType<typeof igamingTool>,
+  scope: Scope,
+  flow: StepFlow,
+  push: PushProblem,
+): ProcToolBranch[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > PROCEDURE_TOOL_BRANCHES_MAX) {
+    push(
+      'procedure_step_bad_option',
+      'branches',
+      `branches is a list of 1 to ${PROCEDURE_TOOL_BRANCHES_MAX} { output, equals, goto }`,
+    );
+    return undefined;
+  }
+  const branches: ProcToolBranch[] = [];
+  for (const [n, entry] of raw.entries()) {
+    const path = `branches[${n}]`;
+    if (
+      !isPlainObject(entry) ||
+      Object.keys(entry).some((key) => key !== 'output' && key !== 'equals' && key !== 'goto') ||
+      typeof entry['output'] !== 'string' ||
+      typeof entry['goto'] !== 'string' ||
+      !['string', 'number', 'boolean'].includes(typeof entry['equals'])
+    ) {
+      push('procedure_step_bad_option', 'branches', `${path} must be { output, equals, goto }`, {
+        path,
+      });
+      continue;
+    }
+    const output = entry['output'];
+    const equals = entry['equals'] as ToolOutputValue;
+    const target = entry['goto'];
+    if (tool !== undefined && !toolOutputValueFits(tool, output, equals)) {
+      push(
+        'procedure_tool_unknown_output',
+        'branches',
+        `${path}: ${tool.key} returns no ${output} equal to ${JSON.stringify(equals)}`,
+        { path, reference: output },
+      );
+    }
+    const to = scope.stepIndex.get(target);
+    if (to === undefined) {
+      push('procedure_unknown_goto', 'branches', `${path} goes to ${target}, which is not a step`, {
+        path,
+        reference: target,
+      });
+      continue;
+    }
+    flow.next.push(to);
+    if (to <= index) flow.backward.push({ field: 'branches', target: to });
+    branches.push({ output, equals, goto: target });
+  }
+  return branches;
 }
 
 function targetIssues(value: unknown, context: ProcedureValidationContext): Issue[] {

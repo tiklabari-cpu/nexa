@@ -266,6 +266,7 @@ import {
   type ProcedureSnapshot,
   type SuspendedProcedure,
 } from './procedure/executor.js';
+import { withPendingChecks } from './procedure/pending-checks.js';
 import {
   rankProcedures,
   type CatalogueEntry,
@@ -2384,6 +2385,8 @@ export class ConversationEngine {
       maxQuestions: maxQuestionsOf(styleOf(ctx.config.skills, run.skill.aiAgentId)),
       resolution: resolutionCriteriaFor(own, handoff.resolution),
       resolutionAsked: askedKey !== null && state.counters[RESOLUTION_ASKED] === askedKey,
+      // AI-28: a simulation's stand-in outputs; live, none — no tool is connected (F1).
+      toolOutputs: ctx.toolStubs,
     });
     log.push(...result.log);
 
@@ -2649,7 +2652,8 @@ export class ConversationEngine {
               : null,
       slots: result.slots,
       suspended: suspendedNext as unknown as AiStateObject | null,
-      signals: run.signals,
+      // What the tool steps could not check, for the card and the report (AI-28).
+      signals: withPendingChecks(run.signals, result.pendingChecks),
       counters: {
         ...counters,
         turns: turn,

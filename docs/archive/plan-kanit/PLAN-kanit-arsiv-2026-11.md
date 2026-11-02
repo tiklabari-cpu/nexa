@@ -9,3 +9,7 @@ Canlı `PLAN.md` § K bloklarından taşınan eski kanıt maddeleri (CONVENTIONS
 #### K10.3 — 10.3 · Invoices + payment details yönetimi
 
 - ✅ **Fatura indirme reddedilince görünür hata (tm 259.9 · UX taraması O10 · 2026-10-08; damga değişmedi).** `download` try/finally idi, catch yoktu: reddedilen istek yakalanmamış reddetme oluyor, düğme sessizce geri geliyordu. Şimdi "{numara} numaralı fatura indirilemedi." + neden `role="alert"`, sonraki indirme uyarıyı siler. Billing pilotta gizli olduğundan görev sırasının sonunda yapıldı — `BillingPage.tsx` · test `BillingPage.test.tsx` (+1) · tm 259.9
+
+#### K06.2.4 — 06.2.4 · Ordered steps (6 adım tipi; reorder + klavye alternatifi)
+
+- ℹ tm 298 · AI-06 (bilgi yolu #298): hiçbir prosedür/skill almayan soru AI-13 tablosu (arayüz, #310) → bilgi bankasından `knowledge_answer` nesnesiyle (`{reply, grounded, cited_ids}`, pasajlar P1…Pn) cevaplanır; verilmeyen alıntı / alıntısız / pasajda olmayan birimli sayı bir kez yeniden yazdırılır, yine bozuksa gönderilmez; cevap yoksa "kesin bilgi veremiyorum" + konu grubuna göre devir (`no_knowledge`) ya da bir kez "aktarayım mı?" (`ai_handoff_settings.no_answer`, migration `20261019090000_ai_no_answer`); `ai` modunda hiçbir tur sessiz bitmez; karar kaydında `details.knowledge.source_ids` / `details.unanswered` · `apps/api/src/services/ai/conversation/knowledge-answer.ts:1` · `conversation-engine.ts` `#knowledgeTurn`/`#noAnswer`/`#neverSilent` · `knowledge-answer.test.ts` (30) · `knowledge-path.test.ts` (19) · `ai-knowledge-answer.test.ts` (9) · §D279

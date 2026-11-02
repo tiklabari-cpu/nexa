@@ -41,7 +41,15 @@
  *     a no, it hands over (`player_said_unresolved`, or the procedure's
  *     `resolution_criteria_unmet`). An answer neither yes nor no is the
  *     engine's: it lets the procedure go before this runs;
- *   - `tool` is passive in F1 (AI-28): skipped, and the run log says so.
+ *   - `tool` calls nothing (AI-28, tm 321): F1 has no connected tool and no
+ *     dispatcher, so no request leaves. Live, the step records
+ *     `tool_not_connected`, keeps a pending check (`pendingChecks` — the tool
+ *     and its input mapping, slot names only; the card says what to check)
+ *     and goes on, or hands over with `on_unavailable: 'handoff'`. In a
+ *     simulation the scenario's `tool_outputs` stand in the output: the first
+ *     of `branches` whose field equals its value is taken, none — the next
+ *     step; an output that is not an object hands over (`on_error`). The
+ *     output is data: it picks a branch and is never said or composed from.
  *
  * **At most {@link MAX_INNER_STEPS} steps run in a turn** — the loop shield.
  * The save-time validator refuses a loop nothing in which waits for the
@@ -59,9 +67,11 @@ import { createHash } from 'node:crypto';
 import {
   DEFAULT_MAX_QUESTIONS_PER_MESSAGE,
   RESOLUTION_PHRASES,
+  TOOL_NOT_CONNECTED,
   RESOLUTION_UNMET_REASON,
   validateProcedure,
   type HandoffTarget,
+  type PendingCheck,
   type PersonaLanguage,
   type ProcInlineStep,
   type ProcOutcome,
@@ -210,6 +220,12 @@ export interface ProcedureTurnInput {
    * turn before: the understanding's yes or no answers it.
    */
   readonly resolutionAsked?: boolean;
+  /**
+   * What a tool step would have returned, by tool key (AI-28) — a simulation
+   * scenario's `tool_outputs`. Absent or without the key: no tool is
+   * connected (F1), and the step keeps a pending check.
+   */
+  readonly toolOutputs?: Readonly<Record<string, unknown>>;
 }
 
 export interface ProcedureTurnResult {
@@ -222,6 +238,8 @@ export interface ProcedureTurnResult {
   log: SkillRunLogEntry[];
   /** A `resolve` step's decision, when one ran (ID-08 `details.resolution`). */
   resolution?: ResolutionRecord;
+  /** The checks this turn's tool steps could not make (AI-28): a person makes them. */
+  pendingChecks: PendingCheck[];
 }
 
 /** Run one turn of a procedure (see the file header). */
@@ -229,6 +247,7 @@ export function runProcedureTurn(input: ProcedureTurnInput): ProcedureTurnResult
   const { procedure } = input;
   const log: SkillRunLogEntry[] = [];
   const trace: StepDecision[] = [];
+  const pendingChecks: PendingCheck[] = [];
 
   let slots: Record<string, unknown> = { ...input.slots };
   if (input.understanding) {
@@ -275,6 +294,7 @@ export function runProcedureTurn(input: ProcedureTurnInput): ProcedureTurnResult
     trace,
     log,
     ...(resolution ? { resolution } : {}),
+    pendingChecks,
   });
 
   const stoppedAt = input.at?.stepId ?? null;
@@ -330,6 +350,8 @@ export function runProcedureTurn(input: ProcedureTurnInput): ProcedureTurnResult
     // Only the step it was asked at reads the answer: a `check` that now
     // branches elsewhere reaches a `resolve` that never asked.
     askedAt: input.resolutionAsked && stoppedAt !== null && start >= 0 ? stoppedAt : null,
+    toolOutputs: input.toolOutputs ?? {},
+    pendingChecks,
     trace,
     log,
   });
@@ -348,6 +370,10 @@ interface StepLoop {
   resolution: ResolutionCriteria;
   /** The step "is it solved?" was asked at, on the turn before; null when it was not. */
   askedAt: string | null;
+  /** A simulation's stand-in tool outputs, by tool key; empty live (F1). */
+  toolOutputs: Readonly<Record<string, unknown>>;
+  /** Where a tool step that had nothing to call leaves its check. */
+  pendingChecks: PendingCheck[];
   trace: StepDecision[];
   log: SkillRunLogEntry[];
 }
@@ -621,10 +647,83 @@ function runSteps(loop: StepLoop): {
         break;
       }
 
-      case 'tool':
-        record(step, cond, `tool ${step.tool_key} is passive in F1 — skipped`);
+      case 'tool': {
+        const output = Object.hasOwn(loop.toolOutputs, step.tool_key)
+          ? loop.toolOutputs[step.tool_key]
+          : undefined;
+        if (output === undefined) {
+          // F1: nothing is connected — no request, a check for a person.
+          loop.pendingChecks.push({
+            tool: step.tool_key,
+            step_id: step.id,
+            inputs: { ...step.inputs },
+          });
+          if (step.on_unavailable === 'handoff') {
+            record(
+              step,
+              cond,
+              `${TOOL_NOT_CONNECTED}: ${step.tool_key} — handing over (on_unavailable)`,
+            );
+            return {
+              parts,
+              tags,
+              end: {
+                kind: 'handoff',
+                stepId: step.id,
+                reason: TOOL_NOT_CONNECTED,
+                target: procedure.handoff.target ?? null,
+              },
+            };
+          }
+          record(
+            step,
+            cond,
+            `${TOOL_NOT_CONNECTED}: ${step.tool_key} — left for a person to check, going on`,
+          );
+          index += 1;
+          break;
+        }
+        if (!isObject(output)) {
+          record(
+            step,
+            cond,
+            `tool ${step.tool_key}: the simulated output is not an object — handing over (on_error)`,
+            false,
+          );
+          return {
+            parts,
+            tags,
+            end: {
+              kind: 'handoff',
+              stepId: step.id,
+              reason: 'tool_error',
+              target: procedure.handoff.target ?? null,
+            },
+          };
+        }
+        const branch = step.branches?.find((candidate) =>
+          Object.hasOwn(output, candidate.output)
+            ? output[candidate.output] === candidate.equals
+            : false,
+        );
+        const target = branch ? indexOf.get(branch.goto) : undefined;
+        if (branch && target !== undefined) {
+          record(
+            step,
+            cond,
+            `tool ${step.tool_key} (simulated output): ${branch.output} is ${JSON.stringify(branch.equals)} — go to ${branch.goto}`,
+          );
+          index = target;
+          break;
+        }
+        record(
+          step,
+          cond,
+          `tool ${step.tool_key} (simulated output): no branch matches — on to the next step`,
+        );
         index += 1;
         break;
+      }
 
       default: {
         const ended = perform(step, step, cond);

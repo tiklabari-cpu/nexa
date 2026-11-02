@@ -105,8 +105,8 @@ describe('step gate parity with the server (FR-MOD-06.2.4)', () => {
  * and writes back changed.
  */
 describe('procedure editor parity with the server (AI-03)', () => {
-  it('offers every step type the server takes, the passive tool aside', () => {
-    expect(new Set([...EDITOR_PROC_STEP_TYPES, 'tool'])).toStrictEqual(new Set(PROC_STEP_TYPES));
+  it('offers every step type the server takes, the system check included (AI-28)', () => {
+    expect(new Set(EDITOR_PROC_STEP_TYPES)).toStrictEqual(new Set(PROC_STEP_TYPES));
     expect(new Set(EDITOR_BRANCH_TYPES)).toStrictEqual(new Set(PROC_BRANCH_STEP_TYPES));
   });
 

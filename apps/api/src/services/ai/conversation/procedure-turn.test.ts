@@ -11,7 +11,7 @@
  * (`understand-mock.ts`) unless a test hands one in; the payment-method facts
  * are a fixture (#310).
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_HANDOFF_MESSAGES,
   readPersona,
@@ -776,10 +776,11 @@ describe('the other steps and limits, through the engine', () => {
     expect(skillDecision(third)?.handoffReason).toBe('max_turns');
   });
 
-  it('the tool step is skipped and logged in F1 (AI-03 acceptance)', async () => {
-    const procedure = build({
+  /** "Bakiyem gelmedi": the deposit is looked up, and its status picks the path (AI-28). */
+  const lookup = (onUnavailable?: 'continue' | 'handoff') =>
+    build({
       when_to_use: 'Test.',
-      examples: ['bakiyem nerede'],
+      examples: ['bakiyem gelmedi'],
       slots: [
         { name: 'kullanici', label: 'Kullanıcı', type: 'username', ask: 'Kullanıcı adınız?' },
       ],
@@ -787,30 +788,99 @@ describe('the other steps and limits, through the engine', () => {
         {
           id: 'sorgu',
           type: 'tool',
-          tool_key: 'balance_lookup',
-          inputs: { user: 'kullanici' },
+          tool_key: 'deposit_lookup',
+          inputs: { user_id: 'kullanici' },
           active: false,
+          ...(onUnavailable ? { on_unavailable: onUnavailable } : {}),
+          branches: [{ output: 'status', equals: 'credited', goto: 'hesaba_gecmis' }],
         },
         { id: 'devir', type: 'handoff', reason_code: 'needs_check' },
+        { id: 'hesaba_gecmis', type: 'say', template_key: 'gecmis' },
+        { id: 'bitti', type: 'resolve', outcome: 'resolved' },
       ],
+      templates: [{ key: 'gecmis', text: 'Teşekkür ederim, başka bir sorunuz var mı?' }],
     });
+
+  it('the tool step calls nothing in F1: tool_not_connected, a pending check, and on to the hand-over (AI-28)', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch');
+    try {
+      const result = await engine().runTurn(
+        emptyTurnState(),
+        { text: 'bakiyem gelmedi' },
+        context([procedureSkill('tool', 'Bakiye', lookup())]),
+      );
+      expect(fetch).not.toHaveBeenCalled();
+      expect(result.decisions.trace).toContainEqual({
+        step_id: 'sorgu',
+        type: 'tool',
+        cond_result: null,
+        detail: 'tool_not_connected: deposit_lookup — left for a person to check, going on',
+      });
+      expect(result.decisions.handoffReason).toBe('needs_check');
+      expect(result.nextState.signals['pending_checks']).toEqual([
+        { tool: 'deposit_lookup', step_id: 'sorgu', inputs: { user_id: 'kullanici' } },
+      ]);
+      // G8: nothing the AI says claims a check it never made.
+      expect(result.reply ?? '').not.toMatch(/kontrol ettim|geçmiş görünüyor/);
+    } finally {
+      fetch.mockRestore();
+    }
+  });
+
+  it('hands over with tool_not_connected when on_unavailable says so (AI-28)', async () => {
     const result = await engine().runTurn(
       emptyTurnState(),
-      { text: 'bakiyem nerede' },
-      context([procedureSkill('tool', 'Bakiye', procedure)]),
+      { text: 'bakiyem gelmedi' },
+      context([procedureSkill('tool', 'Bakiye', lookup('handoff'))]),
     );
-    expect(result.decisions.trace).toContainEqual({
+    expect(result.decisions.handoffReason).toBe('tool_not_connected');
+    expect(result.decisions.trace?.at(-1)).toMatchObject({
       step_id: 'sorgu',
-      type: 'tool',
-      cond_result: null,
-      detail: 'tool balance_lookup is passive in F1 — skipped',
+      detail: 'tool_not_connected: deposit_lookup — handing over (on_unavailable)',
     });
-    expect(result.decisions.log).toContainEqual({
-      step: 'sorgu',
-      detail: 'tool balance_lookup is passive in F1 — skipped',
-      ok: true,
-    });
-    expect(result.decisions.handoffReason).toBe('needs_check');
+    expect(result.nextState.signals['pending_checks']).toHaveLength(1);
+  });
+
+  it('a simulated credited output takes the "hesaba geçmiş" branch; the same turn live hands over (AI-28)', async () => {
+    const skills = [procedureSkill('tool', 'Bakiye', lookup())];
+    const simulated = await engine().runTurn(
+      emptyTurnState(),
+      { text: 'bakiyem gelmedi' },
+      context(skills, { toolStubs: { deposit_lookup: { status: 'credited' } } }),
+    );
+    expect(simulated.decisions.trace?.map((step) => step.step_id)).toEqual([
+      'sorgu',
+      'hesaba_gecmis',
+      'bitti',
+    ]);
+    expect(simulated.decisions.trace?.[0]?.detail).toBe(
+      'tool deposit_lookup (simulated output): status is "credited" — go to hesaba_gecmis',
+    );
+    expect(simulated.reply).toContain('Teşekkür ederim, başka bir sorunuz var mı?');
+    expect(simulated.decisions.handoffReason).toBeNull();
+    expect(simulated.nextState.signals['pending_checks']).toBeUndefined();
+
+    const pending = await engine().runTurn(
+      emptyTurnState(),
+      { text: 'bakiyem gelmedi' },
+      context(skills, { toolStubs: { deposit_lookup: { status: 'pending' } } }),
+    );
+    expect(pending.decisions.handoffReason).toBe('needs_check');
+
+    const broken = await engine().runTurn(
+      emptyTurnState(),
+      { text: 'bakiyem gelmedi' },
+      context(skills, { toolStubs: { deposit_lookup: 'timeout' } }),
+    );
+    expect(broken.decisions.handoffReason).toBe('tool_error');
+
+    const live = await engine().runTurn(
+      emptyTurnState(),
+      { text: 'bakiyem gelmedi' },
+      context(skills),
+    );
+    expect(live.decisions.outcome).toBe('handed_off');
+    expect(live.decisions.handoffReason).toBe('needs_check');
   });
 
   it('a message in a language the persona does not speak is handed to a person, not left in silence; the procedure stays where it stood (AI-05 §7)', async () => {

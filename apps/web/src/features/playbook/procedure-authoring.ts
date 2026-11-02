@@ -34,6 +34,7 @@ import {
   DEFAULT_PROCEDURE_MAX_TURNS,
   DEFAULT_PROCEDURE_PRIORITY,
   PROCEDURE_FACTS,
+  IGAMING_TOOL_CATALOG,
   PROC_STEP_TYPES,
   SLOT_DEF_DEFAULTS,
   slotValueKind,
@@ -62,13 +63,12 @@ import type { Skill } from './types.js';
 
 /**
  * The step types "Add step" offers, in the order a procedure reads: speak,
- * ask, branch, answer, then the endings. `tool` is left off on purpose — F1
- * has no tools (AI-28), a tool step can only be stored passive, and offering
- * one would be offering a control that does nothing. A stored one is kept.
+ * ask, branch, answer, the endings, then the system check (AI-28, tm 321) —
+ * offered so a procedure is written once and needs no rewrite when the
+ * operator's system is connected in phase 2; until then it calls nothing and
+ * the card asks a person to check.
  */
-export const EDITOR_PROC_STEP_TYPES = PROC_STEP_TYPES.filter(
-  (type): type is Exclude<ProcStepType, 'tool'> => type !== 'tool',
-);
+export const EDITOR_PROC_STEP_TYPES: readonly ProcStepType[] = PROC_STEP_TYPES;
 
 /** What a `check` branch may hold besides a `goto`, in the editor's order. */
 export const EDITOR_BRANCH_TYPES: readonly ProcBranchStepType[] = [
@@ -269,7 +269,7 @@ export function blankProcStep(type: ProcStepType, id: string): ProcStep {
     case 'tag':
       return { id, type, tag: '' };
     case 'tool':
-      return { id, type, tool_key: '', inputs: {}, active: false };
+      return { id, type, tool_key: IGAMING_TOOL_CATALOG[0]?.key ?? '', inputs: {}, active: false };
   }
 }
 

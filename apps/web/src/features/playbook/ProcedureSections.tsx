@@ -16,11 +16,14 @@
  */
 import {
   DEFAULT_RESOLUTION_CRITERIA,
+  IGAMING_TOOL_CATALOG,
   PROCEDURE_FACTS,
   PROC_OUTCOMES,
   SLOT_ENUM_SOURCES,
   SLOT_PII_LEVELS,
   SLOT_TYPES,
+  TOOL_ON_UNAVAILABLE,
+  igamingTool,
   procedureProblemDetails,
   type Cond,
   type CondOp,
@@ -28,12 +31,14 @@ import {
   type ProcBranch,
   type ProcStep,
   type ProcStepType,
+  type ProcToolStep,
   type ProcedureProblem,
   type ProcedureProblemDetails,
   type ProcedureWarning,
   type SlotDef,
   type SlotEnumSource,
   type SlotType,
+  type ToolOnUnavailable,
 } from '@siyahtus/types';
 import { memo, useState, type ReactElement, type ReactNode } from 'react';
 import { StatusDot } from '../../components/StatusDot.js';
@@ -214,7 +219,11 @@ export function describeProcStep(step: ProcStep, t: TFunction): string {
     case 'tag':
       return t('playbook.procedure.summary.tag', { tag: step.tag || '?' });
     case 'tool':
-      return t('playbook.procedure.summary.tool', { tool: step.tool_key || '?' });
+      return t('playbook.procedure.summary.tool', {
+        tool: igamingTool(step.tool_key)
+          ? t(`playbook.procedure.tool.name.${step.tool_key}`)
+          : step.tool_key || '?',
+      });
   }
 }
 
@@ -889,14 +898,9 @@ function StepsSection({
                         label={t('playbook.editor.stepType')}
                         value={entry.step.type}
                         disabled={!canEdit}
-                        options={[
-                          ...EDITOR_PROC_STEP_TYPES.map(
-                            (type) => [type, t(STEP_TYPE_KEYS[type])] as const,
-                          ),
-                          ...(entry.step.type === 'tool'
-                            ? ([['tool', t(STEP_TYPE_KEYS.tool)]] as const)
-                            : []),
-                        ]}
+                        options={EDITOR_PROC_STEP_TYPES.map(
+                          (type) => [type, t(STEP_TYPE_KEYS[type])] as const,
+                        )}
                         onChange={(type) =>
                           setSteps((current) => changeProcStepType(current, index, type))
                         }
@@ -1167,7 +1171,13 @@ function StepBody({
       break;
     case 'tool':
       fields = (
-        <p className="text-2xs text-content-tertiary">{t('playbook.procedure.toolPassive')}</p>
+        <ToolStepFields
+          step={s}
+          idPrefix={idPrefix}
+          draft={draft}
+          canEdit={canEdit}
+          onEdit={onEdit}
+        />
       );
       break;
   }
@@ -1186,6 +1196,123 @@ function StepBody({
         />
       )}
     </>
+  );
+}
+
+/**
+ * The system check (AI-28 · tm 321): which lookup, which slot feeds each of
+ * its inputs, and what happens while no system is connected — go on, or hand
+ * over. "Active from phase 2": nothing is called today, the card asks a
+ * person to check. Output branches (a simulation's stand-in output picks one)
+ * are shown, not edited here.
+ */
+function ToolStepFields({
+  step,
+  idPrefix,
+  draft,
+  canEdit,
+  onEdit,
+}: {
+  step: ProcToolStep;
+  idPrefix: string;
+  draft: ProcedureDraft;
+  canEdit: boolean;
+  onEdit: (patch: Record<string, unknown>) => void;
+}): ReactElement {
+  const t = useTranslate();
+  const tool = igamingTool(step.tool_key);
+  const slots = draft.slots.map((slot) => slot.name).filter((name) => name.length > 0);
+  const toolOptions: Array<readonly [string, string]> = [
+    ...(tool === undefined ? [[step.tool_key, step.tool_key || '?'] as const] : []),
+    ...IGAMING_TOOL_CATALOG.map(
+      (entry) => [entry.key, t(`playbook.procedure.tool.name.${entry.key}`)] as const,
+    ),
+  ];
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="flex flex-wrap items-center gap-2 text-2xs text-content-tertiary">
+        <span className="rounded-full border border-border px-2 py-0.5 font-medium text-content-secondary">
+          {t('playbook.procedure.tool.phase2')}
+        </span>
+        <span>{t('playbook.procedure.toolPassive')}</span>
+      </p>
+      <div className="flex flex-wrap gap-3">
+        <Select
+          id={`${idPrefix}-tool`}
+          label={t('playbook.procedure.tool.label')}
+          value={step.tool_key}
+          disabled={!canEdit}
+          options={toolOptions}
+          onChange={(tool_key) => onEdit({ tool_key, inputs: {}, branches: undefined })}
+        />
+        <Select<ToolOnUnavailable>
+          id={`${idPrefix}-unavailable`}
+          label={t('playbook.procedure.tool.onUnavailable')}
+          value={step.on_unavailable ?? 'continue'}
+          disabled={!canEdit}
+          options={TOOL_ON_UNAVAILABLE.map(
+            (choice) => [choice, t(`playbook.procedure.tool.onUnavailable.${choice}`)] as const,
+          )}
+          onChange={(choice) =>
+            onEdit({ on_unavailable: choice === 'continue' ? undefined : choice })
+          }
+        />
+      </div>
+      {tool !== undefined && (
+        <fieldset className="flex flex-col gap-1">
+          <legend className="text-2xs text-content-tertiary">
+            {t('playbook.procedure.tool.inputs')}
+          </legend>
+          <div className="flex flex-wrap gap-3">
+            {Object.keys(tool.input_schema.properties).map((name) => {
+              const mapped = Object.hasOwn(step.inputs, name) ? step.inputs[name] : undefined;
+              const label = t(`playbook.procedure.tool.input.${name}`);
+              return (
+                <Select
+                  key={name}
+                  id={`${idPrefix}-input-${name}`}
+                  label={
+                    tool.input_schema.required.includes(name)
+                      ? t('playbook.procedure.tool.inputRequired', { input: label })
+                      : label
+                  }
+                  value={mapped ?? ''}
+                  disabled={!canEdit}
+                  options={[
+                    ['', t('playbook.procedure.tool.inputNone')] as const,
+                    ...(mapped !== undefined && !slots.includes(mapped)
+                      ? [[mapped, mapped] as const]
+                      : []),
+                    ...slots.map((slot) => [slot, slot] as const),
+                  ]}
+                  onChange={(slot) => {
+                    const { [name]: _dropped, ...rest } = step.inputs;
+                    onEdit({ inputs: slot === '' ? rest : { ...rest, [name]: slot } });
+                  }}
+                  className="w-44"
+                />
+              );
+            })}
+          </div>
+        </fieldset>
+      )}
+      {step.branches !== undefined && step.branches.length > 0 && (
+        <div className="flex flex-col gap-1 text-2xs text-content-tertiary">
+          <span>{t('playbook.procedure.tool.branches')}</span>
+          <ul className="list-disc pl-4">
+            {step.branches.map((branch) => (
+              <li key={`${branch.output}-${String(branch.equals)}-${branch.goto}`}>
+                {t('playbook.procedure.tool.branch', {
+                  output: branch.output,
+                  value: String(branch.equals),
+                  goto: branch.goto,
+                })}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
 

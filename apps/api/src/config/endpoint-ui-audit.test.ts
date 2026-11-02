@@ -372,9 +372,9 @@ describe('the platform pair (tm 389.3)', () => {
   });
 
   it('turns a new platform operation with no admin caller and no entry into a dead end', () => {
-    // `/audit/export` stands for an operation the admin SPA does not call yet and a TRACKED
-    // entry explains (`/meta` did until tm 389.6 built the shell that calls it).
-    const spec = { paths: { '/workspaces': { get: {} }, '/audit/export': { get: {} } } };
+    // PLATFORM_TRACKED is empty since tm 391 built the last surfaces (`/audit/export` was
+    // the example here until then): an operation nobody calls is a dead end outright.
+    const spec = { paths: { '/workspaces': { get: {} } } };
     const analysis = withRepoRoot(() => load().analysePlatform({ spec, sources: [] }));
 
     expect(analysis.dead.map((operation) => operation.op)).toEqual(['GET /workspaces']);
@@ -394,9 +394,7 @@ describe('the platform pair (tm 389.3)', () => {
       sources: corpus('apps/admin/src/features/audit/AuditPage.tsx', "api.get('/audit/export');"),
     });
     expect(analysis.called.map((operation) => operation.op)).toEqual(['GET /audit/export']);
-    expect(analysis.errors).toContain(
-      'tracked: GET /audit/export IS called now — the surface arrived, drop the entry',
-    );
+    expect(analysis.dead).toEqual([]);
   });
 
   it('does not take a call to /dashboard/health for a call to /health', () => {
@@ -449,6 +447,23 @@ describe('the platform pair (tm 389.3)', () => {
         'POST /auth/totp/activate',
         'POST /auth/totp/verify',
         'POST /auth/totp/reverify',
+        // The operator directory, the Audit page and My account (tm 391).
+        'GET /auth/sessions',
+        'DELETE /auth/sessions',
+        'POST /auth/recovery/regenerate',
+        'GET /admins',
+        'GET /admins/invites',
+        'GET /admins/{adminId}',
+        'POST /admins/invites',
+        'POST /admins/invites/{inviteId}/revoke',
+        'POST /admins/{adminId}/disable',
+        'POST /admins/{adminId}/enable',
+        'POST /admins/{adminId}/reset-two-factor',
+        'POST /admins/{adminId}/revoke-sessions',
+        'POST /admins/{adminId}/role',
+        'GET /audit',
+        'GET /audit/export',
+        'POST /audit/verify',
         'GET /dashboard/kpis',
         'GET /dashboard/signups',
         'GET /dashboard/health',
@@ -565,9 +580,7 @@ describe('the platform pair (tm 389.3)', () => {
         'GET /security/abuse-counters',
       ].sort(),
     );
-    // What the empty Admins/Audit pages and the operator's own security screen have no content
-    // for stays named, with an owner, rather than silently uncalled.
-    expect(analysis.explained.tracked.map((operation) => operation.op)).toContain('GET /admins');
-    expect(analysis.explained.tracked.map((operation) => operation.op)).toContain('GET /audit');
+    // tm 391 built the Admins and Audit pages and My account: nothing is left tracked.
+    expect(analysis.explained.tracked).toEqual([]);
   });
 });

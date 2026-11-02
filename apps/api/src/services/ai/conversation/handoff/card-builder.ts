@@ -36,9 +36,11 @@ import {
   type HandoffReason,
   type IdentityTrust,
   type PersonaLanguage,
+  igamingTool,
 } from '@siyahtus/types';
 import { NO_FACTS, type ProcedureFacts } from '../procedure/conditions.js';
 import { readSnapshot, type ProcedureSnapshot } from '../procedure/executor.js';
+import { readPendingChecks } from '../procedure/pending-checks.js';
 import { fillTemplate, variableText, type TemplateContext } from '../procedure/templates.js';
 import { slotCardLines, slotRecord } from '../slots/extract.js';
 import { readRiskFlags } from '../guardrails/guardrail-turn.js';
@@ -91,7 +93,10 @@ export interface HandoffCard {
   player: AiHandoffPlayer;
   slots: AiHandoffSlotLine[];
   decisionFacts: AiHandoffFact[];
+  /** "yatırım sorgusu — kullanıcı adı ali123 (beyan), 2.500 TRY, 13:42" (AI-28-S1). */
   checks: string[];
+  /** The tool behind each of `checks`, in the same order — what the report counts. */
+  checkTools: string[];
   aiStatements: AiHandoffStatement[];
   outputCheckFlags: AiHandoffOutputFlag[];
   reasonCodes: HandoffReason[];
@@ -186,7 +191,7 @@ export function buildHandoffCard(source: HandoffCardSource): HandoffCard {
       ...source.storedRiskFlags,
     ]),
   ].slice(0, RISK_FLAGS_MAX);
-  const checks = state ? pendingChecks(state.signals) : [];
+  const pending = state ? cardChecks(state, snapshot) : [];
   const summary = cardSummary(topic, slots, source.firstMessage ?? source.turnText, source);
 
   const card: Omit<HandoffCard, 'cardText' | 'noteText'> = {
@@ -199,7 +204,8 @@ export function buildHandoffCard(source: HandoffCardSource): HandoffCard {
     player,
     slots,
     decisionFacts,
-    checks,
+    checks: pending.map((check) => check.text),
+    checkTools: pending.map((check) => check.tool),
     aiStatements: [...aiStatements],
     outputCheckFlags,
     reasonCodes: [...source.reasonCodes],
@@ -312,23 +318,51 @@ function outputFlags(actions: readonly GuardrailHitAction[]): AiHandoffOutputFla
   return AI_HANDOFF_OUTPUT_FLAGS.filter((flag) => found.has(flag));
 }
 
-/** What a tool step could not check (AI-28 `signals.pending_checks`, #321): the tools' keys. */
-function pendingChecks(signals: TurnState['signals']): string[] {
-  const raw = signals['pending_checks'];
-  if (!Array.isArray(raw)) return [];
-  const checks: string[] = [];
-  for (const entry of raw) {
-    const tool =
-      typeof entry === 'string'
-        ? entry
-        : entry &&
-            typeof entry === 'object' &&
-            typeof (entry as { tool?: unknown }).tool === 'string'
-          ? (entry as { tool: string }).tool
-          : null;
-    if (tool && !checks.includes(tool)) checks.push(tool);
+/**
+ * What the tool steps could not check (AI-28 `signals.pending_checks`, tm 321),
+ * one line each: the tool's name, then its inputs as the player gave them, in
+ * the tool's order — "yatırım sorgusu — kullanıcı adı ali123 (beyan), 2.500
+ * TRY, 13:42". The player's identity is marked "beyan": it is what they said,
+ * not a verified session (F2 takes it from one). A `pii: 'high'` slot's value
+ * never shows; an input not given says so. One line per tool.
+ */
+function cardChecks(
+  state: TurnState,
+  snapshot: ProcedureSnapshot | null,
+): Array<{ tool: string; text: string }> {
+  const lines: Array<{ tool: string; text: string }> = [];
+  for (const check of readPendingChecks(state.signals)) {
+    if (lines.some((line) => line.tool === check.tool)) continue;
+    const tool = igamingTool(check.tool);
+    if (!tool) {
+      lines.push({ tool: check.tool, text: check.tool });
+      continue;
+    }
+    const parts: string[] = [];
+    for (const [name, property] of Object.entries(tool.input_schema.properties)) {
+      const slot = Object.hasOwn(check.inputs, name) ? check.inputs[name] : undefined;
+      if (slot === undefined) continue;
+      const def = snapshot?.procedure.slots.find((candidate) => candidate.name === slot);
+      const record = slotRecord(state.slots[slot]);
+      const given =
+        record.status === 'filled' || record.status === 'carried' || record.status === 'partial';
+      const identity = tool.identity_inputs.includes(name);
+      if (!given || record.display === null) {
+        parts.push(`${property.title} ${record.status === 'refused' ? 'verilmedi' : 'bilinmiyor'}`);
+      } else if (def?.pii === 'high' || record.pii === 'high') {
+        parts.push(`${property.title} verildi`);
+      } else if (identity) {
+        parts.push(`${property.title} ${record.display} (beyan)`);
+      } else {
+        parts.push(record.display);
+      }
+    }
+    lines.push({
+      tool: tool.key,
+      text: parts.length > 0 ? `${tool.title_tr} — ${parts.join(', ')}` : tool.title_tr,
+    });
   }
-  return checks;
+  return lines;
 }
 
 /** The card as plain text — the agents-only line and the archive (Turkish, like the research card). */
@@ -382,7 +416,7 @@ function cardText(card: Omit<HandoffCard, 'cardText' | 'noteText'>): string {
     }`,
   );
   if (card.attachments.length > 0) lines.push(`Ekler: ${card.attachments.length} dosya`);
-  if (card.checks.length > 0) lines.push(`Kontrol edilmesi gereken: ${card.checks.join(', ')}`);
+  if (card.checks.length > 0) lines.push(`Kontrol edilmesi gereken: ${card.checks.join('; ')}`);
   if (card.suggestedNextStep) lines.push(`Önerilen adım: ${card.suggestedNextStep}`);
   return clip(lines.join('\n'), AI_HANDOFF_CARD_TEXT_MAX)!;
 }

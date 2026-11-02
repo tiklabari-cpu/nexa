@@ -4,8 +4,8 @@
  * crisis-text drafts — read back through a running tenant API on the same database.
  *
  * What the platform ships (the 19 rules, the template pack, the compliance pack, the rubric)
- * comes back with its version and keys and none of its text; the tools catalogue says it is not
- * installed. The platform connection bypasses row level security, so the summary and the install
+ * comes back with its version and keys and none of its text; so does the iGaming tool
+ * catalogue (tm 321). The platform connection bypasses row level security, so the summary and the install
  * list are the proof that every query names its licence: A's numbers carry none of B's rows.
  * The crisis-text drafts are the one write: a reason, the superadmin, plain text, an audit entry
  * naming countries (never a text), and a tenant that is offered the draft for its own country
@@ -23,6 +23,8 @@ import {
   AI_COMPLIANCE_SCENARIOS,
   AI_QA_RUBRIC_VERSION,
   GUARDRAIL_IDS,
+  IGAMING_TOOL_CATALOG,
+  IGAMING_TOOL_CATALOG_VERSION,
   PLATFORM_GUARDRAILS,
   PLATFORM_GUARDRAILS_VERSION,
   PLATFORM_QA_RUBRIC,
@@ -252,11 +254,11 @@ describe('platform AI catalogues (tm 389.19)', () => {
       ).toHaveLength(2);
     });
 
-    it('says the tool catalogue is not installed rather than listing nothing', async () => {
+    it('lists the iGaming tool catalogue by key and version (AI-28)', async () => {
       expect(await ok(call('GET', '/ai-catalogs/tools'))).toEqual({
-        status: 'not_installed',
-        version: null,
-        items: [],
+        status: 'available',
+        version: IGAMING_TOOL_CATALOG_VERSION,
+        items: IGAMING_TOOL_CATALOG.map((tool) => ({ key: tool.key })),
       });
     });
   });

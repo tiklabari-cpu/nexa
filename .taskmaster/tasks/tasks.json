@@ -14346,7 +14346,7 @@
           "327"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-02T08:28:43.798Z",
+        "updatedAt": "2026-11-02T10:11:00.228Z",
         "subtasks": [
           {
             "id": 1,
@@ -14354,11 +14354,11 @@
             "description": "Sahiplik devri çekirdeği: kontrat + ownership_transfers (RLS, kısmi tekil) + servis + tek-Kurucu takası + e-posta + audit",
             "details": "contract (4 uç) + prisma ownership_transfers + RLS + kısmi tekil (license_id) WHERE state='pending' + services/team/ownership-transfer.ts + ownershipTransfer e-posta şablonu + audit eylemleri; başlatma (şifre/2FA yeniden, hedef koşulları), kabul tek işlemde (önce eski Kurucu admin, sonra hedef owner), SSO ve fatura iletişimi kuralları, Yöneticilere bilgi e-postası, S3 runbook notu. Kabul: üst görevin bütün kabul maddeleri API düzeyinde. Ayrıntı ve kabul maddeleri: üst görev #328 details (tek kaynak).",
             "testStrategy": "Entegrasyon: 403, yanlış şifre/2FA, 72 saat düşme, iptal, tek-Kurucu indeksi her ifadede, askıdaki/doğrulanmamış hedef; `pnpm test:gate`.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "328",
             "priority": "low",
-            "updatedAt": "2026-11-02T08:28:43.798Z"
+            "updatedAt": "2026-11-02T10:11:00.228Z"
           },
           {
             "id": 2,
@@ -16188,7 +16188,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-02T08:28:43.799Z",
+      "lastModified": "2026-11-02T10:11:00.228Z",
       "taskCount": 393,
       "completedCount": 381,
       "tags": [

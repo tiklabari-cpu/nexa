@@ -16149,12 +16149,12 @@
         "description": "tm 389.21 runbook'u yazılırken ölçüldü: bu üç yüzün API'si var ve testli, panel yüzü yok. Yöneticiler sayfası (`apps/admin/src/features/admins/AdminsPage.tsx`) yalnız uyarı tercihini gösteriyor; 'Denetim' menü girdisi `PlaceholderPage`; `/auth/recovery/regenerate` ve `/auth/sessions` SPA'dan hiç çağrılmıyor (grep). Operatörler bugün curl ile çalışıyor (docs/runbooks/platform-admin-ops.md §0.4, §2, §13.2).",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1. Kapsam yalnız `apps/admin` (+ gerekirse i18n kaydı); platform API değişmez, kontrat değişmez.\n\nYAPILACAK: (1) Yöneticiler sayfasına operatör dizini: `GET /admins`, `GET /admins/invites`, davet (`POST /admins/invites` {email, role}), davet geri çek, rol değiştir, devre dışı/etkinleştir, 2FA sıfırla, oturumları iptal et — hepsi ReasonDialog ile; recentTotp isteyenlerde taze kod akışı mevcut `auth/totp/reverify` kalıbıyla (workspaces/accounts eylemleriyle aynı). `platform_last_superadmin` 409'u kullanıcıya anlaşılır metinle gösterilir. İzin: `admins.read` / `admins.manage`. (2) Denetim sayfası (`audit.read`): `GET /audit` liste (admin, eylem, çalışma alanı, zaman filtresi, keyset), 'Zinciri doğrula' (`POST /audit/verify`, bulgu türleri `hash_mismatch|sequence_gap|start_mismatch|broken_link|head_mismatch` konumlarıyla), 'Dışa aktar' (NDJSON indir; imza başlığı `X-Siyahtus-Signature` ve cursor gösterilir), çalışma alanı izi zaten Çalışma alanı > Denetim sekmesinde (tekrarlama). (3) Hesabım menüsü: 'Kurtarma kodlarını yenile' (`POST /auth/recovery/regenerate`, taze kod gerekir, yeni sayfa bir kez gösterilir/indirilir — mevcut RecoveryCodesPage bileşeni) ve 'Oturumlarım' (`GET/DELETE /auth/sessions`). (4) en/tr metin, i18n kayıt listesi (`TRANSLATED_FILES`), axe testi, `NAV_ITEMS` izin testi. (5) docs/runbooks/platform-admin-ops.md §0.4/§2/§3/§13.2'deki 'yalnız API' notlarını panel adımlarıyla değiştir; requirements.md §7'de FR-ADMIN-04/06 `◐` → `✅`.\n\nKARARLAR: Operatör silme yok (audit atfı). Kimlik doğrulama gerektiren sıfırlama için panel 'kimlik doğrulandı' onay kutusu ister (runbook §3.4).\n\nKAPSAM DIŞI: platform API/kontrat/migration değişikliği; yeni izin.",
         "testStrategy": "Admin birim: AdminsPage (dizin, davet, rol, devre dışı, son superadmin 409 metni, izin yokken gizli), AuditPage (filtre, doğrula temiz/bulgulu, dışa aktar), hesabım eylemleri; axe en/tr. e2e `platform-admin.spec.ts`'e bir senaryo: davet gönder → kabul et → rol değiştir → devre dışı. DoD: CONVENTIONS §1; `pnpm test:gate --e2e`; `audit:endpoint-ui` exit 0 (yeni çağrılan yollar).",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "389"
         ],
         "priority": "medium",
-        "updatedAt": "2026-11-02T04:46:09.400Z",
+        "updatedAt": "2026-11-02T06:45:15.804Z",
         "subtasks": []
       },
       {
@@ -16188,9 +16188,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-02T04:46:09.401Z",
+      "lastModified": "2026-11-02T06:45:15.804Z",
       "taskCount": 393,
-      "completedCount": 379,
+      "completedCount": 380,
       "tags": [
         "master"
       ]

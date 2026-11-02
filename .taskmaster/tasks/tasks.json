@@ -16163,12 +16163,12 @@
         "description": "requirements.md NFR-ADMIN-B: 'scripts/backup.sh platform tablolarını da kapsar (test: geri yüklemede audit zinciri doğrulanır)'. Yedek tüm veritabanını dökümlüyor (pg_dump -Fc) ama restore-drill platform tablolarına ve zincire hiç bakmıyor (grep: betikte 'platform' yok). Bugün yalnız runbook §13.2'deki elle doğrulama var.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1; yedek/geri yükleme hafızası: docker-desktop-bind-mounts, msys-mangles-container-paths, run-one-integration-file.\n\nYAPILACAK: `scripts/restore-drill.sh` geri yüklenen kazıma veritabanında (a) `platform_*` tabloları var ve satır sayıları canlıyla eşleşiyor (zaten kiracı tabloları için yapılan karşılaştırma kalıbı), (b) `platform_audit_log` zinciri `PLATFORM_SETTINGS_KEY` ile baştan sona doğrulanıyor (konum 1'den, boşluk/kırık yok). Zinciri doğrulayan kodu betik içinde yeniden yazma: `apps/api/src/services/platform/platform-audit.ts` doğrulayıcısını çağıran küçük bir CLI (audit-export-check-run.ts kalıbı) ya da `verifyChain` fonksiyonunu kazıma DB'ye bağlayan bir `*-run.ts`. Anahtar yoksa (platform kurulmamış / PLATFORM_SETTINGS_KEY boş) bu adım 'atlandı' diye açıkça yazılır, yeşil sayılmaz demez; platform_audit_log boşsa 'kanıtlanmadı' (RLS 'kullanılmadı' uyarısı gibi). Mutasyon: bir platform_audit_log satırının hash'i bozulunca drill kırmızı olur (sahipli bağlantıyla; tablo UPDATE'i reddeder → tetikleyiciyi geçici düşürme YOK, bunun yerine dökümü bozup geri yükle ya da doğrulayıcıyı bozuk fixture ile çağır).\n\nDokümantasyon: production-checklist §9 Back office'teki 'make pilot-restore-drill does not look at the chain' cümlesini güncelle; runbook §13.2 notu.\n\nKAPSAM DIŞI: yedek betiği, rol yedeği (pg_dumpall --globals).",
         "testStrategy": "`./scripts/restore-drill.sh` yeşil; platform_audit_log'u dolu bir veritabanında 'platform chain verified' satırı, boş veritabanında 'not exercised' satırı; bozuk zincirli fixture ile kırmızı (exit != 0). Betik için mevcut sınama yöntemi (scripts/*.test) varsa genişlet. DoD: CONVENTIONS §1.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "389"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-02T21:51:30.451Z",
+        "updatedAt": "2026-11-02T23:05:52.709Z",
         "subtasks": []
       },
       {
@@ -16188,9 +16188,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-02T21:51:30.452Z",
+      "lastModified": "2026-11-02T23:05:52.710Z",
       "taskCount": 393,
-      "completedCount": 387,
+      "completedCount": 388,
       "tags": [
         "master"
       ]

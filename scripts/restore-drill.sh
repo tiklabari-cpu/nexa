@@ -30,6 +30,18 @@
 # archive; the row counts of a database that has moved on since will legitimately
 # differ, and the drill reports that as a failure because "does this archive
 # still reproduce its source" is the question being asked.
+#
+# The root panel's data (tm 392 · NFR-ADMIN-B) is checked on top of the tenant
+# data: every `platform_*` table must come back with its source's row count, and
+# the `platform_audit_log` HMAC chain is walked in the restore by the api's own
+# verifier (`platform:chain-check`, the code behind `POST /platform/v1/audit/verify`)
+# — from position 1, no gap, no break. Two honest non-results exist and neither is
+# printed as `ok`: no PLATFORM_SETTINGS_KEY ("skipped") and an empty trail ("not
+# exercised"). RESTORE_DRILL_REQUIRE_PLATFORM=1, for a deployment that runs the
+# root panel, turns both into failures. PLATFORM_CHAIN_CHECK_CMD replaces the
+# command (e.g. `docker compose exec -T platform-api node
+# dist/src/services/platform/restore-chain-check-run.js` where the host has no
+# pnpm); the restored rows reach it on stdin, so it needs no database access.
 set -euo pipefail
 
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -50,6 +62,13 @@ APP_DB_PASSWORD="${APP_DB_PASSWORD:-siyahtus_app_dev_password}"
 # these are the spine of the domain model (PRD §8.4), and the ones a silently
 # empty restore would show up in first.
 COUNT_TABLES=(organizations accounts chats events)
+# Filled from the source catalogue once the database is reachable (tm 392): the
+# root panel's tables are whatever `platform_*` the migrations created, not a
+# list kept here to go stale.
+PLATFORM_TABLES=()
+# A command, word-split on purpose; the chain rows arrive on its stdin.
+PLATFORM_CHAIN_CHECK_CMD="${PLATFORM_CHAIN_CHECK_CMD:-pnpm --filter @siyahtus/api --silent platform:chain-check}"
+REQUIRE_PLATFORM="${RESTORE_DRILL_REQUIRE_PLATFORM:-0}"
 
 DRILL_DB_PREFIX='siyahtus_restore_drill_'
 DRILL_DB="${DRILL_DB:-${DRILL_DB_PREFIX}$(date -u +%Y%m%d%H%M%S)_$$}"
@@ -72,6 +91,16 @@ fail() {
 }
 
 note() { printf '  note  %s\n' "$1"; }
+
+# A check that could not run is not a check that passed: a note (or, where the
+# deployment demands the evidence, a failure) — never `ok`.
+unproven() { # unproven <message> [detail]
+  if [ "$REQUIRE_PLATFORM" = '1' ]; then
+    fail "$1" "${2:-} (RESTORE_DRILL_REQUIRE_PLATFORM=1)"
+  else
+    note "$1"
+  fi
+}
 
 fatal() {
   printf 'restore-drill: %s\n' "$1" >&2
@@ -133,7 +162,7 @@ trap cleanup EXIT INT TERM
 
 count_rows() { # count_rows <database> -> "table|n" lines
   local sql='' table
-  for table in "${COUNT_TABLES[@]}"; do
+  for table in "${COUNT_TABLES[@]}" "${PLATFORM_TABLES[@]}"; do
     [ -n "$sql" ] && sql+=' UNION ALL '
     sql+="SELECT '${table}|'||count(*) AS r FROM ${table}"
   done
@@ -266,6 +295,36 @@ while read -r stale; do
 done < <(psql_q postgres \
   "SELECT datname FROM pg_database WHERE starts_with(datname, '${DRILL_DB_PREFIX}')")
 
+# The platform tables, by catalogue. The name goes into SQL, so one that is not
+# plain lowercase-and-underscore is refused rather than quoted around.
+platform_tables_of() { # platform_tables_of <database>
+  psql_q "$1" "SELECT table_name FROM information_schema.tables
+               WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+                 AND starts_with(table_name, 'platform_') ORDER BY 1"
+}
+platform_tables_source="$(platform_tables_of "$DB_NAME")"
+while read -r table; do
+  [ -n "$table" ] || continue
+  [[ "$table" =~ ^platform_[a-z0-9_]+$ ]] || fatal "unexpected platform table name: $table"
+  PLATFORM_TABLES+=("$table")
+done <<<"$platform_tables_source"
+
+# The platform audit chain as text for `platform:chain-check`: the head on line 1
+# (`null` when there is no head row), then one line per entry in the shape of the
+# audit export (`GET /platform/v1/audit/export`) — which is what the checker's
+# parser reads. Timestamps are cut to milliseconds, the precision the writer hashes.
+chain_dump() { # chain_dump <database>
+  psql_q "$1" "SELECT coalesce((SELECT json_build_object('seq', seq::text, 'hash', hash)::text
+                                FROM platform_audit_chain_head WHERE id = 1), 'null')" &&
+    psql_q "$1" "SELECT json_build_object(
+                 'chain_seq', chain_seq::text, 'admin_id', admin_id, 'action', action,
+                 'target_type', target_type, 'target_id', target_id,
+                 'license_id', license_id::text, 'reason', reason, 'payload', payload, 'ip', ip,
+                 'created_at', to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'),
+                 'prev_hash', prev_hash, 'hash', hash)
+               FROM platform_audit_log ORDER BY chain_seq"
+}
+
 source_counts_before="$(count_rows "$DB_NAME" 2>"$tmpdir/counts.err" || true)"
 [ -n "$source_counts_before" ] ||
   fatal "could not read row counts from $DB_NAME: $(tr '\n' ' ' <"$tmpdir/counts.err")"
@@ -319,7 +378,7 @@ source_counts_after="$(count_rows "$DB_NAME")"
 # source that is being written to concurrently the honest assertion is that the
 # restored count lies between them — which degenerates to equality when nothing
 # is writing, i.e. the normal case.
-for table in "${COUNT_TABLES[@]}"; do
+for table in "${COUNT_TABLES[@]}" "${PLATFORM_TABLES[@]}"; do
   before="$(count_of "$source_counts_before" "$table")"
   after="$(count_of "$source_counts_after" "$table")"
   actual="$(count_of "$restored_counts" "$table")"
@@ -346,6 +405,43 @@ for table in "${COUNT_TABLES[@]}"; do
     fail "$table: restored $actual rows, source has $before to $after"
   fi
 done
+
+# --- The root panel's tables and its audit chain (tm 392 · NFR-ADMIN-B) ---
+#
+# The row counts above already cover every platform_* table. What they cannot say
+# is that the *set* of tables came back, nor that the audit trail is still a chain:
+# a restore can return every row and still carry an altered one. Rows are counted,
+# the chain is verified.
+if [ "${#PLATFORM_TABLES[@]}" -eq 0 ]; then
+  fail 'no platform_* tables in the source' 'the root panel migrations (tm 389) are not applied'
+else
+  diff_check 'platform tables present' "$platform_tables_source" "$(platform_tables_of "$DRILL_DB")"
+  if [[ " ${PLATFORM_TABLES[*]} " != *' platform_audit_log '* ]]; then
+    fail 'platform_audit_log is not among the source tables' 'the audit chain cannot be verified'
+  else
+    # The rows are read with the container's psql into a file first, so a failed read
+    # is its own failure (not the checker's "empty"), and piped in, so the checker
+    # needs no database connection (the pilot publishes no host port).
+    chain_status=0
+    chain_out=''
+    if ! chain_dump "$DRILL_DB" >"$tmpdir/chain.dump" 2>"$tmpdir/chain.err"; then
+      chain_status=2
+    else
+      # shellcheck disable=SC2086 # the command is a word list on purpose
+      chain_out="$($PLATFORM_CHAIN_CHECK_CMD <"$tmpdir/chain.dump" 2>>"$tmpdir/chain.err")" || chain_status=$?
+    fi
+    case "$chain_status" in
+      0) pass "$(head -1 <<<"$chain_out")" ;;
+      1) fail 'platform audit chain is broken in the restore' "$(tr '\n' ' ' <<<"$chain_out")" ;;
+      3) unproven 'platform audit chain skipped: no PLATFORM_SETTINGS_KEY, so it was not verified' \
+        'set it (the root .env has it) to verify the chain in the restore' ;;
+      4) unproven 'platform audit chain not exercised: platform_audit_log is empty, nothing to verify' \
+        'the root panel has recorded nothing yet' ;;
+      *) fail 'platform audit chain check could not run' \
+        "exit $chain_status: $(tr '\n' ' ' <"$tmpdir/chain.err")$(tr '\n' ' ' <<<"$chain_out")" ;;
+    esac
+  fi
+fi
 
 # --- Schema objects a logical dump is not obliged to carry ---
 diff_check 'row level security surface (tables, policies, bodies)' \

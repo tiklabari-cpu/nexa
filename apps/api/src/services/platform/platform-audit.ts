@@ -308,7 +308,7 @@ export interface PlatformAuditRecorded {
 
 type PlatformTx = Prisma.TransactionClient;
 
-interface PlatformAuditRow {
+export interface PlatformAuditRow {
   chainSeq: bigint;
   adminId: string | null;
   action: string;
@@ -422,6 +422,73 @@ function exportLine(row: PlatformAuditRow): string {
 
 function hashOf(key: Buffer, row: PlatformAuditRow): string {
   return platformChainRowHash(key, row);
+}
+
+/** Where {@link verifyPlatformChain} reads the trail from: the live table, or a restored copy of it. */
+export interface PlatformChainSource {
+  /** Up to `take` entries after position `after` (all of them when null), oldest first. */
+  batch(after: bigint | null, take: number): Promise<PlatformAuditRow[]>;
+  head(): Promise<{ seq: bigint; hash: string | null } | null>;
+}
+
+/**
+ * Walk the whole chain from position 1 in batches and report every break:
+ * a removed entry (gap), an altered one (hash), a relinked one, a trail that
+ * does not start at 1, and a head that does not point at the last entry —
+ * which is how a deleted *tail* shows, since nothing after it is left to
+ * break. `PlatformAuditLog.verify` runs it over the table; the restore drill
+ * (tm 392) runs it over the rows it read out of a scratch restore.
+ */
+export async function verifyPlatformChain(
+  key: Buffer,
+  source: PlatformChainSource,
+): Promise<PlatformAuditVerification> {
+  const findings: Array<ChainFinding | HeadFinding> = [];
+  let checked = 0;
+  let first: bigint | null = null;
+  let previous: { seq: bigint; hash: string } | null = null;
+
+  for (;;) {
+    const batch = await source.batch(previous ? previous.seq : null, VERIFY_BATCH);
+    if (batch.length === 0) break;
+    const result: ChainVerification = verifyChain(batch, {
+      recompute: (row) => hashOf(key, row),
+      ...(previous ? { after: previous } : { prunedThroughSeq: 0n }),
+    });
+    findings.push(...result.findings);
+    checked += result.checked;
+    first ??= batch[0]!.chainSeq;
+    const last = batch.at(-1)!;
+    previous = { seq: last.chainSeq, hash: last.hash };
+    if (batch.length < VERIFY_BATCH) break;
+  }
+
+  const head = await source.head();
+  const headSeq = head?.seq ?? 0n;
+  const lastSeq = previous?.seq ?? 0n;
+  if (headSeq !== lastSeq || (previous !== null && head?.hash !== previous.hash)) {
+    findings.push({
+      kind: 'head_mismatch',
+      id: null,
+      seq: headSeq.toString(),
+      detail:
+        headSeq > lastSeq
+          ? `the head has handed out position ${headSeq}, but the last surviving entry is ${lastSeq} — entries ${lastSeq + 1n}…${headSeq} are missing`
+          : `the head (position ${headSeq}) does not point at the last entry (position ${lastSeq})`,
+    });
+  }
+
+  return {
+    ok: findings.length === 0,
+    checked,
+    first_seq: first === null ? null : first.toString(),
+    last_seq: previous ? previous.seq.toString() : null,
+    head_seq: head ? head.seq.toString() : null,
+    findings: findings
+      .slice(0, MAX_REPORTED_FINDINGS)
+      .map(({ kind, seq, detail }) => ({ kind, seq, detail })),
+    findings_total: findings.length,
+  };
 }
 
 export interface PlatformAuditLogOptions {
@@ -689,56 +756,15 @@ export class PlatformAuditLog {
    * break.
    */
   async verify(): Promise<PlatformAuditVerification> {
-    const findings: Array<ChainFinding | HeadFinding> = [];
-    let checked = 0;
-    let first: bigint | null = null;
-    let previous: { seq: bigint; hash: string } | null = null;
-
-    for (;;) {
-      const batch = (await this.#db.platformAuditLog.findMany({
-        where: previous ? { chainSeq: { gt: previous.seq } } : {},
-        orderBy: { chainSeq: 'asc' },
-        take: VERIFY_BATCH,
-      })) as PlatformAuditRow[];
-      if (batch.length === 0) break;
-      const result: ChainVerification = verifyChain(batch, {
-        recompute: (row) => hashOf(this.#key, row),
-        ...(previous ? { after: previous } : { prunedThroughSeq: 0n }),
-      });
-      findings.push(...result.findings);
-      checked += result.checked;
-      first ??= batch[0]!.chainSeq;
-      const last = batch.at(-1)!;
-      previous = { seq: last.chainSeq, hash: last.hash };
-      if (batch.length < VERIFY_BATCH) break;
-    }
-
-    const head = await this.#db.platformAuditChainHead.findUnique({ where: { id: 1 } });
-    const headSeq = head?.seq ?? 0n;
-    const lastSeq = previous?.seq ?? 0n;
-    if (headSeq !== lastSeq || (previous !== null && head?.hash !== previous.hash)) {
-      findings.push({
-        kind: 'head_mismatch',
-        id: null,
-        seq: headSeq.toString(),
-        detail:
-          headSeq > lastSeq
-            ? `the head has handed out position ${headSeq}, but the last surviving entry is ${lastSeq} — entries ${lastSeq + 1n}…${headSeq} are missing`
-            : `the head (position ${headSeq}) does not point at the last entry (position ${lastSeq})`,
-      });
-    }
-
-    return {
-      ok: findings.length === 0,
-      checked,
-      first_seq: first === null ? null : first.toString(),
-      last_seq: previous ? previous.seq.toString() : null,
-      head_seq: head ? head.seq.toString() : null,
-      findings: findings
-        .slice(0, MAX_REPORTED_FINDINGS)
-        .map(({ kind, seq, detail }) => ({ kind, seq, detail })),
-      findings_total: findings.length,
-    };
+    return verifyPlatformChain(this.#key, {
+      batch: async (after, take) =>
+        (await this.#db.platformAuditLog.findMany({
+          where: after !== null ? { chainSeq: { gt: after } } : {},
+          orderBy: { chainSeq: 'asc' },
+          take,
+        })) as PlatformAuditRow[],
+      head: () => this.#db.platformAuditChainHead.findUnique({ where: { id: 1 } }),
+    });
   }
 
   /**

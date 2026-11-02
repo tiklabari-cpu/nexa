@@ -4,6 +4,7 @@ import {
   GOAL_TABS,
   buildGoalDefinition,
   describeGoalTriggers,
+  isCustomEventName,
   filterGoals,
   funnelStages,
   goalCounts,
@@ -85,6 +86,26 @@ describe('buildGoalDefinition (FR-MOD-13.3)', () => {
     expect(buildGoalDefinition('lead_captured', '')).toEqual({ lead_captured: true });
     expect(buildGoalDefinition('chat_resolved', '')).toEqual({ chat_resolved: true });
   });
+
+  it('builds a custom event from the typed name, trimmed, with the value only when given (EN-06)', () => {
+    expect(
+      buildGoalDefinition('custom_event', '', { name: ' registration_completed ', value: '' }),
+    ).toEqual({ custom_event: { name: 'registration_completed' } });
+    expect(
+      buildGoalDefinition('custom_event', '', { name: 'plan_chosen', value: ' pro ' }),
+    ).toEqual({ custom_event: { name: 'plan_chosen', value_equals: 'pro' } });
+  });
+});
+
+describe('isCustomEventName (EN-06)', () => {
+  it('accepts the shape the page and the API accept, and nothing looser', () => {
+    expect(isCustomEventName('registration_completed')).toBe(true);
+    expect(isCustomEventName('a1_b2')).toBe(true);
+    expect(isCustomEventName('a'.repeat(40))).toBe(true);
+    for (const bad of ['', 'Registration', 'sign up', 'a-b', 'é', 'a'.repeat(41)]) {
+      expect(isCustomEventName(bad), bad).toBe(false);
+    }
+  });
 });
 
 describe('describeGoalTriggers (FR-MOD-13.3)', () => {
@@ -104,6 +125,22 @@ describe('describeGoalTriggers (FR-MOD-13.3)', () => {
     expect(describeGoalTriggers({ chat_resolved: true })).toEqual([
       { key: 'goals.page.trigger.chatResolved' },
     ]);
+  });
+
+  it('describes a custom event, with its value when the goal names one (EN-06)', () => {
+    expect(describeGoalTriggers({ custom_event: { name: 'registration_completed' } })).toEqual([
+      { key: 'goals.page.trigger.customEvent', params: { name: 'registration_completed' } },
+    ]);
+    expect(
+      describeGoalTriggers({ custom_event: { name: 'plan_chosen', value_equals: 'pro' } }),
+    ).toEqual([
+      {
+        key: 'goals.page.trigger.customEventValue',
+        params: { name: 'plan_chosen', value: 'pro' },
+      },
+    ]);
+    expect(describeGoalTriggers({ custom_event: 'nope' })).toEqual([]);
+    expect(describeGoalTriggers({ custom_event: { name: 7 } })).toEqual([]);
   });
 
   it('lists every predicate a hand-combined definition sets, url first', () => {

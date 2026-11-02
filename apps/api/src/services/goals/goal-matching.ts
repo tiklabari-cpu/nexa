@@ -24,6 +24,30 @@ function urlNeedle(definition: unknown): string | null {
   return value.trim().toLowerCase() || null;
 }
 
+/** The custom event a goal waits for (EN-06), read defensively from jsonb. */
+export interface CustomEventNeedle {
+  name: string;
+  /** Null when any value counts. */
+  valueEquals: string | null;
+}
+
+/**
+ * The `custom_event` predicate, or null when the definition carries nothing
+ * usable — absent, not an object, or a name that is not a string. A blank
+ * `value_equals` means "any value", the same way an absent one does.
+ */
+export function customEventNeedle(definition: unknown): CustomEventNeedle | null {
+  if (!definition || typeof definition !== 'object') return null;
+  const raw = (definition as { custom_event?: unknown }).custom_event;
+  if (!raw || typeof raw !== 'object') return null;
+  const { name, value_equals: valueEquals } = raw as { name?: unknown; value_equals?: unknown };
+  if (typeof name !== 'string' || name === '') return null;
+  return {
+    name,
+    valueEquals: typeof valueEquals === 'string' && valueEquals !== '' ? valueEquals : null,
+  };
+}
+
 /**
  * The predicates a goal can be reached by that are *not* about a page — the
  * three funnel kinds the PRD row names (sale / lead / resolution).
@@ -54,6 +78,11 @@ export interface GoalFacts {
   leadCaptured?: boolean;
   /** A conversation with this visitor has been archived. */
   chatResolved?: boolean;
+  /**
+   * What the visitor's page has reported with `siyahtus('trackEvent', …)`
+   * (EN-06). Unverified browser data — it can satisfy a goal, nothing else.
+   */
+  customEvents?: ReadonlyArray<{ name: string; value: string }>;
 }
 
 /**
@@ -77,6 +106,7 @@ export function goalRequires(definition: unknown, predicate: GoalFlagPredicate):
  */
 export function hasGoalTrigger(definition: unknown): boolean {
   if (urlNeedle(definition) !== null) return true;
+  if (customEventNeedle(definition) !== null) return true;
   return GOAL_FLAG_PREDICATES.some((predicate) => goalRequires(definition, predicate));
 }
 
@@ -109,6 +139,17 @@ export function matchesGoal(
   if (goalRequires(definition, 'sale_completed')) checks.push(facts.saleCompleted === true);
   if (goalRequires(definition, 'lead_captured')) checks.push(facts.leadCaptured === true);
   if (goalRequires(definition, 'chat_resolved')) checks.push(facts.chatResolved === true);
+
+  const event = customEventNeedle(definition);
+  if (event) {
+    checks.push(
+      (facts.customEvents ?? []).some(
+        (seen) =>
+          seen.name === event.name &&
+          (event.valueEquals === null || seen.value === event.valueEquals),
+      ),
+    );
+  }
 
   // Future predicate kinds (geo, order value, …) push their own check here.
   if (checks.length === 0) return false;

@@ -1,11 +1,13 @@
 /**
  * The New goal builder (FR-MOD-13.3, FR-EK-A.1).
  *
- * A goal is a name plus a trigger — one of the funnel's four predicates
- * (204.1): the visitor-page URL, a tracked sale, a captured lead, or a
- * resolved chat. Both name and trigger are required, and for the URL type
- * the trigger is the typed needle itself; for the other three, choosing the
- * type *is* the trigger — there is nothing further to fill in. The same
+ * A goal is a name plus a trigger — one of the funnel's predicates (204.1,
+ * EN-06): the visitor-page URL, a tracked sale, a captured lead, a resolved
+ * chat, or an event the site reports with `siyahtus('trackEvent', …)`. Both
+ * name and trigger are required, and for the URL type the trigger is the typed
+ * needle itself and for the event type the typed event name (plus an optional
+ * value); for the other three, choosing the type *is* the trigger — there is
+ * nothing further to fill in. The same
  * threshold the server enforces ("a goal needs something to match on") holds
  * Submit disabled here, so the two can never disagree. There is no edit form
  * in this slice (13.3-h) — creating and the active toggle on the list are
@@ -23,6 +25,7 @@ import {
   GOAL_TRIGGER_TYPES,
   GOAL_TRIGGER_TYPE_LABEL_KEY,
   buildGoalDefinition,
+  isCustomEventName,
   type GoalTriggerType,
 } from './goals.js';
 import type { Goal } from '@siyahtus/types';
@@ -39,24 +42,36 @@ export function GoalBuilder({
   const t = useTranslate();
   const [type, setType] = useState<GoalTriggerType>('url_contains');
   const isUrlType = type === 'url_contains';
+  const isEventType = type === 'custom_event';
   const save = useMutation({
     mutationFn: (body: unknown) => api.post<Goal>('/goals', body),
   });
 
   const form = useForm({
-    initial: { name: '', url_contains: '' },
+    initial: { name: '', url_contains: '', event_name: '', event_value: '' },
     validators: {
       name: required(t('goals.builder.nameRequired')),
       // Only the URL type needs its own field filled in — for the other three,
       // picking the radio already sets the whole predicate, so nothing here can
       // be blank in a way the server would reject.
       url_contains: isUrlType ? required(t('goals.builder.triggerRequired')) : () => null,
+      // The same shape the page's trackEvent and the API accept, so the form
+      // cannot save a goal waiting for an event nothing could send.
+      event_name: isEventType
+        ? (value: string) => {
+            if (!value.trim()) return t('goals.builder.eventNameRequired');
+            return isCustomEventName(value.trim()) ? null : t('goals.builder.eventNameInvalid');
+          }
+        : () => null,
     },
     onSubmit: async (values, { setSubmitError }) => {
       try {
         const saved = await save.mutateAsync({
           name: values.name,
-          definition: buildGoalDefinition(type, values.url_contains),
+          definition: buildGoalDefinition(type, values.url_contains, {
+            name: values.event_name,
+            value: values.event_value,
+          }),
         });
         onSaved(saved);
       } catch (failure) {
@@ -73,6 +88,7 @@ export function GoalBuilder({
 
   const nameError = form.errorFor('name');
   const triggerError = form.errorFor('url_contains');
+  const eventNameError = form.errorFor('event_name');
 
   return (
     <Modal
@@ -144,6 +160,42 @@ export function GoalBuilder({
               className="w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
             />
           </Field>
+        )}
+
+        {isEventType && (
+          <>
+            <Field
+              label={t('goals.builder.eventNameLabel')}
+              htmlFor="goal-event-name"
+              hint={t('goals.builder.eventNameHint')}
+              error={eventNameError}
+            >
+              <input
+                id="goal-event-name"
+                value={form.values.event_name}
+                onChange={(event) => form.setValue('event_name', event.target.value)}
+                onBlur={() => form.blur('event_name')}
+                aria-invalid={eventNameError ? true : undefined}
+                autoComplete="off"
+                spellCheck={false}
+                className="w-full rounded-md border border-border bg-inset px-3 py-2 font-mono text-sm"
+              />
+            </Field>
+            <Field
+              label={t('goals.builder.eventValueLabel')}
+              htmlFor="goal-event-value"
+              hint={t('goals.builder.eventValueHint')}
+            >
+              <input
+                id="goal-event-value"
+                value={form.values.event_value}
+                onChange={(event) => form.setValue('event_value', event.target.value)}
+                maxLength={100}
+                autoComplete="off"
+                className="w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+              />
+            </Field>
+          </>
         )}
 
         <div className="mt-2 flex justify-end gap-2">

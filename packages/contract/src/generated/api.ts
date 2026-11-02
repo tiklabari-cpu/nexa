@@ -2583,6 +2583,39 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/customer/events': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Report a page event for goal conversions
+     * @description The write side of `siyahtus('trackEvent', …)` (EN-06): the host page
+     *     reports that something happened to this visitor — a registration
+     *     completed — and the goals that name that event are evaluated.
+     *
+     *     The caller is a visitor's browser, so the data is unverified. It is used
+     *     for the goal report only; billing, limits and authorisation never read it.
+     *     The workspace and the visitor come from the customer token. There is no
+     *     amount: the body carries a name and an optional short label, and any other
+     *     property is ignored, never stored.
+     *
+     *     Idempotent per visitor: the same `name` + `value` reported again records
+     *     nothing new, and a goal converts a visitor once whatever the page repeats.
+     *     A visitor is remembered for at most 200 distinct events; past that the call
+     *     still answers 204 and stores nothing.
+     */
+    post: operations['trackCustomerEvent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/customer/ticket': {
     parameters: {
       query?: never;
@@ -21290,6 +21323,13 @@ export interface components {
       lead_captured?: boolean;
       /** @description Require a conversation with this visitor to have been archived. */
       chat_resolved?: boolean;
+      /** @description Require the visitor's page to have reported this event with `siyahtus('trackEvent', …)` (EN-06). The event comes from the visitor's browser and is not verified: it feeds the goal report, never billing or authorisation. A goal that names it converts a visitor once, however often the page repeats the event. */
+      custom_event?: {
+        /** @description The event name, for example `registration_completed`. */
+        name: string;
+        /** @description When set, only an event reported with exactly this value counts. */
+        value_equals?: string;
+      };
     };
     /** @description A tracked conversion target (FR-MOD-13.3). */
     Goal: {
@@ -25367,6 +25407,22 @@ export interface components {
        *     person or the queue had it already (or another press was doing it).
        */
       requested: boolean;
+    };
+    /**
+     * @description One event a host page reports about its visitor (EN-06) — a
+     *     registration finished, a first deposit page reached.
+     *
+     *     Deliberately a name and an optional label. There is **no amount field**:
+     *     a figure the visitor's browser states is not stored by this endpoint, and
+     *     one sent anyway is ignored like any other unknown property, so a page
+     *     cannot use an event to move revenue. Which workspace and which visitor
+     *     come from the customer token, never the body.
+     */
+    TrackEventRequest: {
+      /** @description Lowercase letters, digits and underscores, 1–40 characters. */
+      name: string;
+      /** @description An optional short label, for example a plan name. Not a number to sum. */
+      value?: string;
     };
     /**
      * @description One completed order, as the widget snippet reports it (FR-MOD-13.5).
@@ -29709,6 +29765,41 @@ export interface operations {
       };
       /** @description Sales tracking is not enabled for this workspace */
       403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  trackCustomerEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TrackEventRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted (recorded, or already known) */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      /** @description The license is read-only (expired trial); nothing is recorded. */
+      402: {
         headers: {
           [name: string]: unknown;
         };

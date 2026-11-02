@@ -1164,7 +1164,10 @@ describe('module parity matrix — what is still owed', () => {
       // owner hands the workspace to a member (RL-05) from web Settings → Company, and the
       // member accepts on a web page from the mailed link. Owner-only and rare; the handset
       // has no Company settings, and nothing here re-scopes.
-      contractEndpoints: 391,
+      // 391 -> 392 with `POST /customer/events` (tm 355) — the visitor's page reporting an
+      // event for goal conversions (EN-06), sent by the website widget with the visitor's
+      // own token; the handset is the agent's app and never calls the customer surface.
+      contractEndpoints: 392,
       scopeBoundaries: 1,
     });
   });

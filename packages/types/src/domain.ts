@@ -734,7 +734,26 @@ export interface GoalDefinition {
   lead_captured?: boolean;
   /** Require a conversation with this visitor to have been archived. */
   chat_resolved?: boolean;
+  /**
+   * Require the visitor's page to have reported this event with
+   * siyahtus('trackEvent', …) (EN-06). Unverified browser data: it feeds the
+   * goal report only, never billing or authorisation.
+   */
+  custom_event?: GoalCustomEvent;
 }
+
+/** A page event a goal waits for (EN-06). */
+export interface GoalCustomEvent {
+  /** Lowercase words, digits and underscores — see {@link CUSTOM_EVENT_NAME_RE}. */
+  name: string;
+  /** When set, only an event reported with exactly this value counts. */
+  value_equals?: string;
+}
+
+/** The shape of a custom event name (EN-06): 1-40 of a-z, 0-9 and underscore. */
+export const CUSTOM_EVENT_NAME_RE = /^[a-z0-9_]{1,40}$/;
+/** The longest value an event may carry (EN-06). There is no amount field at all. */
+export const CUSTOM_EVENT_VALUE_MAX_LENGTH = 100;
 
 /** A tracked conversion target (FR-MOD-13.3). */
 export interface Goal {

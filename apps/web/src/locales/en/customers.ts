@@ -539,6 +539,8 @@ export const customers: Messages = {
   'goals.page.trigger.saleCompleted': 'Sale completed',
   'goals.page.trigger.leadCaptured': 'Lead captured',
   'goals.page.trigger.chatResolved': 'Chat resolved',
+  'goals.page.trigger.customEvent': 'Page event {name}',
+  'goals.page.trigger.customEventValue': 'Page event {name} = {value}',
   'goals.page.trigger.none': 'No trigger defined',
 
   // Goal builder — GoalBuilder.tsx
@@ -551,6 +553,15 @@ export const customers: Messages = {
   'goals.builder.type.saleCompleted': 'Sale completed',
   'goals.builder.type.leadCaptured': 'Lead captured',
   'goals.builder.type.chatResolved': 'Chat resolved',
+  'goals.builder.type.customEvent': 'Page event (advanced)',
+  'goals.builder.eventNameLabel': 'Event name',
+  'goals.builder.eventNameHint':
+    "Sent by your site with siyahtus('trackEvent', {name: 'registration_completed'}). Lowercase letters, digits and _, up to 40.",
+  'goals.builder.eventNameRequired': 'Enter the event name your site sends.',
+  'goals.builder.eventNameInvalid': 'Use lowercase letters, digits and _ only (1–40 characters).',
+  'goals.builder.eventValueLabel': 'Only when the value is (optional)',
+  'goals.builder.eventValueHint':
+    'Leave empty to count the event with any value. The event comes from the visitor’s browser and is not verified.',
   'goals.builder.triggerLabel': 'Trigger — page URL contains',
   'goals.builder.triggerHint':
     'e.g. /thank-you — a visitor reaching a matching page has converted.',

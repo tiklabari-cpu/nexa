@@ -729,6 +729,44 @@ sale:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+customEvent:
+  post:
+    tags: [Customer]
+    operationId: trackCustomerEvent
+    summary: Report a page event for goal conversions
+    description: |
+      The write side of `siyahtus('trackEvent', …)` (EN-06): the host page
+      reports that something happened to this visitor — a registration
+      completed — and the goals that name that event are evaluated.
+
+      The caller is a visitor's browser, so the data is unverified. It is used
+      for the goal report only; billing, limits and authorisation never read it.
+      The workspace and the visitor come from the customer token. There is no
+      amount: the body carries a name and an optional short label, and any other
+      property is ignored, never stored.
+
+      Idempotent per visitor: the same `name` + `value` reported again records
+      nothing new, and a goal converts a visitor once whatever the page repeats.
+      A visitor is remembered for at most 200 distinct events; past that the call
+      still answers 204 and stores nothing.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/TrackEventRequest" }
+    responses:
+      "204":
+        description: Accepted (recorded, or already known)
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "402":
+        description: The license is read-only (expired trial); nothing is recorded.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 rating:
   post:
     tags: [Customer]

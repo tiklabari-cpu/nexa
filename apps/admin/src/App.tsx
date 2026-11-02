@@ -1,6 +1,7 @@
 import { useEffect, type ReactElement } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/AppShell.js';
+import { AuditPage } from './features/audit/AuditPage.js';
 import { AccountsSection } from './features/accounts/AccountsSection.js';
 import { BillingPage } from './features/billing/BillingPage.js';
 import { AdminsPage } from './features/admins/AdminsPage.js';
@@ -95,6 +96,8 @@ function SectionPage({ item }: { item: NavItem }): ReactElement {
       return <BillingPage />;
     case 'usage':
       return <UsageSection />;
+    case 'audit':
+      return <AuditPage />;
     case 'admins':
       return <AdminsPage />;
     case 'settings':

@@ -11,6 +11,11 @@
  * survives a reload — and that the page that results is accessible with the real stylesheet
  * (contrast is only decidable here: jsdom has no computed colour).
  *
+ * One (tm 391 · FR-ADMIN-04) works the operator directory: it invites an operator, who accepts from
+ * the mailed link and enrols an authenticator, then changes their role and disables them. The next
+ * (tm 391 · FR-ADMIN-06) reads the signed trail the operations above left, verifies the chain,
+ * exports a signed page, and works the operator's own security (sessions, a new recovery sheet).
+ *
  * One (tm 389.10 · FR-ADMIN-09) suspends a workspace from the panel and watches its owner be
  * turned away at the workspace panel's sign-in, then lifts it and watches them get in. The last
  * (tm 389.15 · FR-ADMIN-21) enters a workspace as its owner, read-only: the one-time link opens
@@ -29,6 +34,7 @@ import { promisify } from 'node:util';
 import type { Page, TestInfo } from '@playwright/test';
 import { assertNoBlockingViolations, scanScreen } from './a11y.js';
 import { API_BASE, expect, ownerAccessToken, ownerAccessTokenFor, test } from './fixtures.js';
+import { linkIn, waitForMail } from './mailbox.js';
 import { STACK_ADMIN, STACK_API, USUAL_PORTS } from './stack-ports.js';
 import { nextTotpCode, stepOf, totpCode } from './totp.js';
 
@@ -157,7 +163,8 @@ test('creates the first superadmin, enrols the authenticator and opens the shell
   await menu.getByRole('link', { name: 'Audit' }).click();
   await expect(page).toHaveURL(`${ADMIN}/audit`);
   await expect(menu.getByRole('link', { name: 'Audit' })).toHaveAttribute('aria-current', 'page');
-  await scanBothThemes(page, 'audit placeholder', testInfo);
+  await expect(page.getByRole('table', { name: 'Entries' })).toBeVisible();
+  await scanBothThemes(page, 'audit', testInfo);
 
   // An address that is not a page says so, inside the shell.
   await page.goto(`${ADMIN}/no-such-page`);
@@ -559,4 +566,165 @@ test('opens Billing › Payment queue and Payment settings: every section answer
   await expect(page.getByRole('checkbox', { name: 'Bank transfer (SWIFT)' })).toBeChecked();
   await expect(page.getByRole('checkbox', { name: /^Card \(Stripe\)/ })).not.toBeChecked();
   await scanBothThemes(page, 'billing-payment-settings', testInfo);
+});
+
+test('works the operator directory: invites an operator, who accepts and enrols, then changes their role and disables them', async ({
+  page,
+  request,
+  browser,
+}, testInfo) => {
+  // Four codes from four different thirty-second steps: the sign-in, the invitation, the role and
+  // the disabling (each one is a `recentTotp` action).
+  test.setTimeout(300_000);
+  const invitee = `invitee-${Date.now().toString(36)}@platform.test`;
+
+  await page.goto(`${ADMIN}/admins`);
+  await typePassword(page);
+  const signInCode = await nextTotpCode(secret, usedStep);
+  usedStep = stepOf();
+  await page.getByLabel('Authenticator code').fill(signInCode);
+  await page.getByRole('button', { name: 'Verify' }).click();
+  await expect(page.getByRole('heading', { name: 'Admins', level: 1 })).toBeVisible();
+
+  const operators = page.getByRole('table', { name: 'Operators' });
+  await expect(operators.getByText(OPERATOR.email)).toBeVisible();
+  await expect(operators.getByText('(you)')).toBeVisible();
+  await scanBothThemes(page, 'admins directory', testInfo);
+
+  /** One dialog action: reason, a fresh code, confirm. */
+  const confirmWithCode = async (confirm: string, why: string) => {
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel('Reason').fill(why);
+    const code = await nextTotpCode(secret, usedStep);
+    usedStep = stepOf();
+    await dialog.getByLabel('Authenticator code').fill(code);
+    await dialog.getByRole('button', { name: confirm, exact: true }).click();
+  };
+
+  // Invite.
+  await page.getByRole('button', { name: 'Invite an operator' }).click();
+  await page.getByRole('dialog').getByLabel('Email address').fill(invitee);
+  await page.getByRole('dialog').getByLabel('Role').selectOption('support');
+  await confirmWithCode('Send invitation', 'e2e: joins the support rota');
+  await expect(page.getByText(`Invitation sent to ${invitee}.`)).toBeVisible();
+  const pending = page.getByRole('table', { name: 'Pending invitations' });
+  await expect(pending.getByText(invitee)).toBeVisible();
+  await scanBothThemes(page, 'admins directory with an invitation', testInfo);
+
+  // The invitee follows the mailed link, chooses a password and enrols an authenticator.
+  const mail = await waitForMail(request, invitee, 'invited to operate');
+  // A browser context of their own: the operator's session lives in this tab's storage, and a
+  // second tab of the same context would be handed it.
+  const joinerContext = await browser.newContext({ locale: 'en-US' });
+  const joiner = await joinerContext.newPage();
+  await joiner.goto(linkIn(mail, '/invite'));
+  await joiner.getByLabel('Password').fill('e2e invitee password 1');
+  await joiner.getByRole('button', { name: 'Accept and continue' }).click();
+  await expect(joiner.getByRole('heading', { name: 'Set up your authenticator' })).toBeVisible();
+  const joinerSecret = (await joiner.getByTestId('enroll-secret').innerText()).replace(/\s+/g, '');
+  await joiner.getByLabel('Code from the app').fill(totpCode(joinerSecret));
+  await joiner.getByRole('button', { name: 'Activate' }).click();
+  await joiner.getByLabel('I have saved these codes').check();
+  await joiner.getByRole('button', { name: 'Continue to the panel' }).click();
+  await expect(joiner.getByRole('navigation', { name: 'Main menu' })).toBeVisible();
+
+  // The directory now lists them as an operator with an authenticator, and the invitation is spent.
+  await page.reload();
+  const row = page.getByRole('row').filter({ hasText: invitee });
+  await expect(row.getByText('Support', { exact: true })).toBeVisible();
+  await expect(row.getByText('Set up', { exact: true })).toBeVisible();
+  await expect(page.getByText('No invitation is waiting.')).toBeVisible();
+
+  const choose = async (label: string) => {
+    await row.getByRole('button', { name: `Actions for ${invitee}` }).click();
+    await row.getByRole('button', { name: label, exact: true }).click();
+  };
+
+  // Role.
+  await choose('Change role');
+  await page.getByRole('dialog').getByLabel('Role').selectOption('billing');
+  await confirmWithCode('Change role', 'e2e: moves to the finance rota');
+  await expect(page.getByText(`${invitee} is now Billing.`)).toBeVisible();
+  await expect(row.getByText('Billing', { exact: true })).toBeVisible();
+
+  // Disable: the row says so, and the invitee's open session is over.
+  await choose('Disable');
+  await confirmWithCode('Disable', 'e2e: leaves the rota');
+  await expect(page.getByText(`${invitee} was disabled.`)).toBeVisible();
+  await expect(row.getByText(/^Disabled /)).toBeVisible();
+  await scanBothThemes(page, 'admins directory with a disabled operator', testInfo);
+  // (`/invite` is the page they are still on, and it answers a signed-out visitor with its own
+  // page; the address bar was cleared of the token, so go to the panel's front door.)
+  await joiner.goto(`${ADMIN}/`);
+  await expect(
+    joiner.getByRole('heading', { name: 'Sign in to the platform panel' }),
+  ).toBeVisible();
+  await joinerContext.close();
+});
+
+test('reads the audit trail the operations left, verifies the chain, exports a signed page, lists the operator’s sessions and renews the recovery sheet', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(240_000);
+
+  await page.goto(`${ADMIN}/audit`);
+  await typePassword(page);
+  const signInCode = await nextTotpCode(secret, usedStep);
+  usedStep = stepOf();
+  await page.getByLabel('Authenticator code').fill(signInCode);
+  await page.getByRole('button', { name: 'Verify' }).click();
+  await expect(page.getByRole('heading', { name: 'Audit', level: 1 })).toBeVisible();
+
+  // The trail, filtered to one action of the story above.
+  const entries = page.getByRole('table', { name: 'Entries' });
+  await expect(entries.getByText('admin.invited')).toBeVisible();
+  await page.getByLabel('Action').selectOption('admin.role_changed');
+  await expect(entries.getByText('admin.role_changed')).toBeVisible();
+  await expect(entries.getByText('admin.invited')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Clear filters' }).click();
+  await expect(entries.getByText('admin.invited')).toBeVisible();
+
+  // Verify: the chain the suite has written so far is whole.
+  await page.getByRole('button', { name: 'Verify the chain' }).click();
+  await expect(page.getByText(/^The chain is intact: \d+ entries checked/)).toBeVisible();
+
+  // Export: a file, and what the page says about itself.
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'Export from the start' }).click(),
+  ]);
+  expect(download.suggestedFilename()).toMatch(/^platform-audit-\d+-\d+\.ndjson$/);
+  const facts = page.getByLabel('The exported page');
+  await expect(facts.getByText('Intact')).toBeVisible();
+  await expect(facts.getByText('Signature (X-Siyahtus-Signature)')).toBeVisible();
+  await expect(facts.getByText('No — this was the last page')).toBeVisible();
+  await scanBothThemes(page, 'audit with a verification and an export', testInfo);
+
+  // My account: the sessions, then a new recovery sheet.
+  await page.getByRole('button', { name: 'My account' }).click();
+  await page.getByRole('button', { name: 'My sessions' }).click();
+  const sessions = page.getByRole('dialog');
+  await expect(sessions.getByRole('table', { name: 'My sessions' })).toBeVisible();
+  await expect(sessions.getByText('This session')).toHaveCount(1);
+  await scanBothThemes(page, 'my sessions', testInfo);
+  await sessions.getByRole('button', { name: 'Sign out all other sessions' }).click();
+  await expect(sessions.getByText(/^Other sessions ended: \d+\.$/)).toBeVisible();
+  await sessions.getByRole('button', { name: 'Close' }).click();
+
+  await page.getByRole('button', { name: 'My account' }).click();
+  await page.getByRole('button', { name: 'Renew recovery codes' }).click();
+  const renew = page.getByRole('dialog');
+  const code = await nextTotpCode(secret, usedStep);
+  usedStep = stepOf();
+  await renew.getByLabel('Authenticator code').fill(code);
+  await renew.getByRole('button', { name: 'Renew codes' }).click();
+  const sheet = page.getByRole('list', { name: 'Recovery codes' });
+  await expect(sheet).toBeVisible();
+  const renewed = (await sheet.getByRole('listitem').allInnerTexts()).map((c) => c.trim());
+  expect(renewed).toHaveLength(10);
+  // Ten new codes: none of the sheet issued at enrolment survives.
+  expect(renewed.filter((c) => recoveryCodes.includes(c))).toEqual([]);
+  await page.getByLabel('I have saved these codes').check();
+  await page.getByRole('button', { name: 'Continue to the panel' }).click();
+  await expect(page.getByRole('heading', { name: 'Audit', level: 1 })).toBeVisible();
 });

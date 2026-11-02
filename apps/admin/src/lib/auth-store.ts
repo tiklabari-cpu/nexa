@@ -16,6 +16,7 @@ import { create } from 'zustand';
 import { ApiClient, ApiClientError } from './api-client.js';
 import type {
   PlatformMe,
+  PlatformRecoveryCodes,
   PlatformSessionEnvelope,
   PlatformSignIn,
   PlatformTotpActivation,
@@ -87,6 +88,12 @@ interface AuthState {
   verify: (input: { code: string } | { recoveryCode: string }) => Promise<void>;
   /** A fresh code for a route that wants one (`platform_recent_totp_required`). */
   reverify: (code: string) => Promise<void>;
+  /**
+   * A new recovery sheet on request (FR-ADMIN-02): a fresh code first — the server wants a recent
+   * one, and a stolen session must not be able to mint itself a lasting second factor — then the
+   * sheet, held in `recoveryCodes` so the same one-time page that follows enrolment shows it.
+   */
+  regenerateRecoveryCodes: (code: string) => Promise<void>;
   acknowledgeRecoveryCodes: () => void;
   /** Back to the password screen from the code step, discarding the half-open session. */
   cancelChallenge: () => Promise<void>;
@@ -234,6 +241,17 @@ export const useAuth = create<AuthState>((set, get) => {
       const { session } = await api.post<PlatformSessionEnvelope>('/auth/totp/reverify', { code });
       const me = get().me;
       if (me) set({ me: { ...me, session } });
+    },
+
+    async regenerateRecoveryCodes(code) {
+      await get().reverify(code);
+      const sheet = await api.post<PlatformRecoveryCodes>('/auth/recovery/regenerate');
+      const me = get().me;
+      set({
+        recoveryCodes: sheet.recovery_codes,
+        recoveryCodesRemaining: sheet.recovery_codes.length,
+        ...(me ? { me: { ...me, recovery_codes_remaining: sheet.recovery_codes.length } } : {}),
+      });
     },
 
     acknowledgeRecoveryCodes() {

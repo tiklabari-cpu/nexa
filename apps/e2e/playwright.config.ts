@@ -400,6 +400,16 @@ export default defineConfig({
         RATE_LIMIT_PLATFORM_PER_MIN: '5000',
         LLM_PROVIDER: 'mock',
         EMBEDDING_PROVIDER: 'mock',
+        // The operator invitation (tm 391) is mailed; the spec reads it from the stand-in's
+        // mailbox like every other mail this suite causes, instead of a file beside the process.
+        MAIL_PROVIDER: 'smtp',
+        SMTP_HOST: '127.0.0.1',
+        SMTP_PORT: String(MOCK_SMTP_PORT),
+        SMTP_SECURE: 'false',
+        SMTP_USERNAME: 'info@nolnk.test',
+        SMTP_PASSWORD: 'fake-smtp-password-not-a-secret',
+        SMTP_FROM: 'info@nolnk.test',
+        NODE_EXTRA_CA_CERTS: SMTP_TEST_CA,
       },
     },
     {

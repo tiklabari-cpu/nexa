@@ -106,11 +106,12 @@ describe('a route opened by hand', () => {
     expect(await screen.findByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
   });
 
-  it('shows a page that is not built yet as its placeholder', async () => {
+  it('opens the audit trail from its menu entry (every entry has its page since tm 391)', async () => {
     await enter('superadmin', '/audit');
 
     expect(await screen.findByRole('heading', { name: 'Audit', level: 1 })).toBeVisible();
-    expect(screen.getByText('Nothing here yet')).toBeVisible();
+    expect(await screen.findByRole('table', { name: 'Entries' })).toBeVisible();
+    expect(screen.queryByText('Nothing here yet')).toBeNull();
   });
 
   it('keeps the shell around the refusal, so the menu is still there to leave by', async () => {

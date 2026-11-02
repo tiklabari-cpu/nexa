@@ -235,33 +235,33 @@ FR-ADMIN-nn → alt görev → test. Test yolları: **int** = `apps/api/test/int
 `apps/api/src/…` (yanında), **admin** = `apps/admin/src/features/…`, **e2e** =
 `apps/e2e/tests/platform-admin.spec.ts` (gerçek yığın, axe dahil). Operatör adım listeleri:
 [`docs/runbooks/platform-admin-ops.md`](../runbooks/platform-admin-ops.md) (Ek B: FR → bölüm).
-`✅` = uç + test var; `◐` = uç var, panel yüzü eksik (aşağıdaki "Açık").
+`✅` = uç + test var; `◐` = uç var, panel yüzü eksik (aşağıdaki "Açık"; tm 391'den sonra yok).
 
-| FR-ADMIN | Konu                               | Alt görev     | Test                                                                                                         | Durum |
-| -------- | ---------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------ | ----- |
-| 01–02    | Parola + zorunlu TOTP, oturum      | 389.4         | int `platform-auth`; e2e (ilk operatör, tekrar oynatılan kod, kurtarma kodu)                                 | ✅    |
-| 03       | Bootstrap CLI, davet, IP, kova     | 389.4, 389.7  | birim `bootstrap-admin`; int `platform-auth`; `scripts/smoke.sh` "Back office"                               | ✅    |
-| 04       | Operatör yönetimi                  | 389.4         | int `platform-auth`, `platform-audit` (API; panelde dizin sayfası yok)                                       | ◐     |
-| 05       | Audit zinciri, çift kayıt          | 389.5         | int `platform-audit`; birim `platform-audit`                                                                 | ✅    |
-| 06       | NDJSON dışa aktarma, kiracı izi    | 389.5         | int `platform-audit` (API; panelde Denetim sayfası iskelet; kiracı izi çalışma alanı Denetim sekmesinde)     | ◐     |
-| 07       | Dashboard, sağlık, bileşenler      | 389.8         | int `platform-dashboard`; admin `dashboard/DashboardPage`                                                    | ✅    |
-| 08       | Çalışma alanı listesi/detayı       | 389.9         | int `platform-workspaces`; admin `workspaces/WorkspacesPage`                                                 | ✅    |
-| 09       | Çalışma alanı eylemleri, askı      | 389.2, 389.10 | int `platform-tenant-ripples`, `platform-workspace-actions`; admin `workspaces/WorkspaceActions`; e2e (askı) | ✅    |
-| 10       | Kimlikten çalışma alanı araması    | 389.9         | int `platform-workspaces`                                                                                    | ✅    |
-| 11       | Hesaplar                           | 389.11        | int `platform-accounts`; admin `accounts/AccountsPage`                                                       | ✅    |
-| 12       | Faturalama, kredi, elle abonelik   | 389.12        | int `platform-billing-usage`; admin `billing/BillingPage`, `usage/UsagePage`                                 | ✅    |
-| 13       | AI kota override'ı                 | 389.12        | int `platform-billing-usage`                                                                                 | ✅    |
-| 14       | Ödeme operasyonu                   | 389.18        | int `platform-payment-ops`; admin `billing/PaymentOps`; e2e                                                  | ✅    |
-| 15       | Ayarlar, duyuru, bakım             | 389.13        | int `platform-settings`; birim `public-settings`, `plugins/maintenance-gate`; admin `settings/SettingsPage`  | ✅    |
-| 16       | Effective-config                   | 389.13        | int `platform-settings`; admin `settings/SettingsPage`                                                       | ✅    |
-| 17       | AI ayarları, yazma-yalnız anahtar  | 389.17        | int `platform-ai-settings`; birim `services/ai/ai-settings`; admin `settings/AiSettingsSection`; e2e         | ✅    |
-| 18       | Hot-swap registry                  | 389.17        | int `platform-ai-settings` (5 sn testi); birim `services/ai/provider/llm-registry`                           | ✅    |
-| 19       | Kayıt doğrulama, test, yeniden göm | 389.17        | int `platform-ai-settings`                                                                                   | ✅    |
-| 20       | Operasyon                          | 389.14        | int `platform-operations`; admin `operations/OperationsPage`; e2e                                            | ✅    |
-| 21       | Impersonation                      | 389.2, 389.15 | int `platform-impersonation`; admin `support/Impersonation`; e2e                                             | ✅    |
-| 22       | Güvenlik, blocklist                | 389.16        | int `platform-security`; admin `security/SecurityPage`; e2e                                                  | ✅    |
-| 23       | AI katalogları, AI sekmesi         | 389.19        | int `platform-ai-catalogs`; admin `ai/AiPage`                                                                | ✅    |
-| 24       | Operatör uyarıları                 | 389.20        | int `platform-alerts`; birim `services/platform/alerts`; admin `admins/AlertPrefsSection`                    | ✅    |
+| FR-ADMIN | Konu                               | Alt görev     | Test                                                                                                                    | Durum |
+| -------- | ---------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------- | ----- |
+| 01–02    | Parola + zorunlu TOTP, oturum      | 389.4         | int `platform-auth`; e2e (ilk operatör, tekrar oynatılan kod, kurtarma kodu)                                            | ✅    |
+| 03       | Bootstrap CLI, davet, IP, kova     | 389.4, 389.7  | birim `bootstrap-admin`; int `platform-auth`; `scripts/smoke.sh` "Back office"                                          | ✅    |
+| 04       | Operatör yönetimi                  | 389.4, 391    | int `platform-auth`, `platform-audit`; admin `admins/OperatorDirectory`, `myaccount/AccountMenu`; e2e                   | ✅    |
+| 05       | Audit zinciri, çift kayıt          | 389.5         | int `platform-audit`; birim `platform-audit`                                                                            | ✅    |
+| 06       | NDJSON dışa aktarma, kiracı izi    | 389.5, 391    | int `platform-audit`; admin `audit/AuditPage` (liste, doğrula, dışa aktar); kiracı izi çalışma alanı Denetim sekmesinde | ✅    |
+| 07       | Dashboard, sağlık, bileşenler      | 389.8         | int `platform-dashboard`; admin `dashboard/DashboardPage`                                                               | ✅    |
+| 08       | Çalışma alanı listesi/detayı       | 389.9         | int `platform-workspaces`; admin `workspaces/WorkspacesPage`                                                            | ✅    |
+| 09       | Çalışma alanı eylemleri, askı      | 389.2, 389.10 | int `platform-tenant-ripples`, `platform-workspace-actions`; admin `workspaces/WorkspaceActions`; e2e (askı)            | ✅    |
+| 10       | Kimlikten çalışma alanı araması    | 389.9         | int `platform-workspaces`                                                                                               | ✅    |
+| 11       | Hesaplar                           | 389.11        | int `platform-accounts`; admin `accounts/AccountsPage`                                                                  | ✅    |
+| 12       | Faturalama, kredi, elle abonelik   | 389.12        | int `platform-billing-usage`; admin `billing/BillingPage`, `usage/UsagePage`                                            | ✅    |
+| 13       | AI kota override'ı                 | 389.12        | int `platform-billing-usage`                                                                                            | ✅    |
+| 14       | Ödeme operasyonu                   | 389.18        | int `platform-payment-ops`; admin `billing/PaymentOps`; e2e                                                             | ✅    |
+| 15       | Ayarlar, duyuru, bakım             | 389.13        | int `platform-settings`; birim `public-settings`, `plugins/maintenance-gate`; admin `settings/SettingsPage`             | ✅    |
+| 16       | Effective-config                   | 389.13        | int `platform-settings`; admin `settings/SettingsPage`                                                                  | ✅    |
+| 17       | AI ayarları, yazma-yalnız anahtar  | 389.17        | int `platform-ai-settings`; birim `services/ai/ai-settings`; admin `settings/AiSettingsSection`; e2e                    | ✅    |
+| 18       | Hot-swap registry                  | 389.17        | int `platform-ai-settings` (5 sn testi); birim `services/ai/provider/llm-registry`                                      | ✅    |
+| 19       | Kayıt doğrulama, test, yeniden göm | 389.17        | int `platform-ai-settings`                                                                                              | ✅    |
+| 20       | Operasyon                          | 389.14        | int `platform-operations`; admin `operations/OperationsPage`; e2e                                                       | ✅    |
+| 21       | Impersonation                      | 389.2, 389.15 | int `platform-impersonation`; admin `support/Impersonation`; e2e                                                        | ✅    |
+| 22       | Güvenlik, blocklist                | 389.16        | int `platform-security`; admin `security/SecurityPage`; e2e                                                             | ✅    |
+| 23       | AI katalogları, AI sekmesi         | 389.19        | int `platform-ai-catalogs`; admin `ai/AiPage`                                                                           | ✅    |
+| 24       | Operatör uyarıları                 | 389.20        | int `platform-alerts`; birim `services/platform/alerts`; admin `admins/AlertPrefsSection`                               | ✅    |
 
 NFR kanıtı: S1 izolasyon — int `platform-rls`, `platform-server` ("the tenant API serves nothing of the
 platform"), `platform-contract-parity`; denetim — `platform-audit`. Ortak taban: 389.1 (rol + tablolar,
@@ -269,10 +269,8 @@ platform"), `platform-contract-parity`; denetim — `platform-audit`. Ortak taba
 
 **Açık (yeni görev gerektirir; kapsam dışı bırakıldı):**
 
-- **Operatör dizini panelde yok** (FR-ADMIN-04): davet, rol, devre dışı, operatör 2FA sıfırlama ve oturum
-  iptali yalnız API'dedir (`/admins/*`); Yöneticiler sayfası yalnız uyarı tercihini gösterir.
-- **Denetim sayfası iskelet** (FR-ADMIN-06): zincir doğrulama ve dışa aktarma yalnız API'dedir.
-- **Kurtarma kodlarını yenileme ve oturum listesi** (`/auth/recovery/regenerate`, `/auth/sessions`) panelde yok.
+- _(Kapandı, tm 391)_ Operatör dizini (Yöneticiler), Denetim sayfası (liste, zincir doğrulama, imzalı dışa
+  aktarma) ve Hesabım menüsü (kurtarma kodlarını yenile, oturumlarım) panelde; panelde olmayan yüz kalmadı.
 - **NFR-ADMIN-B "geri yüklemede audit zinciri doğrulanır" testi yok:** `scripts/restore-drill.sh` platform
   tablolarına ve zincire bakmaz; elle doğrulama production-checklist §9 Back office ve runbook §13.2'dedir.
 - Kiracı paneli, reddedilen kripto talebinin gerekçesini (`closed_reason`) göstermiyor (389.18 notu).

@@ -7,9 +7,10 @@ panelin kurulu olmadığı ya da kilitlendiği durumlar için [Ek A](#ek-a--acil
 taşındı. Gereksinimler: `docs/platform-admin/requirements.md`; tasarım: `docs/platform-admin/design.md`;
 kararlar: [ADR-16](../adr/platform-admin-panel.md).
 
-**Panelde olmayan üç yüz var; hepsi API'dir** (§0.4): operatör dizini (davet, rol, devre dışı, operatör
-2FA sıfırlama, operatör oturumu iptali), **Denetim** sayfası (menüde iskelet; zincir doğrulama ve dışa aktarma)
-ve kurtarma kodlarını yenileme. Bölümlerde "Panelde:" diye başlamayan her adım API ile yapılır.
+**Bu belgedeki her iş panelden yapılır** (tm 391'den beri): operatör dizini (Yöneticiler: davet, rol, devre
+dışı/etkin, operatör 2FA sıfırlama, operatör oturumu iptali), **Denetim** sayfası (liste, zincir doğrulama,
+imzalı dışa aktarma) ve üst şeritteki **Hesabım** menüsü (kurtarma kodlarını yenile, oturumlarım). API yolu
+(§0.4) otomasyon ve panelin açılamadığı durumlar içindir.
 
 ## 0. Ortak kurallar
 
@@ -43,7 +44,7 @@ dakika içinde** girilmiş bir kod ister (`recentTotp`); süre dolduysa 403 dön
 API'de `POST /auth/totp/reverify`. Oturum mutlak 8 saat, boşta 15 dakika. Giriş denemeleri IP başına 15
 dakikada 10 başarısızla kilitlenir (doğru parola dahil, pencere dolana dek).
 
-### 0.4 API ile çalışmak (panelde olmayan işler)
+### 0.4 API ile çalışmak (otomasyon ve panelin kapalı olduğu durumlar)
 
 ```sh
 BASE=https://admin.example.com/platform/v1
@@ -98,13 +99,16 @@ docker compose -f docker-compose.pilot.yml --profile platform exec platform-api 
 
 ## 2. Operatör daveti ve operatör yönetimi — FR-ADMIN-04
 
-- **Nerede:** yalnız API (`/admins/*`; Yöneticiler sayfasında henüz operatör dizini yoktur).
+- **Panelde:** Yöneticiler → **Operatörler** tablosu (e-posta, rol, durum, authenticator, açık oturum, son
+  görülme) ve **Bekleyen davetler**; her operatör satırının **İşlemler** menüsü rolün izin verdiğini ve satırın
+  durumunun uygun bulduğunu sunar (devre dışı operatörde yalnız Rolü değiştir / Etkinleştir). Her işlem gerekçe
+  sorar; "TOTP gerekli" olanlar taze kod alanını baştan açar. Operatör **silinemez** — menüde silme yoktur.
 - **Rol:** liste S/D/R; davet, rol, devre dışı/etkin, 2FA sıfırlama, oturum iptali yalnız **S**.
 - **TOTP:** davet, rol, devre dışı/etkin ve 2FA sıfırlama için **gerekli** (§0.3); oturum iptali için değil.
 - **Audit:** `admin.invited`, `admin.invite_revoked`, `admin.invite_accepted`, `admin.role_changed`,
   `admin.disabled`, `admin.enabled`, `admin.two_factor_reset`, `admin.sessions_revoked`.
 
-| İş                       | İstek (`$BASE`, `Authorization: Bearer $TOKEN`, hepsi `reason` ile)                             |
+| İş (panelde aynı ad)     | API karşılığı (`$BASE`, `Authorization: Bearer $TOKEN`, hepsi `reason` ile)                     |
 | ------------------------ | ----------------------------------------------------------------------------------------------- |
 | Operatör listesi         | `GET /admins` · `GET /admins/{adminId}` · bekleyen davetler `/admins/invites`                   |
 | Davet                    | `POST /admins/invites` `{email, role}` — e-postayla gider, **72 saat** geçerli, tek kullanımlık |
@@ -113,9 +117,15 @@ docker compose -f docker-compose.pilot.yml --profile platform exec platform-api 
 | Devre dışı / etkinleştir | `POST /admins/{adminId}/disable` · `…/enable`                                                   |
 | Oturumları iptal et      | `POST /admins/{adminId}/revoke-sessions`                                                        |
 
+**Davet adımları (panel):** **Operatör davet et** → e-posta + rol → gerekçe + taze kod → **Daveti gönder**.
+E-posta gitmezse panel kabul bağlantısını **yalnız o an** gösterir; kopyalayıp başka kanaldan iletin (bağlantı
+kimlik bilgisidir). Bekleyen davet **Geri çek** ile iptal edilir (kod gerekmez).
+**Doğrulayıcıyı sıfırla** menü öğesi, "kimliğini başka bir kanaldan doğruladım" kutusu işaretlenmeden
+onaylanamaz (§3.4).
 Davetli e-postadaki bağlantıdan parola belirler (`/invite`) ve ilk girişte authenticator kaydeder.
 Devre dışı bırakılan operatör **silinmez** (audit atfı bozulmasın); oturumları biter. **Son aktif `superadmin`
-devre dışı bırakılamaz ya da rolü düşürülemez** (409 `platform_last_superadmin`; sayım kilit altındadır).
+devre dışı bırakılamaz ya da rolü düşürülemez** (409 `platform_last_superadmin`; panel "önce başka bir
+operatörü süper yönetici yapın" der; sayım kilit altındadır).
 **Geri alma:** devre dışı → `enable`; rol → yeniden `role`; davet → yeni davet.
 
 ## 3. Kayıp TOTP / kurtarma kodu — FR-ADMIN-01/04
@@ -124,14 +134,19 @@ Operatör authenticator'ını kaybetti.
 
 1. **Kurtarma kodu elinde:** giriş ekranındaki kurtarma kodu alanına girilir (API: `{"recovery_code":"…"}`);
    her kod tek kullanımlıktır, yanıt `recovery_codes_remaining` döner. Girişten sonra yeni sayfa üretin:
-   `POST $BASE/auth/recovery/regenerate` (taze kod gerekir; audit `admin.recovery_codes_regenerated`; yanıttaki
-   kodlar bir kez gösterilir) ve sakla. Kodlar azalınca beklemeyin.
-2. **Kurtarma kodu da yok, başka bir `superadmin` var:** o kişi `POST /admins/{adminId}/reset-two-factor`
-   çağırır (S, TOTP gerekli, gerekçe; audit `admin.two_factor_reset`). Sıfırlama authenticator'ı, kurtarma
+   panelde üst şeritte **Hesabım → Kurtarma kodlarını yenile** (taze kod ister; yeni liste bir kez gösterilir,
+   indirilebilir ve "Kodları kaydettim" işaretlenene dek panel açılmaz; eski kodlar çalışmaz). API karşılığı
+   `POST $BASE/auth/recovery/regenerate`; audit `admin.recovery_codes_regenerated`. Kodlar azalınca beklemeyin.
+2. **Kurtarma kodu da yok, başka bir `superadmin` var:** o kişi Yöneticiler → operatör satırı → **İşlemler → Doğrulayıcıyı sıfırla**
+   yapar (API: `POST /admins/{adminId}/reset-two-factor`; S, TOTP gerekli, gerekçe; audit `admin.two_factor_reset`). Sıfırlama authenticator'ı, kurtarma
    sayfasını ve operatörün tüm oturumlarını siler; sonraki giriş yalnız yeni authenticator kaydettirebilir.
 3. **Tek superadmin ve ikisi de yok:** API kendi 2FA'sını sıfırlatmaz; sunucu kabuğundan Ek A.2.
 4. **Kimlik doğrulaması şart:** sıfırlamayı isteyenin gerçekten o kişi olduğunu (görüntülü görüşme, bilinen
-   ikinci kanal) doğrulayın; gerekçeye yöntemi yazın.
+   ikinci kanal) doğrulayın; gerekçeye yöntemi yazın. Panel bu yüzden **"kimliğini doğruladım"** kutusu
+   işaretlenmeden **Doğrulayıcıyı sıfırla** düğmesini açmaz.
+5. **Açık oturumlarınızı görmek / kapatmak:** **Hesabım → Oturumlarım** (başlangıç, son kullanım, adres,
+   tarayıcı; geçerli oturum işaretli) ve **Diğer tüm oturumları kapat** (API: `GET/DELETE $BASE/auth/sessions`;
+   audit `admin.other_sessions_ended`). Cihaz kaybında önce bunu, sonra parolayı değiştirin.
 
 ## 4. Askıya alma — FR-ADMIN-09, FR-ADMIN-11
 
@@ -378,12 +393,16 @@ kaydet; kota → özel değeri kaldır (ya da bitiş günü); iptal → sürdür
 
 ### 13.2 Audit zincirini doğrulama ve dışa aktarma
 
-- **Nerede:** yalnız API (menüdeki Denetim iskelet). **Rol:** S/D/R okur; yazma yok.
-- **Doğrulama:** `POST $BASE/audit/verify` → `ok: true, findings: []` tek temiz yanıttır. Bulgu varsa incident'tir;
-  tabloyu "onarmaya" çalışmayın.
-- **Dışa aktarma:** `GET $BASE/audit/export?limit=5000` (NDJSON, imzalı); çevrimdışı kontrol
-  `pnpm --filter @siyahtus/api platform:audit-check --file … --signature …`.
-- **Bir alanın izi:** `GET $BASE/audit/workspaces/{licenseId}` — üyelerin gördüğüyle aynı, `platform.*` kayıtları dahil.
+- **Panelde:** Denetim. **Rol:** S/D/R okur; yazma yok. Sayfa: **Zincir** (doğrula + dışa aktar) ve
+  **Kayıtlar** (yeni → eski; operatör, eylem, çalışma alanı numarası ve UTC tarih aralığı süzgeçleri).
+- **Doğrulama:** **Zinciri doğrula** (API: `POST $BASE/audit/verify`). Temiz yanıt "zincir sağlam: N kayıt
+  denetlendi" der; bulgu varsa tür (`hash_mismatch`, `sequence_gap`, `start_mismatch`, `broken_link`,
+  `unchained_entry`, `head_mismatch`) ve konumla listelenir. Bulgu incident'tir; tabloyu "onarmaya" çalışmayın.
+- **Dışa aktarma:** **Baştan dışa aktar** bir imzalı NDJSON sayfasını indirir (API: `GET $BASE/audit/export?limit=5000`)
+  ve sayfanın imzasını (`X-Siyahtus-Signature`), konum aralığını, devam imlecini ve zincir denetimini gösterir;
+  sayfa sürüyorsa **Sonraki sayfayı dışa aktar** imleçten devam eder. Süzgeç dışa aktarmaya uygulanmaz.
+  Çevrimdışı kontrol `pnpm --filter @siyahtus/api platform:audit-check --file … --signature …`.
+- **Bir alanın izi:** Çalışma alanları → alan → **Denetim** sekmesi (API: `GET $BASE/audit/workspaces/{licenseId}`) — üyelerin gördüğüyle aynı, `platform.*` kayıtları dahil.
 - Ayrıntı, bulgu türleri ve anahtar yönetimi: **[`platform-audit.md`](platform-audit.md)**; bulgu çıkarsa
   [`tenant-isolation-suspicion.md`](tenant-isolation-suspicion.md) "Platform rolü ve impersonation izleri".
 - **Sıklık:** haftalık doğrulama + her şüpheli olayda; aylık dışa aktarmayı hesap dışı bir yere kopyalayın.

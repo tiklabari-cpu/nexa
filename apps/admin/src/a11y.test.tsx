@@ -32,6 +32,7 @@ async function violations(container: HTMLElement): Promise<string[]> {
 // The page address from the menu table: a literal page path would read as an API call to the
 // endpoint-ui audit.
 const ADMINS_PATH = NAV_ITEMS.find((item) => item.id === 'admins')!.path;
+const AUDIT_PATH = NAV_ITEMS.find((item) => item.id === 'audit')!.path;
 
 async function signInAs(user: ReturnType<typeof userEvent.setup>): Promise<void> {
   await user.type(await screen.findByLabelText('Email'), 'ops@example.com');
@@ -137,13 +138,13 @@ describe.each(['en', 'tr'] as const)('axe, %s', (locale) => {
     await screen.findByRole('link', { name: 'Lead Person' });
     expect(await violations(container)).toEqual([]);
 
-    // A page still waiting for its task: Audit (Billing and Usage arrived with tm 389.12).
+    // The audit trail (tm 391): the last menu entry to get its page.
     await user.click(
       within(screen.getAllByRole('navigation')[0]!).getByRole('link', {
         name: locale === 'tr' ? 'Denetim' : 'Audit',
       }),
     );
-    await screen.findByText(locale === 'tr' ? 'Burada henüz bir şey yok' : 'Nothing here yet');
+    await screen.findByRole('table', { name: locale === 'tr' ? 'Kayıtlar' : 'Entries' });
     expect(await violations(container)).toEqual([]);
   });
 
@@ -427,6 +428,89 @@ describe.each(['en', 'tr'] as const)('axe, %s', (locale) => {
     await screen.findByRole('form', {
       name: locale === 'tr' ? 'Uyarı e-postaları' : 'Alert e-mails',
     });
+    // The directory (tm 391): operators and invitations have landed.
+    const tr = locale === 'tr';
+    await screen.findByRole('table', { name: tr ? 'Operatörler' : 'Operators' });
+    await screen.findByRole('table', { name: tr ? 'Bekleyen davetler' : 'Pending invitations' });
+    expect(await violations(document.body)).toEqual([]);
+
+    await user.click(
+      screen.getByRole('button', { name: tr ? 'Operatör davet et' : 'Invite an operator' }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByLabelText(tr ? 'E-posta adresi' : 'Email address');
+    expect(await violations(document.body)).toEqual([]);
+  });
+
+  it('finds nothing on the Audit page, a broken verification and an exported page (tm 391)', async () => {
+    const fake = installFakePlatform();
+    fake.adminsState.verification = 'broken';
+    setLocale(locale);
+    const user = userEvent.setup();
+    renderApp(AUDIT_PATH);
+    const tr = locale === 'tr';
+    if (tr) {
+      await user.type(await screen.findByLabelText('E-posta'), 'ops@example.com');
+      await user.type(screen.getByLabelText('Parola'), 'correct horse battery staple');
+      await user.click(screen.getByRole('button', { name: 'Devam' }));
+      await user.type(await screen.findByLabelText('Doğrulayıcı kodu'), '123456');
+      await user.click(screen.getByRole('button', { name: 'Doğrula' }));
+    } else {
+      await signInAs(user);
+      await user.type(await screen.findByLabelText('Authenticator code'), '123456');
+      await user.click(screen.getByRole('button', { name: 'Verify' }));
+    }
+    await screen.findByRole('heading', { name: tr ? 'Denetim' : 'Audit', level: 1 });
+    await screen.findByRole('table', { name: tr ? 'Kayıtlar' : 'Entries' });
+    expect(await violations(document.body)).toEqual([]);
+
+    await user.click(
+      screen.getByRole('button', { name: tr ? 'Zinciri doğrula' : 'Verify the chain' }),
+    );
+    await screen.findByRole('table', { name: tr ? 'Bulgular' : 'Findings' });
+    await user.click(
+      screen.getByRole('button', { name: tr ? 'Baştan dışa aktar' : 'Export from the start' }),
+    );
+    await screen.findByLabelText(tr ? 'Dışa aktarılan sayfa' : 'The exported page');
+    expect(await violations(document.body)).toEqual([]);
+  });
+
+  it('finds nothing in the account menu and the dialogs it opens (tm 391)', async () => {
+    installFakePlatform();
+    setLocale(locale);
+    const user = userEvent.setup();
+    renderApp();
+    const tr = locale === 'tr';
+    if (tr) {
+      await user.type(await screen.findByLabelText('E-posta'), 'ops@example.com');
+      await user.type(screen.getByLabelText('Parola'), 'correct horse battery staple');
+      await user.click(screen.getByRole('button', { name: 'Devam' }));
+      await user.type(await screen.findByLabelText('Doğrulayıcı kodu'), '123456');
+      await user.click(screen.getByRole('button', { name: 'Doğrula' }));
+    } else {
+      await signInAs(user);
+      await user.type(await screen.findByLabelText('Authenticator code'), '123456');
+      await user.click(screen.getByRole('button', { name: 'Verify' }));
+    }
+    await screen.findByRole('navigation');
+    const menu = screen.getByRole('button', { name: tr ? 'Hesabım' : 'My account' });
+    await user.click(menu);
+    expect(await violations(document.body)).toEqual([]);
+
+    await user.click(screen.getByRole('button', { name: tr ? 'Oturumlarım' : 'My sessions' }));
+    let dialog = await screen.findByRole('dialog');
+    await within(dialog).findByRole('table', { name: tr ? 'Oturumlarım' : 'My sessions' });
+    expect(await violations(document.body)).toEqual([]);
+    await user.click(within(dialog).getByRole('button', { name: tr ? 'Kapat' : 'Close' }));
+
+    await user.click(menu);
+    await user.click(
+      screen.getByRole('button', {
+        name: tr ? 'Kurtarma kodlarını yenile' : 'Renew recovery codes',
+      }),
+    );
+    dialog = await screen.findByRole('dialog');
+    await within(dialog).findByLabelText(tr ? 'Doğrulayıcı kodu' : 'Authenticator code');
     expect(await violations(document.body)).toEqual([]);
   });
 

@@ -1,0 +1,71 @@
+import type { Messages } from '../merge.js';
+
+/** Denetim: platform kaydı, doğrulaması ve imzalı dışa aktarımı (tm 391 · FR-ADMIN-05/06). */
+export const audit: Messages = {
+  'audit.chain.heading': 'Zincir',
+
+  'audit.verify.intro':
+    'İlk kayıttan başlayarak her kaydı gezer, her özeti ve bağlantıyı yeniden hesaplar. Kopukluk, bir kaydın yazıldıktan sonra değiştirildiği, silindiği ya da araya eklendiği anlamına gelir.',
+  'audit.verify.run': 'Zinciri doğrula',
+  'audit.verify.running': 'Doğrulanıyor…',
+  'audit.verify.ok': 'Zincir sağlam: {checked} kayıt denetlendi, konumlar {first} – {last}.',
+  'audit.verify.broken': 'Zincir doğrulanamıyor: {total} bulgu.',
+  'audit.verify.findings': 'Bulgular',
+  'audit.verify.truncated':
+    'İlk {shown} bulgu gösteriliyor; kalanı için düzeltmeden sonra denetimi yeniden çalıştırın.',
+  'audit.verify.col.kind': 'Bulgu',
+  'audit.verify.col.position': 'Konum',
+  'audit.verify.col.detail': 'Ayrıntı',
+  'audit.verify.kind.sequence_gap': 'Sırada boşluk',
+  'audit.verify.kind.start_mismatch': 'Başlangıç uyuşmuyor',
+  'audit.verify.kind.broken_link': 'Kopuk bağlantı',
+  'audit.verify.kind.hash_mismatch': 'Özet uyuşmuyor',
+  'audit.verify.kind.unchained_entry': 'Zincir dışında kayıt',
+  'audit.verify.kind.head_mismatch': 'Zincir başı uyuşmuyor',
+
+  'audit.export.intro':
+    'Tüm kaydın imzalı bir sayfasını, en eskiden başlayarak NDJSON olarak indirir. Sayfa asla süzülmez: seçilmiş bir kopya kaydın kanıtı değildir.',
+  'audit.export.first': 'Baştan dışa aktar',
+  'audit.export.next': 'Sonraki sayfayı dışa aktar',
+  'audit.export.running': 'Dışa aktarılıyor…',
+  'audit.export.result': 'Dışa aktarılan sayfa',
+  'audit.export.count': 'Bu sayfadaki kayıt',
+  'audit.export.range': 'Konumlar',
+  'audit.export.more': 'Başka sayfa',
+  'audit.export.more.yes': 'Var — devam etmek için sonraki sayfayı dışa aktarın',
+  'audit.export.more.no': 'Yok — bu son sayfaydı',
+  'audit.export.cursor': 'Devam imleci',
+  'audit.export.signature': 'İmza (X-Siyahtus-Signature)',
+  'audit.export.chain': 'Bu sayfanın zincir denetimi',
+  'audit.export.chain.ok': 'Sağlam',
+  'audit.export.chain.broken': 'Kopuk — zinciri doğrulayın',
+
+  'audit.entries.heading': 'Kayıtlar',
+  'audit.entries.loading': 'Yükleniyor…',
+  'audit.entries.loadError': 'Denetim kayıtları yüklenemedi',
+  'audit.entries.empty': 'Henüz hiçbir şey kaydedilmedi.',
+  'audit.entries.noMatch': 'Bu süzgeçlere uyan kayıt yok.',
+  'audit.entries.more': 'Daha fazla yükle',
+  'audit.entries.nobody': 'Eşleşen kimse yok',
+
+  'audit.filter.label': 'Kayıtları süz',
+  'audit.filter.admin': 'Operatör',
+  'audit.filter.anyAdmin': 'Tüm operatörler',
+  'audit.filter.action': 'Eylem',
+  'audit.filter.anyAction': 'Tüm eylemler',
+  'audit.filter.workspace': 'Çalışma alanı numarası',
+  'audit.filter.from': 'Başlangıç',
+  'audit.filter.to': 'Bitiş',
+  'audit.filter.clear': 'Süzgeçleri temizle',
+  'audit.filter.workspaceInvalid': 'Çalışma alanı numarası yalnız rakamlardan oluşur.',
+  'audit.filter.rangeInvalid': 'Başlangıç tarihi bitiş tarihinden sonra.',
+  'audit.filter.utc': 'Tarihler UTC’dir, iki uç da dahildir.',
+
+  'audit.col.seq': 'Konum',
+  'audit.col.at': 'Zaman',
+  'audit.col.admin': 'Operatör',
+  'audit.col.action': 'Eylem',
+  'audit.col.target': 'Hedef',
+  'audit.col.workspace': 'Çalışma alanı',
+  'audit.col.reason': 'Gerekçe',
+};

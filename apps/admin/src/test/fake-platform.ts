@@ -24,6 +24,7 @@ import {
   initialImpersonationState,
   type FakeImpersonationState,
 } from './fake-impersonations.js';
+import { handleAdmins, initialAdminsState, type FakeAdminsState } from './fake-admins.js';
 import { handleBilling, initialBillingState } from './fake-billing.js';
 import { handlePayments, initialPaymentsState, type FakePaymentsState } from './fake-payments.js';
 
@@ -540,6 +541,8 @@ export interface FakePlatform {
   /** The operator's alert preferences (tm 389.20). */
   alertPrefsState: FakeAlertPrefsState;
   paymentsState: FakePaymentsState;
+  /** The operator directory, the audit trail and the operator's own sessions (tm 391). */
+  adminsState: FakeAdminsState;
 }
 
 export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatform {
@@ -569,6 +572,7 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
   const aiState = initialAiState();
   const paymentsState = initialPaymentsState();
   const alertPrefsState = initialAlertPrefsState();
+  const adminsState = initialAdminsState(email, role);
   const impersonationState = initialImpersonationState({
     id: WORKSPACE_ID,
     members: WORKSPACE_MEMBERS.data,
@@ -729,6 +733,18 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     );
     if (accountResponse) return accountResponse;
 
+    const adminsResponse = handleAdmins(
+      method,
+      path,
+      body,
+      search,
+      role,
+      adminsState,
+      json,
+      problem,
+    );
+    if (adminsResponse) return adminsResponse;
+
     const alertPrefsResponse = handleAlertPrefs(
       method,
       path,
@@ -824,5 +840,6 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     aiState,
     alertPrefsState,
     paymentsState,
+    adminsState,
   };
 }

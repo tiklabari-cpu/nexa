@@ -11,6 +11,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../lib/auth-store.js';
 import { useTranslate } from '../lib/i18n.js';
 import { visibleNavItems } from '../lib/navigation.js';
+import { AccountMenu } from '../features/myaccount/AccountMenu.js';
 import { PlatformStrip } from './PlatformStrip.js';
 import { PreferenceControls } from './PreferenceControls.js';
 
@@ -37,6 +38,7 @@ export function AppShell(): ReactElement {
                 {t(`shell.role.${me.admin.role}`)}
               </span>
             </p>
+            <AccountMenu />
             <PreferenceControls />
             <button
               type="button"

@@ -4,7 +4,7 @@
  */
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebsiteWidgets } from './WebsiteWidgets.js';
@@ -211,5 +211,34 @@ describe('WebsiteWidgets localisation (NFR-I18N2)', () => {
       await screen.findByRole('heading', { name: "Web sitesi widget'ları" }),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Web sitesi ekle' })).toBeInTheDocument();
+  });
+});
+
+/** The "Installation guide" link (WG-15) is on the screen whether or not a site exists yet. */
+describe('WebsiteWidgets installation guide link (FR-MOD-08.5.2)', () => {
+  it('points at the guide the panel ships when the deployment names none', async () => {
+    renderWidgets(); // empty list
+    const link = await screen.findByRole('link', { name: 'Installation guide' });
+    expect(link).toHaveAttribute('href', '/help/install-guide.html');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
+  });
+
+  it('points at the deployment own guide when it names one', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        String(url).includes('/deployment')
+          ? okJson({ install_guide_url: 'https://help.example.com/install' })
+          : okJson({ items: [] }),
+      ),
+    );
+    renderWidgets();
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: 'Installation guide' })).toHaveAttribute(
+        'href',
+        'https://help.example.com/install',
+      ),
+    );
   });
 });

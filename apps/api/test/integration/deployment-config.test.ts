@@ -57,6 +57,8 @@ describe('GET /deployment', () => {
           privacy_policy_url: null,
           terms_url: null,
           terms_version: null,
+          // The installation guide (WG-15), unset unless the deployment names one.
+          install_guide_url: null,
           // No Apps card is live unless APPS_LIVE_PROVIDERS names one (tm 263).
           live_apps: [],
         });
@@ -81,6 +83,8 @@ describe('GET /deployment', () => {
           privacy_policy_url: null,
           terms_url: null,
           terms_version: null,
+          // The installation guide (WG-15), unset unless the deployment names one.
+          install_guide_url: null,
           // No Apps card is live unless APPS_LIVE_PROVIDERS names one (tm 263).
           live_apps: [],
         });
@@ -100,6 +104,16 @@ describe('GET /deployment', () => {
         expect(body.privacy_policy_url).toBe('https://siyahtus.test/privacy');
         expect(body.terms_url).toBe('https://siyahtus.test/terms');
         expect(body.terms_version).toBe('2026-10-01');
+      },
+    );
+  });
+
+  it('reports the installation guide when the deployment names one', async () => {
+    await withServer(
+      { INSTALL_GUIDE_URL: 'https://help.siyahtus.test/install' },
+      async (server) => {
+        const body = (await server.get('/deployment')).json();
+        expect(body.install_guide_url).toBe('https://help.siyahtus.test/install');
       },
     );
   });

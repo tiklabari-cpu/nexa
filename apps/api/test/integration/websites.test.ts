@@ -198,6 +198,44 @@ describe('websites', () => {
     expect(created.snippet).not.toContain('theme:');
   });
 
+  it('ends the snippet with a <noscript> link to the hosted Chat page of this tenant (FR-MOD-08.5.2)', async () => {
+    const created = (
+      await server.post('/websites', { domain: 'noscript.example' }, auth(adminToken))
+    ).json() as Website;
+    // A workspace that never saved the widget settings reads the application
+    // default language (tr); the link points at the tenant's own Chat page.
+    expect(created.snippet).toMatch(
+      new RegExp(
+        `<noscript><a href="http[^"]+/chat\\.html\\?organization_id=${fx.a.organizationId}" lang="tr">Bizimle sohbet edin</a></noscript>$`,
+      ),
+    );
+    // The scripts the snippet always had come first, in order.
+    expect(created.snippet.indexOf('/loader.js')).toBeLessThan(
+      created.snippet.indexOf('<noscript>'),
+    );
+  });
+
+  it('writes the <noscript> text in the widget language: pinned, else the auto fallback (FR-MOD-08.5.2)', async () => {
+    await server.put('/settings/widget', { language: 'de' }, auth(adminToken));
+    const pinned = (
+      await server.post('/websites', { domain: 'de.example' }, auth(adminToken))
+    ).json() as Website;
+    expect(pinned.snippet).toContain('lang="de">Chatten Sie mit uns</a></noscript>');
+
+    // `auto` cannot know the visitor's language when the code is pasted, so the
+    // line uses the language `auto` falls back to.
+    await server.put(
+      '/settings/widget',
+      { language: 'auto', fallback_language: 'ar' },
+      auth(adminToken),
+    );
+    const auto = (await server.get('/websites', auth(adminToken))).json() as { items: Website[] };
+    const row = auto.items.find((site) => site.domain === 'de.example');
+    expect(row?.snippet).toContain('lang="ar" dir="rtl">');
+    // The language never reaches the live widget through the snippet.
+    expect(row?.snippet).not.toContain('language:');
+  });
+
   // --- Duplicate is a conflict, not a 500 ------------------------------------
 
   it('rejects a duplicate domain with a website_exists envelope, not a raw 500', async () => {

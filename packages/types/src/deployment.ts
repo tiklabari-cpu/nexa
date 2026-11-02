@@ -29,6 +29,13 @@ export interface DeploymentConfig {
   /** `TERMS_VERSION`: what a sign-up sends back once the terms are accepted. */
   terms_version: string | null;
   /**
+   * `INSTALL_GUIDE_URL` (WG-15 · tm 349), an `https` address, or `null` when the
+   * deployment names none — the panel then links to the guide it ships
+   * (`/help/install-guide.html`). Optional for older servers: absent reads as
+   * `null`.
+   */
+  install_guide_url?: string | null;
+  /**
    * The Apps cards and channels this deployment connects to their real
    * provider (tm 263, `APPS_LIVE_PROVIDERS`): `brevo`, `freshdesk`, `telegram`.
    * Under `pilot_mode` these are the only ones the panel shows — the API opens

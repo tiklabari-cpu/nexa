@@ -51,6 +51,9 @@ export default async function deploymentRoutes(
         privacy_policy_url: env.PRIVACY_POLICY_URL ?? null,
         terms_url: env.TERMS_URL ?? null,
         terms_version: env.TERMS_VERSION ?? null,
+        // The installation guide (WG-15 · tm 349): the panel links to it from the
+        // setup wizard and the website widgets screen. `null` = the panel's own.
+        install_guide_url: env.INSTALL_GUIDE_URL ?? null,
         // Which cards are live (tm 263) — names only, never a key.
         live_apps: liveAppIds(env.APPS_LIVE_PROVIDERS),
       };

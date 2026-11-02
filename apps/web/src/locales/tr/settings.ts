@@ -640,6 +640,7 @@ export const settings: Messages = {
   'settings.websiteWidgets.footerHintPrefix': 'Kod parçasını her sayfada kapanış',
   'settings.websiteWidgets.footerHintSuffix': 'etiketinden hemen önce yapıştırın.',
   'settings.websiteWidgets.customizeWidget': "Widget'ı özelleştir",
+  'settings.websiteWidgets.installGuide': 'Kurulum rehberi',
   'settings.websiteWidgets.snippet.reportSale':
     'Ödeme tamamlandığında bir satışı bildirmek için kendi betiğinizden izleme kodunu çağırın:',
   'settings.websiteWidgets.snippet.signOut':

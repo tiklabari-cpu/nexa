@@ -275,6 +275,12 @@ export const auth: Messages = {
   'auth.onboarding.website.submit': 'Add website',
   'auth.onboarding.website.submitting': 'Adding…',
   'auth.onboarding.website.added': 'Added {domain}. You can add more sites later in Settings.',
+  'auth.onboarding.website.codeHeading': 'Paste this code on your site',
+  'auth.onboarding.website.codeHint':
+    'Paste it on every page of {domain}, immediately before the closing </body> tag. Not the one adding it? Use “Invite developer” to send it to them.',
+  'auth.onboarding.website.statusPending':
+    'Waiting for the widget to load on {domain}. This turns to “Connected” by itself once it does — you can carry on meanwhile.',
+  'auth.onboarding.website.statusConnected': 'Connected — the widget is live on {domain}.',
   'auth.onboarding.channels.heading': 'Reach customers everywhere',
   'auth.onboarding.channels.body':
     'The website widget is only one way in. Connect these anytime from Settings → Channels — nothing to do here now.',

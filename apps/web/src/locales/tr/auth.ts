@@ -269,6 +269,12 @@ export const auth: Messages = {
   'auth.onboarding.website.submitting': 'Ekleniyor…',
   'auth.onboarding.website.added':
     '{domain} eklendi. Daha fazla siteyi Ayarlar’dan ekleyebilirsiniz.',
+  'auth.onboarding.website.codeHeading': 'Bu kodu sitenize yapıştırın',
+  'auth.onboarding.website.codeHint':
+    '{domain} sitesinin her sayfasında, kapanış </body> etiketinden hemen önce yapıştırın. Bunu siz eklemeyecekseniz “Geliştiriciyi davet et” ile kodu ona gönderin.',
+  'auth.onboarding.website.statusPending':
+    'Widget’ın {domain} sitesinde yüklenmesi bekleniyor. Yüklenince bu satır kendiliğinden “Bağlandı” olur — bu arada devam edebilirsiniz.',
+  'auth.onboarding.website.statusConnected': 'Bağlandı — widget {domain} sitesinde çalışıyor.',
   'auth.onboarding.channels.heading': 'Müşterilere her yerden ulaşın',
   'auth.onboarding.channels.body':
     'Website widget’ı yalnızca tek bir yol. Bunları istediğiniz zaman Ayarlar → Kanallar bölümünden bağlayabilirsiniz — şimdi yapacak bir şey yok.',

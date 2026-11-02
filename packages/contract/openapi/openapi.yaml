@@ -1275,6 +1275,15 @@ components:
             The version of the terms at `terms_url` (`TERMS_VERSION`), the value
             a sign-up form sends back as `terms_version`. Never `null` while
             `terms_url` is set.
+        install_guide_url:
+          type: string
+          nullable: true
+          format: uri
+          description: |
+            The installation guide the panel links to from the setup wizard and
+            the website widgets screen (`INSTALL_GUIDE_URL`, WG-15), an
+            `https` address; `null` when the deployment names none, in which
+            case the panel links to the guide it ships.
         live_apps:
           type: array
           items: { type: string, enum: [brevo, freshdesk, telegram] }
@@ -8387,7 +8396,10 @@ components:
             The code to paste before `</body>`. Sets `window.__siyahtus` and loads
             the async widget loader. Identical across a workspace's sites — the
             embedding origin is resolved at runtime — so "get code" per row shows
-            this same value.
+            this same value. It ends with a `<noscript>` link to the hosted Chat
+            page (`/chat.html?organization_id=…`, WG-15) whose text follows the
+            workspace's widget language from a fixed list; a snippet pasted
+            before that line existed is not changed.
 
     ChannelType:
       type: string

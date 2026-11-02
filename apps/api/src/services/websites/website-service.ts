@@ -14,8 +14,10 @@
  */
 import {
   DEFAULT_WIDGET_APPEARANCE,
+  isWidgetUiLocale,
   normalizeWidgetAppearance,
   type WidgetAppearance,
+  type WidgetUiLocale,
 } from '@siyahtus/types';
 import { resolveBrandId } from '../../lib/brand.js';
 import { poweredByFor } from '../../lib/entitlements.js';
@@ -141,6 +143,10 @@ export class WebsiteService {
       theme: row.theme as WidgetAppearance['theme'],
       mobile_fullscreen: row.mobileFullscreen,
       powered_by: await poweredByFor(tx, tenant, row.poweredBy),
+      // Only the `<noscript>` line reads these (WG-15): the live widget gets its
+      // language from the mint, never from the snippet.
+      language: row.language as WidgetAppearance['language'],
+      fallback_language: row.fallbackLanguage as WidgetAppearance['fallback_language'],
     });
   }
 
@@ -177,9 +183,18 @@ export class WebsiteService {
    * workspace that has never customised the widget still gets the minimal
    * snippet, and a customised one carries just its overrides (FR-MOD-11.7).
    *
+   * It ends with a `<noscript>` link to the hosted Chat page (WG-15), so a visitor
+   * whose browser blocks scripts still reaches the team. The link text is one
+   * line from a fixed per-language list (`NOSCRIPT_CHAT_LINK`), picked by the
+   * workspace's widget language — a pinned language, otherwise the language
+   * `auto` falls back to, since a pasted snippet cannot know the visitor's. It
+   * is baked in at copy time (an installed snippet never changes); the live
+   * widget's language still comes from the mint.
+   *
    * `organizationId` is a validated UUID, `widgetBaseUrl` a validated URL and
    * the appearance is normalised — a colour is only ever `#rrggbb`, position and
-   * theme only their enums — so nothing here can carry markup into the template.
+   * theme only their enums, the language one of eight codes — so nothing here can
+   * carry markup into the template.
    */
   snippet(
     organizationId: string,
@@ -197,8 +212,47 @@ export class WebsiteService {
       `  window.__siyahtus = { ${fields.join(', ')} };`,
       '</script>',
       `<script async src="${origin}/loader.js"></script>`,
+      noscriptLink(origin, organizationId, appearance),
     ].join('\n');
   }
+}
+
+/**
+ * The anchor text of the `<noscript>` fallback, per widget language (WG-15). A
+ * fixed list — the only text the snippet carries that is not code — so there is
+ * no user input to escape. `Record` over the locale union: a ninth widget
+ * language is a compile error here until it has a line.
+ */
+const NOSCRIPT_CHAT_LINK: Record<WidgetUiLocale, string> = {
+  en: 'Chat with us',
+  tr: 'Bizimle sohbet edin',
+  de: 'Chatten Sie mit uns',
+  fr: 'Discutez avec nous',
+  es: 'Chatea con nosotros',
+  it: 'Chatta con noi',
+  pt: 'Converse conosco',
+  ar: 'تحدث معنا',
+};
+
+/**
+ * What a JavaScript-free page shows in place of the launcher: a link to the
+ * hosted Chat page (`apps/widget/chat.html`, FR-MOD-08.5.9) scoped to the
+ * workspace. That page is on our own origin, which is why it needs no trusted
+ * domain; the link carries only the organization id, nothing about the visitor.
+ */
+function noscriptLink(
+  origin: string,
+  organizationId: string,
+  appearance: WidgetAppearance,
+): string {
+  // `auto` is not a locale, so it falls through to the fallback language; a value
+  // that is none of the eight (a row the normaliser never saw) to the default.
+  const locale =
+    [appearance.language, appearance.fallback_language].find(isWidgetUiLocale) ??
+    DEFAULT_WIDGET_APPEARANCE.fallback_language;
+  const href = `${origin}/chat.html?organization_id=${encodeURIComponent(organizationId)}`;
+  const dir = locale === 'ar' ? ' dir="rtl"' : '';
+  return `<noscript><a href="${href}" lang="${locale}"${dir}>${NOSCRIPT_CHAT_LINK[locale]}</a></noscript>`;
 }
 
 /**

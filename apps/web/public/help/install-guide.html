@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Kurulum rehberi · Installation guide — SiyahTuş</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        margin: 0 auto;
+        max-width: 46rem;
+        padding: 2rem 1.25rem 4rem;
+        font: 1rem/1.65 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      }
+      h1 {
+        line-height: 1.25;
+      }
+      h2 {
+        margin-top: 2.25rem;
+        line-height: 1.3;
+      }
+      h3 {
+        margin-top: 1.5rem;
+      }
+      pre,
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      pre {
+        overflow-x: auto;
+        padding: 0.75rem 1rem;
+        border: 1px solid rgba(127, 127, 127, 0.45);
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        line-height: 1.5;
+      }
+      a {
+        color: inherit;
+      }
+      nav ul {
+        padding-left: 1.25rem;
+      }
+      .note {
+        padding: 0.5rem 1rem;
+        border-left: 4px solid rgba(127, 127, 127, 0.7);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Kurulum rehberi</h1>
+      <p>
+        SiyahTuş sohbet widget’ını sitenize eklemek için tek bir kod parçası yeterlidir. Bu
+        sayfa kodun nereden alınacağını, nereye yapıştırılacağını ve çalıştığının nasıl
+        anlaşılacağını anlatır. <a href="#english">English version below.</a>
+      </p>
+
+      <nav aria-label="İçindekiler">
+        <ul>
+          <li><a href="#kod">Kodu alın ve yapıştırın</a></li>
+          <li><a href="#dogrula">Çalıştığını doğrulayın</a></li>
+          <li><a href="#gtm">Google Tag Manager ile</a></li>
+          <li><a href="#platform">iGaming platformunun içerik panelinde</a></li>
+          <li><a href="#noscript">JavaScript kapalı ziyaretçiler</a></li>
+          <li><a href="#sorun">Sorun giderme</a></li>
+        </ul>
+      </nav>
+
+      <h2 id="kod">1. Kodu alın ve yapıştırın</h2>
+      <ol>
+        <li>
+          Kurulum sihirbazında ya da <strong>Ayarlar → Kanallar → Web sitesi widget’ları</strong>
+          bölümünde sitenizin alan adını girip <strong>Web sitesi ekle</strong>’ye basın. Alan adı
+          aynı anda güvenilir alan adları listesine de eklenir.
+        </li>
+        <li>
+          Çıkan kod kutusundaki <strong>Kodu kopyala</strong> düğmesine basın. Kodu siz
+          yapıştırmayacaksanız <strong>Geliştiriciyi davet et</strong> ile e-posta
+          programınızda hazır bir ileti açın.
+        </li>
+        <li>
+          Kodu sitenizin <strong>her sayfasında</strong>, kapanış <code>&lt;/body&gt;</code>
+          etiketinden hemen önce yapıştırın. Kod şuna benzer:
+        </li>
+      </ol>
+      <pre>&lt;!-- SiyahTuş widget --&gt;
+&lt;script&gt;
+  window.__siyahtus = { organizationId: "…", widgetOrigin: "https://…" };
+&lt;/script&gt;
+&lt;script async src="https://…/loader.js"&gt;&lt;/script&gt;
+&lt;noscript&gt;&lt;a href="https://…/chat.html?organization_id=…"&gt;Bizimle sohbet edin&lt;/a&gt;&lt;/noscript&gt;</pre>
+      <p>
+        Kodu <strong>olduğu gibi</strong> yapıştırın; satırları değiştirmeyin. Görünümü
+        (renk, konum, dil) kodu değiştirmeden <strong>Ayarlar → Kanallar → Widget görünümü</strong>’nden
+        ayarlarsınız.
+      </p>
+
+      <h2 id="dogrula">2. Çalıştığını doğrulayın</h2>
+      <p>
+        Siteniz yayındayken herhangi bir sayfayı bir kez açın. Widget ilk kez yüklendiğinde
+        sitenin durumu <strong>“İlk mesaj bekleniyor”</strong>dan <strong>“Bağlı”</strong>’ya
+        döner; sihirbazda aynı satır kendiliğinden güncellenir, sayfayı yenilemeniz gerekmez.
+        Durumu istediğiniz zaman <strong>Ayarlar → Kanallar → Web sitesi widget’ları</strong>
+        bölümünden görürsünüz.
+      </p>
+
+      <h2 id="gtm">3. Google Tag Manager ile</h2>
+      <ol>
+        <li>Tag Manager’da <strong>Etiketler → Yeni</strong> deyin, tür olarak <strong>Özel HTML</strong> seçin.</li>
+        <li>
+          HTML alanına SiyahTuş kodunun <strong>tamamını</strong> yapıştırın
+          (<code>&lt;script&gt;</code> ve <code>&lt;noscript&gt;</code> satırları dahil).
+        </li>
+        <li>Tetikleyici olarak <strong>Tüm Sayfalar</strong>’ı seçin, etiketi adlandırıp kaydedin.</li>
+        <li>
+          <strong>Önizle</strong> ile sitenizde etiketin tetiklendiğini görün, sonra
+          <strong>Gönder</strong> ile yayımlayın.
+        </li>
+      </ol>
+      <p class="note">
+        Tag Manager, <code>&lt;noscript&gt;</code> satırını sayfaya her zaman koymayabilir. Bu
+        yedek bağlantı için zorunlu değildir; widget’ın kendisi <code>&lt;script&gt;</code>
+        satırlarıyla çalışır.
+      </p>
+
+      <h2 id="platform">4. iGaming platformunun içerik panelinde</h2>
+      <p>
+        BetConstruct, EveryMatrix gibi platformlar sitenin şablonuna kod eklemek için bir
+        “özel script”, “özel HTML” ya da “altbilgi kodu” alanı sunar. Menü adları platforma ve
+        sürüme göre değişir; adımlar aynıdır:
+      </p>
+      <ol>
+        <li>İçerik / site yönetim panelinde <strong>tüm sayfalarda</strong> gösterilen altbilgi (footer) ya da sayfa sonu kod alanını bulun.</li>
+        <li>SiyahTuş kodunun tamamını bu alana yapıştırıp kaydedin ve yayımlayın.</li>
+        <li>Önbellek ya da CDN kullanılıyorsa temizleyin, sonra sitenizi açıp <a href="#dogrula">doğrulayın</a>.</li>
+      </ol>
+      <p class="note">
+        Bazı platformlar özel script alanında <code>async</code> özniteliğini kaldırır ya da
+        <code>&lt;script&gt;</code> etiketlerini süzer. Widget yine de çalışır, yalnızca geç
+        yüklenebilir. Hiç yüklenmiyorsa platform desteğinden “üçüncü taraf script” izni
+        isteyin; siteyi bozmadan eklenebilen bir alan yoksa bir sonraki bölümdeki barındırılan
+        sohbet sayfası bağlantısını sitenize düğme olarak koyabilirsiniz.
+      </p>
+
+      <h2 id="noscript">5. JavaScript kapalı ziyaretçiler</h2>
+      <p>
+        Kodun sonundaki <code>&lt;noscript&gt;</code> satırı, tarayıcısında JavaScript kapalı
+        ya da bir reklam engelleyici yüzünden widget’ı göremeyen ziyaretçiye <strong>“Bizimle
+        sohbet edin”</strong> bağlantısı gösterir. Bağlantı, SiyahTuş’un barındırdığı tam sayfa
+        sohbet ekranını sizin çalışma alanınızla açar; bu sayfanın ayrıca bir güvenilir alan
+        adı tanımı gerektirmez. Bağlantı metni, kodu kopyaladığınız andaki widget dilinizle
+        yazılır. Daha önce yapıştırdığınız kodlar değişmez; yedek bağlantıyı istiyorsanız
+        güncel kodu yeniden kopyalayıp yapıştırın.
+      </p>
+
+      <h2 id="sorun">6. Sorun giderme</h2>
+      <ul>
+        <li>
+          <strong>Durum “İlk mesaj bekleniyor”da kalıyor.</strong> Kodun sayfada gerçekten
+          bulunduğunu tarayıcıda “sayfa kaynağını görüntüle” ile kontrol edin; sonra sitenin
+          alan adının Ayarlar’daki <strong>Güvenilir alan adları</strong> listesinde olduğundan
+          emin olun.
+        </li>
+        <li>
+          <strong>Widget görünmüyor.</strong> Sitenizin İçerik Güvenlik Politikası
+          (Content-Security-Policy) <code>script-src</code> ve <code>frame-src</code>
+          için kodun <code>widgetOrigin</code> adresine izin vermelidir.
+        </li>
+        <li>
+          <strong>Alan adı bir alt alan adı.</strong> <code>www.ornek.com</code> ile
+          <code>ornek.com</code> ayrı sayılır; sitenizin gerçekten açıldığı adı ekleyin.
+        </li>
+      </ul>
+
+      <hr />
+
+      <section id="english" lang="en">
+        <h1>Installation guide</h1>
+        <p>
+          One snippet puts the SiyahTuş chat widget on your site. This page covers where to get
+          it, where to paste it and how to tell it works.
+        </p>
+
+        <h2>1. Get the code and paste it</h2>
+        <ol>
+          <li>
+            In the setup wizard, or under <strong>Settings → Channels → Website widgets</strong>,
+            enter your site’s domain and press <strong>Add website</strong>. The domain is added
+            to your trusted domains at the same time.
+          </li>
+          <li>
+            Press <strong>Copy code</strong> in the code box. If someone else will paste it,
+            <strong>Invite developer</strong> opens a ready-made message in your mail program.
+          </li>
+          <li>
+            Paste it on <strong>every page</strong>, immediately before the closing
+            <code>&lt;/body&gt;</code> tag, exactly as copied. Look and feel (colour, position,
+            language) is set under <strong>Settings → Channels → Widget appearance</strong> without touching the code.
+          </li>
+        </ol>
+
+        <h2>2. Check that it works</h2>
+        <p>
+          Open any page of your live site once. The first time the widget loads, the site’s
+          status changes from <strong>“Waiting for first message”</strong> to
+          <strong>“Connected”</strong>; in the wizard the same line updates by itself.
+        </p>
+
+        <h2>3. With Google Tag Manager</h2>
+        <ol>
+          <li>Create a tag of type <strong>Custom HTML</strong>.</li>
+          <li>Paste the <strong>whole</strong> snippet, <code>&lt;script&gt;</code> and <code>&lt;noscript&gt;</code> lines included.</li>
+          <li>Trigger it on <strong>All Pages</strong>, save, check it fires in <strong>Preview</strong>, then <strong>Submit</strong>.</li>
+        </ol>
+        <p class="note">
+          Tag Manager may not place the <code>&lt;noscript&gt;</code> line on the page. That is
+          fine: the widget itself runs from the <code>&lt;script&gt;</code> lines.
+        </p>
+
+        <h2>4. In an iGaming platform’s content panel</h2>
+        <p>
+          Platforms such as BetConstruct or EveryMatrix offer a “custom script”, “custom HTML”
+          or “footer code” field. Names differ by platform and version; the steps do not: find
+          the footer field shown on <strong>all pages</strong>, paste the whole snippet, save and
+          publish, clear any cache or CDN, then <a href="#dogrula">check</a>.
+        </p>
+        <p class="note">
+          Some platforms strip <code>async</code> or filter <code>&lt;script&gt;</code> tags in
+          that field. The widget then loads later, or not at all — ask the platform to allow a
+          third-party script. If no safe field exists, put the hosted chat page link on your
+          site as a button instead.
+        </p>
+
+        <h2>5. Visitors with JavaScript off</h2>
+        <p>
+          The <code>&lt;noscript&gt;</code> line at the end of the snippet shows a “Chat with
+          us” link to visitors whose browser has JavaScript off, or whose ad blocker hides the
+          widget. It opens SiyahTuş’s hosted full-page chat for your workspace; that page needs
+          no trusted-domain entry. The link text follows the widget language at the moment you
+          copy the code. Snippets you pasted earlier do not change — copy and paste the current
+          one if you want the fallback link.
+        </p>
+
+        <h2>6. Troubleshooting</h2>
+        <ul>
+          <li>
+            <strong>Stuck on “Waiting for first message”.</strong> View the page source to
+            confirm the snippet is there, then make sure the site’s domain is in
+            <strong>Trusted domains</strong> in Settings.
+          </li>
+          <li>
+            <strong>Widget not visible.</strong> Your site’s Content-Security-Policy must allow
+            the snippet’s <code>widgetOrigin</code> in <code>script-src</code> and
+            <code>frame-src</code>.
+          </li>
+          <li>
+            <strong>Subdomains.</strong> <code>www.example.com</code> and
+            <code>example.com</code> are different names; add the one your site is served on.
+          </li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

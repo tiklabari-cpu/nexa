@@ -42,6 +42,7 @@ import {
   type OnboardingSeedResult,
   type OnboardingState,
 } from '@siyahtus/types';
+import { InstallGuideLink, SnippetPanel } from '../../components/InstallSnippet.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { emailList, FieldError, required, splitList, useForm } from '../../lib/form.js';
@@ -274,15 +275,34 @@ function WelcomeStep({
   );
 }
 
-/** Reuses the Website Widgets flow: adding a site also trusts its domain. */
+/** The slice of `Website` this step reads — `snippet` is the server's, never rebuilt here. */
+interface AddedWebsite {
+  id: string;
+  domain: string;
+  status: 'pending' | 'connected' | 'error';
+  snippet: string;
+}
+
+/** How often the step asks whether the widget has loaded on the new site. */
+const CONNECT_POLL_MS = 5_000;
+
+/**
+ * Reuses the Website Widgets flow: adding a site also trusts its domain, and
+ * the install code is shown straight away (WG-13) — the same panel Settings
+ * uses, fed by the same `snippet` the server built. Below it a live line
+ * reads "waiting" until the widget first loads on that domain, then
+ * "connected": the signal is `websites.status`, which the server writes on the
+ * widget's first handshake, polled until it flips. Leaving the step early is
+ * fine; the same status stays visible under Settings → Website widgets.
+ */
 function WebsiteStep(): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
-  const [added, setAdded] = useState<string | null>(null);
+  const [added, setAdded] = useState<AddedWebsite | null>(null);
 
   const add = useMutation({
     mutationFn: async (value: string) => {
-      const website = await api.post<{ domain: string }>('/websites', {
+      const website = await api.post<AddedWebsite>('/websites', {
         domain: value,
         setup: 'manual',
       });
@@ -290,9 +310,20 @@ function WebsiteStep(): ReactElement {
       return website;
     },
     onSuccess: (website) => {
-      setAdded(website.domain);
+      setAdded(website);
     },
   });
+
+  // The seed of the poll is the add response; the poll replaces it. Stops once
+  // the site is connected — nothing else changes after that.
+  const status = useQuery({
+    queryKey: ['onboarding', 'website', added?.id],
+    queryFn: () => api.get<AddedWebsite>(`/websites/${added?.id ?? ''}`),
+    enabled: Boolean(added?.id),
+    refetchInterval: (query) =>
+      query.state.data?.status === 'connected' ? false : CONNECT_POLL_MS,
+  });
+  const connected = (status.data?.status ?? added?.status) === 'connected';
 
   // Only "is this empty?" — `POST /websites` runs the pasted value through
   // `normaliseTrustedDomain`, which deliberately accepts a full URL and keeps
@@ -345,16 +376,35 @@ function WebsiteStep(): ReactElement {
             : t('auth.onboarding.website.submit')}
         </button>
       </form>
-      {added && (
-        <p role="status" className="text-2xs text-success">
-          {t('auth.onboarding.website.added', { domain: added })}
-        </p>
-      )}
       {form.submitError && (
         <p role="alert" className="text-2xs text-danger">
           {form.submitError}
         </p>
       )}
+      {added && (
+        <div className="flex flex-col gap-2">
+          <p className="text-2xs text-success">
+            {t('auth.onboarding.website.added', { domain: added.domain })}
+          </p>
+          <h3 className="text-sm font-semibold">{t('auth.onboarding.website.codeHeading')}</h3>
+          <p className="text-2xs text-content-secondary">
+            {t('auth.onboarding.website.codeHint', { domain: added.domain })}
+          </p>
+          <SnippetPanel snippet={added.snippet} domain={added.domain} compact />
+          <p
+            role="status"
+            data-testid="onboarding-connect-status"
+            className={connected ? 'text-2xs text-success' : 'text-2xs text-content-secondary'}
+          >
+            {connected
+              ? t('auth.onboarding.website.statusConnected', { domain: added.domain })
+              : t('auth.onboarding.website.statusPending', { domain: added.domain })}
+          </p>
+        </div>
+      )}
+      <div>
+        <InstallGuideLink />
+      </div>
     </div>
   );
 }

@@ -16,6 +16,7 @@ import {
   verifyExportSignature,
   type ChainVerification,
 } from '../audit/audit-chain.js';
+import type { PlatformAuditRow } from './platform-audit.js';
 
 export interface PlatformExportCheck {
   signatureOk: boolean;
@@ -41,17 +42,13 @@ interface ExportRecord {
   hash: string;
 }
 
-export function checkPlatformExport(input: {
-  body: string;
-  signature: string;
-  settingsKey: string;
-}): PlatformExportCheck {
-  const key = Buffer.from(derivePlatformKey(input.settingsKey, 'auditChain'), 'hex');
-  const records = input.body
+/** NDJSON export lines (one `ExportRecord` each) as the rows the chain functions take. */
+export function parsePlatformExportBody(body: string): PlatformAuditRow[] {
+  const records = body
     .split('\n')
     .filter((line) => line.length > 0)
     .map((line) => JSON.parse(line) as ExportRecord);
-  const rows = records.map((record) => ({
+  return records.map((record) => ({
     chainSeq: BigInt(record.chain_seq),
     adminId: record.admin_id,
     action: record.action,
@@ -65,6 +62,15 @@ export function checkPlatformExport(input: {
     prevHash: record.prev_hash,
     hash: record.hash,
   }));
+}
+
+export function checkPlatformExport(input: {
+  body: string;
+  signature: string;
+  settingsKey: string;
+}): PlatformExportCheck {
+  const key = Buffer.from(derivePlatformKey(input.settingsKey, 'auditChain'), 'hex');
+  const rows = parsePlatformExportBody(input.body);
   const firstSeq = rows[0]?.chainSeq ?? null;
   const lastSeq = rows.at(-1)?.chainSeq ?? null;
   return {

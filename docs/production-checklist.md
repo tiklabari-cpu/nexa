@@ -541,8 +541,14 @@ changes. Why it is built this way: [ADR-16](adr/platform-admin-panel.md).
       `PLATFORM_SETTINGS_KEY` (it lives in `.env`: the audit chain's HMAC key and the seal on the AI
       keys and authenticator secrets derive from it, so a restored chain verifies only under the
       same value — keep the key with the `.env` copy that leaves the host, never in the dump).
-      `make pilot-restore-drill` does not look at the chain. After a real restore, sign in and run
-      `POST /platform/v1/audit/verify` (runbook §13.2): `ok: true` with no findings is the claim.
+      `make pilot-restore-drill` compares the row count of every `platform_*` table with its source and
+      walks the `platform_audit_log` chain in the scratch restore, from position 1 (tm 392: the verifier
+      behind `POST /platform/v1/audit/verify`, fed the restored rows). The line
+      `platform chain verified: N entries` is the claim. `skipped` (no `PLATFORM_SETTINGS_KEY` in the
+      drill's environment) and `not exercised` (an empty trail) are notes, not proof: on a host that runs
+      the root panel set `RESTORE_DRILL_REQUIRE_PLATFORM=1` and both fail. After a real restore, still
+      sign in and run `POST /platform/v1/audit/verify` (runbook §13.2): `ok: true` with no findings is
+      the claim.
 - [ ] The operators have their runbook: [`runbooks/platform-admin-ops.md`](runbooks/platform-admin-ops.md)
       (bootstrap, invitations, lost authenticator, suspension, forced ownership transfer,
       deletion, the payment queue, an AI key change, maintenance, impersonation, audit

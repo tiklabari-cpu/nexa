@@ -11,6 +11,7 @@
     "platform:start": "node dist/src/platform.js",
     "platform:bootstrap-admin": "tsx src/services/platform/bootstrap-admin-run.ts",
     "platform:audit-check": "tsx src/services/platform/audit-export-check-run.ts",
+    "platform:chain-check": "tsx src/services/platform/restore-chain-check-run.ts",
     "build": "node --max-old-space-size=8192 node_modules/typescript/bin/tsc -p tsconfig.json",
     "typecheck": "node --max-old-space-size=8192 node_modules/typescript/bin/tsc -p tsconfig.json --noEmit",
     "lint": "eslint src scripts",

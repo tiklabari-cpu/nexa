@@ -416,6 +416,13 @@ kaydet; kota → özel değeri kaldır (ya da bitiş günü); iptal → sürdür
   [`tenant-isolation-suspicion.md`](tenant-isolation-suspicion.md) "Platform rolü ve impersonation izleri".
 - **Sıklık:** haftalık doğrulama + her şüpheli olayda; aylık dışa aktarmayı hesap dışı bir yere kopyalayın.
   Zincir kırılırsa `audit_chain_broken` uyarısı da gelir (§15).
+- **Yedekten dönüşte (NFR-ADMIN-B):** `make restore-drill` ve `make pilot-restore-drill`, geçici veritabanına
+  geri yüklenen her `platform_*` tablosunun satır sayısını kaynakla karşılaştırır ve `platform_audit_log`
+  zincirini 1. konumdan başa kadar doğrular (panelin "Zinciri doğrula" kodu, geri yüklenen satırlarla).
+  `platform chain verified: N entries` satırı zincirin geri geldiğinin kanıtıdır. `skipped` (drill ortamında
+  `PLATFORM_SETTINGS_KEY` yok) ve `not exercised` (iz boş) kanıt **değildir**; kök panelin çalıştığı sunucuda
+  `RESTORE_DRILL_REQUIRE_PLATFORM=1` verin, ikisi de kırmızı olsun. Host'ta pnpm yoksa denetçi komutu
+  `PLATFORM_CHAIN_CHECK_CMD` ile değiştirilir; geri yüklenen satırlar stdin'den gelir, veritabanı erişimi gerekmez.
 
 ## 14. Panel, sağlık, AI katalogları — FR-ADMIN-07/23
 

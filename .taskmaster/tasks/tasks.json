@@ -14340,13 +14340,13 @@
         "description": "Kurucu ayrılırsa SSO, BAA, sandbox, font gibi yalnız-Kurucu ayarları kilitli kalır; bugün yolu yok (agents.ts:666-670 açıkça reddediyor). ChatBot.com'da \"Transfer ownership\" sessizce çalışmıyordu — tekrarlanmamalı. Kaynak: RL-05.",
         "details": "KAYNAK: SiyahTus-Analiz 03-eklenebilecekler.md / 04-gerekceler-ve-sorular.md (Karar kaydı K1–K27 ve \"Kararların maddelere etkisi\" madde içi varsayılanların önüne geçer) / 05-uygulama-rehberi.md — maddeler: RL-05. Eşleme: SiyahTus-Analiz/07-gorev-plani.md.\nTERİM EŞLEMESİ (K1=A): ekranda \"Thread ID\" = nexa Chat (kod/DB/API alanı chat_id, günlük kapsayıcı); ekranda \"Chat ID\" = nexa Thread (kod alanı thread_id, tek bağlantı). Kod adları değişmez; çeviri yalnız sunum katmanında.\nSIRA (contract-first): OpenAPI (packages/contract) → pnpm contract:generate (@siyahtus/types) → Prisma migration (genişlet → taşı → daralt; CONCURRENTLY kendi dosyasında tek ifade) → API servis + birim test → RTM → web/widget/mobil → entegrasyon/E2E.\nPROTOKOL: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → close); CONVENTIONS.md §1 (DoD), §2 (git), §3 (HANDOFF), §5, §6.3 (migration), §7 (test başlığında gereksinim etiketi); CLAUDE.md sınırları (production/DNS/TLS/gerçek secret/kart/ödeme YOK; dış servisler mock).\nNOT: 05'teki dosya:satır referansları 2026-10-14 çalışma kopyasına göredir; başlamadan önce grep ile yeniden doğrula, kayma varsa HANDOFF'a yaz.\nDALGA: Dalga 4 — roller ve yetki matrisi.\n\nXHIGH GEREKÇESİ (eski etiket MAX, 2026-10-14 gözden geçirme): authZ (tek Kurucu kısıtı, rol geçişi).\ncontract: POST /ownership-transfers (target_agent_id, password, totp?), GET /ownership-transfers/current, POST …/{id}/accept (token), DELETE …/{id}.\nprisma: ownership_transfers (id, license_id, from_account_id, to_account_id, token_hash, state, expires_at, created_at, decided_at) + RLS + kısmi tekil (license_id) WHERE state='pending'.\napi: services/team/ownership-transfer.ts; e-posta şablonu ownershipTransfer (messages.ts); audit ownership.transfer_requested|accepted|cancelled|expired. Başlatma: şifre (+2FA) yeniden; hedef aynı lisansın aktif, e-postası doğrulanmış üyesi; workspace 2FA zorunluysa hedefin 2FA'sı açık. Kabul: giriş yapmış + token (72 saat, RL-05-S1); tek işlemde önce eski Kurucu admin'e (S2), sonra hedef owner (tek-Kurucu kısmi indeksini her ifadede sağlar); SSO zorunluysa yeni Kurucu muaf, eski zorunluluğa girer (ekranda yazılır); fatura iletişimi geçer ya da sorulur; tüm Yöneticilere bilgi e-postası.\nweb: Ayarlar › Şirket \"Tehlikeli bölge\" (hedef, şifre/2FA, workspace adını yazarak onay), kabul sayfası, bekleyen devir bandı.\nKAPSAM DIŞI (S3): Kurucuya ulaşılamıyorsa panel yolu yok — platform destek ekibinin kimlik doğrulamalı manuel süreci (runbook notu).\n\nKABUL KRİTERLERİ:\n- Yalnız Kurucu başlatır; başkasına 403.\n- Yanlış şifre/2FA ile başlatma reddedilir.\n- 72 saat içinde kabul edilmezse düşer; Kurucu iptal edebilir.\n- Kabulde tam bir Kurucu; eski Kurucu Yönetici; ilgili audit eylemleri.\n- Askıdaki ya da e-postası doğrulanmamış üyeye başlatılamaz.\n\nKULLANILAN VARSAYIMLAR:\n- RL-05-S1/S2/S3.\n- P2 → low.\n\nPANEL YERLEŞİMİ (tm 389 root panel · docs/platform-admin/gorev-yerlesimi.md · 2026-10-14): W+R. Workspace paneli: Kurucu başlatır, devralan 72 sa içinde kabul eder. ROOT panel (389.10): KAPSAM DIŞI (S3) \"Kurucuya ulaşılamıyorsa manuel süreç\" = `POST /platform/v1/workspaces/{id}/force-ownership-transfer` (superadmin + TOTP + kimlik doğrulama kontrol listesi + gerekçe; eski Kurucu → Yönetici; çift audit; e-postalar). Bu görev tek-Kurucu değişmezini uygulayan yardımcıyı (`applyOwnershipSwap(tx, licenseId, fromAccountId, toAccountId)`) `services/team/ownership-transfer.ts` içinde PAYLAŞILABİLİR yazsın; 389.10 varsa onu çağırır, yoksa kendi yazar ve bu görev \"varsa kullan\". Runbook notu \"platform destek ekibinin manuel süreci\" → 389.10 paneli.",
         "testStrategy": "Entegrasyon, e2e (apps/e2e/tests/mailbox.ts ile); `pnpm test:gate`. DoD: CONVENTIONS §1 kapısı exit 0 — `pnpm test:gate` (arka planda; log son satırları), db:check-drift, contract:generate temiz, audit:req-coverage, PLAN §K kanıtı + HANDOFF bloğu.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "324",
           "327"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-02T10:12:13.432Z",
+        "updatedAt": "2026-11-02T11:43:53.875Z",
         "subtasks": [
           {
             "id": 1,
@@ -14366,13 +14366,13 @@
             "description": "Sahiplik devri arayüzü: Ayarlar › Şirket \"Tehlikeli bölge\", kabul sayfası, bekleyen devir bandı",
             "details": "web: hedef seçimi, şifre/2FA, workspace adını yazarak onay; token'lı kabul sayfası; bekleyen devir bandı + iptal; SSO notu ekranda; i18n (TRANSLATED_FILES). Uçlar ve sözleşme önceki alt görevde bitti: `packages/contract` + üretilen tipler tek kaynak; sunucu davranışını kod haritasıyla bul (`trace_path`, `search_graph`), düzenleyeceğin dosyayı Read ile oku. Ayrıntı ve kabul maddeleri: üst görev #328 details (tek kaynak).",
             "testStrategy": "Birim + e2e (başlat → kabul → rol değişimi görünür); `pnpm test:gate`.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "328.1"
             ],
             "parentId": "328",
             "priority": "low",
-            "updatedAt": "2026-11-02T10:12:13.432Z"
+            "updatedAt": "2026-11-02T11:43:53.875Z"
           }
         ]
       },
@@ -16188,9 +16188,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-02T10:12:13.433Z",
+      "lastModified": "2026-11-02T11:43:53.875Z",
       "taskCount": 393,
-      "completedCount": 381,
+      "completedCount": 382,
       "tags": [
         "master"
       ]

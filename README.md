@@ -134,8 +134,21 @@ all, so the two never collide.
                     ┌────────▼──────────────────────▼─────────┐
                     │  PostgreSQL 17 (pgvector) · Redis 7     │
                     │  RLS tenant isolation · Streams/pubsub  │
-                    └─────────────────────────────────────────┘
+                    └────────────────────▲────────────────────┘
+                                         │ same datastores, other database role
+  operator browser  ┌──────────────────┐ │ ┌──────────────────────────┐
+  (admin.<domain>)  │  apps/admin      │─┼►│  platform-api            │
+  ───────────────►  │  root panel      │ │ │  Fastify, /platform/v1   │
+                    └──────────────────┘ │ │  role siyahtus_platform  │
+                                         │ │  (BYPASSRLS), own audit  │
+                                         └─┴──────────────────────────┘
 ```
+
+Six services run from this repository: **widget**, **web**, **api** and **rtm** serve the
+workspaces; **admin** and **platform-api** are the operators' back office (tm 389). The back
+office is a separate process, role, contract and sign-in, and the workspace API serves nothing
+under `/platform/*` ([ADR-16](docs/adr/platform-admin-panel.md)). What operators do there, and
+how to undo it, is in [`docs/runbooks/platform-admin-ops.md`](docs/runbooks/platform-admin-ops.md).
 
 ### Workspace layout
 
@@ -146,6 +159,7 @@ all, so the two never collide.
 | `apps/api`          | REST API (Fastify + Prisma), migrations, seed                                            |
 | `apps/rtm`          | WebSocket gateway: presence, push fan-out, missed-event sync                             |
 | `apps/web`          | Agent SPA (React + Vite + Tailwind)                                                      |
+| `apps/admin`        | Root panel SPA (operators' back office; talks only to `platform-api`)                    |
 | `apps/widget`       | Customer chat widget — loader + sandboxed iframe app                                     |
 | `apps/mobile`       | Agent phone app (Expo / React Native) — Inbox, AI, CRM, Reports + push                   |
 | `apps/e2e`          | Playwright suite: drives the real servers, as parallel private stacks with own databases |

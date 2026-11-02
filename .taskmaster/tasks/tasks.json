@@ -15766,7 +15766,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-11-01T22:59:52.141Z",
+        "updatedAt": "2026-11-02T00:28:23.081Z",
         "subtasks": [
           {
             "id": 1,
@@ -16069,7 +16069,7 @@
             "description": "Panel bittiğinde SiyahTuş ekibinin elinde her operasyon için adım listesi ve kanıt olsun.",
             "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → close). DoD kapısı CONVENTIONS.md §1 (entegrasyon testleri paralel, `pnpm test:gate` arka planda — log yolunu ilk satırdan al, bitince son satırları oku; turbo `--force` ve çıktıda \"0 cached\"; önce `docker info`; e2e ve db:migrate için kök .env source); git §2 (`feat/<slug>` → main, force-push yok); handoff §3; kapsam disiplini §5; migration §6.3; gereksinim etiketi §7 (test başlığında YALNIZ prd-uyum-denetimi.md Ek A kimlikleri — FR-ADMIN-nn kodları etiket DEĞİLDİR). Sınırlar CLAUDE.md: gerçek sır/anahtar, deploy, DNS, TLS, kart/ödeme yok; dış servisler mock; `pnpm db:reset` yasak (`SIYAHTUS_SEED_RESET=1 pnpm db:seed`).\n\nBAĞLAM (önce oku, sırayla): (1) docs/platform-admin/design.md — bu epiğin tek tasarım kaynağı (bölüm harfleri aşağıda); (2) docs/platform-admin/requirements.md — FR-ADMIN kodları ve kabul kriterleri; (3) docs/platform-admin/gorev-yerlesimi.md — hangi iş workspace panelinde, hangisi root panelde; (4) epik tm 389 details (Task Master) — sıra, ortak kurallar; (5) `head -60 HANDOFF.md` — önceki 389.x pencerelerinin notları; (6) PLAN.md §D218 (`grep -n \"D218\" PLAN.md`). Bu alt görevin tasarım bölümü: design.md §E docs.\n\nORTAK KURALLAR:\n- Platform rotaları YALNIZ platform-api sürecinde yüklenir; kiracı API (`buildServer`) `/platform/*` için 404 kalır (test: platform-rls/platform-isolation). Kiracı API'de boot'u durduran YENİ kural yok (sahip kuralı 2026-10-10): platform ayarı okunamazsa env ile devam + uyarı.\n- Her platform mutasyonu `{reason}` ister ve `platform_audit_log` zincirine yazar; kiracıya dokunanlar ayrıca kiracı `audit_log`'una `actor_type='platform'` ile (çift audit).\n- Kiracı içeriği (mesaj, oyuncu verisi, KB) platform ekranlarında ve platform API yanıtlarında YOK; yalnız sayı/durum/kimlik. Kiracı adına bakmak yalnız 389.15 impersonation ile.\n- Dağıtım sırları env'de kalır; panelde saklanan tek sır AI anahtarlarıdır (389.17, şifreli). Hiçbir yanıt/log/audit düz anahtar taşımaz.\n- Kontrat-first: `packages/contract/platform/openapi.yaml` → `pnpm contract:generate` → migration → servis + test → SPA. Kiracı kontratına yeni yol eklenirse `apps/mobile` parity sayısı yorumla bump edilir (hafıza: openapi-path-breaks-mobile-parity-count).\n- `prisma format` ÇALIŞTIRMA (ilgisiz modelleri hizalar); `prisma generate` dev API açıkken EPERM verebilir, TS istemcisi yine üretilir.\n- Türkçe metin (PLAN, HANDOFF, i18n) Write/Edit ile; heredoc ve `node -e` Türkçe karakteri bozar. Mutasyon testlerinde dosyayı turun başındaki kopyadan geri yükle (`git checkout --` değil).\n- Yeni web/admin bileşeni `t()` çağırıyorsa i18n kayıt listesine girer (apps/admin kendi `TRANSLATED_FILES`'ını taşır).\n- PLAN: tablo hücresine kanıt yazılmaz; FR-ADMIN maddeleri Ek A'da olmadığından req-coverage etiketi yazılmaz; kanıt HANDOFF bloğu + §D218 altına tek satır madde.\n- Döngü penceresi 10 dk komut tavanı: uzun komutlar `run_in_background`.\n\nAMAÇ: Runbook `docs/runbooks/platform-admin-ops.md`: her operasyon için \"panelde nerede / hangi rol / TOTP gerekli mi / audit eylemi / geri alma\"; eski psql yolları \"acil durum\" ekinde. `docs/platform-admin/requirements.md`'ye \"Durum\" sütunu (FR-ADMIN-nn → alt görev → test dosyası). `docs/production-checklist.md` §9 Back office son hali (bootstrap, Cloudflare Access, BYPASSRLS notu, yedek kapsamı). README mimari şeması (6 servis). `docs/runbooks/tenant-isolation-suspicion.md`'ye \"platform rolü ve impersonation izleri nasıl ayıklanır\" paragrafı. HANDOFF: epik özet bloğu (ölçümler, kararlar, açık riskler). PLAN §D218 altındaki alt görev kanıt satırlarının eksiksizliği (389.1–389.20 her biri tek satır).\n\nKODDA BUGÜN (HEAD'de oku, satırlar kayabilir):\n- docs/runbooks/*.md (biçim kalıbı), docs/production-checklist.md §1/§9, README.md, docs/runbooks/tenant-isolation-suspicion.md, PLAN.md §D218, HANDOFF.md.\n\nKARARLAR (pencere ölçülmüş gerekçeyle değiştirebilir):\n1) Runbook TR; komut blokları top-level (liste içinde fenced code prettier idempotence tuzağı).\n2) Eski psql komutları silinmez, \"acil durum\" ekine taşınır.\n\nKAPSAM DIŞI: Kod değişikliği (yalnız docs; kod bulgusu varsa yeni görev olarak Task Master'a yazılır).\nTUZAKLAR: Prettier `proseWrap: preserve`, printWidth 90 — tablolar uzun satır olabilir (prettier tabloya dokunmaz). PLAN tablo hücresine yazma. HANDOFF canlı dosyada son 5 görev kuralı: eski blokları arşive taşı (CONVENTIONS §3).",
             "testStrategy": "Kabul: `pnpm -w format:check` yeşil; runbook her FR-ADMIN modülü için bölüm içerir (başlık listesi testi yok — gözle + HANDOFF'a liste); requirements.md durum sütunu dolu; PLAN §D218 alt satırları 389.1–389.20 var (`grep -c \"tm 389\\.\" PLAN.md` ≥ 20); HANDOFF özeti. Kod dokunulmadı (`git diff --stat` yalnız docs/*.md, PLAN.md, HANDOFF.md). DoD: CONVENTIONS §1 tamamı — `pnpm test:gate` (arka planda; log son satırları `Tasks:`/`Failed:`/`exit`), `db:check-drift`, `contract:generate` sonrası generated temiz, `audit:req-coverage` exit 0, HANDOFF bloğu + PLAN §D218 altına tek satır kanıt maddesi.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "389.10",
               "389.11",
@@ -16085,7 +16085,7 @@
             ],
             "parentId": "389",
             "priority": "high",
-            "updatedAt": "2026-10-14T20:30:00.000Z"
+            "updatedAt": "2026-11-02T00:28:23.081Z"
           },
           {
             "id": 22,
@@ -16142,12 +16142,54 @@
             "updatedAt": "2026-10-27T05:13:33.126Z"
           }
         ]
+      },
+      {
+        "id": "391",
+        "title": "ADMIN-OPERATOR-DIRECTORY-AUDIT-UI [SONNET-HIGH] (Sonnet 5.5) Root panelde operatör dizini (davet, rol, devre dışı/etkin, 2FA sıfırla, oturum iptali), Denetim sayfası (liste, zincir doğrula, dışa aktar, çalışma alanı izi) ve hesabım (kurtarma kodlarını yenile, oturumlarım) — FR-ADMIN-04/06",
+        "description": "tm 389.21 runbook'u yazılırken ölçüldü: bu üç yüzün API'si var ve testli, panel yüzü yok. Yöneticiler sayfası (`apps/admin/src/features/admins/AdminsPage.tsx`) yalnız uyarı tercihini gösteriyor; 'Denetim' menü girdisi `PlaceholderPage`; `/auth/recovery/regenerate` ve `/auth/sessions` SPA'dan hiç çağrılmıyor (grep). Operatörler bugün curl ile çalışıyor (docs/runbooks/platform-admin-ops.md §0.4, §2, §13.2).",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1. Kapsam yalnız `apps/admin` (+ gerekirse i18n kaydı); platform API değişmez, kontrat değişmez.\n\nYAPILACAK: (1) Yöneticiler sayfasına operatör dizini: `GET /admins`, `GET /admins/invites`, davet (`POST /admins/invites` {email, role}), davet geri çek, rol değiştir, devre dışı/etkinleştir, 2FA sıfırla, oturumları iptal et — hepsi ReasonDialog ile; recentTotp isteyenlerde taze kod akışı mevcut `auth/totp/reverify` kalıbıyla (workspaces/accounts eylemleriyle aynı). `platform_last_superadmin` 409'u kullanıcıya anlaşılır metinle gösterilir. İzin: `admins.read` / `admins.manage`. (2) Denetim sayfası (`audit.read`): `GET /audit` liste (admin, eylem, çalışma alanı, zaman filtresi, keyset), 'Zinciri doğrula' (`POST /audit/verify`, bulgu türleri `hash_mismatch|sequence_gap|start_mismatch|broken_link|head_mismatch` konumlarıyla), 'Dışa aktar' (NDJSON indir; imza başlığı `X-Siyahtus-Signature` ve cursor gösterilir), çalışma alanı izi zaten Çalışma alanı > Denetim sekmesinde (tekrarlama). (3) Hesabım menüsü: 'Kurtarma kodlarını yenile' (`POST /auth/recovery/regenerate`, taze kod gerekir, yeni sayfa bir kez gösterilir/indirilir — mevcut RecoveryCodesPage bileşeni) ve 'Oturumlarım' (`GET/DELETE /auth/sessions`). (4) en/tr metin, i18n kayıt listesi (`TRANSLATED_FILES`), axe testi, `NAV_ITEMS` izin testi. (5) docs/runbooks/platform-admin-ops.md §0.4/§2/§3/§13.2'deki 'yalnız API' notlarını panel adımlarıyla değiştir; requirements.md §7'de FR-ADMIN-04/06 `◐` → `✅`.\n\nKARARLAR: Operatör silme yok (audit atfı). Kimlik doğrulama gerektiren sıfırlama için panel 'kimlik doğrulandı' onay kutusu ister (runbook §3.4).\n\nKAPSAM DIŞI: platform API/kontrat/migration değişikliği; yeni izin.",
+        "testStrategy": "Admin birim: AdminsPage (dizin, davet, rol, devre dışı, son superadmin 409 metni, izin yokken gizli), AuditPage (filtre, doğrula temiz/bulgulu, dışa aktar), hesabım eylemleri; axe en/tr. e2e `platform-admin.spec.ts`'e bir senaryo: davet gönder → kabul et → rol değiştir → devre dışı. DoD: CONVENTIONS §1; `pnpm test:gate --e2e`; `audit:endpoint-ui` exit 0 (yeni çağrılan yollar).",
+        "status": "pending",
+        "dependencies": [
+          "389"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-02T00:40:00.000Z",
+        "subtasks": []
+      },
+      {
+        "id": "392",
+        "title": "RESTORE-DRILL-PLATFORM-CHAIN [SONNET-HIGH] (Sonnet 5.5) `scripts/restore-drill.sh` platform tablolarını ve audit zincirini de doğrulasın — NFR-ADMIN-B",
+        "description": "requirements.md NFR-ADMIN-B: 'scripts/backup.sh platform tablolarını da kapsar (test: geri yüklemede audit zinciri doğrulanır)'. Yedek tüm veritabanını dökümlüyor (pg_dump -Fc) ama restore-drill platform tablolarına ve zincire hiç bakmıyor (grep: betikte 'platform' yok). Bugün yalnız runbook §13.2'deki elle doğrulama var.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1; yedek/geri yükleme hafızası: docker-desktop-bind-mounts, msys-mangles-container-paths, run-one-integration-file.\n\nYAPILACAK: `scripts/restore-drill.sh` geri yüklenen kazıma veritabanında (a) `platform_*` tabloları var ve satır sayıları canlıyla eşleşiyor (zaten kiracı tabloları için yapılan karşılaştırma kalıbı), (b) `platform_audit_log` zinciri `PLATFORM_SETTINGS_KEY` ile baştan sona doğrulanıyor (konum 1'den, boşluk/kırık yok). Zinciri doğrulayan kodu betik içinde yeniden yazma: `apps/api/src/services/platform/platform-audit.ts` doğrulayıcısını çağıran küçük bir CLI (audit-export-check-run.ts kalıbı) ya da `verifyChain` fonksiyonunu kazıma DB'ye bağlayan bir `*-run.ts`. Anahtar yoksa (platform kurulmamış / PLATFORM_SETTINGS_KEY boş) bu adım 'atlandı' diye açıkça yazılır, yeşil sayılmaz demez; platform_audit_log boşsa 'kanıtlanmadı' (RLS 'kullanılmadı' uyarısı gibi). Mutasyon: bir platform_audit_log satırının hash'i bozulunca drill kırmızı olur (sahipli bağlantıyla; tablo UPDATE'i reddeder → tetikleyiciyi geçici düşürme YOK, bunun yerine dökümü bozup geri yükle ya da doğrulayıcıyı bozuk fixture ile çağır).\n\nDokümantasyon: production-checklist §9 Back office'teki 'make pilot-restore-drill does not look at the chain' cümlesini güncelle; runbook §13.2 notu.\n\nKAPSAM DIŞI: yedek betiği, rol yedeği (pg_dumpall --globals).",
+        "testStrategy": "`./scripts/restore-drill.sh` yeşil; platform_audit_log'u dolu bir veritabanında 'platform chain verified' satırı, boş veritabanında 'not exercised' satırı; bozuk zincirli fixture ile kırmızı (exit != 0). Betik için mevcut sınama yöntemi (scripts/*.test) varsa genişlet. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "389"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-02T00:40:00.000Z",
+        "subtasks": []
+      },
+      {
+        "id": "393",
+        "title": "PAYMENT-CLOSED-REASON-TENANT [SONNET-HIGH] (Sonnet 5.5) Kiracı paneli, reddedilen kripto talebinin gerekçesini (`closed_reason`) göstersin",
+        "description": "tm 389.18 HANDOFF notu: kiracı API'si reddin gerekçesini döndürüyor (`closed_reason`) ama `apps/web` `PaymentMethods.tsx` onu göstermiyor (grep: yalnız tipte). Operatör 'Talebi reddet'te yazdığı gerekçeyi Kurucu görsün diyor ('Kurucu yazdığınız gerekçeyi görür ve yeniden talep açabilir' — admin metni, docs/runbooks/platform-admin-ops.md §7.1) ama panel göstermiyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\nYAPILACAK: `apps/web` Faturalama > ödeme yöntemleri ekranında (PaymentMethods.tsx) en son talep `closed`/reddedilmişse `closed_reason` metnini kullanıcıya göster (en/tr; metin çevrilmez, operatörün yazdığıdır — kaynak etiketi 'SiyahTuş ekibi'); 'Yeniden talep et' akışı zaten var. Yeni web bileşeni/anahtar `t()` kullanıyorsa i18n kayıt listesine girer. Kontrat değişmez (alan zaten dönüyor); `apps/mobile` etkilenmez.\n\nKAPSAM DIŞI: kiracı API değişikliği, operatör paneli.",
+        "testStrategy": "Web birim: reddedilmiş talep gerekçeyi gösterir, gerekçesiz kapalı talep göstermez, yeniden talep düğmesi var; axe. e2e gerekmez (mevcut ödeme spec'leri bozulmamalı). DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
+        "status": "pending",
+        "dependencies": [
+          "389"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-02T00:40:00.000Z",
+        "subtasks": []
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-01T22:59:52.141Z",
-      "taskCount": 390,
+      "lastModified": "2026-11-02T00:28:23.081Z",
+      "taskCount": 393,
       "completedCount": 378,
       "tags": [
         "master"

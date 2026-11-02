@@ -531,6 +531,24 @@ changes. Why it is built this way: [ADR-16](adr/platform-admin-panel.md).
 - [ ] Workspace actions (tm 389.10): activation, trial extension and the rest live in the back
       office's workspace page (**Trial end and manual activation**); the `psql` path there is a
       footnote for a deployment without the back office.
+- [ ] The platform tables are in the backup, and the chain is checked after a restore (tm 389.21).
+      `scripts/backup.sh` dumps the whole database (`pg_dump -Fc`), so the `platform_*` tables
+      (operators, sessions, `platform_audit_log`, `platform_settings` with the sealed AI keys) ride
+      along with the workspaces' data — there is no second backup to remember. Two things the dump
+      does **not** hold: the role `siyahtus_platform` (roles are cluster-wide; a restore onto a
+      fresh volume needs it created first, as with `siyahtus_app` — the migrations and
+      `infra/db/pilot/20-platform-role-password.sh` do that on an empty volume) and
+      `PLATFORM_SETTINGS_KEY` (it lives in `.env`: the audit chain's HMAC key and the seal on the AI
+      keys and authenticator secrets derive from it, so a restored chain verifies only under the
+      same value — keep the key with the `.env` copy that leaves the host, never in the dump).
+      `make pilot-restore-drill` does not look at the chain. After a real restore, sign in and run
+      `POST /platform/v1/audit/verify` (runbook §13.2): `ok: true` with no findings is the claim.
+- [ ] The operators have their runbook: [`runbooks/platform-admin-ops.md`](runbooks/platform-admin-ops.md)
+      (bootstrap, invitations, lost authenticator, suspension, forced ownership transfer,
+      deletion, the payment queue, an AI key change, maintenance, impersonation, audit
+      verification; the old `psql` paths are its appendix). Three things have no screen yet and
+      are API-only there: the operator directory, the Audit page and recovery-code
+      regeneration.
 
 ### Region and providers
 

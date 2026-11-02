@@ -28,6 +28,7 @@ import { roleAtLeast } from '../team/RoleMenu.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { Brands } from './Brands.js';
 import { CompanyDetails } from './CompanyDetails.js';
+import { OwnershipTransferZone } from '../ownership/OwnershipTransferZone.js';
 import { Appearance } from './Appearance.js';
 import { McpConnection } from './McpConnection.js';
 import { WebsiteWidgets } from './WebsiteWidgets.js';
@@ -133,7 +134,12 @@ function permissionsFrom(scopes: readonly string[], role: string | undefined): S
  */
 export const SECTION_ELEMENTS: Record<string, (p: SectionPermissions) => ReactElement> = {
   notifications: () => <NotificationSettings />,
-  company: (p) => <CompanyDetails canManage={p.canManageCompany} />,
+  company: (p) => (
+    <>
+      <CompanyDetails canManage={p.canManageCompany} />
+      <OwnershipTransferZone isOwner={p.isOwner} />
+    </>
+  ),
   appearance: (p) => <Appearance canEdit={p.isOwner} />,
   brands: (p) => <Brands canEdit={p.canManageBrands} />,
   channels: () => <ChannelsGrid />,

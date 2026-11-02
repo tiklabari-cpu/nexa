@@ -1875,4 +1875,95 @@ export const settings: Messages = {
   'settings.widgetPhrases.key.offline.submit': 'Offline form button',
   'settings.widgetPhrases.key.offline.thanks': 'Offline form thank-you',
   'settings.widgetPhrases.key.chat.end.closedMessage': 'Conversation ended',
+  // Handing the workspace over (RL-05 · tm 328.2): Settings › Company "Danger zone",
+  // the accept page the offer's e-mail leads to, and the pending-offer banner.
+  'settings.ownership.title': 'Danger zone',
+  'settings.ownership.description':
+    'Actions that change who runs this workspace. Only the owner can take them.',
+  'settings.ownership.loadError': 'We couldn’t load the ownership transfer. Reload to try again.',
+  'settings.ownership.heading': 'Transfer ownership',
+  'settings.ownership.body':
+    'Offer the workspace to another member. They have 72 hours to accept; when they do, they become the owner and you become an administrator. Nothing changes until then.',
+  'settings.ownership.offerButton': 'Transfer ownership…',
+  'settings.ownership.pendingTitle': 'Ownership offered to {name}',
+  'settings.ownership.pendingBody':
+    'We mailed a link to {email}. The offer runs out on {expires}; until they accept, you stay the owner.',
+  'settings.ownership.cancelButton': 'Cancel offer',
+  'settings.ownership.cancelConfirmTitle': 'Take back the offer to {name}?',
+  'settings.ownership.cancelConfirmBody':
+    'The link in their e-mail stops working and they are told the offer is off. You stay the owner and can offer the workspace again.',
+  'settings.ownership.cancelConfirmButton': 'Cancel offer',
+  'settings.ownership.cancelFailed': 'The offer could not be cancelled.',
+  'settings.ownership.mailSent': 'The link was sent to {email}.',
+  'settings.ownership.mailFailed':
+    'The offer is recorded, but the e-mail to {email} could not be sent. Cancel the offer and make it again.',
+  'settings.ownership.modalTitle': 'Transfer ownership',
+  'settings.ownership.modalBody':
+    'The member you choose becomes the owner once they accept, and you become an administrator. They have 72 hours. Confirm it is you to continue.',
+  'settings.ownership.membersError': 'We couldn’t load the members.',
+  'settings.ownership.targetLabel': 'New owner',
+  'settings.ownership.targetPlaceholder': 'Choose a member',
+  'settings.ownership.targetRequired': 'Choose who should become the owner.',
+  'settings.ownership.passwordLabel': 'Your password',
+  'settings.ownership.totpLabel': 'Authenticator or recovery code',
+  'settings.ownership.totpHint':
+    'Needed if you use two-factor authentication, or have no password.',
+  'settings.ownership.confirmNameLabel': 'Workspace name',
+  'settings.ownership.confirmNameHint': 'Type “{name}” to confirm.',
+  'settings.ownership.confirmNameMismatch': 'Type the workspace name exactly as shown.',
+  'settings.ownership.credentialRequired':
+    'Enter your password, or a code if you have no password.',
+  'settings.ownership.wrongCredential': 'That password or code is not correct.',
+  'settings.ownership.offering': 'Sending the offer…',
+  'settings.ownership.offerConfirm': 'Offer ownership',
+  'settings.ownership.reason.pending_exists':
+    'An offer is already waiting. Cancel it before making another.',
+  'settings.ownership.reason.target_suspended':
+    'That member is suspended or blocked and can’t take the workspace over.',
+  'settings.ownership.reason.target_unverified':
+    'That member hasn’t confirmed their e-mail address yet.',
+  'settings.ownership.reason.target_two_factor_required':
+    'This workspace requires two-factor authentication, and that member hasn’t set it up.',
+  'settings.ownership.reason.target_is_owner': 'You already own the workspace.',
+  'settings.ownership.reason.session_required':
+    'Hand the workspace over from a signed-in session, not an access token.',
+  'settings.ownership.reason.reauthentication_unavailable':
+    'This account has no password and no second factor to prove it with. Set up two-factor authentication first.',
+  'settings.ownership.reason.not_pending': 'This offer is no longer open.',
+  'settings.ownership.reason.owner_changed':
+    'The workspace has a different owner now, so this offer has been cancelled.',
+  'settings.ownership.reason.invalid_token':
+    'That token is not the one from the e-mail. Check it and try again.',
+  'settings.ownership.accept.title': 'Take over the workspace',
+  'settings.ownership.accept.description': 'You were offered ownership of this workspace.',
+  'settings.ownership.accept.wrongAccount':
+    'This offer is for {email}, and you are signed in as {current}. Sign out and open the link again with the right account.',
+  'settings.ownership.accept.closed':
+    'This offer is no longer open. It was accepted, taken back or ran out, or it was not made to you.',
+  'settings.ownership.accept.offer':
+    '{name} ({email}) is offering you ownership of this workspace.',
+  'settings.ownership.accept.consequence':
+    'If you accept, you become the owner and {name} becomes an administrator. The offer runs out on {expires}.',
+  'settings.ownership.accept.sso':
+    'This workspace signs members in through an identity provider. You keep the owner’s password sign-in; {name} will sign in through the provider from now on.',
+  'settings.ownership.accept.tokenLabel': 'Token from the e-mail',
+  'settings.ownership.accept.tokenHint': 'The link in the e-mail fills this in for you.',
+  'settings.ownership.accept.tokenRequired': 'Paste the token from the e-mail.',
+  'settings.ownership.accept.accepting': 'Accepting…',
+  'settings.ownership.accept.button': 'Accept ownership',
+  'settings.ownership.accept.doneTitle': 'You are the owner',
+  'settings.ownership.accept.done': 'You are now the owner of this workspace.',
+  'settings.ownership.accept.doneRoles': '{name} is an administrator now.',
+  'settings.ownership.accept.billingMoved': 'The invoice e-mail address is now yours.',
+  'settings.ownership.accept.billingKept':
+    'The invoice e-mail still goes to another address. Decide whether it should be yours.',
+  'settings.ownership.accept.billingLink': 'Review the invoice e-mail',
+  'settings.ownership.banner.offeredToYou':
+    '{from} is offering you ownership of this workspace. The offer runs out on {expires}.',
+  'settings.ownership.banner.offeredByYou':
+    'You offered ownership of this workspace to {to}. The offer runs out on {expires}.',
+  'settings.ownership.banner.pending':
+    '{from} is handing this workspace over to {to}. The offer runs out on {expires}.',
+  'settings.ownership.banner.review': 'Review the offer',
+  'settings.ownership.banner.manage': 'See the offer',
 };

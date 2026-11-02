@@ -295,6 +295,13 @@ interface AuthState {
   updateProfile: (patch: { name?: string; public_name?: string | null }) => Promise<void>;
   /** Re-read which font applies — after the owner changed the workspace default. */
   refreshAppearance: () => Promise<void>;
+  /**
+   * Re-read the role and what it holds — after the workspace changed hands
+   * (RL-05 · tm 328.2): the server applies a new role at once, but the profile
+   * this tab holds was read at sign-in, so it would go on offering the old
+   * owner's screens and hiding the new owner's.
+   */
+  refreshAccess: () => Promise<void>;
   /** Flip the local gate once the wizard has told the server setup is done. */
   markOnboarded: () => void;
 }
@@ -1391,6 +1398,21 @@ export const useAuth = create<AuthState>((set, get) => {
       useFontStore.getState().setAppearance(me.appearance);
       const current = get().agent;
       if (current) set({ agent: { ...current, appearance: me.appearance } });
+    },
+
+    async refreshAccess() {
+      if (!get().accessToken) return;
+      const me = await sessionClient().request<CurrentAgent>('GET', '/auth/me');
+      const current = get().agent;
+      if (!current) return;
+      set({
+        agent: {
+          ...current,
+          role: me.role,
+          scopes: me.scopes,
+          ...(me.capabilities === undefined ? {} : { capabilities: me.capabilities }),
+        },
+      });
     },
 
     async setNotificationPreferences(patch) {

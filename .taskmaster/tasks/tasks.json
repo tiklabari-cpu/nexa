@@ -14346,7 +14346,7 @@
           "327"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-02T10:11:00.228Z",
+        "updatedAt": "2026-11-02T10:12:13.432Z",
         "subtasks": [
           {
             "id": 1,
@@ -14366,13 +14366,13 @@
             "description": "Sahiplik devri arayüzü: Ayarlar › Şirket \"Tehlikeli bölge\", kabul sayfası, bekleyen devir bandı",
             "details": "web: hedef seçimi, şifre/2FA, workspace adını yazarak onay; token'lı kabul sayfası; bekleyen devir bandı + iptal; SSO notu ekranda; i18n (TRANSLATED_FILES). Uçlar ve sözleşme önceki alt görevde bitti: `packages/contract` + üretilen tipler tek kaynak; sunucu davranışını kod haritasıyla bul (`trace_path`, `search_graph`), düzenleyeceğin dosyayı Read ile oku. Ayrıntı ve kabul maddeleri: üst görev #328 details (tek kaynak).",
             "testStrategy": "Birim + e2e (başlat → kabul → rol değişimi görünür); `pnpm test:gate`.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "328.1"
             ],
             "parentId": "328",
             "priority": "low",
-            "updatedAt": "2026-10-16T07:00:34.672Z"
+            "updatedAt": "2026-11-02T10:12:13.432Z"
           }
         ]
       },
@@ -16188,7 +16188,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-02T10:11:00.228Z",
+      "lastModified": "2026-11-02T10:12:13.433Z",
       "taskCount": 393,
       "completedCount": 381,
       "tags": [

@@ -25,6 +25,7 @@ import { GoalsPage } from './features/goals/GoalsPage.js';
 import { PlaybookPage } from './features/playbook/PlaybookPage.js';
 import { SettingsIndex, SettingsLayout, SettingsPage } from './features/settings/SettingsPage.js';
 import { AuditLogPage } from './features/audit/AuditLogPage.js';
+import { OwnershipTransferPage } from './features/ownership/OwnershipTransferPage.js';
 import { AppsMarketplacePage } from './features/apps/AppsMarketplace.js';
 import { DeveloperPortalPage } from './features/developers/DeveloperPortal.js';
 import { ArchivePage } from './features/archive/ArchivePage.js';
@@ -179,6 +180,8 @@ function SignedInRoutes({ onboarding }: { onboarding: boolean }): ReactElement {
           }
         />
         <Route path="playbook" element={<PlaybookPage />} />
+        {/* The offer's e-mail leads here (RL-05 · tm 328.2). */}
+        <Route path="ownership-transfer" element={<OwnershipTransferPage />} />
         {/* FR-MOD-08.1: one address per section, behind the grouped side
             navigation. The audit log keeps the address it always had. Flat
             rather than nested so every route under the shell stays

@@ -10355,10 +10355,24 @@ export interface paths {
      *     Meta not answering is `503` `app_provider_unavailable`. The channel's
      *     `address` is Meta's phone number id; `display_address` is the number.
      *
+     *     **Live Messenger / Instagram (tm 381).** With `messenger` or
+     *     `instagram` in `live_apps`, the channel is connected through Facebook
+     *     Login (`GET /channels/meta/login-config`, then
+     *     `POST /channels/meta/pages`): the body is `{ selection_id, page_id }`
+     *     — a page from that selection. The page's access token (read with a
+     *     long-lived user token) is stored encrypted, and the app is subscribed to
+     *     the page's `messages` and `messaging_postbacks`. Messenger's
+     *     `address` is the page id; Instagram's is the professional account
+     *     linked to the page (`400`, `details.reason:
+     *     "instagram_account_not_linked"` when the page has none). An unknown or
+     *     expired selection, or a page not in it, is `400` with
+     *     `details.reason: "meta_selection_invalid"`.
+     *
      *     In the public pilot (`pilot_mode` on `GET /deployment`) this is refused for
      *     every caller with `403 not_allowed` and `error.details.reason:
      *     "pilot_mode"`, before the body is read: the pilot offers no adapter
-     *     channels — except a live Telegram or WhatsApp, which it serves.
+     *     channels — except a live Telegram, WhatsApp, Messenger or Instagram,
+     *     which it serves.
      */
     post: operations['connectChannel'];
     delete?: never;
@@ -10610,6 +10624,105 @@ export interface paths {
     get: operations['getWhatsAppSignupConfig'];
     put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/channels/meta/login-config': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What Facebook Login needs for Messenger / Instagram (tm 381)
+     * @description The deployment's Meta app id, Graph version, the redirect the dialog
+     *     returns to and the permissions each channel asks for — what the
+     *     Settings → Channels Messenger and Instagram cards open Facebook Login
+     *     with. `404` unless the deployment runs Messenger or Instagram live
+     *     (`live_apps`).
+     */
+    get: operations['getMetaLoginConfig'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/channels/meta/pages': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * The pages a Facebook Login opened (tm 381)
+     * @description Exchanges the login's one-time `code` for a long-lived user token and
+     *     lists the Facebook Pages that person manages, each with its linked
+     *     Instagram professional account. The page tokens are kept on the server
+     *     (encrypted, ten minutes, this workspace only) under `selection_id`;
+     *     the answer carries no token. Connect one with
+     *     `POST /channels/{type}/connect` `{ selection_id, page_id }`.
+     *
+     *     A code Meta refuses is `400` with `details.reason:
+     *     "app_credentials_invalid"`; Meta not answering is `503`
+     *     `app_provider_unavailable`. `404` unless the deployment runs
+     *     Messenger or Instagram live (`live_apps`).
+     */
+    post: operations['listMetaPages'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/channels/meta/messaging-webhook': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Meta's webhook subscription handshake for Messenger / Instagram (tm 381)
+     * @description Meta calls this once when the app's `page` or `instagram` webhook is
+     *     configured: with `hub.mode=subscribe` and the deployment's verify token
+     *     (the Meta app's, `WHATSAPP_VERIFY_TOKEN`) it answers `hub.challenge`
+     *     as plain text; anything else is `403`. `404` unless the deployment runs
+     *     Messenger or Instagram live (`live_apps`).
+     */
+    get: operations['verifyMetaMessagingWebhook'];
+    put?: never;
+    /**
+     * Receive Messenger / Instagram messages (tm 381)
+     * @description The Messenger and Instagram webhook of the deployment's Meta app
+     *     (FR-MOD-08.5.4 · FR-MOD-08.5.7, tm 381). Public — Meta has no session —
+     *     but authenticated exactly as the WhatsApp one: `X-Hub-Signature-256`
+     *     must be `sha256=` and the HMAC-SHA256 of the raw body under the app
+     *     secret, compared in constant time. A missing or wrong signature is
+     *     `401` and nothing is written.
+     *
+     *     `object` is `page` (Messenger) or `instagram`. Each messaging item's
+     *     recipient (the page id / Instagram account id) resolves the workspace;
+     *     the sender's page-scoped id (PSID / IGSID) is the customer — the same
+     *     person on two pages is two customers. A message id (`mid`) delivered
+     *     twice is taken in once. Echoes of the page's own messages, delivery
+     *     and read receipts and reactions are acknowledged and dropped; a story
+     *     reply, a story mention, an attachment and a postback button arrive as a
+     *     plain message. A recipient no live channel answers to is acknowledged
+     *     and dropped, so one stale page cannot make Meta retry everyone's.
+     *
+     *     `404` unless the deployment runs Messenger or Instagram live (`live_apps`).
+     */
+    post: operations['ingestMetaMessagingWebhook'];
     delete?: never;
     options?: never;
     head?: never;
@@ -19182,19 +19295,21 @@ export interface components {
       created_at: string;
       /**
        * @description Connected to the real provider (tm 263 — a live Telegram bot, whose
-       *     token is held encrypted; tm 380 — a live WhatsApp number); false for
-       *     every mock channel.
+       *     token is held encrypted; tm 380 — a live WhatsApp number; tm 381 — a
+       *     live Messenger page or Instagram account); false for every mock channel.
        */
       live?: boolean;
       /**
        * @description The address as a person reads it, where it differs from `address`
        *     (tm 380 — a live WhatsApp number, whose `address` is Meta's phone
-       *     number id). Null otherwise and while off.
+       *     number id; tm 381 — a live page's name or an Instagram @username).
+       *     Null otherwise and while off.
        */
       display_address?: string | null;
       /**
        * @description The provider refused the live credential (tm 380 — Meta's Graph
-       *     error 190 on a WhatsApp business token). Replies are refused until
+       *     error 190 on a WhatsApp business token; tm 381 — on a page token).
+       *     Replies are refused until
        *     the channel is connected again; the admins were e-mailed once.
        */
       needs_reconnect?: boolean;
@@ -19213,10 +19328,53 @@ export interface components {
       redirect_uri: string;
     };
     /**
-     * @description Whether an agent may write to a chat's customer now (tm 380). Only a
-     *     live WhatsApp has a window: free text for 24 hours after the customer's
-     *     last message, and no templates in this release — so past it the
-     *     composer is locked and a reply is refused with `400`
+     * @description What the Settings card needs to open Facebook Login for a live
+     *     Messenger or Instagram channel (tm 381 · KN-02). The app id is public
+     *     — Meta shows it in the dialog's URL; the app secret never leaves the
+     *     server. `scopes` are the permissions each channel asks for.
+     */
+    MetaLoginConfig: {
+      app_id: string;
+      /** @example v21.0 */
+      graph_version: string;
+      /** @description Where Meta's dialog sends the browser back with the code. */
+      redirect_uri: string;
+      scopes: {
+        messenger: string[];
+        instagram: string[];
+      };
+    };
+    /**
+     * @description One Facebook Page the person who logged in manages (tm 381), with the
+     *     Instagram professional account linked to it, if any. No token: the
+     *     page's access token stays on the server until the page is connected.
+     */
+    MetaPageChoice: {
+      /** @description The page id (Messenger's channel address). */
+      id: string;
+      name: string;
+      instagram: {
+        /** @description The Instagram professional account id (Instagram's channel address). */
+        id: string;
+        username: string | null;
+      } | null;
+    };
+    /**
+     * @description The pages a Facebook Login opened (tm 381), to choose one from. The
+     *     choice is posted to `POST /channels/{type}/connect` as
+     *     `{ selection_id, page_id }` within ten minutes; the selection is
+     *     bound to this workspace and used once.
+     */
+    MetaPageSelection: {
+      selection_id: string;
+      pages: components['schemas']['MetaPageChoice'][];
+    };
+    /**
+     * @description Whether an agent may write to a chat's customer now (tm 380). A live
+     *     WhatsApp, Messenger or Instagram (tm 381) has a window: free text for
+     *     24 hours after the customer's last message, and no templates or
+     *     message tags in this release — so past it the composer is locked and
+     *     a reply is refused with `400`
      *     `details.reason: "channel_window_closed"`. Every other chat is `open`.
      */
     ReplyWindow: {
@@ -41842,6 +42000,128 @@ export interface operations {
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
+    };
+  };
+  getMetaLoginConfig: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The login configuration */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MetaLoginConfig'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listMetaPages: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          code: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The pages to choose from */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MetaPageSelection'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+      503: components['responses']['AppProviderUnavailable'];
+    };
+  };
+  verifyMetaMessagingWebhook: {
+    parameters: {
+      query: {
+        'hub.mode': string;
+        'hub.verify_token': string;
+        'hub.challenge': string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The challenge, echoed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/plain': string;
+        };
+      };
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  ingestMetaMessagingWebhook: {
+    parameters: {
+      query?: never;
+      header: {
+        'X-Hub-Signature-256': string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          [key: string]: unknown;
+        };
+      };
+    };
+    responses: {
+      /** @description Received */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @enum {string} */
+            status: 'received';
+            /** @description Messages taken into a chat. */
+            accepted: number;
+            /** @description Messages already taken in (a redelivered `mid`). */
+            duplicates: number;
+            /** @description Messages dropped (no live channel, spam). */
+            ignored: number;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
     };
   };
   ingestInboundEmail: {

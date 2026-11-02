@@ -49,9 +49,11 @@ export const COMPONENTS_NOT_IN_THIS_BUILD: ReadonlyArray<{
     detail:
       'WhatsApp is not live here (APPS_LIVE_PROVIDERS), or no signed delivery has arrived yet',
   },
+  // The same for a live Messenger / Instagram (tm 381): its signed webhook reports.
   {
     key: 'channel_meta',
-    detail: 'Messenger/Instagram live adapter (tm 381) is not part of this build',
+    detail:
+      'Messenger/Instagram is not live here (APPS_LIVE_PROVIDERS), or no signed delivery has arrived yet',
   },
 ];
 

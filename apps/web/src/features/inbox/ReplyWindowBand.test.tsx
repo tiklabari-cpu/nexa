@@ -99,3 +99,27 @@ describe('Composer — WhatsApp 24-hour window (tm 380 · FR-MOD-08.5.6)', () =>
     expect(asked()).toBe(false);
   });
 });
+
+describe('Composer — Messenger / Instagram 24-hour window (tm 381 · FR-MOD-08.5.4)', () => {
+  it('asks where only Messenger runs live, and names Messenger in the band', async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.includes('/reply-window')
+        ? { chat_id: 'CHAT1', channel: 'messenger', ...window24 }
+        : url.includes('/uploads-policy')
+          ? { file_sharing_enabled: true }
+          : { items: [] };
+      return { ok: true, status: 200, headers: { get: () => null }, json: async () => body };
+    });
+    renderComposer({ ...BASE, live_apps: ['messenger'] });
+    const user = userEvent.setup();
+    expect(await screen.findByText('24-hour window closed')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Messenger only lets you reply within 24 hours of the customer's last message. You can write again when they do; internal notes still work.",
+      ),
+    ).toBeInTheDocument();
+    await user.type(box(), 'Geç kalmış yanıt');
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+  });
+});

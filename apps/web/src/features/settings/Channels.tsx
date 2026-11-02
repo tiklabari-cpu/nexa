@@ -36,11 +36,12 @@ import { useCloseGuard } from '../../lib/dirty-guard.js';
 import { FieldError, compose, phoneNumber, required, useForm } from '../../lib/form.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { useDeployment } from '../../lib/deployment.js';
-import { isTelegramLive, isWhatsAppLive } from '../../lib/live-apps.js';
+import { isMetaChannelLive, isTelegramLive, isWhatsAppLive } from '../../lib/live-apps.js';
 import { liveConnectErrorText } from '../apps/live-errors.js';
 import { useConnectedChannels, type ConnectedChannel } from '../inbox/useInbox.js';
 import { canReadChannels } from '../inbox/views.js';
 import { WhatsAppLiveConnect } from '../whatsapp/WhatsAppLiveConnect.js';
+import { MetaLiveConnect } from '../meta/MetaLiveConnect.js';
 
 /** Origin serving the widget and its hosted Chat page. */
 const WIDGET_URL =
@@ -149,7 +150,8 @@ function ctaText(t: TFunction, cta: string): string {
  * only: Website and Chat page are real, and everything after them is a mock
  * provider or the e-mail channel, which the pilot does not run — except a
  * Telegram the deployment runs live (`telegramLive`, tm 263), which is real,
- * and the same for a live WhatsApp (`whatsappLive`, tm 380).
+ * and the same for a live WhatsApp (`whatsappLive`, tm 380) and a live
+ * Messenger / Instagram (`metaLive`, tm 381).
  */
 export function channelsFor(
   websites: WebsiteStatusRow[],
@@ -157,6 +159,7 @@ export function channelsFor(
   pilotMode = false,
   telegramLive = false,
   whatsappLive = false,
+  metaLive: { messenger: boolean; instagram: boolean } = { messenger: false, instagram: false },
 ): Channel[] {
   const connected = websites.filter((w) => w.status === 'connected').length;
   const websiteStatus: ChannelStatus =
@@ -200,7 +203,9 @@ export function channelsFor(
           c.id === 'website' ||
           c.id === 'chat-page' ||
           (telegramLive && c.id === 'telegram') ||
-          (whatsappLive && c.id === 'whatsapp'),
+          (whatsappLive && c.id === 'whatsapp') ||
+          (metaLive.messenger && c.id === 'messenger') ||
+          (metaLive.instagram && c.id === 'instagram'),
       )
     : all;
 }
@@ -223,7 +228,10 @@ function messengerChannel(connectedChannels: ConnectedChannel[]): Channel {
     description: 'Answer Messenger conversations.',
     status: isConnected ? 'connected' : 'not_connected',
     cta: isConnected ? 'Disconnect' : 'Connect with Facebook (mock)',
-    address: isConnected ? (row?.address ?? null) : undefined,
+    // A live page reads as its name (tm 381); the routing key is the page id.
+    address: isConnected ? (row?.display_address ?? row?.address ?? null) : undefined,
+    live: isConnected && row?.live === true,
+    needsReconnect: isConnected && row?.needs_reconnect === true,
   };
 }
 
@@ -288,7 +296,10 @@ function instagramChannel(connectedChannels: ConnectedChannel[]): Channel {
     description: 'Answer Instagram direct messages.',
     status: isConnected ? 'connected' : 'not_connected',
     cta: isConnected ? 'Disconnect' : 'Connect',
-    address: isConnected ? (row?.address ?? null) : undefined,
+    // A live account reads as its @username (tm 381); the routing key is its id.
+    address: isConnected ? (row?.display_address ?? row?.address ?? null) : undefined,
+    live: isConnected && row?.live === true,
+    needsReconnect: isConnected && row?.needs_reconnect === true,
   };
 }
 
@@ -622,7 +633,14 @@ export function ChannelsGrid(): ReactElement {
   const pilotMode = deployment.pilot_mode;
   const telegramLive = isTelegramLive(deployment);
   const whatsappLive = isWhatsAppLive(deployment);
-  const canChannels = canReadChannels(scopes) && (!pilotMode || telegramLive || whatsappLive);
+  // Live Messenger / Instagram (tm 381): real in the pilot too, as the two above.
+  const metaLive = {
+    messenger: isMetaChannelLive(deployment, 'messenger'),
+    instagram: isMetaChannelLive(deployment, 'instagram'),
+  };
+  const canChannels =
+    canReadChannels(scopes) &&
+    (!pilotMode || telegramLive || whatsappLive || metaLive.messenger || metaLive.instagram);
 
   const websites = useQuery({
     queryKey: ['settings', 'websites', brandId],
@@ -645,6 +663,7 @@ export function ChannelsGrid(): ReactElement {
     pilotMode,
     telegramLive,
     whatsappLive,
+    metaLive,
   );
 
   return (
@@ -687,6 +706,7 @@ function ChannelCardView({
   const t = useTranslate();
   const meta = STATUS_META[channel.status];
   const copy = CHANNEL_COPY[channel.id];
+  const deployment = useDeployment();
   // The Website/Messenger/SMS/Instagram/Telegram status is unknown until its
   // query resolves; do not flash a wrong badge in the meantime.
   // `channelsLoading` is false while the /channels request is gated off
@@ -726,12 +746,16 @@ function ChannelCardView({
           <ChatPageLink label={cta} />
         ) : channel.id === 'email' ? (
           <EmailForwardingAddress label={cta} />
+        ) : channel.id === 'messenger' && isMetaChannelLive(deployment, 'messenger') ? (
+          <MetaLiveChannelAction channel={channel} type="messenger" cta={cta} />
         ) : channel.id === 'messenger' ? (
           <MessengerChannelAction channel={channel} cta={cta} />
         ) : channel.id === 'whatsapp' ? (
           <WhatsappChannelAction channel={channel} cta={cta} />
         ) : channel.id === 'sms' ? (
           <SmsChannelAction channel={channel} cta={cta} />
+        ) : channel.id === 'instagram' && isMetaChannelLive(deployment, 'instagram') ? (
+          <MetaLiveChannelAction channel={channel} type="instagram" cta={cta} />
         ) : channel.id === 'instagram' ? (
           <InstagramChannelAction channel={channel} cta={cta} />
         ) : channel.id === 'telegram' ? (
@@ -1104,6 +1128,85 @@ function TelegramChannelAction({ channel, cta }: { channel: Channel; cta: string
         </form>
       </Modal>
     </>
+  );
+}
+
+/**
+ * A live Messenger or Instagram card (tm 381 · KN-02): Facebook Login and a
+ * page choice instead of the mock form. Connected, it reads as the page's
+ * name or the account's @username, with the same "Live" and "Reconnect
+ * needed" marks as a live WhatsApp; a channel Meta stopped accepting is
+ * reconnected by logging in again.
+ */
+function MetaLiveChannelAction({
+  channel,
+  type,
+  cta,
+}: {
+  channel: Channel;
+  type: 'messenger' | 'instagram';
+  cta: string;
+}): ReactElement {
+  const t = useTranslate();
+  const api = useApiClient();
+  const client = useQueryClient();
+  const disconnect = useMutation({
+    mutationFn: () => api.post(`/channels/${type}/disconnect`),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['channels'] }),
+  });
+
+  if (channel.status === 'connected') {
+    return (
+      <div className="flex flex-col gap-1">
+        {channel.address && (
+          <div className="flex items-center gap-1.5">
+            <code className="min-w-0 truncate text-2xs text-content-tertiary">
+              {channel.address}
+            </code>
+            {channel.live && !channel.needsReconnect && (
+              <span className="shrink-0 rounded-sm bg-success/10 px-1.5 text-2xs font-medium text-success">
+                {t('settings.channels.live')}
+              </span>
+            )}
+            {channel.needsReconnect && (
+              <span className="shrink-0 rounded-sm bg-warning/10 px-1.5 text-2xs font-medium text-warning">
+                {t('settings.channels.whatsapp.reconnectNeeded')}
+              </span>
+            )}
+          </div>
+        )}
+        {channel.needsReconnect && (
+          <p className="text-2xs text-content-secondary">
+            {t('settings.channels.whatsapp.reconnectHint')}
+          </p>
+        )}
+        {/* A page connected while the channel was a mock has no token to reply with. */}
+        {(channel.needsReconnect || !channel.live) && (
+          <MetaLiveConnect channel={type} label={t('settings.channels.meta.reconnectCta')} />
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm(t(`settings.channels.${type}.disconnectConfirm`))) {
+              disconnect.mutate();
+            }
+          }}
+          disabled={disconnect.isPending}
+          className="self-start rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+        >
+          {disconnect.isPending ? t('settings.channels.disconnecting') : cta}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-2xs text-content-tertiary">
+        {t(`settings.channels.${type}.live.description`)}
+      </p>
+      <MetaLiveConnect channel={type} label={t('settings.channels.meta.connectCta')} />
+    </div>
   );
 }
 

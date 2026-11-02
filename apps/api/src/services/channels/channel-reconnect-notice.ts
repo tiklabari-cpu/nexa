@@ -28,7 +28,12 @@ import { channelReconnectMail } from '../mail/templates/messages.js';
 /** Who is told: the people who can reconnect a channel. */
 export const CHANNEL_RECONNECT_NOTICE_ROLES = ['owner', 'viceowner', 'admin'] as const;
 
-const CHANNEL_NAMES: Record<string, string> = { whatsapp: 'WhatsApp', telegram: 'Telegram' };
+const CHANNEL_NAMES: Record<string, string> = {
+  whatsapp: 'WhatsApp',
+  telegram: 'Telegram',
+  messenger: 'Facebook Messenger',
+  instagram: 'Instagram',
+};
 
 export interface ReconnectNoticeOptions {
   /** Absent: the mark and the audit entry only (a test, a process without mail). */

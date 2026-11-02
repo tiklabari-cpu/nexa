@@ -204,10 +204,24 @@ channelConnect:
       Meta not answering is `503` `app_provider_unavailable`. The channel's
       `address` is Meta's phone number id; `display_address` is the number.
 
+      **Live Messenger / Instagram (tm 381).** With `messenger` or
+      `instagram` in `live_apps`, the channel is connected through Facebook
+      Login (`GET /channels/meta/login-config`, then
+      `POST /channels/meta/pages`): the body is `{ selection_id, page_id }`
+      — a page from that selection. The page's access token (read with a
+      long-lived user token) is stored encrypted, and the app is subscribed to
+      the page's `messages` and `messaging_postbacks`. Messenger's
+      `address` is the page id; Instagram's is the professional account
+      linked to the page (`400`, `details.reason:
+      "instagram_account_not_linked"` when the page has none). An unknown or
+      expired selection, or a page not in it, is `400` with
+      `details.reason: "meta_selection_invalid"`.
+
       In the public pilot (`pilot_mode` on `GET /deployment`) this is refused for
       every caller with `403 not_allowed` and `error.details.reason:
       "pilot_mode"`, before the body is read: the pilot offers no adapter
-      channels — except a live Telegram or WhatsApp, which it serves.
+      channels — except a live Telegram, WhatsApp, Messenger or Instagram,
+      which it serves.
     requestBody:
       required: true
       content:
@@ -585,6 +599,152 @@ whatsappSignupConfig:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+metaLoginConfig:
+  get:
+    tags: [Configuration]
+    operationId: getMetaLoginConfig
+    summary: What Facebook Login needs for Messenger / Instagram (tm 381)
+    description: |
+      The deployment's Meta app id, Graph version, the redirect the dialog
+      returns to and the permissions each channel asks for — what the
+      Settings → Channels Messenger and Instagram cards open Facebook Login
+      with. `404` unless the deployment runs Messenger or Instagram live
+      (`live_apps`).
+    responses:
+      "200":
+        description: The login configuration
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/MetaLoginConfig" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+metaPages:
+  post:
+    tags: [Configuration]
+    operationId: listMetaPages
+    summary: The pages a Facebook Login opened (tm 381)
+    description: |
+      Exchanges the login's one-time `code` for a long-lived user token and
+      lists the Facebook Pages that person manages, each with its linked
+      Instagram professional account. The page tokens are kept on the server
+      (encrypted, ten minutes, this workspace only) under `selection_id`;
+      the answer carries no token. Connect one with
+      `POST /channels/{type}/connect` `{ selection_id, page_id }`.
+
+      A code Meta refuses is `400` with `details.reason:
+      "app_credentials_invalid"`; Meta not answering is `503`
+      `app_provider_unavailable`. `404` unless the deployment runs
+      Messenger or Instagram live (`live_apps`).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [code]
+            additionalProperties: false
+            properties:
+              code: { type: string, minLength: 1, maxLength: 2048 }
+    responses:
+      "200":
+        description: The pages to choose from
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/MetaPageSelection" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503": { $ref: "../openapi.yaml#/components/responses/AppProviderUnavailable" }
+
+metaMessagingWebhook:
+  get:
+    tags: [Configuration]
+    operationId: verifyMetaMessagingWebhook
+    summary: Meta's webhook subscription handshake for Messenger / Instagram (tm 381)
+    description: |
+      Meta calls this once when the app's `page` or `instagram` webhook is
+      configured: with `hub.mode=subscribe` and the deployment's verify token
+      (the Meta app's, `WHATSAPP_VERIFY_TOKEN`) it answers `hub.challenge`
+      as plain text; anything else is `403`. `404` unless the deployment runs
+      Messenger or Instagram live (`live_apps`).
+    security: []
+    parameters:
+      - { name: hub.mode, in: query, required: true, schema: { type: string } }
+      - { name: hub.verify_token, in: query, required: true, schema: { type: string } }
+      - { name: hub.challenge, in: query, required: true, schema: { type: string } }
+    responses:
+      "200":
+        description: The challenge, echoed
+        content:
+          text/plain:
+            schema: { type: string }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+  post:
+    tags: [Configuration]
+    operationId: ingestMetaMessagingWebhook
+    summary: Receive Messenger / Instagram messages (tm 381)
+    description: |
+      The Messenger and Instagram webhook of the deployment's Meta app
+      (FR-MOD-08.5.4 · FR-MOD-08.5.7, tm 381). Public — Meta has no session —
+      but authenticated exactly as the WhatsApp one: `X-Hub-Signature-256`
+      must be `sha256=` and the HMAC-SHA256 of the raw body under the app
+      secret, compared in constant time. A missing or wrong signature is
+      `401` and nothing is written.
+
+      `object` is `page` (Messenger) or `instagram`. Each messaging item's
+      recipient (the page id / Instagram account id) resolves the workspace;
+      the sender's page-scoped id (PSID / IGSID) is the customer — the same
+      person on two pages is two customers. A message id (`mid`) delivered
+      twice is taken in once. Echoes of the page's own messages, delivery
+      and read receipts and reactions are acknowledged and dropped; a story
+      reply, a story mention, an attachment and a postback button arrive as a
+      plain message. A recipient no live channel answers to is acknowledged
+      and dropped, so one stale page cannot make Meta retry everyone's.
+
+      `404` unless the deployment runs Messenger or Instagram live (`live_apps`).
+    security: []
+    parameters:
+      - name: X-Hub-Signature-256
+        in: header
+        required: true
+        schema: { type: string, example: "sha256=5f2b…" }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            description: "A Messenger or Instagram webhook (`object` is `page` or `instagram`)."
+            additionalProperties: true
+    responses:
+      "200":
+        description: Received
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, accepted, duplicates, ignored]
+              properties:
+                status: { type: string, enum: [received] }
+                accepted:
+                  type: integer
+                  description: Messages taken into a chat.
+                duplicates:
+                  type: integer
+                  description: Messages already taken in (a redelivered `mid`).
+                ignored:
+                  type: integer
+                  description: Messages dropped (no live channel, spam).
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
 
 emailAddresses:
   get:

@@ -1699,6 +1699,31 @@ describe('Apps live providers and their credential key (tm 263 · FR-MOD-09.2)',
     );
     expect(() => parseEnv({ ...BASE, WHATSAPP_GRAPH_VERSION: 'latest' })).toThrow(/v21.0/);
   });
+
+  // tm 381: Messenger / Instagram are the same Meta app — its id, secret and verify token.
+  it('keeps Messenger and Instagram demos until the Meta app is set, without the signup configuration', () => {
+    const live = parseEnv({
+      ...BASE,
+      APPS_CREDENTIAL_KEY: KEY,
+      APPS_LIVE_PROVIDERS: 'messenger,instagram',
+      WHATSAPP_APP_ID: '1234567890',
+      WHATSAPP_APP_SECRET: 'app-secret',
+      WHATSAPP_VERIFY_TOKEN: 'verify-token',
+    });
+    expect(live.APPS_LIVE_PROVIDERS).toEqual(['messenger', 'instagram']);
+    expect(live.appsLiveWarnings).toEqual([]);
+
+    const missing = parseEnv({
+      ...BASE,
+      APPS_CREDENTIAL_KEY: KEY,
+      APPS_LIVE_PROVIDERS: 'brevo,instagram',
+      WHATSAPP_APP_ID: '1234567890',
+    });
+    expect(missing.APPS_LIVE_PROVIDERS).toEqual(['brevo']);
+    expect(missing.appsLiveWarnings.join(' ')).toMatch(
+      /names instagram but WHATSAPP_APP_SECRET, WHATSAPP_VERIFY_TOKEN are not set; Instagram stays a demo/,
+    );
+  });
 });
 
 describe('DATABASE_POOL_SIZE', () => {

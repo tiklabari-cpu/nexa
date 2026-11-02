@@ -30,7 +30,8 @@ export function liveVerifier(
 
 /**
  * Every card id this deployment runs live — data cards with a switched-on
- * verifier, plus `telegram` / `whatsapp` (tm 380) when their live channel is on. What `GET /deployment`
+ * verifier, plus `telegram` / `whatsapp` (tm 380) / `messenger` / `instagram` (tm 381) when
+ * their live channel is on. What `GET /deployment`
  * reports as `live_apps` and what the pilot gate lets through.
  */
 export function liveAppIds(liveProviders: readonly LiveAppId[]): string[] {
@@ -38,6 +39,8 @@ export function liveAppIds(liveProviders: readonly LiveAppId[]): string[] {
     (id) =>
       id === 'telegram' ||
       id === 'whatsapp' ||
+      id === 'messenger' ||
+      id === 'instagram' ||
       Object.prototype.hasOwnProperty.call(APP_VERIFIERS, id),
   );
 }

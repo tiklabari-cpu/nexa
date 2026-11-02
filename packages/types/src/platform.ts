@@ -381,6 +381,8 @@ export const IMPERSONATION_FORBIDDEN_PATHS: readonly ImpersonationForbiddenRule[
   { pattern: /^\/channels\/telegram\/webhook\/[^/]+$/, category: 'not_a_member_surface' },
   // Meta's signed WhatsApp delivery callback (tm 380): the caller is Meta, never a member.
   { pattern: /^\/channels\/whatsapp\/cloud-webhook$/, category: 'not_a_member_surface' },
+  // Meta's signed Messenger / Instagram delivery callback (tm 381), the same.
+  { pattern: /^\/channels\/meta\/messaging-webhook$/, category: 'not_a_member_surface' },
   { pattern: /^\/channels\/email\/inbound$/, category: 'not_a_member_surface' },
   // Stripe's signed event callback (tm 382): the caller is the processor.
   { pattern: /^\/billing\/webhooks\/stripe$/, category: 'not_a_member_surface' },
@@ -400,7 +402,8 @@ export const IMPERSONATION_ALLOWED_WRITES: readonly RegExp[] = [
   /^\/groups(\/.*)?$/,
   /^\/brands(\/.*)?$/,
   /^\/websites(\/.*)?$/,
-  /^\/channels\/(email\/addresses|[^/]+\/(connect|disconnect|messages))(\/.*)?$/,
+  // `meta/pages` (tm 381) is the first half of a Messenger / Instagram connect.
+  /^\/channels\/(email\/addresses|meta\/pages|[^/]+\/(connect|disconnect|messages))(\/.*)?$/,
   /^\/campaigns(\/.*)?$/,
   /^\/goals(\/.*)?$/,
   /^\/handoff-routes(\/.*)?$/,

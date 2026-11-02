@@ -764,8 +764,15 @@ cannedResponses:
           application/json:
             schema:
               type: object
-              required: [items, fallback_text, company_name]
+              required: [items, fallback_text, company_name, customer_idle_seconds]
               properties:
+                customer_idle_seconds:
+                  type: integer
+                  format: int32
+                  description: |
+                    How long the player may stay silent after the agent's last
+                    message before the "player went quiet" chips appear
+                    (IN-07); the brand's setting, 180 unless set.
                 items:
                   type: array
                   items: { $ref: "../openapi.yaml#/components/schemas/CannedResponse" }
@@ -827,6 +834,27 @@ cannedResponses:
                 format: int64
                 nullable: true
                 description: The team the reply belongs to. Required when `visibility` is `group`.
+              suggest_on:
+                type: array
+                uniqueItems: true
+                items:
+                  {
+                    type: string,
+                    enum: [chat_started, chat_transferred, customer_idle, rated_good, rated_bad],
+                  }
+                description: >-
+                  The chat events the reply is offered as a chip on (IN-07); empty: never.
+              suggest_order:
+                type: integer
+                format: int32
+                minimum: 0
+                maximum: 1000
+                description: The place among one event's chips; smaller first.
+              category:
+                type: string
+                enum: [general, promotion]
+                description: >-
+                  `promotion` replies are not suggested while the player is kept from promotions (EN-01).
     responses:
       "201":
         description: Saved
@@ -870,6 +898,27 @@ cannedResponse:
               shortcut: { type: string, pattern: "^[A-Za-z0-9_-]{1,40}$" }
               text: { type: string, minLength: 1, maxLength: 10000 }
               visibility: { type: string, enum: [all, group, private] }
+              suggest_on:
+                type: array
+                uniqueItems: true
+                items:
+                  {
+                    type: string,
+                    enum: [chat_started, chat_transferred, customer_idle, rated_good, rated_bad],
+                  }
+                description: >-
+                  The chat events the reply is offered as a chip on (IN-07); empty: never.
+              suggest_order:
+                type: integer
+                format: int32
+                minimum: 0
+                maximum: 1000
+                description: The place among one event's chips; smaller first.
+              category:
+                type: string
+                enum: [general, promotion]
+                description: >-
+                  `promotion` replies are not suggested while the player is kept from promotions (EN-01).
               group_id:
                 type: integer
                 format: int64
@@ -1743,6 +1792,17 @@ chatTimeout:
                   here instead); null turns it off. Must be below
                   `unanswered_transfer_seconds`, `inactive_after_seconds` and
                   `chat_timeout_seconds` when those are on.
+              customer_idle_seconds:
+                type: integer
+                format: int32
+                minimum: 10
+                maximum: 86400
+                nullable: true
+                description: >-
+                  Seconds a player may stay silent after the agent's last
+                  message before the "player went quiet" suggested replies
+                  appear (IN-07); null puts the default (180) back. Left out,
+                  the stored value stays.
               waiting_warn_seconds:
                 type: integer
                 format: int32

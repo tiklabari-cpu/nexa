@@ -1,6 +1,7 @@
 export * from './domain.js';
 export * from './template-variables.js';
 export * from './canned-variables.js';
+export * from './event-suggestions.js';
 export * from './custom-fields.js';
 export * from './apps.js';
 export * from './api-packages.js';

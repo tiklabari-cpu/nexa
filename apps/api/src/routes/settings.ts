@@ -66,6 +66,12 @@ import {
   normaliseTranscriptDomain,
   unverifiedForwardAddress,
   findCannedResponseProblems,
+  CANNED_CATEGORIES,
+  CUSTOMER_IDLE_MAX_SECONDS,
+  CUSTOMER_IDLE_MIN_SECONDS,
+  DEFAULT_CUSTOMER_IDLE_SECONDS,
+  SUGGEST_EVENTS,
+  SUGGEST_ORDER_MAX,
 } from '@siyahtus/types';
 import type {
   CompanySector,
@@ -426,7 +432,22 @@ const cannedFallbackBody = z.object({
   fallback_text: z.string().trim().min(1).max(CANNED_FALLBACK_MAX).nullable(),
 });
 
+/**
+ * The IN-07 fields of a saved reply: the chat events it is offered on, its
+ * place among them and whether it is a promotion. Repeats are refused rather
+ * than collapsed, so what a client reads back is what it sent.
+ */
+const cannedSuggestOn = z
+  .array(z.enum(SUGGEST_EVENTS))
+  .max(SUGGEST_EVENTS.length)
+  .refine((events) => new Set(events).size === events.length, 'events must not repeat');
+const cannedSuggestOrder = z.number().int().min(0).max(SUGGEST_ORDER_MAX);
+const cannedCategory = z.enum(CANNED_CATEGORIES);
+
 const createCannedBody = z.object({
+  suggest_on: cannedSuggestOn.default([]),
+  suggest_order: cannedSuggestOrder.default(0),
+  category: cannedCategory.default('general'),
   shortcut: z.string().trim().regex(SHORTCUT, 'letters, digits, _ and - only, up to 40'),
   text: cannedText,
   scope: z.enum(['chat', 'ticket']).default('chat'),
@@ -444,6 +465,9 @@ const updateCannedBody = z
     text: cannedText.optional(),
     visibility: cannedVisibility.optional(),
     group_id: cannedGroupId.optional(),
+    suggest_on: cannedSuggestOn.optional(),
+    suggest_order: cannedSuggestOrder.optional(),
+    category: cannedCategory.optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -678,6 +702,15 @@ const updateChatTimeoutBody = z.object({
   // When an inbox row turns to a warning and to an alert (IN-03 · tm 361).
   // Null puts the default back; their order is checked against the stored row.
   waiting_warn_seconds: z.number().int().positive().max(WAITING_MAX_SECONDS).nullable().optional(),
+  // How long a quiet player takes to count as idle for the suggested replies
+  // (IN-07 · tm 364). Null puts the default back.
+  customer_idle_seconds: z
+    .number()
+    .int()
+    .min(CUSTOMER_IDLE_MIN_SECONDS)
+    .max(CUSTOMER_IDLE_MAX_SECONDS)
+    .nullable()
+    .optional(),
   waiting_alert_seconds: z.number().int().positive().max(WAITING_MAX_SECONDS).nullable().optional(),
   // How long a solved ticket still reopens on the player's e-mailed answer
   // (tm 358 · HD-03). Optional the same way; the CHECK holds the same bounds.
@@ -2178,9 +2211,15 @@ export default async function settingsRoutes(
       const principal = request.requirePrincipal();
 
       const organizationId = request.tenant().organizationId;
-      const { items, settings, org } = await request.withTenant(async (tx) => {
+      const { items, settings, org, idle } = await request.withTenant(async (tx) => {
         const visibility = await resolveCannedVisibility(tx, principal);
-        const [items, settings, org] = await Promise.all([
+        // The list never fails for want of a default brand (every real workspace has
+        // one): without it the delay is simply the default.
+        const idleBrandId =
+          request.brandId ??
+          (await tx.brand.findFirst({ where: { isDefault: true }, select: { id: true } }))?.id ??
+          null;
+        const [items, settings, org, idle] = await Promise.all([
           tx.cannedResponse.findMany({
             where: {
               ...(query.scope ? { scope: query.scope } : {}),
@@ -2192,14 +2231,24 @@ export default async function settingsRoutes(
           // `{{company.name}}` (IN-06): the composer has no other read of it an
           // agent may make — `GET /settings/company` is an admin's.
           tx.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
+          // How long a quiet player takes to count as idle (IN-07): the same read
+          // every member's composer makes, so it rides on this list rather than on
+          // the admin-only chat-timeout endpoint.
+          idleBrandId === null
+            ? Promise.resolve(null)
+            : tx.inboxSettings.findFirst({
+                where: { brandId: idleBrandId },
+                select: { customerIdleSeconds: true },
+              }),
         ]);
-        return { items, settings, org };
+        return { items, settings, org, idle };
       });
 
       return reply.send({
         items: items.map(serialiseCanned),
         fallback_text: settings?.fallbackText ?? null,
         company_name: org?.name ?? null,
+        customer_idle_seconds: idle?.customerIdleSeconds ?? DEFAULT_CUSTOMER_IDLE_SECONDS,
       });
     },
   );
@@ -2235,6 +2284,9 @@ export default async function settingsRoutes(
               visibility: scope.visibility,
               groupId: scope.groupId,
               ownerAccountId: scope.ownerAccountId,
+              suggestOn: body.suggest_on,
+              suggestOrder: body.suggest_order,
+              category: body.category,
               updatedBy: principal.kind === 'agent' ? principal.accountId : null,
               updatedAt: new Date(),
             },
@@ -2311,6 +2363,9 @@ export default async function settingsRoutes(
             data: {
               ...(body.shortcut !== undefined ? { shortcut: body.shortcut } : {}),
               ...(body.text !== undefined ? { text: body.text } : {}),
+              ...(body.suggest_on !== undefined ? { suggestOn: body.suggest_on } : {}),
+              ...(body.suggest_order !== undefined ? { suggestOrder: body.suggest_order } : {}),
+              ...(body.category !== undefined ? { category: body.category } : {}),
               ...(scope
                 ? {
                     visibility: scope.visibility,
@@ -3119,6 +3174,10 @@ export default async function settingsRoutes(
             },
           );
         }
+        const idle =
+          body.customer_idle_seconds === undefined
+            ? {}
+            : { customerIdleSeconds: body.customer_idle_seconds };
         const dayBoundary = {
           ...(body.day_boundary_timezone === undefined
             ? {}
@@ -3193,6 +3252,7 @@ export default async function settingsRoutes(
             chatTimeoutSeconds: body.chat_timeout_seconds,
             ...windows,
             ...waiting,
+            ...idle,
             ...dayBoundary,
             ...pauseAndReopen,
             ...forward,
@@ -3202,6 +3262,7 @@ export default async function settingsRoutes(
             chatTimeoutSeconds: body.chat_timeout_seconds,
             ...windows,
             ...waiting,
+            ...idle,
             ...dayBoundary,
             ...pauseAndReopen,
             ...forward,
@@ -3221,6 +3282,7 @@ export default async function settingsRoutes(
             ask_email_when_offline: row.askEmailWhenOffline,
             waiting_warn_seconds: row.waitingWarnSeconds,
             waiting_alert_seconds: row.waitingAlertSeconds,
+            customer_idle_seconds: row.customerIdleSeconds,
             ticket_reopen_window_days: row.ticketReopenWindowDays,
             transcript_allowed_domains: row.transcriptAllowedDomains,
             // The domains only, as the transcript mails are recorded.
@@ -4142,6 +4204,7 @@ function serialiseInbox(
         askEmailWhenOffline: boolean;
         waitingWarnSeconds: number | null;
         waitingAlertSeconds: number | null;
+        customerIdleSeconds: number | null;
         ticketReopenWindowDays: number;
         transcriptAllowedDomains: string[];
         transcriptForwardTo: string[];
@@ -4169,6 +4232,8 @@ function serialiseInbox(
     // Null: the defaults below (IN-03); the inbox reads the effective pair too.
     waiting_warn_seconds: row?.waitingWarnSeconds ?? null,
     waiting_alert_seconds: row?.waitingAlertSeconds ?? null,
+    // Null: the default, `DEFAULT_CUSTOMER_IDLE_SECONDS` (IN-07).
+    customer_idle_seconds: row?.customerIdleSeconds ?? null,
     ticket_reopen_window_days: row?.ticketReopenWindowDays ?? TICKET_REOPEN_WINDOW_DAYS_DEFAULT,
     transcript_allowed_domains: row?.transcriptAllowedDomains ?? [],
     transcript_forward_to: row?.transcriptForwardTo ?? [],
@@ -4514,6 +4579,9 @@ function serialiseCanned(row: {
   groupId: bigint | null;
   visibility: string;
   ownerAccountId: string | null;
+  suggestOn: string[];
+  suggestOrder: number;
+  category: string;
   updatedBy: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -4526,6 +4594,9 @@ function serialiseCanned(row: {
     group_id: row.groupId === null ? null : Number(row.groupId),
     visibility: row.visibility,
     owner_account_id: row.ownerAccountId,
+    suggest_on: row.suggestOn,
+    suggest_order: row.suggestOrder,
+    category: row.category,
     updated_by: row.updatedBy,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),

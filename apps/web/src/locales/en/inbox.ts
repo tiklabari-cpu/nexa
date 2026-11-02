@@ -252,6 +252,17 @@ export const inbox: Messages = {
   'inbox.composer.suggestions.chip.holdingMoment': 'Give me a moment, I’ll check that for you.',
   'inbox.composer.picker.ariaLabel': 'Saved replies',
   'inbox.composer.picker.personal': 'Personal',
+  'inbox.composer.picker.eventsOff': 'Close event suggestions for me',
+  'inbox.composer.picker.eventsOn': 'Turn event suggestions back on',
+  // Event-bound suggested replies (IN-07): saved replies offered when something happens in the chat.
+  'inbox.composer.eventSuggestions.ariaLabel': 'Suggested replies for this moment',
+  'inbox.composer.eventSuggestions.dismiss': 'Dismiss these suggestions',
+  'inbox.composer.eventSuggestions.event.chat_started': 'Suggested: the chat just started',
+  'inbox.composer.eventSuggestions.event.chat_transferred':
+    'Suggested: the chat was transferred to you',
+  'inbox.composer.eventSuggestions.event.customer_idle': 'Suggested: the player has not answered',
+  'inbox.composer.eventSuggestions.event.rated_good': 'Suggested: the player rated this good',
+  'inbox.composer.eventSuggestions.event.rated_bad': 'Suggested: the player rated this bad',
   'inbox.composer.picker.fallbackDefault': 'valued member',
   'inbox.composer.placeholder.note': 'Add a note for your team…',
   'inbox.composer.placeholder.reply': 'Type your reply, or press Space for suggestions…',

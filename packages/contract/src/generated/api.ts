@@ -13698,9 +13698,14 @@ export interface components {
      *     navigation" switch. It defaults to `true` — the navigation is the only
      *     way between Settings sections, so a new member sees it and folds it away
      *     rather than having to discover it.
+     *
+     *     `suggestions_event_enabled` (IN-07) is "close event suggestions for me":
+     *     while `false` the chips that follow a chat event are not shown to this
+     *     member. On by default.
      */
     UiPreferences: {
       settings_nav_pinned: boolean;
+      suggestions_event_enabled: boolean;
       /**
        * @description The panel font this member chose; `null` follows the workspace
        *     default. Whether it applies is `GET /auth/me`'s `appearance`: the
@@ -20037,6 +20042,11 @@ export interface components {
       ask_email_when_offline: boolean;
       /**
        * Format: int32
+       * @description Seconds a player may stay silent after the agent's last message before the "player went quiet" suggested replies appear (IN-07); null: the default, 180.
+       */
+      customer_idle_seconds?: number | null;
+      /**
+       * Format: int32
        * @description Seconds a player may wait before the inbox row turns to a warning (IN-03); null: the default, 120.
        */
       waiting_warn_seconds?: number | null;
@@ -20469,6 +20479,25 @@ export interface components {
        * @description The author of a `private` reply; null for a shared one.
        */
       owner_account_id: string | null;
+      /**
+       * @description The chat events this reply is offered as a chip on (IN-07); empty
+       *     means it is never suggested. The panel detects the event and shows
+       *     the chip above the reply box — it never sends one by itself.
+       */
+      suggest_on: (
+        'chat_started' | 'chat_transferred' | 'customer_idle' | 'rated_good' | 'rated_bad'
+      )[];
+      /**
+       * Format: int32
+       * @description The place among the chips of one event; smaller first, ties by shortcut.
+       */
+      suggest_order: number;
+      /**
+       * @description `promotion` marks a bonus or promotion text: it is not suggested while
+       *     the player is kept from promotions (EN-01).
+       * @enum {string}
+       */
+      category: 'general' | 'promotion';
       updated_by?: string | null;
       /** Format: date-time */
       created_at: string;
@@ -31729,6 +31758,8 @@ export interface operations {
         'application/json': {
           /** @description Whether the Settings side navigation is shown pinned (`true`) or folded away. */
           settings_nav_pinned?: boolean;
+          /** @description Whether the chips that follow a chat event are shown to the caller (IN-07). */
+          suggestions_event_enabled?: boolean;
           /**
            * @description The caller's own panel font, stamped with the time of the
            *     write; `null` clears the choice (and its time) so the
@@ -37920,6 +37951,13 @@ export interface operations {
         };
         content: {
           'application/json': {
+            /**
+             * Format: int32
+             * @description How long the player may stay silent after the agent's last
+             *     message before the "player went quiet" chips appear
+             *     (IN-07); the brand's setting, 180 unless set.
+             */
+            customer_idle_seconds: number;
             items: components['schemas']['CannedResponse'][];
             /**
              * @description What the composer puts in place of a variable it has no value
@@ -37974,6 +38012,20 @@ export interface operations {
            * @description The team the reply belongs to. Required when `visibility` is `group`.
            */
           group_id?: number | null;
+          /** @description The chat events the reply is offered as a chip on (IN-07); empty: never. */
+          suggest_on?: (
+            'chat_started' | 'chat_transferred' | 'customer_idle' | 'rated_good' | 'rated_bad'
+          )[];
+          /**
+           * Format: int32
+           * @description The place among one event's chips; smaller first.
+           */
+          suggest_order?: number;
+          /**
+           * @description `promotion` replies are not suggested while the player is kept from promotions (EN-01).
+           * @enum {string}
+           */
+          category?: 'general' | 'promotion';
         };
       };
     };
@@ -38042,6 +38094,20 @@ export interface operations {
           text?: string;
           /** @enum {string} */
           visibility?: 'all' | 'group' | 'private';
+          /** @description The chat events the reply is offered as a chip on (IN-07); empty: never. */
+          suggest_on?: (
+            'chat_started' | 'chat_transferred' | 'customer_idle' | 'rated_good' | 'rated_bad'
+          )[];
+          /**
+           * Format: int32
+           * @description The place among one event's chips; smaller first.
+           */
+          suggest_order?: number;
+          /**
+           * @description `promotion` replies are not suggested while the player is kept from promotions (EN-01).
+           * @enum {string}
+           */
+          category?: 'general' | 'promotion';
           /**
            * Format: int64
            * @description Re-scoping is a pair, so the two fields are read together: the
@@ -39841,6 +39907,11 @@ export interface operations {
            * @description Seconds a connection may wait for a person's first reply before the player is asked for an e-mail (once; a player whose e-mail or username is known is told the answer will come here instead); null turns it off. Must be below `unanswered_transfer_seconds`, `inactive_after_seconds` and `chat_timeout_seconds` when those are on.
            */
           ask_email_after_seconds?: number | null;
+          /**
+           * Format: int32
+           * @description Seconds a player may stay silent after the agent's last message before the "player went quiet" suggested replies appear (IN-07); null puts the default (180) back. Left out, the stored value stays.
+           */
+          customer_idle_seconds?: number | null;
           /**
            * Format: int32
            * @description Seconds a player may wait before the inbox row turns to a warning (IN-03); null puts the default (120) back. Must be below `waiting_alert_seconds`. Left out, the stored value stays.

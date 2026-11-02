@@ -11,6 +11,7 @@ import type { TenantClient } from '../../lib/tenant.js';
 
 const UI_PREFERENCE_SELECT = {
   settingsNavPinned: true,
+  suggestionsEventEnabled: true,
   fontPreset: true,
   fontPresetSetAt: true,
 } as const;
@@ -18,6 +19,7 @@ const UI_PREFERENCE_SELECT = {
 function serialise(
   row: {
     settingsNavPinned: boolean;
+    suggestionsEventEnabled: boolean;
     fontPreset: string | null;
     fontPresetSetAt: Date | null;
   } | null,
@@ -28,6 +30,7 @@ function serialise(
   const fontPreset = isPanelFontPreset(row.fontPreset) ? row.fontPreset : null;
   return {
     settings_nav_pinned: row.settingsNavPinned,
+    suggestions_event_enabled: row.suggestionsEventEnabled,
     font_preset: fontPreset,
     font_preset_set_at: fontPreset ? (row.fontPresetSetAt?.toISOString() ?? null) : null,
   };
@@ -55,6 +58,9 @@ export async function writeUiPreferences(
     data: {
       ...(input.patch.settings_nav_pinned !== undefined
         ? { settingsNavPinned: input.patch.settings_nav_pinned }
+        : {}),
+      ...(input.patch.suggestions_event_enabled !== undefined
+        ? { suggestionsEventEnabled: input.patch.suggestions_event_enabled }
         : {}),
       // A font choice is stamped with when it was made — that time is what
       // "latest wins" orders against the workspace default. Clearing it

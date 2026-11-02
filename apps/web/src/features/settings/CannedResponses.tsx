@@ -29,7 +29,13 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useRef, useState, type ReactElement } from 'react';
-import { CANNED_VARIABLES, findCannedResponseProblems, type CannedVariable } from '@siyahtus/types';
+import {
+  CANNED_VARIABLES,
+  findCannedResponseProblems,
+  type CannedCategory,
+  type CannedVariable,
+  type SuggestEvent,
+} from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { useSettingsLeaveGuard } from '../../components/settings/FormSaveBar.js';
 import { useConfirm } from '../../components/ui/index.js';
@@ -41,6 +47,7 @@ import { FieldError, required, useForm } from '../../lib/form.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { Dropdown } from '../../components/ui/Dropdown.js';
 import { foldForSearch } from '../inbox/cannedSearch.js';
+import { SuggestedResponses } from '../suggestions/SuggestedResponses.js';
 
 interface CannedResponse {
   id: string;
@@ -49,6 +56,10 @@ interface CannedResponse {
   scope: 'chat' | 'ticket';
   group_id: number | null;
   visibility: 'all' | 'group' | 'private';
+  /** The chat events the reply is offered on (IN-07); absent from an older server. */
+  suggest_on?: SuggestEvent[];
+  suggest_order?: number;
+  category?: CannedCategory;
 }
 
 /** The picker's value for a personal reply; `''` is everyone, a number a team. */
@@ -94,11 +105,14 @@ function scopeBody(teamId: string): {
 export function CannedResponses({
   canEdit,
   canWritePersonal = canEdit,
+  canConfigureIdle = false,
 }: {
   /** Manages the shared library (`canned_responses--all:rw`). */
   canEdit: boolean;
   /** Saves their own personal replies (`canned_responses--my:rw`); every member by default. */
   canWritePersonal?: boolean;
+  /** May change the inbox settings (`access_rules:rw`): the "player went quiet" delay (IN-07). */
+  canConfigureIdle?: boolean;
 }): ReactElement {
   const t = useTranslate();
   const { confirm, dialog } = useConfirm();
@@ -588,6 +602,14 @@ export function CannedResponses({
             </ul>
           )}
         </Card>
+      )}
+      {list.data && (
+        <SuggestedResponses
+          items={list.data.items}
+          canEdit={canEdit}
+          canWritePersonal={canWritePersonal}
+          canConfigureIdle={canConfigureIdle}
+        />
       )}
       {dialog}
     </Section>

@@ -8,7 +8,12 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import { fillCannedResponse, type CannedValues } from '@siyahtus/types';
+import {
+  fillCannedResponse,
+  type CannedCategory,
+  type CannedValues,
+  type SuggestEvent,
+} from '@siyahtus/types';
 import { useApiClient } from '../../lib/auth-store.js';
 import { rankCannedResponses } from './cannedSearch.js';
 
@@ -18,6 +23,11 @@ export interface CannedResponse {
   text: string;
   /** `private` is the caller's own personal reply (IN-06); absent from an older server. */
   visibility?: 'all' | 'group' | 'private';
+  /** The chat events the reply is offered as a chip on (IN-07); absent from an older server. */
+  suggest_on?: SuggestEvent[];
+  suggest_order?: number;
+  /** `promotion` replies are not suggested to a player kept from promotions. */
+  category?: CannedCategory;
 }
 
 /** The list endpoint's answer: the replies, and the workspace's phrase for a variable with no value. */
@@ -27,6 +37,8 @@ export interface CannedResponseList {
   fallback_text?: string | null;
   /** The workspace name, for `{{company.name}}`; absent from an older server. */
   company_name?: string | null;
+  /** Seconds of player silence before the "went quiet" chips (IN-07); absent from an older server. */
+  customer_idle_seconds?: number;
 }
 
 export function useCannedResponses() {

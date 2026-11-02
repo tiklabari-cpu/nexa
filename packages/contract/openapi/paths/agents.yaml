@@ -206,6 +206,9 @@ uiPreferences:
               settings_nav_pinned:
                 type: boolean
                 description: Whether the Settings side navigation is shown pinned (`true`) or folded away.
+              suggestions_event_enabled:
+                type: boolean
+                description: Whether the chips that follow a chat event are shown to the caller (IN-07).
               font_preset:
                 allOf:
                   - $ref: "../openapi.yaml#/components/schemas/PanelFontPreset"

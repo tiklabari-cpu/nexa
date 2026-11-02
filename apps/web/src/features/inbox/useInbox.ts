@@ -40,6 +40,7 @@ import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { optimisticCacheUpdate } from '../../lib/optimistic.js';
 import { usePagedQuery, type PagedQueryResult, type PagedResponse } from '../../lib/paged-query.js';
 import { useTypingStore } from './typing.js';
+import { useEventSuggestionStore } from './eventSuggestionState.js';
 import { useConflictStore, type ConflictAgent } from './conflict.js';
 import { useFailedSendStore } from './failedSends.js';
 import { retireDraft } from './composerDrafts.js';
@@ -1606,6 +1607,8 @@ export function applyPush(
       // (`ratings.view`), so the chat and the archive re-read.
       const chatId = payload['chat_id'];
       if (typeof chatId === 'string') {
+        // The rated-reply chips (IN-07) wait for this push; the value comes from the re-read.
+        useEventSuggestionStore.getState().markRated(chatId);
         void queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
       }
       void queryClient.invalidateQueries({ queryKey: ['archive'] });

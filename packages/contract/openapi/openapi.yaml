@@ -1082,9 +1082,14 @@ components:
         navigation" switch. It defaults to `true` — the navigation is the only
         way between Settings sections, so a new member sees it and folds it away
         rather than having to discover it.
-      required: [settings_nav_pinned, font_preset, font_preset_set_at]
+
+        `suggestions_event_enabled` (IN-07) is "close event suggestions for me":
+        while `false` the chips that follow a chat event are not shown to this
+        member. On by default.
+      required: [settings_nav_pinned, suggestions_event_enabled, font_preset, font_preset_set_at]
       properties:
         settings_nav_pinned: { type: boolean }
+        suggestions_event_enabled: { type: boolean }
         font_preset:
           allOf:
             - $ref: "#/components/schemas/PanelFontPreset"
@@ -9612,6 +9617,16 @@ components:
           description: >-
             Whether a connection waiting for a person while nobody is accepting
             chats asks the player for an e-mail at once. False unless turned on.
+        customer_idle_seconds:
+          type: integer
+          format: int32
+          nullable: true
+          minimum: 10
+          maximum: 86400
+          description: >-
+            Seconds a player may stay silent after the agent's last message
+            before the "player went quiet" suggested replies appear (IN-07);
+            null: the default, 180.
         waiting_warn_seconds:
           type: integer
           format: int32
@@ -10185,7 +10200,20 @@ components:
         them when the reply is inserted. A write naming an unknown variable is
         refused with 400.
       required:
-        [id, shortcut, text, scope, group_id, visibility, owner_account_id, created_at, updated_at]
+        [
+          id,
+          shortcut,
+          text,
+          scope,
+          group_id,
+          visibility,
+          owner_account_id,
+          suggest_on,
+          suggest_order,
+          category,
+          created_at,
+          updated_at,
+        ]
       properties:
         id: { type: string, format: uuid }
         shortcut: { type: string }
@@ -10210,6 +10238,28 @@ components:
           format: uuid
           nullable: true
           description: The author of a `private` reply; null for a shared one.
+        suggest_on:
+          type: array
+          items:
+            type: string
+            enum: [chat_started, chat_transferred, customer_idle, rated_good, rated_bad]
+          uniqueItems: true
+          description: |
+            The chat events this reply is offered as a chip on (IN-07); empty
+            means it is never suggested. The panel detects the event and shows
+            the chip above the reply box — it never sends one by itself.
+        suggest_order:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 1000
+          description: The place among the chips of one event; smaller first, ties by shortcut.
+        category:
+          type: string
+          enum: [general, promotion]
+          description: |
+            `promotion` marks a bonus or promotion text: it is not suggested while
+            the player is kept from promotions (EN-01).
         updated_by: { type: string, nullable: true }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }

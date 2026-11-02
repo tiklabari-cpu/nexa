@@ -37,6 +37,8 @@
  * language the agent is working in.
  */
 
+import type { SuggestEvent } from '@siyahtus/types';
+
 /** One turn of the visible conversation, reduced to who spoke and what they said. */
 export interface SuggestionTurn {
   role: 'customer' | 'agent';
@@ -47,11 +49,14 @@ export interface SuggestionTurn {
  * A chip the agent can press. `template` chips come from {@link
  * replySuggestionIds} + the catalogue; a `copilot` chip is a draft the
  * knowledge base answered with, and is marked so the composer can say where it
- * came from.
+ * came from. An `event` chip (IN-07) is a saved reply the workspace bound to
+ * something that just happened in the conversation (`event` says which); it
+ * leads the row, ahead of Copilot's draft and the templates.
  */
 export interface ReplyChip {
   text: string;
-  source: 'template' | 'copilot';
+  source: 'template' | 'copilot' | 'event';
+  event?: SuggestEvent;
 }
 
 /**
@@ -178,8 +183,23 @@ export function replySuggestionIds(turns: SuggestionTurn[]): ReplySuggestionId[]
 export function withCopilotDraft(chips: readonly ReplyChip[], draft: string): ReplyChip[] {
   const text = draft.trim();
   if (text.length === 0) return [...chips];
-  return [
-    { text, source: 'copilot' as const },
-    ...chips.filter((chip) => chip.text !== text),
-  ].slice(0, MAX_SUGGESTIONS);
+  // Event chips lead (IN-07): the order is event, then Copilot, then template.
+  const events = chips.filter((chip) => chip.source === 'event' && chip.text !== text);
+  const rest = chips.filter((chip) => chip.source !== 'event' && chip.text !== text);
+  return [...events, { text, source: 'copilot' as const }, ...rest].slice(0, MAX_SUGGESTIONS);
+}
+
+/**
+ * Put the event chips (IN-07) at the head of a row of template chips: the order
+ * is event, then Copilot, then template, and the row stays within
+ * {@link MAX_SUGGESTIONS}. A template that says what an event chip already says
+ * is dropped, not repeated.
+ */
+export function withEventChips(
+  chips: readonly ReplyChip[],
+  events: readonly ReplyChip[],
+): ReplyChip[] {
+  const lead = events.slice(0, MAX_SUGGESTIONS);
+  const said = new Set(lead.map((chip) => chip.text));
+  return [...lead, ...chips.filter((chip) => !said.has(chip.text))].slice(0, MAX_SUGGESTIONS);
 }

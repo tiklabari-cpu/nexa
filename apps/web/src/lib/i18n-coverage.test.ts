@@ -152,6 +152,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/home/HomePage.tsx',
   'src/features/settings/Appearance.tsx',
   'src/features/settings/CannedResponses.tsx',
+  'src/features/suggestions/SuggestedResponses.tsx',
   'src/features/settings/Channels.tsx',
   'src/features/settings/ChatTimeout.tsx',
   'src/features/settings/CustomFieldsSettings.tsx',

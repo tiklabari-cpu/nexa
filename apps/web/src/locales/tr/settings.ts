@@ -160,6 +160,10 @@ export const settings: Messages = {
   'settings.integrations.hint':
     'Ekibinizin zaten kullandığı araçları bağlamak için mağazaya göz atın.',
   'settings.integrations.openMarketplace': 'Mağazayı aç',
+  'settings.integrations.igamingTools.title': 'iGaming sistem kontrolleri',
+  'settings.integrations.igamingTools.description':
+    'Prosedürlerdeki sistem kontrolü adımının seçebileceği sorgular. Henüz hiçbiri bağlı değil: Faz 2’ye kadar devir kartı bu kontrolü bir kişiye bırakır.',
+  'settings.integrations.igamingTools.notConnected': 'Bağlı değil',
   'settings.integrations.igaming.title': 'iGaming platformları',
   'settings.integrations.igaming.description':
     'Bir konuşmanın içinden oyuncunun yatırım, çekim ve doğrulama durumuna bakın. Henüz kullanılamıyor.',

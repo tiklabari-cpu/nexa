@@ -425,6 +425,65 @@ describe('SkillEditor — saving a procedure', () => {
   });
 });
 
+describe('SkillEditor — a system check step (AI-28 · tm 321)', () => {
+  const lookup: ProcStep = {
+    id: 'sorgu',
+    type: 'tool',
+    tool_key: 'deposit_lookup',
+    inputs: {},
+    active: false,
+    branches: [{ output: 'status', equals: 'credited', goto: 'devir' }],
+  };
+  const steps: ProcStep[] = [
+    { id: 'sor', type: 'collect', slots: ['yontem'] },
+    lookup,
+    { id: 'devir', type: 'handoff', reason_code: 'needs_finance' },
+  ];
+
+  it('picks the lookup, maps its inputs to slots and says what happens with no system — saved passive', async () => {
+    const user = userEvent.setup();
+    renderEditor(smallSkill(steps));
+
+    const step = await openStep(user, /System check: Deposit lookup \(active from phase 2\)/);
+    expect(within(step).getByText('Active from phase 2')).toBeInTheDocument();
+    expect(within(step).getByLabelText('Lookup')).toHaveValue('deposit_lookup');
+    expect(within(step).getByText('status = credited → devir')).toBeInTheDocument();
+    // The username is the lookup's required input: unmapped, the save is refused in place.
+    expect(
+      within(step).getByText('Map the system check’s “user_id” input to a slot.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+
+    await user.selectOptions(within(step).getByLabelText('Username (required)'), 'yontem');
+    await user.selectOptions(
+      within(step).getByLabelText('While no system is connected'),
+      'handoff',
+    );
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(api.patch).toHaveBeenCalledTimes(1));
+    const body = api.patch.mock.calls[0]?.[1] as { procedure: { steps: ProcStep[] } };
+    expect(body.procedure.steps[1]).toEqual({
+      ...lookup,
+      inputs: { user_id: 'yontem' },
+      on_unavailable: 'handoff',
+    });
+  });
+
+  it('offers the system check in "Add step", in Turkish with its phase-2 badge', async () => {
+    setLocale('tr');
+    const user = userEvent.setup();
+    renderEditor(smallSkill(steps));
+    const list = screen.getByRole('list', { name: 'Adımlar' });
+    const toggle = within(list).getByRole('button', { name: /Sistem kontrolü: Yatırım sorgusu/ });
+    await user.click(toggle);
+    const step = toggle.closest('li') as HTMLElement;
+    expect(within(step).getByText("Faz 2'de etkinleşir")).toBeInTheDocument();
+    const type = within(step).getByLabelText('Adım türü');
+    expect(within(type).getByRole('option', { name: 'Sistem kontrolü' })).toBeInTheDocument();
+  });
+});
+
 describe('SkillEditor — conditions and branches', () => {
   it('edits a simple comparison in the form', async () => {
     const user = userEvent.setup();

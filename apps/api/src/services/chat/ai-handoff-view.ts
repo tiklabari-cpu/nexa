@@ -63,7 +63,16 @@ export function serialiseAiHandoff(
     decision_facts: arrayOf(row.decisionFacts)
       .filter(isFact)
       .map((fact) => ({ ...fact, text: textOrNull(fact.text) })),
-    checks: arrayOf(row.checks).filter((entry): entry is string => typeof entry === 'string'),
+    // `{ tool, text }` since tm 321; a bare string is an older card's tool key.
+    checks: arrayOf(row.checks).flatMap((entry) =>
+      typeof entry === 'string'
+        ? [entry]
+        : typeof entry === 'object' &&
+            entry !== null &&
+            typeof (entry as { text?: unknown }).text === 'string'
+          ? [(entry as { text: string }).text]
+          : [],
+    ),
     ai_statements: arrayOf(row.aiStatements)
       .filter(isStatement)
       .map((statement) => ({ ...statement, text: text(statement.text) })),

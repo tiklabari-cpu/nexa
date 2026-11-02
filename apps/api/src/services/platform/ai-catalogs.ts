@@ -15,8 +15,8 @@
  *     platform connection bypasses row level security, so the `WHERE
  *     license_id` is the only wall (`platform-ai-catalogs.test.ts` mutates it).
  *
- * A source that has not shipped yet — the tool catalogue (tm 321);
- * `ai_config_changes` was one until tm 315, `qa_reviews` until tm 319.1 — answers
+ * A source that has not shipped yet — `ai_config_changes` was one until
+ * tm 315, `qa_reviews` until tm 319.1, the tool catalogue until tm 321 — answers
  * `not_installed`, decided at read time from the database (`to_regclass`), so
  * it turns on by itself when its migration lands. If the table exists and its
  * columns are not the ones named in {@link OPTIONAL_SOURCES} the query fails
@@ -36,6 +36,8 @@ import {
   AI_QA_RUBRIC,
   AI_QA_RUBRIC_SCALE,
   AI_QA_RUBRIC_VERSION,
+  IGAMING_TOOL_CATALOG,
+  IGAMING_TOOL_CATALOG_VERSION,
   PLATFORM_CRISIS_TEXT_MAX,
   PLATFORM_GUARDRAILS,
   PLATFORM_GUARDRAILS_VERSION,
@@ -273,12 +275,15 @@ export class PlatformAiCatalogs {
     };
   }
 
-  /** The tool slot (tm 321) has not shipped: no catalogue, and the panel says so. */
+  /**
+   * The iGaming tool catalogue (tm 321 · AI-28): code, read-only — the keys a
+   * procedure's tool step may name. None is connected in F1.
+   */
   tools() {
     return {
-      status: 'not_installed' as AiCatalogStatus,
-      version: null as string | null,
-      items: [] as Array<{ key: string }>,
+      status: 'available' as AiCatalogStatus,
+      version: IGAMING_TOOL_CATALOG_VERSION as string | null,
+      items: IGAMING_TOOL_CATALOG.map((tool) => ({ key: tool.key })),
     };
   }
 

@@ -173,7 +173,8 @@ export class HandoffCardService implements HandoffCardWriter {
         primaryReason: card.primaryReason,
         slotsSnapshot: card.slots.map((line) => ({ ...line })),
         decisionFacts: card.decisionFacts.map((fact) => ({ ...fact })),
-        checks: card.checks,
+        // `{ tool, text }` each: the card shows the text, the report counts the tool (AI-28).
+        checks: card.checks.map((text, index) => ({ tool: card.checkTools[index] ?? null, text })),
         aiStatements: card.aiStatements.map((statement) => ({ ...statement })),
         outputCheckFlags: card.outputCheckFlags,
         riskFlags: card.riskFlags,

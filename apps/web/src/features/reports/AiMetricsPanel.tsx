@@ -21,6 +21,7 @@
 import {
   AI_METRICS_BREAKDOWN_DIMENSIONS,
   AI_METRICS_CONVERSATION_LISTS,
+  igamingTool,
   type AiMetricKey,
   type AiMetricsBreakdownDimension,
   type AiMetricsConversationList,
@@ -156,7 +157,11 @@ export function AiMetricsPanel({
       </Section>
 
       <ResolutionSection quality={quality} onOpen={openList} />
-      <HandoffSection quality={quality} onOpen={openList} />
+      <HandoffSection
+        quality={quality}
+        pendingChecks={breakdown.data.pending_checks}
+        onOpen={openList}
+      />
       <SafetySection quality={quality} onOpen={openList} />
 
       <Section
@@ -351,9 +356,11 @@ function ClaimFigure({ label, value }: { label: string; value: number }): ReactE
 
 function HandoffSection({
   quality,
+  pendingChecks,
   onOpen,
 }: {
   quality: AiQualityWire;
+  pendingChecks: AiQualityBreakdownWire['pending_checks'];
   onOpen: OpenList;
 }): ReactElement {
   const t = useTranslate();
@@ -458,6 +465,47 @@ function HandoffSection({
             {t('reports.aiMetrics.reasons.noKnowledge')}
           </p>
         )}
+      </Card>
+
+      <Card>
+        <h3 className="mb-2 text-xs font-semibold">{t('reports.aiMetrics.pendingChecks.title')}</h3>
+        {pendingChecks.length === 0 ? (
+          <p className="text-sm text-content-secondary">
+            {t('reports.aiMetrics.pendingChecks.empty')}
+          </p>
+        ) : (
+          <table className="w-full text-sm">
+            <caption className="sr-only">{t('reports.aiMetrics.pendingChecks.title')}</caption>
+            <thead>
+              <tr className="border-b border-border text-left">
+                <th scope="col" className="px-2 py-1.5 text-xs font-medium text-content-secondary">
+                  {t('reports.aiMetrics.pendingChecks.tool')}
+                </th>
+                <th
+                  scope="col"
+                  className="px-2 py-1.5 text-right text-xs font-medium text-content-secondary"
+                >
+                  {t('reports.aiMetrics.pendingChecks.handoffs')}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendingChecks.map((row) => (
+                <tr key={row.tool} className="border-b border-border last:border-0">
+                  <td className="px-2 py-1.5">
+                    {igamingTool(row.tool)
+                      ? t(`playbook.procedure.tool.name.${row.tool}`)
+                      : row.tool}
+                  </td>
+                  <td className="tabular px-2 py-1.5 text-right">{formatCount(row.handoffs)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <p className="mt-2 text-2xs text-content-tertiary">
+          {t('reports.aiMetrics.pendingChecks.note')}
+        </p>
       </Card>
 
       <Card>

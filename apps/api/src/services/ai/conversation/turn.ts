@@ -321,8 +321,9 @@ export interface TurnContext {
    */
   readonly knowledgeVersion?: KnowledgeVersionView;
   /**
-   * What a tool step would have returned, by tool key (AI-28). The slot is
-   * passive in F1: no step calls a tool yet.
+   * What a tool step would have returned, by tool key (AI-28): a simulation
+   * scenario's `tool_outputs`, which pick the step's branch. Live turns pass
+   * none — no tool is connected in F1, and the step leaves a pending check.
    */
   readonly toolStubs: Readonly<Record<string, unknown>>;
   /**

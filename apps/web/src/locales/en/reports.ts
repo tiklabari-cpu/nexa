@@ -295,6 +295,13 @@ export const reports: Messages = {
   'reports.aiMetrics.reasons.empty': 'No hand-overs in this window.',
   'reports.aiMetrics.reasons.noKnowledge':
     '“No answer in the knowledge base” points at the unanswered questions list in the Playbook.',
+  'reports.aiMetrics.pendingChecks.title':
+    'Handed over because it could not be checked automatically',
+  'reports.aiMetrics.pendingChecks.empty': 'No hand-over in this period was left a system check.',
+  'reports.aiMetrics.pendingChecks.tool': 'System check',
+  'reports.aiMetrics.pendingChecks.handoffs': 'Hand-overs',
+  'reports.aiMetrics.pendingChecks.note':
+    'No system is connected yet; these are the checks a person made. The most frequent is the one to connect first.',
   'reports.aiMetrics.violations.title': 'Mandatory hand-over violations',
   'reports.aiMetrics.violations.empty': 'None in this window.',
   'reports.aiMetrics.violations.rule': 'Rule',

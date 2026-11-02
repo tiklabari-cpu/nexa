@@ -173,6 +173,10 @@ export const settings: Messages = {
   'settings.integrations.hint':
     'Browse the marketplace to connect the tools your team already uses.',
   'settings.integrations.openMarketplace': 'Open marketplace',
+  'settings.integrations.igamingTools.title': 'iGaming system checks',
+  'settings.integrations.igamingTools.description':
+    'The lookups a procedure’s system check step can name. None is connected yet: until phase 2 the hand-over card asks a person to make the check.',
+  'settings.integrations.igamingTools.notConnected': 'Not connected',
   'settings.integrations.igaming.title': 'iGaming platforms',
   'settings.integrations.igaming.description':
     'Look up a player’s deposits, withdrawals and verification status from inside a conversation. Not available yet.',

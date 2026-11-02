@@ -2,7 +2,7 @@
  * The procedure executor (tm 296.3 · AI-03 §3–§6): one turn at a time over the
  * research §3.1 deposit procedure — its four endings — and the rules every
  * procedure runs by: the turn limit, the hand-over conditions, a refused slot,
- * the eight-step shield, `when`, `check` branches, the passive tool step, and
+ * the eight-step shield, `when`, `check` branches, the unconnected tool step, and
  * the pinned snapshot's hash.
  *
  * Pure: the understanding is a fixture (the call is #297), and so are the
@@ -221,7 +221,7 @@ describe('the §3.1 deposit procedure, turn by turn (AI-03 acceptance)', () => {
     });
   });
 
-  it('D — every check passes: six turns collect every slot, skip the passive lookup and hand finance all of it', () => {
+  it('D — every check passes: six turns collect every slot, pass the unconnected lookup and hand finance all of it', () => {
     const chat = conversation(depositProcedure());
     const turns = [
       chat.say('param yatmadı', null),
@@ -260,8 +260,16 @@ describe('the §3.1 deposit procedure, turn by turn (AI-03 acceptance)', () => {
       step_id: 'yatirim_sorgula',
       type: 'tool',
       cond_result: null,
-      detail: 'tool deposit_lookup is passive in F1 — skipped',
+      detail: 'tool_not_connected: deposit_lookup — left for a person to check, going on',
     });
+    // AI-28: the lookup no tool made is left for the card, by slot name.
+    expect(last.pendingChecks).toEqual([
+      {
+        tool: 'deposit_lookup',
+        step_id: 'yatirim_sorgula',
+        inputs: { user_id: 'kullanici_adi', amount: 'tutar', time: 'islem_zamani' },
+      },
+    ]);
     for (const slot of [
       'yontem',
       'islem_zamani',

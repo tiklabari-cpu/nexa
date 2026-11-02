@@ -112,7 +112,16 @@ function breakdown(
             { key: null, label: null, quality: rates({ conversations: 7 }) },
           ]
         : [];
-  return { range: RANGE, by, total, rows };
+  return {
+    range: RANGE,
+    by,
+    total,
+    rows,
+    pending_checks: [
+      { tool: 'deposit_lookup', handoffs: 3 },
+      { tool: 'retired_tool', handoffs: 1 },
+    ],
+  };
 }
 
 function conversations(cursor: string | undefined): AiMetricConversationsWire {
@@ -279,6 +288,19 @@ describe('AiMetricsPanel (AI-25)', () => {
     expect(row).toHaveTextContent('CONNMISSED');
     expect(row).toHaveTextContent('DAYMISSED1');
     expect(row).toHaveTextContent('Found by QA');
+  });
+
+  it('counts per system check the hand-overs nothing could check automatically (AI-28)', async () => {
+    render(wrap(<AiMetricsPanel range={RANGE} rangeKey="30" />));
+    await screen.findByText('Over 10 ended conversations the AI wrote in');
+    const table = screen.getByRole('table', {
+      name: 'Handed over because it could not be checked automatically',
+    });
+    const [, first, second] = within(table).getAllByRole('row');
+    expect(first).toHaveTextContent('Deposit lookup');
+    expect(first).toHaveTextContent('3');
+    // A key the catalogue no longer has is shown as it is.
+    expect(second).toHaveTextContent('retired_tool');
   });
 
   it('puts v12 beside v13, and narrows every figure to the row picked', async () => {

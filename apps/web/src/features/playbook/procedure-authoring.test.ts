@@ -203,8 +203,8 @@ describe('adding, removing, moving and retyping steps', () => {
     expect(nextStepId(steps, 'say')).toBe('say_3');
   });
 
-  it('offers every step type but the passive tool, and a blank of each blocks the save until filled', () => {
-    expect([...EDITOR_PROC_STEP_TYPES, 'tool'].sort()).toEqual([...PROC_STEP_TYPES].sort());
+  it('offers every step type, the system check too, and a blank of each blocks the save until filled', () => {
+    expect([...EDITOR_PROC_STEP_TYPES].sort()).toEqual([...PROC_STEP_TYPES].sort());
 
     for (const type of EDITOR_PROC_STEP_TYPES) {
       const blank = small([
@@ -212,7 +212,8 @@ describe('adding, removing, moving and retyping steps', () => {
         blankProcStep(type, 'yeni'),
       ]);
       const ok = validateDraft(blank).ok;
-      // Complete as they are: their one choice has a default, or there is none.
+      // Complete as they are: their one choice has a default, or there is none. A new
+      // system check names its lookup but no slot yet: its required input blocks it.
       expect(ok, type).toBe(type === 'resolve' || type === 'answer_from_knowledge');
     }
   });

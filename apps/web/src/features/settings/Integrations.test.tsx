@@ -6,7 +6,7 @@
  */
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { IGAMING_PLATFORMS } from '@siyahtus/types';
+import { IGAMING_PLATFORMS, IGAMING_TOOL_CATALOG } from '@siyahtus/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
@@ -24,6 +24,26 @@ describe('Settings → Integrations entry', () => {
 
     const link = screen.getByRole('link', { name: 'Open marketplace' });
     expect(link).toHaveAttribute('href', '/app/apps');
+  });
+});
+
+describe('Settings → Integrations → iGaming system checks (AI-28 F1)', () => {
+  afterEach(() => resetLocale());
+
+  it('lists every catalogue lookup as not connected, with no control to press', () => {
+    render(
+      <MemoryRouter>
+        <Integrations />
+      </MemoryRouter>,
+    );
+    const region = screen.getByRole('region', { name: 'iGaming system checks' });
+    for (const tool of IGAMING_TOOL_CATALOG) {
+      const row = within(region).getByTestId(`igaming-tool-${tool.key}`);
+      expect(within(row).getByText('Not connected')).toBeInTheDocument();
+      expect(within(row).getByText('Active from phase 2')).toBeInTheDocument();
+    }
+    expect(within(region).getByText('Deposit lookup')).toBeInTheDocument();
+    expect(within(region).queryAllByRole('button')).toEqual([]);
   });
 });
 

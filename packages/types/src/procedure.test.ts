@@ -644,6 +644,117 @@ describe('steps', () => {
       { id: 't', type: 'tool', tool_key: 'Lookup', active: false },
       'procedure_step_bad_option',
     ],
+    [
+      'a tool the catalogue does not have (AI-28)',
+      { id: 't', type: 'tool', tool_key: 'balance_lookup', inputs: {}, active: false },
+      'procedure_unknown_tool',
+    ],
+    [
+      'a tool input the tool does not take',
+      {
+        id: 't',
+        type: 'tool',
+        tool_key: 'deposit_lookup',
+        inputs: { user_id: 'not', iban: 'tutar' },
+        active: false,
+      },
+      'procedure_tool_unknown_input',
+    ],
+    [
+      "a tool's required input left unmapped",
+      {
+        id: 't',
+        type: 'tool',
+        tool_key: 'deposit_lookup',
+        inputs: { amount: 'tutar' },
+        active: false,
+      },
+      'procedure_tool_missing_input',
+    ],
+    [
+      'an on_unavailable that is neither continue nor handoff',
+      {
+        id: 't',
+        type: 'tool',
+        tool_key: 'deposit_lookup',
+        inputs: { user_id: 'not' },
+        active: false,
+        on_unavailable: 'retry',
+      },
+      'procedure_step_bad_option',
+    ],
+    [
+      'an on_error other than handoff',
+      {
+        id: 't',
+        type: 'tool',
+        tool_key: 'deposit_lookup',
+        inputs: { user_id: 'not' },
+        active: false,
+        on_error: 'continue',
+      },
+      'procedure_step_bad_option',
+    ],
+    [
+      'a branch on a field the tool does not return',
+      {
+        id: 't',
+        type: 'tool',
+        tool_key: 'deposit_lookup',
+        inputs: { user_id: 'not' },
+        active: false,
+        branches: [{ output: 'balance', equals: 'x', goto: 't' }],
+      },
+      'procedure_tool_unknown_output',
+    ],
+    [
+      "a branch on a value outside the field's enum",
+      {
+        id: 't',
+        type: 'tool',
+        tool_key: 'deposit_lookup',
+        inputs: { user_id: 'not' },
+        active: false,
+        branches: [{ output: 'status', equals: 'paid', goto: 't' }],
+      },
+      'procedure_tool_unknown_output',
+    ],
+    [
+      'a branch going to no step',
+      {
+        id: 't',
+        type: 'tool',
+        tool_key: 'deposit_lookup',
+        inputs: { user_id: 'not' },
+        active: false,
+        branches: [{ output: 'status', equals: 'credited', goto: 'yok' }],
+      },
+      'procedure_unknown_goto',
+    ],
+    [
+      'a branch that is not { output, equals, goto }',
+      {
+        id: 't',
+        type: 'tool',
+        tool_key: 'deposit_lookup',
+        inputs: { user_id: 'not' },
+        active: false,
+        branches: [{ when: 'output.status == "credited"', goto: 't' }],
+      },
+      'procedure_step_bad_option',
+    ],
+    [
+      'an empty branch list',
+      {
+        id: 't',
+        type: 'tool',
+        tool_key: 'deposit_lookup',
+        inputs: { user_id: 'not' },
+        active: false,
+        branches: [],
+      },
+      'procedure_step_bad_option',
+    ],
   ])('refuses %s', (_name, step, code) => {
     expect(codesOf(withSteps(step))).toContain(code);
   });
@@ -680,7 +791,7 @@ describe('steps', () => {
           id: 'bak',
           type: 'tool',
           tool_key: 'deposit_lookup',
-          inputs: { amount: 'tutar' },
+          inputs: { user_id: 'not', amount: 'tutar' },
           active: false,
         },
         { id: 'devir', type: 'handoff', reason_code: 'needs_finance' },
@@ -690,9 +801,69 @@ describe('steps', () => {
       id: 'bak',
       type: 'tool',
       tool_key: 'deposit_lookup',
-      inputs: { amount: 'tutar' },
+      inputs: { user_id: 'not', amount: 'tutar' },
       active: false,
     });
+  });
+
+  it('keeps a call_tool step with its fallbacks and output branches (AI-28)', () => {
+    const procedure = valid(
+      withSteps(
+        { id: 'sor', type: 'collect', slots: ['tutar', 'islem_zamani'] },
+        {
+          id: 'bak',
+          type: 'tool',
+          tool_key: 'deposit_lookup',
+          inputs: { user_id: 'not', amount: 'tutar', time: 'islem_zamani' },
+          active: false,
+          on_unavailable: 'handoff',
+          on_error: 'handoff',
+          branches: [
+            { output: 'status', equals: 'credited', goto: 'gecmis' },
+            { output: 'status', equals: 'pending', goto: 'devir' },
+          ],
+        },
+        { id: 'devir', type: 'handoff', reason_code: 'needs_finance' },
+        { id: 'gecmis', type: 'resolve', outcome: 'resolved' },
+      ),
+    );
+    expect(procedure.steps[1]).toEqual({
+      id: 'bak',
+      type: 'tool',
+      tool_key: 'deposit_lookup',
+      inputs: { user_id: 'not', amount: 'tutar', time: 'islem_zamani' },
+      active: false,
+      on_unavailable: 'handoff',
+      on_error: 'handoff',
+      branches: [
+        { output: 'status', equals: 'credited', goto: 'gecmis' },
+        { output: 'status', equals: 'pending', goto: 'devir' },
+      ],
+    });
+  });
+
+  it('refuses a tool branch that jumps back with nothing waiting on the way', () => {
+    const problems = problemsOf(
+      withSteps(
+        { id: 'not_al', type: 'say', instruction: 'Bakıyorum.' },
+        {
+          id: 'bak',
+          type: 'tool',
+          tool_key: 'kyc_status',
+          inputs: { user_id: 'not' },
+          active: false,
+          branches: [{ output: 'status', equals: 'pending', goto: 'not_al' }],
+        },
+        { id: 'devir', type: 'handoff', reason_code: 'needs_kyc' },
+      ),
+    );
+    expect(problems).toEqual([
+      expect.objectContaining({
+        code: 'procedure_loop_without_collect',
+        step_id: 'bak',
+        field: 'branches',
+      }),
+    ]);
   });
 
   it('takes a step in place of a goto in a branch, but not a collect, check or tool', () => {
@@ -1435,6 +1606,16 @@ describe('problems on the wire', () => {
         }),
       ],
       [withSteps({ id: 'a', type: 'tool', tool_key: 'x', active: true })],
+      [
+        withSteps({
+          id: 'a',
+          type: 'tool',
+          tool_key: 'deposit_lookup',
+          inputs: { iban: 'tutar' },
+          active: false,
+          branches: [{ output: 'balance', equals: 1, goto: 'a' }],
+        }),
+      ],
       [withCondition('x')],
       [withCondition(deep(COND_DEPTH_MAX))],
       [withCondition({ slot: { name: 'tutar', op: 'x' } })],

@@ -378,6 +378,126 @@ describe('the AI hand-over card (AI-10 · tm 304.1)', () => {
     });
   });
 
+  describe('a check no tool could make (AI-28 · tm 321)', () => {
+    /** The deposit procedure with the lookup before finance, its inputs bound to these slots. */
+    function withLookup(inputs: Record<string, string>) {
+      const base = definition();
+      const steps = base.procedure.steps;
+      return {
+        ...base,
+        slots: [
+          ...base.slots,
+          { name: 'kullanici', label: 'Kullanıcı adı', type: 'username', ask: 'Kullanıcı adınız?' },
+        ],
+        procedure: {
+          ...base.procedure,
+          steps: [
+            ...steps.slice(0, 3),
+            {
+              id: 'yatirim_sorgula',
+              type: 'tool',
+              tool_key: 'deposit_lookup',
+              inputs,
+              active: false,
+            },
+            ...steps.slice(3),
+          ],
+        },
+      };
+    }
+
+    it('saves a call_tool step, and refuses one whose input names no slot or whose tool is not in the catalogue', async () => {
+      const unbound = await server.post(
+        '/skills',
+        withLookup({ user_id: 'oyuncu_no' }),
+        as(adminToken),
+      );
+      expect(unbound.statusCode).toBe(400);
+      expect((unbound.json() as { error: { details: unknown } }).error.details).toMatchObject({
+        reason: 'slot_unknown_reference',
+        section: 'steps',
+        step_id: 'yatirim_sorgula',
+        slot: 'oyuncu_no',
+      });
+
+      const unknownTool = withLookup({ user_id: 'kullanici' });
+      (unknownTool.procedure.steps[3] as { tool_key: string }).tool_key = 'balance_lookup';
+      const refused = await server.post('/skills', unknownTool, as(adminToken));
+      expect(refused.statusCode).toBe(400);
+      expect((refused.json() as { error: { details: unknown } }).error.details).toMatchObject({
+        reason: 'procedure_unknown_tool',
+        reference: 'balance_lookup',
+      });
+
+      const saved = await server.post(
+        '/skills',
+        withLookup({ user_id: 'kullanici', time: 'islem_zamani', method: 'yontem' }),
+        as(adminToken),
+      );
+      expect(saved.statusCode, saved.body).toBe(201);
+      expect(
+        (saved.json() as { procedure: { steps: Array<{ id: string }> } }).procedure.steps[3],
+      ).toEqual({
+        id: 'yatirim_sorgula',
+        type: 'tool',
+        tool_key: 'deposit_lookup',
+        inputs: { user_id: 'kullanici', time: 'islem_zamani', method: 'yontem' },
+        active: false,
+      });
+    });
+
+    it('puts "Kontrol edilmesi gereken" on the card, and the report counts the hand-over per tool', async () => {
+      const created = await server.post(
+        '/skills',
+        withLookup({ user_id: 'kullanici', time: 'islem_zamani', method: 'yontem' }),
+        as(adminToken),
+      );
+      expect(created.statusCode, created.body).toBe(201);
+      const id = (created.json() as { id: string }).id;
+      expect(
+        (await server.patch(`/skills/${id}`, { active: true }, as(adminToken))).statusCode,
+      ).toBe(200);
+      const headers = await visitor();
+      const first = await send(headers, 'param yatmadı');
+      await send(headers, 'Havale, 2 saat önce');
+      const [card] = await cards(first.chatId);
+
+      expect(card?.reason_codes).toEqual(['procedure_rule']);
+      expect(card?.checks).toEqual([
+        expect.stringMatching(/^yatırım sorgusu — kullanıcı adı bilinmiyor, .+, Havale$/),
+      ]);
+      expect(card?.card_text).toContain(`Kontrol edilmesi gereken: ${card?.checks[0]}`);
+      // The AI never says it checked (G8): the lookup is the person's.
+      for (const statement of card?.ai_statements ?? []) {
+        expect(statement.text).not.toMatch(/kontrol ettim|sistemde gördüm/i);
+      }
+      const row = await owner.aiHandoff.findFirstOrThrow({
+        where: { chatId: first.chatId },
+        select: { checks: true },
+      });
+      expect(row.checks).toEqual([{ tool: 'deposit_lookup', text: card?.checks[0] }]);
+      const decision = await owner.aiDecisionLog.findFirstOrThrow({
+        where: { chatId: first.chatId, decision: 'handoff' },
+        select: { details: true },
+      });
+      expect(JSON.stringify(decision.details)).toContain('tool_not_connected: deposit_lookup');
+
+      // The report counts a connection once it ended: close it, then read the window.
+      await owner.$executeRaw`UPDATE ai_conversation_outcomes SET ended_at = now()
+                               WHERE thread_id = ${first.threadId}`;
+      const from = new Date(Date.now() - 3_600_000).toISOString();
+      const to = new Date(Date.now() + 3_600_000).toISOString();
+      const report = await server.get(
+        `/reports/ai-agent/breakdown?by=reason&from=${from}&to=${to}`,
+        as(adminToken),
+      );
+      expect(report.statusCode, report.body).toBe(200);
+      expect((report.json() as { pending_checks: unknown }).pending_checks).toEqual([
+        { tool: 'deposit_lookup', handoffs: 1 },
+      ]);
+    });
+  });
+
   describe('a knowledge hand-over', () => {
     it('shows the question and why there was no answer (AI-10 acceptance)', async () => {
       // A procedure the question is not about, and a passage that does not answer it.

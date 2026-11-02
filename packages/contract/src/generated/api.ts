@@ -15862,8 +15862,12 @@ export interface components {
      *       - `handoff` — hand over with `reason_code`, to `target` or the routes' team.
      *       - `resolve` — mark `outcome`; `followup_template` goes with it.
      *       - `tag` — tag the conversation.
-     *       - `tool` — a system lookup's place (AI-28); `active` is always false
-     *         in this release: skipped and logged.
+     *       - `tool` — a system lookup (AI-28 "call_tool"): `tool_key` names a tool
+     *         of the iGaming catalogue, `inputs` maps its inputs to slots. `active`
+     *         is always false in this release: nothing is called, the decision
+     *         record says `tool_not_connected`, the hand-over card lists the check,
+     *         and `on_unavailable` goes on or hands over. In a simulation the
+     *         scenario's `tool_outputs` pick one of `branches`.
      *
      *     On any step but `check`, `when` is a guard: the step runs only when it holds.
      */
@@ -15906,6 +15910,27 @@ export interface components {
        * @enum {boolean}
        */
       active?: false;
+      /**
+       * @description tool: with no tool connected, go on (the default) or hand over.
+       * @enum {string}
+       */
+      on_unavailable?: 'continue' | 'handoff';
+      /**
+       * @description tool: when the tool fails — a hand-over (the default and only choice).
+       * @enum {string}
+       */
+      on_error?: 'handoff';
+      /**
+       * @description tool: where the output takes the procedure — the first whose
+       *     `output` field equals `equals` goes to `goto`; none, the next step.
+       */
+      branches?: {
+        /** @description A field of the tool's output. */
+        output: string;
+        /** @description A value the field may hold. */
+        equals: string | number | boolean;
+        goto: string;
+      }[];
     };
     /**
      * @description Where a `check` goes: `{goto: <step id>}`, or a step written in place —
@@ -16103,6 +16128,10 @@ export interface components {
         | 'procedure_unknown_goto'
         | 'procedure_loop_without_collect'
         | 'procedure_tool_must_be_inactive'
+        | 'procedure_unknown_tool'
+        | 'procedure_tool_unknown_input'
+        | 'procedure_tool_missing_input'
+        | 'procedure_tool_unknown_output'
         | 'procedure_bad_condition'
         | 'procedure_condition_too_deep'
         | 'procedure_bad_comparison'
@@ -23767,6 +23796,17 @@ export interface components {
         /** @description A version's number (`v12`), a brand's or a team's name; the key otherwise. */
         label: string | null;
         quality: components['schemas']['AiQualityRates'];
+      }[];
+      /**
+       * @description "Handed over because it could not be checked automatically" (AI-28 ·
+       *     tm 321): per tool of the iGaming catalogue, the window's hand-overs
+       *     whose card asked a person to make that tool's check — no tool is
+       *     connected yet. Same window, filters and reach as `rows`; most first.
+       */
+      pending_checks: {
+        /** @description A tool key (`deposit_lookup`). */
+        tool: string;
+        handoffs: number;
       }[];
     };
     AiMetricConversations: {

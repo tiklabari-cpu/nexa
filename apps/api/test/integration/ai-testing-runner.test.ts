@@ -178,6 +178,84 @@ describe('the AI test bench plays scenarios on the live engine (tm 314.2 · AI-1
     ).id;
   });
 
+  describe('a tool step with a stand-in output (AI-28 · tm 321)', () => {
+    it('credited takes the "hesaba geçmiş" branch; the same scenario without an output hands over', async () => {
+      // The lookup procedure is the agent's only skill here.
+      await owner.skill.update({ where: { id: skillId }, data: { active: false } });
+      const lookupId = (
+        await owner.skill.create({
+          data: {
+            licenseId: fx.a.licenseId,
+            aiAgentId,
+            name: 'Bakiye gelmedi',
+            kind: 'ai_agent',
+            mode: 'procedure',
+            whenToUse: 'Oyuncu yatırımının bakiyesine yansımadığını söylüyor.',
+            examples: ['bakiyem gelmedi', 'yatırımım bakiyeme yansımadı'],
+            priority: 50,
+            slots: [
+              {
+                name: 'kullanici',
+                label: 'Kullanıcı adı',
+                type: 'username',
+                ask: 'Kullanıcı adınız?',
+              },
+            ] as object,
+            procedure: {
+              steps: [
+                {
+                  id: 'sorgu',
+                  type: 'tool',
+                  tool_key: 'deposit_lookup',
+                  inputs: { user_id: 'kullanici' },
+                  active: false,
+                  branches: [{ output: 'status', equals: 'credited', goto: 'hesaba_gecmis' }],
+                },
+                { id: 'finans', type: 'handoff', reason_code: 'deposit_needs_check' },
+                { id: 'hesaba_gecmis', type: 'say', template_key: 'gecmis' },
+                { id: 'bitti', type: 'resolve', outcome: 'resolved' },
+              ],
+              templates: [{ key: 'gecmis', text: 'Teşekkür ederim, başka bir sorunuz var mı?' }],
+              handoff: { conditions: [], card_fields: [] },
+              limits: { max_turns: 6 },
+            } as object,
+            active: true,
+            updatedAt: new Date(),
+          },
+          select: { id: true },
+        })
+      ).id;
+      const credited = await scenario({
+        name: 'Bakiye — araç: credited',
+        turns: ['bakiyem gelmedi', 'evet, teşekkürler'],
+        tool_outputs: { deposit_lookup: { status: 'credited' } },
+        expectations: { outcome: 'resolved', procedure_id: lookupId, max_turns: 3 },
+      });
+      const live = await scenario({
+        name: 'Bakiye — araç yok (F1)',
+        turns: ['bakiyem gelmedi', 'evet, teşekkürler'],
+        expectations: {
+          outcome: 'handoff',
+          procedure_id: lookupId,
+          reason_code: 'deposit_needs_check',
+          max_turns: 3,
+        },
+      });
+      const { byKey } = await play([credited, live]);
+      const branch = byKey.get(credited)!;
+      expect(branch, JSON.stringify(branch.transcript, null, 2)).toMatchObject({
+        status: 'passed',
+        outcome: 'resolved',
+      });
+      const handed = byKey.get(live)!;
+      expect(handed, JSON.stringify(handed.transcript, null, 2)).toMatchObject({
+        status: 'passed',
+        stop_reason: 'handoff',
+        outcome: 'handoff',
+      });
+    });
+  });
+
   describe('"Papara yatırım geçmedi" under two clocks (AI-19 acceptance 1, 2)', () => {
     it('95 minutes on: method, time, request and receipt in four turns, then Finance — every check passes', async () => {
       const id = await scenario({

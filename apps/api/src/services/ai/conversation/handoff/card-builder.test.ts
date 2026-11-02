@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AiHandoffStatement } from '@siyahtus/types';
 import { depositFacts, depositProcedure } from '../../../../../test/helpers/procedure-fixtures.js';
 import { procedureHash } from '../procedure/executor.js';
+import { slotRecord } from '../slots/extract.js';
 import type { AiStateObject } from '../state-store.js';
 import { emptyTurnState, type TurnDecisions, type TurnState } from '../turn.js';
 import { buildHandoffCard, playerSummaryLine, type HandoffCardSource } from './card-builder.js';
@@ -271,14 +272,57 @@ describe('buildHandoffCard — a deposit hand-over (AI-10 §1 · research §3.1)
     expect(card.riskFlags).toEqual(['abusive', 'complaint_formal', 'rg_signal']);
   });
 
-  it('lists what a tool step could not check (AI-28 pending_checks)', () => {
+  it('lists what a tool step could not check, with the values the player gave (AI-28-S1)', () => {
     const state = {
       ...depositState(),
-      signals: { pending_checks: [{ tool: 'deposit_lookup' }, 'deposit_lookup', 'kyc_status'] },
+      signals: {
+        pending_checks: [
+          {
+            tool: 'deposit_lookup',
+            step_id: 'yatirim_sorgula',
+            inputs: { user_id: 'kullanici_adi', amount: 'tutar', time: 'islem_zamani' },
+          },
+          // An older card's bare key, and the same tool twice: one line each tool.
+          'deposit_lookup',
+          { tool: 'kyc_status', step_id: 'kyc', inputs: { user_id: 'yok_boyle_slot' } },
+          { tool: 'retired_tool', step_id: 'eski', inputs: {} },
+        ],
+      },
     };
     const card = buildHandoffCard(source({ state }));
-    expect(card.checks).toEqual(['deposit_lookup', 'kyc_status']);
-    expect(card.cardText).toContain('Kontrol edilmesi gereken: deposit_lookup, kyc_status');
+    const username = slotRecord(state.slots['kullanici_adi']).display;
+    const amount = slotRecord(state.slots['tutar']).display;
+    const time = slotRecord(state.slots['islem_zamani']).display;
+    expect(card.checks).toEqual([
+      `yatırım sorgusu — kullanıcı adı ${username} (beyan), ${amount}, ${time}`,
+      'kimlik doğrulama durumu — kullanıcı adı bilinmiyor',
+      'retired_tool',
+    ]);
+    expect(card.checkTools).toEqual(['deposit_lookup', 'kyc_status', 'retired_tool']);
+    expect(card.cardText).toContain(`Kontrol edilmesi gereken: ${card.checks.join('; ')}`);
+  });
+
+  it('never shows a pii: high input on the check line, and says a refused one was not given', () => {
+    const base = depositState();
+    const state = {
+      ...base,
+      slots: {
+        ...base.slots,
+        kullanici_adi: { ...(base.slots['kullanici_adi'] as object), pii: 'high' },
+        tutar: { status: 'refused', value: null, display: null },
+      },
+      signals: {
+        pending_checks: [
+          {
+            tool: 'deposit_lookup',
+            step_id: 's',
+            inputs: { user_id: 'kullanici_adi', amount: 'tutar' },
+          },
+        ],
+      },
+    };
+    const card = buildHandoffCard(source({ state }));
+    expect(card.checks).toEqual(['yatırım sorgusu — kullanıcı adı verildi, tutar verilmedi']);
   });
 
   it('leaves the next step empty when its variables are unknown', () => {

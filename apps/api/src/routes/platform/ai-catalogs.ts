@@ -9,7 +9,7 @@
  *   GET /ai-catalogs/templates/installs    ai.read    per workspace: installed / live / behind
  *   GET /ai-catalogs/compliance-pack       ai.read    the locked scenario pack: version, keys
  *   GET /ai-catalogs/qa-rubric             ai.read    the judge's criteria
- *   GET /ai-catalogs/tools                 ai.read    the tool catalogue (`not_installed` until tm 321)
+ *   GET /ai-catalogs/tools                 ai.read    the iGaming tool catalogue (tm 321)
  *
  * Reads write nothing. A change to the drafts records `ai_settings.crisis_drafts_updated`
  * with the countries added, changed and removed — never a text — in the same

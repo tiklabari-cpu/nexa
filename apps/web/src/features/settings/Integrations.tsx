@@ -19,10 +19,15 @@
  * catalogue record per platform (`IGAMING_PLATFORMS`) with a "Coming soon"
  * badge and a "Connect" button that cannot be pressed. There is no connection
  * flow behind it — no handler, no request — the real connector is F2 (tm 378).
+ *
+ * Then the "iGaming system checks" list (AI-28 F1, tm 321): the lookups a
+ * procedure's system check step may name (`IGAMING_TOOL_CATALOG`), each
+ * "Not connected" — read only, no control. Until phase 2 a procedure that
+ * reaches one leaves the check to a person, on the hand-over card.
  */
 import type { ReactElement } from 'react';
 import { Link } from 'react-router-dom';
-import { IGAMING_PLATFORMS, type IgamingPlatform } from '@siyahtus/types';
+import { IGAMING_PLATFORMS, IGAMING_TOOL_CATALOG, type IgamingPlatform } from '@siyahtus/types';
 import { Card, Section } from '../../components/Page.js';
 import { useTranslate } from '../../lib/i18n.js';
 
@@ -83,6 +88,33 @@ export function Integrations(): ReactElement {
           <ul className="divide-y divide-border">
             {IGAMING_PLATFORMS.map((platform) => (
               <IgamingPlatformCard key={platform.vendor} platform={platform} />
+            ))}
+          </ul>
+        </Card>
+      </Section>
+      <Section
+        title={t('settings.integrations.igamingTools.title')}
+        description={t('settings.integrations.igamingTools.description')}
+      >
+        <Card>
+          <ul
+            aria-label={t('settings.integrations.igamingTools.title')}
+            className="divide-y divide-border"
+          >
+            {IGAMING_TOOL_CATALOG.map((tool) => (
+              <li
+                key={tool.key}
+                data-testid={`igaming-tool-${tool.key}`}
+                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+              >
+                <span className="text-sm">{t(`playbook.procedure.tool.name.${tool.key}`)}</span>
+                <span className="flex items-center gap-2 text-2xs font-medium text-content-secondary">
+                  <span className="rounded-full bg-surface-2 px-2 py-0.5">
+                    {t('settings.integrations.igamingTools.notConnected')}
+                  </span>
+                  <span>{t('playbook.procedure.tool.phase2')}</span>
+                </span>
+              </li>
             ))}
           </ul>
         </Card>

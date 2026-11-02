@@ -142,6 +142,7 @@ import {
   listAiMetricConversations,
   readAiQuality,
   readAiQualityBreakdown,
+  readPendingCheckCounts,
   type AiMetricsFilter,
 } from '../services/reports/ai-metrics.js';
 import { isAgent, scopesOf } from '../services/auth/principal.js';
@@ -1882,6 +1883,8 @@ export default async function reportRoutes(
         by: query.by,
         total: await readAiQuality(tx, tenant.licenseId, from, to, filter),
         rows: await readAiQualityBreakdown(tx, from, to, filter, query.by),
+        // AI-28: the hand-overs a tool could not check, per tool (tm 321).
+        pending_checks: await readPendingCheckCounts(tx, from, to, filter),
       };
     });
     return reply.send(body);

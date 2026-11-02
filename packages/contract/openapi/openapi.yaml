@@ -4168,8 +4168,12 @@ components:
           - `handoff` — hand over with `reason_code`, to `target` or the routes' team.
           - `resolve` — mark `outcome`; `followup_template` goes with it.
           - `tag` — tag the conversation.
-          - `tool` — a system lookup's place (AI-28); `active` is always false
-            in this release: skipped and logged.
+          - `tool` — a system lookup (AI-28 "call_tool"): `tool_key` names a tool
+            of the iGaming catalogue, `inputs` maps its inputs to slots. `active`
+            is always false in this release: nothing is called, the decision
+            record says `tool_not_connected`, the hand-over card lists the check,
+            and `on_unavailable` goes on or hands over. In a simulation the
+            scenario's `tool_outputs` pick one of `branches`.
 
         On any step but `check`, `when` is a guard: the step runs only when it holds.
       properties:
@@ -4209,6 +4213,30 @@ components:
           type: boolean
           enum: [false]
           description: "tool: always false — no tool runs in this release."
+        on_unavailable:
+          type: string
+          enum: [continue, handoff]
+          description: "tool: with no tool connected, go on (the default) or hand over."
+        on_error:
+          type: string
+          enum: [handoff]
+          description: "tool: when the tool fails — a hand-over (the default and only choice)."
+        branches:
+          type: array
+          minItems: 1
+          maxItems: 8
+          description: |
+            tool: where the output takes the procedure — the first whose
+            `output` field equals `equals` goes to `goto`; none, the next step.
+          items:
+            type: object
+            required: [output, equals, goto]
+            properties:
+              output: { type: string, description: "A field of the tool's output." }
+              equals:
+                description: A value the field may hold.
+                oneOf: [{ type: string }, { type: number }, { type: boolean }]
+              goto: { type: string }
 
     ProcedureBranch:
       type: object
@@ -4458,6 +4486,10 @@ components:
             - procedure_unknown_goto
             - procedure_loop_without_collect
             - procedure_tool_must_be_inactive
+            - procedure_unknown_tool
+            - procedure_tool_unknown_input
+            - procedure_tool_missing_input
+            - procedure_tool_unknown_output
             - procedure_bad_condition
             - procedure_condition_too_deep
             - procedure_bad_comparison
@@ -14779,7 +14811,7 @@ components:
 
     AiQualityBreakdown:
       type: object
-      required: [range, by, total, rows]
+      required: [range, by, total, rows, pending_checks]
       properties:
         range:
           type: object
@@ -14804,6 +14836,19 @@ components:
                 nullable: true
                 description: A version's number (`v12`), a brand's or a team's name; the key otherwise.
               quality: { $ref: "#/components/schemas/AiQualityRates" }
+        pending_checks:
+          type: array
+          description: |
+            "Handed over because it could not be checked automatically" (AI-28 ·
+            tm 321): per tool of the iGaming catalogue, the window's hand-overs
+            whose card asked a person to make that tool's check — no tool is
+            connected yet. Same window, filters and reach as `rows`; most first.
+          items:
+            type: object
+            required: [tool, handoffs]
+            properties:
+              tool: { type: string, description: "A tool key (`deposit_lookup`)." }
+              handoffs: { type: integer, minimum: 1 }
 
     AiMetricConversations:
       type: object

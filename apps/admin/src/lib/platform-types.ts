@@ -8,6 +8,9 @@ type Schemas = platformComponents['schemas'];
 
 export type PlatformMe = Schemas['PlatformMe'];
 export type PlatformSession = Schemas['PlatformSession'];
+export type PlatformSessionList = Schemas['PlatformSessionList'];
+export type PlatformEndedCount = Schemas['PlatformEndedCount'];
+export type PlatformRecoveryCodes = Schemas['PlatformRecoveryCodes'];
 export type PlatformSignIn = Schemas['PlatformSignIn'];
 export type PlatformTotpEnrollment = Schemas['PlatformTotpEnrollment'];
 export type PlatformTotpActivation = Schemas['PlatformTotpActivation'];
@@ -134,3 +137,15 @@ export type PlatformTemplateInstallList = Schemas['PlatformTemplateInstallList']
 export type PlatformCompliancePack = Schemas['PlatformCompliancePack'];
 export type PlatformQaRubric = Schemas['PlatformQaRubric'];
 export type PlatformToolCatalog = Schemas['PlatformToolCatalog'];
+
+export type PlatformRole = Schemas['PlatformRole'];
+export type PlatformAdmin = Schemas['PlatformAdmin'];
+export type PlatformAdminList = Schemas['PlatformAdminList'];
+export type PlatformInvite = Schemas['PlatformInvite'];
+export type PlatformInviteList = Schemas['PlatformInviteList'];
+export type PlatformInviteCreated = Schemas['PlatformInviteCreated'];
+
+export type PlatformAuditAction = Schemas['PlatformAuditAction'];
+export type PlatformAuditEntry = Schemas['PlatformAuditEntry'];
+export type PlatformAuditList = Schemas['PlatformAuditList'];
+export type PlatformAuditVerification = Schemas['PlatformAuditVerification'];

@@ -7,7 +7,7 @@
  * `password`-stage session whose next step is always the authenticator enrolment — never a
  * session that skips it.
  */
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useAuth } from '../../lib/auth-store.js';
@@ -24,12 +24,15 @@ export function inviteTokenFromHash(hash: string): string | null {
 export function InvitePage(): ReactElement {
   const t = useTranslate();
   const acceptInvite = useAuth((s) => s.acceptInvite);
-  // Read once, then taken out of the address bar and the history entry.
-  const [token] = useState(() => {
-    const found = inviteTokenFromHash(globalThis.location?.hash ?? '');
-    if (found) globalThis.history?.replaceState(null, '', globalThis.location.pathname);
-    return found;
-  });
+  // Read once, then taken out of the address bar and the history entry. The read is a pure
+  // initializer and the removal an effect: React runs an initializer twice in development
+  // (StrictMode) and keeps the second result, so one that also cleared the fragment handed the
+  // page an empty token — "this invitation link is incomplete" on a complete link (tm 391, found by
+  // the e2e stack, which runs the dev server).
+  const [token] = useState(() => inviteTokenFromHash(globalThis.location?.hash ?? ''));
+  useEffect(() => {
+    if (token) globalThis.history?.replaceState(null, '', globalThis.location.pathname);
+  }, [token]);
 
   const form = useForm({
     initial: { password: '' },

@@ -1,0 +1,71 @@
+import type { Messages } from '../merge.js';
+
+/** Audit: the platform trail, its verification and its signed export (tm 391 · FR-ADMIN-05/06). */
+export const audit: Messages = {
+  'audit.chain.heading': 'The chain',
+
+  'audit.verify.intro':
+    'Walks every entry from the first and recomputes each hash and link. A break means an entry was changed, removed or inserted after it was written.',
+  'audit.verify.run': 'Verify the chain',
+  'audit.verify.running': 'Verifying…',
+  'audit.verify.ok': 'The chain is intact: {checked} entries checked, positions {first} to {last}.',
+  'audit.verify.broken': 'The chain does not verify: {total} findings.',
+  'audit.verify.findings': 'Findings',
+  'audit.verify.truncated':
+    'Showing the first {shown}; run the check again after the fix to see the rest.',
+  'audit.verify.col.kind': 'Finding',
+  'audit.verify.col.position': 'Position',
+  'audit.verify.col.detail': 'Detail',
+  'audit.verify.kind.sequence_gap': 'Gap in the sequence',
+  'audit.verify.kind.start_mismatch': 'Start does not match',
+  'audit.verify.kind.broken_link': 'Broken link',
+  'audit.verify.kind.hash_mismatch': 'Hash mismatch',
+  'audit.verify.kind.unchained_entry': 'Entry outside the chain',
+  'audit.verify.kind.head_mismatch': 'Chain head mismatch',
+
+  'audit.export.intro':
+    'Downloads one signed page of the whole trail as NDJSON, oldest first. The page is never filtered: a selective copy is not evidence of the trail.',
+  'audit.export.first': 'Export from the start',
+  'audit.export.next': 'Export the next page',
+  'audit.export.running': 'Exporting…',
+  'audit.export.result': 'The exported page',
+  'audit.export.count': 'Entries in this page',
+  'audit.export.range': 'Positions',
+  'audit.export.more': 'More pages',
+  'audit.export.more.yes': 'Yes — export the next page to continue',
+  'audit.export.more.no': 'No — this was the last page',
+  'audit.export.cursor': 'Resume cursor',
+  'audit.export.signature': 'Signature (X-Siyahtus-Signature)',
+  'audit.export.chain': 'Chain check of this page',
+  'audit.export.chain.ok': 'Intact',
+  'audit.export.chain.broken': 'Broken — verify the chain',
+
+  'audit.entries.heading': 'Entries',
+  'audit.entries.loading': 'Loading…',
+  'audit.entries.loadError': 'The audit entries could not be loaded',
+  'audit.entries.empty': 'Nothing has been recorded yet.',
+  'audit.entries.noMatch': 'No entry matches these filters.',
+  'audit.entries.more': 'Load more',
+  'audit.entries.nobody': 'Nobody matched',
+
+  'audit.filter.label': 'Filter the entries',
+  'audit.filter.admin': 'Operator',
+  'audit.filter.anyAdmin': 'Any operator',
+  'audit.filter.action': 'Action',
+  'audit.filter.anyAction': 'Any action',
+  'audit.filter.workspace': 'Workspace number',
+  'audit.filter.from': 'From',
+  'audit.filter.to': 'To',
+  'audit.filter.clear': 'Clear filters',
+  'audit.filter.workspaceInvalid': 'The workspace number is digits only.',
+  'audit.filter.rangeInvalid': 'The start date is after the end date.',
+  'audit.filter.utc': 'Dates are in UTC, both ends included.',
+
+  'audit.col.seq': 'Position',
+  'audit.col.at': 'When',
+  'audit.col.admin': 'Operator',
+  'audit.col.action': 'Action',
+  'audit.col.target': 'Target',
+  'audit.col.workspace': 'Workspace',
+  'audit.col.reason': 'Reason',
+};

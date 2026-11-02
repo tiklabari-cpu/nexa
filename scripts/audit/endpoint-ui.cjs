@@ -464,50 +464,12 @@ const PLATFORM_HEADLESS = [
  * `/auth/me`, logout, invitation accept, reverify — so those entries are gone (the audit fails
  * an entry whose operation `IS called now`). What stays is what the shell's empty pages have no
  * content for yet.
+ *
+ * tm 391 emptied it: the operator directory, the Audit page and the account menu call the last
+ * of the operations it listed (`/admins/*`, `/audit`, `/audit/export`, `/audit/verify`,
+ * `/auth/sessions`, `/auth/recovery/regenerate`).
  */
-const PLATFORM_TRACKED = [
-  // The operator's own security screen (tm 389.4): live sessions and the recovery sheet. The
-  // shell ships the sign-in, and shows the recovery sheet once at enrolment, but nothing yet lets
-  // a signed-in operator regenerate it or end their other sessions. No subtask names that screen
-  // (HANDOFF tm 389.4/389.6 open item).
-  ...['POST /auth/recovery/regenerate', 'GET /auth/sessions', 'DELETE /auth/sessions'].map(
-    (op) => ({
-      op,
-      owner: 'tm 389.6',
-      reason:
-        "the operator's own security screen (tm 389.4) — recovery-sheet regeneration and their live " +
-        'sessions. The shell (tm 389.6) ships the sign-in only; no later subtask names this screen yet.',
-    }),
-  ),
-  // Operator management (tm 389.4): the shell's Admins page is an empty skeleton since tm 389.6;
-  // its content (list, invite, role, disable, reset) is named by no later subtask yet.
-  ...[
-    'GET /admins',
-    'GET /admins/invites',
-    'POST /admins/invites',
-    'POST /admins/invites/{inviteId}/revoke',
-    'GET /admins/{adminId}',
-    'POST /admins/{adminId}/role',
-    'POST /admins/{adminId}/disable',
-    'POST /admins/{adminId}/enable',
-    'POST /admins/{adminId}/reset-two-factor',
-    'POST /admins/{adminId}/revoke-sessions',
-  ].map((op) => ({
-    op,
-    owner: 'tm 389.6',
-    reason:
-      'operator management (tm 389.4) — the Admins page, an empty skeleton in the admin shell since ' +
-      'tm 389.6; its content is named by no later subtask yet.',
-  })),
-  // The platform audit chain (tm 389.5): the Audit page is an empty skeleton in the shell too.
-  ...['GET /audit', 'GET /audit/export', 'POST /audit/verify'].map((op) => ({
-    op,
-    owner: 'tm 389.6',
-    reason:
-      'the platform audit chain (tm 389.5) — the Audit page (list, filters, signed export, verify), ' +
-      'an empty skeleton in the admin shell since tm 389.6; its content is named by no later subtask yet.',
-  })),
-];
+const PLATFORM_TRACKED = [];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */
 function pathMatcher(path, { wholePath = false } = {}) {

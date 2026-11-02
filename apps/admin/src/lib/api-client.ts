@@ -3,8 +3,7 @@
  *
  * Copied from apps/web and cut down to what this surface has: one opaque session token as a
  * bearer, no brand header, no token renewal (a session simply ends — 8 h absolute, 15 min idle
- * — and the operator signs in again), no blob downloads yet (the audit export, 389.14, adds
- * its own). Every non-2xx response is turned into an `ApiClientError` carrying the ADR-06
+ * — and the operator signs in again), one download that keeps its headers (the audit export). Every non-2xx response is turned into an `ApiClientError` carrying the ADR-06
  * `type` and `request_id`, so UI code branches on a stable machine-readable value and a report
  * from an operator can be matched to a server log line.
  */
@@ -138,6 +137,18 @@ export class ApiClient {
   async getBlob(path: string, init: RequestInit = {}): Promise<Blob> {
     const response = await this.#send('GET', path, undefined, init, '*/*');
     return response.blob();
+  }
+
+  /**
+   * A download whose headers matter as much as its body (the audit export: the seal and the
+   * position travel in headers). Same errors and session handling as {@link request}.
+   */
+  async getDownload(
+    path: string,
+    init: RequestInit = {},
+  ): Promise<{ body: Blob; headers: Headers }> {
+    const response = await this.#send('GET', path, undefined, init, '*/*');
+    return { body: await response.blob(), headers: response.headers };
   }
 
   async request<T>(

@@ -41,7 +41,7 @@ async function menuItems(): Promise<string[]> {
   await user().click(screen.getByRole('button', { name: 'Actions' }));
   const items = screen
     .getAllByRole('button')
-    .filter((button) => button.closest('details') !== null && button.tagName === 'BUTTON')
+    .filter((button) => button.closest('details[open]') !== null && button.tagName === 'BUTTON')
     .map((button) => button.textContent ?? '');
   await user().keyboard('{Escape}');
   return items;

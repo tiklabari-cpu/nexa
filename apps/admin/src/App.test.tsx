@@ -368,6 +368,20 @@ describe('invitations', () => {
     });
   });
 
+  it('keeps the token when React runs its initializers twice (StrictMode, as the dev server does)', async () => {
+    const fake = installFakePlatform({ enrolled: false });
+    const user = userEvent.setup();
+    globalThis.history.replaceState(null, '', '/invite#token=good-invite');
+    renderApp('/invite', { strict: true });
+
+    await user.type(await screen.findByLabelText('Password'), 'a long enough password');
+    await user.click(screen.getByRole('button', { name: 'Accept and continue' }));
+
+    expect(await screen.findByRole('heading', { name: 'Set up your authenticator' })).toBeVisible();
+    expect(fake.calls('/auth/invite/accept')[0]!.body).toMatchObject({ token: 'good-invite' });
+    expect(globalThis.location.hash).toBe('');
+  });
+
   it('says so when the link carries no token', async () => {
     installFakePlatform();
     renderApp('/invite');

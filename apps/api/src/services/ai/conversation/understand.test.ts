@@ -121,6 +121,7 @@ describe('the schema (ADR §6a.3)', () => {
   it('asks for every field of AI-05 §3, each risk with its evidence', () => {
     expect(UNDERSTAND_SCHEMA.required).toEqual([
       'language',
+      'language_confidence',
       'relates_to_previous',
       'wants_human',
       'intent',

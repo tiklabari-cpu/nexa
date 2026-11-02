@@ -18,7 +18,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { embed, toVectorLiteral } from '@siyahtus/ai-mock';
-import { DEFAULT_HANDOFF_MESSAGES } from '@siyahtus/types';
 import {
   grantToken,
   ownerClient,
@@ -286,8 +285,9 @@ describe('AI persona shapes the answer (FR-MOD-06.4)', () => {
         { type: 'send_message', source: 'text', text: 'One moment.' },
       ]);
 
-      // Not a silence (tm 303.2 · AI-09): the fixed sentence, in English, and a person.
-      expect(await ask(GERMAN)).toBe(DEFAULT_HANDOFF_MESSAGES.unsupported_language.en);
+      // Not a silence (tm 303.2 · AI-09): the fixed sentence and a person — in
+      // German, the language the player wrote in (tm 387 · AI-30), not English.
+      expect(await ask(GERMAN)).toBe('Ich verbinde Sie mit einem unserer Mitarbeiter.');
 
       // Not a silent nothing: the admin can see the decision in the run log.
       const run = await owner.skillRun.findFirst({
@@ -312,6 +312,61 @@ describe('AI persona shapes the answer (FR-MOD-06.4)', () => {
       await createSkill([{ type: 'send_message', source: 'text', text: 'One moment.' }]);
 
       expect(await ask('ORD-99231')).toBe('One moment.');
+    });
+  });
+
+  // --- The player's language (tm 387 · AI-30) --------------------------------
+
+  describe("the AI answers in the player's language (AI-30)", () => {
+    const RU_PASSAGE = 'Служба поддержки работает круглосуточно и отвечает на вопросы о депозите.';
+    const RU_QUESTION = 'Когда работает служба поддержки и как с вами связаться?';
+
+    /** One visitor's messages, in order, and every AI line on the chat after the last. */
+    async function converse(texts: string[]): Promise<{ chatId: string; said: string[] }> {
+      const headers = await visitor();
+      let chatId = '';
+      for (const text of texts) {
+        const response = await server.post('/customer/chat/events', { text }, headers);
+        expect(response.statusCode).toBe(201);
+        chatId = (response.json() as { chat_id: string }).chat_id;
+      }
+      const written = await owner.event.findMany({
+        where: { chatId, authorType: 'bot', type: 'message' },
+        orderBy: { createdAt: 'asc' },
+        select: { text: true },
+      });
+      return { chatId, said: written.map((event) => event.text ?? '') };
+    }
+
+    it('answers a Russian message in Russian, and "ok" after it stays Russian (AI-30 acceptance)', async () => {
+      await setPersona({ tone: 'friendly', languages: ['tr', 'ru'] });
+      await seedKnowledge([RU_PASSAGE]);
+      await createSkill([{ type: 'send_message', source: 'knowledge' }]);
+
+      const { chatId, said } = await converse([RU_QUESTION, 'ok']);
+      expect(said[0]).toBe(`С удовольствием помогу! ${RU_PASSAGE}`);
+      // The second reply is Russian whatever it says: no Latin-script Turkish in it.
+      expect(said).toHaveLength(2);
+      expect(said[1]).toMatch(/[а-яё]/i);
+      expect(said[1]).not.toMatch(/[ğışİ]/);
+      const conversation = await owner.aiConversation.findFirst({
+        where: { chatId },
+        select: { signals: true },
+      });
+      expect(conversation?.signals).toMatchObject({ language: { current: 'ru', pending: null } });
+    });
+
+    it('a Turkish-only agent hands a Russian message to a person — told in Russian — and AI-22 lists it as unsupported_language (AI-30 acceptance)', async () => {
+      await setPersona({ languages: ['tr'] });
+      await createSkill([{ type: 'send_message', source: 'text', text: 'Bir saniye.' }]);
+
+      const { chatId, said } = await converse(['Мой депозит не пришёл, что мне делать?']);
+      expect(said).toEqual(['Передаю вас нашему оператору.']);
+      const items = await owner.aiUnresolvedItem.findMany({
+        where: { chatId },
+        select: { reason: true, language: true },
+      });
+      expect(items).toEqual([{ reason: 'unsupported_language', language: 'ru' }]);
     });
   });
 

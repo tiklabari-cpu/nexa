@@ -4974,6 +4974,11 @@
               "recognized_device": {
                 "type": "boolean",
                 "description": "A member token this workspace signed came with the message."
+              },
+              "language": {
+                "type": "string",
+                "nullable": true,
+                "description": "The language the conversation was in (ISO 639-1, tm 387 · AI-30), as\nthe AI kept it; absent when not told. The card's own words are Turkish.\n"
               }
             }
           },

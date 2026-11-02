@@ -134,6 +134,8 @@ export interface RetrievedChunk {
   id: string;
   sourceId: string;
   sourceName: string;
+  /** The source's declared language (`knowledge_sources.language`, tm 387); null: not said. */
+  sourceLanguage?: string | null;
   text: string;
   /** Cosine similarity in [0, 1]. Higher is closer. */
   score: number;
@@ -291,6 +293,7 @@ interface ChunkRow {
   id: string;
   source_id: string;
   source_name: string;
+  source_language?: string | null;
   chunk_text: string;
   distance: number;
 }
@@ -701,7 +704,7 @@ export class KnowledgeService {
     limit: number,
   ): Promise<RetrievedChunk[]> {
     const rows = await tx.$queryRaw<ChunkRow[]>`
-      SELECT c.id, c.source_id, s.name AS source_name, c.chunk_text,
+      SELECT c.id, c.source_id, s.name AS source_name, s.language AS source_language, c.chunk_text,
              (c.embedding <=> (SELECT ${vector}::vector)) + 0 AS distance
       FROM knowledge_chunks c
       JOIN knowledge_sources s ON s.id = c.source_id
@@ -748,7 +751,7 @@ export class KnowledgeService {
                set_config('hnsw.iterative_scan', ${APPROXIMATE_SEARCH.iterativeScan}, true)
       `;
       rows = await tx.$queryRaw<ChunkRow[]>`
-        SELECT c.id, c.source_id, s.name AS source_name, c.chunk_text,
+        SELECT c.id, c.source_id, s.name AS source_name, s.language AS source_language, c.chunk_text,
                c.embedding <=> (SELECT ${vector}::vector) AS distance
         FROM knowledge_chunks c
         JOIN knowledge_sources s ON s.id = c.source_id
@@ -822,6 +825,8 @@ function toRetrievedChunks(rows: ChunkRow[], limit: number, threshold: number): 
         id: row.id,
         sourceId: row.source_id,
         sourceName: row.source_name,
+        // Only when the source says one, so a hit reads as before otherwise.
+        ...(row.source_language ? { sourceLanguage: row.source_language } : {}),
         text: row.chunk_text,
         score: Number((1 - Number(row.distance)).toFixed(4)),
       }))

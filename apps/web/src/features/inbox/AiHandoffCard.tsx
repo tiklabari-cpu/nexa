@@ -34,7 +34,7 @@ import {
 import { Banner, PanelSection } from '../../components/ui/index.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useAuth } from '../../lib/auth-store.js';
-import { formatDateTime, formatTime } from '../../lib/format.js';
+import { formatDateTime, formatLanguage, formatTime } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
 import {
   PRIORITY_TONE,
@@ -186,6 +186,14 @@ export function AiHandoffCard({
             <Badge>{t('inbox.handoffCard.declared')}</Badge>
             {card.player.recognized_device && (
               <Badge tone="success">{t('inbox.handoffCard.recognizedDevice')}</Badge>
+            )}
+            {/* The conversation's language (tm 387 · AI-30): what to answer in. */}
+            {card.player.language && (
+              <Badge>
+                {t('inbox.handoffCard.language', {
+                  language: formatLanguage(card.player.language) ?? card.player.language,
+                })}
+              </Badge>
             )}
           </span>
         </span>

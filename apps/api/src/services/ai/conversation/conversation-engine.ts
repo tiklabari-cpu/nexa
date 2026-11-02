@@ -95,10 +95,13 @@ import {
   DEFAULT_CLARIFY_THRESHOLDS,
   DEFAULT_DAY_BOUNDARY,
   DEFAULT_NO_ANSWER,
+  detectLanguage,
   GUARDRAIL_OUTPUT_BLOCK_REASON,
   maxQuestionsOf,
   platformGuardrail,
+  normaliseLanguage,
   readPersona,
+  TRANSLATION_NOTES,
   validateSkillProcedure,
   type AiConversationOutcome,
   type AiUsageSurface,
@@ -187,6 +190,7 @@ import {
   type GuidanceRecord,
 } from './guidance.js';
 import {
+  criticalTopic,
   KNOWLEDGE_ANSWER_RESPONSE_FORMAT,
   NO_ANSWER_PHRASES,
   NO_ANSWER_SIGNAL,
@@ -277,9 +281,17 @@ import {
   CLARIFY_SIGNAL,
   clarifyQuestion,
   clarifySignal,
+  confidentLanguage,
   decide,
+  LANGUAGE_SIGNAL,
+  languageSignal,
   languageVerdict,
+  nextLanguageTrack,
+  NO_LANGUAGE_TRACK,
   readClarifyMark,
+  readLanguageTrack,
+  type ConversationLanguage,
+  type LanguageInput,
   type PolicyRecord,
 } from './policy.js';
 import {
@@ -554,6 +566,14 @@ const PROCEDURE_PHRASES: Readonly<Record<PersonaLanguage, { offer: string; decli
     offer: '¿Volvemos al tema anterior?',
     declined: 'De acuerdo. ¿Puedo ayudarle con algo más?',
   },
+  ru: {
+    offer: 'Вернёмся к предыдущей теме?',
+    declined: 'Хорошо. Могу ли я помочь вам с чем-то ещё?',
+  },
+  az: {
+    offer: 'Əvvəlki mövzuya qayıdaq?',
+    declined: 'Yaxşı. Başqa bir məsələdə sizə kömək edə bilərəm?',
+  },
 };
 
 /** A step's knowledge answer, or why there is none. */
@@ -642,6 +662,11 @@ export class ConversationEngine {
   readonly #watches = new WeakMap<TurnMessage, HandoffWatch>();
   /** G16's words held from the input for the understanding call (`#holdsForTopic`). */
   readonly #held = new WeakMap<TurnMessage, GuardrailTrigger>();
+  /**
+   * The conversation's language as the turn found it (tm 387 · AI-30), set by
+   * `runTurn`: every verdict of the turn reads the message against it.
+   */
+  readonly #languages = new WeakMap<TurnMessage, ConversationLanguage>();
 
   constructor(options: ConversationEngineOptions) {
     this.#knowledge = options.knowledge;
@@ -690,6 +715,11 @@ export class ConversationEngine {
     const guard = this.#openGuard(state, message, ctx);
     const watch = openHandoffWatch();
     this.#watches.set(message, watch);
+    const conversation: ConversationLanguage = {
+      track: readLanguageTrack(state.signals),
+      visitor: ctx.visitorLanguage ?? null,
+    };
+    this.#languages.set(message, conversation);
     const result =
       this.#inputGuardrails(state, message, ctx, guard) ??
       this.#riskHandoff(state, message, ctx) ??
@@ -701,7 +731,12 @@ export class ConversationEngine {
       guard.deferred.length > 0 ? this.#settleDeferred(state, message, ctx, guard, result) : result;
     const closed = this.#closeGuard(state, message, ctx, guard, settled);
     this.#watches.delete(message);
-    const turn = this.#settleHandoff(state, message, ctx, watch, closed);
+    const turn = withLanguage(
+      this.#settleHandoff(state, message, ctx, watch, closed),
+      message,
+      conversation,
+    );
+    this.#languages.delete(message);
     const unresolved = unresolvedOf({
       state,
       message,
@@ -715,6 +750,21 @@ export class ConversationEngine {
   /** The turn's hand-over watch — a fresh one outside `runTurn`. */
   #watchOf(message: TurnMessage): HandoffWatch {
     return this.#watches.get(message) ?? openHandoffWatch();
+  }
+
+  /**
+   * Whether the persona serves the message, and in which language — read
+   * against the conversation's language (tm 387 · AI-30): "ok" after Russian
+   * stays Russian, and one message in another language does not switch it.
+   * Outside `runTurn` (a preview) the conversation has no language yet.
+   */
+  #verdict(message: TurnMessage, persona: Persona, understood: LanguageInput) {
+    return languageVerdict(
+      message.text,
+      persona,
+      understood,
+      this.#languages.get(message) ?? { track: NO_LANGUAGE_TRACK },
+    );
   }
 
   /**
@@ -793,11 +843,7 @@ export class ConversationEngine {
       ...(input.record ? { understood: input.record } : {}),
       log: input.log,
     };
-    const language = languageVerdict(
-      message.text,
-      agentPersona(ctx.config.skills),
-      input.understanding.language,
-    );
+    const language = this.#verdict(message, agentPersona(ctx.config.skills), input.understanding);
     const skill = input.active
       ? { id: input.active.skillId, name: input.active.snapshot.skill_name }
       : null;
@@ -851,8 +897,9 @@ export class ConversationEngine {
 
   /**
    * The hand-over triggers' last word on the turn (tm 303.2 · AI-09,
-   * `settleHandoffTurn`), in the language the turn answered in — English
-   * for a language the persona does not speak — and G16's hit when its words
+   * `settleHandoffTurn`), in the language the turn answered in — for a
+   * language the persona does not speak, that language when the template has
+   * it, else English (tm 387 · AI-30) — and G16's hit when its words
    * waited for the understanding call.
    */
   #settleHandoff(
@@ -866,10 +913,10 @@ export class ConversationEngine {
     this.#held.delete(message);
     if (!tookTurn(result)) return result;
     const skill = ctx.config.skills.find((candidate) => candidate.id === result.decisions.skillId);
-    const language = languageVerdict(
-      message.text,
+    const language = this.#verdict(
+      message,
       skill?.persona ?? agentPersona(ctx.config.skills),
-      result.decisions.understood?.language,
+      result.decisions.understood,
     );
     const settled = settleHandoffTurn({
       state,
@@ -877,7 +924,7 @@ export class ConversationEngine {
       result,
       config: handoffConfigOf(ctx),
       watch,
-      answerIn: language.unsupported ? 'en' : language.answerIn,
+      answerIn: language.unsupported ? (language.detected ?? 'en') : language.answerIn,
       ...(ctx.handoffAvailable !== undefined ? { available: ctx.handoffAvailable } : {}),
     });
     if (!held) return settled;
@@ -1028,7 +1075,7 @@ export class ConversationEngine {
       state,
       message,
       triggers,
-      answerIn: languageVerdict(message.text, agentPersona(ctx.config.skills), null).answerIn,
+      answerIn: this.#verdict(message, agentPersona(ctx.config.skills), null).answerIn,
       settings: guardrailSettingsFor(guard.config, agentId),
       catalogVersion: guard.config.catalogVersion,
       decided: {},
@@ -1058,11 +1105,8 @@ export class ConversationEngine {
       state,
       message,
       triggers,
-      answerIn: languageVerdict(
-        message.text,
-        agentPersona(ctx.config.skills),
-        decisions.understood?.language,
-      ).answerIn,
+      answerIn: this.#verdict(message, agentPersona(ctx.config.skills), decisions.understood)
+        .answerIn,
       settings: guardrailSettingsFor(guard.config, turnAgentId(ctx.config.skills)),
       catalogVersion: guard.config.catalogVersion,
       decided: {
@@ -1111,10 +1155,10 @@ export class ConversationEngine {
       aiAgentId: skill?.aiAgentId ?? turnAgentId(ctx.config.skills),
       skillId: result.decisions.skillId,
     };
-    const { answerIn } = languageVerdict(
-      message.text,
+    const { answerIn } = this.#verdict(
+      message,
       skill?.persona ?? agentPersona(ctx.config.skills),
-      result.decisions.understood?.language,
+      result.decisions.understood,
     );
 
     if (!forced && out.reply) {
@@ -1338,11 +1382,7 @@ export class ConversationEngine {
     procedural: NoProcedure | null,
   ): Promise<TurnResult> {
     const { skill, procedure } = item;
-    const language = languageVerdict(
-      message.text,
-      skill.persona,
-      procedural?.understanding.language,
-    );
+    const language = this.#verdict(message, skill.persona, procedural?.understanding);
     const identity = { id: skill.id, name: skill.name, aiAgentId: skill.aiAgentId };
     const intent = procedure.whenToUse[0]?.intent ?? null;
 
@@ -1773,7 +1813,7 @@ export class ConversationEngine {
         state,
         message,
         triggers: signalled,
-        answerIn: languageVerdict(message.text, persona, understanding.language).answerIn,
+        answerIn: this.#verdict(message, persona, understanding).answerIn,
         settings: guardrailSettingsFor(guard.config, turnAgentId(ctx.config.skills)),
         catalogVersion: guard.config.catalogVersion,
         decided: {
@@ -1852,7 +1892,7 @@ export class ConversationEngine {
     if (decision.kind === 'clarify' || decision.kind === 'smalltalk') {
       // Said for the agent, not for a skill: its persona and its language.
       const persona = agentPersona(ctx.config.skills);
-      const language = languageVerdict(message.text, persona, understanding.language);
+      const language = this.#verdict(message, persona, understanding);
       if (language.unsupported) {
         return forcedHandoff(state, message, null, {
           log,
@@ -1908,7 +1948,7 @@ export class ConversationEngine {
         aiAgentId: null,
       };
       const persona = personaFor(ctx.config.skills, decision.skillId, null);
-      const { answerIn } = languageVerdict(message.text, persona, understanding.language);
+      const { answerIn } = this.#verdict(message, persona, understanding);
       const line = PROCEDURE_PHRASES[answerIn ?? 'tr'].declined;
       const executed: Executed = {
         reply: line,
@@ -1991,7 +2031,7 @@ export class ConversationEngine {
     const persona = starting
       ? starting.skill.persona
       : personaFor(ctx.config.skills, skill.id, skill.aiAgentId);
-    const language = languageVerdict(message.text, persona, understanding.language);
+    const language = this.#verdict(message, persona, understanding);
     if (language.unsupported) {
       // AI-05 §7 → AI-09: a person answers. The procedure stays where it
       // stood — nothing of it ran — and goes on if the conversation comes back.
@@ -3038,6 +3078,24 @@ export class ConversationEngine {
       };
     }
 
+    // AI-30 (tm 387): passages in another language than the reply's are
+    // translated — unless the persona turned that off for the language, when
+    // a person answers (AI-30-S1).
+    const translateFrom = translationSource(hits, input.answerIn);
+    if (
+      translateFrom !== null &&
+      input.answerIn !== null &&
+      input.persona.translateFromKnowledge?.[input.answerIn] === false
+    ) {
+      return {
+        text: null,
+        blocked: { reason: 'unsupported_language' },
+        spent: { embeddingTokens },
+        record: { grounded: 'none', cited_ids: [], source_ids: [] },
+        detail: `the knowledge is in ${translateFrom} and translating it into ${input.answerIn} is turned off — handed to a human`,
+      };
+    }
+
     // The answer is an object (tm 298 · AI-06 §6): the reply, whether the
     // passages answer it, and which of them it is drawn from — by the labels
     // the prompt gives them. Outside any transaction (see the file header).
@@ -3063,6 +3121,7 @@ export class ConversationEngine {
             passages: sources,
             persona: input.persona,
             answerIn: input.answerIn,
+            ...(translateFrom ? { translateFrom } : {}),
             rules: rules.lines,
             cite: { ids: labels, notes },
             ...(history ? { history } : {}),
@@ -3113,6 +3172,33 @@ export class ConversationEngine {
         detail: `withheld — it repeated ${leaked.length} detail(s) from an earlier conversation today the player has not given again`,
       };
     };
+    /**
+     * AI-30 §3 (tm 387): a translated answer about money, a bonus or the
+     * account that changed a figure the passages give — an amount, its
+     * currency, a duration — is not sent and not written again: a person answers.
+     */
+    const slipped = (answer: ReadKnowledgeAnswer): KnowledgeAnswer | null => {
+      if (translateFrom === null || answer.grounded === 'none') return null;
+      const figures = answer.problems.find((problem) => problem.kind === 'invented_figure');
+      if (!figures || figures.kind !== 'invented_figure') return null;
+      const cited = answer.cited
+        .map((label) => sources[labels.indexOf(label)])
+        .filter((text): text is string => text !== undefined);
+      if (!criticalTopic([input.message, ...cited])) return null;
+      return {
+        text: null,
+        blocked: { reason: GUARDRAIL_OUTPUT_BLOCK_REASON },
+        spent,
+        record: {
+          grounded: 'none',
+          cited_ids: [],
+          source_ids: [],
+          ...(drafts === 2 ? { drafts } : {}),
+          withheld: ['invented_figure'],
+        },
+        detail: `not sent — the translation from ${translateFrom} changed ${figures.figures.length} figure(s) the passages give — handed to a human`,
+      };
+    };
     const checkNotes: string[] = [];
     /** A draft through the guardrails (tm 301.3): its check billed, noted and recorded. */
     const guarded = async (answer: ReadKnowledgeAnswer, attempt: 1 | 2): Promise<DraftCheck> => {
@@ -3155,6 +3241,8 @@ export class ConversationEngine {
       // say — withheld, and a person answers, with no second draft asked for.
       const leakedFirst = repeated(read);
       if (leakedFirst) return leakedFirst;
+      const slippedFirst = slipped(read);
+      if (slippedFirst) return slippedFirst;
       const checked = await guarded(read, 1);
       if (checked.handoff.length > 0) return blocked(checked);
       if (read.problems.length > 0 || checked.violations.length > 0) {
@@ -3169,6 +3257,8 @@ export class ConversationEngine {
         ]);
         bill(second.usage);
         const again = readKnowledgeAnswer(second.value, { labels, sources });
+        const slippedAgain = slipped(again);
+        if (slippedAgain) return slippedAgain;
         const rechecked = await guarded(again, 2);
         if (rechecked.handoff.length > 0 || rechecked.violations.length > 0) {
           return blocked(rechecked);
@@ -3241,8 +3331,12 @@ export class ConversationEngine {
     const best = cited[0]!;
     const asked = personaRequest(input.persona, input.answerIn);
     const strayed = styleWarnings(read.reply, rules.style);
+    const note =
+      translateFrom !== null && input.answerIn !== null && input.persona.disclaimerOnTranslation
+        ? TRANSLATION_NOTES[input.answerIn]
+        : null;
     return {
-      text: read.reply,
+      text: note ? `${read.reply}\n${note}` : read.reply,
       grounded: read.grounded,
       spent,
       record: {
@@ -3257,6 +3351,7 @@ export class ConversationEngine {
         cited.length > 1 ? `+ ${cited.length - 1} more passage(s)` : '',
         read.grounded === 'partial' ? 'in part' : '',
         drafts === 2 ? 'written again' : '',
+        translateFrom !== null ? `translated from ${translateFrom}` : '',
         `written by ${this.#llm.id}`,
         asked ? `persona: ${asked}` : '',
         rules.note,
@@ -3288,7 +3383,7 @@ export class ConversationEngine {
     },
   ): Promise<TurnResult | KnowledgeMiss> {
     const persona = agentPersona(ctx.config.skills);
-    const language = languageVerdict(message.text, persona, input.understanding?.language);
+    const language = this.#verdict(message, persona, input.understanding);
     if (language.unsupported) {
       return forcedHandoff(state, message, null, {
         log: input.log,
@@ -3513,7 +3608,7 @@ export class ConversationEngine {
   ): TurnResult {
     const { base } = input;
     const persona = agentPersona(ctx.config.skills);
-    const { answerIn } = languageVerdict(message.text, persona, input.understanding?.language);
+    const { answerIn } = this.#verdict(message, persona, input.understanding);
     const settings = ctx.noAnswer ?? DEFAULT_NO_ANSWER;
     const category = noAnswerCategory(message.text, input.understanding);
     const before: TurnState =
@@ -3579,7 +3674,7 @@ export class ConversationEngine {
     if (!mark || mark.turn !== turnsTaken(state) || ctx.config.skills.length === 0) return null;
     const said = readOfferAnswer(message.text);
     if (said === null) return null;
-    const { answerIn } = languageVerdict(message.text, agentPersona(ctx.config.skills), null);
+    const { answerIn } = this.#verdict(message, agentPersona(ctx.config.skills), null);
     const phrases = NO_ANSWER_PHRASES[answerIn ?? 'tr'];
     const yes = said === 'yes';
     // A hand-over trigger's offer (`ask_first`, tm 303.2) hands over for its reason.
@@ -3737,6 +3832,53 @@ function withRecall(executed: Executed, recall: string | null): Executed {
   return { ...executed, reply: recall, decisions: { ...decisions, replyKind: 'answer' } };
 }
 
+/**
+ * The language the passages are in when none is in the reply's (tm 387 ·
+ * AI-30): each by its source's declared language, else as the persona rule
+ * reads its text. Null — no translation — when one passage is in the reply's
+ * language, when no language is known, or when the reply has none.
+ */
+function translationSource(
+  hits: ReadonlyArray<{ text: string; sourceLanguage?: string | null }>,
+  answerIn: PersonaLanguage | null,
+): string | null {
+  if (answerIn === null) return null;
+  const languages = hits.map(
+    (hit) => normaliseLanguage(hit.sourceLanguage ?? null) ?? detectLanguage(hit.text),
+  );
+  if (languages.includes(answerIn)) return null;
+  return (
+    languages.find((language): language is NonNullable<typeof language> => language !== null) ??
+    null
+  );
+}
+
+/**
+ * The turn with the conversation's language kept (tm 387 · AI-30): the track
+ * after this message, read with the understanding the turn recorded, goes
+ * into `signals` — only on a turn the AI took, and only when it moved.
+ */
+function withLanguage(
+  turn: TurnResult,
+  message: TurnMessage,
+  conversation: ConversationLanguage,
+): TurnResult {
+  if (!tookTurn(turn)) return turn;
+  const next = nextLanguageTrack(
+    conversation.track,
+    confidentLanguage(message.text, turn.decisions.understood ?? null),
+  );
+  const before = readLanguageTrack(turn.nextState.signals);
+  if (next.current === before.current && next.pending === before.pending) return turn;
+  return {
+    ...turn,
+    nextState: {
+      ...turn.nextState,
+      signals: { ...turn.nextState.signals, [LANGUAGE_SIGNAL]: languageSignal(next) },
+    },
+  };
+}
+
 /** What the player has said in this connection: the message and their earlier lines. */
 function saidSoFar(message: TurnMessage): string {
   const earlier = (message.history?.messages ?? [])
@@ -3858,6 +4000,8 @@ const SMALLTALK_PHRASES: Readonly<Record<PersonaLanguage, string>> = {
   de: 'Ich bin für Sie da — wie kann ich helfen?',
   fr: 'Je suis là — comment puis-je vous aider ?',
   es: 'Aquí estoy — ¿en qué puedo ayudarle?',
+  ru: 'Я здесь — чем могу помочь?',
+  az: 'Buradayam — sizə necə kömək edə bilərəm?',
 };
 
 /**

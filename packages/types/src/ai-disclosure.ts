@@ -112,6 +112,10 @@ export function aiDisclosureSentence(input: {
       return `Je suis ${name}, l’assistant IA de ${brand}.`;
     case 'es':
       return `Soy ${name}, el asistente de IA de ${brand}.`;
+    case 'ru':
+      return `Я ${name}, ИИ-ассистент ${brand}.`;
+    case 'az':
+      return `Mən ${name}, ${brand} süni intellekt köməkçisiyəm.`;
     default:
       return `I am ${name}, ${brand}${/s$/i.test(brand) ? '’' : '’s'} AI assistant.`;
   }

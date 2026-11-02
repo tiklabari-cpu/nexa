@@ -156,7 +156,7 @@ import {
   DEFAULT_HANDOFF_CONFIG,
   handoffWords,
 } from './conversation/handoff/triggers.js';
-import { languageVerdict } from './conversation/policy.js';
+import { languageVerdict, turnLanguageVerdict } from './conversation/policy.js';
 import {
   aimedHandoff,
   anyoneAccepting,
@@ -555,6 +555,7 @@ export class AiResponder {
             mode: 'live',
             chatId,
             brandId: loaded.brandId,
+            visitorLanguage: loaded.visitorLanguage,
             configVersionId: loaded.config.versionId,
             config: loaded.config.pkg,
             ...(loaded.config.knowledge ? { knowledgeVersion: loaded.config.knowledge } : {}),
@@ -1084,12 +1085,11 @@ export class AiResponder {
         skills.find((skill) => skill.id === result.decisions.skillId)?.persona ??
         skills[0]?.persona ??
         readPersona(null);
-      const language = languageVerdict(
-        message ?? '',
-        persona,
-        result.decisions.understood?.language,
+      const language = turnLanguageVerdict(message ?? '', persona, result);
+      const words = afterHoursWords(
+        config,
+        language.unsupported ? (language.detected ?? 'en') : language.answerIn,
       );
-      const words = afterHoursWords(config, language.unsupported ? 'en' : language.answerIn);
       if (!reply.includes(words)) reply = `${reply}\n${words}`;
     }
     return {
@@ -1150,11 +1150,11 @@ export class AiResponder {
       skills.find((skill) => skill.id === result.decisions.skillId)?.persona ??
       skills[0]?.persona ??
       readPersona(null);
-    const language = languageVerdict(message ?? '', persona, result.decisions.understood?.language);
+    const language = turnLanguageVerdict(message ?? '', persona, result);
     const sentence = aiDisclosureSentence({
       name: read.agent.name,
       brand: read.brand,
-      language: language.unsupported ? 'en' : language.answerIn,
+      language: language.unsupported ? (language.detected ?? 'en') : language.answerIn,
     });
     const opening = aiOpening(sentence, readAiWelcome(read.agent.persona));
     return { ...result, reply: withAiOpening(reply, opening) };
@@ -1306,8 +1306,14 @@ export class AiResponder {
     const handoffAvailable = await anyoneAccepting(tx, licenseId);
     // The brand the member came in through (tm 309.1), live: the knowledge
     // search answers from that brand's sources and the every-brand ones.
-    const chat = await tx.chat.findUnique({ where: { id: ref.chatId }, select: { brandId: true } });
+    const chat = await tx.chat.findUnique({
+      where: { id: ref.chatId },
+      select: { brandId: true, customer: { select: { locale: true } } },
+    });
     const brandId = chat?.brandId ?? null;
+    // The widget language the visitor opened the chat in (WG-02): what a
+    // conversation with no confident message yet is answered in (tm 387 · AI-30).
+    const visitorLanguage = chat?.customer?.locale ?? null;
     if (trigger === null) {
       return {
         conversation,
@@ -1323,6 +1329,7 @@ export class AiResponder {
         riskFlags,
         handoffAvailable,
         brandId,
+        visitorLanguage,
       };
     }
     const newest = await newestVisitorEvent(tx, ref);
@@ -1351,6 +1358,7 @@ export class AiResponder {
       riskFlags,
       handoffAvailable,
       brandId,
+      visitorLanguage,
     };
   }
 }
@@ -1394,6 +1402,8 @@ interface TurnRead {
   handoffAvailable: boolean;
   /** The conversation's brand (`chats.brand_id`, tm 309.1); null when not known. */
   brandId: string | null;
+  /** The visitor's widget language (`customers.locale`, tm 387); null when not known. */
+  visitorLanguage: string | null;
 }
 
 /**

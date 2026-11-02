@@ -14727,6 +14727,24 @@ export interface components {
        *     (AI-29-S1). The button itself cannot be hidden. Null: the widget's.
        */
       human_button_label?: string | null;
+      /**
+       * @description The language a conversation is answered in before the player has
+       *     written enough to tell theirs (AI-30) — after the visitor's widget
+       *     language, when the agent speaks it. Null: the first of `languages`.
+       * @enum {string|null}
+       */
+      default_language?: 'en' | 'tr' | 'de' | 'fr' | 'es' | 'ru' | 'az' | null;
+      /**
+       * @description Per answer language, whether an answer may be a faithful
+       *     translation of knowledge written in another language (AI-30-S1).
+       *     A language not listed may; `false` hands such a question to a
+       *     person instead.
+       */
+      translate_from_knowledge?: {
+        [key: string]: boolean;
+      };
+      /** @description A translated answer ends with a short note saying so (AI-30). */
+      disclaimer_on_translation?: boolean;
       active: boolean;
       skills_count?: number;
     };
@@ -15038,6 +15056,11 @@ export interface components {
         basis: 'declared';
         /** @description A member token this workspace signed came with the message. */
         recognized_device: boolean;
+        /**
+         * @description The language the conversation was in (ISO 639-1, tm 387 · AI-30), as
+         *     the AI kept it; absent when not told. The card's own words are Turkish.
+         */
+        language?: string | null;
       };
       /** @description The procedure's `show_in_card` slots, in its order, once there is something to say. */
       slots: {
@@ -32575,6 +32598,21 @@ export interface operations {
           welcome_message?: string | null;
           /** @description The widget's "Talk to an agent" button text (AI-29-S1). Null or blank clears it. */
           human_button_label?: string | null;
+          /**
+           * @description The language a conversation starts in (AI-30). Null clears it.
+           * @enum {string|null}
+           */
+          default_language?: 'en' | 'tr' | 'de' | 'fr' | 'es' | 'ru' | 'az' | null;
+          /**
+           * @description Per language code (`en`, `tr`, `de`, `fr`, `es`, `ru`, `az`):
+           *     whether a translated answer is allowed (AI-30-S1). Merged into
+           *     the stored map; the languages left out keep their value.
+           */
+          translate_from_knowledge?: {
+            [key: string]: boolean;
+          };
+          /** @description A translated answer ends with a note saying so (AI-30). */
+          disclaimer_on_translation?: boolean;
         };
       };
     };

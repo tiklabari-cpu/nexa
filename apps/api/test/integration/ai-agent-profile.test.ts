@@ -211,4 +211,50 @@ describe('AI agent profile', () => {
     });
     expect(unchanged?.name).toBe('Ada');
   });
+
+  it('keeps the language settings: the start, translation per language (merged), the note (tm 387 · AI-30)', async () => {
+    const set = await server.patch(
+      `/ai-agents/${agentId}`,
+      {
+        languages: ['tr', 'ru', 'az'],
+        default_language: 'ru',
+        translate_from_knowledge: { ru: false },
+        disclaimer_on_translation: true,
+      },
+      await write('a'),
+    );
+    expect(set.statusCode).toBe(200);
+    expect(set.json()).toMatchObject({
+      languages: ['tr', 'ru', 'az'],
+      default_language: 'ru',
+      translate_from_knowledge: { ru: false },
+      disclaimer_on_translation: true,
+    });
+
+    // Merged: Azerbaijani added, Russian kept off; the note turned off; the start cleared.
+    const merged = await server.patch(
+      `/ai-agents/${agentId}`,
+      {
+        translate_from_knowledge: { az: true },
+        disclaimer_on_translation: false,
+        default_language: null,
+      },
+      await write('a'),
+    );
+    expect(merged.json()).toMatchObject({
+      default_language: null,
+      translate_from_knowledge: { ru: false, az: true },
+      disclaimer_on_translation: false,
+    });
+
+    for (const body of [
+      { default_language: 'xx' },
+      { translate_from_knowledge: { xx: true } },
+      { translate_from_knowledge: {} },
+      { translate_from_knowledge: { ru: 'no' } },
+    ]) {
+      const refused = await server.patch(`/ai-agents/${agentId}`, body, await write('a'));
+      expect(refused.statusCode, JSON.stringify(body)).toBe(400);
+    }
+  });
 });

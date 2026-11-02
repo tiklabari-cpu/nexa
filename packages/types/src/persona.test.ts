@@ -18,9 +18,12 @@ import {
   personaIsEmpty,
   personaLanguageVerdict,
   personaOpener,
+  PERSONA_LANGUAGES,
   readBatchWindowSeconds,
   readPersona,
+  readPersonaLanguagePolicy,
   shapeAnswer,
+  TRANSLATION_NOTES,
   type Persona,
 } from './persona.js';
 
@@ -245,5 +248,67 @@ describe('persona — tone and length compose (FR-MOD-06.4)', () => {
       notes: [],
     });
     expect(shapeAnswer(['   '], persona({ answerLength: 'long' })).text).toBe('');
+  });
+});
+
+describe('persona — Russian and Azerbaijani (tm 387 · AI-30)', () => {
+  it('speaks Russian and Azerbaijani — the AI does, the widget does not (K25)', () => {
+    expect(PERSONA_LANGUAGES).toEqual(['en', 'tr', 'de', 'fr', 'es', 'ru', 'az']);
+    expect(personaOpener('friendly', 'ru')).toBe('С удовольствием помогу!');
+    expect(personaOpener('formal', 'az')).toBe('Müraciətiniz üçün təşəkkür edirik.');
+    for (const language of PERSONA_LANGUAGES) expect(TRANSLATION_NOTES[language]).toBeTruthy();
+  });
+
+  it('tells Russian and Azerbaijani apart from Turkish', () => {
+    expect(detectLanguage('Здравствуйте, как вывести деньги с моего счёта?')).toBe('ru');
+    expect(detectLanguage('Pulu necə çıxara bilərəm, zəhmət olmasa?')).toBe('az');
+    expect(detectLanguage('Param hesabıma geçmedi, ne zaman gelir?')).toBe('tr');
+  });
+
+  it('leaves "ok" and a Turkish-Azerbaijani shared sentence undecided or Turkish — "TR / AZ ortak"', () => {
+    expect(detectLanguage('ok')).toBeNull();
+    // "bir", "var" and "siz" are both languages' small words: Turkish wins or nobody does.
+    expect(detectLanguage('Bir sual var siz')).not.toBe('az');
+  });
+
+  it('reads a Turkish-only persona as unable to serve Russian', () => {
+    const turkish = readPersona({ languages: ['tr'] });
+    expect(personaLanguageVerdict('Мой депозит не пришёл, что мне делать?', turkish)).toEqual({
+      detected: 'ru',
+      answerIn: null,
+      unsupported: true,
+    });
+  });
+
+  it('reads the language settings from the persona JSON, and nothing else', () => {
+    const read = readPersona({
+      languages: ['tr', 'ru'],
+      persona: {
+        defaultLanguage: 'ru-RU',
+        translateFromKnowledge: { ru: false, az: true, xx: true, en: 'yes' },
+        disclaimerOnTranslation: true,
+      },
+    });
+    expect(read).toEqual({
+      tone: null,
+      languages: ['tr', 'ru'],
+      answerLength: null,
+      defaultLanguage: 'ru',
+      translateFromKnowledge: { ru: false, az: true },
+      disclaimerOnTranslation: true,
+    });
+    // Nothing set: the persona reads exactly as before.
+    expect(readPersona({ languages: ['tr'], persona: {} })).toEqual({
+      tone: null,
+      languages: ['tr'],
+      answerLength: null,
+    });
+    expect(
+      readPersonaLanguagePolicy({ defaultLanguage: 'zz', disclaimerOnTranslation: 'on' }),
+    ).toEqual({
+      defaultLanguage: null,
+      translateFromKnowledge: {},
+      disclaimerOnTranslation: false,
+    });
   });
 });

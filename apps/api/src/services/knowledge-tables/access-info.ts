@@ -252,6 +252,8 @@ export const ACCESS_INFO_LEAD: Readonly<Record<PersonaLanguage, string>> = {
   de: 'Aktuelle Zugangsinformation:',
   fr: 'Informations d’accès actuelles :',
   es: 'Información de acceso actual:',
+  ru: 'Актуальная информация для доступа:',
+  az: 'Aktual giriş məlumatı:',
 };
 
 /** A fixed link as it is said: the workspace's sentence with the link, or the lead-in and the link. */

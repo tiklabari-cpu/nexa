@@ -421,3 +421,51 @@ describe('ProfileForm opening message and agent button (tm 308 · AI-29)', () =>
     );
   });
 });
+
+describe('ProfileForm languages (tm 387 · AI-30)', () => {
+  it('offers Russian and Azerbaijani as answer languages', () => {
+    renderForm();
+    expect(screen.getByRole('switch', { name: 'Русский' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+    expect(screen.getByRole('switch', { name: 'Azərbaycanca' })).toBeInTheDocument();
+  });
+
+  it('shows the first selected language as the start, translation on, and no note when nothing is set', () => {
+    renderForm({ ...AGENT, languages: ['tr', 'ru'] });
+    expect(screen.getByLabelText('Starting language')).toHaveValue('');
+    expect(screen.getByRole('checkbox', { name: 'Русский' })).toBeChecked();
+    expect(screen.getByLabelText('Note on a translated answer')).toHaveValue('off');
+  });
+
+  it('PATCHes the starting language, the translation switch and the note — only what changed', async () => {
+    const user = userEvent.setup();
+    renderForm({ ...AGENT, languages: ['tr', 'ru'] });
+
+    await user.selectOptions(screen.getByLabelText('Starting language'), 'ru');
+    await user.click(screen.getByRole('checkbox', { name: 'Русский' }));
+    await user.selectOptions(screen.getByLabelText('Note on a translated answer'), 'on');
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+
+    expect(api.patch).toHaveBeenCalledWith(
+      '/ai-agents/agent-1',
+      expect.objectContaining({
+        default_language: 'ru',
+        translate_from_knowledge: { ru: false },
+        disclaimer_on_translation: true,
+      }),
+    );
+  });
+
+  it('sends none of the language settings when only the name changed', async () => {
+    const user = userEvent.setup();
+    renderForm({ ...AGENT, languages: ['tr', 'ru'], translate_from_knowledge: { ru: false } });
+    await user.type(screen.getByLabelText('Name'), 'x');
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+    const body = api.patch.mock.calls[0]![1] as Record<string, unknown>;
+    expect(body).not.toHaveProperty('default_language');
+    expect(body).not.toHaveProperty('translate_from_knowledge');
+    expect(body).not.toHaveProperty('disclaimer_on_translation');
+  });
+});

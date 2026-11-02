@@ -219,7 +219,8 @@ describe('the language check (AI-05 §7)', () => {
   const turkish = readPersona({ tone: null, languages: ['tr'], persona: null });
 
   it('a language the rule cannot tell, read by the understanding, is unsupported', () => {
-    expect(languageVerdict('Здравствуйте, депозит не пришёл', turkish, 'ru')).toEqual({
+    // Greek: Russian is the rule's own since tm 387 (AI-30).
+    expect(languageVerdict('Γεια σας, η κατάθεσή μου δεν έφτασε', turkish, 'el')).toEqual({
       detected: null,
       answerIn: null,
       unsupported: true,

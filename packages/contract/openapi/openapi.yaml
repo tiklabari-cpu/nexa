@@ -2241,6 +2241,25 @@ components:
           description: |
             The widget's "Talk to an agent" button in the workspace's words
             (AI-29-S1). The button itself cannot be hidden. Null: the widget's.
+        default_language:
+          type: string
+          nullable: true
+          enum: [en, tr, de, fr, es, ru, az, null]
+          description: |
+            The language a conversation is answered in before the player has
+            written enough to tell theirs (AI-30) — after the visitor's widget
+            language, when the agent speaks it. Null: the first of `languages`.
+        translate_from_knowledge:
+          type: object
+          additionalProperties: { type: boolean }
+          description: |
+            Per answer language, whether an answer may be a faithful
+            translation of knowledge written in another language (AI-30-S1).
+            A language not listed may; `false` hands such a question to a
+            person instead.
+        disclaimer_on_translation:
+          type: boolean
+          description: A translated answer ends with a short note saying so (AI-30).
         active: { type: boolean }
         skills_count: { type: integer }
 
@@ -2682,6 +2701,12 @@ components:
             recognized_device:
               type: boolean
               description: A member token this workspace signed came with the message.
+            language:
+              type: string
+              nullable: true
+              description: |
+                The language the conversation was in (ISO 639-1, tm 387 · AI-30), as
+                the AI kept it; absent when not told. The card's own words are Turkish.
         slots:
           type: array
           description: The procedure's `show_in_card` slots, in its order, once there is something to say.

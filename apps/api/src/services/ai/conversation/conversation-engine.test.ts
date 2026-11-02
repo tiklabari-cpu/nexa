@@ -1000,6 +1000,8 @@ describe('the turn returns what it would do and does none of it (AI-19)', () => 
     expect(result.nextState).toEqual({
       ...before,
       counters: { turns: 3, clarify: 1 },
+      // The conversation's language, kept from this English message (tm 387 · AI-30).
+      signals: { ...before.signals, language: { current: 'en', pending: null } },
       digest: {
         procedure_key: 'skill-1',
         procedure_name: expect.any(String),

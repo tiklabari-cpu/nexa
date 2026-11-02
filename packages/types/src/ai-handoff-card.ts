@@ -71,6 +71,11 @@ export interface AiHandoffPlayer {
   basis: 'declared';
   /** A member token this workspace signed came with the message: "tanınan cihaz". */
   recognized_device: boolean;
+  /**
+   * The language the conversation was in (tm 387 · AI-30), as the AI kept it;
+   * absent when it was not told. The card itself is written in Turkish.
+   */
+  language?: string | null;
 }
 
 /** One collected slot, in the procedure's order (`show_in_card` only). */

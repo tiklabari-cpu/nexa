@@ -243,6 +243,20 @@ const STOCK: Readonly<Record<PersonaLanguage, StockLines>> = {
     stall: 'Un momento, lo miro.',
     confirmed: 'Sí, gracias.',
   },
+  ru: {
+    yes: 'Да',
+    no: 'Нет',
+    unknown: 'Не знаю.',
+    stall: 'Секунду, сейчас посмотрю.',
+    confirmed: 'Да, спасибо.',
+  },
+  az: {
+    yes: 'Bəli',
+    no: 'Xeyr',
+    unknown: 'Bilmirəm.',
+    stall: 'Bir saniyə, baxıram.',
+    confirmed: 'Bəli, təşəkkür edirəm.',
+  },
 };
 
 /** The stock lines in `language`, English for one the stub does not write. */

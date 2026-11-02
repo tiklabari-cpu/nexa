@@ -219,6 +219,24 @@ describe('buildHandoffCard — a deposit hand-over (AI-10 §1 · research §3.1)
     expect(card.cardText).toContain('Referans no: paylaşıldı (kartta gösterilmez)');
   });
 
+  it('names the player’s language when it is not Turkish; the card stays Turkish (tm 387 · AI-30 acceptance)', () => {
+    const russian = depositState();
+    const card = buildHandoffCard(
+      source({
+        state: {
+          ...russian,
+          signals: { ...russian.signals, language: { current: 'ru', pending: null } },
+        },
+      }),
+    );
+    expect(card.player.language).toBe('ru');
+    expect(card.cardText).toContain('Oyuncu dili: Rusça (ru)');
+    expect(card.cardText).toContain('Özet: Yatırım hesaba geçmedi');
+    // A Turkish conversation, or one with no language kept, says nothing of it.
+    expect(buildHandoffCard(source()).cardText).not.toContain('Oyuncu dili');
+    expect(buildHandoffCard(source()).player).not.toHaveProperty('language');
+  });
+
   it('says "oyuncu beyanı" without the device when the visitor proved nothing', () => {
     const card = buildHandoffCard(source({ trust: 'claimed' }));
     expect(card.player.recognized_device).toBe(false);

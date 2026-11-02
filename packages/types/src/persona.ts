@@ -53,7 +53,7 @@ export type PersonaTone = (typeof PERSONA_TONES)[number];
  * tone phrasing, because inventing a greeting in a language nobody wrote is how
  * a persona ends up saying something embarrassing.
  */
-export const PERSONA_LANGUAGES = ['en', 'tr', 'de', 'fr', 'es'] as const;
+export const PERSONA_LANGUAGES = ['en', 'tr', 'de', 'fr', 'es', 'ru', 'az'] as const;
 export type PersonaLanguage = (typeof PERSONA_LANGUAGES)[number];
 
 /** The persona, normalised. Every field is either meaningful or absent. */
@@ -62,6 +62,18 @@ export interface Persona {
   /** Normalised, de-duplicated language codes; empty means "no declaration". */
   languages: string[];
   answerLength: AnswerLength | null;
+  /**
+   * The language a conversation starts in when the player has not shown one
+   * yet (tm 387 · AI-30). Absent or null: the first declared language.
+   */
+  defaultLanguage?: PersonaLanguage | null;
+  /**
+   * Per reply language, whether an answer may be translated from knowledge
+   * written in another one (AI-30-S1). A language not listed may.
+   */
+  translateFromKnowledge?: Readonly<Record<string, boolean>>;
+  /** A translated answer ends with a short note saying so (AI-30). */
+  disclaimerOnTranslation?: boolean;
 }
 
 /** A persona that asks for nothing. `shapeAnswer` against it changes nothing. */
@@ -117,6 +129,8 @@ const TONE_OPENERS: Record<PersonaTone, Record<PersonaLanguage, string>> = {
     de: 'Gerne helfe ich!',
     fr: 'Avec plaisir !',
     es: '¡Con mucho gusto!',
+    ru: 'С удовольствием помогу!',
+    az: 'Kömək etməkdən məmnunam!',
   },
   professional: {
     en: 'Certainly.',
@@ -124,6 +138,8 @@ const TONE_OPENERS: Record<PersonaTone, Record<PersonaLanguage, string>> = {
     de: 'Selbstverständlich.',
     fr: 'Bien sûr.',
     es: 'Por supuesto.',
+    ru: 'Конечно.',
+    az: 'Əlbəttə.',
   },
   casual: {
     en: 'Sure thing —',
@@ -131,6 +147,8 @@ const TONE_OPENERS: Record<PersonaTone, Record<PersonaLanguage, string>> = {
     de: 'Klar —',
     fr: 'Bien sûr —',
     es: 'Claro —',
+    ru: 'Конечно —',
+    az: 'Əlbəttə —',
   },
   formal: {
     en: 'Thank you for your enquiry.',
@@ -138,8 +156,10 @@ const TONE_OPENERS: Record<PersonaTone, Record<PersonaLanguage, string>> = {
     de: 'Vielen Dank für Ihre Anfrage.',
     fr: 'Nous vous remercions de votre demande.',
     es: 'Gracias por su consulta.',
+    ru: 'Благодарим вас за обращение.',
+    az: 'Müraciətiniz üçün təşəkkür edirik.',
   },
-  neutral: { en: '', tr: '', de: '', fr: '', es: '' },
+  neutral: { en: '', tr: '', de: '', fr: '', es: '', ru: '', az: '' },
 };
 
 /**
@@ -347,10 +367,69 @@ const LANGUAGE_STOPWORDS: Record<PersonaLanguage, readonly string[]> = {
     'del',
     'muy',
   ],
+  // Russian and Azerbaijani (tm 387 · AI-30). Azerbaijani leaves out the small
+  // words it shares with Turkish ("bir", "var", "siz"): a message made of those
+  // alone stays Turkish — the "TR / AZ ortak" behaviour AI-30 accepts.
+  ru: [
+    'и',
+    'в',
+    'не',
+    'на',
+    'я',
+    'что',
+    'как',
+    'где',
+    'когда',
+    'почему',
+    'мой',
+    'моя',
+    'мои',
+    'мне',
+    'вы',
+    'вас',
+    'ваш',
+    'это',
+    'у',
+    'с',
+    'по',
+    'для',
+    'есть',
+    'нет',
+    'пожалуйста',
+    'спасибо',
+    'можно',
+    'ли',
+    'или',
+    'уже',
+    'ещё',
+    'еще',
+  ],
+  az: [
+    'və',
+    'üçün',
+    'necə',
+    'nədir',
+    'nə',
+    'mən',
+    'mənim',
+    'harada',
+    'niyə',
+    'yoxdur',
+    'deyil',
+    'zəhmət',
+    'edə',
+    'bilərəm',
+    'bilərsiniz',
+    'çox',
+    'təşəkkür',
+    'edirəm',
+    'olunur',
+    'etmək',
+  ],
 };
 
 /**
- * Letters that only one of the five languages uses.
+ * Letters that only one of the persona languages uses.
  *
  * A weak signal on its own (one accented word proves little) so it is worth a
  * single point, the same as one function word — enough to break a tie between
@@ -363,6 +442,9 @@ const LANGUAGE_MARKS: Record<PersonaLanguage, RegExp | null> = {
   de: /[äßÄ]/u,
   fr: /[àèêùœÀÈÊÙŒ]/u,
   es: /[ñ¿¡Ñ]/u,
+  // Cyrillic is Russian's here; the schwa is Azerbaijani's alone.
+  ru: /[а-яё]/iu,
+  az: /[əƏ]/u,
 };
 
 /** The score a winning language must reach before it is believed at all. */
@@ -436,12 +518,67 @@ export function readPersona(source: PersonaSource | null | undefined): Persona {
     if (code && !languages.includes(code)) languages.push(code);
   }
 
+  const policy = readPersonaLanguagePolicy(source.persona);
   return {
     tone: normaliseTone(source.tone),
     languages,
     answerLength: isAnswerLength(declared) ? declared : null,
+    // Only what was set, so a persona without a language policy reads as before.
+    ...(policy.defaultLanguage !== null ? { defaultLanguage: policy.defaultLanguage } : {}),
+    ...(Object.keys(policy.translateFromKnowledge).length > 0
+      ? { translateFromKnowledge: policy.translateFromKnowledge }
+      : {}),
+    ...(policy.disclaimerOnTranslation ? { disclaimerOnTranslation: true } : {}),
   };
 }
+
+/** The persona's language settings (tm 387 · AI-30), as stored in its `persona` JSON. */
+export interface PersonaLanguagePolicy {
+  defaultLanguage: PersonaLanguage | null;
+  translateFromKnowledge: Record<string, boolean>;
+  disclaimerOnTranslation: boolean;
+}
+
+/**
+ * Read the language settings from the `persona` JSON column: anything that is
+ * not a language this module speaks, or not a boolean, reads as unset.
+ */
+export function readPersonaLanguagePolicy(persona: unknown): PersonaLanguagePolicy {
+  const json =
+    persona && typeof persona === 'object' && !Array.isArray(persona)
+      ? (persona as Record<string, unknown>)
+      : {};
+  const code = normaliseLanguage(
+    typeof json['defaultLanguage'] === 'string' ? json['defaultLanguage'] : null,
+  );
+  const translate: Record<string, boolean> = {};
+  const raw = json['translateFromKnowledge'];
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+      const lang = normaliseLanguage(key);
+      if (isPersonaLanguage(lang) && typeof value === 'boolean') translate[lang] = value;
+    }
+  }
+  return {
+    defaultLanguage: isPersonaLanguage(code) ? code : null,
+    translateFromKnowledge: translate,
+    disclaimerOnTranslation: json['disclaimerOnTranslation'] === true,
+  };
+}
+
+/**
+ * The note a translated answer ends with (`disclaimerOnTranslation`), in the
+ * reply's language — fixed words, like the tone openers.
+ */
+export const TRANSLATION_NOTES: Readonly<Record<PersonaLanguage, string>> = {
+  en: '(This answer was translated from our help content.)',
+  tr: '(Bu yanıt yardım içeriğimizden çevrildi.)',
+  de: '(Diese Antwort wurde aus unseren Hilfeinhalten übersetzt.)',
+  fr: '(Cette réponse a été traduite de notre contenu d’aide.)',
+  es: '(Esta respuesta se tradujo de nuestro contenido de ayuda.)',
+  ru: '(Этот ответ переведён из наших справочных материалов.)',
+  az: '(Bu cavab yardım materiallarımızdan tərcümə olunub.)',
+};
 
 function answerLengthFromJson(persona: unknown): string | null {
   if (!persona || typeof persona !== 'object' || Array.isArray(persona)) return null;
@@ -487,7 +624,7 @@ export function personaIsEmpty(persona: Persona): boolean {
 }
 
 /**
- * Which of the five languages a message is written in, or `null` for "cannot
+ * Which of the persona languages a message is written in, or `null` for "cannot
  * tell".
  *
  * The `null` is the important return value. A three-word message, a bare order

@@ -245,7 +245,10 @@ describe('an answer from the knowledge base (AI-06 §4–§7)', () => {
       `${FAQ.text}\nDaha fazla ayrıntı için sizi temsilcimize aktarabilirim.`,
     );
     expect(partial.decisions.knowledge).toMatchObject({ grounded: 'partial' });
-    expect(chat.state.signals).toEqual({ no_answer: { turn: 1 } });
+    expect(chat.state.signals).toEqual({
+      no_answer: { turn: 1 },
+      language: { current: 'tr', pending: null },
+    });
 
     const yes = await chat.say('evet');
     expect(yes.reply).toBe('Sizi bir temsilcimize aktarıyorum.');

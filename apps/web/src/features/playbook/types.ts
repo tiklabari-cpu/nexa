@@ -92,6 +92,14 @@ export interface AiAgent {
   /** The opening words after the AI disclosure, and the button's wording (tm 308 · AI-29); null is unset. */
   welcome_message?: string | null;
   human_button_label?: string | null;
+  /**
+   * The language settings (tm 387 · AI-30): where a conversation starts, per
+   * language whether a translated answer is allowed (absent: allowed), and the
+   * note a translation ends with. Absent reads as unset.
+   */
+  default_language?: string | null;
+  translate_from_knowledge?: Record<string, boolean>;
+  disclaimer_on_translation?: boolean;
   active: boolean;
   skills_count: number;
 }

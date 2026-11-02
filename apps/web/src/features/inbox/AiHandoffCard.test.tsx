@@ -199,6 +199,20 @@ describe('the card, short and in full (AI-10)', () => {
     expect(screen.queryByText('What the AI collected')).not.toBeInTheDocument();
   });
 
+  it('names the language the player writes in, when the AI kept one (tm 387 · AI-30 acceptance)', () => {
+    mount(
+      <AiHandoffCard
+        card={depositCard({ player: { ...depositCard().player, language: 'ru' } })}
+        chatId={CHAT}
+        canJudge
+      />,
+    );
+    expect(screen.getByText('Writes in Russian')).toBeInTheDocument();
+    cleanup();
+    mount(<AiHandoffCard card={depositCard()} chatId={CHAT} canJudge />);
+    expect(screen.queryByText(/Writes in/)).not.toBeInTheDocument();
+  });
+
   it('marks a recognised device and the moment a person took the card up', () => {
     const card = depositCard({
       player: { ...depositCard().player, recognized_device: true },

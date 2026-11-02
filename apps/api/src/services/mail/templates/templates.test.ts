@@ -16,6 +16,7 @@ import {
   duration,
   invitationMail,
   joinVerifyEmailMail,
+  ownershipTransferMail,
   ownershipTransferredMail,
   passwordChangedMail,
   passwordResetMail,
@@ -232,6 +233,26 @@ function everyMail(locale: MailLocale): Record<string, RenderedEmail> {
       previousOwner: 'ali@acme.test',
       role: 'admin',
     }),
+    ownershipOffer: ownershipTransferMail(ctx, {
+      kind: 'offer',
+      workspaceName: 'Acme',
+      ownerName: 'Ali',
+      url: APP + '/app/ownership-transfer?transfer=t1&token=abc',
+      hours: 72,
+    }),
+    ownershipCancelled: ownershipTransferMail(ctx, {
+      kind: 'cancelled',
+      workspaceName: 'Acme',
+      ownerName: 'Ali',
+    }),
+    ownershipAccepted: ownershipTransferMail(ctx, {
+      kind: 'accepted',
+      workspaceName: 'Acme',
+      newOwner: 'Ayşe',
+      previousOwner: 'Ali',
+      part: 'previous_owner',
+      ssoEnforced: true,
+    }),
     cancelScheduled: subscriptionCancelMail(ctx, {
       kind: 'scheduled',
       workspaceName: 'Acme',
@@ -261,9 +282,9 @@ function everyMail(locale: MailLocale): Record<string, RenderedEmail> {
 
 describe('every message, in both languages (tm 265)', () => {
   for (const locale of ['en', 'tr'] as const) {
-    it(`renders all thirty in ${locale}: subject, text and HTML, in that language`, () => {
+    it(`renders all thirty-three in ${locale}: subject, text and HTML, in that language`, () => {
       const mails = everyMail(locale);
-      expect(Object.keys(mails)).toHaveLength(30);
+      expect(Object.keys(mails)).toHaveLength(33);
       for (const [name, mail] of Object.entries(mails)) {
         expect(mail.subject, name).toBeTruthy();
         expect(mail.body, name).toBeTruthy();
@@ -318,6 +339,14 @@ describe('every message, in both languages (tm 265)', () => {
     expect(en['platformInvite']!.body).toContain('authenticator app');
     expect(everyMail('tr')['platformInvite']!.body).toContain('destek rolüyle');
     expect(everyMail('tr')['verify']!.body).toContain('Bağlantı 24 saat geçerlidir');
+    // The owner's handover (RL-05 · tm 328): the 72 hours and the single use,
+    // and the previous owner told what changes at sign-in under an enforced SSO.
+    expect(en['ownershipOffer']!.body).toContain('The link expires in 72 hours and works once.');
+    expect(en['ownershipOffer']!.body).toContain(
+      `\n${APP}/app/ownership-transfer?transfer=t1&token=abc\n`,
+    );
+    expect(en['ownershipAccepted']!.body).toContain('You are an admin of it from now on.');
+    expect(en['ownershipAccepted']!.body).toContain('signs in through the identity provider');
   });
 
   it('marks an operator alert [OPS], names the workspace and its id, and links only when given a page', () => {

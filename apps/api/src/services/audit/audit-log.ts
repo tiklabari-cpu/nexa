@@ -201,6 +201,18 @@ export const AUDIT_ACTIONS = [
   // owner is immutable, and no grant above the actor's own rank); the entry
   // records only the from/to roles, never the whole membership.
   'member.role_changed',
+  // The workspace changing hands (RL-05 · tm 328), the one role change the
+  // line above never records: the owner offered it to a member (re-proving
+  // the password and second factor first), took the offer back — or the
+  // system did, when the owner changed meanwhile (`cause`) — the member
+  // accepted (both role moves in one entry: `from_role` → `from_role_now`,
+  // `to_previous_role` → owner, and what happened to the billing contact), or
+  // 72 hours passed (`system` actor, dated by the expiry). Metadata names the
+  // transfer and the accounts, never the token or an address.
+  'ownership.transfer_requested',
+  'ownership.transfer_cancelled',
+  'ownership.transfer_accepted',
+  'ownership.transfer_expired',
   // What a role may do was changed in the permission matrix (RL-02 · tm 325.2)
   // — the role-wide counterpart of the line above, and wider: one entry can
   // give every Ekip Üyesi a reach none of them had. Only the Founder writes

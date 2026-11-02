@@ -90,6 +90,8 @@ export const common: Messages = {
   'common.errors.platform_workspace_state': 'The workspace is not in a state that allows this.',
   'common.errors.recipient_not_allowed':
     "Transcripts can only be mailed to the player's own address or to one of the workspace's allowed domains.",
+  'common.errors.ownership_transfer_state':
+    'This ownership transfer cannot go ahead in its current state — reload to see where it stands.',
   'common.errors.request_timeout': 'That took too long — try again.',
   'common.errors.sandbox_exists': 'This workspace already has a sandbox.',
   'common.errors.service_unavailable':

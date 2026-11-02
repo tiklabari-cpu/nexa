@@ -12222,6 +12222,139 @@ export interface paths {
     patch: operations['updateSubscription'];
     trace?: never;
   };
+  '/ownership-transfers': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Offer the workspace's ownership to a member
+     * @description Starts a transfer to `target_agent_id` and mails that member a link with
+     *     a single-use token, valid for 72 hours. Nothing changes until they
+     *     accept; the owner may cancel meanwhile. One transfer is pending per
+     *     workspace at a time.
+     *
+     *     **Owner only** — everyone else gets `403`. From a signed-in session
+     *     only: a personal access token or a support session is refused (`403
+     *     not_allowed`, `details.reason` `session_required`). The owner proves it
+     *     again: `password` (401 when wrong), and when the account has two-factor
+     *     authentication on, `totp` too — a current authenticator code or one of
+     *     the account's recovery codes (`401 two_factor_required` when missing,
+     *     `401` when wrong). An account without a password proves the second
+     *     factor instead. Every attempt, right or wrong, counts against a budget of
+     *     10 per account per hour (429).
+     *
+     *     The member must belong to this workspace (404 otherwise), not be its
+     *     owner (`400 validation`, `details.reason` `target_is_owner`), and be
+     *     able to hold it — refused with `409 ownership_transfer_state` and
+     *     `details.reason`: `target_suspended` (suspended, awaiting approval or
+     *     blocked by SiyahTuş), `target_unverified` (e-mail address not
+     *     confirmed), `target_two_factor_required` (the workspace requires
+     *     two-factor authentication and the member has not set it up), or
+     *     `pending_exists` (`details.transfer_id` names the pending one).
+     *
+     *     Writable while the workspace is read-only. The mail is sent after the
+     *     transfer is recorded; `mail` says whether it went.
+     */
+    post: operations['startOwnershipTransfer'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ownership-transfers/current': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The workspace's pending ownership transfer
+     * @description The pending transfer, or `null` when there is none. Shown to the owner,
+     *     the workspace's admins and the member it is offered to; anyone else
+     *     reads `null`. A transfer whose 72 hours ran out is recorded as expired
+     *     (audit `ownership.transfer_expired`) when it is next looked at, and is
+     *     not returned.
+     */
+    get: operations['getCurrentOwnershipTransfer'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ownership-transfers/{transferId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Cancel a pending ownership transfer
+     * @description **Owner only.** The member's link stops working and they are told by
+     *     mail. A transfer no longer pending — accepted, cancelled or expired —
+     *     is refused with `409 ownership_transfer_state` (`details.reason`
+     *     `not_pending`, `details.state` its state). From a signed-in session
+     *     only, like starting one.
+     */
+    delete: operations['cancelOwnershipTransfer'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ownership-transfers/{transferId}/accept': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Accept the workspace's ownership
+     * @description The member the transfer names, signed in to this workspace, presents the
+     *     token from their mail. In one transaction the previous owner becomes an
+     *     admin and the caller becomes the owner; every admin and both parties
+     *     are told by mail. Anyone else gets `403`; a wrong token `403
+     *     not_allowed` (`details.reason` `invalid_token`).
+     *
+     *     Refused with `409 ownership_transfer_state` and `details.reason`:
+     *     `not_pending` (`details.state`: accepted, cancelled or expired — 72
+     *     hours passed), `owner_changed` (the workspace's owner is no longer the
+     *     one who offered it; the transfer is cancelled), or the member's own
+     *     state as at the start (`target_suspended`, `target_unverified`,
+     *     `target_two_factor_required`).
+     *
+     *     When the workspace signs its members in through an identity provider
+     *     (`sso_enforced`), the new owner keeps the password sign-in owners have,
+     *     and the previous owner signs in through the provider from now on.
+     *     `billing_contact` says what happened to the invoice e-mail on the
+     *     billing profile: `moved` (it was the previous owner's address and is now
+     *     the new owner's), `kept` (another address — the new owner decides) or
+     *     `none` (no billing profile or no invoice address). Billing mail itself
+     *     always goes to whoever is the owner.
+     */
+    post: operations['acceptOwnershipTransfer'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/billing/subscription/cancel': {
     parameters: {
       query?: never;
@@ -25310,6 +25443,36 @@ export interface components {
       provider: 'turnstile' | 'mock';
       site_key: string;
     };
+    OwnershipTransferParty: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      email: string;
+    };
+    /**
+     * @description One offer of the workspace's ownership (RL-05). `pending` until the
+     *     member accepts, the owner cancels, or 72 hours pass (`expired`).
+     */
+    OwnershipTransfer: {
+      /** Format: uuid */
+      id: string;
+      /** @enum {string} */
+      state: 'pending' | 'accepted' | 'cancelled' | 'expired';
+      from_agent: components['schemas']['OwnershipTransferParty'];
+      to_agent: components['schemas']['OwnershipTransferParty'];
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      expires_at: string;
+      /** Format: date-time */
+      decided_at: string | null;
+      /**
+       * @description The workspace signs its members in through an identity provider:
+       *     the new owner keeps the owner's password sign-in, the previous
+       *     owner signs in through the provider after the transfer.
+       */
+      sso_enforced: boolean;
+    };
     /**
      * @description Machine-readable error category (v2-03 §1.8).
      * @enum {string}
@@ -25353,6 +25516,7 @@ export interface components {
       | 'misdirected_request'
       | 'not_allowed'
       | 'not_found'
+      | 'ownership_transfer_state'
       | 'pending_requests_limit_reached'
       | 'recipient_not_allowed'
       | 'request_timeout'
@@ -25749,6 +25913,8 @@ export interface components {
     AiConfigChangeTo: string;
     /** @description Opaque keyset cursor from the previous page. */
     PageId: string;
+    /** @description An ownership transfer's id. */
+    OwnershipTransferId: string;
     /** @description A crypto payment request's id. */
     CryptoRequestId: string;
     /** @description Short base32 chat token. Panelde: Thread ID (günlük). */
@@ -44036,6 +44202,144 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
+    };
+  };
+  startOwnershipTransfer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /**
+           * Format: uuid
+           * @description The member to make the owner.
+           */
+          target_agent_id: string;
+          /** @description The owner's current password. Required when the account has one. */
+          password?: string;
+          /**
+           * @description A current authenticator code or a recovery code. Required when
+           *     the owner has two-factor authentication on, or has no password.
+           */
+          totp?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The pending transfer */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            transfer: components['schemas']['OwnershipTransfer'];
+            /**
+             * @description Whether the member's link was handed to the mail provider.
+             * @enum {string}
+             */
+            mail: 'sent' | 'failed';
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getCurrentOwnershipTransfer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The pending transfer, if any */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            transfer: components['schemas']['OwnershipTransfer'] | null;
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  cancelOwnershipTransfer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description An ownership transfer's id. */
+        transferId: components['parameters']['OwnershipTransferId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Cancelled */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  acceptOwnershipTransfer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description An ownership transfer's id. */
+        transferId: components['parameters']['OwnershipTransferId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description The token from the transfer mail. */
+          token: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The accepted transfer */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            transfer: components['schemas']['OwnershipTransfer'];
+            /** @enum {string} */
+            billing_contact: 'moved' | 'kept' | 'none';
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
     };
   };
   cancelSubscription: {

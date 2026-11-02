@@ -1159,7 +1159,12 @@ describe('module parity matrix — what is still owed', () => {
       // 385 -> 387 with `/billing/subscription/cancel` and `/billing/subscription/resume`
       // (tm 384) — the owner's cancellation on the web Billing screen; the handset has no
       // Billing screen, and nothing here re-scopes.
-      contractEndpoints: 387,
+      // 387 -> 391 with `/ownership-transfers`, `/ownership-transfers/current`,
+      // `/ownership-transfers/{transferId}` and `…/{transferId}/accept` (tm 328) — the
+      // owner hands the workspace to a member (RL-05) from web Settings → Company, and the
+      // member accepts on a web page from the mailed link. Owner-only and rare; the handset
+      // has no Company settings, and nothing here re-scopes.
+      contractEndpoints: 391,
       scopeBoundaries: 1,
     });
   });

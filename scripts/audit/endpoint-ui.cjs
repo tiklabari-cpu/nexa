@@ -427,6 +427,29 @@ const TRACKED = [
       '"AI\'ın topladıkları" list (AI-04), drawn with the rest of that pane by IN-02 (tm 331); ' +
       'the timeline viewer (tm 334) reads it too.',
   },
+  // Handing the workspace over (RL-05 · tm 328): the API landed in 328.1, its
+  // screens — Settings › Company "Danger zone", the acceptance page the mail
+  // links to, the pending-transfer band — are 328.2's.
+  {
+    op: 'POST /ownership-transfers',
+    owner: 'tm 328.2',
+    reason: 'the owner offers the workspace to a member — Settings › Company "Danger zone".',
+  },
+  {
+    op: 'GET /ownership-transfers/current',
+    owner: 'tm 328.2',
+    reason: 'the pending-transfer band (owner, admins, the member offered) and the danger zone.',
+  },
+  {
+    op: 'DELETE /ownership-transfers/{transferId}',
+    owner: 'tm 328.2',
+    reason: "the owner's cancel on the pending-transfer band.",
+  },
+  {
+    op: 'POST /ownership-transfers/{transferId}/accept',
+    owner: 'tm 328.2',
+    reason: 'the acceptance page the offer mail links to (`/app/ownership-transfer`).',
+  },
 ];
 
 /** The platform contract's operations with no client, and why (tm 389.3). */

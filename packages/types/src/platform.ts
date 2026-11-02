@@ -346,6 +346,9 @@ export const IMPERSONATION_FORBIDDEN_PATHS: readonly ImpersonationForbiddenRule[
   { pattern: /^\/settings\/sso(\/.*)?$/, category: 'security' },
   { pattern: /^\/invitations(\/[^/]+)?$/, category: 'membership' },
   { pattern: /^\/agents\/[^/]+\/(role|suspension)$/, category: 'membership' },
+  // Who owns the workspace (RL-05 · tm 328): starting, cancelling or accepting
+  // a transfer of it is the heaviest change of standing there is.
+  { pattern: /^\/ownership-transfers(\/.*)?$/, category: 'membership' },
   // The member's own name, account-wide (RL-06): how they appear in every
   // workspace they belong to, not this one's daily work.
   { pattern: /^\/agents\/me$/, category: 'membership' },

@@ -179,6 +179,15 @@ Operatör authenticator'ını kaybetti.
 
 Kurucu erişimini kaybetti (ayrıldı, hesabı çalındı) ve alanı başka biri yönetmeli.
 
+> **Önce kiracının kendi yolu (RL-05 · tm 328).** Kurucuya ulaşılabiliyorsa devri kendisi yapar:
+> Ayarlar › Şirket › Tehlikeli bölge → şifre (+2FA) → hedef üye 72 saat içinde e-postadaki bağlantıyla,
+> kendi oturumuyla kabul eder (`POST /ownership-transfers`, `…/{id}/accept`; audit
+> `ownership.transfer_requested|accepted|cancelled|expired`). Bu bölümdeki zorlamalı devir **yalnız**
+> Kurucuya ulaşılamadığında, yukarıdaki kimlik doğrulamalı manuel süreçle yapılır (RL-05-S3) —
+> kiracı panelinde bunun bir yolu yoktur. Zorlamalı devirden önce bekleyen bir kiracı devri varsa
+> kabul edilemez: kabul anında Kurucunun değiştiği görülür, devir `cancelled` olur
+> (`cause: owner_changed`) ve hedefe 409 `owner_changed` döner.
+
 - **Panelde:** Çalışma alanları → alan → Eylemler → **Sahipliği devret**.
 - **Rol:** **S**. **TOTP:** gerekli. **Audit:** `workspace.ownership_transferred`
   (+ kiracıda `platform.workspace_ownership_transferred`).

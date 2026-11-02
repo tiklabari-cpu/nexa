@@ -879,6 +879,14 @@ paths:
     $ref: "./paths/reports.yaml#/scheduledExportRuns"
   /billing/subscription:
     $ref: "./paths/reports.yaml#/subscription"
+  /ownership-transfers:
+    $ref: "./paths/ownership-transfers.yaml#/ownershipTransfers"
+  /ownership-transfers/current:
+    $ref: "./paths/ownership-transfers.yaml#/currentOwnershipTransfer"
+  /ownership-transfers/{transferId}:
+    $ref: "./paths/ownership-transfers.yaml#/ownershipTransfer"
+  /ownership-transfers/{transferId}/accept:
+    $ref: "./paths/ownership-transfers.yaml#/acceptOwnershipTransfer"
   /billing/subscription/cancel:
     $ref: "./paths/billing-cancel.yaml#/subscriptionCancel"
   /billing/subscription/resume:
@@ -16858,6 +16866,43 @@ components:
             `mock-captcha-pass`.
         site_key: { type: string }
 
+    OwnershipTransferParty:
+      type: object
+      additionalProperties: false
+      required: [id, name, email]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string }
+    OwnershipTransfer:
+      type: object
+      additionalProperties: false
+      description: |
+        One offer of the workspace's ownership (RL-05). `pending` until the
+        member accepts, the owner cancels, or 72 hours pass (`expired`).
+      required: [id, state, from_agent, to_agent, created_at, expires_at, decided_at, sso_enforced]
+      properties:
+        id: { type: string, format: uuid }
+        state:
+          type: string
+          enum: [pending, accepted, cancelled, expired]
+        from_agent:
+          $ref: "#/components/schemas/OwnershipTransferParty"
+        to_agent:
+          $ref: "#/components/schemas/OwnershipTransferParty"
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        decided_at:
+          type: string
+          format: date-time
+          nullable: true
+        sso_enforced:
+          type: boolean
+          description: |
+            The workspace signs its members in through an identity provider:
+            the new owner keeps the owner's password sign-in, the previous
+            owner signs in through the provider after the transfer.
+
     ErrorType:
       type: string
       description: Machine-readable error category (v2-03 §1.8).
@@ -16900,6 +16945,7 @@ components:
         - misdirected_request
         - not_allowed
         - not_found
+        - ownership_transfer_state
         - pending_requests_limit_reached
         - recipient_not_allowed
         - request_timeout
@@ -17118,6 +17164,12 @@ components:
       required: false
       description: Opaque keyset cursor from the previous page.
       schema: { type: string }
+    OwnershipTransferId:
+      name: transferId
+      in: path
+      required: true
+      description: An ownership transfer's id.
+      schema: { type: string, format: uuid }
     CryptoRequestId:
       name: requestId
       in: path

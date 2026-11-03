@@ -16184,6 +16184,154 @@
         "priority": "low",
         "updatedAt": "2026-11-03T00:03:13.319Z",
         "subtasks": []
+      },
+      {
+        "id": "394",
+        "title": "WIDGET-MOBILE-FULLSCREEN-DEFAULT [SONNET-HIGH] (Sonnet 5.5) Varsayılan kurulumda widget telefonda tam ekran açılsın (şu an 14-68 px kırpılıyor)",
+        "description": "Varsayılan snippet ile kurulan widget 360-414 px ekranda açılınca panel soldan 14-68 px kesiliyor (\"Email\" → \"il\"). Ayar \"Mobilde tam ekran: açık\" görünüyor ama loader'a hiç ulaşmıyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT:\n- `apps/widget/src/loader.ts:241`: `if (open && config.mobileFullscreen && win.innerWidth <= MOBILE_MAX_WIDTH)` — alan yoksa (`undefined`) tam ekran yok.\n- `apps/api/src/services/websites/website-service.ts:274` `appearanceFields()`: yalnız varsayılandan FARKLI alanları yazar; `DEFAULT_WIDGET_APPEARANCE.mobile_fullscreen` true olduğu için varsayılan kurulumda `mobileFullscreen` snippet'e hiç girmez.\n- Widget tarafı varsayılanı true (`apps/widget/src/widget.ts:189`), `loader.ts:396` yalnız `=== false` iken `mobile_full=0` yollar — yani loader dışındaki her yer \"yoksa true\" der.\n- Ölçüm: 375/360/414 px viewport, widget açık → iframe left=60, panel 400 px; ekranda negatif sol kenar.\n\nYAPILACAK: loader'ın varsayılanını ürünle hizala (`config.mobileFullscreen !== false`), böylece müşterinin sayfasında zaten duran eski snippet'ler de düzelir. Snippet üretecini değiştirmek tek başına YETMEZ (yapıştırılmış snippet'ler güncellenmez); istenirse ek olarak yapılabilir.\n\nTUZAK — BUNDLE BÜTÇESİ: 2026-11-03 ölçümünde widget toplamı 66,300 B / tavan 66,304 B (`apps/widget/test/bundle-size.test.ts:56`), yani 4 B pay. loader.js toplamın içinde sayılır. Değişiklik bütçeyi aşarsa aynı dosyada (loader.ts) eşdeğer bayt kazan; tavanı yükseltmek sahip kararıdır, bu görevde YAPILMAZ. Lazy chunk kuralı için memory widget-bundle-budget-and-css-minify. Aşılamazsa görevi blocked bırak, nedenini HANDOFF'a yaz (bkz. WIDGET-BUNDLE-HEADROOM görevi).\n\nKAPSAM DIŞI: widget içi yerleşim, ayar ekranı, kontrat.",
+        "testStrategy": "Widget birim (loader.appearance.test.ts / loader.test.ts): `mobileFullscreen` alanı yokken dar ekranda açılış tam ekran; `false` iken kart; geniş ekranda kart. bundle-size.test.ts yeşil. e2e: 375 px viewport'ta widget açılınca iframe sol kenarı 0 ve genişlik viewport'a eşit (mevcut widget spec'ine ek test). DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "updatedAt": "2026-11-03T19:01:17.661Z",
+        "subtasks": []
+      },
+      {
+        "id": "395",
+        "title": "WIDGET-BUNDLE-HEADROOM [OPUS-HIGH] (Opus 5.5) Widget bundle bütçesinde tavanı yükseltmeden en az 1 KB pay aç",
+        "description": "Widget toplamı 66,300 B, tavan 66,304 B: 4 B pay. Bir sonraki widget değişikliği bundle-size testini kırar.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT: `apps/widget/test/bundle-size.test.ts:56` `TOTAL_BUDGET_BYTES = 64.75 * 1024` (66,304 B); ölçüm `:78-90` ile aynı yöntemle (gzip 9; .js/.css/.woff2; help/targeting/card hariç): widget-*.js 41,693 · manrope-latin.woff2 20,088 · manrope-tr.woff2 1,955 · loader.js 2,564 = 66,300 B. Ayrıca `apps/widget/vite.config.ts:18` yorumu hâlâ \"50 KB\" diyor (gerçek 64.75 KB).\n\nYAPILACAK: ana widget chunk'ından ilk açılışta gerekmeyen kodu mevcut lazy-chunk mekanizmasına (`lazy-chunks.ts`, düz `import()` DEĞİL) taşı ya da ölü kodu çıkar; hedef ≥1,024 B pay. Hangi parçanın taşındığını ve önce/sonra ölçümünü HANDOFF'a yaz. vite.config.ts:18 yorumunu düzelt. Davranış değişmez.\n\nKAPSAM DIŞI: tavanı yükseltmek (sahip kararı), font subset değişikliği (görsel etki — ancak sahip onayıyla).\nTUZAK: memory widget-bundle-budget-and-css-minify, types-top-level-calls-bloat-widget-loader.",
+        "testStrategy": "bundle-size.test.ts yeşil ve ölçülen pay ≥1,024 B (test çıktısı/ölçüm alıntısı HANDOFF'ta). Widget birim + widget e2e spec'leri yeşil. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "updatedAt": "2026-11-03T19:01:17.661Z",
+        "subtasks": []
+      },
+      {
+        "id": "396",
+        "title": "E2E-ORDER-ISOLATION [SONNET-HIGH] (Sonnet 5.5) Üç e2e spec'inin sıra bağımlılığını kaldır (ai-mode, inbox-waiting, manual-assignment)",
+        "description": "Sharded tam e2e koşusunda 560 geçti / 3 kırmızı; üçü de tek başına yeşil, önceki spec'lerin bıraktığı veri yüzünden kırmızı.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT (2026-11-03, `pnpm test:e2e`, 3 shard, 31 dk):\n1. `apps/e2e/tests/ai-mode.spec.ts:25` — `ai-metrics.spec` önce koşarsa kırmızı: `pnpm test:e2e --shards=1 ai-metrics ai-mode` deterministik üretir. `ai-metrics` neredeyse aynı metinli bir bilgi kaynağı bırakıyor (\"Standard X delivery takes 3 to 5 working days\"); AI cevabı ondan veriyor. Tek başına yeşil.\n2. `inbox-waiting.spec.ts:13` ve 3. `manual-assignment.spec.ts:16` — shard 0'da önlerindeki 27 dosyadan sonra kırmızı: ekran \"My chats 6\" / \"You are at your chat limit\" — önceki spec'ler owner'ın 6 sohbetlik limitini dolduruyor. Tek başına yeşil. Sınıf memory'de bilinir (e2e-red-may-predate-your-run, tm 208).\n\nYAPILACAK: TESTİ düzelt, ürünü değil, retry ekleme. Her spec kendi verisini kursun/temizlesin: ai-mode kendine özgü (benzersiz ifadeli) bilgi kaynağı + soru kullansın ya da ai-metrics kendi kaynağını sonunda silsin; inbox-waiting/manual-assignment owner limitine dayanmasın (kendi ajanı/limiti ya da önceden açık sohbetleri kapatma). Yeniden üretim: `pnpm test:e2e --shards=1 <önceki-dosyalar> <kırmızı>` (`--plan` shard bölünmesini yazar).\nTUZAK: memory e2e-runs-sharded-on-private-stacks, new-e2e-spec-reshuffles-shard-packing, targeted-e2e-rerun-has-no-retry, ai-question-text-is-load-bearing (AI soru metnini değiştirmek mock embedding eşiğini düşürebilir).",
+        "testStrategy": "`pnpm test:e2e --shards=1 ai-metrics ai-mode` yeşil; inbox-waiting ve manual-assignment, shard 0'daki önceki dosyalarla birlikte yeşil; tam `pnpm test:e2e` iki kez üst üste yeşil (verdict satırları HANDOFF'ta). kanit PNG churn'ü geri alınır. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "updatedAt": "2026-11-03T19:01:17.661Z",
+        "subtasks": []
+      },
+      {
+        "id": "397",
+        "title": "PLATFORM-OPS-TEST-FOREIGN-SUBSCRIBER [SONNET-HIGH] (Sonnet 5.5) platform-operations entegrasyon testi açık dev yığınında kırmızı olmasın",
+        "description": "`platform-operations.test.ts:241` aynı makinede dev api açıkken deterministik kırmızı (beklenen `no_listener`, gelen `queued`); dev yığını kapalıyken 32/32 yeşil.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT: `pnpm --filter @siyahtus/api exec tsx scripts/with-test-datastores.ts vitest run test/integration/platform-operations.test.ts` dev api (:4000) açıkken 31/32 kırmızı, kapalıyken 32/32 yeşil. Neden: Redis pub/sub db index'ini yok sayar; dev api `siyahtus:platform:ops:jobs` kanalına abone (`PUBSUB NUMSUB` = 1, client `siyahtus-api-platform-ops`). Test \"kanalda kimse dinlemiyor\" varsayıyor.\n\nYAPILACAK: testi yabancı aboneye dayanıklı yap — tercihen kanal adını test datastore'una özgü kıl (ör. kanal öneki/lisans ofseti gibi zaten var olan bir izolasyon değeri; memory e2e-runs-sharded-on-private-stacks \"Redis pub/sub ignores the db index\" çözümüne bak) ya da testin beklentisini dinleyici sayısı ölçümüne bağla. Üretim davranışı değişmeyecek; kanal adı üretimde aynı kalır.\nKAPSAM DIŞI: platform ops iş mantığı.",
+        "testStrategy": "Dosya dev api açıkken VE kapalıyken tek başına yeşil (iki koşu da HANDOFF'ta). `pnpm test:gate entegrasyon --force` yeşil. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "updatedAt": "2026-11-03T19:01:17.661Z",
+        "subtasks": []
+      },
+      {
+        "id": "398",
+        "title": "CHAT-ARCHIVED-SYSTEM-TEXT-I18N [SONNET-HIGH] (Sonnet 5.5) \"Chat archived\" sistem metni Türkçe panelde İngilizce görünmesin",
+        "description": "Sohbet arşivlenince sunucu sabit İngilizce \"Chat archived\" yazıyor; tr modundaki gelen kutusu önizlemesinde \"Ziyaretçi / Chat archived\" görünüyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT: `apps/api/src/services/chat/chat-service.ts:2597` `text: 'Chat archived'`, `properties: { system_event: 'chat_deactivated' }`. Panel tr modunda inbox liste önizlemesi metni olduğu gibi gösteriyor.\n\nYAPILACAK: önce diğer sistem olaylarının (system_event) panelde nasıl yerelleştirildiğini bul (grep `system_event` apps/web) ve aynı yolu izle: panel `system_event: chat_deactivated` için çevrilmiş metin göstersin (en/tr), önizleme dahil. Sunucu metni geriye dönük uyum için kalabilir. Yeni anahtar en+tr glossary/plural kurallarına uyar (memory web-glossary-and-plural-catalogue-traps, new-web-component-must-be-registered-for-i18n). Mobil de aynı metni gösteriyorsa aynı düzeltme mobile'a.\nKAPSAM DIŞI: transcript e-postası, widget (ziyaretçi tarafı ayrı bakılır; aynı sorun varsa HANDOFF'a not).",
+        "testStrategy": "Web birim: tr'de chat_deactivated önizlemesi ve thread satırı Türkçe; en'de İngilizce. locale-copy denetimi yeşil. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "updatedAt": "2026-11-03T19:01:17.661Z",
+        "subtasks": []
+      },
+      {
+        "id": "399",
+        "title": "WIDGET-QUEUE-NOTICE-AFTER-REPLY [SONNET-HIGH] (Sonnet 5.5) Ajan yanıt verince ziyaretçinin \"sırada 1.\" bildirimi kalksın",
+        "description": "Ajan sohbeti alıp yanıt verdikten sonra widget hâlâ \"You are number 1 in the queue\" bildirimini gösteriyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT: dev yığınında akış: ziyaretçi widget'tan yazdı → ajan panelde aldı ve yanıtladı → yanıt widget'a 107 ms'de geldi, ama sıra bildirimi görünür kaldı. Yeni owner için ajan durumu varsayılanıyla, kuyruklu sohbet.\n\nYAPILACAK: widget'ta sıra bildirimini hangi olayın gizlediğini bul (grep queue apps/widget/src/widget.ts); sohbet bir ajana atanınca VE/VEYA ilk ajan mesajı gelince bildirim kalksın. RTM push'unda atama olayı varsa ona bağla; yoksa ilk ajan mesajında gizle. Bundle bütçesine dikkat (WIDGET-BUNDLE-HEADROOM görevi; 2026-11-03'te 4 B pay).\nTUZAK: memory widget-mount-returns-teardown, widget-test-fetch-mocks-share-objects.",
+        "testStrategy": "Widget birim: kuyrukta bildirim görünür; atama olayı/ilk ajan mesajı sonrası gizli. bundle-size.test.ts yeşil. İlgili widget e2e yeşil. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
+        "status": "pending",
+        "dependencies": [
+          "395"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-03T19:01:17.661Z",
+        "subtasks": []
+      },
+      {
+        "id": "400",
+        "title": "KNOWLEDGE-EMPTY-STATE-NO-AI-AGENT [SONNET-HIGH] (Sonnet 5.5) Yeni çalışma alanında Bilgi sekmesi çıkmaz sokak olmasın",
+        "description": "Yeni kayıt olmuş çalışma alanında Bilgi (Knowledge) sekmesinde hiçbir düğme ve yönlendirme yok; ekleme formu bir AI ajanının var olmasını gerektiriyor ve bunu söylemiyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT: yeni workspace (public sign-up) → playbook/AI altında Knowledge görünümü açık ve koyu temada boş: düğme yok, açıklama yok.\n\nYAPILACAK: AI ajanı yokken bu görünümde boş durum göster: neden boş olduğu + AI ajanı oluşturma ekranına giden bağlantı/düğme (rol izni yoksa yalnız açıklama). Mevcut boş durum bileşenini/kalıbını kullan. en+tr metin; panel metni iç kod içeremez (memory panel-copy-cannot-carry-internal-codes); inline link tuzakları (inline-link-in-a-screen-has-two-traps); dark tema kontrastı (dark-theme-needs-content-brand-text).\nKAPSAM DIŞI: AI ajanı olmadan bilgi kaynağı eklenebilmesi (ürün kararı).",
+        "testStrategy": "Web birim: AI ajanı yokken boş durum + bağlantı görünür; ajan varken mevcut form. axe açık/koyu 0 ihlal. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "updatedAt": "2026-11-03T19:01:17.661Z",
+        "subtasks": []
+      },
+      {
+        "id": "401",
+        "title": "AUDIT-UNPAGED-LISTS-CURSOR [SONNET-HIGH] (Sonnet 5.5) audit:unpaged-lists `cursor` sayfalamasını tanısın, kalan kayıtlar kapatılsın ya da gerekçelensin",
+        "description": "`pnpm audit:unpaged-lists` main'de exit 1 (UNPAGED = 6); en az biri yanlış pozitif. Kapı CI'da olmadığı için fark edilmiyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT: `pnpm audit:unpaged-lists` → exit 1, UNPAGED 6: `PlayerCard.tsx:307` (`&limit=100`), `useInbox.ts:139` (`/chats?...&limit=${CHAT_PAGE_SIZE}${cursor}`), `TestLab.tsx:94` (`limit=20`), `ai-suggestions.ts:82` ve `:88`, `WebhookDeliveryLog.tsx:94`. Beşi PLAN.md D397'de (tm 342) kırmızı olarak kayıtlı.\n- `WebhookDeliveryLog.tsx:94` yanlış pozitif: `useInfiniteQuery` + `params.set('cursor', pageParam)` (satır 96), `getNextPageParam: last.next_cursor`. Denetim (scripts/audit/unpaged-lists.cjs, README §unpaged-lists) imleç olarak yalnız `page_id/before_event_id/after_event_id` arıyor.\n- `useInbox.ts:139` büyük olasılıkla aynı türden (doğrula).\n\nYAPILACAK: (1) denetim `cursor`/`next_cursor` sayfalamasını tanısın (+ kendi testine örnek). (2) Kalan her kayıt için: gerçekten sayfalanmalıysa sayfala; sınırlı ve bilinçliyse denetimin mevcut istisna mekanizmasıyla gerekçesini yaz. Hedef exit 0. (3) PLAN D397 satırını güncelle.\nKAPSAM DIŞI: CI'a yeni adım eklemek — sahip kararı; HANDOFF'ta öner (memory ci-gates-beyond-the-dod-list).",
+        "testStrategy": "`pnpm audit:unpaged-lists` exit 0; denetimin kendi testi cursor örneğini kapsar; değişen web dosyalarının birim testleri yeşil. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "updatedAt": "2026-11-03T19:01:17.661Z",
+        "subtasks": []
+      },
+      {
+        "id": "402",
+        "title": "PANEL-WIDGET-SMALL-UX [SONNET-HIGH] (Sonnet 5.5) Dört küçük UX düzeltmesi: widget doğrulama dili, kayıt düğmesi açıklaması, kendi sohbetini alma mesajı, pre-chat kullanıcı adı varsayılanı",
+        "description": "2026-11-03 tarayıcı denetiminde bulunan dört Düşük önemli UX sorunu.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nHer madde ayrı commit olabilir; biri ürün kararı gerektiriyorsa onu atla ve HANDOFF'a yaz.\n1. Widget form doğrulama mesajları widget dilini değil tarayıcı dilini izliyor (tarayıcının yerel `required`/`type=email` balonları). Widget kendi `t()` metniyle doğrulasın (ör. `setCustomValidity` ya da kendi hata satırı) — en/tr ve diğer 6 widget dili; widget anahtar paritesi (8 dil × 112) korunmalı. Bundle bütçesine dikkat (2026-11-03: 4 B pay; WIDGET-BUNDLE-HEADROOM görevi).\n2. Kayıt (sign-up) düğmesi kısa parolada açıklamasız devre dışı: hangi alanın neden eksik olduğu ekran okuyucuya ve görsel olarak söylensin (ör. `aria-describedby` ile ipucu). Kanıt ekranı: kısa parola girilince düğme gri, metin yok.\n3. Owner zaten kendisine atanmış bir sohbeti \"al/claim\" edince \"Another agent took this…\" mesajı çıkıyor. Kendi üstündeyse doğru mesaj (ya da sessizce no-op) gösterilsin; API zaten kendisinde olduğunu ayırt ediyorsa onu kullan.\n4. Varsayılan pre-chat formunda \"Kullanıcı adı\" zorunlu (`apps/widget/src/widget.ts:4021` `labelledField(doc, prechatUsername, t('prechat.username'), true)`). ÖNCE PRD/PLAN'da bunun bilinçli olup olmadığını grep'le (oyuncu platformu `username` kullanıyor olabilir); bilinçliyse dokunma ve HANDOFF'a \"bilinçli\" yaz; değilse varsayılanda opsiyonel yap.\nTUZAK: label-text-leaks-into-the-fields-name, form-validator-must-match-its-own-endpoint.",
+        "testStrategy": "Her madde için birim test (widget/web). axe 0 ihlal. bundle-size.test.ts yeşil. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
+        "status": "pending",
+        "dependencies": [
+          "395"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-03T19:01:17.661Z",
+        "subtasks": []
+      },
+      {
+        "id": "403",
+        "title": "DOCS-DRIFT-CLEANUP [SONNET-HIGH] (Sonnet 5.5) Doküman ↔ kod sapmaları: kırık görsel linkleri, ölü dosya atıfları, env örneği eksikleri, gate rerun ipucu",
+        "description": "2026-11-03 doküman tutarlılık denetiminde bulunan Orta/Düşük sapmalar.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nYAPILACAK:\n1. `rapor-1-fonksiyonel.md` ve `rapor-2-teknik-mimari.md` içinde 35 kırık görsel linki: `gorseller/fonksiyonel/*.jpg` ve `gorseller/teknik/*.jpg` işaret ediliyor, dosyalar artık düz `gorseller/mod-*.png`. YALNIZ link yollarını düzelt; görselleri taşıma/yeniden adlandırma YOK (CLAUDE.md sınırı). Eşleşmeyen link varsa listele, tahmin etme.\n2. `MASTER-PROMPT.md:35` \"shadcn/ui (Radix)\" kilitli diyor; `apps/web/package.json`'da Radix/shadcn yok, bileşenler el yazımı. MASTER-PROMPT bilinçli olarak eski metni taşır (§D63 emsali) — ona dokunma; PLAN.md'ye bir D kaydı ekle: gerçek durum + karar sahibe ait.\n3. ADR'ler ve PLAN.md silinmiş `skill-engine.ts` ve `follow-ups.ts` dosyalarına atıf yapıyor — tarihsel kayıtsa dokunma, güncel talimatsa yeni yolu yaz (grep ile bul).\n4. README.md:77 \"four apps\" — imaj sayısı beş (api, rtm, web, admin, widget). HANDOFF.md başlığındaki eski Ağustos branch notu. `SiyahTus-Analiz/07-gorev-plani.md:11,369,378` #379/#388'i pending gösteriyor (ikisi de done). `SiyahTus-Analiz/kaynaklar/eksikler.md:4` olmayan `report.md`'ye bağlanıyor.\n5. `.env.production.example`'a eksik opsiyonel api değişkenleri (`GEOIP_DB_PATH`, `CRAWLER_PROVIDER`, `INSTALL_GUIDE_URL`, `RATE_LIMIT_AUTH_FAILURES_PER_MIN` ve env şemasında olup örnekte olmayan diğerleri — `apps/api/src/config/env.parity.test.ts` ne kontrol ediyor bak); `apps/mobile` `SIYAHTUS_*_BASE_URL` değişkenlerini belgeleyen satır.\n6. `scripts/test-gate.mjs` kırmızı mobil (jest) dosyası için vitest + with-test-datastores rerun satırı basıyor; mobil için doğrusu `cd apps/mobile && npx jest <dosya>`. (Aynı sorun types/web için memory gate-rerun-hint-fails-for-web.) `node --test scripts/loop` klasör argümanıyla Node 24'te çalışmıyor — gate/CI dosyayı doğrudan koşuyor; dokümanda klasör biçimi geçiyorsa düzelt.\n7. `apps/widget/vite.config.ts:18` \"50 KB\" yorumu WIDGET-BUNDLE-HEADROOM görevinde; burada dokunma.",
+        "testStrategy": "Markdown link denetimi (küçük node betiği: göreli linkler var olan dosyaya gidiyor) 0 kırık — betik repoya girmez ya da `scripts/` altında testli girer. env.parity testi yeşil. test-gate.mjs değişikliği için `node --test` yeşil. `pnpm -w format:check` yeşil. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "updatedAt": "2026-11-03T19:01:17.661Z",
+        "subtasks": []
+      },
+      {
+        "id": "404",
+        "title": "NGINX-SERVER-TOKENS-OFF [SONNET-HIGH] (Sonnet 5.5) nginx sürüm bilgisini göndermesin",
+        "description": "Pilot imajlarındaki nginx `Server: nginx/1.27.5` başlığı gönderiyor; config'lerde `server_tokens off` yok.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT: pilot provası (2026-11-03, `docker-compose.pilot.yml --profile platform`) `curl -I` web/admin/widget → `Server: nginx/1.27.5`.\n\nYAPILACAK: web, admin, widget (ve repoda başka nginx.conf varsa onlar) için `server_tokens off;`. Başka başlık değişmez (CSP/frame-ancestors aynı kalır; memory panel-csp-lives-only-in-nginx).",
+        "testStrategy": "Varsa nginx config testine/smoke.sh'a `Server` başlığında sürüm olmaması kontrolü eklenir; pilot imajları build edilip `curl -I` ile `Server: nginx` (sürümsüz) doğrulanır (memory pilot-rehearsal-with-fake-env, benzersiz compose project, `down -v`). DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "updatedAt": "2026-11-03T19:01:17.661Z",
+        "subtasks": []
+      },
+      {
+        "id": "405",
+        "title": "RTM-PRELOGIN-PER-IP-CAP [OPUS-XHIGH] (Opus 5.5) RTM'de kimliği doğrulanmamış soketlere IP başına sınır",
+        "description": "RTM bağlantı tavanı yalnız global; tek kaynak, login-timeout (~30 sn) biçene kadar kimliksiz soket tutarak global tavanı doldurabilir.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nXHIGH GEREKÇESİ: (1) güvenlik yüzeyi — güvenilmeyen bağlantı kabulü / DoS.\n\nKANIT: `apps/rtm/src/server.ts:414` (M-LOAD-CAP global connection ceiling; login/idle timeout'lar `:385-428`, `:771-800`). Güvenlik incelemesi (salt okuma) Düşük olarak işaretledi; belgeli yük atma davranışı.\n\nYAPILACAK: login öncesi eşzamanlı soketleri IP başına sınırla (login olunca sayaçtan düş; kapanışta mutlaka düş — sızıntı yok). IP kaynağı api ile aynı güven modeli: yalnız loopback/RFC1918 eşten gelen X-Forwarded-For'a güven (api `trust-proxy.ts` mantığı; RTM'de karşılığını bul/yeniden kullan). Varsayılan değer env ile ayarlanabilir, env parity (`.env.example`, `.env.production.example`, doküman) güncellenir. Sınır aşılınca upgrade uygun kodla reddedilir ve metrik/log (snake_case anahtar) üretilir.\nTUZAK: DeploymentConfig alanı ekleniyorsa memory deployment-config-field-ripples; k6 rtm senaryosu (200 soket, tek IP!) bu sınıra takılmamalı — varsayılanı ya da senaryoyu buna göre ayarla ve ölç.",
+        "testStrategy": "RTM entegrasyon: aynı IP'den sınır+1 kimliksiz soket → sonuncusu reddedilir; login olan soket sayaçtan düşer; kapanan soket düşer; farklı IP etkilenmez; sahte X-Forwarded-For public eşten yok sayılır. k6 rtm senaryosu bütçe içinde (memory k6-binary-location). DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "updatedAt": "2026-11-03T19:01:17.661Z",
+        "subtasks": []
       }
     ],
     "metadata": {

@@ -8,12 +8,12 @@
 
 ## 0. Özet
 
-**Toplam:** 120 görev (#269–#388), 141 alt görev. Öncelik: high 59, medium 49, low 12. Durum: pending 116, deferred 4 (#322, #378, #379, #388).
+**Toplam:** 120 görev (#269–#388), 141 alt görev. Öncelik: high 59, medium 49, low 12. Durum: pending 116, deferred 4 (#322, #378, #379, #388). **Güncelleme (2026-11-03):** sahip kararı K28/K29 ile #388 ve #379 pending'e alındı; deferred 2 (#322, #378).
 
 - **Öncelik eşlemesi:** P0 → high, P1 → medium, P2 → low. **Öncelik devri:** high bir görevin bağımlı olduğu görev de high yapıldı; yoksa otonom döngü önkoşula sıra vermez (ör. #281 RL-04, #291 RP-04 veri yakalama, #323 GV-06/WG-14, #335 AR-01).
 - **Etiketler:** PLAN §5.1.1 matrisi (`[SONNET|OPUS-HIGH|XHIGH|MAX]`). Her XHIGH etiketinin gerekçesi görev ayrıntısında adıyla yazılı; authZ/kripto/kiracı izolasyonu/eşzamanlılık/algoritma işleri `OPUS-MAX`. **Gözden geçirme (2026-10-14, sahip):** #385–#386 `OPUS-MEDIUM` (matriste yok; `run-loop.sh` tanımaz), #320/#323/#338/#345/#350/#370 `OPUS-HIGH`, #346 `OPUS-HIGH`. **İkinci tur (2026-10-14):** MAX→XHIGH #286 #289 #292 #293 #296 #305 #316 #324 #328 #340; XHIGH→HIGH #282 #294 #302 #326 #327 #332 #339 #346 #368 #383. Task Master başlıklarında etiketin ardına `(Opus 5.5)` / `(Sonnet 5.5)` yazılıdır; bu tabloda yazılmaz.
 - **Görev biçimi:** başlık `KOD [ETİKET] açıklama`; `description` sonunda "Kaynak: …"; `details` = ortak üst bilgi (kaynak, K1=A, contract-first sıra, protokol, satır numaralarını yeniden doğrulama notu, dalga) + 05 mantığı + **KABUL KRİTERLERİ** + **KULLANILAN VARSAYIMLAR**; `testStrategy` sonunda DoD satırı. L maddeler alt görevlere bölündü; alt görev bağımlılıkları `"<üst>.<n>"` biçiminde.
-- **F2 / deferred:** #322 (AI-28 aktif araç kullanımı), #378 (KN-06 gerçek entegrasyon), #379 (KN-05 iframe SDK), #388 (operatörün imzaladığı kimlik). KN-06'nın F1 pasif "Bağla" kartları (K15) normal görev: #377.
+- **F2 / deferred:** #322 (AI-28 aktif araç kullanımı), #378 (KN-06 gerçek entegrasyon). KN-06'nın F1 pasif "Bağla" kartları (K15) normal görev: #377. #379 (KN-05 iframe SDK, K29 `frame-src https:`) ve #388 (operatörün imzaladığı kimlik, K28) 2026-11-03'te pending'e alındı; başlıklarındaki `-F2` kodu değişmedi.
 - **Doğrulama (bu turda koşuldu):** `tasks.json` JSON olarak geçerli; id'ler tekrarsız ve 269–388 ardışık; tüm bağımlılıklar mevcut, döngü yok (alt görevler dahil, alt görev yalnız önceki kardeşe bağlı); aktif hiçbir görev deferred bir göreve bağlı değil; 109 maddenin hepsi en az bir göreve eşli; `git diff` mevcut 268 göreve dokunmuyor (yalnız ekleme + metadata `taskCount` 388, `lastModified`).
 
 ### İlk başlanacak görevler
@@ -39,7 +39,7 @@ Her madde en az bir göreve bağlı. "Ana görev" maddenin asıl işini yapan g�
 |---|---|---|---|---|
 | ID-01 | Kimlik sözlüğü: "thread ID" ve "chat ID" kavramlarının nexa'daki karşılıklarının tek bir tanımla sabitlenme… | P0 | #284 ID-GLOSSARY | – |
 | ID-02 | Günlük thread (üye + gün): üyenin o günkü ilk bağlantısı yeni thread ID ve chat ID alır; aynı gün tekrar ge… | P0 | #286 DAILY-THREAD | – |
-| ID-03 | Üye tanıma ve doğrulama: widget'ın kendi ürettiği imzalı token/çerezle üyenin geri gelişte doğrulanması (me… | P0 | #287 MEMBER-TOKEN | #278, #388 (deferred) |
+| ID-03 | Üye tanıma ve doğrulama: widget'ın kendi ürettiği imzalı token/çerezle üyenin geri gelişte doğrulanması (me… | P0 | #287 MEMBER-TOKEN | #278, #388 (K28: pending) |
 | ID-04 | Gün sınırı ve saat dilimi: "aynı gün" tanımı kiracı ayarı (varsayılan Europe/Istanbul, 00:00) | P1 | #285 DAY-BOUNDARY | – |
 | ID-05 | ID'lerin arayüzde görünmesi ve kopyalanması: Inbox başlığı, arşiv, müşteri profili, devir kartı, loglar | P0 | #329 ID-DISPLAY-COPY | – |
 | ID-06 | ID ile arama: global arama, komut paleti ve arşivde chat ID, thread ID, kullanıcı adı ve e-posta ile doğrud… | P0 | #332 ID-SEARCH | – |
@@ -185,7 +185,7 @@ Her madde en az bir göreve bağlı. "Ana görev" maddenin asıl işini yapan g�
 | KN-02 | Gerçek Messenger / Instagram kanalları | P2 | #381 MESSENGER-INSTAGRAM-LIVE | – |
 | KN-03 | Webhook teslim günlüğü arayüzü | P1 | #375 WEBHOOK-DELIVERY-LOG | – |
 | KN-04 | Barındırılan API dokümanı | P1 | #376 HOSTED-API-DOCS | – |
-| KN-05 | Uygulamaların ajan arayüzüne panel ekleyebilmesi (iframe SDK) | P2 | #379 CUSTOM-PANELS-F2 (deferred) | – |
+| KN-05 | Uygulamaların ajan arayüzüne panel ekleyebilmesi (iframe SDK) | P2 | #379 CUSTOM-PANELS-F2 (K29: pending) | – |
 | KN-06 | iGaming platform entegrasyonları (BetConstruct, EveryMatrix vb.): oyuncu/işlem sorgulama, AI-28 araç yuvası… | P1 | #377 IGAMING-CONNECT-PLACEHOLDERS | #378 (deferred) |
 
 ### Faturalama (BL)
@@ -366,7 +366,7 @@ Dalgalar bir sıra önerisidir. `run-loop.sh` önce bağımlılıklara, sonra ö
 | 376 | HOSTED-API-DOCS [SONNET-HIGH] | KN-04 | medium | pending | – | – |
 | 377 | IGAMING-CONNECT-PLACEHOLDERS [SONNET-HIGH] | KN-06 | medium | pending | – | – |
 | 378 | IGAMING-PLATFORM-F2 [OPUS-MAX] | KN-06 | low | deferred | – | 377, 287 |
-| 379 | CUSTOM-PANELS-F2 [OPUS-XHIGH] | KN-05 | low | deferred | – | 325, 287 |
+| 379 | CUSTOM-PANELS-F2 [OPUS-XHIGH] | KN-05 | low | pending (K29) | – | 325, 287 |
 | 380 | WHATSAPP-LIVE [OPUS-XHIGH] | KN-01 | medium | pending | 3 | 289 |
 | 381 | MESSENGER-INSTAGRAM-LIVE [OPUS-HIGH] | KN-02 | low | pending | – | 380 |
 | 382 | BILLING-PAYMENT-METHODS [OPUS-XHIGH] | BL-01 | medium | pending | 4 | 276 |
@@ -375,7 +375,7 @@ Dalgalar bir sıra önerisidir. `run-loop.sh` önce bağımlılıklara, sonra ö
 | 385 | NARROW-SCREEN-PANEL [OPUS-HIGH] | GV-04 | medium | pending | – | 304, 334 |
 | 386 | NO-PII-IN-URLS [OPUS-HIGH] | GV-05 | medium | pending | – | – |
 | 387 | AI-MULTILINGUAL [OPUS-HIGH] | AI-30 | low | pending | – | 297, 301 |
-| 388 | OPERATOR-SIGNED-IDENTITY-F2 [OPUS-MAX] | ID-03 | low | deferred | – | 287 |
+| 388 | OPERATOR-SIGNED-IDENTITY-F2 [OPUS-MAX] | ID-03 | low | pending (K28) | – | 287 |
 
 ## 3. Bu turda eklenen kararlar (K17–K27)
 
@@ -404,7 +404,7 @@ Kod referansları 2026-10-14'te HEAD `120bb3d` üzerinde beş ayrı taramayla ye
 | Konu | Paket diyor | Görevde uygulanan |
 |---|---|---|
 | Günlük kimlik kolonu | 05 §1.0 ayrı `daily_thread_id` / `day_thread_key` kolonu öneriyor | K1=A: nexa `chat_id` kullanılır, ayrı kolon açılmaz (#286, #292) |
-| Üye kimliği | 05 ID-03 operatörün imzaladığı `user_hash`'i anlatıyor | K4: token'ı widget üretir (#287); operatör imzası F2 (#388, deferred) |
+| Üye kimliği | 05 ID-03 operatörün imzaladığı `user_hash`'i anlatıyor | K4: token'ı widget üretir (#287); operatör imzası #388 (K28 ile pending, kiracı açmadıkça kapalı) |
 | AI erişim/adres soruları | 05 AI-08 G14 varsayılanı "hiçbir yöntem önerme" | K13: kiracının girdiği bilgi esas (#310, #301) |
 | Devir kuralları | 05 AI-11, K9'un genişlettiği kapsamı içermiyor | #303'e kiracının devir kuralları ve "çözüldü" kriterleri eklendi |
 | Widget dilleri | WG-02 S2 ve AI-30 RU/AZ widget dili ekliyor | K25: widget 8 dilde kalır; AI persona dillerine RU/AZ (#280, #387) |

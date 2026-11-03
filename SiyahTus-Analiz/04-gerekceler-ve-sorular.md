@@ -49,8 +49,12 @@ Aşağıdaki kararlar birçok maddeyi etkiliyor. Kodlamaya başlamadan önce bun
 | K25 | **Widget'a Rusça ve Azerice eklensin mi?** (WG-02 S2 ile AI-30 S2 çelişkisi) | WG-02, AI-30 | Ekle | ✅ **Eklenmesin:** widget 8 dilde kalır; AI yine RU/AZ cevap verebilir |
 | K26 | **Sohbet dökümü oyuncuya otomatik gitsin mi?** | WG-06 | Varsayılan kapalı, şirket açabilir | ✅ **Otomatik gönderilmesin, yalnız oyuncu isterse tıklasın;** loglama/içeride kaydetme aynen sürer |
 | K27 | **ADR ek notları nasıl görevlendirilsin?** | Dalga 0 | ADR başına bir görev | ✅ ADR başına bir görev |
+| K28 | **Operatörün imzaladığı oyuncu kimliği (ID-03 operatör yolu, #388) F2'de mi kalsın?** (2026-11-03) | ID-03, KN-06, GV-01 | F2 (deferred) | ✅ **Şimdi yapılsın** (pending). Kiracı açmadıkça kapalı; operatör geliştirme yapmazsa K4 yolu aynen sürer |
+| K29 | **Inbox'a gömülen panellerde (KN-05, #379) CSP `frame-src` nasıl yönetilsin?** (2026-11-03) | KN-05 | Kiracı origin'ine göre sunucu/proxy tarafında | ✅ **(a) Panel CSP'sine sabit `frame-src https:`**; asıl kapı veritabanındaki panel URL listesi + sandbox + origin kontrolü + kısa ömürlü token. Görev pending |
 
 > **Karar kaydı durumu (2026-10-14):** K1–K27'nin hepsi cevaplandı (K17–K27 görev planlama turunda eklendi; görev eşlemesi [07-gorev-plani.md](07-gorev-plani.md)). K4, K9, K13, K15, K16, K22, K25 ve K26 varsayılandan farklı ya da daha geniş cevaplandı. Bunların hangi maddeleri nasıl değiştirdiği hemen aşağıdaki "Kararların maddelere etkisi" bölümünde yazıyor. Uygulayıcı, maddelerin içindeki varsayılanlar yerine bu bölümü esas alır.
+>
+> **Güncelleme (2026-11-03):** K28 ve K29 eklendi. #388 ve #379 deferred'dan pending'e alındı; #322 ve #378 deferred kalır.
 
 ### Kararların maddelere etkisi
 
@@ -126,7 +130,21 @@ Aşağıdaki kararlar birçok maddeyi etkiliyor. Kodlamaya başlamadan önce bun
 - Kapanışta oyuncuya döküm e-postası gitmez (mevcut ve yeni tüm şirketler). Oyuncu isterse widget'taki "Dökümü e-postama gönder" ile alır.
 - Bu karar loglamayı etkilemez: konuşmanın içeride kaydedilmesi (transkript, arşiv, zaman çizelgesi, denetim kaydı) aynen sürer. Yalnız dışarıya giden otomatik e-posta kalkar.
 
-**K17–K27'nin görev karşılıkları:** [07-gorev-plani.md](07-gorev-plani.md) (Task Master #269–#388).
+**K28: Operatörün imzaladığı kimlik şimdi yapılır (2026-11-03)**
+- **Etkilediği maddeler:** ID-03 (operatör yolu), KN-06 kimlik kapısı, GV-01 "doğrulanmış üye sorulmaz", WG-01 S3 imzalı kullanıcı adı
+- #388 deferred'dan pending'e alındı. Görevin dışarıya bağımlılığı yok; F1'deki üye tokenı (#287) bitti.
+- K4'teki "ileride ikinci giriş yolu" notu bu görevle gerçekleşir: aynı doğrulama altyapısına (`member-token.ts`, `MemberTokenKey` kalıbı: şifreli anahtar + önceki anahtar geçiş süresi) operatör sunucusunun HMAC'i eklenir.
+- **Varsayılan kapalı:** kiracı Ayarlar › Güvenlik › Üye tanıma'dan "Operatör imzalı kimlik"i açıp gizli anahtarı üretene kadar `identify` çağrısı yok sayılır. Pilot operatör sunucu tarafında imzalama yapamıyorsa hiçbir şey değişmez; K4 yolu (widget tokenı + ajan onayı) aynen sürer.
+- #378 (gerçek platform entegrasyonu) ve #322 (araç çağrısı) deferred kalır: K15 ve satıcı/DPA koşulu değişmedi.
+
+**K29: Gömülü paneller için `frame-src https:` (2026-11-03)**
+- **Etkilediği maddeler:** KN-05 (#379)
+- **Sorun:** Ajan paneli tek bir web adresinden bütün kiracılara aynı `index.html` ile sunulur (`apps/web/nginx.conf`, `map $host $siyahtus_csp`). Kiracı girişten sonra belli olduğu için CSP başlığını kiracının panel origin'lerine göre üretmek ya kiracı başına alt alan adı ya da API'den sunulan HTML ister; ikisi de Cloudflare Tunnel / Caddy dağıtımını (pilot K8/K11) karmaşıklaştırır.
+- **Karar (a):** panel CSP'sine sabit `frame-src https:` eklenir; `frame-ancestors 'none'` ve `X-Frame-Options: DENY` olduğu gibi kalır (panel gömülmez, yalnız gömer). Widget'ın `frame-ancestors *` + veritabanındaki izinli alan adı listesi kalıbının aynısıdır: CSP geniş, asıl kapı sunucuda.
+- **Asıl kapılar:** (1) panel URL'leri yalnız yöneticinin kaydettiği `https://` adresleri (`custom_panels.url` CHECK, audit); (2) iframe her zaman `sandbox="allow-scripts allow-forms allow-popups"` ve farklı origin (`allow-same-origin` eklenmez); (3) postMessage köprüsü yalnız o panelin kayıtlı origin'inden gelen mesajı işler; (4) bağlam yalnız ≤5 dk imzalı token ile ve postMessage ile verilir, URL'ye oyuncu bilgisi yazılmaz (GV-05); (5) panel sohbet geçmişini okuyamaz, mesaj gönderemez.
+- `http:` açılmaz (karışık içerik; panel TLS ile sunulur). Ayrıca kiracı başına CSP üretimi yapılmaz; ileride gerekirse ayrı karar.
+
+**K17–K29'un görev karşılıkları:** [07-gorev-plani.md](07-gorev-plani.md) (Task Master #269–#388).
 
 Maddelerin içinde bunların dışında daha ayrıntılı sorular da var. Onların hepsinin önerilen varsayılanı yazılı.
 

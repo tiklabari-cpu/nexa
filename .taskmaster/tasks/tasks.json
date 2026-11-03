@@ -16177,18 +16177,18 @@
         "description": "tm 389.18 HANDOFF notu: kiracı API'si reddin gerekçesini döndürüyor (`closed_reason`) ama `apps/web` `PaymentMethods.tsx` onu göstermiyor (grep: yalnız tipte). Operatör 'Talebi reddet'te yazdığı gerekçeyi Kurucu görsün diyor ('Kurucu yazdığınız gerekçeyi görür ve yeniden talep açabilir' — admin metni, docs/runbooks/platform-admin-ops.md §7.1) ama panel göstermiyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\nYAPILACAK: `apps/web` Faturalama > ödeme yöntemleri ekranında (PaymentMethods.tsx) en son talep `closed`/reddedilmişse `closed_reason` metnini kullanıcıya göster (en/tr; metin çevrilmez, operatörün yazdığıdır — kaynak etiketi 'SiyahTuş ekibi'); 'Yeniden talep et' akışı zaten var. Yeni web bileşeni/anahtar `t()` kullanıyorsa i18n kayıt listesine girer. Kontrat değişmez (alan zaten dönüyor); `apps/mobile` etkilenmez.\n\nKAPSAM DIŞI: kiracı API değişikliği, operatör paneli.",
         "testStrategy": "Web birim: reddedilmiş talep gerekçeyi gösterir, gerekçesiz kapalı talep göstermez, yeniden talep düğmesi var; axe. e2e gerekmez (mevcut ödeme spec'leri bozulmamalı). DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "389"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-02T00:40:00.000Z",
+        "updatedAt": "2026-11-02T23:06:44.870Z",
         "subtasks": []
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-02T23:05:52.710Z",
+      "lastModified": "2026-11-02T23:06:44.870Z",
       "taskCount": 393,
       "completedCount": 388,
       "tags": [

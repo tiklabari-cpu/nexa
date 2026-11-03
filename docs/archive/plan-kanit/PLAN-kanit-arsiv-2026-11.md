@@ -8,6 +8,8 @@ Canlı `PLAN.md` § K bloklarından taşınan eski kanıt maddeleri (CONVENTIONS
 
 #### K10.3 — 10.3 · Invoices + payment details yönetimi
 
+- ✅ tm 382 · BL-01 ödeme yöntemleri: SWIFT referansı + ekipten elle "ödendi", kripto "Adres isteyin" kuyruğu (adres kendiliğinden gösterilmez, TXID ile elle onay, TXID bir kez), Stripe barındırılan ödeme + imzalı webhook (olay kimliğiyle tekil), görünürlük `platform_billing_settings()`, ödeme geçmişi + "ödeme başarısız" bandı; açık dönem faturası ödenince `paid` · `apps/api/src/services/billing/payment-methods.ts`, `manual-payments.ts`, `stripe-payments.ts`, `stripe-provider.ts`, `routes/billing-payments.ts`, migration `20261216090000_payment_methods`, web `features/billing/PaymentMethods.tsx` · int `billing-payments.test.ts` (19), `stripe-provider.test.ts` (20), `payment-methods.test.ts` (11), `PaymentMethods.test.tsx` (15), e2e `payment-methods.spec.ts` (2) · commit tm 382 · §D431
+
 - ✅ **Fatura indirme reddedilince görünür hata (tm 259.9 · UX taraması O10 · 2026-10-08; damga değişmedi).** `download` try/finally idi, catch yoktu: reddedilen istek yakalanmamış reddetme oluyor, düğme sessizce geri geliyordu. Şimdi "{numara} numaralı fatura indirilemedi." + neden `role="alert"`, sonraki indirme uyarıyı siler. Billing pilotta gizli olduğundan görev sırasının sonunda yapıldı — `BillingPage.tsx` · test `BillingPage.test.tsx` (+1) · tm 259.9
 
 #### K06.2.4 — 06.2.4 · Ordered steps (6 adım tipi; reorder + klavye alternatifi)

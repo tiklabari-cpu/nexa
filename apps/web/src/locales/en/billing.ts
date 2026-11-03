@@ -325,6 +325,9 @@ export const billing: Messages = {
   'billing.payments.crypto.billingDetailsLabel': 'Billing details (address, tax number)',
   'billing.payments.crypto.requestButton': 'Request an address',
   'billing.payments.crypto.noRequest': 'No crypto payment has been requested.',
+  'billing.payments.crypto.rejectedTitle': 'Your last crypto request was rejected.',
+  'billing.payments.crypto.rejectedSource': 'Reason from the SiyahTuş team',
+  'billing.payments.crypto.rejectedRetry': 'You can request an address again below.',
   'billing.payments.card.intro':
     "Pay {amount} on the card processor's secure page. Your card is saved there for renewals; SiyahTuş never sees your card number.",
   'billing.payments.card.payButton': 'Pay with card',

@@ -375,6 +375,11 @@ export const IMPERSONATION_FORBIDDEN_PATHS: readonly ImpersonationForbiddenRule[
   // Who receives the workspace's figures by e-mail each morning (RP-05).
   { pattern: /^\/settings\/digests$/, category: 'data_egress' },
   { pattern: /^\/settings\/apps\//, category: 'data_egress' },
+  // A custom panel (KN-05 · tm 379) is a third-party page every matching
+  // conversation hands a signed player context to, and its secret is the
+  // operator's to keep — creating, re-pointing or re-keying one is a new place
+  // the workspace's data goes.
+  { pattern: /^\/settings\/custom-panels(\/.*)?$/, category: 'data_egress' },
   { pattern: /^\/reports\/(share-links|scheduled-exports)(\/[^/]+)?$/, category: 'data_egress' },
   { pattern: /^\/customer\//, category: 'not_a_member_surface' },
   { pattern: /^\/channels\/[^/]+\/webhook$/, category: 'not_a_member_surface' },

@@ -737,6 +737,16 @@ paths:
     $ref: "./paths/apps.yaml#/appConnect"
   /chats/{chatId}/apps:
     $ref: "./paths/apps.yaml#/chatApps"
+  /settings/custom-panels:
+    $ref: "./paths/custom-panels.yaml#/customPanels"
+  /settings/custom-panels/{panelId}:
+    $ref: "./paths/custom-panels.yaml#/customPanel"
+  /settings/custom-panels/{panelId}/rotate-secret:
+    $ref: "./paths/custom-panels.yaml#/customPanelRotateSecret"
+  /chats/{chatId}/panels:
+    $ref: "./paths/custom-panels.yaml#/chatPanels"
+  /chats/{chatId}/panels/{panelId}/context-token:
+    $ref: "./paths/custom-panels.yaml#/chatPanelContextToken"
 
   /onboarding/state:
     $ref: "./paths/onboarding.yaml#/state"
@@ -12412,6 +12422,64 @@ components:
         state:
           type: string
           description: Opaque value echoed back on the callback to bind the two steps.
+
+    CustomPanel:
+      type: object
+      description: |
+        An operator's own page embedded in the Inbox right panel (KN-05 ·
+        tm 379). The console frames `url` with `sandbox="allow-scripts
+        allow-forms allow-popups"` and talks to it by postMessage only.
+      required: [id, name, url, origin, visible_group_ids, enabled, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, maxLength: 60 }
+        url:
+          type: string
+          maxLength: 2048
+          description: Always `https://`, no credentials, no fragment.
+        origin:
+          type: string
+          description: The origin of `url` — where the page runs and what the agent is told it opens.
+        visible_group_ids:
+          type: array
+          items: { type: integer }
+          description: Teams whose conversations show the panel; empty means every team.
+        enabled: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CustomPanelWithSecret:
+      allOf:
+        - $ref: "#/components/schemas/CustomPanel"
+        - type: object
+          required: [signing_secret]
+          properties:
+            signing_secret:
+              type: string
+              description: |
+                The HMAC-SHA256 key (as UTF-8 bytes of this string) the context
+                tokens are signed with. Returned only by create and
+                rotate-secret.
+
+    ChatPanel:
+      type: object
+      description: A custom panel as one conversation shows it — no secret, no team list.
+      required: [id, name, url, origin]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, maxLength: 60 }
+        url: { type: string, maxLength: 2048 }
+        origin: { type: string }
+
+    PanelContextToken:
+      type: object
+      required: [token, expires_at, delivery]
+      properties:
+        token:
+          type: string
+          description: HS256 JWT signed with the panel's secret — see `createChatPanelContextToken`.
+        expires_at: { type: string, format: date-time }
+        delivery: { type: string, enum: [frame, link] }
 
     AppChatData:
       type: object

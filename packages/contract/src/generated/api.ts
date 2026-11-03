@@ -9662,6 +9662,160 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/settings/custom-panels': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The workspace's custom panels
+     * @description Every panel, enabled or not, oldest first. The signing secret is never
+     *     read back: it is shown once, when the panel is created or its secret is
+     *     replaced.
+     */
+    get: operations['listCustomPanels'];
+    put?: never;
+    /**
+     * Add a custom panel
+     * @description Owner or admin. `url` must be an `https://` address without credentials
+     *     or a fragment (the console writes its own fragment). `visible_group_ids`
+     *     limits the panel to conversations of those teams; empty shows it on every
+     *     team's conversations. At most 20 panels per workspace — the 21st is
+     *     refused with `400` and `details.reason: limit_reached`.
+     *
+     *     The response carries `signing_secret`, the HMAC-SHA256 key the context
+     *     tokens are signed with. It is not stored readable anywhere a member can
+     *     reach and is never returned again; keep it on the page's server.
+     *     Recorded in the audit trail (`custom_panel.created`).
+     */
+    post: operations['createCustomPanel'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/custom-panels/{panelId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        panelId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Remove a custom panel
+     * @description Owner or admin. Gone from every conversation on the next read; tokens
+     *     already handed out stay valid until they expire (at most five minutes) —
+     *     the page's server holds the secret, nothing here can recall them.
+     *     Recorded in the audit trail (`custom_panel.deleted`).
+     */
+    delete: operations['deleteCustomPanel'];
+    options?: never;
+    head?: never;
+    /**
+     * Change a custom panel
+     * @description Owner or admin. Any of the four fields; an omitted one is unchanged. The
+     *     secret stays the same (`POST …/rotate-secret` replaces it). Recorded in
+     *     the audit trail (`custom_panel.updated`, the changed field names).
+     */
+    patch: operations['updateCustomPanel'];
+    trace?: never;
+  };
+  '/settings/custom-panels/{panelId}/rotate-secret': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        panelId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Replace a custom panel's signing secret
+     * @description Owner or admin. The old secret stops signing at once; there is no overlap
+     *     window — the page's server should take the new value before the next
+     *     token (at most five minutes of tokens signed with the old one are still
+     *     in the field). Shown once, like on creation. Recorded in the audit trail
+     *     (`custom_panel.secret_rotated`).
+     */
+    post: operations['rotateCustomPanelSecret'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/chats/{chatId}/panels': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        chatId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * The custom panels this conversation shows
+     * @description The enabled panels for one of this conversation's teams (or for every
+     *     team), oldest first — what the Details pane embeds. A conversation the
+     *     caller may not see is `404`, like its transcript (NFR-S5). Holds no
+     *     secret and no player data.
+     */
+    get: operations['listChatPanels'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/chats/{chatId}/panels/{panelId}/context-token': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        chatId: string;
+        panelId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * A signed, five-minute context token for one panel and one conversation
+     * @description An agent's console asks for this when the panel's page says it is ready,
+     *     and hands the token to the page by postMessage. HS256 JWT signed with the
+     *     panel's secret; claims: `iss` `siyahtus`, `aud` `siyahtus-panel:<panel
+     *     id>`, `iat`, `exp` (`iat` + 300), `jti`, `delivery`, `org_id`,
+     *     `license_id`, `panel_id`, `chat_id`, `thread_id` (the newest connection),
+     *     `agent_id`, and — only on a `frame` token, and only when the caller's
+     *     role may see player contact details — `player.username` with
+     *     `player.username_verified` (true only for an operator-signed identity).
+     *
+     *     `delivery: link` is the token for the "open in a new tab" address of a
+     *     page that refuses to be framed: the same claims without `player`, since
+     *     an address is where the username must not go (GV-05).
+     *
+     *     `404` when the conversation is not the caller's to see, or the panel is
+     *     disabled, gone, or not shown for this conversation's teams.
+     */
+    post: operations['createChatPanelContextToken'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/onboarding/state': {
     parameters: {
       query?: never;
@@ -22237,6 +22391,51 @@ export interface components {
       authorize_url: string;
       /** @description Opaque value echoed back on the callback to bind the two steps. */
       state: string;
+    };
+    /**
+     * @description An operator's own page embedded in the Inbox right panel (KN-05 ·
+     *     tm 379). The console frames `url` with `sandbox="allow-scripts
+     *     allow-forms allow-popups"` and talks to it by postMessage only.
+     */
+    CustomPanel: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      /** @description Always `https://`, no credentials, no fragment. */
+      url: string;
+      /** @description The origin of `url` — where the page runs and what the agent is told it opens. */
+      origin: string;
+      /** @description Teams whose conversations show the panel; empty means every team. */
+      visible_group_ids: number[];
+      enabled: boolean;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    CustomPanelWithSecret: components['schemas']['CustomPanel'] & {
+      /**
+       * @description The HMAC-SHA256 key (as UTF-8 bytes of this string) the context
+       *     tokens are signed with. Returned only by create and
+       *     rotate-secret.
+       */
+      signing_secret: string;
+    };
+    /** @description A custom panel as one conversation shows it — no secret, no team list. */
+    ChatPanel: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      url: string;
+      origin: string;
+    };
+    PanelContextToken: {
+      /** @description HS256 JWT signed with the panel's secret — see `createChatPanelContextToken`. */
+      token: string;
+      /** Format: date-time */
+      expires_at: string;
+      /** @enum {string} */
+      delivery: 'frame' | 'link';
     };
     /**
      * @description A connected app's (mock) data for one conversation's customer
@@ -40724,6 +40923,220 @@ export interface operations {
           };
         };
       };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listCustomPanels: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The panels */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['CustomPanel'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createCustomPanel: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name: string;
+          /** Format: uri */
+          url: string;
+          /** @default [] */
+          visible_group_ids?: number[];
+          /** @default true */
+          enabled?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Added — the only time the secret is shown, with the rotation's */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CustomPanelWithSecret'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteCustomPanel: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        panelId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Removed */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateCustomPanel: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        panelId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name?: string;
+          /** Format: uri */
+          url?: string;
+          visible_group_ids?: number[];
+          enabled?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description The panel as it now is */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CustomPanel'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  rotateCustomPanelSecret: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        panelId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The panel and its new secret */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CustomPanelWithSecret'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listChatPanels: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        chatId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Zero or more panels */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['ChatPanel'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createChatPanelContextToken: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        chatId: string;
+        panelId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          /**
+           * @default frame
+           * @enum {string}
+           */
+          delivery?: 'frame' | 'link';
+        };
+      };
+    };
+    responses: {
+      /** @description The token */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PanelContextToken'];
+        };
+      };
+      400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];

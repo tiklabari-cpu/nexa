@@ -77,6 +77,7 @@ export const settings: Messages = {
   'settings.nav.section.personalAccessTokens': 'Kişisel erişim jetonları',
   'settings.nav.section.scheduledExports': 'Zamanlanmış dışa aktarımlar',
   'settings.nav.section.sandbox': 'Sandbox',
+  'settings.nav.section.customPanels': 'Özel paneller',
   'settings.nav.section.trustedDomains': 'Güvenilir alan adları',
   'settings.nav.section.bannedCustomers': 'Engellenen IP adresleri',
   'settings.nav.section.memberRecognition': 'Üye tanıma',
@@ -192,6 +193,81 @@ export const settings: Messages = {
   'settings.trustedDomains.empty.title': 'Henüz alan adı yok',
   'settings.trustedDomains.empty.description':
     "Widget'ı istediğiniz siteyi ekleyin. Ekleyene kadar hiçbir yerde sohbet başlatamaz.",
+
+  // Özel paneller (KN-05 · tm 379): operatörün kendi sayfası Gelen kutusunun sağ panelinde.
+  'settings.customPanels.title': 'Özel paneller',
+  'settings.customPanels.description':
+    'Kendi sayfanızı, örneğin back-office oyuncu kartını, Gelen kutusunda sohbetin yanında gösterin. Seçtiğiniz ekiplerin temsilcileri görür; sayfa sohbet bilgisini adresinde değil, kısa ömürlü imzalı bir belirteçle alır.',
+  'settings.customPanels.loadError': 'Özel paneller yüklenemedi.',
+  'settings.customPanels.addFormLabel': 'Özel panel ekle',
+  'settings.customPanels.addButton': 'Panel ekle',
+  'settings.customPanels.empty.title': 'Henüz özel panel yok',
+  'settings.customPanels.empty.description':
+    'Back-office sayfanızı buraya ekleyin; eşleşen sohbetlerin Ayrıntılar bölümünde görünür.',
+  'settings.customPanels.allTeams': 'Tüm ekipler',
+  'settings.customPanels.unknownTeam': 'Ekip #{id}',
+  'settings.customPanels.status.on': 'Açık',
+  'settings.customPanels.status.off': 'Kapalı',
+  'settings.customPanels.teamsLine': 'Gösterildiği ekipler: {teams}',
+  'settings.customPanels.edit': 'Düzenle',
+  'settings.customPanels.editAriaLabel': '{name} panelini düzenle',
+  'settings.customPanels.editFormLabel': '{name} panelini düzenle',
+  'settings.customPanels.turnOff': 'Kapat',
+  'settings.customPanels.turnOn': 'Aç',
+  'settings.customPanels.turnOffAriaLabel': '{name} panelini kapat',
+  'settings.customPanels.turnOnAriaLabel': '{name} panelini aç',
+  'settings.customPanels.rotate': 'Yeni sır',
+  'settings.customPanels.rotateAriaLabel': '{name} için yeni sır',
+  'settings.customPanels.rotateConfirmTitle': '{name} panelinin sırrı yenilensin mi?',
+  'settings.customPanels.rotateConfirmDescription':
+    'Mevcut sır hemen imzalamayı bırakır. Bir sonraki sohbet açılmadan yenisini sayfanızın sunucusuna koyun.',
+  'settings.customPanels.rotateFailure': '{name} panelinin sırrı yenilenemedi',
+  'settings.customPanels.removeAriaLabel': '{name} panelini kaldır',
+  'settings.customPanels.removeConfirmTitle': '{name} kaldırılsın mı?',
+  'settings.customPanels.removeConfirmDescription':
+    'Panel bütün sohbetlerden kalkar. Daha önce verilmiş belirteçler süreleri dolana kadar, en fazla beş dakika, geçerli kalır.',
+  'settings.customPanels.nameLabel': 'Ad',
+  'settings.customPanels.namePlaceholder': 'Oyuncu kartı',
+  'settings.customPanels.nameRequired': 'Bir ad girin.',
+  'settings.customPanels.urlLabel': 'Sayfa adresi',
+  'settings.customPanels.urlHint':
+    'https:// ile başlayan bir adres. Oyuncu bilgisini adrese yazmayın: sohbet bilgisi belirteçle gelir.',
+  'settings.customPanels.teamsLabel': 'Ekipler',
+  'settings.customPanels.teamsHint':
+    'Hiçbirini seçmezseniz panel bütün ekiplerin sohbetlerinde görünür.',
+  'settings.customPanels.noTeams': 'Henüz ekip yok. Panel bütün sohbetlerde görünecek.',
+  'settings.customPanels.save': 'Kaydet',
+  'settings.customPanels.cancel': 'Vazgeç',
+  'settings.customPanels.secret.title': '{name} için imzalama sırrı',
+  'settings.customPanels.secret.description':
+    'Sayfanızın sunucusu her belirteci bu sırla doğrular (HMAC-SHA256, HS256 JWT algoritması).',
+  'settings.customPanels.secret.copyAriaLabel': 'İmzalama sırrını kopyala',
+  'settings.customPanels.secret.warning':
+    'Sır yalnız bu kez gösterilir. Sayfanın kendisinde değil, sunucunuzda saklayın.',
+  'settings.customPanels.secret.done': 'Tamam',
+  'settings.customPanels.dev.title': 'Sayfanız Gelen kutusuyla nasıl konuşur',
+  'settings.customPanels.dev.sandbox':
+    'Sayfa korumalı bir çerçevede çalışır (yalnız betik, form ve açılır pencere; aynı köken erişimi yok). Kendi çerezleri orada kullanılamaz.',
+  'settings.customPanels.dev.ready':
+    'Yüklenince location.hash içinden siyahtus_channel değerini okuyun ve window.parent\'a { type: "siyahtus:ready", channel } gönderin.',
+  'settings.customPanels.dev.context':
+    'Gelen kutusu { type: "siyahtus:context", channel, token, expires_at } ile yanıt verir. Belirteç {minutes} dakika geçerlidir; yenisi için ready\'yi yeniden gönderin.',
+  'settings.customPanels.dev.verify':
+    'Belirteci sunucunuza gönderip orada doğrulayın: sırla HS256, iss siyahtus, aud siyahtus-panel:<panel kimliği>, exp. İçinde chat_id, thread_id, org_id, agent_id ve temsilci görebiliyorsa oyuncunun kullanıcı adı bulunur.',
+  'settings.customPanels.dev.extras':
+    'İsteğe bağlı: { type: "siyahtus:resize", channel, height } çerçeve yüksekliğini ayarlar; { type: "siyahtus:insert_text", channel, text } yanıt kutusuna bir öneri yazar. Göndermeye temsilci karar verir; sayfa mesaj okuyamaz ve gönderemez.',
+  'settings.customPanels.dev.newTab':
+    'Temsilciler sayfayı yeni sekmede de açabilir. Belirteç o zaman adresin # kısmında siyahtus_token olarak, oyuncunun kullanıcı adı olmadan gelir.',
+  'settings.customPanels.reason.limit_reached':
+    'Bir çalışma alanında en fazla 20 özel panel olabilir.',
+  'settings.customPanels.reason.unknown_group':
+    'Ekiplerden biri artık yok. Sayfayı yenileyip yeniden seçin.',
+  'settings.customPanels.reason.url_invalid':
+    'https://backoffice.example/player gibi tam bir adres girin.',
+  'settings.customPanels.reason.url_not_https': 'Sayfa https:// üzerinden sunulmalı.',
+  'settings.customPanels.reason.url_credentials': 'Adresteki kullanıcı adını ve parolayı kaldırın.',
+  'settings.customPanels.reason.url_fragment': 'Adresteki # kısmını kaldırın.',
+  'settings.customPanels.reason.url_too_long': 'Adres 2048 karakterden uzun.',
 
   // Kayıtlı yanıtlar — CannedResponses.tsx
   'settings.cannedResponses.title': 'Kayıtlı yanıtlar',

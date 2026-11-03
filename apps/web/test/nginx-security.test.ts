@@ -258,6 +258,21 @@ describe('the panel and the widget frame in opposite directions', () => {
     expect(directive(widget, 'frame-src')).toBe('frame-src https://challenges.cloudflare.com');
     expect(panel).not.toContain('challenges.cloudflare.com');
   });
+
+  it('lets the console frame https pages only — custom panels, K29 (tm 379)', () => {
+    // An operator's back-office page in the Inbox's Details pane (KN-05). One
+    // header serves every workspace, so the list is `https:` and the real gate
+    // is on the server: the admin-saved address, the sandbox without
+    // `allow-same-origin`, the bridge's window + nonce check, the five-minute
+    // token. `http:` is never added, and framing does not loosen being framed.
+    expect(directive(panel, 'frame-src')).toBe('frame-src https:');
+    expect(panel).not.toMatch(/frame-src[^;]*\bhttp:/);
+    expect(panel).not.toMatch(/frame-src[^;]*\*/);
+    expect(directive(panel, 'frame-ancestors')).toBe("frame-ancestors 'none'");
+    expect(stripComments(WEB_CONF)).toMatch(/add_header\s+X-Frame-Options\s+"DENY"/);
+    // The reason is written next to the policy, like the other source lists.
+    expect(WEB_CONF).toMatch(/#\s+frame-src\s+Custom panels \(KN-05/);
+  });
 });
 
 describe("the panel's inline theme boot is pinned by hash, not waved through", () => {

@@ -30,6 +30,7 @@ import { Brands } from './Brands.js';
 import { CompanyDetails } from './CompanyDetails.js';
 import { OwnershipTransferZone } from '../ownership/OwnershipTransferZone.js';
 import { Appearance } from './Appearance.js';
+import { CustomPanels } from './CustomPanels.js';
 import { McpConnection } from './McpConnection.js';
 import { WebsiteWidgets } from './WebsiteWidgets.js';
 import { WidgetCustomization } from './WidgetCustomization.js';
@@ -172,6 +173,7 @@ export const SECTION_ELEMENTS: Record<string, (p: SectionPermissions) => ReactEl
   'personal-access-tokens': () => <PersonalAccessTokens />,
   'scheduled-exports': (p) => <ScheduledExports canEdit={p.canManageScheduledExports} />,
   sandbox: (p) => <Sandbox canEdit={p.canManageAccess} />,
+  'custom-panels': (p) => <CustomPanels canEdit={p.canManageAccess} />,
   'trusted-domains': (p) => <TrustedDomains canEdit={p.canManageAccess} />,
   'banned-customers': (p) => <BannedCustomerIps canEdit={p.canManageAccess} />,
   'member-recognition': (p) => <MemberRecognition canEdit={p.canManageAccess} />,

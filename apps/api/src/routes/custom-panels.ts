@@ -99,7 +99,7 @@ async function visibleChat(
   tx: TenantClient,
   principal: Principal,
   chatId: string,
-): Promise<{ groupIds: bigint[]; username: string | null }> {
+): Promise<{ groupIds: bigint[]; username: string | null; usernameVerified: boolean }> {
   const visibility = await resolveVisibility(tx, principal, 'read');
   const chat = await tx.chat.findUnique({
     where: { id: chatId },
@@ -107,13 +107,14 @@ async function visibleChat(
       customerId: true,
       access: { select: { groupId: true } },
       users: { select: { userId: true, userType: true } },
-      customer: { select: { username: true } },
+      customer: { select: { username: true, usernameVerified: true } },
     },
   });
   if (!chat || !canSeeChat(visibility, chat)) throw ApiError.notFound('Chat not found.');
   return {
     groupIds: chat.access.map((row) => row.groupId),
     username: chat.customer.username,
+    usernameVerified: chat.customer.usernameVerified,
   };
 }
 
@@ -313,7 +314,7 @@ export default async function customPanelRoutes(
                 // Only an identity the operator's own server signed is verified
                 // (ID-03 operator path, K28 · tm 388); a username typed into the
                 // pre-chat form never is.
-                usernameVerified: false,
+                usernameVerified: found.chat.usernameVerified,
               },
             }
           : {}),

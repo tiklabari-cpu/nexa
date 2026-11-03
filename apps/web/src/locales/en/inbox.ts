@@ -393,6 +393,11 @@ export const inbox: Messages = {
   'inbox.playerCard.openProfile': 'Open profile',
   'inbox.playerCard.username': 'Username',
   'inbox.playerCard.email': 'Email',
+  'inbox.playerCard.verifiedMember': 'Verified member',
+  'inbox.playerCard.verifiedMemberHint':
+    'Your website signed this member in. Last confirmed {date}.',
+  'inbox.playerCard.usernameVerified': 'Signed by your website',
+  'inbox.playerCard.platformUserId': 'Member ID',
   'inbox.playerCard.country': 'Country',
   'inbox.playerCard.hidden': 'Hidden',
   'inbox.playerCard.hiddenHint': 'Your role does not show players’ contact details.',

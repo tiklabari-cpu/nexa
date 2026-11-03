@@ -3,7 +3,7 @@
 - **Görev:** tm 287 (MEMBER-TOKEN). Bu kayıt tm 287.1 (şema + sözleşme) ile açıldı · PLAN.md §D240; tm 287.2 (token üretimi/doğrulaması, geçiş, rotasyon, iptal) §8'de · PLAN.md §D241; tm 287.3 (widget saklama, kuruluş başına çerez, çıkış) §9'da · PLAN.md §D242; tm 287.4 (olası eşleşmeler, ajan onaylı bağlama, tarayıcıları unut düğmesi) §10'da · PLAN.md §D243
 - **Tarih:** 2026-10-15
 - **Durum:** Kabul edildi — sahip kararı **K4** ("Token'ı bizim widget'ımız üretir (imzalı, çerez/localStorage'da saklanır); widget geri gelişte okuyup sunucuda doğrular … Başka cihazdan gelişte ajan onayı yolu geçerli", `SiyahTus-Analiz/04-gerekceler-ve-sorular.md` Karar kaydı K4 ve "Kararların maddelere etkisi"). Varsayımlar: **K5** (AI yalnız konu düzeyinde hatırlatır), **ID-03-S4** (ajan onaylı bağlama Ekip Lideri ve üstü; RL-01 gelene kadar admin ve üstü).
-- **Değiştirdiği karar:** `05-uygulama-rehberi.md` ID-03'ün "operatörün imzaladığı `user_hash`" yolu. K4 ile token'ı operatör değil SiyahTuş widget'ı üretir; operatör imzası F2'ye kaldı (tm 388, deferred) ve geldiğinde aynı doğrulama altyapısına ikinci giriş olur.
+- **Değiştirdiği karar:** `05-uygulama-rehberi.md` ID-03'ün "operatörün imzaladığı `user_hash`" yolu. K4 ile token'ı operatör değil SiyahTuş widget'ı üretir; operatör imzası F2'ye kaldı (tm 388, deferred) ve geldiğinde aynı doğrulama altyapısına ikinci giriş olur. **Sahip kararı K28 (2026-11-03) ile tm 388 şimdi yapıldı — §11** (PLAN.md §D446): kiracı açmadıkça kapalı, K4 akışı bit bit aynı.
 - **Bağlı görevler:** tm 287.2 (token üretimi/doğrulaması, geçiş, rotasyon), tm 287.3 (widget saklama), tm 287.4 (olası eşleşmeler + bağlama), tm 287.5 (ayar ekranı); tm 286 (ID-02 günlük thread — "aynı müşteri" kararını bundan alır), tm 292 (AI-02 gün içi hafıza), tm 388 (F2).
 
 ## 1. Sorun
@@ -221,3 +221,76 @@ Arama iki yarının `UNION`'ıdır (tek `OR`, iki yarısı da indeks koşulu ola
 - Web: `features/customers/MemberIdentity.tsx` (yeni), `CustomerDetailPanel.tsx`, `CustomersPage.tsx` (`canLink`, kaydı aç), `features/inbox/DetailsPanel.tsx` (bölüm), `features/audit/AuditLogPage.tsx` ("Müşteri kayıtları" grubu), `locales/{en,tr}/{customers,inbox,audit,audit-labels}.ts`, `lib/i18n-coverage.test.ts`.
 - `scripts/audit/endpoint-ui.cjs` (`revoke-member-tokens` `TRACKED`'ten çıktı).
 - Testler: `customer-identity-links.test.ts` (16, entegrasyon), birim `customer-identity.test.ts` (2), web `MemberIdentity.test.tsx` (11), `CustomersPage.test.tsx` (+4), `DetailsPanel.possibleMatches.test.tsx` (4), e2e `customers.spec.ts` (+1); profili açan iki testin sahte `fetch`'i iki yeni okumayı açıkça yönlendirir (`CustomersPage.test.tsx`, `ConfirmTeamCustomer.test.tsx`).
+
+## 11. Operatör imzalı kimlik (tm 388 · sahip kararı K28)
+
+K4'ün "ileride ikinci giriş yolu" notu: operatörün sitesi hangi üyenin giriş yaptığını bilir; sunucusu o üyenin numarasını çalışma alanının **kimlik gizli anahtarıyla** imzalar, sayfa imzayı `siyahtus('identify', {user_id, username?, email?, ts, user_hash})` ile widget'a verir, widget `POST /customer/token`'a `identity` olarak gönderir. Geçerli imza ziyaretçiyi o üyenin müşteri kaydı yapar — hangi cihazdan gelirse gelsin. Kod: `services/auth/member-identity.ts` (sır, imza, yaş, tekrar kaydı, sayaçlar), `member-recognition.ts` (`verifyIdentity`, `resolve`'un 0. adımı, `rotateIdentitySecret`, görünüm), `routes/auth.ts` (mint), `routes/member-recognition.ts` (ayar + sır), migration `20261224090000_member_signed_identity` + `20261224090100_customers_platform_user_id_index`.
+
+### 11.1 İmzalanan mesaj
+
+- `user_hash = hex(HMAC-SHA256(anahtar = gizli anahtar dizgesi, mesaj))`, mesaj **sabit sıralı ve sürümlü**: `siyahtus-identify-v1\n<user_id>\n<username>\n<email>\n<ts>` (`@siyahtus/types` `signedIdentityMessage`). Olmayan kullanıcı adı / e-posta **boş satırdır**. Hiçbir alan denetim karakteri (U+0000–001F, U+007F) taşıyamaz: bir değer satır sonuyla bir sonraki alanın yerine geçemez, dolayısıyla sıra tek başına mesajı belirsizlikten çıkarır (`"a\nb"` + boş kullanıcı adı ile `"a"` + `"b"` aynı mesaj olurdu — ilki reddedilir). JSON değil: PHP'nin `json_encode` kaçışları ile Node'unki farklıdır, satır birleştirme her dilde aynıdır.
+- Bilinen-cevap testi (`member-identity.test.ts` types + api): rehberdeki örnek gizli anahtarla örnek üyenin imzası sabittir — operatörün geliştiricisi kendi kodunu buna karşı sınayabilir.
+- `ts` Unix saniyesi; **en çok 300 sn eski, en çok 60 sn ileri** (`SIGNED_IDENTITY_LIMITS`), veritabanının saatine karşı (üye tanımadaki her zaman ölçümü gibi tek saat). İleri payı operatör sunucusunun saati hızlı çalışırsa diye.
+
+### 11.2 Doğrulama sırası ve tekrar koruması
+
+Mintten önce kendi kısa kiracı işleminde (`verifyIdentity`): **anahtar açık mı → gizli anahtar var mı → biçim → imza (güncel + geçiş süresi süren önceki, ikisi de sabit zamanlı, hangisinin tuttuğu süreden okunmaz) → yaş → tekrar kaydı**. Tekrar kaydı Redis `SET NX PX` (`member-identity:seen:<lisans>:<hash>`), yalnız her bakımdan geçerli bir imzaya harcanır (sahte imza akını yoldaki gerçek bir imzanın kaydını yakamaz) ve imzanın son kabul anı + 60 sn yaşar (Redis saati veritabanınınkinden biraz hızlıysa da kayıt imzadan önce düşmez). **Redis'e ulaşılamazsa kapalı kalır** (`replay_unchecked`) — `lib/saml.ts` gerekçesi: kesinti boyunca tekrarı kabul etmek başlangıcı belli bir kimlik doğrulama atlatması olurdu. Tekrar `(lisans, hash)` tekilliğidir; hash `user_id` + `ts`'i kapsadığı için görev metnindeki `(license, user_id, ts, hash)` ile aynı şeydir.
+
+**Aynı tarayıcının aynı imzayı yeniden göndermesi tekrar sayılmaz:** imzayı harcayan belgedeki sonraki bir mint (müşteri tokenı süresi dolunca) onu yine taşır; tarayıcının üye tokenı zaten o `user_id`'yi taşıyan müşteriyi adlandırıyorsa ret yazılmaz, sayılmaz.
+
+### 11.3 Hangi müşteri (`resolve` 0. adım)
+
+1. Kuruluşta `platform_user_id = user_id` taşıyan müşteri (kısmi tekil indeks `(organization_id, platform_user_id) WHERE platform_user_id IS NOT NULL`, RLS kuruluşu daraltır; `texteq` sızdırmaz, indeks koşulu olur).
+2. Yoksa tarayıcının kendi kaydı (geçerli üye tokenının müşterisi) — **başka bir üyenin numarasını taşımıyorsa**. Tek koşullu `UPDATE … WHERE platform_user_id IS NULL OR = $uid`: aynı tarayıcıda iki sekme iki farklı üyeyle aynı anda girerse ikinci güncelleme satırı yeniden okur, ilk üyenin numarasını görür ve kendi kaydını açar — iki üye asla birleşmez.
+3. Yoksa yeni müşteri.
+
+Üye numarası başına `pg_advisory_xact_lock(hashtext('siyahtus.member-identity'), hashtext(<kuruluş>:<user_id>))`: aynı anda giren iki cihaz ikinci kaydı açmaz (tekil indeks ikinci mint'i hata ile düşürürdü). Seçilen kayda `platform_user_id`, `identity_verified_at` (veritabanı saati) ve imzalı geldiyse kullanıcı adı (`username_verified = true`) ile e-posta yazılır; imzasız gelen alan dokunulmaz. Çıplak `customer_id` geçişi (§8.3) imzalı kimlik varken denenmez. Üye tokenı yeni kayda yeniden imzalanır; kayıt tarayıcının kendi kaydı değilse **yeni koşu** (`did`/`oat`) başlar — o üyenin eski iptalleri operatörün yeni kefaletini reddetmez. `via = 'identity'` → yapay zekâ güveni `verified` (`MEMBER_IDENTITY_TRUST`), insan doğrulaması **hiç sorulmaz** (GV-01 · mint'te `via` denetimi, sohbet açılışında token `identity` = `verified`), yeni müşteri sayacına (`recordNewCustomer`) girmez. Yasaklı doğrulanmış üye 403 `customer_banned` alır (kim olduğunu kanıtladı).
+
+Kuruluşlar arası eşleşme yoktur: aynı `user_id` başka çalışma alanında başka kişidir; bir alanın imzası ötekinin anahtarıyla doğrulanmaz (`bad_signature`).
+
+### 11.4 Varsayılan kapalı, yok sayma, sayaç
+
+- `member_recognition_settings.signed_identity_enabled` varsayılan `false`; anahtar açık **ve** gizli anahtar varsa `active`. Öncesinde her `identity` yok sayılır (`disabled`), K4 akışı bit bit aynıdır — entegrasyon testi aynı tarayıcının kimlikli ve kimliksiz mint'inin aynı müşteriyi, aynı alan kümesini ve aynı ön-sohbet formunu aldığını sabitler.
+- Reddedilen her kimlik **yok sayılır, cevaplanmaz**: 200, kimliksiz istekle aynı alan kümesi; `identity_verified` müşterinin özelliğidir (bu istekte ya da daha önce doğrulanmış mı), isteğin değil — reddedilmiş kimlik ile hiç kimlik aynı okunur. `warn` satırı yalnız `license_id` + `reason` taşır (`signed identity refused; ignored`); üye numarası, imza, gizli anahtar log'a girmez (ayrıca `req.body.identity` ve `identity_secret` redaksiyonda, `MEMBER_IDENTITY_LOG_PATHS`).
+- Sayaç: Redis'te lisans × UTC günü başına `HINCRBY` (`verified` + her ret nedeni), 8 gün yaşar; ayar ekranı son 7 günü okur (`signed_identity.recent`, okunamazsa `null` — sıfır yazılmaz). Yanlış imza oyuncuya hiç hata olarak görünmediği için entegrasyonu denetlemenin tek yeri burasıdır.
+
+### 11.5 Gizli anahtar
+
+- `sti_` + 256 bit base64url (`MEMBER_IDENTITY_SECRET_PREFIX`; sızan bir anahtarı tarayıcılar tanısın). HMAC anahtarı bu dizginin kendisidir.
+- `member_identity_secrets` (lisans başına satır; `member_token_keys` kalıbı, **ayrı tablo, ayrı KEK etiketi** `siyahtus/member-identity/secret-encryption/v1`, ayrı AAD `member-identity:<lisans>:<sürüm>` — üye tokenı anahtarı ile asla aynı anahtar değildir, birlikte dönmez). Mühürlü, CHECK'ler, RLS lisans, uygulama rolü silemez.
+- Üye tokenı anahtarından farkı: açılamayan gizli anahtar **sessizce değiştirilemez** (diğer kopyası operatörün sunucusundadır) — atlanır, `warn` yazılır, imzalar `disabled` sayılır; yönetici yenisini üretir.
+- `POST /settings/member-recognition/identity-secret` (`access_rules:rw` + admin, `credentials` impersonation sınıfı): ilk sır ya da rotasyon; **sırrı taşıyan tek yanıt** (`Cache-Control: no-store`), denetim `member_identity_secret.rotated` yalnız sürümlerle. Geçiş süresi 0–30 gün, varsayılan **1 gün** (`MEMBER_IDENTITY_SECRET_ROTATION_GRACE` — üye anahtarının 7 günü ziyaretçinin dönüş aralığıdır, bu ise operatörün dağıtım süresi); 0 = sızan anahtar için acil rotasyon. Tek önceki yuva.
+
+### 11.6 Widget
+
+- **Yükleyici değişmedi:** her komutu zaten sıraya alıp aktarıyordu; `identify` için tek bayt eklenmedi (yorum hariç).
+- `widget.ts` `identify`: komut yalnız gömen sayfadan ve barındırılan sohbet sayfası dışında kabul edilir; yük **sayfanın verdiği gibi** `api.pageHints.identity`'ye yazılır (sunucu denetler; widget'ta ayrıştırma yok — bütçe) ve **hemen** mint edilir (ilk kez gelen ziyaretçi de: imza 5 dk yaşar ve ilk kullanımda harcanır, sayfada bekleyen imza hem bayatlar hem de ilk okuyanın işine yarar). Uçuştaki mint (dönen ziyaretçinin yükleme mint'i) önce iner, sonra ikinci mint kimliği taşır; eski müşteri olarak oturum açmış soket kapanır, `mint()` dökümü artık baştan çizer (`rerenderTranscript` — ilk mint'te sonuç aynı, sonrakinde eski müşterinin balonları kalmaz), `refresh()` eski tokenla getirilmiş anlık görüntüyü çizmez.
+- Bütçe (`test/bundle-size.test.ts` 64,75 KB, **büyütülmedi**): ana parça +49 B, toplam 66.300 / 66.304 B — **4 B kaldı**. Bir sonraki widget özelliği yer açmadan sığmaz.
+- Bilinçli maliyet: dönen ve giriş yapmış bir üye sayfa başına iki mint yapar (yükleme mint'i + kimlikli mint). Önlemi (yükleyicinin çerçeve adresine "kimlik geliyor" bayrağı, widget'ın yükleme mint'ini beklemesi) ~65 B tutuyordu; bütçede yer yok.
+
+### 11.7 Panel
+
+- Ayarlar › Güvenlik › Üye tanıma: anahtar, ömür ve olası eşleşmeyle **aynı formda**, taslak + Kaydet (GV-06 — çalışma alanının güvenlik ayarı anlık yazılmaz; `save-pattern.test.tsx` bunu sabitler). "Operatör imzalı kimlik" kartı: durum satırı (kapalı / açık ama anahtar yok / doğrulanıyor), sır bilgisi (kendi etiketleriyle — imza anahtarı kartıyla karışmasın; sürüm, üretim tarihi, önceki sürümün son günü — sırrın kendisi değil), "Gizli anahtar üret" / "Yeni gizli anahtar" (geçiş günü + onay; 0 acil), sır **bir kez** pencerede (kapatınca ekranın durumundan silinir), "asla tarayıcıya konmaz" uyarısı, son 7 günün sayıları nedenlere göre, geliştirici notları (mesaj, saat kuralı, Node + PHP + sayfa örneği, çıkışta `logout`).
+- Gelen kutusu oyuncu kartı: "Doğrulanmış üye" rozeti (her ajan görür — bir durum, iletişim bilgisi değil), imzalı kullanıcı adında "Sitenizce imzalandı" (beyan rozeti yerine), "Üye numarası" (`customers.contact.view` kapalıysa gizli). Özel panel tokenının `player.username_verified`'ı artık kayıttan okunur (tm 379'un bıraktığı `false`).
+- Ön-sohbet formu: imzalı kullanıcı adı olan üyeye kullanıcı adı alanı sorulmaz (mint `prechat.fields.username` gizler — WG-01-S3); sohbet açılışındaki yazılmış kullanıcı adı doğrulanmış olanın üstüne yazılmaz; ajanın kullanıcı adı düzenlemesi `username_verified`'ı düşürür.
+- Kurulum rehberi §6 (tr + en): adımlar, mesaj, Node/PHP/sayfa örneği, uyarı.
+
+### 11.8 Varsayımlar ve sapmalar
+
+- **Ön-giriş anonim kaydı otomatik bağlanmaz.** Tarayıcı anonim A iken üye başka cihazdan doğrulanmış B'ye sahipse imza B'ye çözülür; A'nın konuşması B'ye `customer_identity_links` ile otomatik bağlanmaz — imza tarayıcının _şimdi_ üye olduğunu kanıtlar, _önceki_ anonim konuşmanın ona ait olduğunu değil (ortak bilgisayar). Doğrulanmış kimlik bağı ajan onaylı bağdan **ayrı işaretlenir**: müşteri satırındaki `platform_user_id`. A'yı B'ye ajan, olası eşleşmeden bağlayabilir. Tarayıcının kendi kaydı ise (başka üyeye ait değilse) ilk imzada üyenin kaydı olur — rehberin kuralı.
+- `external_id` adı yerine `platform_user_id` (görev metni); `customers` kuruluş düzeyinde olduğu için birden çok lisanslı bir kuruluşta ad alanı ortaktır (rehber notu); bugünkü kayıt akışı kuruluş başına tek lisans açar.
+- `mode = required` (rehber) yapılmadı: K28 "kiracı açmadıkça kapalı, K4 yolu sürer" der; imzasız ziyaretçiyi reddetmek ayrı karar.
+- İmzalı e-posta müşteriye yazılır ama `is_lead`'i değiştirmez (ziyaretçinin iletişim bırakması değil) ve "doğrulandı" işareti taşımaz (yalnız kullanıcı adı işaretlenir).
+- Yapay zekâ devir kartının `basis`'i hâlâ `declared`; kartı doğrulanmış kimliğe bağlamak ayrı iş (kart oyuncuyu kayıttan değil, mesajdan kurar).
+- iOS/Safari: `identify` akışı tarayıcı depolamasına bağlı değildir (imza her sayfada yeniden gelir); §9.4'teki 7 günlük ITP sınırı imzalı üyeyi yeni ziyaretçi yapmaz.
+- **Bağımsız güvenlik incelemesi** (salt okunur, kapanıştan önce): kritik / yüksek / orta bulgu yok. İki düşük bulgu düzeltildi — biçimsiz kimlik artık gizli anahtar okunup açılmadan reddedilir (açık bir çalışma alanında boşuna şifre çözme ve açık/kapalı zamanlama farkı kalmadı); günlük sayaçlar API'nin değil veritabanının saatine göre güne yazılır (`IdentityCheck.checkedAt`). Bilinçli kalanlar: imzalı kullanıcı adı / e-posta ön-sohbet serbest metninin hassas veri maskesinden geçmez (operatör kendi üyesinin verisine kefil); imza 5 dakikalık tek kullanımlık bir **taşıyıcı** beyandır, cihaza bağlı değildir — rehber ve ayar ekranı imzalı sonucun önbelleğe alınabilen bir yanıta konmamasını açıkça söyler.
+
+### 11.9 Değişen dosyalar (tm 388)
+
+- Migration: `20261224090000_member_signed_identity` (anahtar kolonu, `member_identity_secrets`, `customers.platform_user_id|identity_verified_at|username_verified` + CHECK'ler), `20261224090100_customers_platform_user_id_index` (CONCURRENTLY, tek ifade); `schema.prisma`; `scripts/check-drift.ts` (kısmi indeks adıyla).
+- Types: `member-identity.ts` (+ test), `customer-context.ts` (üç alan), `platform.ts` (impersonation `identity-secret`).
+- Kontrat: `openapi.yaml` (`MemberSignedIdentitySettings`, `MemberIdentitySecretInfo`, `MemberIdentityStats`, `MemberIdentitySecretRotationInput`, `MemberIdentitySecretIssued`, `SignedIdentityInput`, `CustomerContext.customer` +3), `paths/auth.yaml` (`identity`, `identity_verified`), `paths/settings.yaml` (yeni yol); 400 → 401 yol, mobil parity +1.
+- API: `services/auth/member-identity.ts` (yeni), `member-recognition.ts`, `plugins/auth.ts`, `routes/auth.ts`, `routes/member-recognition.ts`, `routes/customer.ts`, `routes/customers.ts`, `routes/custom-panels.ts`, `services/customers/customer-context.ts`, `services/audit/audit-log.ts`, `lib/log-redact.ts`, `lib/fastify-options.ts`.
+- Web: `settings/MemberRecognition.tsx`, `inbox/PlayerCard.tsx`, `audit/AuditLogPage.tsx`, `locales/{en,tr}/{settings,inbox,audit-labels}.ts`, `public/help/install-guide.html`.
+- Widget: `src/widget.ts` (`identify`, `rerenderTranscript` mint'te, `refresh` token koruması), `src/api.ts` (tip), `src/loader.ts` (yalnız yorum).
+- Testler: entegrasyon `member-identity.test.ts` (17), `member-recognition-schema.test.ts` (+1), `customer-context.test.ts` (+1, bir şekil), `captcha-challenge.test.ts` (+1 GV-01), `member-token.test.ts` (varsayılan görünüm); birim `member-identity.test.ts` (22), `log-redact.test.ts` (+1), types `member-identity.test.ts` (9); web `MemberRecognition.test.tsx` (+7), `PlayerCard.test.tsx` (+2); widget `widget.identify.test.ts` (5), `loader.test.ts` (+1); e2e `signed-identity.spec.ts` (1).

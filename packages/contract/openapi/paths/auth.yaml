@@ -1022,6 +1022,24 @@ customerToken:
       form never selects a customer; another device is a new customer until an
       agent confirms the link.
 
+      **Operator-signed identity (ID-03 · decision K28 · tm 388).** The second
+      way in: a page whose user is logged in on the operator's site hands the
+      widget that member's id signed by the operator's server
+      (`siyahtus('identify', …)`), and the widget sends it as `identity`. Only
+      when the workspace has turned signed identity on and issued a secret is
+      it checked — the signature (current secret, or the one a rotation is
+      phasing out), its age (5 minutes, a minute of clock skew), and that it
+      was not used before. A valid one makes the visitor the customer that
+      carries that `user_id` in this organization, on whatever device — or,
+      the first time, the browser's own customer if it carries no other
+      member's id, else a new one — and that customer is the verified member
+      the panel badges. Its signed username, if any, becomes the customer's,
+      and the pre-chat form stops asking for one. Anything else about an
+      identity — malformed, expired, replayed, wrongly signed, or the feature
+      off — is ignored and counted for the workspace, never answered: the
+      response is the one the request would have had without it. A verified
+      member is never shown the human check.
+
       **The human check (tm 339.2 · GV-01).** A visitor this workspace has not
       signed a member token for is answered `403 challenge_required` — before
       any customer is created — when the address opened more new visitors in
@@ -1063,6 +1081,12 @@ customerToken:
                   token, and a `customer_id` without one gets a new anonymous
                   customer. A visitor from before member tokens is moved onto
                   one once, during a transition period.
+              identity:
+                allOf: [{ $ref: "../openapi.yaml#/components/schemas/SignedIdentityInput" }]
+                description: |
+                  The operator-signed identity the page handed
+                  `siyahtus('identify', …)` (tm 388). Whatever its shape, never
+                  a 400: one that does not verify is ignored.
               host_origin:
                 type: string
                 maxLength: 2048
@@ -1147,6 +1171,14 @@ customerToken:
                     the member comes back first — every visit re-signs it for
                     the workspace's token lifetime (`token_ttl_seconds` in
                     Settings › Security › Member recognition).
+                identity_verified:
+                  type: boolean
+                  description: |
+                    Whether the customer this token speaks for is a member the
+                    operator's site vouched for (tm 388) — in this request or
+                    an earlier one. A property of the customer, not of the
+                    request's `identity`: a refused identity and no identity at
+                    all are answered alike.
                 widget:
                   allOf:
                     - $ref: "../openapi.yaml#/components/schemas/WidgetAppearance"

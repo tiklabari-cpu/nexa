@@ -15,6 +15,7 @@ import {
   maskPii,
   PROVIDER_SECRET_ENV_KEYS,
   APPS_SECRET_LOG_PATHS,
+  MEMBER_IDENTITY_LOG_PATHS,
   PLATFORM_SECRET_LOG_PATHS,
   PROVIDER_SECRET_LOG_PATHS,
   requestPath,
@@ -326,5 +327,43 @@ describe('platform sign-in secrets', () => {
     expect(written).toContain('ops@x.test');
     expect(written).toContain('P2002');
     expect(written).toContain('unconfirmed');
+  });
+});
+
+/**
+ * The operator-signed identity (ID-03 · K28 · tm 388): the mint's `identity` body
+ * carries a member's id, username and e-mail and a signature that is a
+ * credential for five minutes; the secret is in one response. Neither reaches
+ * the log, whatever a debugging line dumps.
+ */
+describe('signed identity secrets', () => {
+  it('censors the identity a mint carries and the secret in a result object', () => {
+    const lines: string[] = [];
+    const logger = pino(
+      { redact: { paths: [...MEMBER_IDENTITY_LOG_PATHS], censor: '[redacted]' } },
+      { write: (line: string) => lines.push(line) },
+    );
+    const HASH = 'f'.repeat(64);
+    const SECRET = 'sti_never-logged-secret-0123456789abcdefghijklm';
+    logger.info(
+      {
+        req: {
+          body: {
+            organization_id: 'org-1',
+            identity: { user_id: 'player-77', username: 'ayse', user_hash: HASH, ts: 1 },
+          },
+        },
+      },
+      'mint body',
+    );
+    logger.info({ identity_secret: SECRET }, 'top level');
+    logger.info({ result: { identity_secret: SECRET, version: 2 } }, 'result');
+
+    const written = lines.join('\n');
+    for (const value of [HASH, SECRET, 'player-77', 'ayse']) {
+      expect(written).not.toContain(value);
+    }
+    expect(written).toContain('org-1');
+    expect(written).toContain('"version":2');
   });
 });

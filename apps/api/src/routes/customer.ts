@@ -1400,13 +1400,18 @@ export default async function customerRoutes(
         const becameLead = await request.withTenant(async (tx) => {
           const before = await tx.customer.findFirst({
             where: { id: principal.customerId },
-            select: { isLead: true },
+            select: { isLead: true, usernameVerified: true },
           });
           await tx.customer.update({
             where: { id: principal.customerId },
             data: {
               ...(body.name ? { name: body.name } : {}),
-              ...(body.username ? { username: body.username } : {}),
+              // Not over the username the operator signed (ID-03 · K28 ·
+              // tm 388): the widget no longer asks a verified member for one,
+              // and a typed one from a scripted request is not proof of anything.
+              ...(body.username && before?.usernameVerified !== true
+                ? { username: body.username }
+                : {}),
               ...(body.email ? { email: body.email, isLead: true } : {}),
               lastActivityAt: new Date(),
             },

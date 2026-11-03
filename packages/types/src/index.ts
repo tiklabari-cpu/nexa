@@ -47,6 +47,7 @@ export * from './queue-entry.js';
 export * from './team-queues.js';
 export * from './handoff-routes.js';
 export * from './member-recognition.js';
+export * from './member-identity.js';
 export * from './realtime-bus.js';
 export * from './widget.js';
 export * from './widget-availability.js';

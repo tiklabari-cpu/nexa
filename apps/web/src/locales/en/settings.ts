@@ -1775,6 +1775,76 @@ export const settings: Messages = {
     'Every visitor your website recognised so far starts again as a new visitor on their next visit. This cannot be undone.',
   'settings.memberRecognition.forgetConfirm': 'Forget all visitors',
   'settings.memberRecognition.forgetFailure': 'The visitors could not be forgotten.',
+  'settings.memberRecognition.identity.heading': 'Operator-signed identity',
+  'settings.memberRecognition.identity.hint':
+    'Your website knows which member is logged in. Your server signs that member’s id with the secret below and the page hands it to the widget; a valid signature makes the visitor the same verified member on every device. Off, nothing changes: visitors are recognised by their browser and agents confirm the rest.',
+  'settings.memberRecognition.identity.toggle': 'Accept signed identities from my website',
+  'settings.memberRecognition.identity.toggleHint':
+    'Your server signs the logged-in member; a valid signature makes them the same verified member on every device. Needs the identity secret below.',
+  'settings.memberRecognition.identity.statusActive':
+    'On: signed identities are checked, and a valid one makes the visitor a verified member.',
+  'settings.memberRecognition.identity.statusNoSecret':
+    'On, but no secret has been issued yet: nothing is checked until you issue one.',
+  'settings.memberRecognition.identity.statusOff':
+    'Off: signed identities are ignored, and visitors are recognised by their browser only.',
+  'settings.memberRecognition.identity.secretHeading': 'Identity secret',
+  'settings.memberRecognition.identity.secretNone':
+    'No secret yet. Issue one, then put it on your server.',
+  'settings.memberRecognition.identity.previous': 'Previous secret',
+  'settings.memberRecognition.identity.secretVersion': 'Secret version',
+  'settings.memberRecognition.identity.secretCreated': 'Issued',
+  'settings.memberRecognition.identity.previousUntil':
+    'Version {version}, accepted from your server until {date}',
+  'settings.memberRecognition.identity.browserWarning':
+    'Keep this secret on your server. Never put it in a web page, a script or an app a visitor can download: anyone who has it can sign in as any member.',
+  'settings.memberRecognition.identity.graceLabel': 'Keep the old secret for (days)',
+  'settings.memberRecognition.identity.graceHint.one':
+    'Signatures made with the old secret are still accepted for {count} day while you deploy the new one.',
+  'settings.memberRecognition.identity.graceHint.other':
+    'Signatures made with the old secret are still accepted for {count} days while you deploy the new one.',
+  'settings.memberRecognition.identity.graceNone':
+    '0 retires the old secret at once: members are not recognised until your server uses the new one.',
+  'settings.memberRecognition.identity.issueButton': 'Issue a secret',
+  'settings.memberRecognition.identity.rotateButton': 'Issue a new secret',
+  'settings.memberRecognition.identity.rotateConfirmTitle': 'Issue a new identity secret?',
+  'settings.memberRecognition.identity.rotateConfirmGrace.one':
+    'A new secret is shown once. The old one is still accepted for {count} day, so update your server within that time.',
+  'settings.memberRecognition.identity.rotateConfirmGrace.other':
+    'A new secret is shown once. The old one is still accepted for {count} days, so update your server within that time.',
+  'settings.memberRecognition.identity.rotateConfirmNone':
+    'The old secret stops working at once. Logged-in members are not recognised until your server uses the new one.',
+  'settings.memberRecognition.identity.rotateConfirm': 'Issue secret',
+  'settings.memberRecognition.identity.issueFailure': 'The secret could not be issued.',
+  'settings.memberRecognition.identity.recentUnavailable':
+    'The counts of recent signatures could not be read.',
+  'settings.memberRecognition.identity.recentHeading': 'Signatures in the last {days} days',
+  'settings.memberRecognition.identity.recentVerified.one': '{count} verified',
+  'settings.memberRecognition.identity.recentVerified.other': '{count} verified',
+  'settings.memberRecognition.identity.recentNoneRefused': 'None ignored.',
+  'settings.memberRecognition.identity.reason.disabled': 'Ignored while switched off',
+  'settings.memberRecognition.identity.reason.malformed': 'Ignored: not in the expected format',
+  'settings.memberRecognition.identity.reason.expired': 'Ignored: older than five minutes',
+  'settings.memberRecognition.identity.reason.future': 'Ignored: time ahead of our clock',
+  'settings.memberRecognition.identity.reason.bad_signature': 'Ignored: wrong signature',
+  'settings.memberRecognition.identity.reason.replayed': 'Ignored: already used once',
+  'settings.memberRecognition.identity.reason.replay_unchecked':
+    'Ignored: could not be checked for reuse',
+  'settings.memberRecognition.identity.dev.title': 'For your developer',
+  'settings.memberRecognition.identity.dev.server':
+    'Sign on your server, for the member who is logged in, every time you render a page for them. The secret never leaves the server, and the signed result never goes into a page a cache or CDN could serve to someone else.',
+  'settings.memberRecognition.identity.dev.message':
+    'The signature is HMAC-SHA256 with the secret as the key, in lowercase hex, over these lines (an absent username or e-mail is an empty line; no field may contain a line break; user_id is text, so a numeric id is signed and sent as a string):',
+  'settings.memberRecognition.identity.dev.clock':
+    'ts is the current Unix time in seconds. A signature older than {minutes} minutes, or used once already, is ignored — sign a fresh one for each page.',
+  'settings.memberRecognition.identity.dev.page':
+    'Hand the result to the widget with siyahtus("identify", …) once the page has loaded — in a single-page site, right after the member signs in.',
+  'settings.memberRecognition.identity.dev.logout':
+    'When the member signs out, call siyahtus("logout") so the next person at that computer is a new visitor.',
+  'settings.memberRecognition.identity.secretTitle': 'Your identity secret',
+  'settings.memberRecognition.identity.secretDescription':
+    'Copy it now and store it on your server. It is not shown again; if it is lost, issue a new one.',
+  'settings.memberRecognition.identity.copyAriaLabel': 'Copy the identity secret',
+  'settings.memberRecognition.identity.secretDone': 'I have stored it',
   // Risk flags (AI-27 · tm 302.3) — RiskFlagSettings.tsx
   'settings.nav.section.riskFlags': 'Risk flags',
   'settings.riskFlags.title': 'Risk flags',

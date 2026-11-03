@@ -20,20 +20,34 @@
  *     starts again as a new visitor.
  *   - **Forget every returning visitor** — the bulk revocation. Nothing is
  *     deleted and nobody is banned; every browser becomes a new visitor.
+ *   - **Operator-signed identity** (ID-03 · K28 · tm 388) — the switch, the
+ *     secret the operator's server signs logged-in members with (issued and
+ *     rotated here, shown exactly once), the last week's accepted and ignored
+ *     signatures by reason, and what the operator's developer has to build.
  *
  * The key itself is never on the screen — the API describes it (version, age,
- * the previous version's deadline) and nothing else. The two destructive
- * buttons ask first (`useConfirm`) and keep their dialog open on a refusal.
+ * the previous version's deadline) and nothing else. The identity secret is on
+ * it once, in the dialog that issues it; closing the dialog discards it. The
+ * destructive buttons ask first (`useConfirm`) and keep their dialog open on a
+ * refusal.
  *
  * Read-only for whoever lacks `access_rules:rw`: the same gate as every other
  * Security section, and the endpoints keep the real one (`minimumRole: admin`).
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
-import { MEMBER_KEY_ROTATION_GRACE, MEMBER_TOKEN_TTL, type SecondsRange } from '@siyahtus/types';
+import {
+  MEMBER_IDENTITY_SECRET_ROTATION_GRACE,
+  MEMBER_KEY_ROTATION_GRACE,
+  MEMBER_TOKEN_TTL,
+  SIGNED_IDENTITY_LIMITS,
+  SIGNED_IDENTITY_REFUSALS,
+  type SecondsRange,
+} from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { FormSaveBar } from '../../components/settings/FormSaveBar.js';
 import { useConfirm } from '../../components/ui/ConfirmDialog.js';
+import { Modal } from '../../components/ui/index.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { FieldError, useForm } from '../../lib/form.js';
@@ -47,16 +61,34 @@ interface MemberKeyInfo {
   previous_valid_until: string | null;
 }
 
+interface SignedIdentitySettings {
+  enabled: boolean;
+  /** On and a secret exists: identify calls are being verified. */
+  active: boolean;
+  /** Described like the key — never the secret. */
+  secret: MemberKeyInfo | null;
+  /** The last week's signed identities; null when the counters could not be read. */
+  recent: { days: number; verified: number; refused: Record<string, number> } | null;
+}
+
+/** What the settings form sends: only the fields that changed. */
+interface SettingsChange {
+  token_ttl_seconds?: number;
+  possible_matches_enabled?: boolean;
+  signed_identity_enabled?: boolean;
+}
+
 interface MemberRecognitionSettings {
   token_ttl_seconds: number;
   possible_matches_enabled: boolean;
   key: MemberKeyInfo | null;
   tokens_revoked_before: string | null;
+  signed_identity: SignedIdentitySettings;
   updated_at: string | null;
 }
 
 type TtlUnit = 'hours' | 'days';
-type FormValues = Record<'amount' | 'unit' | 'matches', string>;
+type FormValues = Record<'amount' | 'unit' | 'matches' | 'signed', string>;
 
 const UNIT_SECONDS: Record<TtlUnit, number> = { hours: 3600, days: 86_400 };
 const QUERY_KEY = ['settings', 'member-recognition'] as const;
@@ -139,6 +171,9 @@ export function MemberRecognition({ canEdit }: { canEdit: boolean }): ReactEleme
           <Card>
             <ForgetAll config={settings.data} canEdit={canEdit} onChanged={onChanged} />
           </Card>
+          <Card>
+            <SignedIdentity config={settings.data} canEdit={canEdit} onChanged={onChanged} />
+          </Card>
         </div>
       )}
     </Section>
@@ -164,7 +199,7 @@ function RecognitionForm({
   const draft = draftFromSeconds(config.token_ttl_seconds);
 
   const save = useMutation({
-    mutationFn: (body: { token_ttl_seconds?: number; possible_matches_enabled?: boolean }) =>
+    mutationFn: (body: SettingsChange) =>
       api.patch<MemberRecognitionSettings>('/settings/member-recognition', body),
     onSuccess: onSaved,
   });
@@ -174,6 +209,7 @@ function RecognitionForm({
       amount: draft.amount,
       unit: draft.unit,
       matches: String(config.possible_matches_enabled),
+      signed: String(config.signed_identity.enabled),
     },
     // No per-field validator for the amount: its range depends on the unit,
     // which a single-field `Validator` cannot see (`ChatTimeout`'s reasoning).
@@ -183,12 +219,15 @@ function RecognitionForm({
         setFieldError('amount', error);
         return;
       }
-      const body: { token_ttl_seconds?: number; possible_matches_enabled?: boolean } = {};
+      const body: SettingsChange = {};
       if (secondsOf(values) !== config.token_ttl_seconds) {
         body.token_ttl_seconds = secondsOf(values);
       }
       if ((values.matches === 'true') !== config.possible_matches_enabled) {
         body.possible_matches_enabled = values.matches === 'true';
+      }
+      if ((values.signed === 'true') !== config.signed_identity.enabled) {
+        body.signed_identity_enabled = values.signed === 'true';
       }
       // Nothing to send: the unit was switched back to what it was.
       if (Object.keys(body).length === 0) return;
@@ -278,6 +317,22 @@ function RecognitionForm({
             {t('settings.memberRecognition.matchesLabel')}
             <span className="block text-2xs text-content-tertiary">
               {t('settings.memberRecognition.matchesHint')}
+            </span>
+          </span>
+        </label>
+
+        {/* A workspace-wide security switch, so it waits for Save like the
+            others (GV-06); the secret, its card below, is issued on its own. */}
+        <label className="flex items-start gap-3 border-t border-border pt-5">
+          <input
+            type="checkbox"
+            checked={form.values.signed === 'true'}
+            onChange={(event) => form.setValue('signed', String(event.target.checked))}
+          />
+          <span className="text-sm">
+            {t('settings.memberRecognition.identity.toggle')}
+            <span className="block text-2xs text-content-tertiary">
+              {t('settings.memberRecognition.identity.toggleHint')}
             </span>
           </span>
         </label>
@@ -465,5 +520,347 @@ function ForgetAll({
       )}
       {dialog}
     </div>
+  );
+}
+
+/**
+ * The exact message the operator's server signs — one line per field, the
+ * version first and the time last (`signedIdentityMessage` in
+ * `@siyahtus/types`). Code, so not translated.
+ */
+const MESSAGE_FORMAT = 'siyahtus-identify-v1\\n<user_id>\\n<username>\\n<email>\\n<ts>';
+
+const NODE_EXAMPLE = `const crypto = require('node:crypto');
+
+// On your server only. SIYAHTUS_IDENTITY_SECRET is the secret this screen showed you.
+function siyahtusIdentity(user) {
+  const id = String(user.id); // user_id is text, a numeric id too
+  const ts = Math.floor(Date.now() / 1000);
+  const message = ['siyahtus-identify-v1', id, user.username || '', user.email || '', String(ts)].join('\\n');
+  const user_hash = crypto
+    .createHmac('sha256', process.env.SIYAHTUS_IDENTITY_SECRET)
+    .update(message)
+    .digest('hex');
+  return { user_id: id, username: user.username || '', email: user.email || '', ts, user_hash };
+}`;
+
+const PHP_EXAMPLE = `<?php
+// On your server only. SIYAHTUS_IDENTITY_SECRET is the secret this screen showed you.
+function siyahtus_identity(array $user): array {
+    $id = (string) $user['id']; // user_id is text, a numeric id too
+    $ts = time();
+    $message = implode("\\n", ['siyahtus-identify-v1', $id, $user['username'] ?? '', $user['email'] ?? '', (string) $ts]);
+    $hash = hash_hmac('sha256', $message, getenv('SIYAHTUS_IDENTITY_SECRET'));
+    return ['user_id' => $id, 'username' => $user['username'] ?? '', 'email' => $user['email'] ?? '', 'ts' => $ts, 'user_hash' => $hash];
+}`;
+
+const PAGE_EXAMPLE = `<script>
+  window.addEventListener('load', function () {
+    siyahtus('identify', <?= json_encode(siyahtus_identity($user), JSON_HEX_TAG | JSON_HEX_AMP) ?>);
+  });
+</script>`;
+
+/**
+ * Operator-signed identity (ID-03 · K28 · tm 388): what the switch means now,
+ * the secret — issued, described, rotated with a grace window, shown once —
+ * the last week's signatures, and what the operator's developer builds. The
+ * switch itself is the form's above: a workspace security setting waits for
+ * Save (GV-06). On without a secret still verifies nothing, as the status says.
+ */
+function SignedIdentity({
+  config,
+  canEdit,
+  onChanged,
+}: {
+  config: MemberRecognitionSettings;
+  canEdit: boolean;
+  onChanged: (data: MemberRecognitionSettings) => void;
+}): ReactElement {
+  const t = useTranslate();
+  const api = useApiClient();
+  const { confirm, dialog } = useConfirm();
+  const [grace, setGrace] = useState(
+    String(days(MEMBER_IDENTITY_SECRET_ROTATION_GRACE.defaultSeconds)),
+  );
+  const [revealed, setRevealed] = useState<string | null>(null);
+  const identity = config.signed_identity;
+  const secret = identity.secret;
+
+  const issue = useMutation({
+    mutationFn: (graceDays: number) =>
+      api.post<MemberRecognitionSettings & { identity_secret: string }>(
+        '/settings/member-recognition/identity-secret',
+        { grace_period_seconds: graceDays * UNIT_SECONDS.days },
+      ),
+    onSuccess: ({ identity_secret, ...view }) => {
+      onChanged(view);
+      setRevealed(identity_secret);
+    },
+  });
+
+  const error = secret ? graceError(t, grace, MEMBER_IDENTITY_SECRET_ROTATION_GRACE) : null;
+  const status = identity.active
+    ? t('settings.memberRecognition.identity.statusActive')
+    : identity.enabled
+      ? t('settings.memberRecognition.identity.statusNoSecret')
+      : t('settings.memberRecognition.identity.statusOff');
+
+  return (
+    <div className="flex flex-col gap-4 p-4">
+      <div>
+        <h3 className="text-sm font-medium">{t('settings.memberRecognition.identity.heading')}</h3>
+        <p className="text-2xs text-content-tertiary">
+          {t('settings.memberRecognition.identity.hint')}
+        </p>
+      </div>
+
+      <p data-testid="signed-identity-status" className="text-sm text-content-secondary">
+        {status}
+      </p>
+
+      <div className="flex flex-col gap-2 border-t border-border pt-4">
+        <h4 className="text-xs font-medium">
+          {t('settings.memberRecognition.identity.secretHeading')}
+        </h4>
+        {secret ? (
+          // Labels of its own, not the signing key's: the two cards sit on one
+          // screen and describe different keys.
+          <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
+            <dt className="text-content-tertiary">
+              {t('settings.memberRecognition.identity.secretVersion')}
+            </dt>
+            <dd>{secret.version}</dd>
+            <dt className="text-content-tertiary">
+              {t('settings.memberRecognition.identity.secretCreated')}
+            </dt>
+            <dd>{formatDateTime(secret.created_at)}</dd>
+            {secret.previous_version !== null && secret.previous_valid_until !== null && (
+              <>
+                <dt className="text-content-tertiary">
+                  {t('settings.memberRecognition.identity.previous')}
+                </dt>
+                <dd>
+                  {t('settings.memberRecognition.identity.previousUntil', {
+                    version: secret.previous_version,
+                    date: formatDateTime(secret.previous_valid_until) ?? '',
+                  })}
+                </dd>
+              </>
+            )}
+          </dl>
+        ) : (
+          <p className="text-sm text-content-secondary">
+            {t('settings.memberRecognition.identity.secretNone')}
+          </p>
+        )}
+        <p role="note" className="text-2xs text-warning">
+          {t('settings.memberRecognition.identity.browserWarning')}
+        </p>
+
+        {canEdit && (
+          <div className="flex flex-col gap-3">
+            {secret && (
+              <>
+                <div className="flex w-48 flex-col gap-1">
+                  <label
+                    htmlFor="member-identity-grace"
+                    className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+                  >
+                    {t('settings.memberRecognition.identity.graceLabel')}
+                  </label>
+                  <input
+                    id="member-identity-grace"
+                    type="number"
+                    min={days(MEMBER_IDENTITY_SECRET_ROTATION_GRACE.minSeconds)}
+                    max={days(MEMBER_IDENTITY_SECRET_ROTATION_GRACE.maxSeconds)}
+                    value={grace}
+                    onChange={(event) => setGrace(event.target.value)}
+                    aria-invalid={error ? true : undefined}
+                    aria-describedby="member-identity-grace-hint"
+                    className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
+                  />
+                </div>
+                {error ? (
+                  <FieldError id="member-identity-grace-hint" message={error} />
+                ) : (
+                  <p id="member-identity-grace-hint" className="text-2xs text-content-tertiary">
+                    {Number(grace) === 0
+                      ? t('settings.memberRecognition.identity.graceNone')
+                      : t('settings.memberRecognition.identity.graceHint', {
+                          count: Number(grace),
+                        })}
+                  </p>
+                )}
+              </>
+            )}
+            <div>
+              <button
+                type="button"
+                disabled={error !== null || issue.isPending}
+                onClick={() =>
+                  secret
+                    ? confirm({
+                        title: t('settings.memberRecognition.identity.rotateConfirmTitle'),
+                        description:
+                          Number(grace) === 0
+                            ? t('settings.memberRecognition.identity.rotateConfirmNone')
+                            : t('settings.memberRecognition.identity.rotateConfirmGrace', {
+                                count: Number(grace),
+                              }),
+                        confirmLabel: t('settings.memberRecognition.identity.rotateConfirm'),
+                        failureTitle: t('settings.memberRecognition.identity.issueFailure'),
+                        onConfirm: () => issue.mutateAsync(Number(grace)),
+                      })
+                    : void issue.mutateAsync(0).catch(() => undefined)
+                }
+                className="rounded-md border border-border px-3 py-1.5 text-sm transition-colors hover:bg-surface-2 disabled:opacity-50"
+              >
+                {secret
+                  ? t('settings.memberRecognition.identity.rotateButton')
+                  : t('settings.memberRecognition.identity.issueButton')}
+              </button>
+            </div>
+            {!secret && issue.isError && (
+              <p role="alert" className="text-2xs text-danger">
+                {t('settings.memberRecognition.identity.issueFailure')}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <RecentSignatures recent={identity.recent} />
+      <IdentityDeveloperNotes />
+      {revealed && <IdentitySecretPanel secret={revealed} onClose={() => setRevealed(null)} />}
+      {dialog}
+    </div>
+  );
+}
+
+/** The last week's signed identities: how many verified, and why the others were ignored. */
+function RecentSignatures({ recent }: { recent: SignedIdentitySettings['recent'] }): ReactElement {
+  const t = useTranslate();
+  if (!recent) {
+    return (
+      <p className="text-2xs text-content-tertiary">
+        {t('settings.memberRecognition.identity.recentUnavailable')}
+      </p>
+    );
+  }
+  const refused = SIGNED_IDENTITY_REFUSALS.filter((reason) => (recent.refused[reason] ?? 0) > 0);
+  return (
+    <div className="flex flex-col gap-1 border-t border-border pt-4">
+      <h4 className="text-xs font-medium">
+        {t('settings.memberRecognition.identity.recentHeading', { days: recent.days })}
+      </h4>
+      <p className="text-sm" data-testid="signed-identity-verified">
+        {t('settings.memberRecognition.identity.recentVerified', { count: recent.verified })}
+      </p>
+      {refused.length === 0 ? (
+        <p className="text-2xs text-content-tertiary">
+          {t('settings.memberRecognition.identity.recentNoneRefused')}
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-0.5 text-2xs text-content-secondary">
+          {refused.map((reason) => (
+            <li key={reason}>
+              {t(`settings.memberRecognition.identity.reason.${reason}`)}:{' '}
+              <span className="tabular">{recent.refused[reason]}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** What the operator's developer builds: the message, the clock rule, two examples, the warning. */
+function IdentityDeveloperNotes(): ReactElement {
+  const t = useTranslate();
+  return (
+    <details className="rounded-md border border-border p-3 text-xs">
+      <summary className="cursor-pointer font-medium">
+        {t('settings.memberRecognition.identity.dev.title')}
+      </summary>
+      <ol className="mt-2 flex list-decimal flex-col gap-1.5 pl-5 text-content-secondary">
+        <li>{t('settings.memberRecognition.identity.dev.server')}</li>
+        <li>
+          {t('settings.memberRecognition.identity.dev.message')}{' '}
+          <code className="rounded-sm bg-inset px-1">{MESSAGE_FORMAT}</code>
+        </li>
+        <li>
+          {t('settings.memberRecognition.identity.dev.clock', {
+            minutes: SIGNED_IDENTITY_LIMITS.maxAgeSeconds / 60,
+          })}
+        </li>
+        <li>{t('settings.memberRecognition.identity.dev.page')}</li>
+        <li>{t('settings.memberRecognition.identity.dev.logout')}</li>
+      </ol>
+      <p className="mt-2 font-medium">Node.js</p>
+      <pre className="mt-1 overflow-x-auto rounded-md bg-inset p-2 text-2xs">{NODE_EXAMPLE}</pre>
+      <p className="mt-2 font-medium">PHP</p>
+      <pre className="mt-1 overflow-x-auto rounded-md bg-inset p-2 text-2xs">{PHP_EXAMPLE}</pre>
+      <pre className="mt-1 overflow-x-auto rounded-md bg-inset p-2 text-2xs">{PAGE_EXAMPLE}</pre>
+    </details>
+  );
+}
+
+/** The secret, once — closing the dialog is what discards it from the screen's state. */
+function IdentitySecretPanel({
+  secret,
+  onClose,
+}: {
+  secret: string;
+  onClose: () => void;
+}): ReactElement {
+  const t = useTranslate();
+  const [copied, setCopied] = useState(false);
+  const copy = (): void => {
+    void navigator.clipboard?.writeText(secret).then(
+      () => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1_500);
+      },
+      () => setCopied(false),
+    );
+  };
+  return (
+    <Modal
+      onClose={onClose}
+      title={t('settings.memberRecognition.identity.secretTitle')}
+      description={t('settings.memberRecognition.identity.secretDescription')}
+      className="w-[32rem]"
+    >
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <code
+            data-testid="member-identity-secret"
+            className="flex-1 truncate rounded-md border border-border bg-inset px-2 py-1.5 text-2xs"
+          >
+            {secret}
+          </code>
+          <button
+            type="button"
+            onClick={copy}
+            aria-label={t('settings.memberRecognition.identity.copyAriaLabel')}
+            className="shrink-0 rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
+          >
+            {copied ? t('settings.copied') : t('settings.copy')}
+          </button>
+        </div>
+        <p role="alert" className="text-2xs text-warning">
+          {t('settings.memberRecognition.identity.browserWarning')}
+        </p>
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-border px-3 py-1.5 text-sm"
+          >
+            {t('settings.memberRecognition.identity.secretDone')}
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }

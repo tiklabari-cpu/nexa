@@ -31,6 +31,7 @@ import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { CustomerTokenService } from '../services/auth/customer-token.js';
 import { LastSeenRecorder } from '../services/auth/last-seen.js';
 import { MemberRecognitionService } from '../services/auth/member-recognition.js';
+import { IdentityLedger, IdentitySecretCodec } from '../services/auth/member-identity.js';
 import { MemberTokenCodec } from '../services/auth/member-token.js';
 import { roleAtLeast, tenantOf, type Principal } from '../services/auth/principal.js';
 import { TokenService } from '../services/auth/token-service.js';
@@ -117,10 +118,15 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
   app.decorate('tokens', tokens);
   app.decorate('customerTokens', customerTokens);
   // The member-token keys are sealed under a key derived from the same secret
-  // (HKDF, its own label) — no new environment key to boot with.
+  // (HKDF, its own label) — no new environment key to boot with. So is the
+  // operator-signed identity's secret (tm 388), under a label of its own; its
+  // replay record and counters are in Redis.
   app.decorate(
     'memberRecognition',
-    new MemberRecognitionService(new MemberTokenCodec(env.CUSTOMER_TOKEN_SECRET)),
+    new MemberRecognitionService(new MemberTokenCodec(env.CUSTOMER_TOKEN_SECRET), {
+      codec: new IdentitySecretCodec(env.CUSTOMER_TOKEN_SECRET),
+      ledger: new IdentityLedger(app.redis),
+    }),
   );
 
   app.decorateRequest('principal', undefined);

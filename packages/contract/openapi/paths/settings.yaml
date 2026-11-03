@@ -2714,9 +2714,12 @@ memberRecognition:
     summary: How returning visitors are recognised
     description: |
       The member-token lifetime, whether agents see possible matches, the
-      signing key's version and rotation state (never the key itself) and the
-      latest bulk revocation (ID-03 · decision K4). A workspace that never saved
-      these reads the defaults; reading creates nothing.
+      signing key's version and rotation state (never the key itself), the
+      latest bulk revocation (ID-03 · decision K4), and the operator-signed
+      identity — its switch, its secret's version (never the secret) and the
+      last week's signed identities, accepted and refused by reason (K28 ·
+      tm 388). A workspace that never saved these reads the defaults; reading
+      creates nothing.
 
       `access_rules:ro` (or `:rw`) plus `minimumRole: admin`, like the other
       Security settings.
@@ -2733,7 +2736,7 @@ memberRecognition:
   patch:
     tags: [Settings]
     operationId: updateMemberRecognitionSettings
-    summary: Change the token lifetime or the possible-match switch
+    summary: Change the token lifetime, the possible-match switch or the signed-identity switch
     description: |
       Creates the row on first write; only the fields sent change. A new
       lifetime applies to the tokens signed from then on — every visit
@@ -2785,6 +2788,43 @@ memberRecognitionRotateKey:
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/MemberRecognitionSettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+memberRecognitionIdentitySecret:
+  post:
+    tags: [Settings]
+    operationId: rotateMemberIdentitySecret
+    summary: Issue the operator-signed identity secret, or replace it
+    description: |
+      Generates the workspace's identity secret (ID-03 · decision K28 ·
+      tm 388) — the key the operator's server signs the logged-in member's
+      identity with, `siyahtus('identify', …)` on the page carrying the
+      signature. The response is the only one that ever holds the secret:
+      store it on the server, never in a page or an app a visitor downloads.
+
+      With a secret already in place this is a rotation: the replaced secret
+      stays accepted for `grace_period_seconds` (default a day) while the
+      operator deploys the new one, and is refused after. `0` retires it at
+      once, for a secret that leaked. One previous secret at a time: rotating
+      again inside the window drops the oldest immediately.
+
+      Issuing a secret does not turn the feature on; `signed_identity_enabled`
+      does. `access_rules:rw` plus `minimumRole: admin`; audited with the
+      versions only. `Cache-Control: no-store`.
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/MemberIdentitySecretRotationInput" }
+    responses:
+      "200":
+        description: The settings and, this once, the new secret
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/MemberIdentitySecretIssued" }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }

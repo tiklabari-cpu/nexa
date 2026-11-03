@@ -136,6 +136,17 @@ const KNOWN_UNMODELLABLE = [
       'partial index (folded pre-chat username lookups, NULLs left out) — Prisma cannot express a WHERE predicate',
   },
   {
+    // Created as `UNIQUE ON customers(organization_id, platform_user_id) WHERE
+    // platform_user_id IS NOT NULL` CONCURRENTLY in
+    // 20261224090100_customers_platform_user_id_index — one customer per
+    // operator member id per organization (ID-03 · K28 · tm 388). The column is
+    // modelled; only the predicate is not expressible.
+    pattern:
+      /CREATE UNIQUE INDEX "customers_organization_id_platform_user_id_key" ON "public"\."customers"/,
+    reason:
+      'partial unique index (one customer per verified member id) — Prisma cannot express a WHERE predicate',
+  },
+  {
     // Created as `ON chats(license_id, customer_id, local_day) WHERE local_day
     // IS NOT NULL` in 20261015160100_chats_customer_day_index — one chat per
     // member per conversation day (ID-02). Prisma 6 does not report it today;

@@ -135,6 +135,7 @@ export const auditLabels: Messages = {
   'audit.action.scim_token.revoked': 'Provisioning token revoked',
   'audit.action.member_token_key.rotated': 'Member recognition key rotated',
   'audit.action.member_tokens.revoked': 'Returning visitors forgotten',
+  'audit.action.member_identity_secret.rotated': 'Signed identity secret issued',
   'audit.action.device.registered': 'Device registered',
   'audit.action.device.revoked': 'Device revoked',
   'audit.action.digest_settings.updated': 'Summary e-mail defaults changed',

@@ -128,6 +128,7 @@ export const auditLabels: Messages = {
   'audit.action.scim_token.revoked': 'Hesap oluşturma belirteci iptal edildi',
   'audit.action.member_token_key.rotated': 'Üye tanıma anahtarı yenilendi',
   'audit.action.member_tokens.revoked': 'Geri dönen ziyaretçiler unutuldu',
+  'audit.action.member_identity_secret.rotated': 'İmzalı kimlik gizli anahtarı üretildi',
   'audit.action.device.registered': 'Cihaz kaydedildi',
   'audit.action.device.revoked': 'Cihaz erişimi iptal edildi',
   'audit.action.digest_settings.updated': 'Özet e-postası varsayılanları değişti',

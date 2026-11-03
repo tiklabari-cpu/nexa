@@ -181,7 +181,11 @@ export default async function customerDirectoryRoutes(app: FastifyInstance): Pro
           where: { id: customerId },
           data: {
             ...(body.name !== undefined ? { name: body.name } : {}),
-            ...(body.username !== undefined ? { username: body.username } : {}),
+            // An agent's edit is not the operator's signature (tm 388): the
+            // record keeps the new value, unverified.
+            ...(body.username !== undefined
+              ? { username: body.username, usernameVerified: false }
+              : {}),
             ...(body.phone !== undefined ? { phone: body.phone } : {}),
             // Recording an email is what makes someone a lead. Clearing it does
             // not un-make them one: they did give it to us, and quietly

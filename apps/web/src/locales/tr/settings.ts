@@ -1220,6 +1220,78 @@ export const settings: Messages = {
     'Web sitenizin şimdiye kadar tanıdığı her ziyaretçi, bir sonraki ziyaretinde yeni ziyaretçi olarak baştan başlar. Bu geri alınamaz.',
   'settings.memberRecognition.forgetConfirm': 'Bütün ziyaretçileri unut',
   'settings.memberRecognition.forgetFailure': 'Ziyaretçiler unutulamadı.',
+  'settings.memberRecognition.identity.heading': 'Operatör imzalı kimlik',
+  'settings.memberRecognition.identity.hint':
+    'Siteniz hangi üyenin giriş yaptığını bilir. Sunucunuz o üyenin numarasını aşağıdaki gizli anahtarla imzalar, sayfa imzayı widget’a verir; geçerli imza ziyaretçiyi her cihazda aynı doğrulanmış üye yapar. Kapalıyken hiçbir şey değişmez: ziyaretçi tarayıcısından tanınır, gerisini ajan onaylar.',
+  'settings.memberRecognition.identity.toggle': 'Sitemden gelen imzalı kimlikleri kabul et',
+  'settings.memberRecognition.identity.toggleHint':
+    'Sunucunuz giriş yapmış üyeyi imzalar; geçerli imza onu her cihazda aynı doğrulanmış üye yapar. Aşağıdaki kimlik gizli anahtarı gerekir.',
+  'settings.memberRecognition.identity.statusActive':
+    'Açık: imzalı kimlikler doğrulanıyor; geçerli imza ziyaretçiyi doğrulanmış üye yapar.',
+  'settings.memberRecognition.identity.statusNoSecret':
+    'Açık, ama henüz gizli anahtar üretilmedi: anahtar üretilene kadar hiçbir şey doğrulanmaz.',
+  'settings.memberRecognition.identity.statusOff':
+    'Kapalı: imzalı kimlikler yok sayılır, ziyaretçi yalnızca tarayıcısından tanınır.',
+  'settings.memberRecognition.identity.secretHeading': 'Kimlik gizli anahtarı',
+  'settings.memberRecognition.identity.secretNone':
+    'Henüz gizli anahtar yok. Bir tane üretin, sonra sunucunuza koyun.',
+  'settings.memberRecognition.identity.previous': 'Önceki anahtar',
+  'settings.memberRecognition.identity.secretVersion': 'Anahtar sürümü',
+  'settings.memberRecognition.identity.secretCreated': 'Üretildi',
+  'settings.memberRecognition.identity.previousUntil':
+    '{version}. sürüm, {date} tarihine kadar sunucunuzdan kabul edilir',
+  'settings.memberRecognition.identity.browserWarning':
+    'Bu anahtarı yalnızca sunucunuzda saklayın. Asla bir web sayfasına, bir betiğe ya da ziyaretçinin indirebileceği bir uygulamaya koymayın: anahtara sahip olan herkes istediği üye olarak giriş yapabilir.',
+  'settings.memberRecognition.identity.graceLabel': 'Eski anahtar kaç gün geçerli kalsın',
+  'settings.memberRecognition.identity.graceHint.one':
+    'Yenisini sunucunuza koyarken eski anahtarla yapılan imzalar {count} gün daha kabul edilir.',
+  'settings.memberRecognition.identity.graceHint.other':
+    'Yenisini sunucunuza koyarken eski anahtarla yapılan imzalar {count} gün daha kabul edilir.',
+  'settings.memberRecognition.identity.graceNone':
+    '0 eski anahtarı hemen geçersiz kılar: sunucunuz yenisini kullanana kadar üyeler tanınmaz.',
+  'settings.memberRecognition.identity.issueButton': 'Gizli anahtar üret',
+  'settings.memberRecognition.identity.rotateButton': 'Yeni gizli anahtar üret',
+  'settings.memberRecognition.identity.rotateConfirmTitle':
+    'Yeni kimlik gizli anahtarı üretilsin mi?',
+  'settings.memberRecognition.identity.rotateConfirmGrace.one':
+    'Yeni anahtar yalnızca bir kez gösterilir. Eskisi {count} gün daha kabul edilir; sunucunuzu bu süre içinde güncelleyin.',
+  'settings.memberRecognition.identity.rotateConfirmGrace.other':
+    'Yeni anahtar yalnızca bir kez gösterilir. Eskisi {count} gün daha kabul edilir; sunucunuzu bu süre içinde güncelleyin.',
+  'settings.memberRecognition.identity.rotateConfirmNone':
+    'Eski anahtar hemen çalışmaz olur. Sunucunuz yenisini kullanana kadar giriş yapmış üyeler tanınmaz.',
+  'settings.memberRecognition.identity.rotateConfirm': 'Anahtarı üret',
+  'settings.memberRecognition.identity.issueFailure': 'Gizli anahtar üretilemedi.',
+  'settings.memberRecognition.identity.recentUnavailable': 'Son imzaların sayıları okunamadı.',
+  'settings.memberRecognition.identity.recentHeading': 'Son {days} gündeki imzalar',
+  'settings.memberRecognition.identity.recentVerified.one': '{count} doğrulandı',
+  'settings.memberRecognition.identity.recentVerified.other': '{count} doğrulandı',
+  'settings.memberRecognition.identity.recentNoneRefused': 'Yok sayılan yok.',
+  'settings.memberRecognition.identity.reason.disabled': 'Kapalıyken yok sayıldı',
+  'settings.memberRecognition.identity.reason.malformed': 'Yok sayıldı: beklenen biçimde değil',
+  'settings.memberRecognition.identity.reason.expired': 'Yok sayıldı: beş dakikadan eski',
+  'settings.memberRecognition.identity.reason.future':
+    'Yok sayıldı: zaman bizim saatimizin ilerisinde',
+  'settings.memberRecognition.identity.reason.bad_signature': 'Yok sayıldı: imza yanlış',
+  'settings.memberRecognition.identity.reason.replayed':
+    'Yok sayıldı: daha önce bir kez kullanıldı',
+  'settings.memberRecognition.identity.reason.replay_unchecked':
+    'Yok sayıldı: yeniden kullanım denetlenemedi',
+  'settings.memberRecognition.identity.dev.title': 'Geliştiriciniz için',
+  'settings.memberRecognition.identity.dev.server':
+    'İmzayı sunucunuzda, giriş yapmış üye için, ona her sayfa hazırladığınızda üretin. Gizli anahtar sunucudan hiç çıkmaz; imzalı sonuç da bir önbelleğin ya da CDN’in başkasına sunabileceği bir sayfaya konmaz.',
+  'settings.memberRecognition.identity.dev.message':
+    'İmza, anahtar olarak gizli anahtarın kullanıldığı HMAC-SHA256’dır, küçük harfli onaltılık yazılır ve şu satırları kapsar (olmayan kullanıcı adı ya da e-posta boş satırdır; hiçbir alanda satır sonu olamaz; user_id metindir, sayısal numara da metin olarak imzalanıp gönderilir):',
+  'settings.memberRecognition.identity.dev.clock':
+    'ts saniye cinsinden şimdiki Unix zamanıdır. {minutes} dakikadan eski ya da bir kez kullanılmış imza yok sayılır — her sayfa için yenisini imzalayın.',
+  'settings.memberRecognition.identity.dev.page':
+    'Sonucu sayfa yüklendikten sonra siyahtus("identify", …) ile widget’a verin — tek sayfalık sitede, üye giriş yaptıktan hemen sonra.',
+  'settings.memberRecognition.identity.dev.logout':
+    'Üye çıkış yaptığında siyahtus("logout") çağırın; o bilgisayardaki bir sonraki kişi yeni ziyaretçi olur.',
+  'settings.memberRecognition.identity.secretTitle': 'Kimlik gizli anahtarınız',
+  'settings.memberRecognition.identity.secretDescription':
+    'Şimdi kopyalayıp sunucunuzda saklayın. Bir daha gösterilmez; kaybolursa yenisini üretin.',
+  'settings.memberRecognition.identity.copyAriaLabel': 'Kimlik gizli anahtarını kopyala',
+  'settings.memberRecognition.identity.secretDone': 'Sakladım',
 
   // SLA — SlaPolicy.tsx
   'settings.sla.title': 'SLA',

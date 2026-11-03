@@ -25,6 +25,17 @@ interface View {
     previous_valid_until: string | null;
   } | null;
   tokens_revoked_before: string | null;
+  signed_identity: {
+    enabled: boolean;
+    active: boolean;
+    secret: {
+      version: number;
+      created_at: string;
+      previous_version: number | null;
+      previous_valid_until: string | null;
+    } | null;
+    recent: { days: number; verified: number; refused: Record<string, number> } | null;
+  };
   updated_at: string | null;
 }
 
@@ -33,8 +44,17 @@ const DEFAULTS: View = {
   possible_matches_enabled: true,
   key: null,
   tokens_revoked_before: null,
+  signed_identity: {
+    enabled: false,
+    active: false,
+    secret: null,
+    recent: { days: 7, verified: 0, refused: {} },
+  },
   updated_at: null,
 };
+
+/** What the issuing response carries, this once. */
+const ISSUED_SECRET = 'sti_shown-once-in-the-dialog-0123456789abcdefgh';
 
 function okJson(body: unknown): Response {
   return {
@@ -59,6 +79,7 @@ let patches: Array<Record<string, unknown>>;
 let rotations: Array<Record<string, unknown>>;
 let revocations: number;
 let nextRotateFails: boolean;
+let issues: Array<Record<string, unknown>>;
 
 function stubFetch(view: View): void {
   current = view;
@@ -66,6 +87,7 @@ function stubFetch(view: View): void {
   rotations = [];
   revocations = 0;
   nextRotateFails = false;
+  issues = [];
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -74,12 +96,42 @@ function stubFetch(view: View): void {
       if (path.endsWith('/settings/member-recognition') && method === 'PATCH') {
         const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
         patches.push(body);
+        const { signed_identity_enabled: enabled, ...rest } = body;
         current = {
           ...current,
-          ...body,
+          ...rest,
+          ...(typeof enabled === 'boolean'
+            ? {
+                signed_identity: {
+                  ...current.signed_identity,
+                  enabled,
+                  active: enabled && current.signed_identity.secret !== null,
+                },
+              }
+            : {}),
           updated_at: '2026-10-16T10:00:00.000Z',
         } as View;
         return okJson(current);
+      }
+      if (path.endsWith('/identity-secret') && method === 'POST') {
+        const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+        issues.push(body);
+        const previous = current.signed_identity.secret;
+        current = {
+          ...current,
+          signed_identity: {
+            ...current.signed_identity,
+            active: current.signed_identity.enabled,
+            secret: {
+              version: (previous?.version ?? 0) + 1,
+              created_at: '2026-11-03T10:00:00.000Z',
+              previous_version: previous && body['grace_period_seconds'] ? previous.version : null,
+              previous_valid_until:
+                previous && body['grace_period_seconds'] ? '2026-11-04T10:00:00.000Z' : null,
+            },
+          },
+        };
+        return okJson({ ...current, identity_secret: ISSUED_SECRET });
       }
       if (path.endsWith('/rotate-key') && method === 'POST') {
         if (nextRotateFails) return errorJson(500, 'The key store is busy.');
@@ -325,6 +377,159 @@ describe('MemberRecognition', () => {
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Rotate the key' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Forget all visitors' })).not.toBeInTheDocument();
+  });
+
+  // --- Operator-signed identity (ID-03 · K28 · tm 388) -----------------------
+
+  it('says signed identity is off by default, and that switching it on without a secret checks nothing', async () => {
+    const user = userEvent.setup();
+    renderScreen();
+
+    expect(await screen.findByText(/Off: signed identities are ignored/)).toBeVisible();
+    expect(screen.getByText(/No secret yet\./)).toBeVisible();
+    // A workspace security switch: a draft until Save (GV-06), not an instant write.
+    await user.click(screen.getByRole('checkbox', { name: /Accept signed identities/ }));
+    expect(patches).toHaveLength(0);
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(patches).toHaveLength(1));
+    // The switch alone — not mistaken for a lifetime or match change.
+    expect(patches[0]).toStrictEqual({ signed_identity_enabled: true });
+    expect(await screen.findByText(/On, but no secret has been issued yet/)).toBeVisible();
+  });
+
+  it('shows the issued secret exactly once, in a dialog that warns it never goes in a browser; closing discards it', async () => {
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.click(await screen.findByRole('button', { name: 'Issue a secret' }));
+    await waitFor(() => expect(issues).toHaveLength(1));
+    const dialog = await screen.findByRole('dialog', { name: 'Your identity secret' });
+    expect(within(dialog).getByTestId('member-identity-secret')).toHaveTextContent(ISSUED_SECRET);
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(/Never put it in a web page/);
+
+    await user.click(within(dialog).getByRole('button', { name: 'I have stored it' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    // Described from now on — the secret itself is nowhere on the screen.
+    expect(document.body).not.toHaveTextContent(ISSUED_SECRET);
+    expect(screen.getByRole('button', { name: 'Issue a new secret' })).toBeVisible();
+  });
+
+  it('asks before issuing a new secret, with the old one accepted for the grace window it sends in seconds', async () => {
+    const user = userEvent.setup();
+    stubFetch({
+      ...DEFAULTS,
+      signed_identity: {
+        enabled: true,
+        active: true,
+        secret: {
+          version: 2,
+          created_at: '2026-11-01T08:00:00.000Z',
+          previous_version: null,
+          previous_valid_until: null,
+        },
+        recent: { days: 7, verified: 0, refused: {} },
+      },
+    });
+    renderScreen();
+
+    expect(await screen.findByText(/On: signed identities are checked/)).toBeVisible();
+    const grace = screen.getByLabelText('Keep the old secret for (days)');
+    expect(grace).toHaveValue(1);
+    await user.clear(grace);
+    await user.type(grace, '3');
+    await user.click(screen.getByRole('button', { name: 'Issue a new secret' }));
+    const confirm = screen.getByRole('dialog', { name: 'Issue a new identity secret?' });
+    expect(confirm).toHaveTextContent('still accepted for 3 days');
+    expect(issues).toHaveLength(0);
+
+    await user.click(within(confirm).getByRole('button', { name: 'Issue secret' }));
+    await waitFor(() => expect(issues).toHaveLength(1));
+    expect(issues[0]).toStrictEqual({ grace_period_seconds: 3 * DAY });
+    expect(await screen.findByRole('dialog', { name: 'Your identity secret' })).toBeVisible();
+  });
+
+  it('names the emergency rotation of the secret when the grace window is 0, and holds it to 0–30 days', async () => {
+    const user = userEvent.setup();
+    stubFetch({
+      ...DEFAULTS,
+      signed_identity: {
+        enabled: true,
+        active: true,
+        secret: {
+          version: 1,
+          created_at: '2026-11-01T08:00:00.000Z',
+          previous_version: null,
+          previous_valid_until: null,
+        },
+        recent: null,
+      },
+    });
+    renderScreen();
+
+    const grace = await screen.findByLabelText('Keep the old secret for (days)');
+    await user.clear(grace);
+    await user.type(grace, '31');
+    expect(screen.getByRole('button', { name: 'Issue a new secret' })).toBeDisabled();
+    await user.clear(grace);
+    await user.type(grace, '0');
+    expect(screen.getByText(/0 retires the old secret at once/)).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Issue a new secret' }));
+    expect(screen.getByRole('dialog', { name: 'Issue a new identity secret?' })).toHaveTextContent(
+      /stops working at once/,
+    );
+    // The counters could not be read: said so, not drawn as zeros.
+    expect(screen.getByText(/could not be read/)).toBeVisible();
+  });
+
+  it('counts the last week’s signatures, verified and ignored by reason', async () => {
+    stubFetch({
+      ...DEFAULTS,
+      signed_identity: {
+        enabled: true,
+        active: true,
+        secret: {
+          version: 1,
+          created_at: '2026-11-01T08:00:00.000Z',
+          previous_version: null,
+          previous_valid_until: null,
+        },
+        recent: { days: 7, verified: 12, refused: { bad_signature: 3, expired: 1 } },
+      },
+    });
+    renderScreen();
+
+    expect(await screen.findByTestId('signed-identity-verified')).toHaveTextContent('12 verified');
+    expect(screen.getByText(/Ignored: wrong signature/)).toHaveTextContent('3');
+    expect(screen.getByText(/Ignored: older than five minutes/)).toHaveTextContent('1');
+    expect(screen.queryByText(/Ignored: already used once/)).not.toBeInTheDocument();
+  });
+
+  it('gives the developer the message to sign and server examples, never a browser one', async () => {
+    renderScreen();
+    expect(await screen.findByText('For your developer')).toBeInTheDocument();
+    const notes = screen.getByText('For your developer').closest('details')!;
+    expect(notes).toHaveTextContent(
+      'siyahtus-identify-v1\\n<user_id>\\n<username>\\n<email>\\n<ts>',
+    );
+    expect(notes).toHaveTextContent("createHmac('sha256', process.env.SIYAHTUS_IDENTITY_SECRET)");
+    expect(notes).toHaveTextContent(
+      "hash_hmac('sha256', $message, getenv('SIYAHTUS_IDENTITY_SECRET'))",
+    );
+    // The contract's user_id is a string: a numeric id sent as a number is
+    // refused as malformed, so both examples sign and send the id as text.
+    expect(notes).toHaveTextContent('const id = String(user.id);');
+    expect(notes).toHaveTextContent('return { user_id: id,');
+    expect(notes).toHaveTextContent("$id = (string) $user['id'];");
+    expect(notes).toHaveTextContent("return ['user_id' => $id,");
+    expect(notes).not.toHaveTextContent('user_id: user.id');
+    expect(notes).toHaveTextContent('siyahtus("logout")');
+  });
+
+  it('is read-only for signed identity without write access: the status, a locked switch, no secret button', async () => {
+    renderScreen(false);
+    expect(await screen.findByText(/Off: signed identities are ignored/)).toBeVisible();
+    expect(screen.getByRole('checkbox', { name: /Accept signed identities/ })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Issue a secret' })).not.toBeInTheDocument();
   });
 
   it('renders in Turkish', async () => {

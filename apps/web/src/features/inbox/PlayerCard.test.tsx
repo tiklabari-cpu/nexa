@@ -75,6 +75,9 @@ function context(overrides: Partial<CustomerContext> = {}): CustomerContext {
       id: 'cust-1',
       name: 'Ayşe K.',
       username: 'ayse_k',
+      username_verified: false,
+      platform_user_id: null,
+      identity_verified_at: null,
       email: 'ayse@example.com',
       country_code: 'TR',
       country: 'Turkey',
@@ -145,6 +148,9 @@ describe('PlayerCard (IN-02)', () => {
           id: 'cust-1',
           name: null,
           username: null,
+          username_verified: false,
+          platform_user_id: null,
+          identity_verified_at: null,
           email: null,
           country_code: null,
           country: null,
@@ -162,6 +168,44 @@ describe('PlayerCard (IN-02)', () => {
     expect(within(card).getAllByText('—')).toHaveLength(4);
     expect(within(card).queryByText('Hidden')).not.toBeInTheDocument();
     expect(within(card).queryByText('Player’s own claim, not verified')).not.toBeInTheDocument();
+  });
+
+  it('badges a member the operator’s site vouched for, and their signed username as signed (ID-03 · K28)', async () => {
+    const verified = context();
+    verified.customer = {
+      ...verified.customer,
+      username_verified: true,
+      platform_user_id: 'player-388',
+      identity_verified_at: '2026-11-03T09:00:00.000Z',
+    };
+    answer({ '': verified });
+    renderPanel();
+
+    const card = await screen.findByTestId('player-card');
+    expect(within(card).getByText('Verified member')).toBeInTheDocument();
+    expect(within(card).getByText('Signed by your website')).toBeInTheDocument();
+    expect(within(card).queryByText('Player’s own claim, not verified')).not.toBeInTheDocument();
+    expect(within(card).getByText('Member ID')).toBeInTheDocument();
+    expect(within(card).getByText('player-388')).toBeInTheDocument();
+  });
+
+  it('keeps the member id hidden from a caller who may not see contacts, while still badging the member', async () => {
+    const masked = context({ contact_visible: false });
+    masked.customer = {
+      ...masked.customer,
+      username: null,
+      email: null,
+      username_verified: true,
+      platform_user_id: null,
+      identity_verified_at: '2026-11-03T09:00:00.000Z',
+    };
+    answer({ '': masked });
+    renderPanel();
+
+    const card = await screen.findByTestId('player-card');
+    expect(within(card).getByText('Verified member')).toBeInTheDocument();
+    // Username, email and the member id.
+    expect(within(card).getAllByText('Hidden')).toHaveLength(3);
   });
 
   it('reads "Hidden", not "—", for a caller without customers.contact.view', async () => {

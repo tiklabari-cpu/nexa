@@ -1177,7 +1177,11 @@ describe('module parity matrix — what is still owed', () => {
       // operator's own page embedded in the web Inbox's Details pane (KN-05), defined by an
       // admin in web Settings. The handset embeds no third-party page (no sandboxed frame,
       // no postMessage bridge) and has no Integrations settings, so nothing here re-scopes.
-      contractEndpoints: 400,
+      // 400 -> 401 with `/settings/member-recognition/identity-secret` (tm 388) — the
+      // operator-signed identity's secret (ID-03 · K28), issued once in web Settings →
+      // Security → Member recognition. The handset has no Security settings, and its
+      // player view reads the same customer record, so nothing here re-scopes.
+      contractEndpoints: 401,
       scopeBoundaries: 1,
     });
   });

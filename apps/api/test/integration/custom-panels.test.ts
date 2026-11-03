@@ -427,6 +427,25 @@ describe('custom panels (KN-05 · tm 379)', () => {
       expect(claims.exp - claims.iat).toBe(300);
       expect(new Date(body.expires_at).getTime()).toBe(claims.exp * 1000);
 
+      // The username the operator's site signed (ID-03 · K28 · tm 388) reaches
+      // the panel as verified; a typed one never does.
+      const { customerId } = await owner.chat.findUniqueOrThrow({
+        where: { id: chatId },
+        select: { customerId: true },
+      });
+      await owner.customer.update({
+        where: { id: customerId },
+        data: {
+          platformUserId: 'player-388',
+          identityVerifiedAt: new Date(),
+          usernameVerified: true,
+        },
+      });
+      const signed = await mint(agentA, chatId, panel.id);
+      expect(claimsOf((signed.json() as TokenBody).token)).toMatchObject({
+        player: { username: USERNAME, username_verified: true },
+      });
+
       // KK: the token is no good five minutes on.
       const later = new Date((claims.exp + 1) * 1000);
       expect(

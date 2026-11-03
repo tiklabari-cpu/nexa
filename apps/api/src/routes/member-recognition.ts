@@ -8,7 +8,8 @@
  *
  *   - Settings › Security › Member recognition — the token lifetime and the
  *     possible-match switch, the signing key's rotation, and forgetting every
- *     returning visitor at once. `access_rules` plus `minimumRole: admin`, the
+ *     returning visitor at once; the operator-signed identity's switch and
+ *     secret (K28 · tm 388). `access_rules` plus `minimumRole: admin`, the
  *     gate of every other Security setting.
  *   - Forgetting one member's browsers, from the customer's side. `customers:rw`
  *     — admins and above today; the Agent role reaches it when the RL-02
@@ -24,7 +25,11 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { MEMBER_KEY_ROTATION_GRACE, MEMBER_TOKEN_TTL } from '@siyahtus/types';
+import {
+  MEMBER_IDENTITY_SECRET_ROTATION_GRACE,
+  MEMBER_KEY_ROTATION_GRACE,
+  MEMBER_TOKEN_TTL,
+} from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { selfAccountId } from '../services/auth/principal.js';
@@ -55,6 +60,7 @@ const settingsBody = z
       .max(MEMBER_TOKEN_TTL.maxSeconds)
       .optional(),
     possible_matches_enabled: z.boolean().optional(),
+    signed_identity_enabled: z.boolean().optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -65,6 +71,16 @@ const rotateBody = z.object({
     .min(MEMBER_KEY_ROTATION_GRACE.minSeconds)
     .max(MEMBER_KEY_ROTATION_GRACE.maxSeconds)
     .default(MEMBER_KEY_ROTATION_GRACE.defaultSeconds),
+});
+
+/** The identity secret's window: the time the operator has to deploy the new one (tm 388). */
+const rotateSecretBody = z.object({
+  grace_period_seconds: z
+    .number()
+    .int()
+    .min(MEMBER_IDENTITY_SECRET_ROTATION_GRACE.minSeconds)
+    .max(MEMBER_IDENTITY_SECRET_ROTATION_GRACE.maxSeconds)
+    .default(MEMBER_IDENTITY_SECRET_ROTATION_GRACE.defaultSeconds),
 });
 
 // Lower-cased once here: a uuid is the same uuid in either case, and the link
@@ -102,6 +118,9 @@ export default async function memberRecognitionRoutes(app: FastifyInstance): Pro
         ...(body.possible_matches_enabled !== undefined
           ? { possibleMatchesEnabled: body.possible_matches_enabled }
           : {}),
+        ...(body.signed_identity_enabled !== undefined
+          ? { signedIdentityEnabled: body.signed_identity_enabled }
+          : {}),
       };
 
       const view = await request.withTenant(async (tx) => {
@@ -138,6 +157,12 @@ export default async function memberRecognitionRoutes(app: FastifyInstance): Pro
                   possible_matches_after: after.possible_matches_enabled,
                 }
               : {}),
+            ...(body.signed_identity_enabled !== undefined
+              ? {
+                  signed_identity_before: before.signed_identity.enabled,
+                  signed_identity_after: after.signed_identity.enabled,
+                }
+              : {}),
           },
         });
         return after;
@@ -172,6 +197,41 @@ export default async function memberRecognitionRoutes(app: FastifyInstance): Pro
       });
 
       return reply.send(view);
+    },
+  );
+
+  // The operator-signed identity's secret (ID-03 · K28 · tm 388): issued, or
+  // replaced with a window for the operator to deploy the new one. The one
+  // response that ever carries it, so nothing may keep a copy on the way —
+  // `no-store`, and the audit entry names versions only.
+  app.post(
+    '/settings/member-recognition/identity-secret',
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      // The body is optional: no body is the routine rotation, a day's grace.
+      const body = parse(rotateSecretBody, request.body ?? {});
+      const { licenseId } = request.tenant();
+
+      const { secret, view } = await request.withTenant(async (tx) => {
+        const rotated = await members.rotateIdentitySecret(
+          tx,
+          licenseId,
+          body.grace_period_seconds,
+        );
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'member_identity_secret.rotated',
+          target: `member_recognition:${licenseId}`,
+          metadata: {
+            version: rotated.version,
+            previous_version: rotated.previousVersion,
+            grace_period_seconds: rotated.previousVersion === null ? 0 : body.grace_period_seconds,
+          },
+        });
+        return { secret: rotated.secret, view: await members.view(tx, licenseId) };
+      });
+
+      reply.header('Cache-Control', 'no-store');
+      return reply.send({ ...view, identity_secret: secret });
     },
   );
 

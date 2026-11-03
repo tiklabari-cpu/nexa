@@ -13,7 +13,12 @@
         margin: 0 auto;
         max-width: 46rem;
         padding: 2rem 1.25rem 4rem;
-        font: 1rem/1.65 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        font:
+          1rem/1.65 system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
       }
       h1 {
         line-height: 1.25;
@@ -53,9 +58,9 @@
     <main>
       <h1>Kurulum rehberi</h1>
       <p>
-        SiyahTuş sohbet widget’ını sitenize eklemek için tek bir kod parçası yeterlidir. Bu
-        sayfa kodun nereden alınacağını, nereye yapıştırılacağını ve çalıştığının nasıl
-        anlaşılacağını anlatır. <a href="#english">English version below.</a>
+        SiyahTuş sohbet widget’ını sitenize eklemek için tek bir kod parçası yeterlidir. Bu sayfa
+        kodun nereden alınacağını, nereye yapıştırılacağını ve çalıştığının nasıl anlaşılacağını
+        anlatır. <a href="#english">English version below.</a>
       </p>
 
       <nav aria-label="İçindekiler">
@@ -65,6 +70,7 @@
           <li><a href="#gtm">Google Tag Manager ile</a></li>
           <li><a href="#platform">iGaming platformunun içerik panelinde</a></li>
           <li><a href="#noscript">JavaScript kapalı ziyaretçiler</a></li>
+          <li><a href="#kimlik">Giriş yapmış üyeyi tanıtın (operatör imzalı kimlik)</a></li>
           <li><a href="#sorun">Sorun giderme</a></li>
         </ul>
       </nav>
@@ -72,102 +78,189 @@
       <h2 id="kod">1. Kodu alın ve yapıştırın</h2>
       <ol>
         <li>
-          Kurulum sihirbazında ya da <strong>Ayarlar → Kanallar → Web sitesi widget’ları</strong>
-          bölümünde sitenizin alan adını girip <strong>Web sitesi ekle</strong>’ye basın. Alan adı
-          aynı anda güvenilir alan adları listesine de eklenir.
+          Kurulum sihirbazında ya da
+          <strong>Ayarlar → Kanallar → Web sitesi widget’ları</strong> bölümünde sitenizin alan
+          adını girip <strong>Web sitesi ekle</strong>’ye basın. Alan adı aynı anda güvenilir alan
+          adları listesine de eklenir.
         </li>
         <li>
           Çıkan kod kutusundaki <strong>Kodu kopyala</strong> düğmesine basın. Kodu siz
-          yapıştırmayacaksanız <strong>Geliştiriciyi davet et</strong> ile e-posta
-          programınızda hazır bir ileti açın.
+          yapıştırmayacaksanız <strong>Geliştiriciyi davet et</strong> ile e-posta programınızda
+          hazır bir ileti açın.
         </li>
         <li>
           Kodu sitenizin <strong>her sayfasında</strong>, kapanış <code>&lt;/body&gt;</code>
           etiketinden hemen önce yapıştırın. Kod şuna benzer:
         </li>
       </ol>
-      <pre>&lt;!-- SiyahTuş widget --&gt;
+      <pre>
+&lt;!-- SiyahTuş widget --&gt;
 &lt;script&gt;
   window.__siyahtus = { organizationId: "…", widgetOrigin: "https://…" };
 &lt;/script&gt;
 &lt;script async src="https://…/loader.js"&gt;&lt;/script&gt;
 &lt;noscript&gt;&lt;a href="https://…/chat.html?organization_id=…"&gt;Bizimle sohbet edin&lt;/a&gt;&lt;/noscript&gt;</pre>
       <p>
-        Kodu <strong>olduğu gibi</strong> yapıştırın; satırları değiştirmeyin. Görünümü
-        (renk, konum, dil) kodu değiştirmeden <strong>Ayarlar → Kanallar → Widget görünümü</strong>’nden
+        Kodu <strong>olduğu gibi</strong> yapıştırın; satırları değiştirmeyin. Görünümü (renk,
+        konum, dil) kodu değiştirmeden <strong>Ayarlar → Kanallar → Widget görünümü</strong>’nden
         ayarlarsınız.
       </p>
 
       <h2 id="dogrula">2. Çalıştığını doğrulayın</h2>
       <p>
-        Siteniz yayındayken herhangi bir sayfayı bir kez açın. Widget ilk kez yüklendiğinde
-        sitenin durumu <strong>“İlk mesaj bekleniyor”</strong>dan <strong>“Bağlı”</strong>’ya
-        döner; sihirbazda aynı satır kendiliğinden güncellenir, sayfayı yenilemeniz gerekmez.
-        Durumu istediğiniz zaman <strong>Ayarlar → Kanallar → Web sitesi widget’ları</strong>
+        Siteniz yayındayken herhangi bir sayfayı bir kez açın. Widget ilk kez yüklendiğinde sitenin
+        durumu <strong>“İlk mesaj bekleniyor”</strong>dan <strong>“Bağlı”</strong>’ya döner;
+        sihirbazda aynı satır kendiliğinden güncellenir, sayfayı yenilemeniz gerekmez. Durumu
+        istediğiniz zaman <strong>Ayarlar → Kanallar → Web sitesi widget’ları</strong>
         bölümünden görürsünüz.
       </p>
 
       <h2 id="gtm">3. Google Tag Manager ile</h2>
       <ol>
-        <li>Tag Manager’da <strong>Etiketler → Yeni</strong> deyin, tür olarak <strong>Özel HTML</strong> seçin.</li>
         <li>
-          HTML alanına SiyahTuş kodunun <strong>tamamını</strong> yapıştırın
-          (<code>&lt;script&gt;</code> ve <code>&lt;noscript&gt;</code> satırları dahil).
+          Tag Manager’da <strong>Etiketler → Yeni</strong> deyin, tür olarak
+          <strong>Özel HTML</strong> seçin.
         </li>
-        <li>Tetikleyici olarak <strong>Tüm Sayfalar</strong>’ı seçin, etiketi adlandırıp kaydedin.</li>
+        <li>
+          HTML alanına SiyahTuş kodunun <strong>tamamını</strong> yapıştırın (<code
+            >&lt;script&gt;</code
+          >
+          ve <code>&lt;noscript&gt;</code> satırları dahil).
+        </li>
+        <li>
+          Tetikleyici olarak <strong>Tüm Sayfalar</strong>’ı seçin, etiketi adlandırıp kaydedin.
+        </li>
         <li>
           <strong>Önizle</strong> ile sitenizde etiketin tetiklendiğini görün, sonra
           <strong>Gönder</strong> ile yayımlayın.
         </li>
       </ol>
       <p class="note">
-        Tag Manager, <code>&lt;noscript&gt;</code> satırını sayfaya her zaman koymayabilir. Bu
-        yedek bağlantı için zorunlu değildir; widget’ın kendisi <code>&lt;script&gt;</code>
+        Tag Manager, <code>&lt;noscript&gt;</code> satırını sayfaya her zaman koymayabilir. Bu yedek
+        bağlantı için zorunlu değildir; widget’ın kendisi <code>&lt;script&gt;</code>
         satırlarıyla çalışır.
       </p>
 
       <h2 id="platform">4. iGaming platformunun içerik panelinde</h2>
       <p>
-        BetConstruct, EveryMatrix gibi platformlar sitenin şablonuna kod eklemek için bir
-        “özel script”, “özel HTML” ya da “altbilgi kodu” alanı sunar. Menü adları platforma ve
-        sürüme göre değişir; adımlar aynıdır:
+        BetConstruct, EveryMatrix gibi platformlar sitenin şablonuna kod eklemek için bir “özel
+        script”, “özel HTML” ya da “altbilgi kodu” alanı sunar. Menü adları platforma ve sürüme göre
+        değişir; adımlar aynıdır:
       </p>
       <ol>
-        <li>İçerik / site yönetim panelinde <strong>tüm sayfalarda</strong> gösterilen altbilgi (footer) ya da sayfa sonu kod alanını bulun.</li>
+        <li>
+          İçerik / site yönetim panelinde <strong>tüm sayfalarda</strong> gösterilen altbilgi
+          (footer) ya da sayfa sonu kod alanını bulun.
+        </li>
         <li>SiyahTuş kodunun tamamını bu alana yapıştırıp kaydedin ve yayımlayın.</li>
-        <li>Önbellek ya da CDN kullanılıyorsa temizleyin, sonra sitenizi açıp <a href="#dogrula">doğrulayın</a>.</li>
+        <li>
+          Önbellek ya da CDN kullanılıyorsa temizleyin, sonra sitenizi açıp
+          <a href="#dogrula">doğrulayın</a>.
+        </li>
       </ol>
       <p class="note">
         Bazı platformlar özel script alanında <code>async</code> özniteliğini kaldırır ya da
         <code>&lt;script&gt;</code> etiketlerini süzer. Widget yine de çalışır, yalnızca geç
-        yüklenebilir. Hiç yüklenmiyorsa platform desteğinden “üçüncü taraf script” izni
-        isteyin; siteyi bozmadan eklenebilen bir alan yoksa bir sonraki bölümdeki barındırılan
-        sohbet sayfası bağlantısını sitenize düğme olarak koyabilirsiniz.
+        yüklenebilir. Hiç yüklenmiyorsa platform desteğinden “üçüncü taraf script” izni isteyin;
+        siteyi bozmadan eklenebilen bir alan yoksa bir sonraki bölümdeki barındırılan sohbet sayfası
+        bağlantısını sitenize düğme olarak koyabilirsiniz.
       </p>
 
       <h2 id="noscript">5. JavaScript kapalı ziyaretçiler</h2>
       <p>
-        Kodun sonundaki <code>&lt;noscript&gt;</code> satırı, tarayıcısında JavaScript kapalı
-        ya da bir reklam engelleyici yüzünden widget’ı göremeyen ziyaretçiye <strong>“Bizimle
-        sohbet edin”</strong> bağlantısı gösterir. Bağlantı, SiyahTuş’un barındırdığı tam sayfa
-        sohbet ekranını sizin çalışma alanınızla açar; bu sayfanın ayrıca bir güvenilir alan
-        adı tanımı gerektirmez. Bağlantı metni, kodu kopyaladığınız andaki widget dilinizle
-        yazılır. Daha önce yapıştırdığınız kodlar değişmez; yedek bağlantıyı istiyorsanız
+        Kodun sonundaki <code>&lt;noscript&gt;</code> satırı, tarayıcısında JavaScript kapalı ya da
+        bir reklam engelleyici yüzünden widget’ı göremeyen ziyaretçiye
+        <strong>“Bizimle sohbet edin”</strong> bağlantısı gösterir. Bağlantı, SiyahTuş’un
+        barındırdığı tam sayfa sohbet ekranını sizin çalışma alanınızla açar; bu sayfanın ayrıca bir
+        güvenilir alan adı tanımı gerektirmez. Bağlantı metni, kodu kopyaladığınız andaki widget
+        dilinizle yazılır. Daha önce yapıştırdığınız kodlar değişmez; yedek bağlantıyı istiyorsanız
         güncel kodu yeniden kopyalayıp yapıştırın.
       </p>
 
-      <h2 id="sorun">6. Sorun giderme</h2>
+      <h2 id="kimlik">6. Giriş yapmış üyeyi tanıtın (operatör imzalı kimlik)</h2>
+      <p>
+        İsteğe bağlıdır. Siteniz hangi üyenin giriş yaptığını bilir; sunucunuz o üyenin numarasını
+        imzalayıp widget’a verirse oyuncu her cihazda aynı
+        <strong>doğrulanmış üye</strong> olur ve ajanlarınız onu “Doğrulanmış üye” rozetiyle görür.
+        İmza gelmezse bugünkü tanıma sürer: ziyaretçi tarayıcısından tanınır, gerisini ajan onaylar.
+      </p>
+      <ol>
+        <li>
+          <strong>Ayarlar → Güvenlik → Üye tanıma</strong> ekranında “Operatör imzalı kimlik”
+          kartından <strong>Gizli anahtar üret</strong>’e basın. Anahtar yalnızca bir kez
+          gösterilir; kopyalayıp sunucunuzun ortam değişkenine koyun (ör.
+          <code>SIYAHTUS_IDENTITY_SECRET</code>), sonra anahtarı açın.
+        </li>
+        <li>
+          Sunucunuz giriş yapmış üye için her sayfada bir imza üretir: anahtar gizli anahtarın
+          kendisi olan HMAC-SHA256, küçük harfli onaltılık, şu satırlar üzerinden (olmayan kullanıcı
+          adı ya da e-posta boş satırdır; hiçbir alanda satır sonu olamaz):
+          <code
+            >siyahtus-identify-v1\n&lt;user_id&gt;\n&lt;username&gt;\n&lt;email&gt;\n&lt;ts&gt;</code
+          >. <code>user_id</code> metindir: sayısal üye numarasını da metne çevirip imzalayın ve
+          öyle gönderin — sayı olarak giden kimlik yok sayılır. <code>ts</code> saniye cinsinden
+          şimdiki Unix zamanıdır; beş dakikadan eski ya da bir kez kullanılmış imza yok sayılır.
+          İmzalı sonucu yalnızca o üyeye giden yanıta koyun — bir önbelleğin ya da CDN’in başka bir
+          ziyaretçiye sunabileceği sayfaya asla.
+        </li>
+        <li>
+          Sayfa yüklendikten sonra sonucu <code>siyahtus('identify', …)</code> ile verin. Tek
+          sayfalık sitede bunu üye giriş yaptıktan hemen sonra yapın; üye çıkış yaptığında
+          <code>siyahtus('logout')</code> çağırın.
+        </li>
+      </ol>
+      <p><strong>Node.js</strong></p>
+      <pre>
+const crypto = require('node:crypto');
+
+function siyahtusIdentity(user) {
+  const id = String(user.id);
+  const ts = Math.floor(Date.now() / 1000);
+  const message = ['siyahtus-identify-v1', id, user.username || '', user.email || '', String(ts)].join('\n');
+  const user_hash = crypto
+    .createHmac('sha256', process.env.SIYAHTUS_IDENTITY_SECRET)
+    .update(message)
+    .digest('hex');
+  return { user_id: id, username: user.username || '', email: user.email || '', ts, user_hash };
+}</pre>
+      <p><strong>PHP</strong></p>
+      <pre>
+&lt;?php
+function siyahtus_identity(array $user): array {
+    $id = (string) $user['id'];
+    $ts = time();
+    $message = implode("\n", ['siyahtus-identify-v1', $id, $user['username'] ?? '', $user['email'] ?? '', (string) $ts]);
+    $hash = hash_hmac('sha256', $message, getenv('SIYAHTUS_IDENTITY_SECRET'));
+    return ['user_id' =&gt; $id, 'username' =&gt; $user['username'] ?? '', 'email' =&gt; $user['email'] ?? '', 'ts' =&gt; $ts, 'user_hash' =&gt; $hash];
+}</pre>
+      <p><strong>Sayfada</strong></p>
+      <pre>
+&lt;script&gt;
+  window.addEventListener('load', function () {
+    siyahtus('identify', &lt;?= json_encode(siyahtus_identity($user), JSON_HEX_TAG | JSON_HEX_AMP) ?&gt;);
+  });
+&lt;/script&gt;</pre>
+      <p>
+        <strong>Gizli anahtar asla tarayıcıya konmaz.</strong> İmzayı yalnızca sunucunuz üretir;
+        anahtarı bir web sayfasına, bir betiğe, bir etiket yöneticisine ya da ziyaretçinin
+        indirebileceği bir uygulamaya koymayın — anahtara sahip olan herkes istediği üye olarak
+        giriş yapabilir. Anahtar sızdıysa aynı ekranda geçiş süresini 0 yapıp yenisini üretin.
+        Ayarlar ekranındaki “Son 7 gündeki imzalar” sayacı kaç imzanın doğrulandığını ve yok
+        sayılanların nedenini gösterir; yanlış imza oyuncuya hiçbir zaman hata olarak görünmez.
+      </p>
+
+      <h2 id="sorun">7. Sorun giderme</h2>
       <ul>
         <li>
           <strong>Durum “İlk mesaj bekleniyor”da kalıyor.</strong> Kodun sayfada gerçekten
-          bulunduğunu tarayıcıda “sayfa kaynağını görüntüle” ile kontrol edin; sonra sitenin
-          alan adının Ayarlar’daki <strong>Güvenilir alan adları</strong> listesinde olduğundan
-          emin olun.
+          bulunduğunu tarayıcıda “sayfa kaynağını görüntüle” ile kontrol edin; sonra sitenin alan
+          adının Ayarlar’daki <strong>Güvenilir alan adları</strong> listesinde olduğundan emin
+          olun.
         </li>
         <li>
           <strong>Widget görünmüyor.</strong> Sitenizin İçerik Güvenlik Politikası
-          (Content-Security-Policy) <code>script-src</code> ve <code>frame-src</code>
-          için kodun <code>widgetOrigin</code> adresine izin vermelidir.
+          (Content-Security-Policy) <code>script-src</code> ve <code>frame-src</code> için kodun
+          <code>widgetOrigin</code> adresine izin vermelidir.
         </li>
         <li>
           <strong>Alan adı bir alt alan adı.</strong> <code>www.ornek.com</code> ile
@@ -180,16 +273,16 @@
       <section id="english" lang="en">
         <h1>Installation guide</h1>
         <p>
-          One snippet puts the SiyahTuş chat widget on your site. This page covers where to get
-          it, where to paste it and how to tell it works.
+          One snippet puts the SiyahTuş chat widget on your site. This page covers where to get it,
+          where to paste it and how to tell it works.
         </p>
 
         <h2>1. Get the code and paste it</h2>
         <ol>
           <li>
             In the setup wizard, or under <strong>Settings → Channels → Website widgets</strong>,
-            enter your site’s domain and press <strong>Add website</strong>. The domain is added
-            to your trusted domains at the same time.
+            enter your site’s domain and press <strong>Add website</strong>. The domain is added to
+            your trusted domains at the same time.
           </li>
           <li>
             Press <strong>Copy code</strong> in the code box. If someone else will paste it,
@@ -198,22 +291,29 @@
           <li>
             Paste it on <strong>every page</strong>, immediately before the closing
             <code>&lt;/body&gt;</code> tag, exactly as copied. Look and feel (colour, position,
-            language) is set under <strong>Settings → Channels → Widget appearance</strong> without touching the code.
+            language) is set under <strong>Settings → Channels → Widget appearance</strong> without
+            touching the code.
           </li>
         </ol>
 
         <h2>2. Check that it works</h2>
         <p>
-          Open any page of your live site once. The first time the widget loads, the site’s
-          status changes from <strong>“Waiting for first message”</strong> to
-          <strong>“Connected”</strong>; in the wizard the same line updates by itself.
+          Open any page of your live site once. The first time the widget loads, the site’s status
+          changes from <strong>“Waiting for first message”</strong> to <strong>“Connected”</strong>;
+          in the wizard the same line updates by itself.
         </p>
 
         <h2>3. With Google Tag Manager</h2>
         <ol>
           <li>Create a tag of type <strong>Custom HTML</strong>.</li>
-          <li>Paste the <strong>whole</strong> snippet, <code>&lt;script&gt;</code> and <code>&lt;noscript&gt;</code> lines included.</li>
-          <li>Trigger it on <strong>All Pages</strong>, save, check it fires in <strong>Preview</strong>, then <strong>Submit</strong>.</li>
+          <li>
+            Paste the <strong>whole</strong> snippet, <code>&lt;script&gt;</code> and
+            <code>&lt;noscript&gt;</code> lines included.
+          </li>
+          <li>
+            Trigger it on <strong>All Pages</strong>, save, check it fires in
+            <strong>Preview</strong>, then <strong>Submit</strong>.
+          </li>
         </ol>
         <p class="note">
           Tag Manager may not place the <code>&lt;noscript&gt;</code> line on the page. That is
@@ -222,38 +322,81 @@
 
         <h2>4. In an iGaming platform’s content panel</h2>
         <p>
-          Platforms such as BetConstruct or EveryMatrix offer a “custom script”, “custom HTML”
-          or “footer code” field. Names differ by platform and version; the steps do not: find
-          the footer field shown on <strong>all pages</strong>, paste the whole snippet, save and
+          Platforms such as BetConstruct or EveryMatrix offer a “custom script”, “custom HTML” or
+          “footer code” field. Names differ by platform and version; the steps do not: find the
+          footer field shown on <strong>all pages</strong>, paste the whole snippet, save and
           publish, clear any cache or CDN, then <a href="#dogrula">check</a>.
         </p>
         <p class="note">
-          Some platforms strip <code>async</code> or filter <code>&lt;script&gt;</code> tags in
-          that field. The widget then loads later, or not at all — ask the platform to allow a
-          third-party script. If no safe field exists, put the hosted chat page link on your
-          site as a button instead.
+          Some platforms strip <code>async</code> or filter <code>&lt;script&gt;</code> tags in that
+          field. The widget then loads later, or not at all — ask the platform to allow a
+          third-party script. If no safe field exists, put the hosted chat page link on your site as
+          a button instead.
         </p>
 
         <h2>5. Visitors with JavaScript off</h2>
         <p>
-          The <code>&lt;noscript&gt;</code> line at the end of the snippet shows a “Chat with
-          us” link to visitors whose browser has JavaScript off, or whose ad blocker hides the
-          widget. It opens SiyahTuş’s hosted full-page chat for your workspace; that page needs
-          no trusted-domain entry. The link text follows the widget language at the moment you
-          copy the code. Snippets you pasted earlier do not change — copy and paste the current
-          one if you want the fallback link.
+          The <code>&lt;noscript&gt;</code> line at the end of the snippet shows a “Chat with us”
+          link to visitors whose browser has JavaScript off, or whose ad blocker hides the widget.
+          It opens SiyahTuş’s hosted full-page chat for your workspace; that page needs no
+          trusted-domain entry. The link text follows the widget language at the moment you copy the
+          code. Snippets you pasted earlier do not change — copy and paste the current one if you
+          want the fallback link.
         </p>
 
-        <h2>6. Troubleshooting</h2>
+        <h2 id="identity">6. Recognise logged-in members (operator-signed identity)</h2>
+        <p>
+          Optional. Your site knows which member is logged in; when your server signs that member’s
+          id and hands it to the widget, the player is the same
+          <strong>verified member</strong> on every device, and your agents see them with a
+          “Verified member” badge. Without a signature today’s recognition carries on: the visitor
+          is recognised by their browser, and agents confirm the rest.
+        </p>
+        <ol>
+          <li>
+            Under <strong>Settings → Security → Member recognition</strong>, press
+            <strong>Issue a secret</strong> on the “Operator-signed identity” card. It is shown
+            once: copy it into your server’s environment (e.g.
+            <code>SIYAHTUS_IDENTITY_SECRET</code>), then switch the feature on.
+          </li>
+          <li>
+            For the logged-in member, your server signs on every page: HMAC-SHA256 keyed with the
+            secret itself, lowercase hex, over these lines (an absent username or e-mail is an empty
+            line; no field may contain a line break):
+            <code
+              >siyahtus-identify-v1\n&lt;user_id&gt;\n&lt;username&gt;\n&lt;email&gt;\n&lt;ts&gt;</code
+            >. <code>user_id</code> is text: turn a numeric member id into a string before you sign
+            and send it — an id sent as a number is ignored. <code>ts</code> is the current Unix
+            time in seconds; a signature older than five minutes, or used once already, is ignored.
+            Put the signed result only into the response that goes to that member — never into a
+            page a cache or CDN could serve to another visitor.
+          </li>
+          <li>
+            Once the page has loaded, hand the result to <code>siyahtus('identify', …)</code>. In a
+            single-page site do it right after the member signs in; when they sign out, call
+            <code>siyahtus('logout')</code>.
+          </li>
+        </ol>
+        <p>The Node.js, PHP and page examples above apply unchanged.</p>
+        <p>
+          <strong>The secret never goes in a browser.</strong> Only your server signs. Never put the
+          secret in a web page, a script, a tag manager or an app a visitor can download — anyone
+          who has it can sign in as any member. If it leaked, issue a new one on the same screen
+          with a grace period of 0. The “Signatures in the last 7 days” count on the settings screen
+          says how many were verified and why the others were ignored; a wrong signature is never
+          shown to the player as an error.
+        </p>
+
+        <h2>7. Troubleshooting</h2>
         <ul>
           <li>
-            <strong>Stuck on “Waiting for first message”.</strong> View the page source to
-            confirm the snippet is there, then make sure the site’s domain is in
+            <strong>Stuck on “Waiting for first message”.</strong> View the page source to confirm
+            the snippet is there, then make sure the site’s domain is in
             <strong>Trusted domains</strong> in Settings.
           </li>
           <li>
-            <strong>Widget not visible.</strong> Your site’s Content-Security-Policy must allow
-            the snippet’s <code>widgetOrigin</code> in <code>script-src</code> and
+            <strong>Widget not visible.</strong> Your site’s Content-Security-Policy must allow the
+            snippet’s <code>widgetOrigin</code> in <code>script-src</code> and
             <code>frame-src</code>.
           </li>
           <li>

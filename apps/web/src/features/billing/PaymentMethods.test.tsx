@@ -172,6 +172,52 @@ describe('PaymentOptionsSection', () => {
     expect(screen.queryByLabelText('Transaction ID (TXID)')).not.toBeInTheDocument();
   });
 
+  it('shows the team’s reason for rejecting the last request, with the form to ask again', async () => {
+    serve(options(), [
+      cryptoRequest({
+        status: 'rejected',
+        closed_reason: 'Billing name does not match the company record.',
+        closed_at: '2026-11-02T10:00:00.000Z',
+      }),
+    ]);
+    renderUi(<PaymentOptionsSection canManage />);
+    await userEvent.click(await screen.findByRole('tab', { name: 'Crypto (USDT)' }));
+    const note = await screen.findByTestId('crypto-rejected-reason');
+    expect(note).toHaveTextContent('Your last crypto request was rejected.');
+    expect(note).toHaveTextContent('Reason from the SiyahTuş team');
+    expect(note).toHaveTextContent('Billing name does not match the company record.');
+    expect(screen.getByRole('button', { name: 'Request an address' })).toBeInTheDocument();
+  });
+
+  it('shows the reason to a member who cannot ask again, without a retry hint', async () => {
+    serve(options(), [cryptoRequest({ status: 'rejected', closed_reason: 'Wrong network.' })]);
+    renderUi(<PaymentOptionsSection canManage={false} />);
+    await userEvent.click(await screen.findByRole('tab', { name: 'Crypto (USDT)' }));
+    const note = await screen.findByTestId('crypto-rejected-reason');
+    expect(note).toHaveTextContent('Wrong network.');
+    expect(note).not.toHaveTextContent('request an address again');
+    expect(screen.queryByRole('button', { name: 'Request an address' })).not.toBeInTheDocument();
+  });
+
+  it('shows no reason box when the team rejected the request without giving one', async () => {
+    serve(options(), [cryptoRequest({ status: 'rejected', closed_reason: null })]);
+    renderUi(<PaymentOptionsSection canManage />);
+    await userEvent.click(await screen.findByRole('tab', { name: 'Crypto (USDT)' }));
+    expect(await screen.findByRole('button', { name: 'Request an address' })).toBeInTheDocument();
+    expect(screen.queryByTestId('crypto-rejected-reason')).not.toBeInTheDocument();
+  });
+
+  it('hides an old rejection once a newer request is open', async () => {
+    serve(options(), [
+      cryptoRequest({ id: '22222222-2222-4222-8222-222222222222', status: 'requested' }),
+      cryptoRequest({ status: 'rejected', closed_reason: 'Wrong network.' }),
+    ]);
+    renderUi(<PaymentOptionsSection canManage />);
+    await userEvent.click(await screen.findByRole('tab', { name: 'Crypto (USDT)' }));
+    expect(await screen.findByTestId('crypto-open-request')).toBeInTheDocument();
+    expect(screen.queryByTestId('crypto-rejected-reason')).not.toBeInTheDocument();
+  });
+
   it('shows the address the team sent and submits the TXID; a used TXID is explained', async () => {
     const address = 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb';
     serve(options(), [cryptoRequest({ status: 'address_sent', wallet_address: address })]);

@@ -246,8 +246,8 @@ Kurucu erişimini kaybetti (ayrıldı, hesabı çalındı) ve alanı başka biri
    Kurucu TXID yazdıysa operatörün girdiği aynı olmalıdır; yazmadıysa operatör girer. **Aynı TXID** (herhangi
    bir çalışma alanında) ikinci kez 409 alır — tekildir.
 5. Ödeme gelmediyse/yanlışsa **Talebi reddet** (`billing.payment_request_cancelled`): talep kapanır, gerekçe
-   Kurucuya `closed_reason` olarak döner ve yeniden talep açabilir. (Kiracı panelinin gerekçeyi göstermesi
-   henüz yok; bkz. HANDOFF 389.18.)
+   Kurucuya `closed_reason` olarak döner ve yeniden talep açabilir. Kiracı paneli (Faturalama > Kripto)
+   gerekçeyi «SiyahTuş ekibinin gerekçesi» başlığıyla, yazdığınız haliyle gösterir (tm 393).
 
 ### 7.2 SWIFT: eşleştirme
 

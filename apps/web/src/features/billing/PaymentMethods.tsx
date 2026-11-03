@@ -370,6 +370,26 @@ function SwiftPanel({
   );
 }
 
+/** Why the SiyahTuş team rejected the last crypto request, in the team's own words. */
+function RejectedNotice({ reason, canRetry }: { reason: string; canRetry: boolean }): ReactElement {
+  const t = useTranslate();
+  return (
+    <div
+      className="rounded-md border border-border bg-surface-2 p-3"
+      data-testid="crypto-rejected-reason"
+    >
+      <p className="font-medium">{t('billing.payments.crypto.rejectedTitle')}</p>
+      <p className="mt-1 text-2xs font-medium text-content-secondary">
+        {t('billing.payments.crypto.rejectedSource')}
+      </p>
+      <p className="whitespace-pre-wrap break-words">{reason}</p>
+      {canRetry && (
+        <p className="mt-2 text-content-secondary">{t('billing.payments.crypto.rejectedRetry')}</p>
+      )}
+    </div>
+  );
+}
+
 function CryptoPanel({
   amountMinor,
   canManage,
@@ -422,6 +442,10 @@ function CryptoPanel({
   const list = requests.data.requests;
   const open = list.find((r) => r.status === 'requested' || r.status === 'address_sent');
   const closed = list.filter((r) => r !== open).slice(0, 5);
+  // The newest request, when the team rejected it and said why. The reason is the
+  // operator's own words (not translated); it goes away once a new request is open.
+  const rejectedReason =
+    !open && list[0]?.status === 'rejected' ? list[0].closed_reason?.trim() : '';
 
   const onCreate = (event: FormEvent): void => {
     event.preventDefault();
@@ -514,6 +538,7 @@ function CryptoPanel({
           className="flex flex-col gap-3"
           aria-label={t('billing.payments.crypto.formLabel')}
         >
+          {rejectedReason && <RejectedNotice reason={rejectedReason} canRetry />}
           <p className="text-content-secondary">
             {t('billing.payments.crypto.intro', { amount: usdt(amountMinor) })}
           </p>
@@ -569,6 +594,8 @@ function CryptoPanel({
             </p>
           )}
         </form>
+      ) : rejectedReason ? (
+        <RejectedNotice reason={rejectedReason} canRetry={false} />
       ) : (
         <p className="text-content-secondary">{t('billing.payments.crypto.noRequest')}</p>
       )}

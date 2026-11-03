@@ -320,6 +320,9 @@ export const billing: Messages = {
   'billing.payments.crypto.billingDetailsLabel': 'Fatura bilgileri (adres, vergi numarası)',
   'billing.payments.crypto.requestButton': 'Adres isteyin',
   'billing.payments.crypto.noRequest': 'Kripto ödeme talebi yok.',
+  'billing.payments.crypto.rejectedTitle': 'Son kripto talebiniz reddedildi.',
+  'billing.payments.crypto.rejectedSource': 'SiyahTuş ekibinin gerekçesi',
+  'billing.payments.crypto.rejectedRetry': 'Aşağıdan yeniden adres talep edebilirsiniz.',
   'billing.payments.card.intro':
     '{amount} tutarını kart işlemcisinin güvenli sayfasında ödeyin. Kartınız yenilemeler için orada saklanır; SiyahTuş kart numaranızı hiç görmez.',
   'billing.payments.card.payButton': 'Kartla öde',

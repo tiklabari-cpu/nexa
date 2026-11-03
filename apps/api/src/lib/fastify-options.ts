@@ -19,7 +19,12 @@ import { hostname } from 'node:os';
 import { LogController, type FastifyServerOptions } from 'fastify';
 import { isAcceptableRequestId, LOG_KEYS } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
-import { logSafeUrl, PLATFORM_SECRET_LOG_PATHS, PROVIDER_SECRET_LOG_PATHS } from './log-redact.js';
+import {
+  logSafeUrl,
+  MEMBER_IDENTITY_LOG_PATHS,
+  PLATFORM_SECRET_LOG_PATHS,
+  PROVIDER_SECRET_LOG_PATHS,
+} from './log-redact.js';
 import { trustProxyFor } from './trust-proxy.js';
 
 export interface BaseFastifyOptionsInput {
@@ -76,6 +81,8 @@ export function baseFastifyOptions({
           // The operator sign-in (tm 389.4): codes, recovery sheets, TOTP
           // secrets and invitation links, in a body or a logged result.
           ...PLATFORM_SECRET_LOG_PATHS,
+          // The operator-signed identity and its secret (tm 388).
+          ...MEMBER_IDENTITY_LOG_PATHS,
           // The request line. This API puts personal data in query strings —
           // the customer search takes an address — so the URL is where PII
           // reaches the log first, and it is not covered by any secret path.

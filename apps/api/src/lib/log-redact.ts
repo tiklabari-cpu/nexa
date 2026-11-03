@@ -137,6 +137,22 @@ export const APPS_SECRET_LOG_PATHS = [
 ];
 
 /**
+ * The operator-signed identity (ID-03 · K28 · tm 388), for the api's logger:
+ * what a widget mint carries and the workspace secret it is checked with.
+ * Names only these fields own, like the operator sign-in's list below.
+ */
+export const MEMBER_IDENTITY_LOG_PATHS = [
+  // The operator-signed identity a widget mint carries: the member's id,
+  // username and e-mail are personal data, and the signature is a credential
+  // for its five minutes. The whole object goes.
+  'req.body.identity',
+  // The secret, in the one response that carries it and anywhere a result is
+  // logged — at the top and one level down.
+  'identity_secret',
+  '*.identity_secret',
+];
+
+/**
  * The operator sign-in's secrets (tm 389.4), for both processes' loggers: the
  * request bodies that carry a password, a TOTP or recovery code or an
  * invitation token, and the response fields that carry a fresh secret, a

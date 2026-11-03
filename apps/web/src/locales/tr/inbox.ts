@@ -372,6 +372,11 @@ export const inbox: Messages = {
   'inbox.playerCard.openProfile': 'Profili aç',
   'inbox.playerCard.username': 'Kullanıcı adı',
   'inbox.playerCard.email': 'E-posta',
+  'inbox.playerCard.verifiedMember': 'Doğrulanmış üye',
+  'inbox.playerCard.verifiedMemberHint':
+    'Siteniz bu üyeyi giriş yapmış olarak imzaladı. Son doğrulama: {date}.',
+  'inbox.playerCard.usernameVerified': 'Sitenizce imzalandı',
+  'inbox.playerCard.platformUserId': 'Üye numarası',
   'inbox.playerCard.country': 'Ülke',
   'inbox.playerCard.hidden': 'Gizli',
   'inbox.playerCard.hiddenHint': 'Rolünüz oyuncunun iletişim bilgilerini göstermiyor.',

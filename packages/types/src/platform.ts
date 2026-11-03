@@ -336,7 +336,7 @@ export const IMPERSONATION_FORBIDDEN_PATHS: readonly ImpersonationForbiddenRule[
   { pattern: /^\/settings\/scim-tokens(\/[^/]+)?$/, category: 'credentials' },
   { pattern: /^\/partner\/apps(\/.*)?$/, category: 'credentials' },
   {
-    pattern: /^\/settings\/member-recognition(\/(rotate-key|revoke-all))?$/,
+    pattern: /^\/settings\/member-recognition(\/(rotate-key|revoke-all|identity-secret))?$/,
     category: 'credentials',
   },
   { pattern: /^\/scim\/v2\//, category: 'credentials' },

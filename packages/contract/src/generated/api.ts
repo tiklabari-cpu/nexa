@@ -1157,6 +1157,24 @@ export interface paths {
      *     form never selects a customer; another device is a new customer until an
      *     agent confirms the link.
      *
+     *     **Operator-signed identity (ID-03 · decision K28 · tm 388).** The second
+     *     way in: a page whose user is logged in on the operator's site hands the
+     *     widget that member's id signed by the operator's server
+     *     (`siyahtus('identify', …)`), and the widget sends it as `identity`. Only
+     *     when the workspace has turned signed identity on and issued a secret is
+     *     it checked — the signature (current secret, or the one a rotation is
+     *     phasing out), its age (5 minutes, a minute of clock skew), and that it
+     *     was not used before. A valid one makes the visitor the customer that
+     *     carries that `user_id` in this organization, on whatever device — or,
+     *     the first time, the browser's own customer if it carries no other
+     *     member's id, else a new one — and that customer is the verified member
+     *     the panel badges. Its signed username, if any, becomes the customer's,
+     *     and the pre-chat form stops asking for one. Anything else about an
+     *     identity — malformed, expired, replayed, wrongly signed, or the feature
+     *     off — is ignored and counted for the workspace, never answered: the
+     *     response is the one the request would have had without it. A verified
+     *     member is never shown the human check.
+     *
      *     **The human check (tm 339.2 · GV-01).** A visitor this workspace has not
      *     signed a member token for is answered `403 challenge_required` — before
      *     any customer is created — when the address opened more new visitors in
@@ -8729,9 +8747,12 @@ export interface paths {
     /**
      * How returning visitors are recognised
      * @description The member-token lifetime, whether agents see possible matches, the
-     *     signing key's version and rotation state (never the key itself) and the
-     *     latest bulk revocation (ID-03 · decision K4). A workspace that never saved
-     *     these reads the defaults; reading creates nothing.
+     *     signing key's version and rotation state (never the key itself), the
+     *     latest bulk revocation (ID-03 · decision K4), and the operator-signed
+     *     identity — its switch, its secret's version (never the secret) and the
+     *     last week's signed identities, accepted and refused by reason (K28 ·
+     *     tm 388). A workspace that never saved these reads the defaults; reading
+     *     creates nothing.
      *
      *     `access_rules:ro` (or `:rw`) plus `minimumRole: admin`, like the other
      *     Security settings.
@@ -8743,7 +8764,7 @@ export interface paths {
     options?: never;
     head?: never;
     /**
-     * Change the token lifetime or the possible-match switch
+     * Change the token lifetime, the possible-match switch or the signed-identity switch
      * @description Creates the row on first write; only the fields sent change. A new
      *     lifetime applies to the tokens signed from then on — every visit
      *     re-signs, so a returning member picks it up on their next visit — and
@@ -8805,6 +8826,40 @@ export interface paths {
      *     `access_rules:rw` plus `minimumRole: admin`; audited.
      */
     post: operations['revokeAllMemberTokens'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/member-recognition/identity-secret': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Issue the operator-signed identity secret, or replace it
+     * @description Generates the workspace's identity secret (ID-03 · decision K28 ·
+     *     tm 388) — the key the operator's server signs the logged-in member's
+     *     identity with, `siyahtus('identify', …)` on the page carrying the
+     *     signature. The response is the only one that ever holds the secret:
+     *     store it on the server, never in a page or an app a visitor downloads.
+     *
+     *     With a secret already in place this is a rotation: the replaced secret
+     *     stays accepted for `grace_period_seconds` (default a day) while the
+     *     operator deploys the new one, and is refused after. `0` retires it at
+     *     once, for a secret that leaked. One previous secret at a time: rotating
+     *     again inside the window drops the oldest immediately.
+     *
+     *     Issuing a secret does not turn the feature on; `signed_identity_enabled`
+     *     does. `access_rules:rw` plus `minimumRole: admin`; audited with the
+     *     versions only. `Cache-Control: no-store`.
+     */
+    post: operations['rotateMemberIdentitySecret'];
     delete?: never;
     options?: never;
     head?: never;
@@ -15587,8 +15642,28 @@ export interface components {
         /** Format: uuid */
         id: string;
         name: string | null;
-        /** @description Typed by the player, unverified. Null when not given or not visible. */
+        /**
+         * @description Typed by the player, unverified — unless `username_verified`.
+         *     Null when not given or not visible.
+         */
         username: string | null;
+        /**
+         * @description The username came from the operator-signed identity (ID-03 ·
+         *     K28 · tm 388), not from the player's own typing.
+         */
+        username_verified: boolean;
+        /**
+         * @description The member's id on the operator's platform, from an
+         *     operator-signed identity. Null when none was verified, or not
+         *     visible to the caller (`customers.contact.view`).
+         */
+        platform_user_id: string | null;
+        /**
+         * Format: date-time
+         * @description When the operator's site last vouched for this member with a
+         *     valid signed identity; null when never. Every agent sees it.
+         */
+        identity_verified_at: string | null;
         /** @description Null when not given or not visible. */
         email: string | null;
         country_code: string | null;
@@ -20113,6 +20188,7 @@ export interface components {
        *     visitor. Null when there has been none.
        */
       tokens_revoked_before: string | null;
+      signed_identity: components['schemas']['MemberSignedIdentitySettings'];
       /**
        * Format: date-time
        * @description Null when the settings were never saved.
@@ -20123,6 +20199,108 @@ export interface components {
     MemberRecognitionSettingsInput: {
       token_ttl_seconds?: number;
       possible_matches_enabled?: boolean;
+      /**
+       * @description The operator-signed identity switch (ID-03 · K28). On without a
+       *     secret changes nothing yet: identify calls are verified once a
+       *     secret is issued (`POST /settings/member-recognition/identity-secret`).
+       */
+      signed_identity_enabled?: boolean;
+    };
+    /**
+     * @description The operator-signed identity (ID-03 · decision K28 · tm 388): the
+     *     operator's server signs the logged-in member's id with this
+     *     workspace's secret, the page hands it to `siyahtus('identify', …)`, and
+     *     a valid signature makes the visitor that member on every device. Off
+     *     by default; `active` only once it is on **and** a secret exists — until
+     *     then an identify call is ignored and the K4 flow is unchanged. The
+     *     secret itself is in no response but the one that issues it.
+     */
+    MemberSignedIdentitySettings: {
+      enabled: boolean;
+      /** @description Identify calls are being verified — the switch is on and a secret exists. */
+      active: boolean;
+      /** @description Null until an admin issues the first secret. */
+      secret: components['schemas']['MemberIdentitySecretInfo'] | null;
+      /** @description Null when the counters could not be read. */
+      recent: components['schemas']['MemberIdentityStats'] | null;
+    };
+    /**
+     * @description The identity secret, described — never the secret. A rotation keeps
+     *     the secret it replaced as `previous_version` until
+     *     `previous_valid_until`, so signatures the operator's servers still
+     *     make with it are accepted while the new one is deployed.
+     */
+    MemberIdentitySecretInfo: {
+      version: number;
+      /** Format: date-time */
+      created_at: string;
+      previous_version: number | null;
+      /** Format: date-time */
+      previous_valid_until: string | null;
+    };
+    /**
+     * @description Signed identities seen in the last `days` days (UTC), for checking an
+     *     integration: how many were accepted and why the rest were ignored. A
+     *     refused identity is never an error to the visitor, so this is the only
+     *     place a wrong signature shows.
+     */
+    MemberIdentityStats: {
+      days: number;
+      verified: number;
+      /** @description Count per reason; a reason with none is absent. */
+      refused: {
+        disabled?: number;
+        malformed?: number;
+        expired?: number;
+        future?: number;
+        bad_signature?: number;
+        replayed?: number;
+        replay_unchecked?: number;
+      } & {
+        [key: string]: number;
+      };
+    };
+    MemberIdentitySecretRotationInput: {
+      /**
+       * @description How long the replaced secret is still accepted — the time the
+       *     operator's servers have to switch to the new one. `0` retires the
+       *     old secret at once, for one that leaked. Default a day. Ignored
+       *     for the first secret.
+       * @default 86400
+       */
+      grace_period_seconds: number;
+    };
+    /**
+     * @description The settings, with the new secret's version — and, this once, the
+     *     secret itself. Store it on the operator's server; it is never shown
+     *     again and must never reach a browser.
+     */
+    MemberIdentitySecretIssued: components['schemas']['MemberRecognitionSettings'] & {
+      /**
+       * @description `sti_` followed by 256 random bits (base64url). The HMAC key,
+       *     used as this exact string.
+       */
+      identity_secret: string;
+    };
+    /**
+     * @description The operator-signed identity of the member logged in on the
+     *     embedding site (ID-03 · K28 · tm 388), as the page handed it to
+     *     `siyahtus('identify', …)`. `user_hash` is HMAC-SHA256, keyed with the
+     *     workspace's identity secret, over
+     *     `siyahtus-identify-v1\n<user_id>\n<username>\n<email>\n<ts>` (an
+     *     absent username or e-mail is an empty line), as lowercase hex. `ts` is
+     *     Unix time in seconds; a signature more than 5 minutes old, more than a
+     *     minute ahead, or used once already is refused. No field may hold a
+     *     control character. Never a reason to refuse the token: anything wrong
+     *     with it — or any identity while the workspace has signed identity off —
+     *     is ignored, and the request is answered exactly as one without it.
+     */
+    SignedIdentityInput: {
+      user_id?: string;
+      username?: string;
+      email?: string;
+      ts?: number;
+      user_hash?: string;
     };
     MemberKeyRotationInput: {
       /**
@@ -28081,6 +28259,12 @@ export interface operations {
            */
           customer_id?: string;
           /**
+           * @description The operator-signed identity the page handed
+           *     `siyahtus('identify', …)` (tm 388). Whatever its shape, never
+           *     a 400: one that does not verify is ignored.
+           */
+          identity?: components['schemas']['SignedIdentityInput'];
+          /**
            * @description Origin of the page the widget is embedded in, e.g.
            *     `https://shop.example`. Falls back to the `Origin` header.
            */
@@ -28161,6 +28345,14 @@ export interface operations {
              *     Settings › Security › Member recognition).
              */
             member_token_expires_at?: string;
+            /**
+             * @description Whether the customer this token speaks for is a member the
+             *     operator's site vouched for (tm 388) — in this request or
+             *     an earlier one. A property of the customer, not of the
+             *     request's `identity`: a refused identity and no identity at
+             *     all are answered alike.
+             */
+            identity_verified?: boolean;
             /**
              * @description The workspace's widget appearance (FR-MOD-11.7) and the two
              *     footer links (FR-MOD-11.5): the server is the source of
@@ -39748,6 +39940,34 @@ export interface operations {
           'application/json': components['schemas']['MemberRecognitionSettings'];
         };
       };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  rotateMemberIdentitySecret: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['MemberIdentitySecretRotationInput'];
+      };
+    };
+    responses: {
+      /** @description The settings and, this once, the new secret */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MemberIdentitySecretIssued'];
+        };
+      };
+      400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];

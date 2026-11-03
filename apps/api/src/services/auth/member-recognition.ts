@@ -23,12 +23,30 @@
  * row(s) it closes, and an adoption reads its time *before* the update that
  * claims the row — so an adoption either commits first and is refused by the
  * revocation, or finds the window already closed.
+ *
+ * **The operator's way in (K28 · tm 388).** A workspace that turned signed
+ * identity on and issued a secret also believes the operator's server: a valid
+ * signed identity (`member-identity.ts`) makes the visitor the customer that
+ * carries that member id in the organization — on whatever device, ahead of
+ * the browser's own token. The first time, the browser's own customer takes
+ * the id if it carries none; otherwise a new customer does. Off, an identity
+ * is ignored and everything above is exactly K4.
  */
 import { randomUUID } from 'node:crypto';
 import type { FastifyBaseLogger } from 'fastify';
-import type { MemberTokenKey } from '@prisma/client';
-import { MEMBER_TOKEN_TTL, type IdentityTrust } from '@siyahtus/types';
+import type { MemberIdentitySecret, MemberTokenKey } from '@prisma/client';
+import { MEMBER_TOKEN_TTL, type IdentityTrust, type SignedIdentityRefusal } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
+import {
+  identityAge,
+  identitySignatureMatches,
+  newIdentitySecret,
+  parseIdentityClaim,
+  type IdentityClaim,
+  type IdentityLedger,
+  type IdentitySecretCodec,
+  type MemberIdentityStatsView,
+} from './member-identity.js';
 import {
   MEMBER_TOKEN_FORMAT,
   newDeviceId,
@@ -60,21 +78,54 @@ export type MemberTokenRefusal =
 /** Where a credential arrived from. */
 export type MemberTokenSource = 'cookie' | 'body';
 
-export interface MemberRefusal {
-  source: MemberTokenSource | 'customer_id';
-  /** `not_adoptable`: a bare `customer_id` outside the transition window (§5). */
-  reason: MemberTokenRefusal | 'not_adoptable';
-}
+export type MemberRefusal =
+  | {
+      source: MemberTokenSource | 'customer_id';
+      /** `not_adoptable`: a bare `customer_id` outside the transition window (§5). */
+      reason: MemberTokenRefusal | 'not_adoptable';
+    }
+  | {
+      /** An operator-signed identity (tm 388), refused for `reason`. */
+      source: 'identity';
+      reason: SignedIdentityRefusal;
+    };
+
+/**
+ * An operator-signed identity, checked (`verifyIdentity`): the claim it makes
+ * and whether it is believed. A refused one is ignored by `resolve` — logged
+ * and counted, never answered.
+ */
+export type IdentityCheck = (
+  | { ok: true; claim: IdentityClaim }
+  | { ok: false; reason: SignedIdentityRefusal; claim: IdentityClaim | null }
+) & {
+  /** The database's clock when it was checked — the day its outcome is counted on. */
+  checkedAt: Date;
+};
 
 export interface MemberResolution {
   customerId: string;
   /**
-   * How the request reached `customerId`: a valid member token, the one-time
-   * adoption of a customer from before member tokens, or a new anonymous one.
+   * How the request reached `customerId`: a valid operator-signed identity
+   * (tm 388), a valid member token, the one-time adoption of a customer from
+   * before member tokens, or a new anonymous one.
    */
-  via: 'token' | 'adopted' | 'created';
+  via: 'identity' | 'token' | 'adopted' | 'created';
   /** Whether that customer is banned — the caller refuses, inside the transaction. */
   banned: boolean;
+  /**
+   * Whether that customer is a member the operator's site vouched for — in
+   * this request or an earlier one (`customers.platform_user_id`). A property
+   * of the customer, so a refused identity and none at all answer alike.
+   */
+  identityVerified: boolean;
+  /** Whether its username is the one the operator signed: the pre-chat form stops asking. */
+  usernameVerified: boolean;
+  /**
+   * Whether the presented member token was believed — the browser keeps it,
+   * so a cookie that carried it is working (the caller leaves the body copy out).
+   */
+  tokenBelieved: boolean;
   /** The member token re-signed (or first signed) for this browser. */
   memberToken: string;
   expiresAt: Date;
@@ -92,22 +143,35 @@ export interface MemberResolution {
  * browser made, never a signature, so the AI recalls nothing in detail for it.
  */
 export const MEMBER_IDENTITY_TRUST: Readonly<Record<MemberResolution['via'], IdentityTrust>> = {
+  // The operator's site vouched for the member (K28): at least what a token
+  // this workspace signed proves.
+  identity: 'verified',
   token: 'verified',
   created: 'session',
   adopted: 'claimed',
 };
 
+/** A key or secret described — never the key itself. */
+interface SecretDescription {
+  version: number;
+  created_at: string;
+  previous_version: number | null;
+  previous_valid_until: string | null;
+}
+
 /** Settings › Security › Member recognition, as the contract shapes it. */
 export interface MemberRecognitionView {
   token_ttl_seconds: number;
   possible_matches_enabled: boolean;
-  key: {
-    version: number;
-    created_at: string;
-    previous_version: number | null;
-    previous_valid_until: string | null;
-  } | null;
+  key: SecretDescription | null;
   tokens_revoked_before: string | null;
+  signed_identity: {
+    enabled: boolean;
+    /** On and a secret exists: identify calls are verified. */
+    active: boolean;
+    secret: SecretDescription | null;
+    recent: MemberIdentityStatsView | null;
+  };
   updated_at: string | null;
 }
 
@@ -129,12 +193,74 @@ type Verification =
   { ok: true; claims: MemberTokenClaims } | { ok: false; reason: MemberTokenRefusal };
 
 export class MemberRecognitionService {
-  constructor(private readonly codec: MemberTokenCodec) {}
+  constructor(
+    private readonly codec: MemberTokenCodec,
+    /** The operator-signed identity's secret and its Redis ledger (tm 388). */
+    private readonly identity: { codec: IdentitySecretCodec; ledger: IdentityLedger },
+  ) {}
+
+  /** The replay record and the per-day counters of signed identities. */
+  get identityLedger(): IdentityLedger {
+    return this.identity.ledger;
+  }
+
+  /**
+   * Check an operator-signed identity (tm 388), in its own short tenant
+   * transaction before the mint's: the licence's switch and secrets, the shape,
+   * the signature, the age against the database's clock, and — last, so only a
+   * signature valid in every other respect spends it — the replay record.
+   * Never throws for anything the request carried: a refusal is a value the
+   * mint ignores.
+   */
+  async verifyIdentity(
+    tx: TenantClient,
+    input: { licenseId: bigint; raw: unknown; log: FastifyBaseLogger },
+  ): Promise<IdentityCheck> {
+    const claim = parseIdentityClaim(input.raw);
+    const [row] = await tx.$queryRaw<Array<{ now: Date; enabled: boolean | null }>>`
+      SELECT clock_timestamp() AS now,
+             (SELECT signed_identity_enabled FROM member_recognition_settings
+               WHERE license_id = ${input.licenseId}) AS enabled`;
+    const checkedAt = row!.now;
+    const refuse = (reason: SignedIdentityRefusal): IdentityCheck => ({
+      ok: false,
+      reason,
+      claim,
+      checkedAt,
+    });
+    if (row!.enabled !== true) return refuse('disabled');
+    // Before the secrets are read and opened: what cannot be checked costs a
+    // query, not a decryption.
+    if (!claim) return refuse('malformed');
+
+    const secrets = await this.#identitySecrets(tx, input.licenseId, checkedAt, input.log);
+    if (secrets.length === 0) return refuse('disabled');
+    if (!identitySignatureMatches(claim, secrets)) return refuse('bad_signature');
+    const age = identityAge(claim.ts, checkedAt.getTime());
+    if (age !== 'ok') return refuse(age);
+
+    let fresh: boolean;
+    try {
+      fresh = await this.identity.ledger.claim(input.licenseId, claim, checkedAt.getTime());
+    } catch (error) {
+      input.log.warn(
+        { err: error, license_id: input.licenseId.toString() },
+        'signed identity replay record unreachable; refused it',
+      );
+      return refuse('replay_unchecked');
+    }
+    return fresh ? { ok: true, claim, checkedAt } : refuse('replayed');
+  }
 
   /**
    * The customer a `POST /customer/token` request speaks for, and the member
    * token to hand its browser — K4's "imza → süre → lisans → iptal listesi".
    *
+   *   0. A verified operator-signed identity (`identity`, tm 388) wins: the
+   *      customer carrying that member id in this organization, else the
+   *      browser's own token customer if it carries no other member's, else a
+   *      new one ({@link #resolveVerified}). The browser's run continues when
+   *      that is the token's own customer, and starts again otherwise.
    *   1. A presented member token (the caller has already preferred the cookie
    *      over the body) is checked in order: signature, expiry, licence,
    *      revocation list, and the customer still being there. Valid: that
@@ -147,7 +273,8 @@ export class MemberRecognitionService {
    *
    * Paths 2 and 3 begin a new run (new browser number, `oat` now). A refusal
    * on the way is recorded in `refusals`, never thrown: the caller answers it
-   * exactly as it answers a first visit.
+   * exactly as it answers a first visit. A refused identity changes nothing
+   * else about the request — the K4 path below runs as if it had not come.
    */
   async resolve(
     tx: TenantClient,
@@ -157,6 +284,8 @@ export class MemberRecognitionService {
       presented: { token: string; source: MemberTokenSource } | null;
       /** The id a widget from before member tokens kept, if it sent one. */
       customerId?: string;
+      /** The operator-signed identity, already checked (`verifyIdentity`), if one came. */
+      identity?: IdentityCheck | null;
       log: FastifyBaseLogger;
     },
   ): Promise<MemberResolution> {
@@ -165,9 +294,21 @@ export class MemberRecognitionService {
     const keys = await this.#signingKeys(tx, licenseId, now, input.log);
     const refusals: MemberRefusal[] = [];
 
-    let resolved: { customerId: string; banned: boolean; via: MemberResolution['via'] } | null =
-      null;
+    let resolved: {
+      customerId: string;
+      banned: boolean;
+      via: MemberResolution['via'];
+      identityVerified: boolean;
+      usernameVerified: boolean;
+    } | null = null;
     let run: { did: string; oat: number } | null = null;
+    /** The customer a valid member token names: the browser's own record. */
+    let browser: {
+      id: string;
+      bannedAt: Date | null;
+      platformUserId: string | null;
+      usernameVerified: boolean;
+    } | null = null;
 
     if (input.presented) {
       const verified = this.#verify(input.presented.token, keys, now, licenseId);
@@ -179,21 +320,57 @@ export class MemberRecognitionService {
         } else {
           const customer = await tx.customer.findFirst({
             where: { id: claims.sub },
-            select: { id: true, bannedAt: true },
+            select: { id: true, bannedAt: true, platformUserId: true, usernameVerified: true },
           });
           if (!customer) {
             refusal = 'customer_gone';
           } else {
-            resolved = {
-              customerId: customer.id,
-              banned: customer.bannedAt !== null,
-              via: 'token',
-            };
+            browser = customer;
             run = { did: claims.did, oat: claims.oat };
           }
         }
       }
       if (refusal) refusals.push({ source: input.presented.source, reason: refusal });
+    }
+
+    const identity = input.identity ?? null;
+    if (identity?.ok) {
+      const member = await this.#resolveVerified(tx, {
+        organizationId: input.organizationId,
+        claim: identity.claim,
+        browser,
+        now,
+      });
+      resolved = {
+        customerId: member.id,
+        banned: member.bannedAt !== null,
+        via: 'identity',
+        identityVerified: true,
+        usernameVerified: member.usernameVerified,
+      };
+      // Another record than the browser's own: a new run, so a revocation of
+      // that member is measured from now rather than from this browser's past.
+      if (!browser || browser.id !== member.id) run = null;
+    } else {
+      if (identity && !identity.ok) {
+        // The same browser sending the same signature again (a re-mint in the
+        // page that consumed it) is not a replay anyone needs to hear about:
+        // its token already speaks for the member that signature names.
+        const resent =
+          identity.reason === 'replayed' &&
+          identity.claim !== null &&
+          browser?.platformUserId === identity.claim.userId;
+        if (!resent) refusals.push({ source: 'identity', reason: identity.reason });
+      }
+      if (browser) {
+        resolved = {
+          customerId: browser.id,
+          banned: browser.bannedAt !== null,
+          via: 'token',
+          identityVerified: browser.platformUserId !== null,
+          usernameVerified: browser.usernameVerified,
+        };
+      }
     }
 
     if (!resolved && input.customerId) {
@@ -209,7 +386,15 @@ export class MemberRecognitionService {
         RETURNING id, banned_at`;
       const customer = adopted[0];
       if (customer) {
-        resolved = { customerId: customer.id, banned: customer.banned_at !== null, via: 'adopted' };
+        // A customer from before member tokens never carried a member id:
+        // signed identity arrived after the window opened.
+        resolved = {
+          customerId: customer.id,
+          banned: customer.banned_at !== null,
+          via: 'adopted',
+          identityVerified: false,
+          usernameVerified: false,
+        };
       } else {
         refusals.push({ source: 'customer_id', reason: 'not_adoptable' });
       }
@@ -220,7 +405,13 @@ export class MemberRecognitionService {
         data: { organizationId: input.organizationId, lastActivityAt: new Date() },
         select: { id: true },
       });
-      resolved = { customerId: created.id, banned: false, via: 'created' };
+      resolved = {
+        customerId: created.id,
+        banned: false,
+        via: 'created',
+        identityVerified: false,
+        usernameVerified: false,
+      };
     }
 
     const issuedAt = now.getTime();
@@ -239,7 +430,14 @@ export class MemberRecognitionService {
       keys.version,
     );
 
-    return { ...resolved, memberToken, expiresAt: new Date(expiresAt), ttlSeconds, refusals };
+    return {
+      ...resolved,
+      tokenBelieved: browser !== null,
+      memberToken,
+      expiresAt: new Date(expiresAt),
+      ttlSeconds,
+      refusals,
+    };
   }
 
   /** The settings screen's view. Reading creates nothing — not even a key. */
@@ -253,13 +451,21 @@ export class MemberRecognitionService {
       orderBy: { revokedAt: 'desc' },
       select: { revokedAt: true },
     });
+    const secret = await tx.memberIdentitySecret.findUnique({ where: { licenseId } });
     const [clock] = await tx.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`;
     const now = clock!.now;
+    const signedIdentityEnabled = settings?.signedIdentityEnabled ?? false;
     return {
       token_ttl_seconds: settings?.tokenTtlSeconds ?? MEMBER_TOKEN_TTL.defaultSeconds,
       possible_matches_enabled: settings?.possibleMatchesEnabled ?? true,
       key: key ? describeKey(key, now) : null,
       tokens_revoked_before: bulk?.revokedAt.toISOString() ?? null,
+      signed_identity: {
+        enabled: signedIdentityEnabled,
+        active: signedIdentityEnabled && secret !== null,
+        secret: secret ? describeSecret(secret, now) : null,
+        recent: await this.identity.ledger.read(licenseId),
+      },
       updated_at: settings?.updatedAt.toISOString() ?? null,
     };
   }
@@ -322,6 +528,69 @@ export class MemberRecognitionService {
         WHERE license_id = ${licenseId}`;
     }
     return { version, previousVersion: graceSeconds > 0 ? current.key_version : null };
+  }
+
+  /**
+   * Issue the licence's identity secret, or replace it (tm 388) — the one
+   * moment the secret leaves the server, returned for the response alone. The
+   * replaced secret stays accepted for `graceSeconds` while the operator
+   * deploys the new one; `0` retires it at once. One previous slot, like the
+   * member-token key: a rotation inside the window drops the oldest now.
+   */
+  async rotateIdentitySecret(
+    tx: TenantClient,
+    licenseId: bigint,
+    graceSeconds: number,
+  ): Promise<{ secret: string; version: number; previousVersion: number | null }> {
+    // Locked, so two rotations in flight cannot both write version n + 1.
+    const [current] = await tx.$queryRaw<Array<{ secret_version: number }>>`
+      SELECT secret_version FROM member_identity_secrets
+      WHERE license_id = ${licenseId} FOR UPDATE`;
+    const secret = newIdentitySecret();
+
+    if (!current) {
+      const sealed = this.identity.codec.seal(licenseId, 1, secret);
+      const inserted = await tx.$executeRaw`
+        INSERT INTO member_identity_secrets
+          (license_id, secret_version, secret_ciphertext, secret_created_at)
+        VALUES (${licenseId}, 1, ${sealed}, clock_timestamp())
+        ON CONFLICT (license_id) DO NOTHING`;
+      // Another first issue won the race meanwhile: rotate what it wrote.
+      if (inserted === 0) return this.rotateIdentitySecret(tx, licenseId, graceSeconds);
+      return { secret, version: 1, previousVersion: null };
+    }
+
+    const version = current.secret_version + 1;
+    const sealed = this.identity.codec.seal(licenseId, version, secret);
+    // The replaced secret moves with its own version, so its additional data
+    // still matches and it opens from the other slot.
+    if (graceSeconds > 0) {
+      await tx.$executeRaw`
+        UPDATE member_identity_secrets
+        SET previous_secret_version = secret_version,
+            previous_secret_ciphertext = secret_ciphertext,
+            previous_secret_valid_until =
+              clock_timestamp() + make_interval(secs => ${graceSeconds}::double precision),
+            secret_version = ${version},
+            secret_ciphertext = ${sealed},
+            secret_created_at = clock_timestamp()
+        WHERE license_id = ${licenseId}`;
+    } else {
+      await tx.$executeRaw`
+        UPDATE member_identity_secrets
+        SET previous_secret_version = NULL,
+            previous_secret_ciphertext = NULL,
+            previous_secret_valid_until = NULL,
+            secret_version = ${version},
+            secret_ciphertext = ${sealed},
+            secret_created_at = clock_timestamp()
+        WHERE license_id = ${licenseId}`;
+    }
+    return {
+      secret,
+      version,
+      previousVersion: graceSeconds > 0 ? current.secret_version : null,
+    };
   }
 
   /**
@@ -451,6 +720,120 @@ export class MemberRecognitionService {
       return null;
     }
   }
+
+  /**
+   * The secrets a signature may be made with now: the current one, and the
+   * one a rotation replaced while its window lasts. A secret that does not
+   * open (`CUSTOMER_TOKEN_SECRET` changed, the row edited) is left out and
+   * logged — unlike the member-token key it cannot be replaced silently, since
+   * the operator's server holds the other copy; an admin issues a new one.
+   */
+  async #identitySecrets(
+    tx: TenantClient,
+    licenseId: bigint,
+    now: Date,
+    log: FastifyBaseLogger,
+  ): Promise<string[]> {
+    const row = await tx.memberIdentitySecret.findUnique({ where: { licenseId } });
+    if (!row) return [];
+    const slots: Array<{ version: number; sealed: string }> = [
+      { version: row.secretVersion, sealed: row.secretCiphertext },
+    ];
+    if (
+      row.previousSecretVersion !== null &&
+      row.previousSecretCiphertext !== null &&
+      row.previousSecretValidUntil !== null &&
+      row.previousSecretValidUntil > now
+    ) {
+      slots.push({ version: row.previousSecretVersion, sealed: row.previousSecretCiphertext });
+    }
+    const secrets: string[] = [];
+    for (const slot of slots) {
+      try {
+        secrets.push(this.identity.codec.open(licenseId, slot.version, slot.sealed));
+      } catch {
+        log.warn(
+          { license_id: licenseId.toString(), secret_version: slot.version },
+          'signed identity secret could not be opened; issue a new one',
+        );
+      }
+    }
+    return secrets;
+  }
+
+  /**
+   * The customer a verified identity names (ID-03 · K28): the one carrying
+   * that member id in this organization, else the browser's own record if it
+   * carries no other member's id, else a new one — and stamped as verified,
+   * with the username and e-mail the operator signed, if any.
+   *
+   * Serialised per member id with a transaction-scoped advisory lock: two
+   * devices signing in at once would otherwise both find no record and both
+   * create one, and the unique index would abort the second mint instead of
+   * handing it the first one's customer. The claim of the browser's record is
+   * one conditional UPDATE, so a second tab claiming the same record for
+   * another member re-reads it, sees the first member's id and opens its own.
+   * RLS keeps every read and write inside the caller's organization — the same
+   * id in another workspace is somebody else.
+   */
+  async #resolveVerified(
+    tx: TenantClient,
+    input: {
+      organizationId: string;
+      claim: IdentityClaim;
+      browser: { id: string; platformUserId: string | null } | null;
+      now: Date;
+    },
+  ): Promise<{ id: string; bannedAt: Date | null; usernameVerified: boolean }> {
+    const { claim, now } = input;
+    await tx.$executeRaw`
+      SELECT pg_advisory_xact_lock(
+        hashtext('siyahtus.member-identity'),
+        hashtext(${`${input.organizationId}:${claim.userId}`}))`;
+
+    const [existing] = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM customers WHERE platform_user_id = ${claim.userId}`;
+    const candidate =
+      existing?.id ??
+      (input.browser && input.browser.platformUserId === null ? input.browser.id : null);
+
+    if (candidate) {
+      const [stamped] = await tx.$queryRaw<
+        Array<{ id: string; banned_at: Date | null; username_verified: boolean }>
+      >`
+        UPDATE customers
+        SET platform_user_id = ${claim.userId},
+            identity_verified_at = ${now},
+            username = COALESCE(${claim.username}::text, username),
+            username_verified = username_verified OR ${claim.username}::text IS NOT NULL,
+            email = COALESCE(${claim.email}::citext, email)
+        WHERE id = ${candidate}::uuid
+          AND (platform_user_id IS NULL OR platform_user_id = ${claim.userId})
+        RETURNING id, banned_at, username_verified`;
+      if (stamped) {
+        return {
+          id: stamped.id,
+          bannedAt: stamped.banned_at,
+          usernameVerified: stamped.username_verified,
+        };
+      }
+      // The browser's record took another member's id between the read and
+      // this claim (another tab): this member gets a record of their own.
+    }
+
+    const created = await tx.customer.create({
+      data: {
+        organizationId: input.organizationId,
+        lastActivityAt: new Date(),
+        platformUserId: claim.userId,
+        identityVerifiedAt: now,
+        ...(claim.username !== null ? { username: claim.username, usernameVerified: true } : {}),
+        ...(claim.email !== null ? { email: claim.email } : {}),
+      },
+      select: { id: true, bannedAt: true, usernameVerified: true },
+    });
+    return created;
+  }
 }
 
 /** The database's clock, and the licence's token lifetime (the default with no row). */
@@ -498,6 +881,20 @@ async function insertRevocation(
             clock_timestamp(), ${input.revokedBy}::uuid)
     RETURNING customer_id, revoked_at`;
   return { customer_id: row!.customer_id, revoked_at: row!.revoked_at.toISOString() };
+}
+
+/** The identity secret, described — the previous one only while it is still accepted. */
+function describeSecret(secret: MemberIdentitySecret, now: Date): SecretDescription {
+  const previousLive =
+    secret.previousSecretVersion !== null &&
+    secret.previousSecretValidUntil !== null &&
+    secret.previousSecretValidUntil > now;
+  return {
+    version: secret.secretVersion,
+    created_at: secret.secretCreatedAt.toISOString(),
+    previous_version: previousLive ? secret.previousSecretVersion : null,
+    previous_valid_until: previousLive ? secret.previousSecretValidUntil!.toISOString() : null,
+  };
 }
 
 /** The key, described — the previous one only while it is still accepted. */

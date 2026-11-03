@@ -203,9 +203,12 @@ export class WidgetApi {
   /**
    * The embedding page the visitor is on and where they came from, handed to
    * the mint (EN-04): a visitor who has not written yet is otherwise unseen by
-   * a campaign's "current page" trigger.
+   * a campaign's "current page" trigger. Also the operator-signed identity the
+   * page handed `siyahtus('identify', …)` (ID-03 · K28 · tm 388), passed on as
+   * the page gave it: the server checks it and ignores what does not verify,
+   * so nothing here has to read it — and the widget's bundle has no room to.
    */
-  pageHints: { host_url?: string; host_referrer?: string } = {};
+  pageHints: { host_url?: string; host_referrer?: string; identity?: unknown } = {};
 
   /**
    * Teach this client to answer a `403 challenge_required` (tm 339.3): the

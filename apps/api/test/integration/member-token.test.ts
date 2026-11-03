@@ -964,6 +964,13 @@ describe('member tokens (ID-03 · K4)', () => {
         possible_matches_enabled: true,
         key: null,
         tokens_revoked_before: null,
+        // Operator-signed identity (tm 388): off, no secret, nothing seen yet.
+        signed_identity: {
+          enabled: false,
+          active: false,
+          secret: null,
+          recent: { days: 7, verified: 0, refused: {} },
+        },
         updated_at: null,
       });
       expect(await owner.memberTokenKey.count()).toBe(0);

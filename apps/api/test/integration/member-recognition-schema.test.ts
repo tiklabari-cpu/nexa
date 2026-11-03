@@ -23,11 +23,13 @@ import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadOpenApiDocument } from '@siyahtus/contract';
 import {
+  MEMBER_IDENTITY_SECRET_ROTATION_GRACE,
   MEMBER_KEY_ROTATION_GRACE,
   MEMBER_TOKEN_COOKIE,
   MEMBER_TOKEN_TTL,
   POSSIBLE_MATCH_FIELDS,
   POSSIBLE_MATCH_LIMIT,
+  SIGNED_IDENTITY_LIMITS,
   memberTokenCookieName,
 } from '@siyahtus/types';
 import { withTenant, type TenantClient } from '../../src/lib/tenant.js';
@@ -47,6 +49,7 @@ interface SchemaNode {
   maximum?: number;
   default?: number;
   maxItems?: number;
+  maxLength?: number;
   required?: string[];
   properties?: Record<string, SchemaNode>;
 }
@@ -446,6 +449,38 @@ describe('member recognition schema (ID-03 · K4)', () => {
         min: MEMBER_KEY_ROTATION_GRACE.minSeconds,
         max: MEMBER_KEY_ROTATION_GRACE.maxSeconds,
         default: MEMBER_KEY_ROTATION_GRACE.defaultSeconds,
+      });
+    });
+
+    it('keeps operator-signed identity off until switched on, with the bounds the contract and the constants state (tm 388)', async () => {
+      const row = await owner.memberRecognitionSettings.create({
+        data: { licenseId: fx.a.licenseId },
+      });
+      expect(row.signedIdentityEnabled).toBe(false);
+      const [column] = await owner.$queryRaw<Array<{ value: string }>>`
+        SELECT column_default AS value FROM information_schema.columns
+        WHERE table_name = 'member_recognition_settings'
+          AND column_name = 'signed_identity_enabled'
+      `;
+      expect(column?.value).toBe('false');
+
+      const schemas = contractSchemas();
+      const grace =
+        schemas['MemberIdentitySecretRotationInput']?.properties?.['grace_period_seconds'];
+      expect({ min: grace?.minimum, max: grace?.maximum, default: grace?.default }).toEqual({
+        min: MEMBER_IDENTITY_SECRET_ROTATION_GRACE.minSeconds,
+        max: MEMBER_IDENTITY_SECRET_ROTATION_GRACE.maxSeconds,
+        default: MEMBER_IDENTITY_SECRET_ROTATION_GRACE.defaultSeconds,
+      });
+      const identity = schemas['SignedIdentityInput']?.properties;
+      expect({
+        userId: identity?.['user_id']?.maxLength,
+        username: identity?.['username']?.maxLength,
+        email: identity?.['email']?.maxLength,
+      }).toEqual({
+        userId: SIGNED_IDENTITY_LIMITS.userIdMaxLength,
+        username: SIGNED_IDENTITY_LIMITS.usernameMaxLength,
+        email: SIGNED_IDENTITY_LIMITS.emailMaxLength,
       });
     });
   });

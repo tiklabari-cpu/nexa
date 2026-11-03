@@ -1,0 +1,16 @@
+-- Alone in this file on purpose (CONVENTIONS 6.3): `CREATE INDEX CONCURRENTLY`
+-- cannot run inside a transaction block, and a second statement beside it
+-- would fail the whole migration with 25001. Concurrently, because `customers`
+-- is written by every widget mint and a plain build holds a lock that blocks
+-- writes for its duration.
+--
+-- One customer per operator member id per organization (ID-03 · K28 · tm 388):
+-- a valid signed identity finds its customer by this, so two devices of one
+-- member land on one record — and one id can never name two records, or the
+-- second device would be a stranger again. Per organization, like the customer
+-- itself: the same id in another workspace is another person, and the RLS
+-- policy keeps the lookup inside the caller's (`texteq` is leakproof, so the
+-- equality is an index condition under row level security). PARTIAL: almost
+-- every customer has no member id, and NULLs are not a key. Prisma cannot
+-- express the WHERE; `scripts/check-drift.ts` allows it by name.
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "customers_organization_id_platform_user_id_key" ON "customers" ("organization_id", "platform_user_id") WHERE "platform_user_id" IS NOT NULL;

@@ -246,6 +246,13 @@ const customerTokenBody = z.object({
    */
   customer_id: z.string().uuid().optional(),
   /**
+   * The operator-signed identity the page handed `siyahtus('identify', …)`
+   * (ID-03 · K28 · tm 388). Any value is accepted here: an identity that does
+   * not verify — whatever its shape — is ignored, never a 400, so a forged one
+   * is answered exactly like none (`member-identity.ts` reads it).
+   */
+  identity: z.unknown().optional(),
+  /**
    * Origin of the page the widget is embedded in.
    *
    * The request itself comes from inside the widget iframe, so its `Origin`
@@ -1856,6 +1863,22 @@ export default async function authRoutes(
         ? { token: body.member_token, source: 'body' }
         : null;
 
+    // The operator's way in (ID-03 · K28 · tm 388): a signed identity the page
+    // handed the widget, checked before anything is written — the switch, the
+    // signature, its age, and last the replay record it spends. A refusal is a
+    // value, not an error: the resolution below ignores it, and the answer is
+    // the one this request would have had without it.
+    const identityCheck =
+      body.identity !== undefined
+        ? await withTenant(app.db, tenant, (tx) =>
+            app.memberRecognition.verifyIdentity(tx, {
+              licenseId: match.license_id,
+              raw: body.identity,
+              log: request.log,
+            }),
+          )
+        : null;
+
     // Which brand this widget speaks for (WG-01): the website registered for
     // the embedding host, else the licence default. Signed into the token so
     // the chat-open check enforces the same pre-chat form handed out below,
@@ -1907,6 +1930,7 @@ export default async function authRoutes(
         organizationId: match.organization_id,
         presented,
         ...(body.customer_id ? { customerId: body.customer_id } : {}),
+        identity: identityCheck,
         log: request.log,
       });
       // Thrown inside the transaction, so an adoption it would have made is
@@ -1915,8 +1939,10 @@ export default async function authRoutes(
       // adopted is never looked up, so it cannot probe for bans.
       if (resolved.banned) throw new ApiError('customer_banned', 'This customer is banned.');
       // Thrown inside it too, so a refused visitor leaves no customer behind.
+      // Never asked of a member the operator's site vouched for (GV-01, K28):
+      // a signed identity is a better proof of a person than any puzzle.
       let challenge: ChallengeOutcome = 'clear';
-      if (mintReason && resolved.via !== 'token') {
+      if (mintReason && resolved.via !== 'token' && resolved.via !== 'identity') {
         const passedAt =
           resolved.via === 'created'
             ? null
@@ -1949,12 +1975,28 @@ export default async function authRoutes(
     }
     // Logged, never answered: a refused credential is a new visitor with the
     // status and the shape of a first visit, so the response says neither why
-    // nor that there was anything to refuse.
+    // nor that there was anything to refuse. A refused signed identity is
+    // ignored the same way — and counted, so the workspace's settings screen
+    // can say its integration's signatures are failing, and why. Neither line
+    // names the member, the signature or the secret.
+    const ledger = app.memberRecognition.identityLedger;
     for (const refusal of member.refusals) {
+      if (refusal.source === 'identity') {
+        request.log.warn(
+          { license_id: match.license_id.toString(), reason: refusal.reason },
+          'signed identity refused; ignored',
+        );
+        // Counted on the day of the database's clock, the one the check read.
+        await ledger.record(match.license_id, refusal.reason, identityCheck?.checkedAt);
+        continue;
+      }
       request.log.warn(
         { license_id: match.license_id.toString(), reason: refusal.reason, source: refusal.source },
         'member credential refused; answered as a new visitor',
       );
+    }
+    if (member.via === 'identity') {
+      await ledger.record(match.license_id, 'verified', identityCheck?.checkedAt);
     }
     const customerId = member.customerId;
 
@@ -2075,7 +2117,10 @@ export default async function authRoutes(
       'Set-Cookie',
       memberTokenCookie(memberCookie, member.memberToken, member.ttlSeconds, request),
     );
-    const cookieCarriedIt = presented?.source === 'cookie' && member.via === 'token';
+    // The cookie works in this browser when the token it carried was believed —
+    // also when a signed identity then named the customer (tm 388), whose
+    // token the same Set-Cookie now holds.
+    const cookieCarriedIt = presented?.source === 'cookie' && member.tokenBelieved;
     return reply.send({
       token,
       expires_in: expiresIn,
@@ -2083,6 +2128,9 @@ export default async function authRoutes(
       organization_id: match.organization_id,
       ...(cookieCarriedIt ? {} : { member_token: member.memberToken }),
       member_token_expires_at: member.expiresAt.toISOString(),
+      // The customer's property, not the request's identity (tm 388): a refused
+      // identity and none at all read the same here.
+      identity_verified: member.identityVerified,
       // Where the widget dials for its socket (FR-MOD-11.6). It cannot derive
       // this: the gateway is a separate process on its own origin, and nothing
       // in `apiBaseUrl` says where. Handed over at mint alongside the appearance
@@ -2096,7 +2144,9 @@ export default async function authRoutes(
       widget,
       file_sharing_enabled: fileSharingEnabled,
       campaign_tracking: campaignTracking,
-      prechat,
+      // The username the operator signed is the member's (WG-01 · ID-03 · K28):
+      // the form does not ask for one it already has, verified.
+      prechat: member.usernameVerified ? withoutUsernameField(prechat) : prechat,
       pre_chat_form: forms.pre_chat,
       post_chat_form: forms.post_chat,
       ticket_form: forms.ticket,
@@ -2315,6 +2365,16 @@ async function campaignTrackingFor(
     request.log.warn({ err: error }, 'failed to read whether a campaign is running');
     return false;
   }
+}
+
+/**
+ * The form a verified member is shown (WG-01-S3 · ID-03 · K28 · tm 388): the
+ * brand's own, with the username field hidden — the record already holds the
+ * username the operator signed, and the chat-start check counts a detail on
+ * the contact as given. The rest of the form is the brand's choice.
+ */
+function withoutUsernameField(config: PrechatConfig): PrechatConfig {
+  return { ...config, fields: { ...config.fields, username: { visible: false, required: false } } };
 }
 
 /**

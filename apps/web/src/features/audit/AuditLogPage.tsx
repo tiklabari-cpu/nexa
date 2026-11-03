@@ -336,6 +336,7 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
       // new visitors at once, so it is found where the other credentials are.
       'member_token_key.rotated',
       'member_tokens.revoked',
+      'member_identity_secret.rotated',
     ],
   },
   { labelKey: 'audit.group.data', actions: ['data.retention_pruned', 'data.deleted'] },

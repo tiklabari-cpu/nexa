@@ -569,6 +569,11 @@ export const AUDIT_ACTIONS = [
   // moment for a revocation — never the key and never a token.
   'member_token_key.rotated',
   'member_tokens.revoked',
+  // The operator-signed identity's secret was issued or replaced (ID-03 · K28 ·
+  // tm 388) — the key the operator's servers sign members with, so a rotation
+  // with no grace stops every logged-in member being recognised until they
+  // deploy the new one. Versions and the grace window; never the secret.
+  'member_identity_secret.rotated',
   // A handset was allowed to receive this workspace's conversations, or stopped
   // being allowed (FR-MOD-13.7 · 13.7-c). Recorded because a push registration
   // is a standing permission to deliver customer messages to a physical device

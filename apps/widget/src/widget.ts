@@ -2087,7 +2087,10 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       // the widget knows whether anybody is available, which is what decides
       // between the composer and the offline form.
       renderPanelBody();
-      renderEvents();
+      // Wholesale, not appended: a mint after `identify` may speak for another
+      // customer than the transcript on screen (tm 388), whose bubbles must go.
+      // The first mint draws the same either way — nothing is on screen yet.
+      rerenderTranscript();
       renderStatus();
       renderHeader();
       renderTyping();
@@ -2152,6 +2155,35 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     await api.forget();
     forgetLastReadAt(win);
     postToHost(win, { type: 'siyahtus:logged-out' });
+  }
+
+  /**
+   * `siyahtus('identify', {...})` (ID-03 · K28 · tm 388), relayed here from the
+   * loader: the operator's server signed the member logged in on the page.
+   *
+   * Minted for at once, not when the panel opens: a signature lives five
+   * minutes and is spent on first use, so one left waiting in the page is
+   * both likely to go stale and worth something to whoever reads it first. A
+   * mint already out went without it, so it lands first and another follows.
+   * The payload goes as the page gave it — the server checks it and ignores
+   * anything that does not verify, answering exactly as without it.
+   *
+   * The second mint may name another customer (this browser was someone else,
+   * or nobody, until the sign-in): the socket logged in as the old one closes
+   * first and the poll drops a snapshot fetched with the old token
+   * (`refresh`), so nothing of theirs is drawn after the new one's. The mint
+   * itself replaces the transcript, the chat and the forms, as on any connect.
+   */
+  async function identify(identity: unknown): Promise<void> {
+    if (loggingOut) return;
+    api.pageHints.identity = identity;
+    await connecting;
+    if (state.connected) {
+      socket?.close();
+      socket = null;
+      state.connected = false;
+    }
+    await connect();
   }
 
   /**
@@ -2372,6 +2404,9 @@ export function mount(doc: Document = document, win: Window = window): () => voi
 
   async function refresh(): Promise<void> {
     if (!state.connected) return;
+    // Whose snapshot this is: a mint that lands meanwhile (`identify`) may
+    // have made this browser another customer, and theirs must not be drawn.
+    const token = api.token;
     // The request alone, so that only *it* failing counts against the
     // connection — a rendering fault below is ours, not the network's.
     let snapshot: Awaited<ReturnType<typeof api.state>>;
@@ -2382,7 +2417,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       console.warn('siyahtus widget: refresh failed', error);
       return;
     }
-    if (stopped) return;
+    if (stopped || token !== api.token) return;
     notePollAnswered();
     try {
       const previousChatId = state.chatId;
@@ -3042,6 +3077,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
         if (data.command === 'logout') void logout();
         if (data.command === 'open') setOpen(true);
         const variables = data.payload;
+        if (data.command === 'identify') void identify(variables);
         if (data.command === 'setSessionVariables' && typeof variables === 'object' && variables) {
           sessionVariables = { ...sessionVariables, ...variables };
           if (api.campaignTracking) withTargeting((loaded) => loaded.variables(sessionVariables));

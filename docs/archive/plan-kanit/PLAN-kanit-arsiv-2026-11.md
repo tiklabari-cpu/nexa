@@ -2,6 +2,10 @@
 
 Canlı `PLAN.md` § K bloklarından taşınan eski kanıt maddeleri (CONVENTIONS §1.2).
 
+#### KS1-S5 — S1–S5 · Auth · token · scope · tenant izolasyonu · IDOR
+
+- ✅ tm 287.3 · ID-03 3/5 (K4): widget üye tokenını kimlik bilgili basımla (`credentials: 'include'`) bölümlü `HttpOnly` çerezde tutar, çerez taşıyınca kendi kopyasını siler; çerez (`siyahtus_member_<kuruluş>`) ve localStorage kuruluş başına (tm 287.2'nin paylaşılan yuvası bir kez taşınır); `siyahtus('logout')` → widget bu sitedeki bütün kimlikleri siler, `DELETE /customer/token` bütün üye çerezlerini düşürür (iptal etmez), yükleyici çerçeveyi yeniden açar; panelde `await siyahtus('logout');` örneği; damga değişmedi · `api.ts:248`, `:340`, `widget.ts:1522`, `loader.ts:292`, `auth.ts:1714`, `:1862`, `types/member-recognition.ts:43`, `auth.yaml:1017` · `member-token.test.ts` (45), `production-boot.test.ts` (11), widget `api.member.test.ts` (14) + `widget.logout.test.ts` (4) + `loader.test.ts` (+5), e2e `widget.spec.ts` (+2) · §D242
+
 #### K08.6.1 — 08.6.1 · Chat routing kural motoru + fallback
 
 - ✅ tm 307.2 · AI-12 2/3 (devir hedefi çözücü · ADR-14b §2.12): sıra adımın/kuralın ekibi (id, eski adımda ad) → neden rotası (en ağır neden önce, marka sonra tüm markalar) → konu rotası / rolün ekibi (korkuluk yazımı `handoffTopicRole` ile) → aynı gün dönüşü (ekip + ajan önce) → gitmiş hedefte yedek ekip → yönlendirme; rotanın yeteneği `threads.required_expertise_id` ile kuyrukta da geçerli (eğitimsize düşmez, acil bekler, boşaltma onu atlayıp arkadakileri verir), rotanın önceliği taban, hedef ekipte kabul eden yoksa mesai dışı metni (kriz metninden sonra) + e-posta biliniyorsa tek talep, karar kaydında `handoff_target` / `handoff_target_fallback` · `services/ai/conversation/handoff/target-resolver.ts`, `handoff-service.ts`, `ai-responder.ts` `#aim`, `routing-service.ts` `assignWithinGroup`/`#drainTeam` · migration `20261020200000_threads_required_expertise` · `test/integration/handoff-target.test.ts` (9) · `target-resolver.test.ts` (13) · `handoff-routes.test.ts` (types, +1) · §D303

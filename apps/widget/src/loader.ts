@@ -138,6 +138,12 @@ let logoutWaiters: Array<() => void> = [];
  * returned promise resolves once it has — so a page can `await` it before
  * navigating away, which would otherwise tear the frame down mid-forget. It
  * never rejects, and resolves after `LOGOUT_TIMEOUT_MS` whatever happened.
+ *
+ * `siyahtus('identify', {user_id, username?, email?, ts, user_hash})` (ID-03 ·
+ * K28 · tm 388) needs nothing of its own here: the operator's server signed
+ * the logged-in member, the payload is opaque to this script, and it rides the
+ * same queue and relay as every other command — the widget document mints with
+ * it and the server checks it. Nothing extra on the host page's budget.
  */
 function siyahtus(command: string, payload?: SiyahTusCommandPayload): Promise<void> | undefined {
   try {

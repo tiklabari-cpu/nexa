@@ -42,6 +42,7 @@ import {
   type Fixtures,
   type TenantFixture,
 } from '../helpers/fixtures.js';
+import { dbSeconds, enableSignedIdentity, signedIdentity } from '../helpers/member-identity.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const BONUS = 'Bonus kurallarını kısaca anlat.';
@@ -255,6 +256,24 @@ describe('the widget’s human check (GV-01 · tm 339.2)', () => {
       const back = await visitor(server, fx.a, ip, { member_token: member.memberToken });
       expect(back.customerId).toBe(member.customerId);
       expect((await say(server, ip, back, 'merhaba')).statusCode).toBe(201);
+    });
+
+    it('never asks a member the operator’s site vouched for (K28), however busy the address (GV-01)', async () => {
+      const secret = await enableSignedIdentity(server, owner, fx.a);
+      const ip = freshIp();
+      await visitor(server, fx.a, ip);
+      await visitor(server, fx.a, ip);
+      expect((await mint(server, fx.a, ip)).statusCode).toBe(403);
+
+      // A first visit from the same busy address, signed in on the operator's
+      // site: not asked at the mint, nor at the message that opens the chat.
+      const identity = signedIdentity(secret, {
+        userId: `gv01-${Date.now()}`,
+        ts: await dbSeconds(owner),
+      });
+      const member = await visitor(server, fx.a, ip, { identity });
+      expect(await passedAt(member.customerId)).toBeNull();
+      expect((await say(server, ip, member, 'merhaba')).statusCode).toBe(201);
     });
 
     it('asks nobody while the workspace’s mode is off', async () => {

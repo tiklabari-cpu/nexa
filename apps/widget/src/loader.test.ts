@@ -383,6 +383,25 @@ describe('siyahtus command queue (FR-MOD-13.5)', () => {
   it('does not throw when called before the widget has ever booted', () => {
     expect(() => siyahtusGlobal()('trackSale', payload)).not.toThrow();
   });
+
+  it('relays an operator-signed identity untouched, queued like any command (ID-03 · K28)', () => {
+    boot(setup({}));
+    const el = frame()!;
+    const post = vi.spyOn(el.contentWindow!, 'postMessage');
+    const identity = { user_id: 'player-42', ts: 1_730_000_000, user_hash: 'a'.repeat(64) };
+
+    siyahtusGlobal()('identify', identity);
+    expect(post).not.toHaveBeenCalled();
+    markReady(el);
+    // Only to the widget's origin, and nothing of it lands on the host page —
+    // not in the frame's address, not in the page's text.
+    expect(post).toHaveBeenCalledWith(
+      { type: 'siyahtus:command', command: 'identify', payload: identity },
+      'https://widget.test',
+    );
+    expect(el.getAttribute('src')).not.toContain('player-42');
+    expect(document.body.textContent).not.toContain('player-42');
+  });
 });
 
 describe('the frame follows the widget document’s corner (UX audit D17)', () => {

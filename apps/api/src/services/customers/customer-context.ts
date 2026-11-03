@@ -131,6 +131,9 @@ export async function readCustomerContext(
       name: true,
       email: true,
       username: true,
+      usernameVerified: true,
+      platformUserId: true,
+      identityVerifiedAt: true,
       countryCode: true,
       country: true,
       bannedAt: true,
@@ -243,6 +246,12 @@ export async function readCustomerContext(
         id: customer.id,
         name: customer.name,
         username: customer.username,
+        username_verified: customer.usernameVerified,
+        // The operator's id for the member identifies the person like the
+        // username does (tm 388): hidden from a caller who may not see contacts.
+        platform_user_id: contactVisible ? customer.platformUserId : null,
+        // A status, not a contact detail: every agent sees that it is verified.
+        identity_verified_at: customer.identityVerifiedAt?.toISOString() ?? null,
         email: customer.email,
         country_code: countryCode,
         country: customer.country,

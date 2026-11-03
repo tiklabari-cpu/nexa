@@ -64,8 +64,28 @@ export interface CustomerContext {
   customer: {
     id: string;
     name: string | null;
-    /** Typed by the player; unverified. Null when not given — or not visible to the caller. */
+    /**
+     * Typed by the player — unverified — unless `username_verified`. Null when
+     * not given, or not visible to the caller.
+     */
     username: string | null;
+    /**
+     * The username came from the operator-signed identity (ID-03 · K28 ·
+     * tm 388), not from the player's own typing.
+     */
+    username_verified: boolean;
+    /**
+     * The member's id on the operator's platform, from an operator-signed
+     * identity; null when none was ever verified — or not visible to the
+     * caller (it identifies the person, like the username).
+     */
+    platform_user_id: string | null;
+    /**
+     * When the operator's site last vouched for this member (a valid signed
+     * identity); null when never. Seen by every agent: it is a status, not a
+     * contact detail.
+     */
+    identity_verified_at: string | null;
     email: string | null;
     country_code: string | null;
     country: string | null;

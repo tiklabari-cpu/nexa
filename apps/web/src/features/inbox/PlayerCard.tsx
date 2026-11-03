@@ -75,6 +75,16 @@ export function PlayerCard({
               {customer.name ?? t('customers.detail.unnamedVisitor')}
             </span>
             {customer.banned && <Badge tone="danger">{t('inbox.playerCard.banned')}</Badge>}
+            {/* The operator's site vouched for this member (ID-03 · K28 · tm 388). */}
+            {customer.identity_verified_at && (
+              <span
+                title={t('inbox.playerCard.verifiedMemberHint', {
+                  date: formatDate(customer.identity_verified_at) ?? '',
+                })}
+              >
+                <Badge tone="success">{t('inbox.playerCard.verifiedMember')}</Badge>
+              </span>
+            )}
             <Link
               to={`/app/customers?customer=${encodeURIComponent(customer.id)}`}
               className="ml-auto shrink-0 text-2xs text-content-brand underline underline-offset-2"
@@ -87,12 +97,24 @@ export function PlayerCard({
           <Field label={t('inbox.playerCard.username')}>
             <span className="flex flex-col items-end gap-1">
               <ContactValue field={contactField(customer.username, context.contact_visible)} />
-              {customer.username && <Badge>{t('inbox.handoffCard.declared')}</Badge>}
+              {customer.username &&
+                (customer.username_verified ? (
+                  <Badge tone="success">{t('inbox.playerCard.usernameVerified')}</Badge>
+                ) : (
+                  <Badge>{t('inbox.handoffCard.declared')}</Badge>
+                ))}
               {recognizedDevice && (
                 <Badge tone="success">{t('inbox.handoffCard.recognizedDevice')}</Badge>
               )}
             </span>
           </Field>
+          {customer.identity_verified_at && (
+            <Field label={t('inbox.playerCard.platformUserId')}>
+              <ContactValue
+                field={contactField(customer.platform_user_id, context.contact_visible)}
+              />
+            </Field>
+          )}
           <Field label={t('inbox.playerCard.email')}>
             <ContactValue field={contactField(customer.email, context.contact_visible)} />
           </Field>

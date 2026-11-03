@@ -128,6 +128,9 @@ describe('the player card beside a chat (IN-02 · tm 331.1)', () => {
       username: string;
       countryCode: string;
       bannedAt: Date;
+      platformUserId: string;
+      identityVerifiedAt: Date;
+      usernameVerified: boolean;
     }> = {},
   ): Promise<string> {
     const row = await owner.customer.create({
@@ -290,6 +293,10 @@ describe('the player card beside a chat (IN-02 · tm 331.1)', () => {
       id: customerId,
       name: 'Ada Oyuncu',
       username: 'ada_77',
+      // Typed into the pre-chat form, nobody vouched for it (tm 388).
+      username_verified: false,
+      platform_user_id: null,
+      identity_verified_at: null,
       email: 'ada@example.test',
       // No country on the record: the newest visit's, with its city.
       country_code: 'TR',
@@ -598,6 +605,55 @@ describe('the player card beside a chat (IN-02 · tm 331.1)', () => {
     expect((await read(own, visitor)).status).toBe(404);
 
     expect((await read(generateShortId())).status).toBe(404);
+  });
+
+  it('badges a member the operator vouched for to every agent, the platform id only to one who may see contacts (FR-MOD-04.RBAC)', async () => {
+    const verifiedAt = new Date('2026-11-03T09:00:00.000Z');
+    const customerId = await player(fx.a, {
+      name: 'Ada',
+      username: 'ada_signed',
+      usernameVerified: true,
+      platformUserId: 'player-388',
+      identityVerifiedAt: verifiedAt,
+    });
+    const { chatId } = await seedDay(fx.a, {
+      customerId,
+      groupIds: [finance],
+      connections: [{ at: new Date(Date.now() - HOUR), groupId: finance }],
+    });
+
+    const seen = await read(chatId);
+    expect(seen.status, seen.body).toBe(200);
+    expect(seen.json.customer).toMatchObject({
+      username: 'ada_signed',
+      username_verified: true,
+      platform_user_id: 'player-388',
+      identity_verified_at: verifiedAt.toISOString(),
+    });
+
+    const hide: CapabilityOverride = {
+      role: 'agent',
+      capability: 'customers.contact.view',
+      value: 'off',
+    };
+    const put = await server.put(
+      '/settings/permissions',
+      { changes: [hide], reason: 'Oyuncu verisi yalnız yöneticilerde' },
+      founder,
+    );
+    expect(put.statusCode, put.body).toBe(200);
+
+    const masked = await read(chatId);
+    expect(masked.json.contact_visible).toBe(false);
+    // The member id identifies the person like the username does; that they
+    // are verified is a status every agent sees.
+    expect(masked.json.customer).toMatchObject({
+      username: null,
+      platform_user_id: null,
+      username_verified: true,
+      identity_verified_at: verifiedAt.toISOString(),
+    });
+    expect(masked.body).not.toContain('player-388');
   });
 
   it('masks the email and username for a caller without customers.contact.view, in the prose around them too (FR-MOD-04.RBAC)', async () => {

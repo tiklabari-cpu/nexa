@@ -303,6 +303,7 @@ model License {
   memberTokenKey            MemberTokenKey?
   memberTokenRevocations    MemberTokenRevocation[]
   memberRecognitionSettings MemberRecognitionSettings?
+  memberIdentitySecret      MemberIdentitySecret?
 
   invitations Invitation[]
 
@@ -565,6 +566,18 @@ model Customer {
   /// When the member last passed the widget's human check (tm 339.2 · GV-01);
   /// a pass spares them another for `CHALLENGE_PASS_TTL_HOURS`. NULL: never.
   challengePassedAt    DateTime? @map("challenge_passed_at") @db.Timestamptz(6)
+  /// The member's id on the operator's platform, from an operator-signed
+  /// identity (ID-03 · K28 · tm 388), exactly as signed. Unique per
+  /// organization (`customers_organization_id_platform_user_id_key`, a partial
+  /// index Prisma cannot express — 20261224090100): a valid signature finds
+  /// its customer by it, so every device of one member is one record.
+  platformUserId       String?   @map("platform_user_id")
+  /// When a valid signature last named this member. Set with
+  /// `platformUserId`, never without (`customers_platform_identity_check`).
+  identityVerifiedAt   DateTime? @map("identity_verified_at") @db.Timestamptz(6)
+  /// The username is the one the operator signed, not the player's typing.
+  /// Only on a verified member; an agent's edit clears it.
+  usernameVerified     Boolean   @default(false) @map("username_verified")
 
   chats             Chat[]
   tickets           Ticket[]
@@ -596,7 +609,9 @@ model Customer {
   /// `(organization_id, username_normalized) WHERE username_normalized IS NOT
   /// NULL` (20261015090100) — equality on the folded username, reachable under
   /// RLS. Prisma cannot express the WHERE, so `scripts/check-drift.ts` allows
-  /// it by name.
+  /// it by name. Likewise `customers_organization_id_platform_user_id_key`, the
+  /// UNIQUE `(organization_id, platform_user_id) WHERE platform_user_id IS NOT
+  /// NULL` (20261224090100).
   @@map("customers")
 }
 
@@ -682,11 +697,37 @@ model MemberRecognitionSettings {
   /// Whether agents see possible matches: other customers with the same
   /// pre-chat username or e-mail, unverified.
   possibleMatchesEnabled Boolean  @default(true) @map("possible_matches_enabled")
+  /// The operator-signed identity switch (ID-03 · K28 · tm 388). Off: an
+  /// identify call is ignored, whatever it carries. On without a secret in
+  /// `MemberIdentitySecret` is still off in effect.
+  signedIdentityEnabled  Boolean  @default(false) @map("signed_identity_enabled")
   updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 
   @@map("member_recognition_settings")
+}
+
+/// A licence's operator-signed identity secret (ID-03 · K28 · tm 388) — the
+/// HMAC key the operator's server signs the logged-in member's identity with.
+/// Shown to the admin once, when issued; stored AES-256-GCM sealed
+/// (`lib/credential-cipher.ts` format), bound to this licence and version by its
+/// additional data, under a key-encryption key of its own (not the member-token
+/// key's). A rotation keeps the replaced secret in `previous*` until
+/// `previousSecretValidUntil` (all three or none; one slot). Never deleted by
+/// the application role. CHECKs and RLS: 20261224090000.
+model MemberIdentitySecret {
+  licenseId                BigInt    @id @map("license_id")
+  secretVersion            Int       @map("secret_version")
+  secretCiphertext         String    @map("secret_ciphertext")
+  secretCreatedAt          DateTime  @default(now()) @map("secret_created_at") @db.Timestamptz(6)
+  previousSecretVersion    Int?      @map("previous_secret_version")
+  previousSecretCiphertext String?   @map("previous_secret_ciphertext")
+  previousSecretValidUntil DateTime? @map("previous_secret_valid_until") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@map("member_identity_secrets")
 }
 
 /// An agent's confirmation that two customer records are the same person —

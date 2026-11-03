@@ -238,7 +238,7 @@ export function boot(
   let open = false;
 
   const applyGeometry = (): void => {
-    if (open && config.mobileFullscreen && win.innerWidth <= MOBILE_MAX_WIDTH) {
+    if (open && config.mobileFullscreen !== false && win.innerWidth <= MOBILE_MAX_WIDTH) {
       // Edge-to-edge: the launcher's corner offsets would leave a gap, so clear
       // them and pin all four sides.
       Object.assign(frame.style, {

@@ -16191,10 +16191,10 @@
         "description": "Varsayılan snippet ile kurulan widget 360-414 px ekranda açılınca panel soldan 14-68 px kesiliyor (\"Email\" → \"il\"). Ayar \"Mobilde tam ekran: açık\" görünüyor ama loader'a hiç ulaşmıyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT:\n- `apps/widget/src/loader.ts:241`: `if (open && config.mobileFullscreen && win.innerWidth <= MOBILE_MAX_WIDTH)` — alan yoksa (`undefined`) tam ekran yok.\n- `apps/api/src/services/websites/website-service.ts:274` `appearanceFields()`: yalnız varsayılandan FARKLI alanları yazar; `DEFAULT_WIDGET_APPEARANCE.mobile_fullscreen` true olduğu için varsayılan kurulumda `mobileFullscreen` snippet'e hiç girmez.\n- Widget tarafı varsayılanı true (`apps/widget/src/widget.ts:189`), `loader.ts:396` yalnız `=== false` iken `mobile_full=0` yollar — yani loader dışındaki her yer \"yoksa true\" der.\n- Ölçüm: 375/360/414 px viewport, widget açık → iframe left=60, panel 400 px; ekranda negatif sol kenar.\n\nYAPILACAK: loader'ın varsayılanını ürünle hizala (`config.mobileFullscreen !== false`), böylece müşterinin sayfasında zaten duran eski snippet'ler de düzelir. Snippet üretecini değiştirmek tek başına YETMEZ (yapıştırılmış snippet'ler güncellenmez); istenirse ek olarak yapılabilir.\n\nTUZAK — BUNDLE BÜTÇESİ: 2026-11-03 ölçümünde widget toplamı 66,300 B / tavan 66,304 B (`apps/widget/test/bundle-size.test.ts:56`), yani 4 B pay. loader.js toplamın içinde sayılır. Değişiklik bütçeyi aşarsa aynı dosyada (loader.ts) eşdeğer bayt kazan; tavanı yükseltmek sahip kararıdır, bu görevde YAPILMAZ. Lazy chunk kuralı için memory widget-bundle-budget-and-css-minify. Aşılamazsa görevi blocked bırak, nedenini HANDOFF'a yaz (bkz. WIDGET-BUNDLE-HEADROOM görevi).\n\nKAPSAM DIŞI: widget içi yerleşim, ayar ekranı, kontrat.",
         "testStrategy": "Widget birim (loader.appearance.test.ts / loader.test.ts): `mobileFullscreen` alanı yokken dar ekranda açılış tam ekran; `false` iken kart; geniş ekranda kart. bundle-size.test.ts yeşil. e2e: 375 px viewport'ta widget açılınca iframe sol kenarı 0 ve genişlik viewport'a eşit (mevcut widget spec'ine ek test). DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-11-03T20:52:39.380Z",
+        "updatedAt": "2026-11-03T21:59:53.718Z",
         "subtasks": []
       },
       {
@@ -16336,9 +16336,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-03T20:52:39.381Z",
+      "lastModified": "2026-11-03T21:59:53.719Z",
       "taskCount": 405,
-      "completedCount": 391,
+      "completedCount": 392,
       "tags": [
         "master"
       ]

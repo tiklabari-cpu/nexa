@@ -128,6 +128,25 @@ test.describe('widget embedding', () => {
     await expect.poll(async () => (await frameElement.boundingBox())!.width).toBeLessThan(150);
   });
 
+  test('opens edge to edge on a phone with the default snippet (tm 394)', async ({
+    page,
+    organizationId,
+  }) => {
+    // The demo page's snippet carries no `mobileFullscreen`, like a default
+    // install: the loader used to read the missing flag as "off" and left the
+    // 400 px card hanging 14-68 px off a 360-414 px screen.
+    await page.setViewportSize({ width: 375, height: 700 });
+    await page.goto(`${HOST_PAGE}/demo.html?organization_id=${organizationId}`);
+    const frameElement = page.locator('#siyahtus-widget-frame');
+
+    await widgetFrame(page).getByRole('button', { name: 'Open chat' }).click();
+    await expect.poll(async () => (await frameElement.boundingBox())!.width).toBe(375);
+    const box = (await frameElement.boundingBox())!;
+    expect(box.x).toBe(0);
+    expect(box.y).toBe(0);
+    expect(box.height).toBe(700);
+  });
+
   test('sends a message and keeps it after a reload', async ({ page, organizationId }) => {
     await openWidget(page, organizationId);
     const text = `Do you ship to Norway? ${Date.now().toString().slice(-6)}`;

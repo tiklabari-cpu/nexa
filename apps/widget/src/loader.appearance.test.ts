@@ -82,6 +82,27 @@ describe('loader mobile fullscreen', () => {
     expect(el.style.bottom).toBe('0px');
   });
 
+  it('fills the viewport on a phone when the snippet carries no mobileFullscreen at all (the default install)', () => {
+    boot(setup({}));
+    dispatch('siyahtus:open');
+
+    const el = frame()!;
+    expect(el.style.left).toBe('0px');
+    expect(el.style.right).toBe('0px');
+    expect(el.style.width).toBe('100%');
+    expect(el.style.height).toBe('100%');
+  });
+
+  it('stays a floating card on a wide screen when the snippet carries no mobileFullscreen', () => {
+    setViewportWidth(1280);
+    boot(setup({}));
+    dispatch('siyahtus:open');
+
+    const el = frame()!;
+    expect(el.style.width).not.toBe('100%');
+    expect(el.style.top).toBe('');
+  });
+
   it('returns to the corner launcher when the panel closes', () => {
     boot(setup({ mobileFullscreen: true }));
     dispatch('siyahtus:open');

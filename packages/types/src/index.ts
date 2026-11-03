@@ -109,3 +109,4 @@ export * from './igaming-tools.js';
 export * from './billing-payments.js';
 export * from './billing-profile.js';
 export * from './subscription-cancel.js';
+export * from './custom-panels.js';

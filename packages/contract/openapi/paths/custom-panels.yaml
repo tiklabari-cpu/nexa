@@ -1,0 +1,251 @@
+# Custom panels — an operator's own page in the Inbox right panel (KN-05 · K29 · tm 379).
+#
+# Defined by an admin under Settings › Integrations; shown to whoever works a
+# conversation of one of the panel's teams. The page gets the conversation as a
+# short-lived token signed with the panel's own secret, by postMessage — never
+# in an address (GV-05).
+
+customPanels:
+  get:
+    tags: [Settings]
+    operationId: listCustomPanels
+    summary: The workspace's custom panels
+    description: |
+      Every panel, enabled or not, oldest first. The signing secret is never
+      read back: it is shown once, when the panel is created or its secret is
+      replaced.
+    responses:
+      "200":
+        description: The panels
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  maxItems: 20
+                  items: { $ref: "../openapi.yaml#/components/schemas/CustomPanel" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Settings]
+    operationId: createCustomPanel
+    summary: Add a custom panel
+    description: |
+      Owner or admin. `url` must be an `https://` address without credentials
+      or a fragment (the console writes its own fragment). `visible_group_ids`
+      limits the panel to conversations of those teams; empty shows it on every
+      team's conversations. At most 20 panels per workspace — the 21st is
+      refused with `400` and `details.reason: limit_reached`.
+
+      The response carries `signing_secret`, the HMAC-SHA256 key the context
+      tokens are signed with. It is not stored readable anywhere a member can
+      reach and is never returned again; keep it on the page's server.
+      Recorded in the audit trail (`custom_panel.created`).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [name, url]
+            properties:
+              name: { type: string, minLength: 1, maxLength: 60 }
+              url: { type: string, maxLength: 2048, format: uri }
+              visible_group_ids:
+                type: array
+                maxItems: 50
+                items: { type: integer, minimum: 1 }
+                default: []
+              enabled: { type: boolean, default: true }
+    responses:
+      "201":
+        description: Added — the only time the secret is shown, with the rotation's
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CustomPanelWithSecret" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+customPanel:
+  parameters:
+    - name: panelId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  patch:
+    tags: [Settings]
+    operationId: updateCustomPanel
+    summary: Change a custom panel
+    description: |
+      Owner or admin. Any of the four fields; an omitted one is unchanged. The
+      secret stays the same (`POST …/rotate-secret` replaces it). Recorded in
+      the audit trail (`custom_panel.updated`, the changed field names).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            minProperties: 1
+            properties:
+              name: { type: string, minLength: 1, maxLength: 60 }
+              url: { type: string, maxLength: 2048, format: uri }
+              visible_group_ids:
+                type: array
+                maxItems: 50
+                items: { type: integer, minimum: 1 }
+              enabled: { type: boolean }
+    responses:
+      "200":
+        description: The panel as it now is
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CustomPanel" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Settings]
+    operationId: deleteCustomPanel
+    summary: Remove a custom panel
+    description: |
+      Owner or admin. Gone from every conversation on the next read; tokens
+      already handed out stay valid until they expire (at most five minutes) —
+      the page's server holds the secret, nothing here can recall them.
+      Recorded in the audit trail (`custom_panel.deleted`).
+    responses:
+      "204": { description: Removed }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+customPanelRotateSecret:
+  parameters:
+    - name: panelId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Settings]
+    operationId: rotateCustomPanelSecret
+    summary: Replace a custom panel's signing secret
+    description: |
+      Owner or admin. The old secret stops signing at once; there is no overlap
+      window — the page's server should take the new value before the next
+      token (at most five minutes of tokens signed with the old one are still
+      in the field). Shown once, like on creation. Recorded in the audit trail
+      (`custom_panel.secret_rotated`).
+    responses:
+      "200":
+        description: The panel and its new secret
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CustomPanelWithSecret" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+chatPanels:
+  parameters:
+    - name: chatId
+      in: path
+      required: true
+      schema: { type: string }
+
+  get:
+    tags: [Chats]
+    operationId: listChatPanels
+    summary: The custom panels this conversation shows
+    description: |
+      The enabled panels for one of this conversation's teams (or for every
+      team), oldest first — what the Details pane embeds. A conversation the
+      caller may not see is `404`, like its transcript (NFR-S5). Holds no
+      secret and no player data.
+    responses:
+      "200":
+        description: Zero or more panels
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  maxItems: 20
+                  items: { $ref: "../openapi.yaml#/components/schemas/ChatPanel" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+chatPanelContextToken:
+  parameters:
+    - name: chatId
+      in: path
+      required: true
+      schema: { type: string }
+    - name: panelId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Chats]
+    operationId: createChatPanelContextToken
+    summary: A signed, five-minute context token for one panel and one conversation
+    description: |
+      An agent's console asks for this when the panel's page says it is ready,
+      and hands the token to the page by postMessage. HS256 JWT signed with the
+      panel's secret; claims: `iss` `siyahtus`, `aud` `siyahtus-panel:<panel
+      id>`, `iat`, `exp` (`iat` + 300), `jti`, `delivery`, `org_id`,
+      `license_id`, `panel_id`, `chat_id`, `thread_id` (the newest connection),
+      `agent_id`, and — only on a `frame` token, and only when the caller's
+      role may see player contact details — `player.username` with
+      `player.username_verified` (true only for an operator-signed identity).
+
+      `delivery: link` is the token for the "open in a new tab" address of a
+      page that refuses to be framed: the same claims without `player`, since
+      an address is where the username must not go (GV-05).
+
+      `404` when the conversation is not the caller's to see, or the panel is
+      disabled, gone, or not shown for this conversation's teams.
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              delivery:
+                type: string
+                enum: [frame, link]
+                default: frame
+    responses:
+      "200":
+        description: The token
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PanelContextToken" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

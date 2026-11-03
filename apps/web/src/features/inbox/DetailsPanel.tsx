@@ -18,6 +18,7 @@ import {
 } from '../customers/MemberIdentity.js';
 import { RiskSection } from '../risk/RiskSection.js';
 import { AiHandoffSection, JUDGE_SCOPES } from './AiHandoffCard.js';
+import { CustomPanelsSection } from './CustomPanelsSection.js';
 import { PlayerCard } from './PlayerCard.js';
 import { canTakeOver } from './takeover.js';
 import { TransferDialog } from './TransferDialog.js';
@@ -219,6 +220,10 @@ export function DetailsPanel({
           customerId={chat.customer_id}
           recognizedDevice={chat.latest_ai_handoff?.player.recognized_device === true}
         />
+
+        {/* The operator's own pages (KN-05 · tm 379) — a back-office player card beside
+          the platform's own; nothing is drawn when no panel is for this conversation. */}
+        <CustomPanelsSection chatId={chatId} canInsert={chat.active} />
 
         <PanelSection title={t('inbox.details.section.conversation')}>
           <Row label={t('inbox.details.row.status')}>

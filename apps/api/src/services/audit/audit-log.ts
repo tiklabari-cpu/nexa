@@ -596,6 +596,15 @@ export const AUDIT_ACTIONS = [
   'partner_app.updated',
   'partner_app.deleted',
   'partner_app.secret_rotated',
+  // Custom panels (KN-05 · tm 379): a third-party page every matching
+  // conversation hands a signed player context to. Who pointed the console at
+  // which address, and when its secret changed, is the question after a leak —
+  // the target names the panel, the metadata its changed field names and the
+  // address's origin, never the secret.
+  'custom_panel.created',
+  'custom_panel.updated',
+  'custom_panel.deleted',
+  'custom_panel.secret_rotated',
   // MCP tool calls (FR-MOD-08.8.3). An MCP client (Claude, ChatGPT, …) invoked a
   // tool against the workspace. Recorded because these calls read tenant data
   // through an automated agent that can chain many requests, so the trail of

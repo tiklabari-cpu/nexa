@@ -425,6 +425,15 @@ export const inbox: Messages = {
   'inbox.details.apps.demo': 'Demo',
   'inbox.details.apps.unavailable': 'Bu bilgi şu anda {name} üzerinden alınamadı.',
   'inbox.details.apps.noRecord': 'Bu müşteri için kayıt yok.',
+  // Özel paneller (KN-05 · tm 379): operatörün kendi sayfası sohbetin yanında.
+  'inbox.details.customPanels.opens': '{origin} adresini açar',
+  'inbox.details.customPanels.openInNewTab': 'Yeni sekmede aç',
+  'inbox.details.customPanels.frameTitle': '{name} (özel panel)',
+  'inbox.details.customPanels.contextError':
+    'Bu panele sohbet bilgisi verilemedi. Panel yeniden yüklendiğinde tekrar denenecek.',
+  'inbox.details.customPanels.linkError': 'Bu panel yeni sekmede açılamadı.',
+  'inbox.details.customPanels.suggested':
+    'Panel yanıt kutusuna bir öneri yazdı. Göndermeden önce okuyun.',
   'inbox.details.section.visitedPages': 'Ziyaret edilen sayfalar',
   'inbox.details.visitedPages.empty': 'Bu ziyaretçi için kayıtlı sayfa yok.',
   'inbox.details.section.visitInfo': 'Ziyaret bilgisi',

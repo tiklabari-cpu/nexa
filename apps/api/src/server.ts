@@ -99,6 +99,7 @@ import settingsRoutes from './routes/settings.js';
 import permissionRoutes from './routes/permissions.js';
 import onboardingRoutes from './routes/onboarding.js';
 import websiteRoutes from './routes/websites.js';
+import customPanelRoutes from './routes/custom-panels.js';
 import brandRoutes from './routes/brands.js';
 import webhookRoutes from './routes/webhooks.js';
 import partnerAppRoutes from './routes/partner-apps.js';
@@ -712,6 +713,8 @@ export async function buildServer({
       await api.register(permissionRoutes, { env });
       await api.register(onboardingRoutes);
       await api.register(websiteRoutes, { env });
+      // An operator's own page in the Inbox right panel (KN-05 · tm 379).
+      await api.register(customPanelRoutes, { env });
       await api.register(brandRoutes);
       await api.register(webhookRoutes, webhookSender ? { sender: webhookSender } : {});
       await api.register(partnerAppRoutes);

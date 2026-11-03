@@ -90,6 +90,7 @@ export const settings: Messages = {
   'settings.nav.section.personalAccessTokens': 'Personal access tokens',
   'settings.nav.section.scheduledExports': 'Scheduled exports',
   'settings.nav.section.sandbox': 'Sandbox',
+  'settings.nav.section.customPanels': 'Custom panels',
   'settings.nav.section.trustedDomains': 'Trusted domains',
   'settings.nav.section.bannedCustomers': 'Blocked IP addresses',
   'settings.nav.section.memberRecognition': 'Member recognition',
@@ -205,6 +206,80 @@ export const settings: Messages = {
   'settings.trustedDomains.empty.title': 'No domains yet',
   'settings.trustedDomains.empty.description':
     'Add the site you want the widget on. Until then it cannot start conversations anywhere.',
+
+  // Custom panels (KN-05 · tm 379): the operator's own page in the Inbox right panel.
+  'settings.customPanels.title': 'Custom panels',
+  'settings.customPanels.description':
+    'Show your own page, such as a back-office player card, beside the conversation in the Inbox. Agents of the teams you pick see it; the page gets the conversation as a short-lived signed token, never in its address.',
+  'settings.customPanels.loadError': 'Could not load custom panels.',
+  'settings.customPanels.addFormLabel': 'Add a custom panel',
+  'settings.customPanels.addButton': 'Add panel',
+  'settings.customPanels.empty.title': 'No custom panels yet',
+  'settings.customPanels.empty.description':
+    'Add your back-office page here and it appears in the Details pane of the matching conversations.',
+  'settings.customPanels.allTeams': 'All teams',
+  'settings.customPanels.unknownTeam': 'Team #{id}',
+  'settings.customPanels.status.on': 'On',
+  'settings.customPanels.status.off': 'Off',
+  'settings.customPanels.teamsLine': 'Shown to: {teams}',
+  'settings.customPanels.edit': 'Edit',
+  'settings.customPanels.editAriaLabel': 'Edit {name}',
+  'settings.customPanels.editFormLabel': 'Edit {name}',
+  'settings.customPanels.turnOff': 'Turn off',
+  'settings.customPanels.turnOn': 'Turn on',
+  'settings.customPanels.turnOffAriaLabel': 'Turn off {name}',
+  'settings.customPanels.turnOnAriaLabel': 'Turn on {name}',
+  'settings.customPanels.rotate': 'New secret',
+  'settings.customPanels.rotateAriaLabel': 'New secret for {name}',
+  'settings.customPanels.rotateConfirmTitle': 'Replace the secret of {name}?',
+  'settings.customPanels.rotateConfirmDescription':
+    'The current secret stops signing at once. Put the new one on your page’s server before the next conversation is opened.',
+  'settings.customPanels.rotateFailure': 'Could not replace the secret of {name}',
+  'settings.customPanels.removeAriaLabel': 'Remove {name}',
+  'settings.customPanels.removeConfirmTitle': 'Remove {name}?',
+  'settings.customPanels.removeConfirmDescription':
+    'The panel disappears from every conversation. Tokens already handed out stay valid until they expire, at most five minutes.',
+  'settings.customPanels.nameLabel': 'Name',
+  'settings.customPanels.namePlaceholder': 'Player card',
+  'settings.customPanels.nameRequired': 'Enter a name.',
+  'settings.customPanels.urlLabel': 'Page address',
+  'settings.customPanels.urlHint':
+    'An https:// address. Leave player details out of it: the conversation arrives in the token.',
+  'settings.customPanels.teamsLabel': 'Teams',
+  'settings.customPanels.teamsHint': 'Pick none to show it on every team’s conversations.',
+  'settings.customPanels.noTeams': 'No teams yet. The panel will show on every conversation.',
+  'settings.customPanels.save': 'Save',
+  'settings.customPanels.cancel': 'Cancel',
+  'settings.customPanels.secret.title': 'Signing secret for {name}',
+  'settings.customPanels.secret.description':
+    'Your page’s server checks every token with this secret (HMAC-SHA256, the HS256 JWT algorithm).',
+  'settings.customPanels.secret.copyAriaLabel': 'Copy the signing secret',
+  'settings.customPanels.secret.warning':
+    'This is the only time the secret is shown. Store it on your server, never in the page itself.',
+  'settings.customPanels.secret.done': 'Done',
+  'settings.customPanels.dev.title': 'How your page talks to the Inbox',
+  'settings.customPanels.dev.sandbox':
+    'The page runs in a sandboxed frame (scripts, forms and pop-ups only; no same-origin access). Its own cookies are not available there.',
+  'settings.customPanels.dev.ready':
+    'On load, read siyahtus_channel from location.hash and post { type: "siyahtus:ready", channel } to window.parent.',
+  'settings.customPanels.dev.context':
+    'The Inbox answers with { type: "siyahtus:context", channel, token, expires_at }. The token lives {minutes} minutes; post ready again for a fresh one.',
+  'settings.customPanels.dev.verify':
+    'Send the token to your server and verify it there: HS256 with the secret, iss siyahtus, aud siyahtus-panel:<panel id>, exp. It names chat_id, thread_id, org_id, agent_id and, when the agent may see it, the player’s username.',
+  'settings.customPanels.dev.extras':
+    'Optional: { type: "siyahtus:resize", channel, height } sets the frame height; { type: "siyahtus:insert_text", channel, text } puts a suggestion in the reply box. The agent decides whether to send it; the page cannot read or send messages.',
+  'settings.customPanels.dev.newTab':
+    'Agents can also open the page in a new tab. The token then arrives in the address fragment as siyahtus_token, without the player’s username.',
+  'settings.customPanels.reason.limit_reached': 'A workspace can have at most 20 custom panels.',
+  'settings.customPanels.reason.unknown_group':
+    'One of the teams no longer exists. Reload and pick again.',
+  'settings.customPanels.reason.url_invalid':
+    'Enter a full address, such as https://backoffice.example/player.',
+  'settings.customPanels.reason.url_not_https': 'The page must be served over https://.',
+  'settings.customPanels.reason.url_credentials':
+    'Remove the user name and password from the address.',
+  'settings.customPanels.reason.url_fragment': 'Remove the # part from the address.',
+  'settings.customPanels.reason.url_too_long': 'The address is longer than 2048 characters.',
 
   // Saved replies — CannedResponses.tsx
   'settings.cannedResponses.title': 'Saved replies',

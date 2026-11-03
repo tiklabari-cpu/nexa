@@ -325,6 +325,12 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
       'partner_app.updated',
       'partner_app.deleted',
       'partner_app.secret_rotated',
+      // A custom panel (KN-05 · tm 379) holds a signing secret and is a page the
+      // workspace's conversations are handed to — filed with the credentials.
+      'custom_panel.created',
+      'custom_panel.updated',
+      'custom_panel.deleted',
+      'custom_panel.secret_rotated',
       // The member token a returning visitor's browser holds (ID-03 · K4): a
       // key rotation or a revocation is how a workspace's regulars all become
       // new visitors at once, so it is found where the other credentials are.

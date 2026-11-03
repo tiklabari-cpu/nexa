@@ -293,6 +293,7 @@ model License {
   appearanceSettings     WorkspaceAppearanceSettings?
   trackedSales           TrackedSale[]
   visitorEvents          VisitorEvent[]
+  customPanels           CustomPanel[]
   slaPolicy              SlaPolicy?
   slaBreaches            SlaBreach[]
   bots                   Bot[]
@@ -2228,6 +2229,39 @@ model VisitorEvent {
   /// It also serves the matcher's lookup (license, customer, name) by prefix.
   @@unique([licenseId, customerId, name, value])
   @@map("visitor_events")
+}
+
+/// An operator's own page in the Inbox right panel (KN-05 · K29 · tm 379).
+///
+/// The console frames `url` sandboxed and hands the page a ≤ 5 minute token
+/// signed with this panel's secret, by postMessage. Not modelled here, all in
+/// 20261223090000_custom_panels: the CHECKs on `url` (`https://`, no
+/// credentials, no fragment, ≤ 2048), `name` (trimmed, 1–60) and
+/// `visible_group_ids` (≤ 50), and the RLS policy.
+model CustomPanel {
+  id                      String   @id @default(uuid()) @db.Uuid
+  licenseId               BigInt   @map("license_id")
+  name                    String   @db.VarChar(60)
+  url                     String   @db.VarChar(2048)
+  /// Teams whose conversations show the panel; empty means every team. No FK
+  /// (a team's key is `(license_id, id)` and an array cannot carry one): a
+  /// deleted team's id stays and matches nothing.
+  visibleGroupIds         BigInt[] @default([]) @map("visible_group_ids")
+  enabled                 Boolean  @default(true)
+  /// The HMAC key, AES-256-GCM (`lib/credential-cipher.ts`) under a key derived
+  /// from `CUSTOMER_TOKEN_SECRET`, bound to this licence and panel by its
+  /// additional data — a dump alone signs nothing, and a ciphertext copied to
+  /// another row does not open.
+  signingSecretCiphertext String   @map("signing_secret_ciphertext")
+  /// Who added it; no FK — the audit trail is the record of who did what.
+  createdBy               String?  @map("created_by") @db.Uuid
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, createdAt])
+  @@map("custom_panels")
 }
 
 /// Browsing telemetry behind the real-time visitor list.

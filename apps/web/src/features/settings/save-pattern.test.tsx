@@ -67,6 +67,8 @@ const EXEMPT: Readonly<Record<string, string>> = {
   ScheduledExports:
     'A list of scheduled exports: added by its form, edited in a dialog, removed one row at a time.',
   TrustedDomains: 'A list of trusted domains: added by its form, removed one row at a time.',
+  CustomPanels:
+    'A list of custom panels: added by its form, edited, switched off, re-keyed or removed one row at a time.',
   BannedCustomerIps: 'A list of banned addresses: added by its form, removed one row at a time.',
   SsoConnection:
     'SSO connections and SCIM tokens: each added by its form; switching, requiring and removing a connection each ask first.',

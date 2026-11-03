@@ -449,6 +449,15 @@ export const inbox: Messages = {
   'inbox.details.apps.demo': 'Demo',
   'inbox.details.apps.unavailable': 'Could not load this from {name} right now.',
   'inbox.details.apps.noRecord': 'No record for this customer.',
+  // Custom panels (KN-05 · tm 379): the operator's own page beside the conversation.
+  'inbox.details.customPanels.opens': 'Opens {origin}',
+  'inbox.details.customPanels.openInNewTab': 'Open in a new tab',
+  'inbox.details.customPanels.frameTitle': '{name} (custom panel)',
+  'inbox.details.customPanels.contextError':
+    'Could not give this panel the conversation. It will try again when it reloads.',
+  'inbox.details.customPanels.linkError': 'Could not open this panel in a new tab.',
+  'inbox.details.customPanels.suggested':
+    'The panel put a suggestion in the reply box. Read it before you send it.',
   'inbox.details.section.visitedPages': 'Visited pages',
   'inbox.details.visitedPages.empty': 'No pages recorded for this visitor.',
   'inbox.details.section.visitInfo': 'Visit info',

@@ -352,6 +352,15 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     file: 'Sandbox',
     keywords: ['test workspace', 'staging'],
   },
+  // The operator's own page in the Inbox right panel (KN-05 · tm 379).
+  {
+    slug: 'custom-panels',
+    group: 'integrations',
+    labelKey: 'settings.nav.section.customPanels',
+    scope: ACCESS_RULES,
+    file: 'CustomPanels',
+    keywords: ['iframe', 'back-office', 'player card', 'app sdk', 'embed'],
+  },
 
   // 08.9 — Security
   {

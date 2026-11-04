@@ -16203,10 +16203,10 @@
         "description": "Widget toplamı 66,300 B, tavan 66,304 B: 4 B pay. Bir sonraki widget değişikliği bundle-size testini kırar.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT: `apps/widget/test/bundle-size.test.ts:56` `TOTAL_BUDGET_BYTES = 64.75 * 1024` (66,304 B); ölçüm `:78-90` ile aynı yöntemle (gzip 9; .js/.css/.woff2; help/targeting/card hariç): widget-*.js 41,693 · manrope-latin.woff2 20,088 · manrope-tr.woff2 1,955 · loader.js 2,564 = 66,300 B. Ayrıca `apps/widget/vite.config.ts:18` yorumu hâlâ \"50 KB\" diyor (gerçek 64.75 KB).\n\nYAPILACAK: ana widget chunk'ından ilk açılışta gerekmeyen kodu mevcut lazy-chunk mekanizmasına (`lazy-chunks.ts`, düz `import()` DEĞİL) taşı ya da ölü kodu çıkar; hedef ≥1,024 B pay. Hangi parçanın taşındığını ve önce/sonra ölçümünü HANDOFF'a yaz. vite.config.ts:18 yorumunu düzelt. Davranış değişmez.\n\nKAPSAM DIŞI: tavanı yükseltmek (sahip kararı), font subset değişikliği (görsel etki — ancak sahip onayıyla).\nTUZAK: memory widget-bundle-budget-and-css-minify, types-top-level-calls-bloat-widget-loader.",
         "testStrategy": "bundle-size.test.ts yeşil ve ölçülen pay ≥1,024 B (test çıktısı/ölçüm alıntısı HANDOFF'ta). Widget birim + widget e2e spec'leri yeşil. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-11-03T22:00:59.719Z",
+        "updatedAt": "2026-11-04T00:06:49.448Z",
         "subtasks": []
       },
       {
@@ -16336,9 +16336,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-03T22:00:59.719Z",
+      "lastModified": "2026-11-04T00:06:49.449Z",
       "taskCount": 405,
-      "completedCount": 392,
+      "completedCount": 393,
       "tags": [
         "master"
       ]

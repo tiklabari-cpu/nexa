@@ -139,6 +139,8 @@ let eventsAt: (poll: number) => Event[] = () => [];
 /** Overridable per test: the gateway address the mint publishes. */
 let rtmUrl: string | null = RTM;
 let chatId: string | null = 'chat-1';
+/** Overridable per test: the queue position the poll reports (a function so it can move). */
+let queuePosition: () => number | null = () => null;
 
 function stubFetch(): void {
   vi.stubGlobal(
@@ -164,7 +166,7 @@ function stubFetch(): void {
           agent_typing: false,
           customer: { id: 'cust-1', name: null, email: null },
           agent: null,
-          chat: chatId ? { id: chatId, thread_id: 'thr-1', queue_position: null } : null,
+          chat: chatId ? { id: chatId, thread_id: 'thr-1', queue_position: queuePosition() } : null,
           events: eventsAt(chatPolls),
           campaign: null,
         });
@@ -228,6 +230,7 @@ beforeEach(() => {
   eventsAt = () => [];
   rtmUrl = RTM;
   chatId = 'chat-1';
+  queuePosition = () => null;
   FakeSocket.instances = [];
   document.head.replaceChildren();
   document.body.replaceChildren();
@@ -261,6 +264,44 @@ describe('widget RTM connection (FR-MOD-11.6)', () => {
 
     expect(bubbles(root)).toEqual(['my order is late', 'let me look that up']);
     expect(chatPolls).toBe(pollsBefore);
+  });
+
+  it("lifts the queue notice when an agent's reply arrives, without waiting for a poll", async () => {
+    let queued = true;
+    queuePosition = () => (queued ? 1 : null);
+    // The server's transcript holds the reply once it exists, as a real poll's does.
+    eventsAt = () => (queued ? [VISITOR_ASK] : [VISITOR_ASK, AGENT_REPLY]);
+    const root = mountWidget();
+    const socket = await openLive(root);
+    const status = root.querySelector<HTMLElement>('.nx-status')!;
+    expect(status.textContent).toContain('1');
+    expect(status.dataset['tone']).toBe('wait');
+
+    // The agent takes the chat and answers; the server no longer queues it.
+    queued = false;
+    socket.push('incoming_event', { chat_id: 'chat-1', event: AGENT_REPLY });
+    await settle();
+
+    expect(bubbles(root)).toEqual(['my order is late', 'let me look that up']);
+    expect(status.textContent).toBe('');
+  });
+
+  it('keeps the queue notice when the AI answers a queued visitor', async () => {
+    queuePosition = () => 2;
+    eventsAt = () => [VISITOR_ASK];
+    const root = mountWidget();
+    const socket = await openLive(root);
+    const status = root.querySelector<HTMLElement>('.nx-status')!;
+    const before = status.textContent;
+    expect(before).toContain('2');
+
+    socket.push('incoming_event', {
+      chat_id: 'chat-1',
+      event: { ...message('thr-1_3', 'customer', 'still there?') },
+    });
+    await settle();
+
+    expect(status.textContent).toBe(before);
   });
 
   it('demotes the four-second poll to a heartbeat while the socket is live', async () => {

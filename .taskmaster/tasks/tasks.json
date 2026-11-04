@@ -16265,10 +16265,10 @@
         "description": "Yeni kayıt olmuş çalışma alanında Bilgi (Knowledge) sekmesinde hiçbir düğme ve yönlendirme yok; ekleme formu bir AI ajanının var olmasını gerektiriyor ve bunu söylemiyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT: yeni workspace (public sign-up) → playbook/AI altında Knowledge görünümü açık ve koyu temada boş: düğme yok, açıklama yok.\n\nYAPILACAK: AI ajanı yokken bu görünümde boş durum göster: neden boş olduğu + AI ajanı oluşturma ekranına giden bağlantı/düğme (rol izni yoksa yalnız açıklama). Mevcut boş durum bileşenini/kalıbını kullan. en+tr metin; panel metni iç kod içeremez (memory panel-copy-cannot-carry-internal-codes); inline link tuzakları (inline-link-in-a-screen-has-two-traps); dark tema kontrastı (dark-theme-needs-content-brand-text).\nKAPSAM DIŞI: AI ajanı olmadan bilgi kaynağı eklenebilmesi (ürün kararı).",
         "testStrategy": "Web birim: AI ajanı yokken boş durum + bağlantı görünür; ajan varken mevcut form. axe açık/koyu 0 ihlal. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-11-03T19:01:17.661Z",
+        "updatedAt": "2026-11-04T06:09:47.574Z",
         "subtasks": []
       },
       {
@@ -16336,9 +16336,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-04T04:21:48.275Z",
+      "lastModified": "2026-11-04T06:09:47.575Z",
       "taskCount": 405,
-      "completedCount": 396,
+      "completedCount": 397,
       "tags": [
         "master"
       ]

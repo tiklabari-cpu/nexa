@@ -9,7 +9,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MOCK_CAPTCHA_PASS_TOKEN } from '@siyahtus/types';
-import { TURNSTILE_SCRIPT_URL } from './challenge.js';
+import { challengeText, TURNSTILE_SCRIPT_URL } from './challenge.js';
 import { CATALOGS } from './locales/index.js';
 import { mount } from './widget.js';
 
@@ -63,7 +63,7 @@ interface Routes {
   send?: (call: Call, nth: number) => Response;
 }
 
-function setUp(routes: Routes = {}, language = 'en'): Harness {
+function setUp(routes: Routes = {}, language = 'en', mountWidget: typeof mount = mount): Harness {
   const calls: Call[] = [];
   vi.stubGlobal(
     'fetch',
@@ -104,7 +104,7 @@ function setUp(routes: Routes = {}, language = 'en'): Harness {
   doc.body.append(root);
 
   window.history.replaceState({}, '', `/?organization_id=org_test&api=${API}&language=${language}`);
-  mounted.push(mount(doc, window));
+  mounted.push(mountWidget(doc, window));
   return {
     doc,
     calls,
@@ -129,7 +129,11 @@ async function submit(h: Harness, text: string): Promise<void> {
   );
 }
 
-const boxShown = (h: Harness): boolean => !el<HTMLElement>(h.doc, '.nx-challenge').hidden;
+/** The slot is on screen and its chunk (`challenge.ts`, fetched on the first ask) has drawn into it. */
+const boxShown = (h: Harness): boolean => {
+  const slot = el<HTMLElement>(h.doc, '.nx-challenge');
+  return !slot.hidden && slot.childElementCount > 0;
+};
 const tick = (h: Harness): void => {
   const box = el<HTMLInputElement>(h.doc, '.nx-challenge-mock input');
   box.checked = true;
@@ -180,11 +184,11 @@ describe('a check on the token mint', () => {
     // The conversation and the composer wait behind it; the title takes focus.
     expect(el<HTMLElement>(h.doc, '.nx-form').hidden).toBe(true);
     expect(el<HTMLElement>(h.doc, '.nx-transcript').hidden).toBe(true);
-    expect(el(h.doc, '.nx-challenge-title').textContent).toBe(CATALOGS.en['challenge.title']);
+    expect(el(h.doc, '.nx-challenge-title').textContent).toBe(challengeText('en').title);
     expect(el(h.doc, '.nx-challenge').getAttribute('aria-labelledby')).toBe(
       el(h.doc, '.nx-challenge-title').id,
     );
-    expect(el(h.doc, '.nx-challenge-mock').textContent).toBe(CATALOGS.en['challenge.mock']);
+    expect(el(h.doc, '.nx-challenge-mock').textContent).toBe(challengeText('en').mock);
     // The mock draws no frame and loads no script.
     expect(h.doc.querySelector('script, iframe')).toBeNull();
 
@@ -215,7 +219,7 @@ describe('a check on the token mint', () => {
     await vi.waitFor(() =>
       expect(el<HTMLElement>(h.doc, '.nx-challenge-notice').hidden).toBe(false),
     );
-    expect(el(h.doc, '.nx-challenge-notice').textContent).toBe(CATALOGS.en['challenge.failed']);
+    expect(el(h.doc, '.nx-challenge-notice').textContent).toBe(challengeText('en').failed);
     // A fresh box, not the ticked one.
     expect(el<HTMLInputElement>(h.doc, '.nx-challenge-mock input').checked).toBe(false);
 
@@ -364,14 +368,14 @@ describe('Turnstile', () => {
     openLauncher(h);
     await vi.waitFor(() => expect(h.doc.querySelector('script')).not.toBeNull());
     expect(script(h).src).toBe(TURNSTILE_SCRIPT_URL);
-    expect(el(h.doc, '.nx-challenge-loading').textContent).toBe(CATALOGS.en['challenge.loading']);
+    expect(el(h.doc, '.nx-challenge-loading').textContent).toBe(challengeText('en').loading);
 
     const api = turnstileLoads(h);
     await vi.waitFor(() => expect(api.render).toHaveBeenCalledTimes(1));
     const options = (api.render.mock.calls[0] as unknown as [HTMLElement, RenderOptions])[1];
     expect(options.sitekey).toBe('0x4AAAA-site');
     expect(options.language).toBe('en');
-    expect(el(h.doc, '.nx-challenge-provider').textContent).toBe(CATALOGS.en['challenge.provider']);
+    expect(el(h.doc, '.nx-challenge-provider').textContent).toBe(challengeText('en').provider);
 
     options.callback('cf-token');
     await vi.waitFor(() => expect(boxShown(h)).toBe(false));
@@ -388,9 +392,7 @@ describe('Turnstile', () => {
     await vi.waitFor(() =>
       expect(el<HTMLElement>(h.doc, '.nx-challenge-retry').hidden).toBe(false),
     );
-    expect(el(h.doc, '.nx-challenge-notice').textContent).toBe(
-      CATALOGS.en['challenge.unavailable'],
-    );
+    expect(el(h.doc, '.nx-challenge-notice').textContent).toBe(challengeText('en').unavailable);
 
     // Another try adds a fresh script rather than reusing the dead one.
     el<HTMLButtonElement>(h.doc, '.nx-challenge-retry').click();
@@ -415,23 +417,80 @@ describe('the box speaks the visitor language (K25)', () => {
     const tr = setUp({ mint: () => challenge('new_customers_per_ip') }, 'tr');
     openLauncher(tr);
     await vi.waitFor(() => expect(boxShown(tr)).toBe(true));
-    expect(el(tr.doc, '.nx-challenge-title').textContent).toBe(CATALOGS.tr['challenge.title']);
+    expect(el(tr.doc, '.nx-challenge-title').textContent).toBe(challengeText('tr').title);
     expect(el(tr.doc, '.nx-challenge-mock').textContent).toBe('Robot değilim');
-    expect(el(tr.doc, '.nx-challenge-cancel').textContent).toBe(CATALOGS.tr['challenge.cancel']);
+    expect(el(tr.doc, '.nx-challenge-cancel').textContent).toBe(challengeText('tr').cancel);
   });
 
   it('carries every challenge sentence in all eight languages, none left in English', () => {
-    const keys = Object.keys(CATALOGS.en).filter(
-      (key) => key.startsWith('challenge.') || key === 'error.challenge',
-    );
-    expect(keys.length).toBeGreaterThanOrEqual(10);
+    // The box's own words live with its chunk (tm 395); the widget's line after it, in the catalogs.
+    const english = challengeText('en');
+    const keys = Object.keys(english) as Array<keyof typeof english>;
+    expect(keys).toHaveLength(9);
     for (const [locale, catalog] of Object.entries(CATALOGS)) {
       if (locale === 'en') continue;
+      expect(catalog['error.challenge'], `${locale}['error.challenge']`).toBeTruthy();
+      expect(catalog['error.challenge']).not.toBe(CATALOGS.en['error.challenge']);
+      const own = challengeText(locale);
+      expect(own, locale).not.toBe(english);
       for (const key of keys) {
+        expect(own[key], `${locale}.${key}`).toBeTruthy();
         // The provider's name is the same everywhere; every other sentence is translated.
-        if (key === 'challenge.provider') continue;
-        expect(catalog[key], `${locale}['${key}']`).not.toBe(CATALOGS.en[key]);
+        if (key === 'provider') continue;
+        expect(own[key], `${locale}.${key}`).not.toBe(english[key]);
       }
+    }
+  });
+
+  it('moved the box words out of the catalogs every page carries (tm 395)', () => {
+    for (const catalog of Object.values(CATALOGS)) {
+      expect(Object.keys(catalog).filter((key) => key.startsWith('challenge.'))).toEqual([]);
+    }
+  });
+});
+
+describe('the box as a chunk of its own (tm 395)', () => {
+  it('focuses the title once drawn while the panel is open', async () => {
+    // This harness's document has no window of its own, so jsdom moves no focus: watch the call.
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+    const h = setUp({ mint: () => challenge('new_customers_per_ip') });
+    openLauncher(h);
+    await vi.waitFor(() => expect(boxShown(h)).toBe(true));
+    const title = el(h.doc, '.nx-challenge-title');
+    expect(focus.mock.contexts).toContain(title);
+    expect(el(h.doc, '.nx-challenge').getAttribute('role')).toBe('group');
+    expect(h.doc.getElementById('nx-challenge-style')).not.toBeNull();
+  });
+
+  it('empties its slot when the visitor declines', async () => {
+    const h = setUp({ mint: () => challenge('new_customers_per_ip') });
+    openLauncher(h);
+    await vi.waitFor(() => expect(boxShown(h)).toBe(true));
+    el<HTMLButtonElement>(h.doc, '.nx-challenge-cancel').click();
+    await vi.waitFor(() => expect(boxShown(h)).toBe(false));
+    expect(el(h.doc, '.nx-challenge').childElementCount).toBe(0);
+    // One stylesheet however many boxes are drawn.
+    expect(h.doc.querySelectorAll('#nx-challenge-style')).toHaveLength(1);
+  });
+
+  it('treats a box that cannot load as a check not passed: the request fails, the panel comes back', async () => {
+    vi.resetModules();
+    vi.doMock('./challenge.js', () => {
+      throw new Error('chunk offline');
+    });
+    try {
+      const fresh = await import('./widget.js');
+      const h = setUp({ mint: () => challenge('new_customers_per_ip') }, 'en', fresh.mount);
+      openLauncher(h);
+      await vi.waitFor(() =>
+        expect(el(h.doc, '.nx-status').textContent).toBe(CATALOGS.en['error.challenge']),
+      );
+      expect(el<HTMLElement>(h.doc, '.nx-challenge').hidden).toBe(true);
+      // Never asked again behind the visitor's back: one mint, no token.
+      expect(h.mints()).toHaveLength(1);
+    } finally {
+      vi.doUnmock('./challenge.js');
+      vi.resetModules();
     }
   });
 });

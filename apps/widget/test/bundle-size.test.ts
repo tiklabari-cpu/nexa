@@ -75,7 +75,16 @@ const TARGETING_CHUNK = /[\\/]targeting-[\w-]+\.js$/;
  */
 const CARD_BUDGET_BYTES = 2 * 1024;
 const CARD_CHUNK = /[\\/]card-[\w-]+\.js$/;
-const LAZY_CHUNK = /[\\/](help|targeting|card)-[\w-]+\.js$/;
+/**
+ * The human check (GV-01, tm 339.3) — its box, the Turnstile loader, its
+ * stylesheet and its words in eight languages — is a chunk of its own since
+ * tm 395, fetched only when the API asks a visitor for a check. That won back
+ * ≈1.9 KB on every page (page chunk 41,693 → 39,742 B gzipped) without raising
+ * the ceiling above.
+ */
+const CHALLENGE_BUDGET_BYTES = 3.25 * 1024;
+const CHALLENGE_CHUNK = /[\\/]challenge-[\w-]+\.js$/;
+const LAZY_CHUNK = /[\\/](help|targeting|card|challenge)-[\w-]+\.js$/;
 
 function gzippedSize(path: string): number {
   return gzipSync(readFileSync(path), { level: 9 }).byteLength;
@@ -146,7 +155,7 @@ describe('widget bundle budget', () => {
     expect(readFileSync(chunks[0]!, 'utf8')).not.toMatch(/^import\s/m);
     expect(
       collectAssets(join(distDir, 'assets')).filter((file) => file.endsWith('.js')),
-    ).toHaveLength(4);
+    ).toHaveLength(5);
   });
 
   it('ships the rich card as one chunk of its own, under 2 KB, that no page imports statically (EN-02)', () => {
@@ -158,6 +167,24 @@ describe('widget bundle budget', () => {
       (file) => file.endsWith('.js') && !LAZY_CHUNK.test(file),
     );
     expect(readFileSync(page[0]!, 'utf8')).toContain(chunks[0]!.split(/[\\/]/).pop());
+    expect(readFileSync(chunks[0]!, 'utf8')).not.toMatch(/^import\s/m);
+  });
+
+  it('ships the human check as one chunk of its own, under 3.25 KB, that no page imports statically (GV-01)', () => {
+    const chunks = collectAssets(distDir).filter((file) => CHALLENGE_CHUNK.test(file));
+    expect(chunks, 'one challenge-*.js chunk').toHaveLength(1);
+    const size = gzippedSize(chunks[0]!);
+    expect(size, `challenge chunk is ${size} B gzipped`).toBeLessThanOrEqual(
+      CHALLENGE_BUDGET_BYTES,
+    );
+    const page = collectAssets(join(distDir, 'assets')).filter(
+      (file) => file.endsWith('.js') && !LAZY_CHUNK.test(file),
+    );
+    const pageSource = readFileSync(page[0]!, 'utf8');
+    expect(pageSource).toContain(chunks[0]!.split(/[\\/]/).pop());
+    // Its provider and its words stay out of every page.
+    expect(pageSource).not.toContain('challenges.cloudflare.com');
+    expect(pageSource).not.toContain('I am not a robot');
     expect(readFileSync(chunks[0]!, 'utf8')).not.toMatch(/^import\s/m);
   });
 });

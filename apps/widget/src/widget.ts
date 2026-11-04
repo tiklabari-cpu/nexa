@@ -15,6 +15,7 @@ import {
   ASK_EMAIL_ANSWERED_SYSTEM_EVENT,
   ASK_EMAIL_SYSTEM_EVENT,
   DEFAULT_PRECHAT_CONFIG,
+  MOCK_CAPTCHA_PASS_TOKEN,
   PRECHAT_FIELD_KEYS,
   prechatAsksAnything,
   readEditedAt,
@@ -37,7 +38,7 @@ import {
   type WidgetEvent,
   type WidgetState,
 } from './api.js';
-import { buildChallengeParts, drawChallenge, type ChallengeParts } from './challenge.js';
+import type * as ChallengeChunk from './challenge.js';
 import { insertEmojiAtCaret, WIDGET_EMOJI_CATEGORIES } from './emoji.js';
 import type * as CardChunk from './card.js';
 import type { CardSource } from './card.js';
@@ -440,17 +441,34 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     settle: (token: string | null) => void;
   } | null = null;
   let stopChallenge: (() => void) | null = null;
+  /** The box itself, a chunk fetched the first time a check is asked for (tm 395). */
+  let challenges: Promise<typeof ChallengeChunk> | null = null;
+  /** Bumped on every render, so a draw that arrives after a newer one stands down. */
+  let challengeDraws = 0;
 
   /** Draw the pending check into the current shell, or put the conversation back. */
   function renderChallenge(): void {
     stopChallenge?.();
     stopChallenge = null;
     const pending = pendingChallenge;
-    if (pending) {
-      stopChallenge = drawChallenge({ doc, win, t, locale }, ui.challenge, pending);
-    }
+    const draw = ++challengeDraws;
     renderPanelBody();
-    if (pending && state.open) ui.challenge.title.focus();
+    if (!pending) return;
+    // The build hands this over as a chunk URL, without Vite's preload helper (lazy-chunks.ts).
+    challenges ??= import('./challenge.js');
+    challenges.then(
+      ({ drawChallenge }) => {
+        if (draw !== challengeDraws) return;
+        const env = { doc, win, locale, mockToken: MOCK_CAPTCHA_PASS_TOKEN };
+        stopChallenge = drawChallenge(env, ui.challenge, pending, state.open);
+      },
+      () => {
+        // A box that cannot load is a check the visitor could not pass: the
+        // request fails with `error.challenge`, and the next ask fetches again.
+        challenges = null;
+        if (draw === challengeDraws) pending.settle(null);
+      },
+    );
   }
 
   const askHuman: ChallengeHandler = (details) => {
@@ -1790,7 +1808,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     // The human check takes the whole panel while it is up: the conversation,
     // the forms and the composer all wait behind it (tm 339.3).
     const challenging = pendingChallenge !== null;
-    ui.challenge.root.hidden = !challenging;
+    ui.challenge.hidden = !challenging;
     ui.prechat.hidden = !showPrechat || challenging;
     // Form and thank-you are the two halves of one panel: exactly one is on
     // screen while the offline form is open, neither when it is not.
@@ -3432,7 +3450,7 @@ interface Ui {
   greetBrowse: HTMLButtonElement;
   prechat: HTMLFormElement;
   /** The human check, drawn in place of the conversation only while the API asks for one (tm 339.3). */
-  challenge: ChallengeParts;
+  challenge: HTMLElement;
   prechatName: HTMLInputElement;
   prechatUsername: HTMLInputElement;
   prechatEmail: HTMLInputElement;
@@ -4026,8 +4044,11 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   );
   prechat.append(prechatIntro, prechatCard);
 
-  // The human check (tm 339.3): hidden until the API answers `challenge_required`.
-  const challenge = buildChallengeParts(doc, t);
+  // The human check (tm 339.3): hidden until the API answers `challenge_required`,
+  // then filled by its own chunk (`challenge.ts`).
+  const challenge = doc.createElement('div');
+  challenge.className = 'nx-challenge';
+  challenge.hidden = true;
 
   // "Powered by SiyahTuş" (FR-MOD-11.5): shown by default, hidden when a workspace
   // removes it. A link, opened in a new tab so it never navigates the panel away
@@ -4067,7 +4088,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     rating,
     closedBanner,
     prechat,
-    challenge.root,
+    challenge,
     // Where the composer would be, because it is what the composer is replaced
     // by: nobody is available, so the message goes to a queue rather than to a
     // conversation.
@@ -5420,36 +5441,6 @@ button { -webkit-tap-highlight-color: transparent; }
 .nx-prechat-submit::after { width: 16px; height: 16px; -webkit-mask-image: var(--nx-icon-send); mask-image: var(--nx-icon-send); }
 .nx-prechat-submit:hover, .nx-offline-submit:hover, .nx-postchat-submit:hover, .nx-human:hover { filter: brightness(1.07); }
 .nx-offline-submit:disabled, .nx-postchat-submit:disabled, .nx-human:disabled { opacity: .5; cursor: default; filter: none; }
-
-/* ===== The human check (tm 339.3) ======================================== */
-/* Takes the panel's body while the API wants a check; the provider's control
-   sits in a card on the team's side, like the pre-chat form. */
-.nx-challenge {
-  flex: 1 1 auto; min-height: 0; overflow-y: auto;
-  display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
-  padding: 18px 16px 16px; background: var(--nx-surface-2);
-}
-.nx-challenge[hidden] { display: none; }
-.nx-challenge-title { margin: 0; font-size: 15px; font-weight: 700; color: var(--nx-title); outline: none; }
-.nx-challenge-intro { margin: 0; font-size: 14px; line-height: 20px; color: var(--nx-text); }
-.nx-challenge-box {
-  width: 100%; min-height: 72px; display: flex; flex-direction: column; justify-content: center; gap: 8px;
-  padding: 12px; background: var(--nx-surface); border: 1px solid var(--nx-field-border); border-radius: 12px;
-}
-.nx-challenge-mock { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px; font-weight: 600; color: var(--nx-text); cursor: pointer; }
-.nx-challenge-mock input { accent-color: var(--nx-brand); width: 22px; height: 22px; margin: 0; }
-.nx-challenge-loading, .nx-challenge-provider { font-size: 12px; color: var(--nx-muted); }
-.nx-challenge-provider { margin: 0; }
-.nx-challenge-notice { margin: 0; font-size: 13px; font-weight: 600; color: var(--nx-danger); }
-.nx-challenge-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.nx-challenge-retry, .nx-challenge-cancel {
-  min-height: 44px; padding: 0 16px; border-radius: 12px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
-}
-.nx-challenge-retry { border: 0; background: var(--nx-cta); color: var(--nx-on-brand); }
-.nx-challenge-cancel { border: 1px solid var(--nx-field-border); background: transparent; color: var(--nx-text); }
-.nx-challenge-retry:focus-visible, .nx-challenge-cancel:focus-visible, .nx-challenge-mock input:focus-visible {
-  outline: 2px solid var(--nx-brand); outline-offset: 2px;
-}
 
 /* ===== Open, first: the pre-chat form ==================================== */
 /* Lives in the conversation's own well, as the team's first message with a

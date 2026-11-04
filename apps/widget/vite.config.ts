@@ -15,7 +15,8 @@ import { minifyWidgetCss } from './minify-css';
  *     Because it is a separate document on a separate origin it cannot read the
  *     host page's DOM, storage or cookies (NFR-S6).
  *
- * The loader has a hard 50 KB budget (NFR-P3), enforced by a test.
+ * Both are held to gzip budgets (NFR-P3) by `test/bundle-size.test.ts`: the
+ * loader 8 KB, everything a page downloads 64.75 KB.
  */
 export default defineConfig(({ mode }) => {
   const isLoader = mode === 'loader';

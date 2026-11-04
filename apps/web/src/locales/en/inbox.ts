@@ -123,6 +123,10 @@ export const inbox: Messages = {
   'inbox.list.item.connections.one': '{count} connection',
   'inbox.list.item.connections.other': '{count} connections',
   'inbox.list.item.noMessages': 'No messages yet',
+  // The server's own system lines, shown in the console's language (tm 398)
+  'inbox.systemEvent.chatDeactivated': 'Chat archived',
+  'inbox.systemEvent.chatDeactivated.dayRollover': 'Chat closed at the end of the day',
+  'inbox.systemEvent.chatDeactivated.timeout': 'Chat closed after inactivity',
   'inbox.list.error.title': "Conversations couldn't be loaded",
   'inbox.list.error.retry': 'Try again',
   // Message text search in the Archive (ID-07 · tm 333.4)

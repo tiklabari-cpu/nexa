@@ -6711,6 +6711,7 @@ _Önceki maddeler: `docs/archive/plan-kanit/PLAN-kanit-arsiv-2026-10-14.md` (`##
 #### KI18N1-2 — I18N1/2 · Widget + panel i18n
 
 - ✅ **Sistem e-postaları Türkçe ve İngilizce (tm 265 · 2026-10-11 · §D215).** 12 e-postanın konusu, metni ve HTML'i iki dilde (`templates/messages.ts`); dil panelden `X-SiyahTus-Locale` ile gelir. Müşteriye gidenler İngilizce (dil sunucuda bilinmiyor — varsayım §D215). Test `apps/api/src/services/mail/templates/templates.test.ts` · `apps/api/src/lib/request-locale.test.ts` · `apps/api/test/integration/mail-templates.test.ts` · `apps/web/src/lib/api-client.test.ts`
+- ✅ tm 398 · sunucunun sabit İngilizce "Chat archived" sistem satırı (+ `day_rollover`/`timeout` kapanışları) panelde `system_event`'e göre en/tr gösterilir: gelen kutusu önizlemesi + transkript satırı; sunucu metni değişmedi · `apps/web/src/features/inbox/systemEventText.ts`, `InboxPage.tsx`, `Transcript.tsx`, `locales/{en,tr}/inbox.ts` · `systemEventText.test.ts` (4), `InboxPage.systemEvent.test.tsx` (2), `Transcript.card.test.tsx` (+2) · mobil kapsam dışı (uygulamada i18n yok)
 
 _Önceki maddeler: `docs/archive/plan-kanit/PLAN-kanit-arsiv-2026-10-14.md` (`#### KI18N1-2`)_
 

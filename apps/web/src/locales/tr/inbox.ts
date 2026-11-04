@@ -106,6 +106,10 @@ export const inbox: Messages = {
   'inbox.list.item.connections.one': '{count} bağlantı',
   'inbox.list.item.connections.other': '{count} bağlantı',
   'inbox.list.item.noMessages': 'Henüz mesaj yok',
+  // Sunucunun kendi sistem satırları, panelin dilinde (tm 398)
+  'inbox.systemEvent.chatDeactivated': 'Sohbet arşivlendi',
+  'inbox.systemEvent.chatDeactivated.dayRollover': 'Sohbet gün sonunda kapatıldı',
+  'inbox.systemEvent.chatDeactivated.timeout': 'Sohbet hareketsizlik nedeniyle kapatıldı',
   'inbox.list.error.title': 'Sohbetler yüklenemedi',
   'inbox.list.error.retry': 'Yeniden dene',
   // Arşivde mesaj metni arama (ID-07 · tm 333.4)

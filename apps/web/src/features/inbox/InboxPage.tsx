@@ -17,6 +17,7 @@ import { usePageTitle } from '../../lib/document-title.js';
 import { useSetRoutingStatus } from '../../lib/routing-status.js';
 import { useRealtimeStatus } from '../../lib/realtime-status.js';
 import { useTranslate } from '../../lib/i18n.js';
+import { eventText } from './systemEventText.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { Banner, Modal } from '../../components/ui/index.js';
@@ -1171,7 +1172,8 @@ export function InboxPage(): ReactElement {
                                 )}
                               </span>
                               <span className="truncate text-xs text-content-secondary">
-                                {item.last_event?.text ?? t('inbox.list.item.noMessages')}
+                                {(item.last_event ? eventText(item.last_event, t) : null) ??
+                                  t('inbox.list.item.noMessages')}
                               </span>
                               {item.tags.length > 0 && (
                                 <span className="flex flex-wrap gap-1">

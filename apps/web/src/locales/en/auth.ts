@@ -100,6 +100,9 @@ export const auth: Messages = {
     "This is where your workspace's data will live. It cannot be changed after your workspace is created.",
   'auth.signup.submit': 'Create workspace',
   'auth.signup.submitting': 'Creating…',
+  // Under the disabled button: what it is waiting for (the fields' own messages).
+  'auth.signup.blocked': 'Not ready yet. {reasons}',
+  'auth.signup.termsBlocker': 'Tick the box to accept the Terms of Service.',
   'auth.signup.errorGeneric': 'Could not create that workspace.',
   'auth.signup.errorAccountExists': 'An account already exists for that email — sign in instead.',
   'auth.signup.errorSignupClosed':

@@ -58,6 +58,7 @@ export const pt: Record<string, string> = {
   'resolution.no': 'Não',
   'askEmail.label': 'Seu e-mail',
   'askEmail.invalid': 'Digite um e-mail válido.',
+  'form.required': 'Preencha este campo.',
   'askEmail.failed': 'Não foi possível enviar. Tente novamente.',
   'askEmail.sent': 'Enviado',
   'rating.menuLabel': 'Mais opções',

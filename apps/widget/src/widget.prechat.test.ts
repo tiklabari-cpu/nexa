@@ -508,3 +508,80 @@ describe('the brand decides the built-in form (WG-01)', () => {
     expect(sentMessage()).toBeUndefined();
   });
 });
+
+describe('validation speaks the widget’s language, not the browser’s', () => {
+  /** What each balloon would have said, recorded at the moment it was asked for. */
+  let said: Array<{ name: string; message: string }> = [];
+  const connected = () => waitFor(() => calls.some((c) => c.url.endsWith('/customer/chat')));
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  beforeEach(() => {
+    said = [];
+    vi.spyOn(HTMLInputElement.prototype, 'reportValidity').mockImplementation(function (
+      this: HTMLInputElement,
+    ) {
+      said.push({ name: this.getAttribute('aria-label') ?? '', message: this.validationMessage });
+      return false;
+    });
+  });
+
+  function browserSpeaks(...languages: string[]): void {
+    vi.spyOn(window.navigator, 'languages', 'get').mockReturnValue(languages);
+    vi.spyOn(window.navigator, 'language', 'get').mockReturnValue(languages[0] ?? '');
+  }
+
+  it('leaves the browser’s own check off, so its balloon never speaks first', () => {
+    const root = mountWidget('?organization_id=org-1');
+    expect(root.querySelector<HTMLFormElement>('.nx-prechat')!.noValidate).toBe(true);
+  });
+
+  it('says an empty required field in English, and takes the visitor to it', async () => {
+    const root = mountWidget('?organization_id=org-1');
+    openPreChat(root);
+    await connected();
+    fillFixedFields(root, { username: '' });
+    submit(root.querySelector('.nx-prechat')!);
+    expect(said).toEqual([{ name: 'Username', message: 'Please fill in this field.' }]);
+    expect(document.activeElement).toBe(
+      root.querySelector('.nx-prechat-card > .nx-field:nth-child(3) .nx-prechat-input'),
+    );
+    // Cleared at once: the next, valid attempt must not be held by a stale message.
+    fillFixedFields(root);
+    submit(root.querySelector('.nx-prechat')!);
+    await waitFor(() => sentMessage() !== undefined);
+  });
+
+  it('says it in the widget’s language when that is not the browser’s', async () => {
+    browserSpeaks('tr-TR', 'tr');
+    const root = mountWidget('?organization_id=org-1&language=tr');
+    openPreChat(root);
+    await connected();
+    fillFixedFields(root, { name: '' });
+    submit(root.querySelector('.nx-prechat')!);
+    expect(said).toHaveLength(1);
+    expect(said[0]!.message).toBe('Lütfen bu alanı doldurun.');
+  });
+
+  it('says a malformed e-mail with the widget’s own sentence', async () => {
+    const root = mountWidget('?organization_id=org-1');
+    openPreChat(root);
+    await connected();
+    fillFixedFields(root, { email: 'not-an-email' });
+    submit(root.querySelector('.nx-prechat')!);
+    expect(said).toEqual([{ name: 'Email', message: 'Enter a valid e-mail address.' }]);
+    expect(sentMessage()).toBeUndefined();
+  });
+
+  it('says a required custom question too', async () => {
+    preChatForm = [{ definition_id: 'f1', label: 'Account id', type: 'text', required: true }];
+    const root = mountWidget('?organization_id=org-1');
+    openPreChat(root);
+    await waitFor(() => root.querySelector('[data-def-id="f1"]') !== null);
+    fillFixedFields(root);
+    submit(root.querySelector('.nx-prechat')!);
+    expect(said).toEqual([{ name: 'Account id', message: 'Please fill in this field.' }]);
+  });
+});

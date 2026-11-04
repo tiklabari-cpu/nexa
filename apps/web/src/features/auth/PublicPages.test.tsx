@@ -75,6 +75,30 @@ describe('SignUpPage validation', () => {
     await userEvent.type(screen.getByLabelText('Password'), 'short');
     expect(screen.getByRole('button', { name: 'Create workspace' })).toBeDisabled();
   });
+
+  it('says why the button is disabled, and ties the sentence to the button', async () => {
+    renderAt(<SignUpPage />);
+    const submit = screen.getByRole('button', { name: 'Create workspace' });
+    expect(submit).toBeDisabled();
+    // Untouched form: nothing has been blurred, yet the button already says what it waits for.
+    expect(submit).toHaveAccessibleDescription(/Not ready yet..*Enter a workspace name/);
+
+    await userEvent.type(screen.getByLabelText('Workspace name'), 'Acme');
+    await userEvent.type(screen.getByLabelText('Your name'), 'Robin');
+    await userEvent.type(screen.getByLabelText('Email'), 'robin@example.com');
+    await userEvent.type(screen.getByLabelText('Password'), 'short');
+    // Only the short password is left, and the line names that and nothing else.
+    const why = document.getElementById('signup-blockers')!;
+    expect(why).toHaveTextContent(/^Not ready yet. .*at least/i);
+    expect(why).not.toHaveTextContent(/workspace name/i);
+    expect(submit).toHaveAttribute('aria-describedby', 'signup-blockers');
+
+    await userEvent.clear(screen.getByLabelText('Password'));
+    await userEvent.type(screen.getByLabelText('Password'), 'longenoughpass');
+    expect(submit).toBeEnabled();
+    expect(document.getElementById('signup-blockers')).toBeNull();
+    expect(submit).not.toHaveAttribute('aria-describedby');
+  });
 });
 
 /**

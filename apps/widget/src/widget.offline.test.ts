@@ -328,6 +328,37 @@ describe('widget offline form (FR-MOD-08.7.7)', () => {
     );
   });
 
+  it('says what is wrong in the widget’s own sentences, not the browser’s balloon', async () => {
+    const said: string[] = [];
+    vi.spyOn(HTMLInputElement.prototype, 'reportValidity').mockImplementation(function (
+      this: HTMLInputElement,
+    ) {
+      said.push(this.validationMessage);
+      return false;
+    });
+    const root = mountWidget();
+    openPanel(root);
+    await vi.waitFor(() =>
+      expect(root.querySelector<HTMLElement>('.nx-offline')!.hidden).toBe(false),
+    );
+    const form = root.querySelector<HTMLFormElement>('.nx-offline')!;
+    expect(form.noValidate).toBe(true);
+
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    fill(root, '.nx-offline input[type="text"]', 'Hello');
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    fill(root, '.nx-offline input[type="email"]', 'nope');
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+
+    expect(said).toEqual([
+      'Please fill in this field.',
+      'Please fill in this field.',
+      'Enter a valid e-mail address.',
+    ]);
+    expect(leaveCalls()).toHaveLength(0);
+    vi.restoreAllMocks();
+  });
+
   it('surfaces a rejected submit and keeps what the visitor typed on screen', async () => {
     leaveStatus = 400;
     const root = mountWidget();

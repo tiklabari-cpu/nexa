@@ -3896,12 +3896,30 @@ export class ChatService {
         throw refused('not_waiting', 'This conversation is no longer waiting to be taken.');
       }
 
+      // Already the caller's — a second press, a stale list: not a conflict.
+      // The answer is the conversation as it is, with nothing announced twice.
+      if (thread.assigneeId === agentId)
+        return { alreadyMine: true as const, detail: serialiseChat(chat) };
+
       const outcome = await this.routing.claim(tx, tenant.licenseId, thread.id, agentId);
       switch (outcome.outcome) {
         case 'claimed':
           break;
-        case 'claimed_by_other':
+        case 'claimed_by_other': {
+          // The same, when it was the caller's own other request that won.
+          const now = await tx.thread.findUnique({
+            where: { id: thread.id },
+            select: { assigneeId: true },
+          });
+          if (now?.assigneeId === agentId) {
+            const mine = await tx.chat.findUniqueOrThrow({
+              where: { id: chat.id },
+              include: chatInclude,
+            });
+            return { alreadyMine: true as const, detail: serialiseChat(mine) };
+          }
           throw refused('claimed', 'Another agent took this conversation first.');
+        }
         case 'limit':
           throw refused('limit', 'You are at your concurrent chat limit. Close a chat first.');
         case 'not_waiting':
@@ -3917,6 +3935,7 @@ export class ChatService {
       const before = this.#audienceFor(chat);
       const after = this.#audienceFor(reloaded);
       return {
+        alreadyMine: false as const,
         detail: serialiseChat(reloaded),
         threadId: thread.id,
         groupId: outcome.groupId,
@@ -3928,6 +3947,7 @@ export class ChatService {
       };
     });
 
+    if (result.alreadyMine) return result.detail;
     await this.#announceHandover(tenant, {
       chatId,
       threadId: result.threadId,

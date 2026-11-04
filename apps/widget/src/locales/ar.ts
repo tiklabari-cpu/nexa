@@ -59,6 +59,7 @@ export const ar: Record<string, string> = {
   'resolution.no': 'لا',
   'askEmail.label': 'بريدك الإلكتروني',
   'askEmail.invalid': 'أدخل بريدًا إلكترونيًا صالحًا.',
+  'form.required': 'يرجى ملء هذا الحقل.',
   'askEmail.failed': 'تعذر الإرسال. حاول مرة أخرى.',
   'askEmail.sent': 'تم الإرسال',
   'rating.menuLabel': 'خيارات أخرى',

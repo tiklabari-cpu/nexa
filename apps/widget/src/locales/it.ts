@@ -59,6 +59,7 @@ export const it: Record<string, string> = {
   'resolution.no': 'No',
   'askEmail.label': 'Il tuo indirizzo e-mail',
   'askEmail.invalid': 'Inserisci un indirizzo e-mail valido.',
+  'form.required': 'Compila questo campo.',
   'askEmail.failed': 'Invio non riuscito. Riprova.',
   'askEmail.sent': 'Inviato',
   'rating.menuLabel': 'Altre opzioni',

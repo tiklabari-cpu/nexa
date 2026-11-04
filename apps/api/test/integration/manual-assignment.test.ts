@@ -479,6 +479,22 @@ describe('manual assignment mode (WG-07)', () => {
       expect((await threadOf(threadId)).assigneeId).toBe(a.id);
     });
 
+    it('answers the one who already has it with the chat itself, not a conflict, and announces nothing twice', async () => {
+      const a = await addAgent(bonusId);
+      const { chatId, threadId } = await openChat('https://casino.test/bonus/mine');
+      expect((await claim(chatId, a.token)).statusCode).toBe(200);
+      const announced = async () =>
+        (await pushed('chat_transferred')).filter((p) => p.payload['chat_id'] === chatId).length;
+      const before = await announced();
+
+      const again = await claim(chatId, a.token);
+      expect(again.statusCode, again.body).toBe(200);
+      expect(again.json()).toMatchObject({ id: chatId });
+      expect(await announced()).toBe(before);
+      expect((await threadOf(threadId)).assigneeId).toBe(a.id);
+      expect(await owner.queueEntry.count({ where: { threadId, outcome: 'assigned' } })).toBe(1);
+    });
+
     it('lets exactly one of two agents taking it at once have it (FR-MOD-08.6.1)', async () => {
       const a = await addAgent(bonusId);
       const b = await addAgent(bonusId);

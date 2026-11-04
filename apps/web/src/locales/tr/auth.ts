@@ -96,6 +96,8 @@ export const auth: Messages = {
     'Çalışma alanınızın verileri burada barınacak. Çalışma alanınız oluşturulduktan sonra değiştirilemez.',
   'auth.signup.submit': 'Çalışma alanı oluştur',
   'auth.signup.submitting': 'Oluşturuluyor…',
+  'auth.signup.blocked': 'Henüz hazır değil. {reasons}',
+  'auth.signup.termsBlocker': 'Kullanım Koşulları’nı kabul etmek için kutuyu işaretleyin.',
   'auth.signup.errorGeneric': 'O çalışma alanı oluşturulamadı.',
   'auth.signup.errorAccountExists':
     'Bu e-posta için zaten bir hesap var — bunun yerine oturum açın.',

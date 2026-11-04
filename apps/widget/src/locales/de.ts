@@ -60,6 +60,7 @@ export const de: Record<string, string> = {
   'resolution.no': 'Nein',
   'askEmail.label': 'Ihre E-Mail-Adresse',
   'askEmail.invalid': 'Geben Sie eine gültige E-Mail-Adresse ein.',
+  'form.required': 'Bitte füllen Sie dieses Feld aus.',
   'askEmail.failed': 'Senden fehlgeschlagen. Bitte versuchen Sie es erneut.',
   'askEmail.sent': 'Gesendet',
   'rating.menuLabel': 'Weitere Optionen',

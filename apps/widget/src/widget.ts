@@ -1127,7 +1127,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     // A required question must be answered; an empty optional one is left out
     // rather than sent blank. Types are validated authoritatively server-side,
     // by the same rule the CRM and the pre-chat answers go through.
-    const answers = readFormAnswers(ui.postchatFields);
+    const answers = readFormAnswers(ui.postchatFields, t('form.required'));
     if (!answers) return; // a required field was empty and now has focus
 
     state.postChatSubmitting = true;
@@ -1842,21 +1842,21 @@ export function mount(doc: Document = document, win: Window = window): () => voi
 
     const subject = ui.offlineSubject.value.trim();
     if (!subject) {
-      ui.offlineSubject.focus();
+      complain(ui.offlineSubject, t('form.required'));
       return;
     }
     const email = ui.offlineEmail.value.trim();
-    if (!email) {
+    if (!email || !ui.offlineEmail.checkValidity()) {
       // Required here as on the pre-chat form, and for a reason of its own the
       // endpoint gives: this message can only be answered somewhere else.
-      ui.offlineEmail.focus();
+      complain(ui.offlineEmail, t(email ? 'askEmail.invalid' : 'form.required'));
       return;
     }
     // A required question must be answered; an empty optional one is left out
     // rather than sent blank. Types are validated authoritatively server-side.
-    const ticketAnswers = readFormAnswers(ui.offlineTicketFields);
+    const ticketAnswers = readFormAnswers(ui.offlineTicketFields, t('form.required'));
     if (!ticketAnswers) return; // a required field was empty and now has focus
-    const prospectAnswers = readFormAnswers(ui.offlineProspectFields);
+    const prospectAnswers = readFormAnswers(ui.offlineProspectFields, t('form.required'));
     if (!prospectAnswers) return;
 
     state.offlineSubmitting = true;
@@ -1965,8 +1965,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       field.value = field.value.trim();
       const missing = !field.value && state.prechatConfig.fields[key].required;
       if (missing || (field.value && !field.checkValidity())) {
-        field.reportValidity();
-        field.focus();
+        complain(field, t(missing ? 'form.required' : 'askEmail.invalid'));
         return;
       }
     }
@@ -1974,7 +1973,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     // The configurable fields (FR-MOD-08.7.7). A required one must be answered
     // before the chat can start; types are validated authoritatively server-side
     // when the answers ride the first message.
-    const custom = readFormAnswers(ui.prechatFields);
+    const custom = readFormAnswers(ui.prechatFields, t('form.required'));
     if (!custom) return; // a required field was empty and now has focus
 
     // Only what was asked and answered: an optional field left empty is not
@@ -3304,6 +3303,22 @@ function labelledField(
 }
 
 /**
+ * Say what is wrong with a field in the widget's own language and take the
+ * visitor to it. The browser's balloon follows the browser's language, not
+ * the widget's, so the forms are `noValidate` and the message is set here —
+ * cleared at once, as the balloon keeps the text it was shown with.
+ */
+function complain(
+  field: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement,
+  message: string,
+): void {
+  field.setCustomValidity(message);
+  field.reportValidity();
+  field.setCustomValidity('');
+  field.focus();
+}
+
+/**
  * The answers currently typed into a field host, keyed by definition id — or
  * `null` when a required field is empty, in which case it is focused first so
  * the visitor is taken to what is missing.
@@ -3313,7 +3328,7 @@ function labelledField(
  * ask to erase an answer they gave earlier. A checkbox always has an answer; a
  * multiselect's is the JSON array of what is ticked (WG-04).
  */
-function readFormAnswers(host: HTMLElement): Record<string, string> | null {
+function readFormAnswers(host: HTMLElement, required: string): Record<string, string> | null {
   const answers: Record<string, string> = {};
   for (const el of host.querySelectorAll<HTMLInputElement>(
     'input[data-def-id], select[data-def-id], fieldset[data-def-id]',
@@ -3329,7 +3344,7 @@ function readFormAnswers(host: HTMLElement): Record<string, string> | null {
       const ticked = boxes.filter((box) => box.checked).map((box) => box.value);
       if (ticked.length > 0) answers[id] = JSON.stringify(ticked);
       else if (el.dataset.required) {
-        boxes[0]?.focus();
+        if (boxes[0]) complain(boxes[0], required);
         return null;
       }
       continue;
@@ -3337,7 +3352,7 @@ function readFormAnswers(host: HTMLElement): Record<string, string> | null {
     const value = el.value.trim();
     if (!value) {
       if (el.required) {
-        el.focus();
+        complain(el, required);
         return null;
       }
       continue;
@@ -3723,6 +3738,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   // which is never, for a workspace that configures no post-chat fields.
   const postchat = doc.createElement('form');
   postchat.className = 'nx-postchat';
+  postchat.noValidate = true;
   postchat.hidden = true;
   postchat.setAttribute('aria-label', t('postchat.label'));
   const postchatIntro = doc.createElement('p');
@@ -3755,6 +3771,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   // neither the `ticket` nor the `prospect` form.
   const offline = doc.createElement('form');
   offline.className = 'nx-offline';
+  offline.noValidate = true;
   offline.hidden = true;
   offline.setAttribute('aria-label', t('offline.label'));
   const offlineIntro = doc.createElement('p');
@@ -3990,6 +4007,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   // form builder is a separate v1 feature this must not depend on.
   const prechat = doc.createElement('form');
   prechat.className = 'nx-prechat';
+  prechat.noValidate = true;
   prechat.hidden = true;
   const prechatIntro = doc.createElement('p');
   prechatIntro.className = 'nx-prechat-intro';

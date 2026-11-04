@@ -3,6 +3,13 @@
 > Kaynak: `HANDOFF.md` canlı dosyasından CONVENTIONS §3 gereği taşınan fazla görev blokları, newest-first.
 > Arama: `grep -n "tm <id>" docs/archive/handoff/*.md` — baştan okuma.
 
+## tm 398 — CHAT-ARCHIVED-SYSTEM-TEXT-I18N: sunucunun "Chat archived" sistem satırı Türkçe panelde Türkçe — done — 2026-11-04 UTC
+
+- **Yapıldı (dal `fix/chat-archived-i18n`; kontrat/migration/api YOK, sunucu metni aynı):** yeni `features/inbox/systemEventText.ts` `eventText(event, t)`: `system_event: chat_deactivated` olan sistem satırı için katalog cümlesi (`inbox.systemEvent.chatDeactivated[.dayRollover|.timeout]`, en+tr); bilinmeyen olay ve kişi mesajı saklı metinde kalır. Kullanıldığı iki yer: gelen kutusu liste önizlemesi (`InboxPage.tsx`) ve transkript sistem satırı (`Transcript.tsx`).
+- **Doğrulama:** `systemEventText.test.ts` 4, `InboxPage.systemEvent.test.tsx` 2 (tr "Sohbet arşivlendi", en "Chat archived"), `Transcript.card.test.tsx` +2; locale-copy yeşil; web typecheck + eslint temiz. Kapı: build/statik/birim/entegrasyon yeşil; tam e2e 560 geçti, 1 kırmızı (`widget.spec:1151` ek yükleme çipi, 30 sn zaman aşımı — gate yükü) + 3 flaky; ilgisiz kırmızılar tek başına yeşil: `widget` dosyası 2×33/33, `ai-multilingual` 1/1, rtm `telemetry` 2×6/6 (ilk kapıda graceful-drain zamanlama kırmızısı).
+- **Varsayımlar:** `day_rollover` ve `timeout` kapanışları aynı sınıf olduğu için aynı yolla çevrildi. Mobil (`apps/mobile`) kapsam dışı kaldı: uygulamada hiç i18n katmanı yok, tüm metinler zaten sabit İngilizce (`ChatListScreen.previewOf`, `Transcript.tsx`). Widget (ziyaretçi tarafı) ve transkript e-postası kapsam dışı.
+- **Sonraki pencere:** sunucunun yazdığı diğer sistem satırları (ör. `chat_transferred` metni) hâlâ ham `event.text` basar; yeni bir `system_event` panelde görünecekse `systemEventText.ts`'e eklenir.
+
 ## tm 396 — E2E-ORDER-ISOLATION: üç e2e spec'inin sıra bağımlılığı kalktı (ai-mode, inbox-waiting, manual-assignment) — done — 2026-11-04 UTC
 
 - **Yapıldı (dal yok, doğrudan `main`; yalnız test dosyaları; ürün/kontrat/migration YOK):** `ai-metrics.spec` ve `ai-mode.spec` kendi bilgi kaynağını `finally`'de `DELETE /knowledge-sources/:id` ile siler (ai-metrics'in "Standard X delivery takes 3 to 5 working days" kaynağı sonradan koşan ai-mode'un cevabını çalıyordu; soru/pasaj metni DEĞİŞMEDİ — AI_QUESTION tuzağı); `inbox-waiting.spec` ve `manual-assignment.spec` başta `freeARoutingSlot` (fixtures'taki mevcut yardımcı) ile owner'a yer açar (6 sohbetlik limit önceki spec'lerce doluyordu).

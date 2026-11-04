@@ -57,6 +57,7 @@ export const tr: Record<string, string> = {
   'resolution.no': 'Hayır',
   'askEmail.label': 'E-posta adresiniz',
   'askEmail.invalid': 'Geçerli bir e-posta adresi girin.',
+  'form.required': 'Lütfen bu alanı doldurun.',
   'askEmail.failed': 'Gönderilemedi. Lütfen tekrar deneyin.',
   'askEmail.sent': 'Gönderildi',
   'rating.menuLabel': 'Diğer seçenekler',

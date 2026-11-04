@@ -174,6 +174,9 @@ export interface UseFormResult<V extends Record<string, string>> {
   setFieldError: (name: keyof V, message: string | null) => void;
   /** Every field passes its validator right now (independent of touched state). */
   isValid: boolean;
+  /** The message of every field that does not pass right now, touched or not — what a
+   *  disabled Submit can say it is waiting for. Empty exactly when `isValid`. */
+  blockers: string[];
   /** A value differs from its initial — the basis for a discard-changes guard. */
   isDirty: boolean;
   isSubmitting: boolean;
@@ -291,6 +294,7 @@ export function useForm<V extends Record<string, string>>(
     errorFor,
     setFieldError,
     isValid,
+    blockers: Object.values<string | undefined>(validationErrors).filter((m): m is string => !!m),
     isDirty,
     isSubmitting,
     submitError,

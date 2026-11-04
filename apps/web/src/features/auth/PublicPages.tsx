@@ -442,6 +442,12 @@ export function SignUpPage(): ReactElement {
     );
   }
 
+  // What the disabled button is waiting for, in the page's own words.
+  const blockers = [
+    ...form.blockers,
+    ...(termsRequired && !termsAccepted ? [t('auth.signup.termsBlocker')] : []),
+  ];
+
   return (
     <AuthCard
       title={t('auth.signup.title')}
@@ -545,14 +551,22 @@ export function SignUpPage(): ReactElement {
             </div>
           </div>
         )}
-        {/* Disabled until the form can actually succeed (FR-EK-A.1). */}
+        {/* Disabled until the form can actually succeed (FR-EK-A.1). A greyed
+            button with no words is a dead end, so the line under it names what
+            it is waiting for, and the button points at that line. */}
         <button
           type="submit"
           disabled={!form.canSubmit || (termsRequired && !termsAccepted)}
+          aria-describedby={blockers.length > 0 ? 'signup-blockers' : undefined}
           className="w-full rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           {form.isSubmitting ? t('auth.signup.submitting') : t('auth.signup.submit')}
         </button>
+        {blockers.length > 0 && (
+          <p id="signup-blockers" className="mt-2 text-xs text-content-secondary">
+            {t('auth.signup.blocked', { reasons: blockers.join(' ') })}
+          </p>
+        )}
       </form>
     </AuthCard>
   );

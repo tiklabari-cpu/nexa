@@ -119,10 +119,13 @@ test.describe('manual assignment (WG-07)', () => {
           return chat.thread?.assignee_id ?? null;
         })
         .toBe(me.account_id);
-      // Taken: the queue is empty again, and a second Take is refused.
+      // Taken: the queue is empty again, and a second Take by the same person
+      // is not a conflict — the chat is already theirs (tm 402), so it answers
+      // with the chat. A different teammate's would be the 409 (see the
+      // manual-assignment integration test).
       await expect(take).toHaveCount(0);
       const again = await request.post(`${API_BASE}/chats/${chatId}/claim`, { headers: auth });
-      expect(again.status()).toBe(409);
+      expect(again.status()).toBe(200);
     } finally {
       if (chatId) {
         await request.post(`${API_BASE}/chats/${chatId}/deactivate`, { headers: auth });

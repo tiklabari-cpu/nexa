@@ -613,7 +613,9 @@ claim:
       area of expertise it (and the connection) requires. The first caller
       has it — a compare-and-set on the unassigned connection — and every
       later one receives `409 chat_claim_refused` with `details.reason:
-      claimed`. A caller at their concurrent chat limit is refused with
+      claimed`. The caller asking again for a conversation that is already
+      theirs is not a later one: it is `200` with the conversation as it is,
+      and nothing is announced a second time. A caller at their concurrent chat limit is refused with
       `details.reason: limit`; a conversation no longer waiting in such a
       queue (assigned, closed, moved to an automatic team) with
       `not_waiting`. The caller's routing status is not asked: choosing a

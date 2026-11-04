@@ -16215,10 +16215,10 @@
         "description": "Sharded tam e2e koşusunda 560 geçti / 3 kırmızı; üçü de tek başına yeşil, önceki spec'lerin bıraktığı veri yüzünden kırmızı.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT (2026-11-03, `pnpm test:e2e`, 3 shard, 31 dk):\n1. `apps/e2e/tests/ai-mode.spec.ts:25` — `ai-metrics.spec` önce koşarsa kırmızı: `pnpm test:e2e --shards=1 ai-metrics ai-mode` deterministik üretir. `ai-metrics` neredeyse aynı metinli bir bilgi kaynağı bırakıyor (\"Standard X delivery takes 3 to 5 working days\"); AI cevabı ondan veriyor. Tek başına yeşil.\n2. `inbox-waiting.spec.ts:13` ve 3. `manual-assignment.spec.ts:16` — shard 0'da önlerindeki 27 dosyadan sonra kırmızı: ekran \"My chats 6\" / \"You are at your chat limit\" — önceki spec'ler owner'ın 6 sohbetlik limitini dolduruyor. Tek başına yeşil. Sınıf memory'de bilinir (e2e-red-may-predate-your-run, tm 208).\n\nYAPILACAK: TESTİ düzelt, ürünü değil, retry ekleme. Her spec kendi verisini kursun/temizlesin: ai-mode kendine özgü (benzersiz ifadeli) bilgi kaynağı + soru kullansın ya da ai-metrics kendi kaynağını sonunda silsin; inbox-waiting/manual-assignment owner limitine dayanmasın (kendi ajanı/limiti ya da önceden açık sohbetleri kapatma). Yeniden üretim: `pnpm test:e2e --shards=1 <önceki-dosyalar> <kırmızı>` (`--plan` shard bölünmesini yazar).\nTUZAK: memory e2e-runs-sharded-on-private-stacks, new-e2e-spec-reshuffles-shard-packing, targeted-e2e-rerun-has-no-retry, ai-question-text-is-load-bearing (AI soru metnini değiştirmek mock embedding eşiğini düşürebilir).",
         "testStrategy": "`pnpm test:e2e --shards=1 ai-metrics ai-mode` yeşil; inbox-waiting ve manual-assignment, shard 0'daki önceki dosyalarla birlikte yeşil; tam `pnpm test:e2e` iki kez üst üste yeşil (verdict satırları HANDOFF'ta). kanit PNG churn'ü geri alınır. DoD: CONVENTIONS §1.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-11-03T19:01:17.661Z",
+        "updatedAt": "2026-11-04T01:47:00.310Z",
         "subtasks": []
       },
       {
@@ -16336,9 +16336,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-04T00:06:49.449Z",
+      "lastModified": "2026-11-04T01:47:00.310Z",
       "taskCount": 405,
-      "completedCount": 393,
+      "completedCount": 394,
       "tags": [
         "master"
       ]

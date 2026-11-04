@@ -299,6 +299,12 @@ export const playbook: Messages = {
   'playbook.knowledge.loadError.title': "Knowledge sources couldn't be loaded",
   'playbook.knowledge.emptyTitle': 'Nothing indexed',
   'playbook.knowledge.emptyDescription': 'Without knowledge, a skill can only send fixed replies.',
+  'playbook.knowledge.noAgentTitle': 'Add an AI agent first',
+  'playbook.knowledge.noAgentDescription':
+    'Knowledge is what the AI agent answers from, and this workspace has no AI agent yet. Add one, then come back to add sources.',
+  'playbook.knowledge.noAgentAskAdmin':
+    'This workspace has no AI agent yet, so there is nowhere to add knowledge. Ask an admin to add the AI agent.',
+  'playbook.knowledge.noAgentAction': 'Add an AI agent',
   'playbook.knowledge.noneInTab': 'No {type} sources yet.',
   'playbook.knowledge.indexed': 'Indexed',
   'playbook.knowledge.empty': 'Empty',

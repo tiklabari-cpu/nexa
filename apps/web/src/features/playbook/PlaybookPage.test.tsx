@@ -281,7 +281,11 @@ describe('Playbook knowledge — load error (tm 259.6)', () => {
     let healed = false;
     api.get.mockImplementation((path: string) => {
       if (path === '/skills') return Promise.resolve({ items: [] });
-      if (path === '/ai-agents') return Promise.resolve({ items: [] });
+      // An agent exists: without one the tab shows the add-an-agent notice instead (tm 400).
+      if (path === '/ai-agents')
+        return Promise.resolve({
+          items: [{ id: 'agent-1', kind: 'ai_agent', name: 'Ada', active: true }],
+        });
       if (path.startsWith('/knowledge-sources')) {
         return healed
           ? Promise.resolve({ items: [] })

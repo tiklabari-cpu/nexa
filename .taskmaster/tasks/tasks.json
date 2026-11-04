@@ -16315,10 +16315,10 @@
         "description": "Pilot imajlarındaki nginx `Server: nginx/1.27.5` başlığı gönderiyor; config'lerde `server_tokens off` yok.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT: pilot provası (2026-11-03, `docker-compose.pilot.yml --profile platform`) `curl -I` web/admin/widget → `Server: nginx/1.27.5`.\n\nYAPILACAK: web, admin, widget (ve repoda başka nginx.conf varsa onlar) için `server_tokens off;`. Başka başlık değişmez (CSP/frame-ancestors aynı kalır; memory panel-csp-lives-only-in-nginx).",
         "testStrategy": "Varsa nginx config testine/smoke.sh'a `Server` başlığında sürüm olmaması kontrolü eklenir; pilot imajları build edilip `curl -I` ile `Server: nginx` (sürümsüz) doğrulanır (memory pilot-rehearsal-with-fake-env, benzersiz compose project, `down -v`). DoD: CONVENTIONS §1.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
-        "updatedAt": "2026-11-03T19:01:17.661Z",
+        "updatedAt": "2026-11-04T13:57:18.455Z",
         "subtasks": []
       },
       {
@@ -16336,9 +16336,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-04T12:56:30.446Z",
+      "lastModified": "2026-11-04T13:57:18.456Z",
       "taskCount": 405,
-      "completedCount": 401,
+      "completedCount": 402,
       "tags": [
         "master"
       ]

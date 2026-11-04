@@ -16277,10 +16277,10 @@
         "description": "`pnpm audit:unpaged-lists` main'de exit 1 (UNPAGED = 6); en az biri yanlış pozitif. Kapı CI'da olmadığı için fark edilmiyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT: `pnpm audit:unpaged-lists` → exit 1, UNPAGED 6: `PlayerCard.tsx:307` (`&limit=100`), `useInbox.ts:139` (`/chats?...&limit=${CHAT_PAGE_SIZE}${cursor}`), `TestLab.tsx:94` (`limit=20`), `ai-suggestions.ts:82` ve `:88`, `WebhookDeliveryLog.tsx:94`. Beşi PLAN.md D397'de (tm 342) kırmızı olarak kayıtlı.\n- `WebhookDeliveryLog.tsx:94` yanlış pozitif: `useInfiniteQuery` + `params.set('cursor', pageParam)` (satır 96), `getNextPageParam: last.next_cursor`. Denetim (scripts/audit/unpaged-lists.cjs, README §unpaged-lists) imleç olarak yalnız `page_id/before_event_id/after_event_id` arıyor.\n- `useInbox.ts:139` büyük olasılıkla aynı türden (doğrula).\n\nYAPILACAK: (1) denetim `cursor`/`next_cursor` sayfalamasını tanısın (+ kendi testine örnek). (2) Kalan her kayıt için: gerçekten sayfalanmalıysa sayfala; sınırlı ve bilinçliyse denetimin mevcut istisna mekanizmasıyla gerekçesini yaz. Hedef exit 0. (3) PLAN D397 satırını güncelle.\nKAPSAM DIŞI: CI'a yeni adım eklemek — sahip kararı; HANDOFF'ta öner (memory ci-gates-beyond-the-dod-list).",
         "testStrategy": "`pnpm audit:unpaged-lists` exit 0; denetimin kendi testi cursor örneğini kapsar; değişen web dosyalarının birim testleri yeşil. DoD: CONVENTIONS §1.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
-        "updatedAt": "2026-11-04T07:34:23.133Z",
+        "updatedAt": "2026-11-04T10:03:38.021Z",
         "subtasks": []
       },
       {
@@ -16336,9 +16336,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-04T07:34:23.133Z",
+      "lastModified": "2026-11-04T10:03:38.021Z",
       "taskCount": 405,
-      "completedCount": 398,
+      "completedCount": 399,
       "tags": [
         "master"
       ]

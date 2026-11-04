@@ -42,13 +42,14 @@ test.describe('AI mode in the inbox (AI-11)', () => {
     await tabs.getByRole('tab', { name: 'Knowledge' }).click();
     await agentPage.getByLabel('Title').fill(`AI mode proof ${run}`);
     await agentPage.getByLabel('Content').fill(passage);
-    await Promise.all([
+    const [created] = await Promise.all([
       agentPage.waitForResponse(
         (response) =>
           response.request().method() === 'POST' && response.url().endsWith('/knowledge-sources'),
       ),
       agentPage.getByRole('button', { name: 'Add source' }).click(),
     ]);
+    const sourceId = ((await created.json()) as { id: string }).id;
 
     const context = await browser.newContext();
     try {
@@ -121,6 +122,12 @@ test.describe('AI mode in the inbox (AI-11)', () => {
       await agentPage.screenshot({ path: 'kanit/ai-11-mode-badge.png' });
     } finally {
       await context.close();
+      // Taken away again: a later spec's delivery question must not find it.
+      await request
+        .delete(`${API_BASE}/knowledge-sources/${sourceId}`, {
+          headers: { authorization: `Bearer ${await ownerAccessToken(request)}` },
+        })
+        .catch(() => {});
     }
   });
 });

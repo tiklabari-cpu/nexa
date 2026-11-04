@@ -14,8 +14,10 @@
 import { assertNoBlockingViolations, scanScreen } from './a11y.js';
 import {
   ACME_TEAM_LEAD,
+  API_BASE,
   expect,
   openWidget,
+  ownerAccessToken,
   signInAs,
   tenantSubdomain,
   test,
@@ -28,6 +30,7 @@ test.describe('AI quality metrics (AI-25)', () => {
     agentPage,
     browser,
     organizationId,
+    request,
   }, testInfo) => {
     test.setTimeout(180_000);
     const run = Date.now().toString().slice(-6);
@@ -41,13 +44,24 @@ test.describe('AI quality metrics (AI-25)', () => {
     await agentPage
       .getByLabel('Content')
       .fill(`Standard ${marker} delivery takes 3 to 5 working days.`);
-    await Promise.all([
+    const [created] = await Promise.all([
       agentPage.waitForResponse(
         (response) =>
           response.request().method() === 'POST' && response.url().endsWith('/knowledge-sources'),
       ),
       agentPage.getByRole('button', { name: 'Add source' }).click(),
     ]);
+    const sourceId = ((await created.json()) as { id: string }).id;
+    // The source is this run's alone, and it is taken away again below: a
+    // later spec asking a delivery question (ai-mode) must not be answered
+    // from this passage, whose wording is nearly the same as its own.
+    const dropSource = async (): Promise<void> => {
+      await request
+        .delete(`${API_BASE}/knowledge-sources/${sourceId}`, {
+          headers: { authorization: `Bearer ${await ownerAccessToken(request)}` },
+        })
+        .catch(() => {});
+    };
 
     const context = await browser.newContext();
     let chatId: string;
@@ -69,6 +83,7 @@ test.describe('AI quality metrics (AI-25)', () => {
       });
     } finally {
       await context.close();
+      await dropSource();
     }
 
     // --- Archived: the connection ends, its outcome waits for its 72 hours ----------

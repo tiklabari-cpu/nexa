@@ -2624,6 +2624,8 @@ export const playbook: Messages = {
   'playbook.suggestions.count.one': '{count} suggestion',
   'playbook.suggestions.count.other': '{count} suggestions',
   'playbook.suggestions.loadError': "Suggestions couldn't be loaded",
+  'playbook.suggestions.loadMore': 'Load more',
+  'playbook.suggestions.loadingMore': 'Loading…',
   'playbook.suggestions.emptyTitle': 'No suggestions',
   'playbook.suggestions.emptyDescription':
     "When an agent marks the AI's message or offers an answer, it shows up here.",

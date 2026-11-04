@@ -47,8 +47,18 @@ const WINDOW = 8;
 /** How far above a call a `paging-exempt:` comment may sit. */
 const WAIVER_LOOKBACK = 10;
 
-/** The contract's cursor parameters — the wire names, not local variables. */
-const CURSOR = /\b(page_id|before_event_id|after_event_id)\b/;
+/**
+ * The contract's paging parameters — the wire names, not local variables.
+ *
+ * Three families are in use: `page_id` / `before_event_id` / `after_event_id`
+ * (`usePagedQuery`, transcripts), `cursor` / `next_cursor` (the webhook
+ * deliveries list) and `offset` (the older `limit` + `offset` endpoints).
+ * `cursor` is only taken in a wire position — `cursor=`, `'cursor'`, an object
+ * key — because a local `const cursor = …` is a variable, not proof that the
+ * request carries one.
+ */
+const CURSOR =
+  /\b(page_id|before_event_id|after_event_id|next_cursor|offset)\b|\bcursor=|['"]cursor['"]|[{,]\s*cursor\s*:/;
 
 /** The shapes a pinned `limit` takes in this codebase. */
 const LIMIT_PATTERNS = [
@@ -76,63 +86,82 @@ function stripComments(source) {
     .replace(/(^|[^:])\/\/.*$/gm, '$1');
 }
 
-const files = execSync(`git ls-files ${ROOT}`, { encoding: 'utf8' })
-  .trim()
-  .split(/\r?\n/)
-  .filter((f) => /\.(ts|tsx)$/.test(f) && !/\.test\.(ts|tsx)$/.test(f));
+/**
+ * Classify the pinned-`limit` requests of a set of sources.
+ * Pure (no git, no disk) so the test can feed it a synthetic corpus.
+ * @param {{ file: string, text: string }[]} sources
+ */
+function scan(sources) {
+  const paged = [];
+  const exempt = [];
+  const unpaged = [];
 
-const paged = [];
-const exempt = [];
-const unpaged = [];
+  for (const { file, text: source } of sources) {
+    const raw = source.split(/\r?\n/);
+    const code = stripComments(raw.join('\n')).split(/\r?\n/);
 
-for (const file of files) {
-  const raw = fs.readFileSync(file, 'utf8').split(/\r?\n/);
-  const code = stripComments(raw.join('\n')).split(/\r?\n/);
+    code.forEach((line, index) => {
+      if (!LIMIT_PATTERNS.some((re) => re.test(line))) return;
 
-  code.forEach((line, index) => {
-    if (!LIMIT_PATTERNS.some((re) => re.test(line))) return;
+      const near = code.slice(Math.max(0, index - WINDOW), index + WINDOW + 1).join('\n');
+      const at = `${file}:${index + 1}`;
+      const text = raw[index].trim().slice(0, 110);
 
-    const near = code.slice(Math.max(0, index - WINDOW), index + WINDOW + 1).join('\n');
-    const at = `${file}:${index + 1}`;
-    const text = raw[index].trim().slice(0, 110);
+      if (CURSOR.test(near)) {
+        paged.push(`${at}  ${text}`);
+        return;
+      }
 
-    if (CURSOR.test(near)) {
-      paged.push(`${at}  ${text}`);
-      return;
-    }
+      const waiver = raw
+        .slice(Math.max(0, index - WAIVER_LOOKBACK), index + 1)
+        .map((l) => WAIVER.exec(l))
+        .filter(Boolean)
+        .pop();
+      if (waiver) {
+        exempt.push(`${at}  ${waiver[1].replace(/\s*\*\/\s*$/, '').trim()}`);
+        return;
+      }
 
-    const waiver = raw
-      .slice(Math.max(0, index - WAIVER_LOOKBACK), index + 1)
-      .map((l) => WAIVER.exec(l))
-      .filter(Boolean)
-      .pop();
-    if (waiver) {
-      exempt.push(`${at}  ${waiver[1].replace(/\s*\*\/\s*$/, '').trim()}`);
-      return;
-    }
+      unpaged.push(`${at}  ${text}`);
+    });
+  }
 
-    unpaged.push(`${at}  ${text}`);
-  });
+  return { paged, exempt, unpaged };
 }
 
-const total = paged.length + exempt.length + unpaged.length;
-console.log(`scanned ${ROOT} modules: ${files.length}`);
-console.log(`list requests with a pinned limit: ${total}`);
-console.log(`   paged (cursor in the same request): ${paged.length}`);
-console.log(`   exempt (paging-exempt): ${exempt.length}`);
-console.log(`   UNPAGED: ${unpaged.length}\n`);
+function main() {
+  const files = execSync(`git ls-files ${ROOT}`, { encoding: 'utf8' })
+    .trim()
+    .split(/\r?\n/)
+    .filter((f) => /\.(ts|tsx)$/.test(f) && !/\.test\.(ts|tsx)$/.test(f));
 
-console.log(`### paged = ${paged.length}`);
-paged.forEach((p) => console.log('   ' + p));
-console.log(`\n### exempt = ${exempt.length}`);
-exempt.forEach((e) => console.log('   ' + e));
-console.log(`\n### UNPAGED = ${unpaged.length}`);
-unpaged.forEach((u) => console.log('   ' + u));
-
-if (unpaged.length > 0) {
-  console.log(
-    '\nEach of these caps a list at one request. Chain it through `usePagedQuery`,' +
-      '\nor write `paging-exempt: <why>` above the call if the cap is the point.',
+  const { paged, exempt, unpaged } = scan(
+    files.map((file) => ({ file, text: fs.readFileSync(file, 'utf8') })),
   );
-  process.exitCode = 1;
+
+  const total = paged.length + exempt.length + unpaged.length;
+  console.log(`scanned ${ROOT} modules: ${files.length}`);
+  console.log(`list requests with a pinned limit: ${total}`);
+  console.log(`   paged (cursor in the same request): ${paged.length}`);
+  console.log(`   exempt (paging-exempt): ${exempt.length}`);
+  console.log(`   UNPAGED: ${unpaged.length}\n`);
+
+  console.log(`### paged = ${paged.length}`);
+  paged.forEach((p) => console.log('   ' + p));
+  console.log(`\n### exempt = ${exempt.length}`);
+  exempt.forEach((e) => console.log('   ' + e));
+  console.log(`\n### UNPAGED = ${unpaged.length}`);
+  unpaged.forEach((u) => console.log('   ' + u));
+
+  if (unpaged.length > 0) {
+    console.log(
+      '\nEach of these caps a list at one request. Chain it through `usePagedQuery`,' +
+        '\nor write `paging-exempt: <why>` above the call if the cap is the point.',
+    );
+    process.exitCode = 1;
+  }
 }
+
+module.exports = { scan, CURSOR };
+
+if (require.main === module) main();

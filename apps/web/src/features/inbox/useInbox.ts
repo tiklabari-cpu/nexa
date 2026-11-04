@@ -126,7 +126,6 @@ function chatListUrl(
   priority: ThreadPriority | null,
   pageId: string | undefined,
 ): string {
-  const cursor = pageId ? `&page_id=${encodeURIComponent(pageId)}` : '';
   // The server filters, the same way `view` and `sort` do — not a slice of the
   // rows already loaded. A client-side channel filter would narrow one page of
   // fifty and then keep asking for the next page of *everything*, so a busy
@@ -136,6 +135,7 @@ function chatListUrl(
   const onQueue = queueGroupId !== null ? `&queue_group_id=${queueGroupId}` : '';
   // How pressing (AI-12), the same: the server narrows and `total` agrees.
   const onPriority = priority !== null ? `&priority=${priority}` : '';
+  const cursor = pageId ? `&page_id=${encodeURIComponent(pageId)}` : '';
   return `/chats?view=${view}&sort=${sort}${onChannel}${onQueue}${onPriority}&limit=${CHAT_PAGE_SIZE}${cursor}`;
 }
 

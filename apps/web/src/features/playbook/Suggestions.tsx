@@ -18,7 +18,7 @@
  * and how each ended (the API answers only that much). The tab is not the
  * authority — the routes are.
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useState, type ReactElement } from 'react';
 import {
   SUGGESTION_BODY_MAX,
@@ -88,11 +88,21 @@ export function Suggestions({
   const [mine, setMine] = useState(!canReview);
   const [openId, setOpenId] = useState<string | null>(null);
 
-  const list = useQuery({
+  // The endpoint pages by `offset`: one request is one page of fifty, and the
+  // count beside the list is the whole queue, so a longer queue has to be
+  // reachable rather than silently cut at the first page.
+  const list = useInfiniteQuery({
     queryKey: suggestionKeys.list(status, mine),
-    queryFn: () => api.get<AiSuggestionList>(suggestionListPath(status, mine)),
+    queryFn: ({ pageParam }) =>
+      api.get<AiSuggestionList>(suggestionListPath(status, mine, pageParam)),
+    initialPageParam: 0,
+    getNextPageParam: (last, pages) => {
+      const loaded = pages.reduce((sum, page) => sum + page.suggestions.length, 0);
+      return last.suggestions.length > 0 && loaded < last.total ? loaded : undefined;
+    },
   });
-  const suggestions = list.data?.suggestions ?? [];
+  const suggestions = list.data?.pages.flatMap((page) => page.suggestions) ?? [];
+  const total = list.data?.pages.at(-1)?.total;
   const opened = openId ? (suggestions.find((row) => row.id === openId) ?? null) : null;
 
   return (
@@ -147,9 +157,9 @@ export function Suggestions({
                 {t('playbook.suggestions.mineOnly')}
               </label>
             )}
-            {list.data && (
+            {total !== undefined && (
               <p className="ml-auto pb-1 text-2xs text-content-tertiary" aria-live="polite">
-                {t('playbook.suggestions.count', { count: list.data.total })}
+                {t('playbook.suggestions.count', { count: total })}
               </p>
             )}
           </form>
@@ -202,6 +212,21 @@ export function Suggestions({
                 </li>
               ))}
             </ul>
+          )}
+          {list.hasNextPage && (
+            <div className="flex justify-center border-t border-border p-3">
+              <button
+                type="button"
+                data-testid="ai-suggestions-load-more"
+                onClick={() => void list.fetchNextPage()}
+                disabled={list.isFetchingNextPage}
+                className="rounded-md border border-border bg-inset px-3 py-1.5 text-sm font-medium text-content-secondary transition-colors hover:text-content disabled:opacity-60"
+              >
+                {list.isFetchingNextPage
+                  ? t('playbook.suggestions.loadingMore')
+                  : t('playbook.suggestions.loadMore')}
+              </button>
+            </div>
           )}
         </Card>
 

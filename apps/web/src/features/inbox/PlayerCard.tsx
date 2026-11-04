@@ -300,6 +300,8 @@ function ConnectionTranscript({
 }): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
+  // paging-exempt: a read-only peek at one connection, capped at its first 100 events on purpose;
+  // when the thread has more, `next_page_id` is set and the dialog says it is truncated (below).
   const events = useQuery({
     queryKey: ['connection-transcript', connection.chatId, connection.threadId],
     queryFn: () =>

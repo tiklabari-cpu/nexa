@@ -78,12 +78,19 @@ export const suggestionKeys = {
   badge: ['ai-suggestions', 'badge'] as const,
 };
 
-export function suggestionListPath(status: SuggestionListStatus, mine: boolean): string {
+/** `offset` is how many rows the pages already loaded hold; the first page asks for none. */
+export function suggestionListPath(
+  status: SuggestionListStatus,
+  mine: boolean,
+  offset = 0,
+): string {
   const params = new URLSearchParams({ status, limit: String(SUGGESTION_LIST_LIMIT_DEFAULT) });
+  if (offset > 0) params.set('offset', String(offset));
   if (mine) params.set('mine', 'true');
   return `/ai/suggestions?${params.toString()}`;
 }
 
+// paging-exempt: the badge reads `open_count` and ignores the rows, so one row is all it needs.
 /** The badge's request: one row is enough, the list answers `open_count` whatever the page. */
 export const SUGGESTION_BADGE_PATH = '/ai/suggestions?status=open&limit=1';
 

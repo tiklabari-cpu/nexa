@@ -87,6 +87,8 @@ export function TestLab({
     queryFn: () =>
       api.get<CompliancePack>(`/ai/compliance-pack?ai_agent_id=${encodeURIComponent(agentId)}`),
   });
+  // paging-exempt: the history pane is "the latest 20 runs"; `GET /ai/test-runs` takes a `limit` but
+  // has no cursor or offset (`AiTestRunList` is just `{ runs }`), so there is no next page to chain.
   const runs = useQuery({
     queryKey: testingKeys.runs(agentId),
     queryFn: () =>

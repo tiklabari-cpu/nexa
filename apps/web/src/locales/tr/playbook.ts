@@ -2619,6 +2619,8 @@ export const playbook: Messages = {
   'playbook.suggestions.count.one': '{count} öneri',
   'playbook.suggestions.count.other': '{count} öneri',
   'playbook.suggestions.loadError': 'Öneriler yüklenemedi',
+  'playbook.suggestions.loadMore': 'Daha fazla yükle',
+  'playbook.suggestions.loadingMore': 'Yükleniyor…',
   'playbook.suggestions.emptyTitle': 'Öneri yok',
   'playbook.suggestions.emptyDescription':
     'Bir ajan AI’ın mesajını işaretleyince ya da kendi cevabını önerince burada görünür.',

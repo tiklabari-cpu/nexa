@@ -196,6 +196,30 @@ describe('Playbook suggestions — the queue (AI-23)', () => {
       expect(api.get).toHaveBeenCalledWith('/ai/suggestions?status=rejected&limit=50'),
     );
   });
+
+  it('reaches rows past the first page by offset, and stops when the count is reached', async () => {
+    const first = [suggestion({ id: WRONG })];
+    const second = [OFFERED];
+    api.get.mockImplementation((path: string) => {
+      if (path === '/ai/suggestions?status=open&limit=50') {
+        return Promise.resolve({ suggestions: first, total: 2, open_count: 2 });
+      }
+      if (path === '/ai/suggestions?status=open&limit=50&offset=1') {
+        return Promise.resolve({ suggestions: second, total: 2, open_count: 2 });
+      }
+      return Promise.reject(new Error(`unmocked GET ${path}`));
+    });
+    renderQueue({ canReview: true });
+
+    expect(await screen.findAllByTestId('ai-suggestion-row')).toHaveLength(1);
+    expect(screen.getByText('2 suggestions')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId('ai-suggestions-load-more'));
+    await waitFor(() => expect(screen.getAllByTestId('ai-suggestion-row')).toHaveLength(2));
+    expect(api.get).toHaveBeenCalledWith('/ai/suggestions?status=open&limit=50&offset=1');
+    // Everything the count promised is on screen: nothing left to load.
+    expect(screen.queryByTestId('ai-suggestions-load-more')).not.toBeInTheDocument();
+  });
 });
 
 describe('Playbook suggestions — reviewing (AI-23)', () => {

@@ -16303,10 +16303,10 @@
         "description": "2026-11-03 doküman tutarlılık denetiminde bulunan Orta/Düşük sapmalar.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nYAPILACAK:\n1. `rapor-1-fonksiyonel.md` ve `rapor-2-teknik-mimari.md` içinde 35 kırık görsel linki: `gorseller/fonksiyonel/*.jpg` ve `gorseller/teknik/*.jpg` işaret ediliyor, dosyalar artık düz `gorseller/mod-*.png`. YALNIZ link yollarını düzelt; görselleri taşıma/yeniden adlandırma YOK (CLAUDE.md sınırı). Eşleşmeyen link varsa listele, tahmin etme.\n2. `MASTER-PROMPT.md:35` \"shadcn/ui (Radix)\" kilitli diyor; `apps/web/package.json`'da Radix/shadcn yok, bileşenler el yazımı. MASTER-PROMPT bilinçli olarak eski metni taşır (§D63 emsali) — ona dokunma; PLAN.md'ye bir D kaydı ekle: gerçek durum + karar sahibe ait.\n3. ADR'ler ve PLAN.md silinmiş `skill-engine.ts` ve `follow-ups.ts` dosyalarına atıf yapıyor — tarihsel kayıtsa dokunma, güncel talimatsa yeni yolu yaz (grep ile bul).\n4. README.md:77 \"four apps\" — imaj sayısı beş (api, rtm, web, admin, widget). HANDOFF.md başlığındaki eski Ağustos branch notu. `SiyahTus-Analiz/07-gorev-plani.md:11,369,378` #379/#388'i pending gösteriyor (ikisi de done). `SiyahTus-Analiz/kaynaklar/eksikler.md:4` olmayan `report.md`'ye bağlanıyor.\n5. `.env.production.example`'a eksik opsiyonel api değişkenleri (`GEOIP_DB_PATH`, `CRAWLER_PROVIDER`, `INSTALL_GUIDE_URL`, `RATE_LIMIT_AUTH_FAILURES_PER_MIN` ve env şemasında olup örnekte olmayan diğerleri — `apps/api/src/config/env.parity.test.ts` ne kontrol ediyor bak); `apps/mobile` `SIYAHTUS_*_BASE_URL` değişkenlerini belgeleyen satır.\n6. `scripts/test-gate.mjs` kırmızı mobil (jest) dosyası için vitest + with-test-datastores rerun satırı basıyor; mobil için doğrusu `cd apps/mobile && npx jest <dosya>`. (Aynı sorun types/web için memory gate-rerun-hint-fails-for-web.) `node --test scripts/loop` klasör argümanıyla Node 24'te çalışmıyor — gate/CI dosyayı doğrudan koşuyor; dokümanda klasör biçimi geçiyorsa düzelt.\n7. `apps/widget/vite.config.ts:18` \"50 KB\" yorumu WIDGET-BUNDLE-HEADROOM görevinde; burada dokunma.",
         "testStrategy": "Markdown link denetimi (küçük node betiği: göreli linkler var olan dosyaya gidiyor) 0 kırık — betik repoya girmez ya da `scripts/` altında testli girer. env.parity testi yeşil. test-gate.mjs değişikliği için `node --test` yeşil. `pnpm -w format:check` yeşil. DoD: CONVENTIONS §1.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
-        "updatedAt": "2026-11-04T11:23:24.201Z",
+        "updatedAt": "2026-11-04T12:56:30.445Z",
         "subtasks": []
       },
       {
@@ -16336,9 +16336,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-04T11:23:24.201Z",
+      "lastModified": "2026-11-04T12:56:30.446Z",
       "taskCount": 405,
-      "completedCount": 400,
+      "completedCount": 401,
       "tags": [
         "master"
       ]

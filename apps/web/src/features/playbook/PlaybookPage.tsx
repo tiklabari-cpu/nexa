@@ -1066,7 +1066,13 @@ function PlaybookPageBody({
             )}
 
             {view === 'knowledge' && (
-              <KnowledgePanel canEdit={canEdit} aiAgentId={aiAgent?.id ?? null} />
+              <KnowledgePanel
+                canEdit={canEdit}
+                aiAgentId={aiAgent?.id ?? null}
+                // Until the roster lands there is no telling "no agent" from "not yet".
+                noAgent={!agents.isPending && aiAgent === null}
+                onOpenGeneral={() => setView('general')}
+              />
             )}
 
             {view === 'tables' && <TablesPanel />}
@@ -1192,9 +1198,15 @@ const KNOWLEDGE_TYPE_LABEL_KEYS: Record<KnowledgeType, string> = {
 function KnowledgePanel({
   canEdit,
   aiAgentId,
+  noAgent,
+  onOpenGeneral,
 }: {
   canEdit: boolean;
   aiAgentId: string | null;
+  /** The roster has loaded and holds no AI agent: a source has nothing to belong to. */
+  noAgent: boolean;
+  /** Goes to the General tab, where the "add an AI agent" card is. */
+  onOpenGeneral: () => void;
 }): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
@@ -1418,6 +1430,29 @@ function KnowledgePanel({
       description={t('playbook.knowledge.description')}
     >
       <Card>
+        {noAgent && (
+          // The add form needs an AI agent to attach the source to (tm 400): say
+          // so and point at where one is made, rather than showing nothing.
+          <EmptyState
+            title={t('playbook.knowledge.noAgentTitle')}
+            description={
+              canEdit
+                ? t('playbook.knowledge.noAgentDescription')
+                : t('playbook.knowledge.noAgentAskAdmin')
+            }
+            action={
+              canEdit ? (
+                <button
+                  type="button"
+                  onClick={onOpenGeneral}
+                  className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600"
+                >
+                  {t('playbook.knowledge.noAgentAction')}
+                </button>
+              ) : undefined
+            }
+          />
+        )}
         {canEdit && aiAgentId && (
           <form
             onSubmit={form.handleSubmit}
@@ -1678,10 +1713,13 @@ function KnowledgePanel({
             onRetry={() => void sources.refetch()}
           />
         ) : allItems.length === 0 ? (
-          <EmptyState
-            title={t('playbook.knowledge.emptyTitle')}
-            description={t('playbook.knowledge.emptyDescription')}
-          />
+          // With no AI agent the card above already says why it is empty.
+          noAgent ? null : (
+            <EmptyState
+              title={t('playbook.knowledge.emptyTitle')}
+              description={t('playbook.knowledge.emptyDescription')}
+            />
+          )
         ) : visible.length === 0 ? (
           <EmptyState
             title={t('playbook.skills.nothingHereTitle')}

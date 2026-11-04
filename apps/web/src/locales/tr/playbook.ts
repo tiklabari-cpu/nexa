@@ -295,6 +295,12 @@ export const playbook: Messages = {
   'playbook.knowledge.emptyTitle': 'Dizinlenmiş bir şey yok',
   'playbook.knowledge.emptyDescription':
     'Bilgi olmadan bir beceri yalnızca sabit yanıt gönderebilir.',
+  'playbook.knowledge.noAgentTitle': 'Önce bir AI ajanı ekleyin',
+  'playbook.knowledge.noAgentDescription':
+    'Bilgi, AI ajanının yanıt verdiği kaynaktır ve bu çalışma alanında henüz AI ajanı yok. Önce bir tane ekleyin, sonra kaynak eklemek için buraya dönün.',
+  'playbook.knowledge.noAgentAskAdmin':
+    'Bu çalışma alanında henüz AI ajanı yok, bu yüzden bilgi eklenemiyor. AI ajanını eklemesi için bir yöneticiye başvurun.',
+  'playbook.knowledge.noAgentAction': 'AI ajanı ekle',
   'playbook.knowledge.noneInTab': 'Henüz {type} kaynağı yok.',
   'playbook.knowledge.indexed': 'Dizinlendi',
   'playbook.knowledge.empty': 'Boş',

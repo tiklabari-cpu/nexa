@@ -226,6 +226,17 @@ a report that does not separate them feeds the next decision the wrong number:
   `rtm.js` already uses for `siyahtus_rtm_connections_observed` — read it before a ladder and you
   know which rung is expected to fail. A ladder meant to find the pod's real limit should
   leave the key **unset** (its default), or the ladder measures the configuration.
+- **The address cap refused.** Also a product setting, not the machine. k6 on one machine is
+  **one client address**, and the gateway caps how many sockets one address may hold before
+  they log in (`RTM_MAX_PRELOGIN_PER_IP`, default 50, tm 405): past it an upgrade gets `429`
+  with `{"error":{"details":{"reason":"prelogin_limit_reached"}}}`. A socket here counts
+  from its upgrade until its `login` is answered, so what the cap sees is connect rate ×
+  login latency, not the rung size. Measured 2026-11-04 on the default rung (200 sockets at
+  200/s, `api` and `rtm` from source): **cap 10 → 11 refused, cap 20 → 0, cap 50 → 0**, i.e.
+  a peak between 10 and 20 sockets waiting at once. A rung that raises
+  `LOAD_RTM_CONNECT_RATE`, or runs where logins slow down, can cross 50. Read the refusal's
+  `reason`, and for a capacity ladder set `RTM_MAX_PRELOGIN_PER_IP=0` on the stack under test
+  so the ladder measures the pod, not the cap.
 - **The load generator ran out of local resources.** Not a product finding at all. On Windows
   the ceiling is the ephemeral port range — `netsh int ipv4 show dynamicport tcp`, **16384
   ports** on the machine these numbers were taken on — and every closed socket holds its port

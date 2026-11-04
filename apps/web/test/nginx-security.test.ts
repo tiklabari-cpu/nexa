@@ -360,3 +360,20 @@ describe('the public API documentation is served without the SPA fallback', () =
     expect(html).not.toMatch(/\son[a-z]+=/i);
   });
 });
+
+describe("the panel's proxied locations are one hop for the api and for rtm alike (tm 405)", () => {
+  // Both upstreams derive a client address under the same TRUST_PROXY_HOPS:
+  // the api for `request.ip`, rtm for its pre-login cap per address. A proxied
+  // location that did not append the caller would present every browser as
+  // this container — for rtm, one shared cap for everybody routed this way.
+  const proxied = locationBlocks(WEB_CONF).filter((block) => /proxy_pass/.test(block.body));
+
+  it('proxies exactly the two upstreams it is known to', () => {
+    expect(proxied.map((block) => block.match).sort()).toEqual(['/api/', '/v1/agent/rtm/ws']);
+  });
+
+  it.each(['/api/', '/v1/agent/rtm/ws'])('%s appends the caller to X-Forwarded-For', (match) => {
+    const block = proxied.find((candidate) => candidate.match === match)!;
+    expect(block.body).toMatch(/proxy_set_header\s+X-Forwarded-For\s+\$proxy_add_x_forwarded_for;/);
+  });
+});

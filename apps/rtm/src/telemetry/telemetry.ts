@@ -5,7 +5,7 @@
  * process, and a global meter would let one leak into another.
  *
  * The API instruments HTTP requests; this instruments the socket layer instead
- * — three metrics (NFR-M5 · NFR-P1):
+ * — four metrics (NFR-M5 · NFR-P1):
  *
  *   - {@link RtmInstruments.activeConnections} — concurrently open sockets.
  *   - {@link RtmInstruments.fanoutDelay} — time from event production
@@ -14,6 +14,8 @@
  *     what NFR-P1's p99 < 500ms budget is measured against.
  *   - {@link RtmInstruments.disconnects} — closed sockets, tagged by
  *     {@link DisconnectReason}.
+ *   - {@link RtmInstruments.upgradesRefused} — upgrades turned away before the
+ *     handshake, tagged by {@link UpgradeRefusalReason} (tm 405).
  *
  * No tracer: the API's spans exist to join a request to its log line, and
  * every RTM log call already carries `request_id` directly (M-OPS-c ·
@@ -104,6 +106,23 @@ export const DISCONNECT_REASONS = [
 ] as const;
 export type DisconnectReason = (typeof DISCONNECT_REASONS)[number];
 
+/**
+ * Why an upgrade was turned away before the handshake — the same strings the
+ * refusal itself carries in `details.reason` (`server.ts#refuseUpgrade`), so a
+ * metric and the response a client saw can be matched without a mapping:
+ *
+ *   - `draining` — the process is shutting down (M-OPS-b);
+ *   - `connection_limit_reached` — `RTM_MAX_CONNECTIONS` (M-LOAD-CAP);
+ *   - `prelogin_limit_reached` — the caller's address already holds
+ *     `RTM_MAX_PRELOGIN_PER_IP` sockets that have not logged in (tm 405).
+ */
+export const UPGRADE_REFUSAL_REASONS = [
+  'draining',
+  'connection_limit_reached',
+  'prelogin_limit_reached',
+] as const;
+export type UpgradeRefusalReason = (typeof UPGRADE_REFUSAL_REASONS)[number];
+
 /** Codes `ws` uses when it closes a socket itself over a framing problem. */
 const PROTOCOL_VIOLATION_CLOSE_CODES = new Set([1002, 1003, 1007, 1009, 1010]);
 
@@ -150,6 +169,13 @@ export interface RtmInstruments {
   readonly fanoutDelay: Histogram;
   /** Count of sockets closed, tagged `reason` (see {@link DisconnectReason}). */
   readonly disconnects: Counter;
+  /**
+   * Count of upgrades refused before the handshake, tagged `reason` (see
+   * {@link UpgradeRefusalReason}). Counted on every refusal, where the log says
+   * only when a refusal episode starts — the two together say how long and how
+   * hard (tm 405).
+   */
+  readonly upgradesRefused: Counter;
 }
 
 export interface Telemetry {
@@ -196,6 +222,10 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     disconnects: meter.createCounter('rtm.connections.closed', {
       description: 'RTM WebSocket connections closed, tagged by reason.',
       unit: '{connection}',
+    }),
+    upgradesRefused: meter.createCounter('rtm.upgrades.refused', {
+      description: 'RTM WebSocket upgrades refused before the handshake, tagged by reason.',
+      unit: '{upgrade}',
     }),
   };
 

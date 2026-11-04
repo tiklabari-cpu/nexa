@@ -32,10 +32,15 @@
 #
 # SCOPE — api only, deliberately.
 #
-#   rtm is NOT selected here. Its server (apps/rtm/src/server.ts) has no
-#   `trustProxy`, no proxy-addr and never reads `X-Forwarded-For` — a repo-wide
-#   grep for all three over apps/rtm/src returns nothing — so the mechanism this
-#   policy closes does not exist there. It also could not be closed the same way
+#   rtm is NOT selected here. Since tm 405 it does read `X-Forwarded-For`, under
+#   the same TRUST_PROXY_HOPS and the same private-peer rule as api
+#   (apps/rtm/src/client-address.ts), but for one decision only: how many
+#   sockets an address may hold before they log in. So the mechanism this policy
+#   closes exists there with a much smaller stake. A workload that reaches rtm
+#   beside the proxy can choose which pre-login bucket it lands in. That lets it
+#   escape the cap or use up another address's slots for one 30s login window.
+#   It authorises nothing: every rtm socket still has to log in with a token.
+#   It also could not be closed the same way
 #   without inventing a decision the chart has explicitly left open: rtm's socket
 #   is dialled by a BROWSER, and values.yaml's `VITE_RTM_URL` note names two
 #   supported topologies for that (through web's own `/v1/agent/rtm/ws` proxy

@@ -84,7 +84,13 @@ export class TestSocket {
 
   static connect(
     port: number,
-    options: { organizationId?: string; side?: 'agent' | 'customer'; path?: string } = {},
+    options: {
+      organizationId?: string;
+      side?: 'agent' | 'customer';
+      path?: string;
+      /** Upgrade request headers, e.g. a forwarded-for chain (tm 405). */
+      headers?: Record<string, string>;
+    } = {},
   ): Promise<TestSocket> {
     const path = options.path ?? `/v1/${options.side ?? 'agent'}/rtm/ws`;
     const query =
@@ -93,7 +99,9 @@ export class TestSocket {
         : `?organization_id=${encodeURIComponent(options.organizationId)}`;
 
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(`ws://127.0.0.1:${port}${path}${query}`);
+      const ws = new WebSocket(`ws://127.0.0.1:${port}${path}${query}`, {
+        ...(options.headers ? { headers: options.headers } : {}),
+      });
       const socket = new TestSocket(ws);
       ws.on('open', () => resolve(socket));
       ws.on('error', (error) => reject(error));

@@ -16327,16 +16327,16 @@
         "description": "RTM bağlantı tavanı yalnız global; tek kaynak, login-timeout (~30 sn) biçene kadar kimliksiz soket tutarak global tavanı doldurabilir.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nXHIGH GEREKÇESİ: (1) güvenlik yüzeyi — güvenilmeyen bağlantı kabulü / DoS.\n\nKANIT: `apps/rtm/src/server.ts:414` (M-LOAD-CAP global connection ceiling; login/idle timeout'lar `:385-428`, `:771-800`). Güvenlik incelemesi (salt okuma) Düşük olarak işaretledi; belgeli yük atma davranışı.\n\nYAPILACAK: login öncesi eşzamanlı soketleri IP başına sınırla (login olunca sayaçtan düş; kapanışta mutlaka düş — sızıntı yok). IP kaynağı api ile aynı güven modeli: yalnız loopback/RFC1918 eşten gelen X-Forwarded-For'a güven (api `trust-proxy.ts` mantığı; RTM'de karşılığını bul/yeniden kullan). Varsayılan değer env ile ayarlanabilir, env parity (`.env.example`, `.env.production.example`, doküman) güncellenir. Sınır aşılınca upgrade uygun kodla reddedilir ve metrik/log (snake_case anahtar) üretilir.\nTUZAK: DeploymentConfig alanı ekleniyorsa memory deployment-config-field-ripples; k6 rtm senaryosu (200 soket, tek IP!) bu sınıra takılmamalı — varsayılanı ya da senaryoyu buna göre ayarla ve ölç.",
         "testStrategy": "RTM entegrasyon: aynı IP'den sınır+1 kimliksiz soket → sonuncusu reddedilir; login olan soket sayaçtan düşer; kapanan soket düşer; farklı IP etkilenmez; sahte X-Forwarded-For public eşten yok sayılır. k6 rtm senaryosu bütçe içinde (memory k6-binary-location). DoD: CONVENTIONS §1.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "low",
-        "updatedAt": "2026-11-03T19:01:17.661Z",
+        "updatedAt": "2026-11-04T13:58:16.438Z",
         "subtasks": []
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-04T13:57:18.456Z",
+      "lastModified": "2026-11-04T13:58:16.439Z",
       "taskCount": 405,
       "completedCount": 402,
       "tags": [

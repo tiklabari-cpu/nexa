@@ -17,6 +17,7 @@ import { pino, type Logger } from 'pino';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { PermissionMatrixCache, RTM_LIMITS, RTM_PATHS, roleAtLeast } from '@siyahtus/types';
 import { SocketAuthenticator, type SocketPrincipal } from './auth.js';
+import { clientAddress } from './client-address.js';
 import type { RtmEnv } from './config/env.js';
 import { ConflictDetectionService } from './conflict.js';
 import { ConflictPublisher } from './conflict-publisher.js';
@@ -35,12 +36,14 @@ import {
   rtmPermissionMatrixLoader,
 } from './permissions.js';
 import { AgentPresence } from './presence.js';
+import { PreLoginLimiter } from './prelogin-limit.js';
 import { decodeRequest, encodeError } from './protocol.js';
 import { SyncService } from './sync.js';
 import {
   classifyDisconnectReason,
   createTelemetry,
   type Telemetry,
+  type UpgradeRefusalReason,
 } from './telemetry/telemetry.js';
 import { TypingService } from './typing.js';
 
@@ -103,6 +106,11 @@ export interface RtmServer {
    * when `RTM_DISCONNECT_OFFLINE_MS` turned it off.
    */
   presence: AgentPresence | null;
+  /**
+   * Sockets each client address holds before logging in (tm 405); null when
+   * `RTM_MAX_PRELOGIN_PER_IP=0` turned the cap off.
+   */
+  preLogin: PreLoginLimiter | null;
   listen: () => Promise<void>;
   close: () => Promise<void>;
   address: () => { port: number } | null;
@@ -260,6 +268,9 @@ export function buildRtmServer(
       ? null
       : new AgentPresence(db, commands, publisher, log, env.disconnectOfflineMs);
   presence?.start();
+  // The per-address cap on sockets that have not logged in (tm 405). Off, the
+  // upgrade path below derives no address at all.
+  const preLogin = env.maxPreLoginPerIp === null ? null : new PreLoginLimiter(env.maxPreLoginPerIp);
 
   const dispatcher = new Dispatcher({
     registry,
@@ -272,6 +283,10 @@ export function buildRtmServer(
     messagesPerSecond: env.RATE_LIMIT_RTM_PER_SEC,
     inMaintenance: () => maintenance.full,
     onAuthenticated: async (connection: Connection, principal: SocketPrincipal) => {
+      // First, before anything awaits: a socket that has logged in is no longer
+      // one its address is waiting on (tm 405). The close handler releases it
+      // again, harmlessly, so a login that raced its own close cannot leak.
+      preLogin?.release(connection.id);
       // Only a member's agent socket says a person is there: a bot has no
       // membership, a visitor no routing status. Checked against the registry
       // because the login was awaited — a socket that closed meanwhile has
@@ -390,11 +405,7 @@ export function buildRtmServer(
     // reconnect straight back here, because nothing told it this instance is
     // leaving. Refusing sends it to one that is staying.
     if (draining) {
-      refuseUpgrade(
-        socket,
-        'draining',
-        'The gateway is shutting down and is not taking new connections.',
-      );
+      refuseUpgrade(socket, 'draining', telemetryInstance);
       return;
     }
 
@@ -419,11 +430,7 @@ export function buildRtmServer(
           'rtm at connection ceiling: refusing new upgrades',
         );
       }
-      refuseUpgrade(
-        socket,
-        'connection_limit_reached',
-        'The gateway is at its connection ceiling and is not taking new connections.',
-      );
+      refuseUpgrade(socket, 'connection_limit_reached', telemetryInstance);
       return;
     }
 
@@ -441,6 +448,34 @@ export function buildRtmServer(
     if (!side || !organizationId || !isUuid(organizationId)) {
       socket.write('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n');
       socket.destroy();
+      return;
+    }
+
+    // PRE-LOGIN CAP PER ADDRESS (tm 405). The ceiling above is global, and a
+    // socket gets in before it says who it is — it has the 30 s login window —
+    // so one source that never logs in could hold enough sockets to fill that
+    // ceiling for everybody. This bounds what one address can hold that way;
+    // logged-in sockets are not counted (`prelogin-limit.ts`).
+    //
+    // After the path check, so only an upgrade that would otherwise be
+    // accepted is counted against its address — and before the ceiling's
+    // "accepting again" line below, which would otherwise announce an accept
+    // that this refuses.
+    const address = preLogin ? clientAddress(request, env.TRUST_PROXY_HOPS) : null;
+    if (preLogin && address !== null && !preLogin.admits(address)) {
+      // One line per episode, not per refusal — see `PreLoginLimiter.refuse`.
+      // The counter below sees every refusal.
+      if (preLogin.refuse(address)) {
+        log.warn(
+          {
+            client_ip: address,
+            prelogin_sockets: preLogin.heldBy(address),
+            max_prelogin_per_ip: preLogin.limit,
+          },
+          'rtm pre-login limit reached for an address: refusing its new upgrades',
+        );
+      }
+      refuseUpgrade(socket, 'prelogin_limit_reached', telemetryInstance);
       return;
     }
 
@@ -466,6 +501,7 @@ export function buildRtmServer(
         log,
         telemetry: telemetryInstance,
         presence,
+        preLogin: preLogin && address !== null ? { limiter: preLogin, address } : null,
         isDraining: () => draining,
       });
     });
@@ -477,6 +513,7 @@ export function buildRtmServer(
     registry,
     authority,
     presence,
+    preLogin,
     address: () => {
       const address = http.address();
       return address && typeof address === 'object' ? { port: address.port } : null;
@@ -496,6 +533,9 @@ export function buildRtmServer(
               host: env.RTM_HOST,
               backlog: RTM_LISTEN_BACKLOG,
               max_connections: env.maxConnections,
+              // `null` is off, said out loud for the same reason (tm 405).
+              max_prelogin_per_ip: env.maxPreLoginPerIp,
+              trust_proxy_hops: env.TRUST_PROXY_HOPS,
             },
             'rtm listening',
           );
@@ -563,24 +603,64 @@ export function buildRtmServer(
 }
 
 /**
- * Turn an upgrade away before the handshake, saying which of the gateway's two
- * refusals this is (M-OPS-b's drain and M-LOAD-CAP's ceiling).
+ * The gateway's three refusals, by the `details.reason` each one carries.
  *
- * One function for both, because they are one decision — "this process is not
- * taking new sockets" — differing only in why, and a client that has to tell
- * `503 draining` apart from `503 full` by prose is a client that will not.
- * `service_unavailable` is the existing error type for exactly this
- * (`packages/types/src/errors.ts` maps it to 503); the machine-readable half of
- * "why" rides in `details.reason` rather than as a new type, since neither of
- * these is a new *category* of failure.
+ * The first two are one decision — "this process is not taking new sockets"
+ * (M-OPS-b's drain and M-LOAD-CAP's ceiling) — differing only in why, and a
+ * client that has to tell `503 draining` apart from `503 full` by prose is a
+ * client that will not. `service_unavailable` is the existing error type for
+ * exactly this (`packages/types/src/errors.ts` maps it to 503); the
+ * machine-readable half of "why" rides in `details.reason` rather than as a new
+ * type, since neither of these is a new *category* of failure.
  *
- * What the body deliberately does not carry is the configured ceiling. That an
- * unauthenticated caller learns this instance is full is operationally
- * necessary — it is the difference between "the pod refused me" and "my machine
- * ran out of ports", which is the ambiguity §D127 had to pay a whole extra
- * measurement run to resolve. What it would be *capacity* for is the number,
- * and that stays where the rest of the fingerprintable detail is: behind
- * `/health`'s admin gate (M-SEC-b2).
+ * The third is not about this process (tm 405): the caller's own address
+ * already holds as many sockets as it may before they log in. That is the
+ * caller's limit, not the server's state, so it is a 429 with the existing
+ * `too_many_requests` type — another instance would refuse it just the same,
+ * and a load balancer reading 503 as "this pod is unwell" would be wrong to.
+ *
+ * What no body carries is a configured number. That an unauthenticated caller
+ * learns this instance is full is operationally necessary — it is the difference
+ * between "the pod refused me" and "my machine ran out of ports", which is the
+ * ambiguity §D127 had to pay a whole extra measurement run to resolve. What it
+ * would be *capacity* for is the number, and that stays where the rest of the
+ * fingerprintable detail is: behind `/health`'s admin gate (M-SEC-b2).
+ */
+const REFUSALS: Record<
+  UpgradeRefusalReason,
+  {
+    status: string;
+    type: 'service_unavailable' | 'too_many_requests';
+    message: string;
+    /** Seconds, sent as `Retry-After`. */
+    retryAfterSeconds?: number;
+  }
+> = {
+  draining: {
+    status: '503 Service Unavailable',
+    type: 'service_unavailable',
+    message: 'The gateway is shutting down and is not taking new connections.',
+  },
+  connection_limit_reached: {
+    status: '503 Service Unavailable',
+    type: 'service_unavailable',
+    message: 'The gateway is at its connection ceiling and is not taking new connections.',
+  },
+  prelogin_limit_reached: {
+    status: '429 Too Many Requests',
+    type: 'too_many_requests',
+    message: 'Too many connections from this address are waiting to log in.',
+    // NFR-S8: every 429 says when to come back. One second, because a slot
+    // frees as soon as one of this address's sockets logs in — a round trip and
+    // a token check — and a legitimate burst drains within that; the 30 s
+    // login window is only the worst case, which is the attacker's.
+    retryAfterSeconds: 1,
+  },
+};
+
+/**
+ * Turn an upgrade away before the handshake, saying which refusal this is
+ * ({@link REFUSALS}), and count it (`rtm.upgrades.refused`, tm 405).
  *
  * `end()` rather than `write()` + `destroy()`: destroy tears the socket down
  * immediately, including anything still buffered, so a body written that way
@@ -588,16 +668,19 @@ export function buildRtmServer(
  */
 function refuseUpgrade(
   socket: Duplex,
-  reason: 'draining' | 'connection_limit_reached',
-  message: string,
+  reason: UpgradeRefusalReason,
+  telemetry: Telemetry | null,
 ): void {
+  const { status, type, message, retryAfterSeconds } = REFUSALS[reason];
+  telemetry?.instruments.upgradesRefused.add(1, { reason });
   const body = JSON.stringify({
-    error: { type: 'service_unavailable', message, request_id: '-', details: { reason } },
+    error: { type, message, request_id: '-', details: { reason } },
   });
   socket.end(
-    'HTTP/1.1 503 Service Unavailable\r\n' +
+    `HTTP/1.1 ${status}\r\n` +
       'Connection: close\r\n' +
       'Content-Type: application/json\r\n' +
+      (retryAfterSeconds === undefined ? '' : `Retry-After: ${retryAfterSeconds}\r\n`) +
       `Content-Length: ${Buffer.byteLength(body)}\r\n` +
       '\r\n' +
       body,
@@ -745,12 +828,29 @@ function attach(params: {
   log: Logger;
   telemetry: Telemetry | null;
   presence: AgentPresence | null;
+  /**
+   * Where this socket is counted until it logs in (tm 405); null when the cap
+   * is off. Released at login (`onAuthenticated`) and here at close, whichever
+   * comes first — the second release is a no-op.
+   */
+  preLogin: { limiter: PreLoginLimiter; address: string } | null;
   /** Read at close time, not captured once — the drain can start mid-connection. */
   isDraining: () => boolean;
 }): void {
-  const { ws, side, organizationId, registry, dispatcher, log, telemetry, presence, isDraining } =
-    params;
+  const {
+    ws,
+    side,
+    organizationId,
+    registry,
+    dispatcher,
+    log,
+    telemetry,
+    presence,
+    preLogin,
+    isDraining,
+  } = params;
   const connection = registry.add({ ws, side, organizationId });
+  preLogin?.limiter.hold(connection.id, preLogin.address);
 
   // Set when `ws` itself detects a framing problem (oversized payload, bad
   // opcode, invalid UTF-8, …) — its own errors all carry a `WS_ERR_*` code
@@ -840,6 +940,7 @@ function attach(params: {
     clearTimeout(loginTimer);
     clearInterval(idleTimer);
     registry.remove(connection.id);
+    preLogin?.limiter.release(connection.id);
     presence?.closed(connection.id);
     telemetry?.instruments.disconnects.add(1, {
       reason: protocolViolation

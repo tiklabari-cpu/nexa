@@ -3,6 +3,13 @@
 > Kaynak: `HANDOFF.md` canlı dosyasından CONVENTIONS §3 gereği taşınan fazla görev blokları, newest-first.
 > Arama: `grep -n "tm <id>" docs/archive/handoff/*.md` — baştan okuma.
 
+## tm 397 — PLATFORM-OPS-TEST-FOREIGN-SUBSCRIBER: platform-operations entegrasyon testi açık dev yığınında artık kırmızı değil — done — 2026-11-04 UTC
+
+- **Yapıldı (doğrudan `main`; kontrat/migration YOK, üretim davranışı aynı):** "run now" kanal adı enjekte edilebilir oldu, varsayılan hâlâ `PLATFORM_JOB_CHANNEL`: `OpsChannel` seçeneği `channel`, `PlatformOperations` seçeneği `jobChannel`, `buildPlatformServer` seçeneği `opsJobChannel` (route'a `now` gibi geçer). `platform-operations.test.ts` kendine `siyahtus:platform:ops:jobs:test:<uuid>` kanalı verir. Sebep: Redis pub/sub db index'ini yok sayar; açık dev API gerçek kanala abone olduğundan `publish` 1 döner, test `no_listener` yerine `queued` alıyordu.
+- **Doğrulama:** dosya tek başına 32/32 — dev API yokken VE gerçek kanala yabancı abone (`redis-cli subscribe`, NUMSUB=1) bağlıyken; düzeltme olmadan aynı yabancı abone ile (b) `no_listener` testi kırmızı (`queued` geldi). `ops-channel.test.ts` +1 (özel kanal; paylaşılan kanal mesajı yok sayılır). `pnpm test:gate build statik birim entegrasyon` yeşil (14 dk entegrasyon dahil). Tam e2e: 562 geçti, 1 kırmızı `ai-multilingual.spec:28` (Rusça — bot bilgi kaynağından teslimat cevabı verdi; sıra bağımlılığı sınıfı, tm 396 gibi; bu görevle ilgisiz) + flaky `ai-agent:76`; `--shards=1 ai-multilingual` tek başına iki kez GREEN (CONVENTIONS §1.1).
+- **Varsayımlar:** `platform-audit.test.ts` `no_listener` beklemiyor (yalnız `ok()`), dokunulmadı. Gerçek dev API'yi başlatmadan aynı etki yabancı abone ile taklit edildi.
+- **Sonraki pencere:** başka bir entegrasyon testi Redis pub/sub kanalına dayanıyorsa aynı kalıp: kanal adı seçeneği + testte uuid'li kanal.
+
 ## tm 400 — KNOWLEDGE-EMPTY-STATE-NO-AI-AGENT: yeni çalışma alanında Bilgi sekmesi artık "önce AI ajanı ekleyin" der — done — 2026-11-04 UTC
 
 - **Yapıldı (dal `fix/knowledge-empty-state-no-ai-agent`; kontrat/migration/api YOK):** `PlaybookPage.tsx` `KnowledgePanel` yeni `noAgent` (ajan listesi geldi ve ajan yok) + `onOpenGeneral` alır; `noAgent` iken `EmptyState` "Önce bir AI ajanı ekleyin" + (`agents-bot--all:rw` varsa) Genel sekmesine giden düğme, yoksa yalnız "yöneticiye başvurun" açıklaması. Liste boşken ikinci "Nothing indexed" boş durumu çizilmez. En+tr 4 anahtar (`playbook.knowledge.noAgent*`), iç kod yok.

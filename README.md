@@ -659,8 +659,10 @@ above: a two-pod API with a replica holds `2 × pool` connections on the primary
 
 `request.ip` — the anonymous rate-limit bucket, the customer IP ban and the agent IP
 allow-list — is derived from `X-Forwarded-For`, and `TRUST_PROXY_HOPS` says how many
-entries from the right of that header to trust. Get it wrong in either direction and it's a
-security bug, not a cosmetic one:
+entries from the right of that header to trust. The RTM gateway reads the same value by the
+same rule for one thing, the address its pre-login cap counts (`RTM_MAX_PRELOGIN_PER_IP`), so
+one number has to describe the api's paths and the RTM hostname's. Get it wrong in either
+direction and it's a security bug, not a cosmetic one:
 
 - **Too high** (more than the proxies actually in front of the process): a caller can put
   an allow-listed address in the header themselves and be believed — the allow-list is
@@ -829,6 +831,37 @@ a horizontal-scale question, not a ceiling question.
 A client refused this way reconnects on the usual jittered exponential backoff (500ms
 doubling to 15s, `apps/web/src/lib/realtime.ts`) rather than immediately — a shedding
 mechanism whose retries add load would not be one.
+
+### `RTM_MAX_PRELOGIN_PER_IP` — sockets one address may hold before login
+
+The ceiling above is global, and a socket is let in before it says who it is: it has the
+30s login window to send `login`. Without a second limit, one source that opens sockets and
+never logs in holds each of them for that long, and enough of them fill the ceiling for
+everybody (tm 405). This bounds how many sockets **one client address** may hold that have
+not logged in yet. A socket stops counting the moment its login succeeds, and when it
+closes; a failed login keeps it counted, because it is still waiting.
+
+Past the cap the next upgrade from that address gets `429`, `Retry-After: 1` (NFR-S8) and
+`{"error":{"type":"too_many_requests","details":{"reason":"prelogin_limit_reached"}}}` — a
+429 rather than the ceiling's 503, because it is the caller's limit, not the instance's
+state. Like the ceiling's refusal it never names the number. The first refusal of an
+episode logs one `warn` line (`client_ip`, `prelogin_sockets`, `max_prelogin_per_ip`); every
+refusal is counted on the `rtm.upgrades.refused` metric, tagged `reason`.
+
+**Unset is `50`; `0` turns it off.** Defaulted, unlike the ceiling, because it does not
+depend on the pod. A legitimate client logs in on its first frame and waits one round trip
+plus a token check: two hundred agents behind one office NAT, reconnecting within the
+panel's first 500ms backoff window, is about forty at once. A refused client retries on the
+same backoff. What fifty buys an attacker on one address is fifty sockets, each closed after
+30s.
+
+The address is derived exactly as the api derives `request.ip` — same library, same
+private-peer rule, same `TRUST_PROXY_HOPS` (`apps/rtm/src/client-address.ts`; see
+"Choosing `TRUST_PROXY_HOPS`"). So the hop count has to be right for the RTM hostname too.
+Both pilot edges send it straight to rtm, one hop like the api's. If it is too low every
+visitor collapses onto the proxy's address and this becomes a global pre-login cap. Then
+fix the count rather than turning the cap off. A load generator on one machine is one
+address: see `apps/load/README.md`.
 
 ### `APPS_LIVE_PROVIDERS` — Apps cards that talk to the real provider
 

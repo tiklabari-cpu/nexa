@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import { DISCONNECT_OFFLINE_DEFAULT_MS, REGIONS } from '@siyahtus/types';
 import { OTEL_EXPORTERS } from '../telemetry/telemetry.js';
-import { SECRET_KEYS, parseEnv } from './env.js';
+import { RTM_MAX_PRELOGIN_PER_IP_DEFAULT, SECRET_KEYS, parseEnv } from './env.js';
 
 const BASE: NodeJS.ProcessEnv = {
   NODE_ENV: 'test',
@@ -135,6 +135,59 @@ describe('RTM_DISCONNECT_OFFLINE_MS', () => {
  * exists: a value this schema accepted and no factory implemented would be
  * exactly the drift that pattern closes.
  */
+/**
+ * The pre-login cap per client address (tm 405). Defaulted, unlike the
+ * ceiling: four spellings sit side by side — unset, blank, `0` and a number —
+ * and mean "the default", "the default", "off" and "this many".
+ */
+describe('RTM_MAX_PRELOGIN_PER_IP', () => {
+  it('is on by default, at the documented value, in every environment', () => {
+    expect(RTM_MAX_PRELOGIN_PER_IP_DEFAULT).toBe(50);
+    expect(parseEnv(BASE).maxPreLoginPerIp).toBe(RTM_MAX_PRELOGIN_PER_IP_DEFAULT);
+    expect(parseEnv({ ...BASE, NODE_ENV: 'development' }).maxPreLoginPerIp).toBe(50);
+  });
+
+  it('reads blank as unset — a template interpolating an unset variable writes exactly that', () => {
+    expect(parseEnv({ ...BASE, RTM_MAX_PRELOGIN_PER_IP: '' }).maxPreLoginPerIp).toBe(50);
+    expect(parseEnv({ ...BASE, RTM_MAX_PRELOGIN_PER_IP: '  ' }).maxPreLoginPerIp).toBe(50);
+  });
+
+  it('takes a positive integer as the cap and 0 as off', () => {
+    expect(parseEnv({ ...BASE, RTM_MAX_PRELOGIN_PER_IP: '5' }).maxPreLoginPerIp).toBe(5);
+    expect(parseEnv({ ...BASE, RTM_MAX_PRELOGIN_PER_IP: '0' }).maxPreLoginPerIp).toBeNull();
+  });
+
+  it('refuses a value that is not a whole, non-negative number', () => {
+    for (const bad of ['-1', '1.5', 'lots', '100001']) {
+      expect(() => parseEnv({ ...BASE, RTM_MAX_PRELOGIN_PER_IP: bad }), bad).toThrow(
+        /RTM_MAX_PRELOGIN_PER_IP/,
+      );
+    }
+  });
+});
+
+/**
+ * The hop count the pre-login cap's address is derived under (tm 405) — the
+ * API's key, so it has to parse exactly as the API parses it
+ * (`apps/api/src/config/env.test.ts`, "TRUST_PROXY_HOPS").
+ */
+describe('TRUST_PROXY_HOPS', () => {
+  it("defaults to the API's 1 and takes 0..8", () => {
+    expect(parseEnv(BASE).TRUST_PROXY_HOPS).toBe(1);
+    expect(parseEnv({ ...BASE, TRUST_PROXY_HOPS: '0' }).TRUST_PROXY_HOPS).toBe(0);
+    expect(parseEnv({ ...BASE, TRUST_PROXY_HOPS: '2' }).TRUST_PROXY_HOPS).toBe(2);
+    expect(parseEnv({ ...BASE, TRUST_PROXY_HOPS: '8' }).TRUST_PROXY_HOPS).toBe(8);
+  });
+
+  it('refuses what the API refuses: blank, a fraction, a word, more than 8', () => {
+    for (const bad of ['', '1.5', 'one', '-1', '9', '100']) {
+      expect(() => parseEnv({ ...BASE, TRUST_PROXY_HOPS: bad }), JSON.stringify(bad)).toThrow(
+        /TRUST_PROXY_HOPS/,
+      );
+    }
+  });
+});
+
 describe('OTEL_EXPORTER', () => {
   it('accepts every value its factory implements', () => {
     for (const value of OTEL_EXPORTERS) {

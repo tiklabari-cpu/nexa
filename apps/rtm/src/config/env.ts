@@ -86,6 +86,40 @@ const envSchema = z.object({
     z.coerce.number().int().positive().optional(),
   ),
   /**
+   * How many sockets one client address may hold before they log in (tm 405,
+   * `prelogin-limit.ts`). Past it the next upgrade from that address is refused
+   * with 429 `prelogin_limit_reached`; logged-in sockets do not count.
+   *
+   * Defaulted, unlike `RTM_MAX_CONNECTIONS` above, because this is not a
+   * capacity number — it does not depend on the pod. A legitimate client logs
+   * in on its first frame, so it waits for one round trip and one token check;
+   * {@link RTM_MAX_PRELOGIN_PER_IP_DEFAULT} says what the default leaves room for.
+   *
+   * `0` turns it off — a cap of zero would accept nobody, so the value has no
+   * other use, and a load generator on one machine (`apps/load`) or a topology
+   * that collapses every visitor onto one proxy address needs a way out.
+   * Blank is unset, for the reason it is on `RTM_MAX_CONNECTIONS`.
+   */
+  RTM_MAX_PRELOGIN_PER_IP: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.coerce.number().int().min(0).max(100_000).optional(),
+  ),
+  /**
+   * How many reverse proxies in front of this process appended to the
+   * forwarded-for header (tm 405). Same key, same schema, same default as the
+   * API's (`apps/api/src/config/env.ts`, where the reasoning is): both
+   * processes sit behind the same edge, and this one derives the address the
+   * pre-login cap counts by exactly the rule the API derives `request.ip` by
+   * (`client-address.ts`). A value the API refuses is refused here too.
+   */
+  TRUST_PROXY_HOPS: z
+    .preprocess(
+      // '' would coerce to 0, which is a real topology here, not "unset".
+      (value) => (value === '' ? Number.NaN : value),
+      z.coerce.number().int().min(0).max(8),
+    )
+    .default(1),
+  /**
    * Shutdown drain window in milliseconds (M-OPS-b). Same key, same meaning and
    * the same environment-following default as the API's
    * (`apps/api/src/config/env.ts`) — two processes reading one variable out of
@@ -192,6 +226,11 @@ export type RtmEnv = z.infer<typeof envSchema> & {
    */
   maxConnections: number | null;
   /**
+   * Resolved pre-login cap per client address (tm 405). `null` is off
+   * (`RTM_MAX_PRELOGIN_PER_IP=0`); unset is {@link RTM_MAX_PRELOGIN_PER_IP_DEFAULT}.
+   */
+  maxPreLoginPerIp: number | null;
+  /**
    * Resolved disconnect tolerance (tm 340.3): milliseconds an agent may have
    * no open socket before going offline, or `null` when this gateway does not
    * change routing status at all.
@@ -212,6 +251,26 @@ function withPoolSize(url: string, poolSize: number | undefined): string {
   if (parsed.searchParams.has('connection_limit')) return url;
   parsed.searchParams.set('connection_limit', String(poolSize));
   return parsed.toString();
+}
+
+/**
+ * `RTM_MAX_PRELOGIN_PER_IP` when unset (tm 405).
+ *
+ * What it has to leave room for is the worst legitimate case: many people
+ * behind one address all reconnecting at once — an office NAT after a gateway
+ * restart. The panel's first retry lands uniformly within 500 ms
+ * (`apps/web/src/lib/realtime.ts`), and a socket waits only until its login is
+ * answered, one round trip plus a token check. Two hundred agents behind one
+ * address, each waiting ~100 ms, is about 40 at once; fifty covers that, and a
+ * refused socket simply retries on the same backoff. What it costs an attacker
+ * on one address: fifty sockets, each closed after the 30 s login window.
+ */
+export const RTM_MAX_PRELOGIN_PER_IP_DEFAULT = 50;
+
+/** `RTM_MAX_PRELOGIN_PER_IP`, with its default and its off switch (tm 405). */
+function resolvePreLoginPerIp(env: z.infer<typeof envSchema>): number | null {
+  const limit = env.RTM_MAX_PRELOGIN_PER_IP ?? RTM_MAX_PRELOGIN_PER_IP_DEFAULT;
+  return limit === 0 ? null : limit;
 }
 
 /** `RTM_DISCONNECT_OFFLINE_MS`, with its default and its off switch (tm 340.3). */
@@ -249,6 +308,7 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): RtmEnv {
     JWT_SIGNING_KEY_CUSTOMER: env.CUSTOMER_TOKEN_SECRET,
     shutdownDrainMs: env.SHUTDOWN_DRAIN_MS ?? (env.NODE_ENV === 'production' ? 5_000 : 0),
     maxConnections: env.RTM_MAX_CONNECTIONS ?? null,
+    maxPreLoginPerIp: resolvePreLoginPerIp(env),
     disconnectOfflineMs: resolveDisconnectOffline(env),
     otelEnabled: env.OTEL_ENABLED ?? env.NODE_ENV !== 'test',
   };

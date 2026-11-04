@@ -475,7 +475,10 @@ config:
   # RIGHT (apps/api/src/server.ts), and it is what the agent IP allow-list, the
   # customer IP ban and the anonymous rate-limit bucket decide on — so this is a
   # security value, not a logging one. README "Choosing TRUST_PROXY_HOPS" has
-  # the table.
+  # the table. rtm reads the same key by the same rule for its pre-login cap per
+  # address (RTM_MAX_PRELOGIN_PER_IP, tm 405); web nginx's
+  # `/v1/agent/rtm/ws` location appends the caller like `/api/` does, so the
+  # chain below is one hop for rtm too.
   #
   # THIS CHART'S OWN CHAIN IS ONE HOP: browser -> web nginx -> api. The `/api/`
   # location in apps/web/nginx.conf appends the caller with

@@ -16251,12 +16251,12 @@
         "description": "Ajan sohbeti alıp yanıt verdikten sonra widget hâlâ \"You are number 1 in the queue\" bildirimini gösteriyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT: dev yığınında akış: ziyaretçi widget'tan yazdı → ajan panelde aldı ve yanıtladı → yanıt widget'a 107 ms'de geldi, ama sıra bildirimi görünür kaldı. Yeni owner için ajan durumu varsayılanıyla, kuyruklu sohbet.\n\nYAPILACAK: widget'ta sıra bildirimini hangi olayın gizlediğini bul (grep queue apps/widget/src/widget.ts); sohbet bir ajana atanınca VE/VEYA ilk ajan mesajı gelince bildirim kalksın. RTM push'unda atama olayı varsa ona bağla; yoksa ilk ajan mesajında gizle. Bundle bütçesine dikkat (WIDGET-BUNDLE-HEADROOM görevi; 2026-11-03'te 4 B pay).\nTUZAK: memory widget-mount-returns-teardown, widget-test-fetch-mocks-share-objects.",
         "testStrategy": "Widget birim: kuyrukta bildirim görünür; atama olayı/ilk ajan mesajı sonrası gizli. bundle-size.test.ts yeşil. İlgili widget e2e yeşil. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "395"
         ],
         "priority": "medium",
-        "updatedAt": "2026-11-04T02:57:17.070Z",
+        "updatedAt": "2026-11-04T04:21:48.274Z",
         "subtasks": []
       },
       {
@@ -16336,9 +16336,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-04T02:57:17.072Z",
+      "lastModified": "2026-11-04T04:21:48.275Z",
       "taskCount": 405,
-      "completedCount": 395,
+      "completedCount": 396,
       "tags": [
         "master"
       ]

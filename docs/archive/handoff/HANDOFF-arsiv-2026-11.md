@@ -3,6 +3,13 @@
 > Kaynak: `HANDOFF.md` canlı dosyasından CONVENTIONS §3 gereği taşınan fazla görev blokları, newest-first.
 > Arama: `grep -n "tm <id>" docs/archive/handoff/*.md` — baştan okuma.
 
+## tm 399 — WIDGET-QUEUE-NOTICE-AFTER-REPLY: ajan yanıt verince ziyaretçinin "sırada N" bildirimi hemen kalkar — done — 2026-11-04 UTC
+
+- **Yapıldı (dal `fix/widget-queue-notice-after-reply`; kontrat/migration/api YOK):** `apps/widget/src/widget.ts` `applyIncomingEvent`: yazarı `agent` olan ilk olay gelirken `queuePosition` doluysa konum + bekleme tahmini silinir, `renderStatus()` çağrılır ve sahibi/ajanı güncellemek için `refresh()` çalışır. Sebep: soketli widget'ta kuyruk bilgisini yalnız yoklama tazeliyordu (30 sn heartbeat); yanıt 107 ms'de geliyor, satır yarım dakika kalıyordu. AI ve ziyaretçi olayları satıra dokunmaz.
+- **Doğrulama:** `widget.socket.test.ts` +2 (kuyrukta satır görünür → ajan yanıtı sonrası boş; düzeltme geri alınınca kırmızı — mutantla doğrulandı; ziyaretçi olayı satırı değiştirmez); widget birim 57 dosya / 537 yeşil, typecheck + eslint temiz; bundle-size.test.ts yeşil (tavan değişmedi).
+- **Varsayımlar:** RTM'de ayrı "atandı" push'u yok → ilk ajan mesajı tetikleyici. Atama sistem satırı (`system_message`) yazarı `agent` değilse tetiklemez; ajan sessizce atanıp yazmazsa satır bir sonraki yoklamaya kadar kalır (sunucu zaten o yoklamada null döner).
+- **Sonraki pencere:** widget bütçe payı ~1.9 KB'tan bu değişiklik kadar (birkaç on bayt) azaldı; ölçüm için `bundle-size.test.ts`.
+
 ## tm 398 — CHAT-ARCHIVED-SYSTEM-TEXT-I18N: sunucunun "Chat archived" sistem satırı Türkçe panelde Türkçe — done — 2026-11-04 UTC
 
 - **Yapıldı (dal `fix/chat-archived-i18n`; kontrat/migration/api YOK, sunucu metni aynı):** yeni `features/inbox/systemEventText.ts` `eventText(event, t)`: `system_event: chat_deactivated` olan sistem satırı için katalog cümlesi (`inbox.systemEvent.chatDeactivated[.dayRollover|.timeout]`, en+tr); bilinmeyen olay ve kişi mesajı saklı metinde kalır. Kullanıldığı iki yer: gelen kutusu liste önizlemesi (`InboxPage.tsx`) ve transkript sistem satırı (`Transcript.tsx`).

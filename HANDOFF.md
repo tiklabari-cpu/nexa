@@ -2,18 +2,20 @@
 
 **Date:** güncel — bkz. Task log · **Branch:** `main` (Faz-0 + v1 + v2 planı burada) · **Remote:** https://github.com/tiklabari-cpu/nexa
 
-> **Dal durumu (2026-08-01):** `main` uzun süre `e118695` (tm 21) noktasında takılı kalmıştı; Faz-0
-> kapanışı, **tüm v1** ve v2 planlama turu yalnızca `docs/plan-expand-audit` üzerinde birikmişti
-> (127 commit). Bu tur `main` **fast-forward** ile güncellendi (`--ff-only`, force yok, history
-> rewrite yok, hiçbir commit kaybolmadı) ve push edildi. `main` ile `docs/plan-expand-audit` artık
-> **birebir aynı**. Bundan sonra iş `main`'den dallanır — CONVENTIONS §2'nin `feat/<slug>` → `main`
-> akışı yeniden geçerli. Eski `docs/plan-expand-audit` dalı tamamen merge edilmiş durumda; silinebilir.
-
 ---
 
 > **Eski kayıtlar:** `docs/archive/handoff/` (`grep -rn 'tm <id>' docs/archive/handoff`) — canlı dosyada yalnız son 5 görev + açık görevler kalır (CONVENTIONS §3).
 
 ## Task log (newest-first)
+
+## tm 403 — DOCS-DRIFT-CLEANUP: doküman ↔ kod sapmaları (kırık görseller, ölü atıf, env örneği, gate ipucu) — done — 2026-11-04 UTC
+
+- **Yapıldı (doğrudan `main`; kontrat/migration/api davranışı YOK):** `rapor-1/2` içindeki 14 farklı eski görsel yolu düz `gorseller/mod-*.png`'ye çevrildi (görsel taşınmadı). **Eşleşmeyen 11 link bilerek dokunulmadı** (dosya yok, tahmin edilmedi): `19-archive-chat-history` (rapor-1 ×2), `04-customers-campaigns`, `15-chat-routing`, `16-canned-responses`, `14-apps-marketplace`, `17-customer-widget-embedded`, `18-customer-widget-open`, `teknik/02-mcp-server` (rapor-1 + rapor-2), `teknik/03-customer-widget`. `images/real_04_canned.png` / `real_05_archives.png` benzer görünüyor ama farklı klasör ve ad: sahip karar versin.
+- **Belgeler:** `PLAN.md` §D447 (MASTER-PROMPT "shadcn/ui (Radix)" gerçeği yansıtmıyor; MASTER-PROMPT'a dokunulmadı, karar sahibe). `docs/adr/ai-config-versioning.md` §2.6'daki güncel talimat `skill-engine.ts` → `config-source.ts`/`turn-config.ts` notu aldı; tarihsel "bugün" bağlamı taşıyan diğer ADR/PLAN/analiz/task atıfları (durable-ai-jobs, skill-procedure, pilot-llm-embedding-provider, PLAN D-kayıtları, SiyahTus-Analiz) bilerek değişmedi. README "five apps"; HANDOFF başlığındaki Ağustos dal notu silindi; `07-gorev-plani.md` #379/#388 done; `eksikler.md` `report.md` → `livechat-kesif-raporu.md` (2738 satır = atıfların son satırı).
+- **Env:** `.env.production.example` artık `CRAWLER_PROVIDER`, `GEOIP_DB_PATH`, `INSTALL_GUIDE_URL`, `RATE_LIMIT_AUTH_FAILURES_PER_MIN`, `SCHEDULE_{KNOWLEDGE_REFRESH,INVOICE_CLOSE,BILLING_DUNNING}_MS` + mobil `SIYAHTUS_{API,RTM}_BASE_URL` (yorumlu; `.env.example`'a EKLENMEDİ — env.parity "kimsenin okumadığı anahtar" kuralı kırar) taşıyor. `env.production-example.test.ts` +2: api env şemasının her anahtarı üretim şablonunda geçmeli (şablon geri alınınca 7 anahtarla kırmızı, doğrulandı).
+- **Gate ipucu:** yeniden koşu satırı `scripts/loop/gate-hints.mjs`'e taşındı (paket başına: api/rtm datastores — rtm artık `../api/scripts/…`, mobil `cd apps/mobile && npx jest`, web/widget/admin/types/… `cd <dir> && npx vitest run`); `gate-hints.test.mjs` 7; gate `loop-tools` adımı ve CI "Loop tools" iki dosyayı doğrudan koşar (klasör argümanı yok). `apps/widget/vite.config.ts` "50 KB" yorumuna dokunulmadı (başka görev).
+- **Doğrulama:** `pnpm test:gate build statik birim` yeşil (8m40); `pnpm test:gate --e2e`: build/statik/birim/entegrasyon (15m50) OK, e2e 562 geçti, 1 kırmızı `ai-multilingual.spec.ts:28` (flaky defterinde yok, bu görevin dokunmadığı yol) — tek başına iki kez yeşil (§1.1), ilgisiz. `env.production-example` 28, `env.parity` 5, `node --test` 34 yeşil; `pnpm -w format:check` yeşil; link denetimi (geçici betik) göreli link kırığı yalnız yukarıdaki 11 görsel + 6 sahte `dosya:satır`.
+- **Sonraki pencere:** `prd-uyum-denetimi.md` `[x](dosya:satır)` biçimli 6 sahte link (dosyalar var) bir link denetimine takılır; denetim betiği repoya girmedi.
 
 ## tm 402 — PANEL-WIDGET-SMALL-UX: dört küçük UX düzeltmesi (üçü yapıldı, biri bilinçli) — done — 2026-11-04 UTC
 
@@ -42,10 +44,3 @@
 - **Doğrulama:** `PlaybookPage.knowledgeNoAgent.test.tsx` 3 (ajansız: açıklama + düğme Genel sekmesindeki "Add an AI agent" kartını açar; salt-okur: düğme yok; ajan varken mevcut form + "Nothing indexed" aynı); `PlaybookPage.test.tsx` yük-hatası testi ajan listesine bir ajan eklendi (ajansız kurulum artık başka boş durum çizer). Playbook+locale birim 71 dosya yeşil, typecheck + eslint temiz. Kapı: build/statik/birim/entegrasyon yeşil; tam e2e 563 geçti, 1 kırmızı (`ai-multilingual.spec:28`, tek başına iki kez yeşil — yük). Entegrasyon üç koşuda sırayla farklı tek dosya kırdı (`ai-testing-judge-regression`, `knowledge-job-runner`/`ai-jobs`, `knowledge-tables-stale`; hepsi tek başına yeşil), dördüncüde tamamen yeşil.
 - **Varsayımlar:** düğme `<a>` değil `<button>` (sekme durumu sayfa içi `setView`; inline-link tuzağı yok); renkler `CreateAiAgentCard` gönder düğmesiyle aynı (`bg-brand-500 text-white`), koyu tema için yeni renk eklenmedi. axe açık/koyu: ajansız çalışma alanı e2e fikstürü olmadığı için birimde yalnız yapı (jsdom kontrast ölçmez).
 - **Sonraki pencere:** Davranış/Uyum Korumaları/Sürümler/Test/Çözülemeyenler sekmeleri ajansız zaten `aiAgent ? … : …` ile ayrı boş durum çiziyor; ajana bağlı yeni bir sekme eklenirse aynı `noAgent` kalıbı.
-
-## tm 399 — WIDGET-QUEUE-NOTICE-AFTER-REPLY: ajan yanıt verince ziyaretçinin "sırada N" bildirimi hemen kalkar — done — 2026-11-04 UTC
-
-- **Yapıldı (dal `fix/widget-queue-notice-after-reply`; kontrat/migration/api YOK):** `apps/widget/src/widget.ts` `applyIncomingEvent`: yazarı `agent` olan ilk olay gelirken `queuePosition` doluysa konum + bekleme tahmini silinir, `renderStatus()` çağrılır ve sahibi/ajanı güncellemek için `refresh()` çalışır. Sebep: soketli widget'ta kuyruk bilgisini yalnız yoklama tazeliyordu (30 sn heartbeat); yanıt 107 ms'de geliyor, satır yarım dakika kalıyordu. AI ve ziyaretçi olayları satıra dokunmaz.
-- **Doğrulama:** `widget.socket.test.ts` +2 (kuyrukta satır görünür → ajan yanıtı sonrası boş; düzeltme geri alınınca kırmızı — mutantla doğrulandı; ziyaretçi olayı satırı değiştirmez); widget birim 57 dosya / 537 yeşil, typecheck + eslint temiz; bundle-size.test.ts yeşil (tavan değişmedi).
-- **Varsayımlar:** RTM'de ayrı "atandı" push'u yok → ilk ajan mesajı tetikleyici. Atama sistem satırı (`system_message`) yazarı `agent` değilse tetiklemez; ajan sessizce atanıp yazmazsa satır bir sonraki yoklamaya kadar kalır (sunucu zaten o yoklamada null döner).
-- **Sonraki pencere:** widget bütçe payı ~1.9 KB'tan bu değişiklik kadar (birkaç on bayt) azaldı; ölçüm için `bundle-size.test.ts`.

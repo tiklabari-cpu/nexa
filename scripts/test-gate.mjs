@@ -11,7 +11,7 @@
  * Headings and what runs in each:
  *
  *   build        turbo run build
- *   statik       turbo run typecheck lint  ·  prettier --check  ·  node --test scripts/loop   (side by side)
+ *   statik       turbo run typecheck lint  ·  prettier --check  ·  node --test scripts/loop/block.test.mjs scripts/loop/gate-hints.test.mjs   (side by side)
  *   birim        turbo run test:unit        (every package's unit suite; api/rtm on isolated stores)
  *   entegrasyon  turbo run test:integration --concurrency=1
  *                (the api suite runs as parallel shards — `apps/api/scripts/run-sharded.ts`)
@@ -52,6 +52,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { rerunHints as rerunHintsFor } from './loop/gate-hints.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const HEADINGS = ['build', 'statik', 'birim', 'entegrasyon', 'e2e'];
@@ -108,7 +109,10 @@ const STEPS = {
     { name: 'typecheck+lint', command: `npx turbo run typecheck lint${only}${force}` },
     { name: 'format:check', command: 'pnpm -w format:check' },
     // Döngü pencerelerinin okuma yardımcısı (2026-10-19); bozulursa sessizce yanlış blok basmasın.
-    { name: 'loop-tools', command: 'node --test scripts/loop/block.test.mjs' },
+    {
+      name: 'loop-tools',
+      command: 'node --test scripts/loop/block.test.mjs scripts/loop/gate-hints.test.mjs',
+    },
   ],
   birim: [{ name: 'test:unit', command: `npx turbo run test:unit${only}${force}` }],
   entegrasyon: [
@@ -217,28 +221,6 @@ for (const phase of PHASES) {
   results.push(...(await Promise.all(runs)));
 }
 
-/**
- * `@siyahtus/api:test:integration:  FAIL  test/integration/x.test.ts > …` → one re-run command per
- * package. Colour codes are stripped first; the same file listed twice (several tests) is kept once.
- */
-function rerunHints(log) {
-  const byPackage = new Map();
-  const text = readFileSync(log, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
-  for (const line of text.split(/\r?\n/)) {
-    const m =
-      /^(?:(@siyahtus\/[\w-]+):[\w:-]+:\s+)?FAIL\s+(\S+\.test\.tsx?)/.exec(line.trim()) ??
-      /^(@siyahtus\/[\w-]+):[\w:-]+:\s+FAIL\s+(\S+\.test\.tsx?)/.exec(line.trim());
-    if (!m) continue;
-    const pkg = m[1] ?? '@siyahtus/api';
-    if (!byPackage.has(pkg)) byPackage.set(pkg, new Set());
-    byPackage.get(pkg).add(m[2]);
-  }
-  return [...byPackage].map(
-    ([pkg, files]) =>
-      `pnpm --filter ${pkg} exec tsx scripts/with-test-datastores.ts vitest run ${[...files].join(' ')}`,
-  );
-}
-
 const total = Math.round((Date.now() - started) / 1000);
 const failed = results.filter((r) => r.code !== 0);
 const width = Math.max(...results.map((r) => `${r.heading} › ${r.step}`.length));
@@ -267,12 +249,14 @@ for (const r of failed) {
 }
 
 const hints = failed.flatMap((r) =>
-  r.heading === 'birim' || r.heading === 'entegrasyon' ? rerunHints(r.log) : [],
+  r.heading === 'birim' || r.heading === 'entegrasyon'
+    ? rerunHintsFor(readFileSync(r.log, 'utf8'))
+    : [],
 );
 if (hints.length > 0) {
   console.log('');
   console.log(
-    '----- Kırmızı dosyaları tek tek yeniden koş (özel veritabanıyla; tam kapıyı beklemeden) -----',
+    '----- Kırmızı dosyaları tek tek yeniden koş (paketin kendi koşucusuyla, api/rtm özel veritabanıyla; tam kapıyı beklemeden) -----',
   );
   for (const h of [...new Set(hints)]) console.log(`  ${h}`);
   console.log(

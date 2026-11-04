@@ -483,7 +483,7 @@ Bu store, `RtmProvider` içinde WebSocket'ten gelen her push için `applyRtmPush
 
 Platform, tüm yüzeylerini `https://api.livechatinc.com/v3.6` altında **versiyonlanmış** olarak sunar (stabil sürüm **v3.6**). Dört ana API ailesi vardır: **Agent Chat API**, **Customer Chat API**, **Configuration API**, **Reports API**. Her ailenin hem **Web API (XHR/REST)** hem **RTM (WebSocket)** transportu vardır (Reports hariç — o yalnızca REST'tir).
 
-![API access sayfası — APIs & SDKs ve Personal access tokens sekmeleri](gorseller/teknik/01-settings-api-access.jpg)
+![API access sayfası — APIs & SDKs ve Personal access tokens sekmeleri](gorseller/mod-10-settings-api-access.png)
 
 Yukarıdaki ekran, uygulama içindeki **Settings → Integrations → API access** sayfasıdır (`/app/settings/integrations/api-access/apis-sdks`). "APIs & SDKs" ve "Personal access tokens" sekmeleri, "Available APIs" listesinde **Reports API, Agent Chat API, Configuration API** ile **Customer Chat API**'yi gösterir; sağ üstte "API pricing ↗" ve "Documentation ↗" bağlantıları vardır.
 

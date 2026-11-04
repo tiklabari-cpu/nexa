@@ -8,7 +8,7 @@
 
 ## 0. Özet
 
-**Toplam:** 120 görev (#269–#388), 141 alt görev. Öncelik: high 59, medium 49, low 12. Durum: pending 116, deferred 4 (#322, #378, #379, #388). **Güncelleme (2026-11-03):** sahip kararı K28/K29 ile #388 ve #379 pending'e alındı; deferred 2 (#322, #378).
+**Toplam:** 120 görev (#269–#388), 141 alt görev. Öncelik: high 59, medium 49, low 12. Durum: pending 116, deferred 4 (#322, #378, #379, #388). **Güncelleme (2026-11-03):** sahip kararı K28/K29 ile #388 ve #379 pending'e alındı; deferred 2 (#322, #378). **Güncelleme (2026-11-04):** #379 ve #388 done (Task Master durumu esas).
 
 - **Öncelik eşlemesi:** P0 → high, P1 → medium, P2 → low. **Öncelik devri:** high bir görevin bağımlı olduğu görev de high yapıldı; yoksa otonom döngü önkoşula sıra vermez (ör. #281 RL-04, #291 RP-04 veri yakalama, #323 GV-06/WG-14, #335 AR-01).
 - **Etiketler:** PLAN §5.1.1 matrisi (`[SONNET|OPUS-HIGH|XHIGH|MAX]`). Her XHIGH etiketinin gerekçesi görev ayrıntısında adıyla yazılı; authZ/kripto/kiracı izolasyonu/eşzamanlılık/algoritma işleri `OPUS-MAX`. **Gözden geçirme (2026-10-14, sahip):** #385–#386 `OPUS-MEDIUM` (matriste yok; `run-loop.sh` tanımaz), #320/#323/#338/#345/#350/#370 `OPUS-HIGH`, #346 `OPUS-HIGH`. **İkinci tur (2026-10-14):** MAX→XHIGH #286 #289 #292 #293 #296 #305 #316 #324 #328 #340; XHIGH→HIGH #282 #294 #302 #326 #327 #332 #339 #346 #368 #383. Task Master başlıklarında etiketin ardına `(Opus 5.5)` / `(Sonnet 5.5)` yazılıdır; bu tabloda yazılmaz.
@@ -366,7 +366,7 @@ Dalgalar bir sıra önerisidir. `run-loop.sh` önce bağımlılıklara, sonra ö
 | 376 | HOSTED-API-DOCS [SONNET-HIGH] | KN-04 | medium | pending | – | – |
 | 377 | IGAMING-CONNECT-PLACEHOLDERS [SONNET-HIGH] | KN-06 | medium | pending | – | – |
 | 378 | IGAMING-PLATFORM-F2 [OPUS-MAX] | KN-06 | low | deferred | – | 377, 287 |
-| 379 | CUSTOM-PANELS-F2 [OPUS-XHIGH] | KN-05 | low | pending (K29) | – | 325, 287 |
+| 379 | CUSTOM-PANELS-F2 [OPUS-XHIGH] | KN-05 | low | done (K29) | – | 325, 287 |
 | 380 | WHATSAPP-LIVE [OPUS-XHIGH] | KN-01 | medium | pending | 3 | 289 |
 | 381 | MESSENGER-INSTAGRAM-LIVE [OPUS-HIGH] | KN-02 | low | pending | – | 380 |
 | 382 | BILLING-PAYMENT-METHODS [OPUS-XHIGH] | BL-01 | medium | pending | 4 | 276 |
@@ -375,7 +375,7 @@ Dalgalar bir sıra önerisidir. `run-loop.sh` önce bağımlılıklara, sonra ö
 | 385 | NARROW-SCREEN-PANEL [OPUS-HIGH] | GV-04 | medium | pending | – | 304, 334 |
 | 386 | NO-PII-IN-URLS [OPUS-HIGH] | GV-05 | medium | pending | – | – |
 | 387 | AI-MULTILINGUAL [OPUS-HIGH] | AI-30 | low | pending | – | 297, 301 |
-| 388 | OPERATOR-SIGNED-IDENTITY-F2 [OPUS-MAX] | ID-03 | low | pending (K28) | – | 287 |
+| 388 | OPERATOR-SIGNED-IDENTITY-F2 [OPUS-MAX] | ID-03 | low | done (K28) | – | 287 |
 
 ## 3. Bu turda eklenen kararlar (K17–K27)
 

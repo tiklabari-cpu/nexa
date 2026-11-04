@@ -161,7 +161,7 @@ Bu modül uygulama kabuğunun (SPA) dışında, `text.com` genel sitesinde yer a
 
 ## [MOD-01] Global Shell / Navigation
 
-![Global shell — Inbox 3-pane](gorseller/fonksiyonel/01-chats-inbox-all.jpg)
+![Global shell — Inbox 3-pane](gorseller/mod-04-chats-inbox-all.png)
 
 Uygulama kabuğu; her modülde sabit kalan üç kalıcı kenar bölgeyle (üst çubuk, sol ikon rayı, sağ detay/Copilot paneli) tanımlanır. İçerik alanı rota değiştikçe yenilenir; kabuk sabit kalır (persistent shell — çıkarım: kabuk tek sefer mount edilir, iç görünümler client-side router ile değişir).
 
@@ -322,7 +322,7 @@ Alt maddeler (mikro): [MOD-01.2.1] Inbox · [MOD-01.2.2] Contacts · [MOD-01.2.3
 ---
 ## [MOD-02] Inbox / Chats
 
-![Inbox 3-pane + örnek sohbet + details](gorseller/fonksiyonel/01-chats-inbox-all.jpg)
+![Inbox 3-pane + örnek sohbet + details](gorseller/mod-04-chats-inbox-all.png)
 
 Rota: `/app/inbox` ve alt rotaları. Ürünün kalbi olan **3-pane** (üç panelli) sohbet çalışma alanıdır: **liste (sohbet/ticket listesi) | konuşma (transcript + composer) | details (müşteri/sohbet meta)**. Inbox aynı zamanda AI Agent konuşmalarını, ticket'ları ve kanal-bazlı görünümleri (views) barındırır.
 
@@ -633,7 +633,7 @@ Rota: `/app/customers`. Üç alt modül: **Real-time** (canlı ziyaretçi takibi
 
 ### [MOD-03.1] Real-time — Canlı Ziyaretçi Takibi (Traffic)
 
-![Customers — Real-time (visitor tracking) empty state](gorseller/fonksiyonel/02-customers-realtime.jpg)
+![Customers — Real-time (visitor tracking) empty state](gorseller/mod-05-customers-realtime-traffic.png)
 
 Rota: `/app/customers/real-time/{tab}`. Web sitesindeki ziyaretçileri gerçek zamanlı izler ve proaktif temas (start chat / supervise / assign) sağlar.
 
@@ -687,7 +687,7 @@ Rota: `/app/customers/real-time/{tab}`. Web sitesindeki ziyaretçileri gerçek z
 
 ### [MOD-03.2] Contacts — CRM
 
-![Contacts CRM tablosu (13 kayıt)](gorseller/fonksiyonel/03-customers-contacts.jpg)
+![Contacts CRM tablosu (13 kayıt)](gorseller/mod-05-customers-contacts-crm.png)
 
 Rota: `/app/customers/contacts/{all|leads|last-30d}?sortBy=last_activity&sortOrder=desc`. 13 gerçek kişiyi (Turkey/Serbia/Netherlands) tutan hafif CRM.
 
@@ -794,7 +794,7 @@ Rota: `/app/customers/campaigns/{all|ongoing|scheduled|inactive}`. Ziyaretçiler
 ---
 ## [MOD-04] Team
 
-![Teammates roster + Profile paneli](gorseller/fonksiyonel/05-team-teammates.jpg)
+![Teammates roster + Profile paneli](gorseller/mod-07-team-teammates.png)
 
 Rota: `/app/team`. İnsan ve yapay zekâ "takım üyelerini" yönetir: **AI Agents**, **Teammates**, **Teams**. Kenar çubuğu üstünde "**+** (Open create actions)" ile hızlı oluşturma.
 
@@ -901,7 +901,7 @@ Rota: `/app/team/teammates`. Header: "Teammates" + [Copy invite link] + [Invite 
 
 ### [MOD-04.4] Invite Teammates Modal (Form Mantığı)
 
-![Invite teammates modal](gorseller/fonksiyonel/06-team-invite-modal.jpg)
+![Invite teammates modal](gorseller/mod-07-team-invite-modal.png)
 
 **① TEKNİK VE FONKSİYONEL ÖZELLİKLER**
 - **Element Tipi:** Modal + form.
@@ -937,7 +937,7 @@ Rota: `/app/team/teammates`. Header: "Teammates" + [Copy invite link] + [Invite 
 ---
 ## [MOD-05] Playbook (Otomasyon / Skill Motoru)
 
-![Playbook skill listesi + şablon kartları](gorseller/fonksiyonel/07-playbook-skills.jpg)
+![Playbook skill listesi + şablon kartları](gorseller/mod-06-playbook-skills-list.png)
 
 Rota: `/app/playbook`. Eski LiveChat "Automate" (chatbot + routing rules + workflows + canned responses) katmanının birleştirilmiş hâli. Burada temel birim **skill**'dir: AI agent'ın veya workspace'in (deterministik workflow) çalıştırdığı bir kural/iş akışı.
 
@@ -1052,7 +1052,7 @@ Rota: `/app/team/ai-agents/{uuid}/{performance|profile|skills|knowledge}` (gözl
 
 ### [MOD-06.2] Custom Skill Editörü
 
-![AI Agent custom skill editörü + Preview](gorseller/fonksiyonel/08-ai-skill-editor.jpg)
+![AI Agent custom skill editörü + Preview](gorseller/mod-06-ai-agent-custom-skill-editor.png)
 
 Rota: `/app/team/ai-agents/{uuid}/skills/{skillUuid}`. Doğal dil ile yazılan skill'in adımlara derlenip canlı önizlendiği ekran. Sol = tanım, sağ = Preview.
 
@@ -1141,7 +1141,7 @@ Rota: `/app/team/ai-agents/{uuid}/skills/{skillUuid}`. Doğal dil ile yazılan s
 
 ### [MOD-06.3] Knowledge (RAG Bilgi Kütüphanesi)
 
-![AI Agent Knowledge (RAG kaynakları)](gorseller/fonksiyonel/09-ai-knowledge.jpg)
+![AI Agent Knowledge (RAG kaynakları)](gorseller/mod-06-ai-agent-knowledge-sources.png)
 
 Rota: `/app/team/ai-agents/{uuid}/knowledge`. AI agent'ı besleyen retrieval-augmented generation (RAG) bilgi tabanı.
 
@@ -1226,7 +1226,7 @@ Rota: `/app/team/ai-agents/{uuid}/knowledge`. AI agent'ı besleyen retrieval-aug
 ---
 ## [MOD-07] Reports (Analitik)
 
-![Reports Overview KPI'ları](gorseller/fonksiyonel/10-reports-overview.jpg)
+![Reports Overview KPI'ları](gorseller/mod-08-reports-overview.png)
 
 Rota: `/app/reports`. Sohbet, ticket, satış, ekip ve AI performansının analitik merkezi. Karşılaştırmalı dönem (vs previous period) mantığı her metrikte var.
 
@@ -1379,9 +1379,9 @@ Rota: `/app/reports`. Sohbet, ticket, satış, ekip ve AI performansının anali
 ---
 ## [MOD-08] Settings (Omnichannel / Konfigürasyon)
 
-![Settings — All channels](gorseller/fonksiyonel/11-settings-channels.jpg)
+![Settings — All channels](gorseller/mod-10-settings-channels.png)
 
-![Full Settings kenar çubuğu](gorseller/fonksiyonel/13b-billing-full-settings-nav.jpg)
+![Full Settings kenar çubuğu](gorseller/mod-10-settings-nav-full.png)
 
 Rota: `/app/settings`. Tüm ürün yapılandırması: bildirimler, şirket, kanallar, yönlendirme, gelen kutusu araçları, entegrasyonlar, güvenlik, faturalandırma. Kenar çubuğu gruplu; "Unpin side navigation" ile daraltılabilir.
 
@@ -1479,7 +1479,7 @@ Omnichannel'ın kalbi. "All channels" sayfasında her kanal bir kart: ikon + isi
 
 #### [MOD-08.5.2] Website Widgets (+ Add website Form Mantığı)
 
-![Website widgets (2 site, install)](gorseller/fonksiyonel/12-settings-websites.jpg)
+![Website widgets (2 site, install)](gorseller/mod-10-settings-website-widgets.png)
 
 **① TEKNİK VE FONKSİYONEL ÖZELLİKLER**
 - **Element Tipi:** Yönetim sayfası + kurulum banner'ı + site tablosu.
@@ -1737,7 +1737,7 @@ Omnichannel'ın kalbi. "All channels" sayfasında her kanal bir kart: ikon + isi
 
 #### [MOD-08.8.2] API Access (PAT / OAuth)
 
-![API access — teknik](gorseller/teknik/01-settings-api-access.jpg)
+![API access — teknik](gorseller/mod-10-settings-api-access.png)
 
 **① TEKNİK VE FONKSİYONEL ÖZELLİKLER**
 - **Element Tipi:** Geliştirici erişim sayfası + sekmeler.
@@ -1894,7 +1894,7 @@ Rota: `/app/settings/integrations/apps`. Başlık: "Connect your tools with Text
 ---
 ## [MOD-10] Billing / Subscription
 
-![Manage subscription / pricing](gorseller/fonksiyonel/13-billing-subscription.jpg)
+![Manage subscription / pricing](gorseller/mod-11-billing-subscription.png)
 
 Rota: `/app/settings/billing/subscription/manage`. Yeni Text modeli: **koltuk-bazlı ($/user/mo) + tüketim (AI resolutions + API calls)**. Monthly/Annual toggle, 14 günlük trial.
 

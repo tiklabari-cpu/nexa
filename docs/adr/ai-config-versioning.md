@@ -91,7 +91,7 @@ Yardımcıyı, düzenleme tablosuna yazan **ilk** görev açar (tm 296 ya da tm 
 1. **tm 316'ya kadar — "okurken derle":** düzenleme tablolarını §2.4'teki derleyici biçimine çevirir. `versionId` ve `seq` `null` döner. Bugünkü "canlı = tablo" davranışı aynen sürer, ama okuma tek yerdedir.
 2. **tm 316'dan sonra — "yayında derlenmiş":** `pinnedVersionId`'nin paketini okur. Paket değişmez olduğundan önbellek sürüm kimliğiyle süresiz tutulur (`config-cache.ts`, LRU). Geçersizleştirilen tek şey ajanın işaretçisidir (`published_version_id`; `realtime-bus` ile, commit'ten sonra).
 
-`SkillEngine.run`'ın (`skill-engine.ts:247`) ve önizlemenin (`:337-349`) tablo okumaları bu dikişe taşınır. Yeni bir AI özelliği düzenleme tablosunu turda doğrudan okursa bu notu deler.
+`SkillEngine.run`'ın (`skill-engine.ts:247`) ve önizlemenin (`:337-349`) tablo okumaları bu dikişe taşınır. Yeni bir AI özelliği düzenleme tablosunu turda doğrudan okursa bu notu deler. _(Güncel yol: `skill-engine.ts` tm 292.2'de silindi (§D255); bu okumalar bugün `apps/api/src/services/ai/config-source.ts` içinde `AiConfigSource.forTurn` / `forDraft` altındadır, turun girdisi `services/ai/conversation/turn-config.ts`'tir.)_
 
 ### 2.7 Sürümün bağlantıya sabitlenmesi
 

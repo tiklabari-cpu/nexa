@@ -1,7 +1,7 @@
 # LiveChat ↔ SiyahTuş (nexa) — Eksik Analizi
 
 - **Tarih:** 2026-10-14
-- **Kaynaklar:** [report.md](report.md) (LiveChat canlı keşfi) + [nexa-ozellikler.md](nexa-ozellikler.md) + nexa-main kodu. Kod yalnızca okundu; her "Yok" ve "Kısmi" kararı kodda doğrulandı ve kanıt dosya yoluyla verildi.
+- **Kaynaklar:** [livechat-kesif-raporu.md](livechat-kesif-raporu.md) (LiveChat canlı keşfi) + [nexa-ozellikler.md](nexa-ozellikler.md) + nexa-main kodu. Kod yalnızca okundu; her "Yok" ve "Kısmi" kararı kodda doğrulandı ve kanıt dosya yoluyla verildi.
 - **Durum:** **Var** · **Kısmi** · **Yok** · **Mock** (kod var ama gerçek entegrasyon sahte)
 - **Öncelik:** **P0** rakip olmak / pilot için şart · **P1** önemli eşitlik · **P2** olsa iyi olur
 - **Efor:** **S** (küçük) / **M** (orta) / **L** (büyük)
@@ -144,7 +144,7 @@ Aşağıda dört alanın tam tabloları var; her satırda kanıt dosyası ve uyg
 # Boşluk Analizi 01 — Onboarding · Home · Global kabuk · Chats/Inbox · Archives
 
 > LiveChat (referans) ↔ SiyahTuş/nexa (`C:\Users\Hobbie\Desktop\nexa-main`). Tarih: 2026-10-14. Salt okuma, statik kod incelemesi. Hiçbir şey çalıştırılmadı.
-> Kaynaklar: `report.md` s.54–477 ve 1004–1077 (LiveChat) · `nexa-ozellikler.md` (nexa envanteri) · nexa kaynak kodu (aşağıdaki yollar `apps/…` köküne göredir).
+> Kaynaklar: `livechat-kesif-raporu.md` s.54–477 ve 1004–1077 (LiveChat) · `nexa-ozellikler.md` (nexa envanteri) · nexa kaynak kodu (aşağıdaki yollar `apps/…` köküne göredir).
 > Durum: **Var** (eşdeğeri var) · **Kısmi** (bir kısmı var veya başka yerde) · **Yok** · **Mock** (yalnız etiket/sahte yüzey).
 > Öncelik: **P0** = LiveChat rakibi için çekirdek / pilotu engeller · **P1** = önemli eşitlik · **P2** = olsa iyi olur. Efor: **S** (≤2 gün) · **M** (≤1 hafta) · **L** (>1 hafta).
 > "Var" satırlarında öncelik/efor "—" yazıldı (açık boşluk yok).
@@ -353,7 +353,7 @@ Aşağıda dört alanın tam tabloları var; her satırda kanıt dosyası ve uyg
 
 # 02 — Boşluk Analizi: Engage & Automate (LiveChat ↔ SiyahTuş/nexa)
 
-> Kaynaklar: `report.md` §02 (satır 478–982, LiveChat), `nexa-ozellikler.md` (ön yüz §1.6–1.10, arka uç §3.x), ve nexa kodunun salt-okunur doğrulaması.
+> Kaynaklar: `livechat-kesif-raporu.md` §02 (satır 478–982, LiveChat), `nexa-ozellikler.md` (ön yüz §1.6–1.10, arka uç §3.x), ve nexa kodunun salt-okunur doğrulaması.
 > Kök dizin: `C:\Users\Hobbie\Desktop\nexa-main\` (aşağıdaki yollar buna göredir). Kod değiştirilmedi, build/test çalıştırılmadı.
 > Durum: **Var** (eşdeğer çalışıyor) · **Kısmi** (bir kısmı var, ya da yalnız arka uçta var) · **Yok** · **Mock** (arayüz/akış var, alttaki iş sahte/deterministik).
 > Öncelik: **P0** (LiveChat rakibi için çekirdek / pilotu engeller) · **P1** (önemli eşdeğerlik) · **P2** (olsa iyi olur). Efor: **S** (≤2 gün) · **M** (≤1–2 hafta) · **L** (daha büyük).
@@ -627,7 +627,7 @@ Aşağıda dört alanın tam tabloları var; her satırda kanıt dosyası ve uyg
 
 # 03 — Gap analizi: Team · Reports · Billing/Planlar · Apps & Geliştirici platformu · HelpDesk
 
-> Referans: LiveChat (`report.md` satır 1078–2045). Hedef: SiyahTuş / nexa (`C:\Users\Hobbie\Desktop\nexa-main`, salt-okuma, 2026-10-14).
+> Referans: LiveChat (`livechat-kesif-raporu.md` satır 1078–2045). Hedef: SiyahTuş / nexa (`C:\Users\Hobbie\Desktop\nexa-main`, salt-okuma, 2026-10-14).
 > Kanıt yolları repo köküne görelidir. "Yok" ve "Kısmi" kararlarının hepsi Grep/Glob ile kodda doğrulandı (apps/web, apps/api, packages/contract, packages/types).
 > Durum: **Var** · **Kısmi** · **Yok** · **Mock** (UI/API var, dış sağlayıcı sahte). Öncelik: **P0** (LiveChat rakibi için çekirdek / pilotu bloklar) · **P1** (önemli parite) · **P2** (olsa iyi olur). Efor: **S** (≤2 gün) · **M** (≤1 hafta) · **L** (>1 hafta).
 > "—" = boşluk yok, öncelik/efor gerekmiyor.
@@ -950,7 +950,7 @@ Aşağıda dört alanın tam tabloları var; her satırda kanıt dosyası ve uyg
 
 # 04 — Ayarlar + Müşteri Widget'ı / Kanallar: LiveChat ↔ nexa (SiyahTuş) Boşluk Analizi
 
-Kaynak: `report.md` §05 (satır 2046–2738, LiveChat Settings'in 26 menü öğesi), `nexa-ozellikler.md` (§1.10, §2, §4). Yöntem: Her "Yok" ve "Kısmi" kararı nexa kodunda Grep/Glob/Read ile kontrol edildi. Repoya salt okunur erişildi.
+Kaynak: `livechat-kesif-raporu.md` §05 (satır 2046–2738, LiveChat Settings'in 26 menü öğesi), `nexa-ozellikler.md` (§1.10, §2, §4). Yöntem: Her "Yok" ve "Kısmi" kararı nexa kodunda Grep/Glob/Read ile kontrol edildi. Repoya salt okunur erişildi.
 Kök dizin kısaltmaları: `web/` = `apps/web/src/`, `wdg/` = `apps/widget/src/`, `api/` = `apps/api/src/`, `types/` = `packages/types/src/`.
 
 Durum: **Var** (eşdeğer veya daha iyi) · **Kısmi** · **Yok** · **Mock** (arayüzü var, sağlayıcı sahte)

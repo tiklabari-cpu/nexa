@@ -74,7 +74,7 @@ app is built into its own image and the whole product comes up from one file:
 make demo        # docker compose -f docker-compose.full.yml up --build -d + scripts/smoke.sh
 ```
 
-The first build takes a while (it installs and compiles four apps); afterwards Docker's
+The first build takes a while (it installs and compiles five apps — api, rtm, web, admin and widget); afterwards Docker's
 layer cache makes it quick. When it finishes, `scripts/smoke.sh` checks the stack is
 genuinely wired — both health endpoints, the agent app, its same-origin `/api` proxy into
 the `api` container, the widget's loader and hosted Chat page, and a real sign-in with the

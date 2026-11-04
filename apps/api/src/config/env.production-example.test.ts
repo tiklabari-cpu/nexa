@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { SECRET_KEYS } from './env.js';
+import { envSchema, SECRET_KEYS } from './env.js';
 
 // src/config → apps/api → apps → repo root (same resolution as env.parity.test.ts)
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -87,5 +87,22 @@ describe('.env.production.example documents what parseEnv requires in production
   it('INBOUND_EMAIL_SECRET does not carry a dev-only placeholder either', () => {
     const value = uncommentedValueOf('INBOUND_EMAIL_SECRET');
     expect(value?.startsWith('dev-only-')).toBe(false);
+  });
+});
+
+describe('.env.production.example names every env var the api reads', () => {
+  // `.env.example` is held to the same rule by env.parity.test.ts. The production
+  // template used to drift (CRAWLER_PROVIDER, GEOIP_DB_PATH, INSTALL_GUIDE_URL, … were
+  // missing, tm 403): a deployer could not find an optional knob without reading env.ts.
+  // A commented `# KEY=` line counts — optional keys stay commented.
+  const documented = new Set([...source.matchAll(/^#?\s*([A-Z][A-Z0-9_]*)=/gm)].map((m) => m[1]!));
+
+  it('parses a non-trivial key count (guards a broken regex passing vacuously)', () => {
+    expect(documented.size).toBeGreaterThan(80);
+  });
+
+  it('documents every key of the api env schema', () => {
+    const missing = Object.keys(envSchema.shape).filter((key) => !documented.has(key));
+    expect(missing, `.env.production.example is missing: ${missing.join(', ')}`).toEqual([]);
   });
 });

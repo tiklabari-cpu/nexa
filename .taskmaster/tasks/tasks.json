@@ -16289,12 +16289,12 @@
         "description": "2026-11-03 tarayıcı denetiminde bulunan dört Düşük önemli UX sorunu.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nHer madde ayrı commit olabilir; biri ürün kararı gerektiriyorsa onu atla ve HANDOFF'a yaz.\n1. Widget form doğrulama mesajları widget dilini değil tarayıcı dilini izliyor (tarayıcının yerel `required`/`type=email` balonları). Widget kendi `t()` metniyle doğrulasın (ör. `setCustomValidity` ya da kendi hata satırı) — en/tr ve diğer 6 widget dili; widget anahtar paritesi (8 dil × 112) korunmalı. Bundle bütçesine dikkat (2026-11-03: 4 B pay; WIDGET-BUNDLE-HEADROOM görevi).\n2. Kayıt (sign-up) düğmesi kısa parolada açıklamasız devre dışı: hangi alanın neden eksik olduğu ekran okuyucuya ve görsel olarak söylensin (ör. `aria-describedby` ile ipucu). Kanıt ekranı: kısa parola girilince düğme gri, metin yok.\n3. Owner zaten kendisine atanmış bir sohbeti \"al/claim\" edince \"Another agent took this…\" mesajı çıkıyor. Kendi üstündeyse doğru mesaj (ya da sessizce no-op) gösterilsin; API zaten kendisinde olduğunu ayırt ediyorsa onu kullan.\n4. Varsayılan pre-chat formunda \"Kullanıcı adı\" zorunlu (`apps/widget/src/widget.ts:4021` `labelledField(doc, prechatUsername, t('prechat.username'), true)`). ÖNCE PRD/PLAN'da bunun bilinçli olup olmadığını grep'le (oyuncu platformu `username` kullanıyor olabilir); bilinçliyse dokunma ve HANDOFF'a \"bilinçli\" yaz; değilse varsayılanda opsiyonel yap.\nTUZAK: label-text-leaks-into-the-fields-name, form-validator-must-match-its-own-endpoint.",
         "testStrategy": "Her madde için birim test (widget/web). axe 0 ihlal. bundle-size.test.ts yeşil. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "395"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-04T10:10:31.613Z",
+        "updatedAt": "2026-11-04T11:22:25.834Z",
         "subtasks": []
       },
       {
@@ -16336,9 +16336,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-04T10:10:31.614Z",
+      "lastModified": "2026-11-04T11:22:25.834Z",
       "taskCount": 405,
-      "completedCount": 399,
+      "completedCount": 400,
       "tags": [
         "master"
       ]

@@ -98,6 +98,13 @@ export interface BuildPlatformServerOptions {
    * (tm 389.17). Omitted, the global `fetch`; a test passes a recorder.
    */
   aiFetch?: typeof fetch;
+  /**
+   * The pub/sub channel the Operations page's "run now" publishes on. Omitted,
+   * `PLATFORM_JOB_CHANNEL`. Redis pub/sub ignores the database index, so a test
+   * on a private datastore gives itself a private channel and is not heard by a
+   * dev API that happens to be running on the same Redis.
+   */
+  opsJobChannel?: string;
 }
 
 export async function buildPlatformServer({
@@ -108,6 +115,7 @@ export async function buildPlatformServer({
   logStream,
   now,
   aiFetch,
+  opsJobChannel,
 }: BuildPlatformServerOptions): Promise<FastifyInstance> {
   const telemetryInstance =
     telemetry !== undefined
@@ -249,7 +257,11 @@ export async function buildPlatformServer({
       await api.register(platformSettingsRoutes, { ...(now ? { now } : {}) });
       await api.register(platformAiSettingsRoutes, { env, platform, operations: aiOperations });
       await api.register(platformAiCatalogsRoutes, { ...(now ? { now } : {}) });
-      await api.register(platformOperationsRoutes, { env, ...(now ? { now } : {}) });
+      await api.register(platformOperationsRoutes, {
+        env,
+        ...(now ? { now } : {}),
+        ...(opsJobChannel ? { opsJobChannel } : {}),
+      });
       await api.register(platformSecurityRoutes, { env, ...(now ? { now } : {}) });
     },
     { prefix: PLATFORM_PREFIX },

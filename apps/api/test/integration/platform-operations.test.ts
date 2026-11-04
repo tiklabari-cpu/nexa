@@ -12,6 +12,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
+import { PLATFORM_JOB_CHANNEL } from '@siyahtus/types';
 import type { LightMyRequestResponse } from 'fastify';
 import type { Redis } from 'ioredis';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -33,6 +34,12 @@ import { ageSignup, seedUnverifiedSignup } from '../helpers/unverified-signups.j
 
 const HOUR = 3_600_000;
 const owner = ownerClient();
+/**
+ * Redis pub/sub ignores the database index, so a dev API running on the same Redis is subscribed to
+ * the real channel and would be counted as a listener. This suite publishes and listens on a
+ * channel of its own instead; production keeps `PLATFORM_JOB_CHANNEL`.
+ */
+const TEST_JOB_CHANNEL = `${PLATFORM_JOB_CHANNEL}:test:${randomUUID()}`;
 afterAll(async () => {
   await owner.$disconnect();
 });
@@ -94,7 +101,10 @@ describe('the platform Operations page (tm 389.14)', () => {
   beforeAll(async () => {
     db = platformClient();
     clock = new TestClock(Date.now());
-    platform = await buildPlatformTestServer({}, { now: clock.read });
+    platform = await buildPlatformTestServer(
+      {},
+      { now: clock.read, opsJobChannel: TEST_JOB_CHANNEL },
+    );
     tenant = await startTestServer();
     redis = platform.app.redis;
 
@@ -135,6 +145,7 @@ describe('the platform Operations page (tm 389.14)', () => {
       redis,
       scheduler,
       logger: recordingLogger().logger,
+      channel: TEST_JOB_CHANNEL,
     });
   });
 

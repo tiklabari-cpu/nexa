@@ -16227,10 +16227,10 @@
         "description": "`platform-operations.test.ts:241` aynı makinede dev api açıkken deterministik kırmızı (beklenen `no_listener`, gelen `queued`); dev yığını kapalıyken 32/32 yeşil.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT: `pnpm --filter @siyahtus/api exec tsx scripts/with-test-datastores.ts vitest run test/integration/platform-operations.test.ts` dev api (:4000) açıkken 31/32 kırmızı, kapalıyken 32/32 yeşil. Neden: Redis pub/sub db index'ini yok sayar; dev api `siyahtus:platform:ops:jobs` kanalına abone (`PUBSUB NUMSUB` = 1, client `siyahtus-api-platform-ops`). Test \"kanalda kimse dinlemiyor\" varsayıyor.\n\nYAPILACAK: testi yabancı aboneye dayanıklı yap — tercihen kanal adını test datastore'una özgü kıl (ör. kanal öneki/lisans ofseti gibi zaten var olan bir izolasyon değeri; memory e2e-runs-sharded-on-private-stacks \"Redis pub/sub ignores the db index\" çözümüne bak) ya da testin beklentisini dinleyici sayısı ölçümüne bağla. Üretim davranışı değişmeyecek; kanal adı üretimde aynı kalır.\nKAPSAM DIŞI: platform ops iş mantığı.",
         "testStrategy": "Dosya dev api açıkken VE kapalıyken tek başına yeşil (iki koşu da HANDOFF'ta). `pnpm test:gate entegrasyon --force` yeşil. DoD: CONVENTIONS §1.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "low",
-        "updatedAt": "2026-11-03T19:01:17.661Z",
+        "updatedAt": "2026-11-04T06:10:37.135Z",
         "subtasks": []
       },
       {
@@ -16336,7 +16336,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-04T06:09:47.575Z",
+      "lastModified": "2026-11-04T06:10:37.135Z",
       "taskCount": 405,
       "completedCount": 397,
       "tags": [

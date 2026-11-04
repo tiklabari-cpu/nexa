@@ -29,12 +29,13 @@ const ensureBody = z.object({ month: z.string().trim().max(7).optional() }).pass
 
 export default async function platformOperationsRoutes(
   app: FastifyInstance,
-  options: { env: Env; now?: () => number },
+  options: { env: Env; now?: () => number; opsJobChannel?: string },
 ): Promise<void> {
   const operations = new PlatformOperations(app.platformDb, app.redis, {
     now: options.now ?? Date.now,
     unverifiedTtlHours: options.env.UNVERIFIED_SIGNUP_TTL_HOURS,
     siemProvider: options.env.SIEM_PROVIDER,
+    ...(options.opsJobChannel ? { jobChannel: options.opsJobChannel } : {}),
   });
   const read = { platform: { permission: 'operations.read' as const } };
 

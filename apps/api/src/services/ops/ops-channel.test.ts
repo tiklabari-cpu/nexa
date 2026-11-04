@@ -165,6 +165,31 @@ describe('OpsChannel.start', () => {
     expect(runNow).toHaveBeenCalledWith('siem');
   });
 
+  it('listens on a channel of its own when given one, and not on the shared one', async () => {
+    const subscriber = Object.assign(new EventEmitter(), { subscribe: vi.fn(async () => 1) });
+    const runNow = vi.fn(
+      async (_name: string) => ({ result: 'busy' }) as unknown as ManualRunResult,
+    );
+    const channel = new OpsChannel({
+      subscriber: subscriber as unknown as Redis,
+      redis: { set: vi.fn(async () => 'OK' as const), hset: vi.fn(async () => 1) },
+      scheduler: { runNow },
+      logger: recordingLogger().logger,
+      channel: `${PLATFORM_JOB_CHANNEL}:private`,
+    });
+    await channel.start();
+    expect(subscriber.subscribe).toHaveBeenCalledWith(`${PLATFORM_JOB_CHANNEL}:private`);
+
+    subscriber.emit('message', PLATFORM_JOB_CHANNEL, runMessage('siem'));
+    subscriber.emit(
+      'message',
+      `${PLATFORM_JOB_CHANNEL}:private`,
+      runMessage('siem', 'req-private-1'),
+    );
+    await channel.stop();
+    expect(runNow).toHaveBeenCalledTimes(1);
+  });
+
   it('subscribes once however often it is started', async () => {
     const { channel, subscriber } = setup();
     await channel.start();

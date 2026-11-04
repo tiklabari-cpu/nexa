@@ -45,6 +45,8 @@ export interface OpsChannelOptions {
   scheduler: { runNow(name: string): Promise<ManualRunResult> };
   logger: FastifyBaseLogger;
   now?: () => number;
+  /** The channel to listen on; `PLATFORM_JOB_CHANNEL` unless a test isolates itself. */
+  channel?: string;
 }
 
 export class OpsChannel {
@@ -61,12 +63,13 @@ export class OpsChannel {
     if (this.#started) return;
     this.#started = true;
     const { subscriber } = this.#options;
+    const name = this.#options.channel ?? PLATFORM_JOB_CHANNEL;
     subscriber.on('message', (channel: string, message: string) => {
-      if (channel !== PLATFORM_JOB_CHANNEL) return;
+      if (channel !== name) return;
       const handling = this.handle(message).finally(() => this.#pending.delete(handling));
       this.#pending.add(handling);
     });
-    await subscriber.subscribe(PLATFORM_JOB_CHANNEL);
+    await subscriber.subscribe(name);
   }
 
   /** Wait for a run in progress, so a clean shutdown does not cut a job off. */

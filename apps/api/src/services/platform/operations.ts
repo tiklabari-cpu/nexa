@@ -191,6 +191,8 @@ export interface PlatformOperationsOptions {
   /** `env.UNVERIFIED_SIGNUP_TTL_HOURS`; a panel purge never goes below the floor. */
   unverifiedTtlHours: number;
   siemProvider: string;
+  /** The "run now" channel; `PLATFORM_JOB_CHANNEL` unless a test isolates itself. */
+  jobChannel?: string;
 }
 
 type OperationsRedis = Pick<Redis, 'get' | 'hgetall' | 'exists' | 'publish' | 'mget'>;
@@ -273,7 +275,7 @@ export class PlatformOperations {
     }
 
     const listeners = await this.#redis.publish(
-      PLATFORM_JOB_CHANNEL,
+      this.#options.jobChannel ?? PLATFORM_JOB_CHANNEL,
       JSON.stringify({ type: PLATFORM_JOB_RUN, name, request_id: requestId }),
     );
     return { request_id: requestId, result: listeners > 0 ? 'queued' : 'no_listener' };

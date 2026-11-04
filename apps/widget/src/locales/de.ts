@@ -107,15 +107,5 @@ export const de: Record<string, string> = {
   'error.close': 'Der Chat konnte nicht beendet werden. Bitte versuchen Sie es erneut.',
   'error.challenge':
     'Wir konnten nicht bestätigen, dass Sie ein Mensch sind. Bitte versuchen Sie es erneut.',
-  'challenge.title': 'Kurze Überprüfung',
-  'challenge.intro': 'Bitte bestätigen Sie, dass Sie ein Mensch sind, um fortzufahren.',
-  'challenge.mock': 'Ich bin kein Roboter',
-  'challenge.loading': 'Überprüfung wird geladen…',
-  'challenge.failed': 'Die Überprüfung war nicht erfolgreich. Bitte versuchen Sie es erneut.',
-  'challenge.unavailable':
-    'Die Überprüfung konnte nicht geladen werden. Bitte versuchen Sie es erneut.',
-  'challenge.retry': 'Erneut versuchen',
-  'challenge.cancel': 'Jetzt nicht',
-  'challenge.provider': 'Geschützt durch Cloudflare Turnstile.',
   poweredBy: 'Bereitgestellt von SiyahTuş',
 };

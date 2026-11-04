@@ -28,6 +28,8 @@ export const LAZY_CHUNKS = [
   { name: 'help', source: 'src/help.ts', importCall: "import('./help.js')" },
   { name: 'targeting', source: 'src/targeting.ts', importCall: "import('./targeting.js')" },
   { name: 'card', source: 'src/card.ts', importCall: "import('./card.js')" },
+  // The human check (tm 395): fetched only when the API asks a visitor for one.
+  { name: 'challenge', source: 'src/challenge.ts', importCall: "import('./challenge.js')" },
 ] as const;
 
 /** Vite plugin: the lazy modules emitted as chunks and addressed by URL, build only. */

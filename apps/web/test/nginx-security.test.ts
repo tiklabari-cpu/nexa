@@ -165,6 +165,11 @@ describe.each(IMAGES)('$name nginx security profile', ({ conf, dockerfile, heade
     }
   });
 
+  it('does not announce the nginx version (tm 404)', () => {
+    // `server_tokens off` at server level covers the `Server` header and the error pages.
+    expect(stripComments(conf)).toMatch(/^\s*server_tokens\s+off;/m);
+  });
+
   it('emits HSTS only when something in front says the request arrived over HTTPS', () => {
     // There is no TLS in this repository, and the header is meaningless over
     // plain http. nginx skips an `add_header` whose value is empty, so mapping

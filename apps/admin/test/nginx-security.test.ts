@@ -126,6 +126,11 @@ describe('admin nginx security profile', () => {
     }
   });
 
+  it('does not announce the nginx version (tm 404)', () => {
+    // `server_tokens off` at server level covers the `Server` header and the error pages.
+    expect(stripComments(CONF)).toMatch(/^\s*server_tokens\s+off;/m);
+  });
+
   it('emits HSTS only when something in front says the request arrived over HTTPS', () => {
     expect(stripComments(CONF)).toMatch(/map\s+\$http_x_forwarded_proto\s+\$siyahtus_hsts/);
     expect(mapDefault(CONF, 'siyahtus_hsts')).toBe('');

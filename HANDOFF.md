@@ -8,6 +8,13 @@
 
 ## Task log (newest-first)
 
+## tm 404 — NGINX-SERVER-TOKENS-OFF: nginx sürüm bilgisini göndermesin — done — 2026-11-04 UTC
+
+- **Yapıldı (doğrudan `main`; kontrat/migration/api YOK):** `apps/{web,admin,widget}/nginx.conf` server bloğuna `server_tokens off;` (repoda başka nginx.conf yok; CSP/frame-ancestors/diğer başlıklar değişmedi). `Server: nginx/1.27.5` → `Server: nginx`, hata sayfası gövdesi de sürümsüz.
+- **Doğrulama:** `apps/web/test/nginx-security.test.ts` (36, +2) ve `apps/admin/test/nginx-security.test.ts` (19, +1) yeni 'does not announce the nginx version' testi; gerçek `nginxinc/nginx-unprivileged:1.27-alpine` kabında widget+web yapılandırması `curl -I` → `Server: nginx`, widget 404 gövdesi `<center>nginx</center>`, web/admin `nginx -t` OK. Tam pilot imajı build/compose provası yapılmadı (yapılandırma aynı taban imajda koştu). Kapı: `build statik birim` yeşil (5m20); `--e2e` 563 geçti, 1 kırmızı `ai-multilingual.spec.ts:28` (tm 403'te de görülen, bu görevin dokunmadığı yol) — tek başına iki kez yeşil (§1.1).
+- **Varsayımlar:** `smoke.sh`'a ayrıca başlık kontrolü eklenmedi (birim testi yapılandırmayı sabitliyor).
+- **Sonraki pencere:** `infra/pilot` altında ayrı bir nginx/ters vekil yoksa ek iş yok; cloudflared önünde `Server` başlığını Cloudflare kendi değeriyle değiştirir.
+
 ## tm 403 — DOCS-DRIFT-CLEANUP: doküman ↔ kod sapmaları (kırık görseller, ölü atıf, env örneği, gate ipucu) — done — 2026-11-04 UTC
 
 - **Yapıldı (doğrudan `main`; kontrat/migration/api davranışı YOK):** `rapor-1/2` içindeki 14 farklı eski görsel yolu düz `gorseller/mod-*.png`'ye çevrildi (görsel taşınmadı). **Eşleşmeyen 11 link bilerek dokunulmadı** (dosya yok, tahmin edilmedi): `19-archive-chat-history` (rapor-1 ×2), `04-customers-campaigns`, `15-chat-routing`, `16-canned-responses`, `14-apps-marketplace`, `17-customer-widget-embedded`, `18-customer-widget-open`, `teknik/02-mcp-server` (rapor-1 + rapor-2), `teknik/03-customer-widget`. `images/real_04_canned.png` / `real_05_archives.png` benzer görünüyor ama farklı klasör ve ad: sahip karar versin.
@@ -37,10 +44,3 @@
 - **Doğrulama:** dosya tek başına 32/32 — dev API yokken VE gerçek kanala yabancı abone (`redis-cli subscribe`, NUMSUB=1) bağlıyken; düzeltme olmadan aynı yabancı abone ile (b) `no_listener` testi kırmızı (`queued` geldi). `ops-channel.test.ts` +1 (özel kanal; paylaşılan kanal mesajı yok sayılır). `pnpm test:gate build statik birim entegrasyon` yeşil (14 dk entegrasyon dahil). Tam e2e: 562 geçti, 1 kırmızı `ai-multilingual.spec:28` (Rusça — bot bilgi kaynağından teslimat cevabı verdi; sıra bağımlılığı sınıfı, tm 396 gibi; bu görevle ilgisiz) + flaky `ai-agent:76`; `--shards=1 ai-multilingual` tek başına iki kez GREEN (CONVENTIONS §1.1).
 - **Varsayımlar:** `platform-audit.test.ts` `no_listener` beklemiyor (yalnız `ok()`), dokunulmadı. Gerçek dev API'yi başlatmadan aynı etki yabancı abone ile taklit edildi.
 - **Sonraki pencere:** başka bir entegrasyon testi Redis pub/sub kanalına dayanıyorsa aynı kalıp: kanal adı seçeneği + testte uuid'li kanal.
-
-## tm 400 — KNOWLEDGE-EMPTY-STATE-NO-AI-AGENT: yeni çalışma alanında Bilgi sekmesi artık "önce AI ajanı ekleyin" der — done — 2026-11-04 UTC
-
-- **Yapıldı (dal `fix/knowledge-empty-state-no-ai-agent`; kontrat/migration/api YOK):** `PlaybookPage.tsx` `KnowledgePanel` yeni `noAgent` (ajan listesi geldi ve ajan yok) + `onOpenGeneral` alır; `noAgent` iken `EmptyState` "Önce bir AI ajanı ekleyin" + (`agents-bot--all:rw` varsa) Genel sekmesine giden düğme, yoksa yalnız "yöneticiye başvurun" açıklaması. Liste boşken ikinci "Nothing indexed" boş durumu çizilmez. En+tr 4 anahtar (`playbook.knowledge.noAgent*`), iç kod yok.
-- **Doğrulama:** `PlaybookPage.knowledgeNoAgent.test.tsx` 3 (ajansız: açıklama + düğme Genel sekmesindeki "Add an AI agent" kartını açar; salt-okur: düğme yok; ajan varken mevcut form + "Nothing indexed" aynı); `PlaybookPage.test.tsx` yük-hatası testi ajan listesine bir ajan eklendi (ajansız kurulum artık başka boş durum çizer). Playbook+locale birim 71 dosya yeşil, typecheck + eslint temiz. Kapı: build/statik/birim/entegrasyon yeşil; tam e2e 563 geçti, 1 kırmızı (`ai-multilingual.spec:28`, tek başına iki kez yeşil — yük). Entegrasyon üç koşuda sırayla farklı tek dosya kırdı (`ai-testing-judge-regression`, `knowledge-job-runner`/`ai-jobs`, `knowledge-tables-stale`; hepsi tek başına yeşil), dördüncüde tamamen yeşil.
-- **Varsayımlar:** düğme `<a>` değil `<button>` (sekme durumu sayfa içi `setView`; inline-link tuzağı yok); renkler `CreateAiAgentCard` gönder düğmesiyle aynı (`bg-brand-500 text-white`), koyu tema için yeni renk eklenmedi. axe açık/koyu: ajansız çalışma alanı e2e fikstürü olmadığı için birimde yalnız yapı (jsdom kontrast ölçmez).
-- **Sonraki pencere:** Davranış/Uyum Korumaları/Sürümler/Test/Çözülemeyenler sekmeleri ajansız zaten `aiAgent ? … : …` ile ayrı boş durum çiziyor; ajana bağlı yeni bir sekme eklenirse aynı `noAgent` kalıbı.

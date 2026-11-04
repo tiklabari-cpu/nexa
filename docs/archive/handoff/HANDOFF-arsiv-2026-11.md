@@ -3,6 +3,13 @@
 > Kaynak: `HANDOFF.md` canlı dosyasından CONVENTIONS §3 gereği taşınan fazla görev blokları, newest-first.
 > Arama: `grep -n "tm <id>" docs/archive/handoff/*.md` — baştan okuma.
 
+## tm 400 — KNOWLEDGE-EMPTY-STATE-NO-AI-AGENT: yeni çalışma alanında Bilgi sekmesi artık "önce AI ajanı ekleyin" der — done — 2026-11-04 UTC
+
+- **Yapıldı (dal `fix/knowledge-empty-state-no-ai-agent`; kontrat/migration/api YOK):** `PlaybookPage.tsx` `KnowledgePanel` yeni `noAgent` (ajan listesi geldi ve ajan yok) + `onOpenGeneral` alır; `noAgent` iken `EmptyState` "Önce bir AI ajanı ekleyin" + (`agents-bot--all:rw` varsa) Genel sekmesine giden düğme, yoksa yalnız "yöneticiye başvurun" açıklaması. Liste boşken ikinci "Nothing indexed" boş durumu çizilmez. En+tr 4 anahtar (`playbook.knowledge.noAgent*`), iç kod yok.
+- **Doğrulama:** `PlaybookPage.knowledgeNoAgent.test.tsx` 3 (ajansız: açıklama + düğme Genel sekmesindeki "Add an AI agent" kartını açar; salt-okur: düğme yok; ajan varken mevcut form + "Nothing indexed" aynı); `PlaybookPage.test.tsx` yük-hatası testi ajan listesine bir ajan eklendi (ajansız kurulum artık başka boş durum çizer). Playbook+locale birim 71 dosya yeşil, typecheck + eslint temiz. Kapı: build/statik/birim/entegrasyon yeşil; tam e2e 563 geçti, 1 kırmızı (`ai-multilingual.spec:28`, tek başına iki kez yeşil — yük). Entegrasyon üç koşuda sırayla farklı tek dosya kırdı (`ai-testing-judge-regression`, `knowledge-job-runner`/`ai-jobs`, `knowledge-tables-stale`; hepsi tek başına yeşil), dördüncüde tamamen yeşil.
+- **Varsayımlar:** düğme `<a>` değil `<button>` (sekme durumu sayfa içi `setView`; inline-link tuzağı yok); renkler `CreateAiAgentCard` gönder düğmesiyle aynı (`bg-brand-500 text-white`), koyu tema için yeni renk eklenmedi. axe açık/koyu: ajansız çalışma alanı e2e fikstürü olmadığı için birimde yalnız yapı (jsdom kontrast ölçmez).
+- **Sonraki pencere:** Davranış/Uyum Korumaları/Sürümler/Test/Çözülemeyenler sekmeleri ajansız zaten `aiAgent ? … : …` ile ayrı boş durum çiziyor; ajana bağlı yeni bir sekme eklenirse aynı `noAgent` kalıbı.
+
 ## tm 399 — WIDGET-QUEUE-NOTICE-AFTER-REPLY: ajan yanıt verince ziyaretçinin "sırada N" bildirimi hemen kalkar — done — 2026-11-04 UTC
 
 - **Yapıldı (dal `fix/widget-queue-notice-after-reply`; kontrat/migration/api YOK):** `apps/widget/src/widget.ts` `applyIncomingEvent`: yazarı `agent` olan ilk olay gelirken `queuePosition` doluysa konum + bekleme tahmini silinir, `renderStatus()` çağrılır ve sahibi/ajanı güncellemek için `refresh()` çalışır. Sebep: soketli widget'ta kuyruk bilgisini yalnız yoklama tazeliyordu (30 sn heartbeat); yanıt 107 ms'de geliyor, satır yarım dakika kalıyordu. AI ve ziyaretçi olayları satıra dokunmaz.

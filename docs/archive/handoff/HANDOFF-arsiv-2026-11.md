@@ -3,6 +3,13 @@
 > Kaynak: `HANDOFF.md` canlı dosyasından CONVENTIONS §3 gereği taşınan fazla görev blokları, newest-first.
 > Arama: `grep -n "tm <id>" docs/archive/handoff/*.md` — baştan okuma.
 
+## tm 393 — PAYMENT-CLOSED-REASON-TENANT: kiracı paneli, reddedilen kripto talebinin gerekçesini (`closed_reason`) gösteriyor — FR-ADMIN-14 / BL-01 — done — 2026-11-03 UTC
+
+- **Yapıldı (dal `feat/payment-closed-reason-tenant`; kontrat/migration/api/mobil YOK):** `PaymentMethods.tsx` `CryptoPanel`: açık talep yokken en yeni talep `rejected` ve `closed_reason` doluysa `RejectedNotice` (başlık + «SiyahTuş ekibinin gerekçesi» + operatörün metni olduğu gibi, `whitespace-pre-wrap`); sahipte altında mevcut talep formu ("yeniden talep"), üyede yalnız not. en/tr üç yeni anahtar (`billing.payments.crypto.rejected*`), yeni bileşen dışa açılmadı. Runbook §7.1 madde 5'teki "henüz yok" notu güncellendi.
+- **Doğrulama:** web `PaymentMethods.test.tsx` +4 (sahip: gerekçe + form, üye: gerekçe + düğmesiz, gerekçesiz ret: kutu yok, daha yeni açık talep: kutu yok); web birim testlerinde axe aracı kurulu değil (axe e2e tarafında); kutu düz `div`/`p`. Kapı: build/statik/birim/entegrasyon yeşil; tam e2e 558 geçti, 2 kırmızı `inbox-waiting.spec.ts` ("the agent’s reply ends it", yükten; fatura diffiyle ilgisiz) + `ai-mode.spec.ts:25` flaky — `inbox-waiting.spec.ts` tek başına iki kez ve `billing.spec.ts` ile birlikte GREEN.
+- **Varsayımlar:** PLAN'da bu iş için ayrı satır yok → kanıt `K10.3` (satır zaten ✅); `canceled` (kullanıcının geri çekmesi) gerekçe taşımaz, gösterilmez; yalnız en yeni talep dikkate alınır (kapalı geçmiş listesi gerekçesiz kalır).
+- **Sonraki pencere:** gerekçe operatörce serbest metin yazıldığı için çevrilmez; uzun metin `break-words` ile kırılır. e2e eklenmedi (görev gereği).
+
 ## tm 392 — RESTORE-DRILL-PLATFORM-CHAIN: `scripts/restore-drill.sh` platform tablolarını ve audit zincirini de doğruluyor — NFR-ADMIN-B — done — 2026-11-02 UTC
 
 - **Yapıldı (dal `feat/restore-drill-platform-chain`; migration/kontrat YOK):** betik kaynak katalogdan her `platform_*` tablosunu bulur (12), satır sayılarını mevcut önce/sonra aralığıyla karşılaştırır, tablo kümesini `diff_check` eder ve `platform_audit_log` zincirini kazıma veritabanında doğrular. Doğrulayıcı yeniden yazılmadı: `platform-audit.ts` `verify()` gövdesi dışa açık `verifyPlatformChain(key, source)` oldu (`verify()` Prisma kaynağıyla çağırır), yeni `restore-chain-check.ts` + `-run.ts` (`pnpm --filter @siyahtus/api --silent platform:chain-check`) betiğin konteyner `psql`'iyle okuyup stdin'e verdiği satırlarla çağırır (satır biçimi = dışa aktarma NDJSON'u; `audit-export-check.ts` `parsePlatformExportBody` çıkarıldı). Çıkış kodu 0 doğrulandı · 1 kırık · 2 okunamadı · 3 atlandı · 4 boş.

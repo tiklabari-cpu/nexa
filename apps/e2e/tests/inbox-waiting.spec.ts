@@ -7,14 +7,35 @@
  * server's own column, an internal note does not end it, and the agent's reply
  * does — with the counter gone from the row the player was waiting on.
  */
-import { expect, openWidget, test, visitorSends } from './fixtures.js';
+import {
+  API_BASE,
+  DEMO,
+  expect,
+  freeARoutingSlot,
+  openWidget,
+  ownerAccessToken,
+  test,
+  visitorSends,
+} from './fixtures.js';
 
 test.describe('inbox waiting counter', () => {
   test('a player’s message starts the counter, a note leaves it, the agent’s reply ends it', async ({
     agentPage,
     browser,
     organizationId,
+    request,
   }) => {
+    // The specs before this one in a shard leave the owner at their chat limit;
+    // the player's chat would queue instead of landing in this inbox.
+    const auth = { authorization: `Bearer ${await ownerAccessToken(request)}` };
+    const roster = (
+      (await (await request.get(`${API_BASE}/agents`, { headers: auth })).json()) as {
+        items: Array<{ id: string; email: string; concurrent_chats_limit: number }>;
+      }
+    ).items;
+    const owner = roster.find((agent) => agent.email === DEMO.email);
+    expect(owner, 'the seeded owner is not on the roster').toBeTruthy();
+    await freeARoutingSlot(request, auth, owner!.id, owner!.concurrent_chats_limit);
     await agentPage.goto('/app/inbox');
 
     const visitorContext = await browser.newContext();

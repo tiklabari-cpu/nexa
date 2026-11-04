@@ -10,7 +10,15 @@
  * owner its only member, deleted at the end — no other spec routes to it.
  */
 import { randomBytes } from 'node:crypto';
-import { API_BASE, WIDGET_ORIGIN, expect, ownerAccessToken, test } from './fixtures.js';
+import {
+  API_BASE,
+  DEMO,
+  WIDGET_ORIGIN,
+  expect,
+  freeARoutingSlot,
+  ownerAccessToken,
+  test,
+} from './fixtures.js';
 
 test.describe('manual assignment (WG-07)', () => {
   test('a manual team’s chat waits for a member to take it, and Take makes it theirs (FR-MOD-08.6.1)', async ({
@@ -22,6 +30,16 @@ test.describe('manual assignment (WG-07)', () => {
     const me = (await (await request.get(`${API_BASE}/auth/me`, { headers: auth })).json()) as {
       account_id: string;
     };
+    // The specs before this one in a shard leave the owner at their chat limit,
+    // and "Take" is refused there — so the room is made, not assumed.
+    const roster = (
+      (await (await request.get(`${API_BASE}/agents`, { headers: auth })).json()) as {
+        items: Array<{ id: string; email: string; concurrent_chats_limit: number }>;
+      }
+    ).items;
+    const owner = roster.find((agent) => agent.email === DEMO.email);
+    expect(owner, 'the seeded owner is not on the roster').toBeTruthy();
+    await freeARoutingSlot(request, auth, owner!.id, owner!.concurrent_chats_limit);
     const name = `Bonus desk ${randomBytes(3).toString('hex')}`;
 
     const created = await request.post(`${API_BASE}/groups`, { data: { name }, headers: auth });

@@ -2639,6 +2639,16 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     // (FR-MOD-11.1) — and now it can land without a poll having fetched it.
     syncUnread();
 
+    // A person answering means the queue is over for this visitor; with a socket
+    // the next poll is half a minute off, so "you are number 1" would otherwise
+    // outlive the reply. Ask now for who has the chat, too.
+    if (event.author_type === 'agent' && state.queuePosition !== null) {
+      state.queuePosition = null;
+      state.estimatedWait = null;
+      renderStatus();
+      void refresh();
+    }
+
     // The AI spoke while the last poll named someone else (tm 308 · AI-29): with
     // a socket the next poll is half a minute off, so ask now who has the
     // connection — the server's word, not a guess from the author — and

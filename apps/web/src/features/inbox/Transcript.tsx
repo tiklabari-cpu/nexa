@@ -28,6 +28,7 @@ import { SuggestModal } from './SuggestModal.js';
 import { Dropdown } from '../../components/ui/index.js';
 import { suggestionSubjectOf, type SuggestionSubject } from '../playbook/ai-suggestions.js';
 import { handoffCardIdOf } from './handoffCard.js';
+import { eventText } from './systemEventText.js';
 import { readReceiptEventId } from './readReceipt.js';
 import { AttachmentView } from './Attachment.js';
 import { RichCardView } from '../campaigns/RichCardView.js';
@@ -582,7 +583,7 @@ function Bubble({
           data-event-id={event.id}
           className={`self-center text-2xs text-content-tertiary ${highlightRing}`}
         >
-          {event.text}
+          {eventText(event, t)}
         </p>
       ) : (
         <div

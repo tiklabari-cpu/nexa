@@ -125,3 +125,29 @@ describe('Transcript — cards (EN-02)', () => {
     expect(screen.getByText(/“Papara” butonuna bastı/)).toBeInTheDocument();
   });
 });
+
+describe('Transcript — server system lines (tm 398)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  const archived = () =>
+    event({
+      type: 'system_message',
+      author_type: 'system',
+      author_id: null,
+      text: 'Chat archived',
+      properties: { system_event: 'chat_deactivated' },
+    });
+
+  it('draws "Chat archived" in Turkish on a Turkish console', () => {
+    renderWithLocale(transcript([archived()]), 'tr');
+    expect(screen.getByText('Sohbet arşivlendi')).toBeInTheDocument();
+    expect(screen.queryByText('Chat archived')).not.toBeInTheDocument();
+  });
+
+  it('keeps it in English on an English console', () => {
+    render(transcript([archived()]));
+    expect(screen.getByText('Chat archived')).toBeInTheDocument();
+  });
+});

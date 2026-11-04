@@ -16239,10 +16239,10 @@
         "description": "Sohbet arşivlenince sunucu sabit İngilizce \"Chat archived\" yazıyor; tr modundaki gelen kutusu önizlemesinde \"Ziyaretçi / Chat archived\" görünüyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-03 main bütünlük test koşusu (main @ ab01f52c; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT: `apps/api/src/services/chat/chat-service.ts:2597` `text: 'Chat archived'`, `properties: { system_event: 'chat_deactivated' }`. Panel tr modunda inbox liste önizlemesi metni olduğu gibi gösteriyor.\n\nYAPILACAK: önce diğer sistem olaylarının (system_event) panelde nasıl yerelleştirildiğini bul (grep `system_event` apps/web) ve aynı yolu izle: panel `system_event: chat_deactivated` için çevrilmiş metin göstersin (en/tr), önizleme dahil. Sunucu metni geriye dönük uyum için kalabilir. Yeni anahtar en+tr glossary/plural kurallarına uyar (memory web-glossary-and-plural-catalogue-traps, new-web-component-must-be-registered-for-i18n). Mobil de aynı metni gösteriyorsa aynı düzeltme mobile'a.\nKAPSAM DIŞI: transcript e-postası, widget (ziyaretçi tarafı ayrı bakılır; aynı sorun varsa HANDOFF'a not).",
         "testStrategy": "Web birim: tr'de chat_deactivated önizlemesi ve thread satırı Türkçe; en'de İngilizce. locale-copy denetimi yeşil. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-11-03T19:01:17.661Z",
+        "updatedAt": "2026-11-04T01:47:39.110Z",
         "subtasks": []
       },
       {
@@ -16336,7 +16336,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-04T01:47:00.310Z",
+      "lastModified": "2026-11-04T01:47:39.110Z",
       "taskCount": 405,
       "completedCount": 394,
       "tags": [

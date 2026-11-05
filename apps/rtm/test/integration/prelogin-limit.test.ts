@@ -16,6 +16,9 @@
  *     loopback peer at `TRUST_PROXY_HOPS=1`, the socket peer at `0` whatever the
  *     caller wrote. (A public peer cannot be produced on loopback; its forged
  *     header is pinned in `src/client-address.test.ts`.)
+ *   - a source is its network (tm 409): every address of one IPv6 /64 shares a
+ *     count, the next /64 does not, an IPv4 address is still itself and an
+ *     IPv4-mapped one is the IPv4 client it carries.
  *
  * Every upgrade here comes from 127.0.0.1, so at `TRUST_PROXY_HOPS=1` (the
  * default, and `.env.example`'s) the forwarded-for header is what tells two
@@ -238,7 +241,7 @@ describe('at the cap for one address', () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]).toMatchObject({
       level: 40,
-      client_ip: A,
+      client_network: A,
       prelogin_sockets: 1,
       max_prelogin_per_ip: 1,
     });
@@ -361,6 +364,89 @@ describe('the address is the one the api would derive', () => {
     await open(rtm.port);
     expect(rtm.server.preLogin?.heldBy('127.0.0.1')).toBe(1);
     expect((await attemptUpgrade(rtm.port)).accepted).toBe(false);
+  });
+});
+
+describe('a source is its network: an IPv4 address, or an IPv6 /64 (tm 409)', () => {
+  const NET = '2001:db8:1:2::/64';
+
+  it('counts every address of one /64 as one source — past the cap the next is refused, whatever address it takes (NFR-S8)', async () => {
+    const rtm = await start({ RTM_MAX_PRELOGIN_PER_IP: '2' });
+    await open(rtm.port, '2001:db8:1:2::1');
+    await open(rtm.port, '2001:db8:1:2:a:b:c:d');
+    expect(rtm.server.preLogin?.heldBy(NET)).toBe(2);
+    expect(rtm.server.preLogin?.addresses).toBe(1);
+
+    for (const fresh of ['2001:db8:1:2::3', '2001:DB8:1:2:ffff:ffff:ffff:ffff']) {
+      const refused = await attemptUpgrade(rtm.port, fresh);
+      if (refused.accepted) throw new Error(`a fresh address of the same /64 got in: ${fresh}`);
+      expect(refused.status).toBe(429);
+      expect(refused.body.error).toMatchObject({ details: { reason: 'prelogin_limit_reached' } });
+    }
+    expect(rtm.server.preLogin?.heldBy(NET)).toBe(2);
+  });
+
+  it('leaves the next /64 alone', async () => {
+    const rtm = await start({ RTM_MAX_PRELOGIN_PER_IP: '1' });
+    await open(rtm.port, '2001:db8:1:2::1');
+    expect((await attemptUpgrade(rtm.port, '2001:db8:1:2::9')).accepted).toBe(false);
+
+    expect((await attemptUpgrade(rtm.port, '2001:db8:1:3::1')).accepted).toBe(true);
+    expect(rtm.server.preLogin?.heldBy('2001:db8:1:3::/64')).toBe(1);
+    expect(rtm.server.preLogin?.heldBy(NET)).toBe(1);
+  });
+
+  it('frees the slot for any address of the /64 when one of its sockets logs in or closes', async () => {
+    const rtm = await start({ RTM_MAX_PRELOGIN_PER_IP: '1' });
+    const first = await open(rtm.port, '2001:db8:1:2::1');
+    expect((await attemptUpgrade(rtm.port, '2001:db8:1:2::2')).accepted).toBe(false);
+
+    expect((await first.request('login', { token: `Bearer ${await agentToken()}` })).success).toBe(
+      true,
+    );
+    expect(rtm.server.preLogin?.heldBy(NET)).toBe(0);
+    const second = await open(rtm.port, '2001:db8:1:2::2');
+    expect((await attemptUpgrade(rtm.port, '2001:db8:1:2::3')).accepted).toBe(false);
+
+    second.close();
+    expect(await until(() => rtm.server.preLogin?.heldBy(NET) === 0)).toBe(true);
+    expect((await attemptUpgrade(rtm.port, '2001:db8:1:2::3')).accepted).toBe(true);
+    expect(rtm.server.preLogin?.addresses).toBe(1);
+  });
+
+  it('still counts an IPv4 client by its address — a neighbour in the same /24 is apart', async () => {
+    const rtm = await start({ RTM_MAX_PRELOGIN_PER_IP: '1' });
+    await open(rtm.port, '198.51.100.10');
+    expect(rtm.server.preLogin?.heldBy('198.51.100.10')).toBe(1);
+    expect((await attemptUpgrade(rtm.port, '198.51.100.10')).accepted).toBe(false);
+    expect((await attemptUpgrade(rtm.port, '198.51.100.11')).accepted).toBe(true);
+  });
+
+  it('counts an IPv4-mapped address as the IPv4 client it carries, in either order', async () => {
+    const rtm = await start({ RTM_MAX_PRELOGIN_PER_IP: '1' });
+    await open(rtm.port, `::ffff:${A}`);
+    expect(rtm.server.preLogin?.heldBy(A)).toBe(1);
+    expect((await attemptUpgrade(rtm.port, A)).accepted).toBe(false);
+
+    await open(rtm.port, B);
+    expect((await attemptUpgrade(rtm.port, `::FFFF:${B}`)).accepted).toBe(false);
+    expect(rtm.server.preLogin?.addresses).toBe(2);
+  });
+
+  it('names the network in its one warn line, not the address that tipped it over', async () => {
+    const sink = new LineSink();
+    const rtm = await start({ RTM_MAX_PRELOGIN_PER_IP: '1', LOG_LEVEL: 'info' }, { sink });
+    await open(rtm.port, '2001:db8:1:2::1');
+    expect((await attemptUpgrade(rtm.port, '2001:db8:1:2::beef')).accepted).toBe(false);
+    expect((await attemptUpgrade(rtm.port, '2001:db8:1:2::cafe')).accepted).toBe(false);
+
+    const lines = sink
+      .parsed()
+      .filter((line) => String(line['msg']).startsWith('rtm pre-login limit reached'));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ level: 40, client_network: NET, prelogin_sockets: 1 });
+    expect(lines[0]).not.toHaveProperty('client_ip');
+    expect(sink.lines.join('')).not.toMatch(/beef|cafe/);
   });
 });
 

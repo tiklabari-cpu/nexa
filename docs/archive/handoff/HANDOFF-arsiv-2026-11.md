@@ -3,6 +3,13 @@
 > Kaynak: `HANDOFF.md` canlı dosyasından CONVENTIONS §3 gereği taşınan fazla görev blokları, newest-first.
 > Arama: `grep -n "tm <id>" docs/archive/handoff/*.md` — baştan okuma.
 
+## tm 404 — NGINX-SERVER-TOKENS-OFF: nginx sürüm bilgisini göndermesin — done — 2026-11-04 UTC
+
+- **Yapıldı (doğrudan `main`; kontrat/migration/api YOK):** `apps/{web,admin,widget}/nginx.conf` server bloğuna `server_tokens off;` (repoda başka nginx.conf yok; CSP/frame-ancestors/diğer başlıklar değişmedi). `Server: nginx/1.27.5` → `Server: nginx`, hata sayfası gövdesi de sürümsüz.
+- **Doğrulama:** `apps/web/test/nginx-security.test.ts` (36, +2) ve `apps/admin/test/nginx-security.test.ts` (19, +1) yeni 'does not announce the nginx version' testi; gerçek `nginxinc/nginx-unprivileged:1.27-alpine` kabında widget+web yapılandırması `curl -I` → `Server: nginx`, widget 404 gövdesi `<center>nginx</center>`, web/admin `nginx -t` OK. Tam pilot imajı build/compose provası yapılmadı (yapılandırma aynı taban imajda koştu). Kapı: `build statik birim` yeşil (5m20); `--e2e` 563 geçti, 1 kırmızı `ai-multilingual.spec.ts:28` (tm 403'te de görülen, bu görevin dokunmadığı yol) — tek başına iki kez yeşil (§1.1).
+- **Varsayımlar:** `smoke.sh`'a ayrıca başlık kontrolü eklenmedi (birim testi yapılandırmayı sabitliyor).
+- **Sonraki pencere:** `infra/pilot` altında ayrı bir nginx/ters vekil yoksa ek iş yok; cloudflared önünde `Server` başlığını Cloudflare kendi değeriyle değiştirir.
+
 ## tm 403 — DOCS-DRIFT-CLEANUP: doküman ↔ kod sapmaları (kırık görseller, ölü atıf, env örneği, gate ipucu) — done — 2026-11-04 UTC
 
 - **Yapıldı (doğrudan `main`; kontrat/migration/api davranışı YOK):** `rapor-1/2` içindeki 14 farklı eski görsel yolu düz `gorseller/mod-*.png`'ye çevrildi (görsel taşınmadı). **Eşleşmeyen 11 link bilerek dokunulmadı** (dosya yok, tahmin edilmedi): `19-archive-chat-history` (rapor-1 ×2), `04-customers-campaigns`, `15-chat-routing`, `16-canned-responses`, `14-apps-marketplace`, `17-customer-widget-embedded`, `18-customer-widget-open`, `teknik/02-mcp-server` (rapor-1 + rapor-2), `teknik/03-customer-widget`. `images/real_04_canned.png` / `real_05_archives.png` benzer görünüyor ama farklı klasör ve ad: sahip karar versin.

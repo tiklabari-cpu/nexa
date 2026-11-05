@@ -238,7 +238,8 @@ a report that does not separate them feeds the next decision the wrong number:
   know which rung is expected to fail. A ladder meant to find the pod's real limit should
   leave the key **unset** (its default), or the ladder measures the configuration.
 - **The address cap refused.** Also a product setting, not the machine. k6 on one machine is
-  **one client address**, and the gateway caps how many sockets one address may hold before
+  **one client address**, and the gateway caps how many sockets one client network (that
+  address, or its /64 over IPv6, tm 409) may hold before
   they log in (`RTM_MAX_PRELOGIN_PER_IP`, default 50, tm 405): past it an upgrade gets `429`
   with `{"error":{"details":{"reason":"prelogin_limit_reached"}}}`. A socket here counts
   from its upgrade until its `login` is answered, so what the cap sees is connect rate ×

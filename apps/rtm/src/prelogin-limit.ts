@@ -1,12 +1,13 @@
 /**
- * How many sockets one client address may hold before they log in (tm 405).
+ * How many sockets one client network may hold before they log in (tm 405 ·
+ * per network since tm 409).
  *
  * The gateway's only other limit on arrivals is `RTM_MAX_CONNECTIONS`, and that
  * one is global. A socket is let in before it says who it is — it has the
  * login window (`RTM_LIMITS.loginTimeoutMs`, 30 s) to do so — so a single
  * source that opens sockets and never logs in held every one of them for that
  * long, and enough of them filled the ceiling for everybody. This bounds what
- * one address can hold that way. It does not bound what one address holds once
+ * one source can hold that way. It does not bound what one source holds once
  * logged in: those sockets carry a credential, and what they may do is decided
  * by it.
  *
@@ -17,12 +18,14 @@
  *     closes. Release is idempotent, so a socket that logs in and later closes
  *     — or closes while its login is still being checked — is released once.
  *
- * An address's entry is deleted the moment its count reaches zero, so the map
- * holds only addresses that have a socket waiting right now, and its size is
- * bounded by the number of such sockets.
+ * A key's entry is deleted the moment its count reaches zero, so the map holds
+ * only keys that have a socket waiting right now, and its size is bounded by
+ * the number of such sockets.
  *
- * The address is whatever `client-address.ts` derived; this class neither reads
- * nor interprets it.
+ * The key is the client's network: the address `client-address.ts` derived,
+ * reduced by `client-network.ts` to an IPv4 address or an IPv6 /64 (tm 409) —
+ * a source is what it can rotate through, not one address of it. This class
+ * neither reads nor interprets it; the parameters keep the name `address`.
  */
 
 interface AddressState {

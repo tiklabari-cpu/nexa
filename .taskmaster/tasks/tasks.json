@@ -16375,10 +16375,10 @@
         "description": "tm 405'in RTM login öncesi istemci adresi başına tavanı tam adresle anahtarlanıyor; IPv6'da bir saldırgan /64 içinde adres döndürerek tavanı aşabiliyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-04/05 tur 2 kapsamlı test koşusu (main @ 86ee661e; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nXHIGH GEREKÇESİ: güvenlik yüzeyi — güvenilmeyen bağlantı kabulü / DoS.\n\nKANIT: `apps/rtm/src/client-address.ts:60-66` `clientAddress()` tam adresi döndürüyor, IPv6 indirgemesi yok. api tarafında aynı sorun için hazır yardımcı var: `clientNetworkKey` (`apps/api/src/lib/ip-allowlist.ts:142-164`, IPv4 tam adres, IPv6 /64). Güvenlik incelemesi Orta işaretledi.\n\nYAPILACAK: tavan sayacının anahtarını ağ anahtarına çevir (IPv4 tam adres, IPv6 /64; IPv4-mapped IPv6 IPv4 olarak). Yardımcıyı paylaşılan pakete taşımak ya da RTM'de birebir karşılığını yazmak — hangisi workspace sınırlarına uyuyorsa (rtm'nin api'yi import etmediğini doğrula). Log'da tam adres yerine anahtar mı yazılacağına karar ver, HANDOFF'a yaz.\n\nTUZAK: k6 rtm senaryosu tek IP'den 200 soket — varsayılan tavan (50) login olan soketleri saymadığı için 2026-11-05 ölçümünde takılmadı; değişiklik sonrası yeniden ölç.",
         "testStrategy": "RTM birim/entegrasyon: aynı /64'ten farklı adreslerle tavan+1 kimliksiz soket → sonuncusu reddedilir; farklı /64 etkilenmez; IPv4 davranışı değişmez; IPv4-mapped adres IPv4 gibi sayılır. k6 rtm senaryosu yeşil. security-reviewer ile inceleme. DoD: CONVENTIONS §1.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-11-05T15:01:40.280Z",
+        "updatedAt": "2026-11-05T20:22:08.333Z",
         "subtasks": []
       },
       {
@@ -16468,7 +16468,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-05T20:20:58.599Z",
+      "lastModified": "2026-11-05T20:22:08.333Z",
       "taskCount": 416,
       "completedCount": 406,
       "tags": [

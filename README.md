@@ -660,7 +660,8 @@ above: a two-pod API with a replica holds `2 × pool` connections on the primary
 `request.ip` — the anonymous rate-limit bucket, the customer IP ban and the agent IP
 allow-list — is derived from `X-Forwarded-For`, and `TRUST_PROXY_HOPS` says how many
 entries from the right of that header to trust. The RTM gateway reads the same value by the
-same rule for one thing, the address its pre-login cap counts (`RTM_MAX_PRELOGIN_PER_IP`), so
+same rule for one thing, the address its pre-login cap counts (`RTM_MAX_PRELOGIN_PER_IP`, by
+network: an IPv4 address, an IPv6 /64), so
 one number has to describe the api's paths and the RTM hostname's. Get it wrong in either
 direction and it's a security bug, not a cosmetic one:
 
@@ -837,23 +838,30 @@ mechanism whose retries add load would not be one.
 The ceiling above is global, and a socket is let in before it says who it is: it has the
 30s login window to send `login`. Without a second limit, one source that opens sockets and
 never logs in holds each of them for that long, and enough of them fill the ceiling for
-everybody (tm 405). This bounds how many sockets **one client address** may hold that have
-not logged in yet. A socket stops counting the moment its login succeeds, and when it
+everybody (tm 405). This bounds how many sockets **one client network** may hold that have
+not logged in yet: an IPv4 address as itself, an IPv6 address by the /64 it is in, an
+IPv4-mapped address (`::ffff:a.b.c.d`) as the IPv4 client it carries (tm 409). One IPv6
+subscriber is routinely handed a whole /64 and can take a fresh address from it for every
+socket, so a cap per full address would cap nothing over IPv6; the api keys its own
+per-client limits the same way (`clientNetworkKey`, copied into
+`apps/rtm/src/client-network.ts` and held to it text for text). A socket stops counting the moment its login succeeds, and when it
 closes; a failed login keeps it counted, because it is still waiting.
 
-Past the cap the next upgrade from that address gets `429`, `Retry-After: 1` (NFR-S8) and
+Past the cap the next upgrade from that network gets `429`, `Retry-After: 1` (NFR-S8) and
 `{"error":{"type":"too_many_requests","details":{"reason":"prelogin_limit_reached"}}}` — a
 429 rather than the ceiling's 503, because it is the caller's limit, not the instance's
 state. Like the ceiling's refusal it never names the number. The first refusal of an
-episode logs one `warn` line (`client_ip`, `prelogin_sockets`, `max_prelogin_per_ip`); every
+episode logs one `warn` line (`client_network` — the key above, not the address that tipped
+it over — `prelogin_sockets`, `max_prelogin_per_ip`); every
 refusal is counted on the `rtm.upgrades.refused` metric, tagged `reason`.
 
 **Unset is `50`; `0` turns it off.** Defaulted, unlike the ceiling, because it does not
 depend on the pod. A legitimate client logs in on its first frame and waits one round trip
 plus a token check: two hundred agents behind one office NAT, reconnecting within the
 panel's first 500ms backoff window, is about forty at once. A refused client retries on the
-same backoff. What fifty buys an attacker on one address is fifty sockets, each closed after
-30s.
+same backoff. What fifty buys an attacker on one address, or one /64, is fifty sockets, each
+closed after 30s. One holding a larger IPv6 allocation (a /56 is 256 /64s) gets fifty per
+/64 it uses, still under the global ceiling above.
 
 The address is derived exactly as the api derives `request.ip` — same library, same
 private-peer rule, same `TRUST_PROXY_HOPS` (`apps/rtm/src/client-address.ts`; see

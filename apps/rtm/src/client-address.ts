@@ -2,9 +2,11 @@
  * The one client address the gateway reads (tm 405), and the only file that
  * reads it.
  *
- * It exists for one decision: how many sockets a single address may hold
- * before they log in (`prelogin-limit.ts`). Nothing else in the gateway looks
- * at an address — not a log field, not a ban, not an authorisation — and
+ * It exists for one decision: how many sockets a single source may hold
+ * before they log in (`prelogin-limit.ts`), counted per network — the address
+ * reduced to an IPv4 address or an IPv6 /64 by `client-network.ts` (tm 409).
+ * Nothing else in the gateway looks at an address — not a ban, not an
+ * authorisation; the cap's one warn line names the network — and
  * `client-address.test.ts` fails the day something does.
  *
  * The address is derived exactly the way the api derives `request.ip`
@@ -50,8 +52,8 @@ export function trustProxyFor(hops: number): false | ((addr: string, i: number) 
  * `proxyAddr(request, …)` is what Fastify itself calls to produce
  * `request.ip`, so for the same request and the same hop count the api and the
  * gateway arrive at the same string. An IPv4-mapped peer (`::ffff:127.0.0.1`)
- * is reported as Node reports it; the cap only needs the same address to give
- * the same key.
+ * is reported as Node reports it; `client-network.ts` counts it as the IPv4
+ * client it carries.
  *
  * An empty string, never `undefined`: a socket that has already gone away has
  * no peer, and it still needs a key — it is about to be refused by the

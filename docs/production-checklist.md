@@ -654,7 +654,7 @@ value left at its default is a decision too, and the defaults are deliberately c
 | `AI_DAILY_EMBEDDING_TOKENS_GLOBAL`        | The same for the whole deployment                                                  | 20000000  | Default                                              |
 | `TRIAL_DAYS`                              | Trial length of workspaces that sign up from now on                                | 14        | Default                                              |
 | `RTM_MAX_CONNECTIONS`                     | WebSocket connections one rtm process holds before it refuses upgrades with a 503  | unlimited | See below                                            |
-| `RTM_MAX_PRELOGIN_PER_IP`                 | Sockets one address may hold before they log in; past it a 429 (tm 405)            | 50        | Default; `0` turns it off                            |
+| `RTM_MAX_PRELOGIN_PER_IP`                 | Sockets one IPv4 address or IPv6 /64 may hold before login; past it a 429 (tm 409) | 50        | Default; `0` turns it off                            |
 
 - [ ] `MAIL_DAILY_GLOBAL` is set under the mail account's own daily sending limit, which is in the
       provider's terms and is the owner's to read. A provider that suspends the mailbox stops every

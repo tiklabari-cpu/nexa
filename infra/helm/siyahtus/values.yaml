@@ -476,7 +476,7 @@ config:
   # customer IP ban and the anonymous rate-limit bucket decide on — so this is a
   # security value, not a logging one. README "Choosing TRUST_PROXY_HOPS" has
   # the table. rtm reads the same key by the same rule for its pre-login cap per
-  # address (RTM_MAX_PRELOGIN_PER_IP, tm 405); web nginx's
+  # client network (RTM_MAX_PRELOGIN_PER_IP, tm 405 · IPv6 per /64, tm 409); web nginx's
   # `/v1/agent/rtm/ws` location appends the caller like `/api/` does, so the
   # chain below is one hop for rtm too.
   #

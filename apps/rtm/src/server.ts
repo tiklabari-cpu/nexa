@@ -18,6 +18,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { PermissionMatrixCache, RTM_LIMITS, RTM_PATHS, roleAtLeast } from '@siyahtus/types';
 import { SocketAuthenticator, type SocketPrincipal } from './auth.js';
 import { clientAddress } from './client-address.js';
+import { clientNetworkKey } from './client-network.js';
 import type { RtmEnv } from './config/env.js';
 import { ConflictDetectionService } from './conflict.js';
 import { ConflictPublisher } from './conflict-publisher.js';
@@ -107,8 +108,8 @@ export interface RtmServer {
    */
   presence: AgentPresence | null;
   /**
-   * Sockets each client address holds before logging in (tm 405); null when
-   * `RTM_MAX_PRELOGIN_PER_IP=0` turned the cap off.
+   * Sockets each client network holds before logging in (tm 405 · keyed by
+   * network since tm 409); null when `RTM_MAX_PRELOGIN_PER_IP=0` turned the cap off.
    */
   preLogin: PreLoginLimiter | null;
   listen: () => Promise<void>;
@@ -454,25 +455,31 @@ export function buildRtmServer(
     // PRE-LOGIN CAP PER ADDRESS (tm 405). The ceiling above is global, and a
     // socket gets in before it says who it is — it has the 30 s login window —
     // so one source that never logs in could hold enough sockets to fill that
-    // ceiling for everybody. This bounds what one address can hold that way;
+    // ceiling for everybody. This bounds what one source can hold that way;
     // logged-in sockets are not counted (`prelogin-limit.ts`).
     //
+    // A source is its network, not its address (tm 409): an IPv4 address, or an
+    // IPv6 /64 — one subscriber is handed a whole /64 and could otherwise take
+    // a fresh address, and a fresh count, for every socket (`client-network.ts`).
+    //
     // After the path check, so only an upgrade that would otherwise be
-    // accepted is counted against its address — and before the ceiling's
+    // accepted is counted against its network — and before the ceiling's
     // "accepting again" line below, which would otherwise announce an accept
     // that this refuses.
-    const address = preLogin ? clientAddress(request, env.TRUST_PROXY_HOPS) : null;
-    if (preLogin && address !== null && !preLogin.admits(address)) {
+    const key = preLogin ? clientNetworkKey(clientAddress(request, env.TRUST_PROXY_HOPS)) : null;
+    if (preLogin && key !== null && !preLogin.admits(key)) {
       // One line per episode, not per refusal — see `PreLoginLimiter.refuse`.
-      // The counter below sees every refusal.
-      if (preLogin.refuse(address)) {
+      // The counter below sees every refusal. It names the network, not the
+      // address that tipped it over: the network is what was counted and what
+      // an operator would block, and one member of a /64 says little more.
+      if (preLogin.refuse(key)) {
         log.warn(
           {
-            client_ip: address,
-            prelogin_sockets: preLogin.heldBy(address),
+            client_network: key,
+            prelogin_sockets: preLogin.heldBy(key),
             max_prelogin_per_ip: preLogin.limit,
           },
-          'rtm pre-login limit reached for an address: refusing its new upgrades',
+          'rtm pre-login limit reached for a client network: refusing its new upgrades',
         );
       }
       refuseUpgrade(socket, 'prelogin_limit_reached', telemetryInstance);
@@ -501,7 +508,7 @@ export function buildRtmServer(
         log,
         telemetry: telemetryInstance,
         presence,
-        preLogin: preLogin && address !== null ? { limiter: preLogin, address } : null,
+        preLogin: preLogin && key !== null ? { limiter: preLogin, key } : null,
         isDraining: () => draining,
       });
     });
@@ -833,7 +840,7 @@ function attach(params: {
    * is off. Released at login (`onAuthenticated`) and here at close, whichever
    * comes first — the second release is a no-op.
    */
-  preLogin: { limiter: PreLoginLimiter; address: string } | null;
+  preLogin: { limiter: PreLoginLimiter; key: string } | null;
   /** Read at close time, not captured once — the drain can start mid-connection. */
   isDraining: () => boolean;
 }): void {
@@ -850,7 +857,7 @@ function attach(params: {
     isDraining,
   } = params;
   const connection = registry.add({ ws, side, organizationId });
-  preLogin?.limiter.hold(connection.id, preLogin.address);
+  preLogin?.limiter.hold(connection.id, preLogin.key);
 
   // Set when `ws` itself detects a framing problem (oversized payload, bad
   // opcode, invalid UTF-8, …) — its own errors all carry a `WS_ERR_*` code

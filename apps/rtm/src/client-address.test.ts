@@ -62,6 +62,7 @@ describe('the gateway reads one client address, in client-address.ts (tm 405)', 
     expect(names).toContain('server.ts');
     expect(names).toContain('connection.ts');
     expect(names).toContain('client-address.ts');
+    expect(names).toContain('client-network.ts');
     expect(names.some((name) => name.endsWith('.test.ts'))).toBe(false);
     expect(text('server.ts')).toContain("http.on('upgrade'");
   });
@@ -89,10 +90,18 @@ describe('the gateway reads one client address, in client-address.ts (tm 405)', 
     );
     // The definition, and the one call site.
     expect(calls.sort()).toEqual(['client-address.ts', 'server.ts']);
-    expect(text('server.ts')).toMatch(/clientAddress\(request, env\.TRUST_PROXY_HOPS\)/);
+    // Reduced to its network before anything counts it (tm 409): an IPv6
+    // subscriber rotating through its /64 is one source, not one per address.
+    expect(text('server.ts')).toMatch(
+      /const key = preLogin \? clientNetworkKey\(clientAddress\(request, env\.TRUST_PROXY_HOPS\)\) : null;/,
+    );
+    const keyed = FILES.flatMap((file) =>
+      [...file.text.matchAll(/\bclientNetworkKey\(/g)].map(() => file.name),
+    );
+    expect(keyed.sort()).toEqual(['client-network.ts', 'server.ts']);
     // And what the result is handed to: the limiter, and nothing that logs in,
     // routes or authorises.
-    expect(text('server.ts')).toMatch(/preLogin\.admits\(address\)/);
+    expect(text('server.ts')).toMatch(/preLogin\.admits\(key\)/);
   });
 });
 

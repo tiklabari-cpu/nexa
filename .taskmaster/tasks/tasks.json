@@ -16387,10 +16387,10 @@
         "description": "`scripts/edge-rehearsal/run.sh` her probu FAIL gösteriyor çünkü `probe.mjs` API log'unda `reqId` arıyor; alan tm 288.1'den beri `request_id`.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-04/05 tur 2 kapsamlı test koşusu (main @ 86ee661e; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT: `scripts/edge-rehearsal/probe.mjs:77` `entry.reqId` okuyor; API log satırları `request_id` taşıyor. Tunnel mimic (IPv6 `::1`) ve gerçek Caddy (IPv4) provalarında API log'u elle arandığında istemci IP'si doğruydu ve sahte `X-Forwarded-For` yok sayılıyordu — yani ürün doğru, betik yanlış. Operatör açılış günü bu betikle `TRUST_PROXY_HOPS`'u doğrulayacağı için yanlış FAIL tehlikeli (yanlış ayar yapılabilir).\n\nYAPILACAK: `entry.request_id ?? entry.reqId`. Betiğin log alan adını sabit/test ile pinle ki bir sonraki log yeniden adlandırması yakalansın. Betiğin pozitif ve negatif kontrolleri değişmesin.\n\nKAPSAM DIŞI: api log biçimi.",
         "testStrategy": "scripts/edge-rehearsal için node --test birim testi: `request_id` taşıyan log satırı eşleşir, eski `reqId` de eşleşir. Varsa run.sh kuru koşu (pilot fake env, memory pilot-rehearsal-with-fake-env) PASS. DoD: CONVENTIONS §1.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-11-05T21:46:56.597Z",
+        "updatedAt": "2026-11-05T23:00:45.426Z",
         "subtasks": []
       },
       {
@@ -16468,9 +16468,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-05T21:46:56.598Z",
+      "lastModified": "2026-11-05T23:00:45.426Z",
       "taskCount": 416,
-      "completedCount": 407,
+      "completedCount": 408,
       "tags": [
         "master"
       ]

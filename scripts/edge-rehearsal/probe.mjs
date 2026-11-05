@@ -14,9 +14,9 @@
  * PASS: the api derived exactly the address the edge saw. Anything else is a
  * FAIL with the reading that explains it. Exit code 0 only if both pass.
  */
-import { readFileSync } from 'node:fs';
 import http from 'node:http';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { apiSaw, edgeSaw, jsonLines } from './log-lines.mjs';
 
 const [edgeBase, apiLog, edgeLog] = process.argv.slice(2);
 if (!edgeBase || !apiLog || !edgeLog) {
@@ -53,45 +53,11 @@ function send(probe) {
   });
 }
 
-/** Every JSON line of a log; anything else (a banner, pretty output) is skipped. */
-function jsonLines(path) {
-  let text = '';
-  try {
-    text = readFileSync(path, 'utf8');
-  } catch {
-    return [];
-  }
-  return text.split('\n').flatMap((line) => {
-    const start = line.indexOf('{');
-    if (start < 0) return [];
-    try {
-      return [JSON.parse(line.slice(start))];
-    } catch {
-      return [];
-    }
-  });
-}
-
-/** The address the api derived for one request id. */
-function apiSaw(lines, id) {
-  return lines.find((entry) => entry.reqId === id && entry.req?.remoteAddress)?.req.remoteAddress;
-}
-
-/** The visitor the edge saw for one request id — the mimic's record or Caddy's access log. */
-function edgeSaw(lines, id) {
-  for (const entry of lines) {
-    if (entry.request_id === id && entry.visitor) return entry.visitor;
-    const header = entry.request?.headers?.['X-Request-Id']?.[0];
-    if (header === id && entry.request?.remote_ip) return entry.request.remote_ip;
-  }
-  return undefined;
-}
-
 const plain = (address) => (address ?? '').replace(/^::ffff:/, '');
 
 function verdict(api, edge) {
   if (!api) {
-    return 'FAIL — no "incoming request" line with this reqId in the api log (request logging off, LOG_LEVEL above info, or req.remoteAddress redacted)';
+    return 'FAIL — no "incoming request" line with this request_id in the api log (request logging off, LOG_LEVEL above info, or req.remoteAddress redacted)';
   }
   if (plain(api) === SPOOF) {
     return 'FAIL — the api believed the forged entry: TRUST_PROXY_HOPS is higher than the hops on this path, or the request reached the api without crossing the edge';

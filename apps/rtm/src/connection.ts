@@ -130,6 +130,15 @@ export class ConnectionRegistry {
     return out;
   }
 
+  /**
+   * Every logged-in socket on this node, of every tenant — for the one message
+   * that is not about any tenant: the gateway's own bus came back and pushes may
+   * have been lost meanwhile (tm 408). A walk, and a rare one.
+   */
+  authenticated(): Connection[] {
+    return [...this.#byId.values()].filter((connection) => connection.authenticated);
+  }
+
   /** Every authenticated socket for a tenant. Never crosses organizations. */
   forOrganization(organizationId: string): Connection[] {
     const ids = this.#byOrganization.get(organizationId);

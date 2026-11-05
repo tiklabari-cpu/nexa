@@ -361,11 +361,14 @@ export class InboxStore {
         if (chatId !== null) this.#dropChat(chatId);
         return;
 
+      // `sync_required`: pushes were lost on the gateway's bus (tm 408), and
+      // which chats they moved is exactly what is not known.
       case 'incoming_chat':
       case 'chat_appeared':
       case 'chat_transferred':
       case 'chat_taken_over':
       case 'chat_deactivated':
+      case 'sync_required':
         void this.loadChats({ refresh: true });
         return;
 

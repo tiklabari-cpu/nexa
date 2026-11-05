@@ -147,7 +147,7 @@ describe('widget RTM socket (FR-MOD-11.6)', () => {
     // addresses this socket by the customer id inside the signed token and by
     // nothing the client asks for, so there is nothing here to ask wrongly.
     expect(login.payload['pushes']).toEqual({
-      '3.6': ['incoming_event', 'chat_deactivated', 'event_updated'],
+      '3.6': ['incoming_event', 'chat_deactivated', 'event_updated', 'sync_required'],
     });
     expect(Object.keys(login.payload).sort()).toEqual(['pushes', 'token']);
   });
@@ -168,6 +168,37 @@ describe('widget RTM socket (FR-MOD-11.6)', () => {
     expect(h.events).toEqual([
       { chatId: 'chat-1', event: expect.objectContaining({ id: 'thr-1_2', text: 'text thr-1_2' }) },
     ]);
+  });
+
+  it("catches up on `sync_required` — the gateway's bus dropped under an open socket (tm 408)", async () => {
+    const h = harness();
+    h.socket.connect();
+    const fake = h.sockets[0]!;
+    fake.onopen!();
+    await settle();
+    fake.reply('login', {});
+    await settle();
+
+    // Nothing seen yet: nothing to resume from, so nothing is asked.
+    fake.push('sync_required', { reason: 'bus_reconnected' });
+    expect(fake.sent.map((frame) => frame.action)).toEqual(['login']);
+
+    fake.push('incoming_event', { chat_id: 'chat-1', event: event('thr-1_2') });
+    fake.push('sync_required', { reason: 'bus_reconnected' });
+    const sync = fake.sent.at(-1)!;
+    expect(sync.action).toBe('sync');
+    expect(sync.payload).toEqual({ cursors: { 'chat-1': 'thr-1_2' } });
+
+    fake.deliver({
+      request_id: sync.request_id,
+      action: 'sync',
+      type: 'response',
+      success: true,
+      payload: { chats: [{ chat_id: 'chat-1', events: [event('thr-1_3')], truncated: false }] },
+    });
+    await settle();
+    expect(h.events.map((e) => e.event.id)).toEqual(['thr-1_2', 'thr-1_3']);
+    expect(h.socket.live).toBe(true);
   });
 
   it('routes a correction to its own handler instead of the event stream', async () => {

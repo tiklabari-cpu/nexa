@@ -341,3 +341,75 @@ describe('a login refused because the token went stale (tm 259.1)', () => {
     expect(client.status).toBe('offline');
   });
 });
+
+describe("the gateway's bus came back under an open socket (tm 408)", () => {
+  async function settle(): Promise<void> {
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+  }
+
+  function respond(socket: FakeWebSocket, payload: object = {}): void {
+    const request = JSON.parse(socket.sent.at(-1)!) as { request_id: string; action: string };
+    socket.emit('message', {
+      data: JSON.stringify({
+        request_id: request.request_id,
+        action: request.action,
+        type: 'response',
+        success: true,
+        payload,
+      }),
+    });
+  }
+
+  function push(socket: FakeWebSocket, action: string, payload: object): void {
+    socket.emit('message', { data: JSON.stringify({ action, type: 'push', payload }) });
+  }
+
+  it('runs the cursor sync on `sync_required`, replays what it returns, and hands the push on', async () => {
+    install();
+    const pushes: Array<[string, Record<string, unknown>]> = [];
+    const client = new RtmClient({
+      url: 'ws://127.0.0.1:4001/v1/agent/rtm/ws',
+      organizationId: '11111111-1111-4111-8111-111111111111',
+      getToken: () => 'token',
+      pushes: ['incoming_event', 'sync_required'],
+      onPush: (action, payload) => pushes.push([action, payload]),
+    });
+    client.connect();
+    const socket = FakeWebSocket.instances[0]!;
+    socket.emit('open');
+    expect(JSON.parse(socket.sent[0]!).payload.pushes).toEqual({
+      '3.6': ['incoming_event', 'sync_required'],
+    });
+    respond(socket);
+    await settle();
+    expect(client.status).toBe('live');
+    // No cursor yet: a login with nothing seen has nothing to sync.
+    expect(socket.sent).toHaveLength(1);
+
+    push(socket, 'incoming_event', { chat_id: 'CH1', event: { id: 'TH1_4', text: 'before' } });
+    push(socket, 'sync_required', { reason: 'bus_reconnected' });
+    const sync = JSON.parse(socket.sent.at(-1)!) as { action: string; payload: unknown };
+    expect(sync).toMatchObject({ action: 'sync', payload: { cursors: { CH1: 'TH1_4' } } });
+    expect(pushes.map(([action]) => action)).toEqual(['incoming_event', 'sync_required']);
+
+    respond(socket, {
+      chats: [
+        { chat_id: 'CH1', events: [{ id: 'TH1_5', text: 'lost on the bus' }], truncated: false },
+      ],
+      removed_chat_ids: [],
+      new_chat_ids: [],
+    });
+    await settle();
+    expect(pushes.at(-1)).toEqual([
+      'incoming_event',
+      { chat_id: 'CH1', event: { id: 'TH1_5', text: 'lost on the bus' } },
+    ]);
+
+    // The cursor moved with the replay: the next catch-up starts after it.
+    push(socket, 'sync_required', { reason: 'bus_reconnected' });
+    expect(JSON.parse(socket.sent.at(-1)!)).toMatchObject({
+      action: 'sync',
+      payload: { cursors: { CH1: 'TH1_5' } },
+    });
+  });
+});

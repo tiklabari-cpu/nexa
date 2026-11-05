@@ -318,6 +318,40 @@ describe('missed-event sync', () => {
     expect(h.client.cursors()).toEqual({ 'chat-1': 'THREAD1_6' });
   });
 
+  it("syncs on `sync_required` without a reconnect — the gateway's bus dropped, the socket did not (tm 408)", async () => {
+    const h = harness();
+    await signIn(h);
+    const socket = h.latest();
+    socket.push('incoming_event', { chat_id: 'chat-1', event: { id: 'THREAD1_4', text: 'seen' } });
+    h.pushes.length = 0;
+
+    socket.push('sync_required', { reason: 'bus_reconnected' });
+    expect(h.sockets).toHaveLength(1);
+    const sync = [...socket.sent].reverse().find((message) => message.action === 'sync');
+    expect(sync?.payload['cursors']).toEqual({ 'chat-1': 'THREAD1_4' });
+    // Handed on as well, for the list no cursor covers.
+    expect(h.pushes).toEqual([{ action: 'sync_required', payload: { reason: 'bus_reconnected' } }]);
+
+    socket.reply('sync', {
+      chats: [
+        {
+          chat_id: 'chat-1',
+          thread_id: 'THREAD1',
+          events: [{ id: 'THREAD1_5', text: 'lost on the bus' }],
+          truncated: false,
+        },
+      ],
+      removed_chat_ids: [],
+      new_chat_ids: [],
+    });
+    await Promise.resolve();
+    expect(h.pushes.at(-1)).toEqual({
+      action: 'incoming_event',
+      payload: { chat_id: 'chat-1', event: { id: 'THREAD1_5', text: 'lost on the bus' } },
+    });
+    expect(h.client.cursors()).toEqual({ 'chat-1': 'THREAD1_5' });
+  });
+
   it('asks for nothing when it has never seen an event', async () => {
     const h = harness();
     await signIn(h);

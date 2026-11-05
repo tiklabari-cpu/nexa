@@ -1188,6 +1188,15 @@ describe('applyPush — incoming_chat re-reads the open chat (ID-02)', () => {
   });
 });
 
+describe('applyPush — sync_required re-reads the chat lists (tm 408)', () => {
+  it('invalidates every list, since a push lost on the bus could have moved any chat', () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(['chats', 'my'], { pages: [], pageParams: [] });
+    applyPush(queryClient, 'sync_required', { reason: 'bus_reconnected' });
+    expect(queryClient.getQueryState(['chats', 'my'])?.isInvalidated).toBe(true);
+  });
+});
+
 describe('applyPush — chat_rated re-reads the open chat and the archive (AR-03 · tm 337)', () => {
   it('invalidates that chat and every archive read, and nothing for a push without a chat', () => {
     const queryClient = new QueryClient();

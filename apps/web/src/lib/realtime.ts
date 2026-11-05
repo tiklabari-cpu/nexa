@@ -8,6 +8,12 @@
  * four-second network blip during a handover silently costs the agent a
  * customer's message — and nothing on screen would suggest anything was missed.
  *
+ * **A lost bus is caught up too (tm 408).** The gateway's own Redis
+ * subscription can drop while this socket stays open; whatever was published
+ * meanwhile reached nobody. Once it is back the gateway pushes `sync_required`,
+ * and this runs the same `sync` a reconnect does — then hands the push on, so
+ * the app can re-read what a cursor cannot replay (lists, new chats).
+ *
  * **Backoff is bounded and jittered.** A server restart otherwise means every
  * connected agent reconnecting in lockstep, which is how a brief outage becomes
  * a long one.
@@ -131,6 +137,7 @@ export class RtmClient {
       }
       if (message.type === 'push') {
         this.#trackCursor(message);
+        if (message.action === 'sync_required') void this.#catchUp(ws);
         this.options.onPush(message.action, message.payload);
       }
     });
@@ -174,12 +181,21 @@ export class RtmClient {
     this.#startPing();
 
     // The reason this class exists: recover anything sent while we were away.
-    if (this.#cursors.size > 0) {
-      const sync = await this.#send('sync', {
-        cursors: Object.fromEntries(this.#cursors),
-      });
-      if (sync.success) this.#applySync(sync.payload);
-    }
+    await this.#catchUp(ws);
+  }
+
+  /**
+   * Replay everything after the cursors — on every login, and when the gateway
+   * says its bus dropped under a socket that did not (`sync_required`, tm 408).
+   */
+  async #catchUp(ws: WebSocket): Promise<void> {
+    if (this.#cursors.size === 0) return;
+    const sync = await this.#send('sync', {
+      cursors: Object.fromEntries(this.#cursors),
+    });
+    // Replaced while the answer was on its way: the newer socket syncs itself.
+    if (ws !== this.#ws) return;
+    if (sync.success) this.#applySync(sync.payload);
   }
 
   /**

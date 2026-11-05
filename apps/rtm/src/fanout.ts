@@ -9,16 +9,44 @@
  *
  * What it *does* enforce is the boundary it can see: the envelope's licence must
  * match the connection's, always, regardless of what the audience says.
+ *
+ * **A lost subscription is announced (tm 408).** Redis pub/sub is at-most-once:
+ * a push published while this node was not subscribed — Redis restarting, its
+ * name not resolving for a moment — reaches nobody, and ioredis's resubscribe
+ * does not bring it back. The sockets never dropped, so their clients had no
+ * reason to run the reconnect `sync` that would. Measured in the tur 2 chaos
+ * run: a message accepted (201, in Postgres) during a Redis restart did not
+ * reach the open agent socket, 3 of 3 times, until the page was reloaded. So
+ * once the subscription is back, every logged-in socket that asked for it gets
+ * `sync_required`, and the client runs the same cursor `sync` a reconnect does.
  */
 import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
-import { isBusEnvelope, licenseChannel, type BusEnvelope } from '@siyahtus/types';
+import {
+  isBusEnvelope,
+  licenseChannel,
+  type BusEnvelope,
+  type SyncRequiredPush,
+} from '@siyahtus/types';
 import type { Connection, ConnectionRegistry } from './connection.js';
 import { encodePush } from './protocol.js';
 import type { Telemetry } from './telemetry/telemetry.js';
 
+/**
+ * How the `sync_required` announcement is spread out (tm 408): every socket that
+ * hears it runs a `sync`, which is a Postgres transaction, so a node with a few
+ * thousand sockets must not send them all in the same millisecond. Each socket
+ * widens the window by this much, up to the cap — one socket is told at once,
+ * a thousand over five seconds, which is still well inside the gap the restart
+ * itself was.
+ */
+export const RESYNC_SPREAD_PER_SOCKET_MS = 5;
+export const RESYNC_SPREAD_MAX_MS = 5_000;
+
 export class Fanout {
   #subscribedLicenses = new Set<string>();
+  /** The subscriber has dropped since it was last ready — anything published meanwhile is gone. */
+  #lost = false;
 
   constructor(
     private readonly subscriber: Redis,
@@ -29,6 +57,22 @@ export class Fanout {
   ) {
     this.subscriber.on('message', (channel, message) => {
       this.#handle(channel, message);
+    });
+    // `reconnecting` rather than `close`: a `quit` at shutdown closes too, and
+    // is not an outage. It fires again before every attempt; only the first of
+    // an outage is news.
+    this.subscriber.on('reconnecting', () => {
+      if (this.#lost) return;
+      this.#lost = true;
+      this.log.warn(
+        { subscribed_licenses: this.#subscribedLicenses.size },
+        'redis subscription lost; pushes published until it is back will not be delivered',
+      );
+    });
+    this.subscriber.on('ready', () => {
+      if (!this.#lost) return;
+      this.#lost = false;
+      void this.#recover();
     });
   }
 
@@ -47,6 +91,60 @@ export class Fanout {
       this.#subscribedLicenses.delete(licenseId);
       throw error;
     }
+  }
+
+  /**
+   * Re-subscribe, then tell the sockets to `sync`.
+   *
+   * ioredis resubscribes on its own, but `ready` is emitted *before* it sends
+   * those commands, so an announcement made from the event itself would let a
+   * client's `sync` race a push published in the next few milliseconds into the
+   * same hole. Subscribing again here (idempotent on the server) and waiting for
+   * the answer means that by the time a socket hears `sync_required`, anything
+   * published from then on is delivered live and anything before it is in what
+   * the `sync` reads.
+   */
+  async #recover(): Promise<void> {
+    const channels = [...this.#subscribedLicenses].map((licenseId) => licenseChannel(licenseId));
+    if (channels.length > 0) {
+      try {
+        await this.subscriber.subscribe(...channels);
+      } catch (error) {
+        // Dropped again before it answered: the next `ready` starts over.
+        this.#lost = true;
+        this.log.warn({ err: error }, 'redis resubscribe failed; waiting for the next reconnect');
+        return;
+      }
+    }
+    const told = this.#announceResync();
+    this.log.info(
+      { subscribed_licenses: channels.length, sockets_told: told },
+      'redis subscription restored; sockets asked to sync',
+    );
+  }
+
+  /** Send `sync_required` to every logged-in socket that subscribed to it; returns how many. */
+  #announceResync(): number {
+    const payload: SyncRequiredPush = { reason: 'bus_reconnected' };
+    const frame = encodePush('sync_required', payload);
+    const targets = this.registry
+      .authenticated()
+      .filter((connection) => connection.subscriptions.has('sync_required'));
+    const window = Math.min(targets.length * RESYNC_SPREAD_PER_SOCKET_MS, RESYNC_SPREAD_MAX_MS);
+
+    for (const connection of targets) {
+      const timer = setTimeout(() => {
+        // Closed (or replaced) while it waited its turn.
+        if (this.registry.get(connection.id) !== connection) return;
+        try {
+          connection.ws.send(frame);
+        } catch (error) {
+          this.log.debug({ err: error, connection_id: connection.id }, 'push delivery failed');
+        }
+      }, Math.random() * window);
+      timer.unref();
+    }
+    return targets.length;
   }
 
   #handle(channel: string, raw: string): void {

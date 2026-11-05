@@ -467,6 +467,18 @@ describe('realtime', () => {
     expect(api.eventCalls).toHaveLength(2);
   });
 
+  it("re-reads the list when the gateway's bus dropped under the socket (tm 408)", async () => {
+    const api = fakeApi({ chats: [chat({ id: 'chat-1' })] });
+    const store = new InboxStore({ api });
+    await store.loadChats();
+
+    store.applyPush('sync_required', { reason: 'bus_reconnected' });
+    await Promise.resolve();
+
+    // A lost `incoming_chat` or `chat_transferred` has no cursor to replay from.
+    expect(api.listCalls).toBe(2);
+  });
+
   it('forgets a conversation it can no longer see', async () => {
     const forgotten: string[] = [];
     const api = fakeApi({ chats: [chat({ id: 'chat-1' }), chat({ id: 'chat-2' })] });

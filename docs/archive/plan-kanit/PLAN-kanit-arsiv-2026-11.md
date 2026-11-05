@@ -48,3 +48,7 @@ Canlı `PLAN.md` § K bloklarından taşınan eski kanıt maddeleri (CONVENTIONS
 #### K10.2 — 10.2 · 14 günlük trial mantığı (rozet + kısıtlama)
 
 - ⚠ Kabul edilen sınır: `/auth/me` oturum başına bir kez okunur; deneme oturum ortasında biterse ajan şeridi yenilenene kadar yalnız 402 cümlesiyle öğrenir.
+
+#### KM-OPS — M-OPS · Ops dikişleri (NFR-R1/R2 · NFR-M5)
+
+- ✅ tm 289.3 · GV-02 3/5: AI iş işçisi — claim/kira + 500 ms yoklama + `LISTEN ai_jobs` zili (`pg` sürücüsü, `pg_notify` tetikleyicileri; `pgbouncer=true`da yalnız yoklama), işleyiciden önce cevaplı / kapalı bağlantılı / denemesi tükenmiş / 120 sn'den yaşlı iş ayıklanır (devir: ajan notu + `expired`/`failed` + karar kaydı, settle notun transaction'ında), cevap `reply_to_event_id` + çitli `done` settle'la aynı transaction'da (ikinci cevap, başka bağlantı, kirası düşmüş işçi reddedilir), fırlatan işleyici bir kez yeniden denenir, kapanışta 10 sn boşaltma + bitmeyeni geri verme; eklenti boşta, işleyici + rota 289.5'te; damga değişmedi · `services/ai/ai-job-worker.ts:244`, `:445`, `:531`, `:618`, `ai-job-wakeups.ts:67`, `:80`, `chat-service.ts:1338`, `plugins/ai-jobs.ts:37`, `migrations/20261016140000_ai_jobs_notify` · `test/integration/ai-job-worker.test.ts` (22; 11 mutantın 11'i öldü), `services/ai/ai-job-wakeups.test.ts` (5) · §D249

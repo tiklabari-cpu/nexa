@@ -53,8 +53,12 @@ const RTM_VERSION = '3.6';
  * wrong one, is the defect the edit was meant to repair — and the poll would
  * not catch it either, since the fallback appends what is new and a correction
  * mints no new event.
+ *
+ * `sync_required` (tm 408): the gateway's Redis subscription dropped under an
+ * open socket and is back — run the reconnect `sync` now rather than wait for
+ * the slow poll.
  */
-const PUSHES = ['incoming_event', 'chat_deactivated', 'event_updated'] as const;
+const PUSHES = ['incoming_event', 'chat_deactivated', 'event_updated', 'sync_required'] as const;
 
 interface Frame {
   request_id?: string;
@@ -229,12 +233,17 @@ export class WidgetSocket {
     // Live only after `sync` has settled: the visitor's transcript has a hole
     // in it until then, and telling the caller "live" would let it slow the
     // poll that is currently the only thing filling that hole.
-    if (this.#cursors.size > 0) {
-      const sync = await this.#send('sync', { cursors: Object.fromEntries(this.#cursors) });
-      if (this.#stopped || !this.#ws) return;
-      if (sync.success) this.#applySync(sync.payload ?? {});
-    }
+    if (!(await this.#catchUp())) return;
     this.#setLive(true);
+  }
+
+  /** The cursor `sync`; false when the socket went away meanwhile. */
+  async #catchUp(): Promise<boolean> {
+    if (this.#cursors.size === 0) return true;
+    const sync = await this.#send('sync', { cursors: Object.fromEntries(this.#cursors) });
+    if (this.#stopped || !this.#ws) return false;
+    if (sync.success) this.#applySync(sync.payload ?? {});
+    return true;
   }
 
   /**
@@ -301,6 +310,10 @@ export class WidgetSocket {
       return;
     }
     if (frame.type !== 'push') return;
+    if (frame.action === 'sync_required') {
+      void this.#catchUp();
+      return;
+    }
 
     const payload = frame.payload ?? {};
     const chatId = payload['chat_id'];

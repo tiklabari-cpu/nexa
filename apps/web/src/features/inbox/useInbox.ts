@@ -1219,6 +1219,11 @@ export function useRealtime(onPush?: PushHandler): void {
         // the board mounts would be a second `login` — and the board is exactly
         // the screen an agent leaves open in another tab.
         'traffic_visitor_updated',
+        // The gateway's Redis subscription dropped under this socket and is
+        // back (tm 408): the client re-runs its cursor `sync` itself; here the
+        // lists and the agent's own status are read again, since a lost
+        // `incoming_chat` or `routing_status_set` has no cursor to replay from.
+        'sync_required',
       ],
       onStatusChange: (status) => {
         setRealtimeStatus(status);
@@ -1230,6 +1235,7 @@ export function useRealtime(onPush?: PushHandler): void {
         wasReconnecting = status === 'reconnecting';
       },
       onPush: (action, payload) => {
+        if (action === 'sync_required') void reconcileOwnStatus();
         applyPush(queryClient, action, payload);
         onPushRef.current?.(action, payload);
       },
@@ -1835,8 +1841,11 @@ export function applyPush(
       return;
     }
 
+    // `sync_required`: pushes were lost while the gateway's bus was down (tm
+    // 408), and which chats they moved is exactly what is not known.
     case 'chat_unfollowed':
     case 'chat_appeared':
+    case 'sync_required':
       // These can move a chat into or out of a view at any depth, and the push
       // does not say where — the loaded chain is re-read in full. Correct
       // rather than cheap, and rare enough to afford it: the keyset cursors

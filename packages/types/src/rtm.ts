@@ -214,6 +214,11 @@ export const RTM_PUSH_ACTIONS = [
   // A reply's e-mail went out, failed, or was queued again (tm 356.3 · HD-01,
   // `TicketMessageDeliveryChangedPush`): same audience.
   'ticket_message_delivery_changed',
+  // The gateway's Redis subscription dropped and is back (tm 408 ·
+  // `SyncRequiredPush`): whatever was published meanwhile reached nobody, and
+  // the socket itself never closed, so the client has no reason to `sync` on
+  // its own. To every logged-in socket on that gateway that subscribed to it.
+  'sync_required',
   // Errors
   'incoming_error',
 ] as const;
@@ -490,4 +495,24 @@ export interface AgentConflictWarningPush {
   thread_id: string;
   agents: Array<{ agent_id: string; since: string }>;
   detected_at: string;
+}
+
+/**
+ * Why a gateway asks its sockets to `sync` without having dropped them.
+ *
+ * `bus_reconnected`: its Redis subscription was lost and has been re-established
+ * (tm 408). Pub/sub is at-most-once — a push published while the gateway was not
+ * subscribed is gone — but every event it announced is in Postgres, so the same
+ * cursor `sync` a reconnecting client runs recovers it.
+ */
+export const SYNC_REQUIRED_REASONS = ['bus_reconnected'] as const;
+export type SyncRequiredReason = (typeof SYNC_REQUIRED_REASONS)[number];
+
+/**
+ * Run the reconnect `sync` now (tm 408). Not an event: it carries no chat and
+ * moves no cursor, and a client that ignores it is no worse off than before —
+ * it catches up on its next real reconnect.
+ */
+export interface SyncRequiredPush {
+  reason: SyncRequiredReason;
 }

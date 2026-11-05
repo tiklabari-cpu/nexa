@@ -263,6 +263,11 @@ export class MobileRtmClient {
 
     if (message.type === 'push') {
       this.#trackCursor(message);
+      // The gateway's Redis subscription dropped under this open socket and is
+      // back (tm 408): whatever it published meanwhile is gone, and only the
+      // reconnect `sync` gets it from the database. Handed on too — the store
+      // re-reads the list, which no cursor covers.
+      if (message.action === 'sync_required') void this.#sync();
       this.#options.onPush(message.action as RtmClientAction, message.payload ?? {});
     }
   }

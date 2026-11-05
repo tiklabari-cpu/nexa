@@ -146,6 +146,15 @@ describe('the shell owns the connection', () => {
     expect(FakeWebSocket.last.closedByClient).toBe(false);
   });
 
+  it("subscribes to the gateway's `sync_required`, without which it is never sent (tm 408)", async () => {
+    renderShell();
+    await connected();
+
+    const login = FakeWebSocket.last.sent.find((frame) => frame.action === 'login');
+    const subscribed = (login?.payload['pushes'] as Record<string, string[]>)['3.6'];
+    expect(subscribed).toContain('sync_required');
+  });
+
   it("subscribes to the traffic board's visitor signal and lands it in its store (FR-MOD-03.1.1)", async () => {
     // Two links in one chain, and both are invisible from the board itself: the
     // gateway only ever sends what the socket asked for at `login`, and the

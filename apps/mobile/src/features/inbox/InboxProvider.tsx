@@ -32,6 +32,9 @@ const MOBILE_PUSHES: RtmPushAction[] = [
   'chat_deactivated',
   'chat_transferred',
   'chat_taken_over',
+  // The gateway's bus dropped under an open socket and is back (tm 408): the
+  // client syncs its cursors, the store re-reads the list.
+  'sync_required',
 ];
 
 export interface InboxProviderProps extends PropsWithChildren {

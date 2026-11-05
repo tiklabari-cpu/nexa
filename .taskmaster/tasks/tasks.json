@@ -16363,10 +16363,10 @@
         "description": "Redis yeniden başlarken kabul edilen (201, DB'de var) mesajlar açık ajan soketine push edilmiyor; soket düşmediği için istemci sync yapmıyor ve panel mesajı yenilenene kadar göstermiyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-04/05 tur 2 kapsamlı test koşusu (main @ 86ee661e; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT: pilot stack kaos testi — redis restart; o sırada istek başlatıp 201 alan mesaj (3/3 tekrar) ajan soketine gelmedi, öncesi ve sonrası geldi. rtm log: `getaddrinfo ENOTFOUND redis`. Veri kaybı yok (2190 gönderildi = 2190 DB'de). Pub/sub at-most-once; yeniden bağlanma sinyali istemciye iletilmiyor.\n\nYAPILACAK: RTM redis aboneliği yeniden kurulduğunda (veya bir kopukluk saptandığında) bağlı soketlere mevcut protokolle bir \"resync\" olayı/ipucu gönder; istemciler (web panel, widget, mobil) mevcut cursor tabanlı `sync` yolunu tetiklesin. Yeni olay tipi gerekirse kontrat önce (contract-first), mobil parity. Alternatif: istemci tarafında yeni olay yoksa periyodik/heartbeat tabanlı sync — hangisi küçükse, kararı HANDOFF'a yaz.\n\nTUZAK: kapalı sözlükler web'e dalgalanır (memory closed-vocabularies-ripple-into-web); widget bundle bütçesi 1,742 B pay; memory paged-query-drops-fetchnext-during-refresh.",
         "testStrategy": "RTM entegrasyon: abonelik kopup yeniden kurulunca bağlı sokete resync gelir; arada yayınlanan olay istemci sync'i ile alınır. Web birim: resync olayı sync'i tetikler. Elle/kaos: pilot stack'te redis restart sırasında gönderilen mesaj panelde yenilemeden görünür. DoD: CONVENTIONS §1.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-11-05T18:52:02.270Z",
+        "updatedAt": "2026-11-05T20:20:58.599Z",
         "subtasks": []
       },
       {
@@ -16468,9 +16468,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-05T18:52:02.270Z",
+      "lastModified": "2026-11-05T20:20:58.599Z",
       "taskCount": 416,
-      "completedCount": 405,
+      "completedCount": 406,
       "tags": [
         "master"
       ]

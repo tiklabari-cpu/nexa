@@ -489,6 +489,19 @@ export const envSchema = z.object({
   RATE_LIMIT_AGENT_PER_MIN: z.coerce.number().int().positive().default(180),
   RATE_LIMIT_AGENT_BURST: z.coerce.number().int().positive().default(30),
   RATE_LIMIT_CUSTOMER_PER_MIN: z.coerce.number().int().positive().default(60),
+  /**
+   * Widget requests that carry a good customer token, per IP, summed over
+   * every visitor behind that address (tm 407). On top of each visitor's own
+   * `RATE_LIMIT_CUSTOMER_PER_MIN`, not instead of it.
+   *
+   * These requests used to spend the anonymous 30/min as well, so two visitors
+   * behind one office NAT, or every visitor behind a tunnel whose hop count
+   * was wrong, locked the widget for everybody. 600 is ~40 visitors polling
+   * every four seconds without a socket, or ten at their own ceiling: an
+   * office or a classroom does not meet it. What it bounds is one host minting
+   * visitor after visitor to multiply its budget.
+   */
+  RATE_LIMIT_CUSTOMER_IP_PER_MIN: z.coerce.number().int().positive().default(600),
   /** Unauthenticated callers, per IP: sign-in, widget tokens, anything else without a credential. */
   RATE_LIMIT_ANON_PER_MIN: z.coerce.number().int().positive().default(30),
   /**

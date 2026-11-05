@@ -322,6 +322,9 @@ export default defineConfig({
         LLM_PROVIDER: 'mock',
         EMBEDDING_PROVIDER: 'mock',
         RATE_LIMIT_ANON_PER_MIN: '2000',
+        // Widget traffic with a visitor token left the anonymous bucket (tm 407)
+        // for its own per-address one; the suite's visitors all share 127.0.0.1.
+        RATE_LIMIT_CUSTOMER_IP_PER_MIN: '2000',
         RATE_LIMIT_TOKEN_PER_MIN: '2000',
         RATE_LIMIT_AGENT_PER_MIN: '5000',
         RATE_LIMIT_SIGNUP_PER_HOUR: '10000',

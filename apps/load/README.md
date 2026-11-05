@@ -11,20 +11,21 @@ produce a stamp without them.**
 
 ## What is here, and what is not yet
 
-| File                 | What it does                                    | Task  |
-| -------------------- | ----------------------------------------------- | ----- |
-| `lib/thresholds.js`  | NFR budgets → k6 thresholds (the gate)          | 161.1 |
-| `lib/config.js`      | Where the run points, how hard it pushes        | 161.1 |
-| `lib/session.js`     | OAuth 2.1 + PKCE sign-in against a seeded stack | 161.1 |
-| `lib/http.js`        | The only door to `k6/http` — tags and counts    | 161.1 |
-| `lib/metrics.js`     | Custom metrics (429 counter, fan-out trend)     | 161.1 |
-| `lib/summary.js`     | stdout block + `results/<scenario>.json`        | 161.1 |
-| `lib/protocol.js`    | RTM wire facts a Node test can re-check         | 161.3 |
-| `lib/rtm-socket.js`  | One agent socket (`k6/websockets`, async)       | 161.3 |
-| `lib/seed.js`        | Finding the seeded chat a write scenario drives | 161.3 |
-| `scenarios/smoke.js` | Harness self-check — one read, end to end       | 161.1 |
-| `scenarios/rest.js`  | List + transcript + send mix → NFR-P2           | 161.2 |
-| `scenarios/rtm.js`   | N sockets + fan-out → **NFR-P1 / P8 / R2**      | 161.3 |
+| File                  | What it does                                    | Task  |
+| --------------------- | ----------------------------------------------- | ----- |
+| `lib/thresholds.js`   | NFR budgets → k6 thresholds (the gate)          | 161.1 |
+| `lib/config.js`       | Where the run points, how hard it pushes        | 161.1 |
+| `lib/session.js`      | OAuth 2.1 + PKCE sign-in against a seeded stack | 161.1 |
+| `lib/http.js`         | The only door to `k6/http` — tags and counts    | 161.1 |
+| `lib/metrics.js`      | Custom metrics (429 counter, fan-out trend)     | 161.1 |
+| `lib/summary.js`      | stdout block + `results/<scenario>.json`        | 161.1 |
+| `lib/protocol.js`     | RTM wire facts a Node test can re-check         | 161.3 |
+| `lib/rtm-socket.js`   | One agent socket (`k6/websockets`, async)       | 161.3 |
+| `lib/seed.js`         | Finding the seeded chat a write scenario drives | 161.3 |
+| `scenarios/smoke.js`  | Harness self-check — one read, end to end       | 161.1 |
+| `scenarios/rest.js`   | List + transcript + send mix → NFR-P2           | 161.2 |
+| `scenarios/rtm.js`    | N sockets + fan-out → **NFR-P1 / P8 / R2**      | 161.3 |
+| `scenarios/widget.js` | Widget visitors behind one address → no 429     | 407   |
 
 `smoke.js` is not a capacity measurement and must not be quoted as one. It exercises the
 seams the real scenarios stand on — readiness answers, sign-in survives, a tagged read is
@@ -82,6 +83,9 @@ make load-rest                      # the same thing, from the repo root
 
 pnpm --filter @siyahtus/load load:rtm   # == k6 run scenarios/rtm.js — NFR-P1 / NFR-P8
 make load-rtm                       # the same thing, from the repo root
+
+pnpm --filter @siyahtus/load load:widget  # == k6 run scenarios/widget.js — visitors, one address
+make load-widget                    # the same thing, from the repo root
 ```
 
 `rest.js` **sends real messages** into the seed's one live conversation and
@@ -115,6 +119,13 @@ All optional; the defaults target a local `make dev` stack.
 | `LOAD_PACING_SECONDS` | `1`                                   | Seconds a VU sleeps between iterations |
 | `LOAD_NOTE`           | —                                     | Free text: hardware, stack kind        |
 | `LOAD_RESULTS_DIR`    | `results`                             | Where the JSON summary is written      |
+
+`widget.js` has two of its own:
+
+| Variable                     | Default                        | Meaning                                      |
+| ---------------------------- | ------------------------------ | -------------------------------------------- |
+| `LOAD_WIDGET_ORIGIN`         | `https://acme-bikes.localhost` | Embedding page; must be a trusted domain     |
+| `LOAD_WIDGET_PACING_SECONDS` | `4`                            | Seconds between a visitor's message-and-poll |
 
 `rtm.js` has its own set — one rung of the capacity ladder, not a profile to tune once:
 
@@ -366,6 +377,24 @@ Forgetting this step is not silently wrong: the shared `siyahtus_rate_limited co
 threshold still trips and the run exits non-zero, the same way it did in the deliberate
 over-quota run 161.1 recorded in `HANDOFF.md`.
 
+### `widget.js`: the stack's default limits, on purpose (tm 407)
+
+`widget.js` is the one write scenario that needs **nothing raised**. Each VU is a visitor with
+its own customer token, and every VU runs on this machine, so all of them arrive from one
+address — an office NAT, or a tunnel whose `TRUST_PROXY_HOPS` is wrong. That is the case the
+scenario exists for: a widget request used to be charged to its address's anonymous 30/min as
+well as to its visitor, and the pilot's load run was refused on its 28th message.
+
+```
+per visitor  ≈ 2 ÷ LOAD_WIDGET_PACING_SECONDS × 60   = 30/min   (limit 60, RATE_LIMIT_CUSTOMER_PER_MIN)
+per address  ≈ LOAD_VUS × per visitor                ≤ 600/min  (RATE_LIMIT_CUSTOMER_IP_PER_MIN) up to 20 VUs
+anonymous    = LOAD_VUS mints + 2 sign-in calls       ≤ 30/min   (RATE_LIMIT_ANON_PER_MIN) up to 28 VUs
+```
+
+A 429 here is therefore a finding, not a forgotten precondition. Past 20 VUs at the default
+pacing the run meets the address-wide ceiling by design — raise `LOAD_WIDGET_PACING_SECONDS`
+(a socket-connected widget polls every 30 s, not every 4) rather than the limit.
+
 ## Where the numbers go
 
 Each run writes `results/<scenario>.json`: thresholds with pass/fail, every metric k6 kept
@@ -413,6 +442,14 @@ messages).
 ```sh
 docker exec -i siyahtus-db psql -U siyahtus -d siyahtus \
   -c "DELETE FROM events WHERE text LIKE 'load rtm.js — %';"
+```
+
+`widget.js` marks its messages `load widget.js — visitor …`, and also leaves one new visitor and
+one conversation per VU behind; the conversations close on the ordinary inactivity timeout.
+
+```sh
+docker exec -i siyahtus-db psql -U siyahtus -d siyahtus \
+  -c "DELETE FROM events WHERE text LIKE 'load widget.js — %';"
 ```
 
 ### The product edits this text on the way in

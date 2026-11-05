@@ -16351,10 +16351,10 @@
         "description": "Müşteri token'lı widget istekleri (token, `POST /customer/chat/events`, `GET /customer/chat`) IP başına anonim kovadan harcıyor; aynı NAT/tünel IP'si arkasındaki tüm ziyaretçiler dakikada 30 isteği paylaşıp 429 alıyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-04/05 tur 2 kapsamlı test koşusu (main @ 86ee661e; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nXHIGH GEREKÇESİ: güvenlik yüzeyi — rate limiting / kötüye kullanım koruması.\n\nKANIT: pilot stack yük testinde müşteri token'lı `POST /customer/chat/events` 28. istekte `429`, `x-ratelimit-limit: 30`; redis'te `rl:anon:<ip>` anahtarı. `RATE_LIMIT_ANON_PER_MIN=100000` ile 5 VU × 1 s 95/95 başarılı. Kök neden doğrulanmadı: `apps/api/src/plugins/rate-limit.ts` iki aşamalı anon kova; müşteri principal'i `preHandler`'da ayrıca ölçülüyor — kimliği doğrulanmış müşteri isteği anon kovadan da düşülüyor olabilir.\nETKİ: ofis/okul NAT'ı ya da yanlış `TRUST_PROXY_HOPS` (tüm trafik tünel IP'sinden) → widget herkes için kilitlenir.\n\nYAPILACAK: önce kökü doğrula (hangi kova, hangi aşamada). Geçerli müşteri token'ı taşıyan istekler principal (ziyaretçi/oturum) başına ölçülsün; IP başına anon kova yalnız kimliksiz isteklere (token alma vb.) uygulansın ya da widget için ayrı/daha yüksek bir IP kovası olsun. Kötüye kullanım koruması zayıflamasın: token alma IP başına sınırlı kalır, captcha/Turnstile seam'i dokunulmaz. Env değişirse env parity (`.env.example`, `.env.production.example`, doküman).\n\nTUZAK: memory browser-ux-probe-traps (30/dk auth kovası testleri), fastify-gates-must-match-route-pattern; rate-limit testleri rate-limit anahtarlarını resetDatabase sonrası temizlemeyebilir (memory reset-database-reuses-license-ids).",
         "testStrategy": "api entegrasyon: aynı IP'den farklı müşteri token'ları ile 30'dan fazla mesaj/dk → 429 yok; tek token ile principal sınırı aşılınca 429; kimliksiz istekler IP sınırına takılır; sahte X-Forwarded-For public eşten yok sayılır. k6 widget senaryosu varsayılan limitlerle 429 vermez. security-reviewer ile inceleme. DoD: CONVENTIONS §1.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-11-05T15:01:40.280Z",
+        "updatedAt": "2026-11-05T16:41:04.094Z",
         "subtasks": []
       },
       {
@@ -16468,7 +16468,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-05T16:35:39.389Z",
+      "lastModified": "2026-11-05T16:41:04.095Z",
       "taskCount": 416,
       "completedCount": 404,
       "tags": [

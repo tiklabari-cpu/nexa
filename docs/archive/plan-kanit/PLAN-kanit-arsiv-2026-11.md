@@ -43,6 +43,7 @@ Canlı `PLAN.md` § K bloklarından taşınan eski kanıt maddeleri (CONVENTIONS
 #### KS8 — S8 · Rate limiting
 
 - ✅ tm 339.1 · GV-01 1/3: üye başına günlük AI turu (varsayılan 40, 0 = kapalı) — tek ifadeli artır-ve-denetle, 41. turda sabit cümle + insan + ajan notu + `cap_reached`/`customer`; ayar `PATCH /settings/security` · `apps/api/src/services/ai/customer-ai-quota.ts:65` · `ai-responder.ts` (üye iddiası, `#capNote`) · migration `20261024100000_ai_customer_daily_usage` · `test/integration/ai-customer-quota.test.ts` (9) · `feat/abuse-quota` · §D352
+- ✅ tm 339.2 · GV-01 2/3: widget insan doğrulaması — mint + bağlantı açılışında risk sinyalleri (IP yeni ziyaretçi / dakikada mesaj / bugünkü AI turu), `captcha.ts` mock/Turnstile, `403 challenge_required` (`reason`, `provider`, `site_key`), `captcha_mode` + `challenge_passed_at` (12 sa), sağlayıcı yoksa AI susar · `apps/api/src/services/security/abuse-guard.ts` · `captcha.ts` · `routes/auth.ts`, `routes/customer.ts` · migration `20261024120000_captcha_mode_challenge_passed` · `test/integration/captcha-challenge.test.ts` (11) · `abuse-guard.test.ts` (11) · `captcha.test.ts` (7) · `feat/abuse-captcha` · §D353
 
 #### K10.2 — 10.2 · 14 günlük trial mantığı (rozet + kısıtlama)
 

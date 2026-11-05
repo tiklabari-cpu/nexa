@@ -272,6 +272,19 @@ describe('PRIVACY_POLICY_URL · TERMS_URL · TERMS_VERSION', () => {
   });
 });
 
+/** The address-wide ceiling over a widget's visitors (tm 407). */
+describe('RATE_LIMIT_CUSTOMER_IP_PER_MIN', () => {
+  it('is 600 per minute when unset', () => {
+    expect(parseEnv(BASE).RATE_LIMIT_CUSTOMER_IP_PER_MIN).toBe(600);
+  });
+
+  it.each(['0', '-1', '1.5', 'many'])('refuses %j', (value) => {
+    expect(() => parseEnv({ ...BASE, RATE_LIMIT_CUSTOMER_IP_PER_MIN: value })).toThrow(
+      /RATE_LIMIT_CUSTOMER_IP_PER_MIN/,
+    );
+  });
+});
+
 /** The `GET /deployment` bucket (tm 257.13). */
 describe('RATE_LIMIT_PUBLIC_CONFIG_PER_MIN', () => {
   it('is 600 per minute when unset', () => {

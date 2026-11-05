@@ -179,6 +179,13 @@ describe('operator-signed member identity (ID-03 · K28)', () => {
   beforeEach(async () => {
     fx = await seedFixtures(owner);
     await clearRateLimits(server.app);
+    // The outcome counts this file asserts live in Redis per licence and day,
+    // and `seedFixtures` hands out the same licence ids every time — so an
+    // identity signed for workspace A by an earlier file in the same run
+    // (`captcha-challenge.test.ts` signs one) was counted here as well. Found
+    // when a new file reshuffled the shards and put the two together (tm 407).
+    const stats = await server.app.redis.keys('member-identity:stats:*');
+    if (stats.length > 0) await server.app.redis.del(...stats);
   });
 
   // ==========================================================================

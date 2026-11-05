@@ -102,6 +102,25 @@ export const CONFIG = Object.freeze({
    */
   pacingSeconds: Number(env('LOAD_PACING_SECONDS', '1')),
 
+  // --- Widget visitors (`scenarios/widget.js`, tm 407) ---------------------
+
+  /**
+   * The embedding page the visitors' widget is on. The mint checks it against
+   * the workspace's trusted domains; the seed trusts `acme-bikes.localhost`
+   * for Acme Bikes (`prisma/seed.ts`), and https is required off loopback.
+   */
+  widgetOrigin: env('LOAD_WIDGET_ORIGIN', 'https://acme-bikes.localhost'),
+  /**
+   * Seconds between two of one visitor's iterations (a message and a poll).
+   *
+   * Its own dial rather than `pacingSeconds`, because it models a person, not
+   * a load profile: four seconds is the widget's own poll interval without a
+   * socket (`apps/widget/src/widget.ts`, `POLL_INTERVAL_MS`). Two requests per
+   * four seconds is 30/min per visitor, inside the per-visitor 60 — README
+   * §"The widget scenario" works the arithmetic.
+   */
+  widgetPacingSeconds: envNumber('LOAD_WIDGET_PACING_SECONDS', 4),
+
   // --- RTM capacity ladder (`scenarios/rtm.js`) ---------------------------
   //
   // These are one rung of a ladder, not a profile to tune once. NFR-P8 is

@@ -2,7 +2,8 @@
  * Rate limiting (ADR-07 / NFR-S8).
  *
  *   agent token (PAT or OAuth) : 180 req/min, burst 30
- *   customer token             : 60 req/min
+ *   customer token             : 60 req/min per visitor, and 600 req/min per IP
+ *                                across every visitor behind it (tm 407, below)
  *   unauthenticated            : 30 req/min per IP
  *   token exchange             : 300 req/min per IP (`POST /auth/token`, below)
  *
@@ -31,7 +32,7 @@
  *
  * So there is now a second hook, an `onRequest` one registered *before* the
  * `auth` plugin (see `server.ts`, where the registration order is the
- * mechanism), covering exactly the two cases the principal buckets cannot:
+ * mechanism), covering the two cases the principal buckets cannot:
  *
  *   1. **No credential at all.** The caller is anonymous by definition, so the
  *      per-IP bucket that would have been chosen in `preHandler` anyway is
@@ -44,6 +45,9 @@
  *      per-IP budget of recently failed token resolutions and refuses when that
  *      budget is gone. Authentication charges that budget itself, one entry per
  *      resolution that failed (`plugins/auth.ts`).
+ *
+ * (A third case joined later: a widget's customer token, which is checked
+ * without a query and so can be charged to its visitor here — tm 407, below.)
  *
  * Requests that pass stage 2 are still metered by their principal bucket in
  * `preHandler`, unchanged: the account-scoped limit ADR-07 specifies (agent
@@ -76,13 +80,55 @@
  * let every request already in flight past the read before the first refusal is
  * charged; a reservation is counted the moment it is made, so the ceiling holds
  * for simultaneous requests too.
+ *
+ * ## The widget's visitors (tm 407)
+ *
+ * A customer token costs no lookup to verify, so it never went down the
+ * failure-budget branch of stage one — it went down the *anonymous* one. Every
+ * widget request was charged to `rl:anon:<ip>` before authentication and then
+ * to its visitor's own bucket in `preHandler`: two buckets, and the one that
+ * bit was the shared one. Behind an office or school NAT, or a tunnel whose
+ * hop count is set wrong, every visitor of every workspace spent the 30 a
+ * minute that sign-in and the token mint also live on, and two visitors
+ * polling were enough to lock the widget for everybody (pilot load test:
+ * `POST /customer/chat/events` refused on the 28th request).
+ *
+ * Stage one now reads the token itself — an HMAC check in this process, the
+ * same `CustomerTokenService.verify` authentication runs a moment later — and
+ * a good token on a route that admits customers is charged to the bucket of
+ * the visitor it names, the same key `preHandler` would pick, so `preHandler`
+ * sees it already paid. Charged *before* authentication, like every other
+ * stage-one bucket, so the refusals authentication can still raise for a real
+ * token (residency, which writes an audit entry) stay behind a limit.
+ *
+ * A visitor costs nothing to mint compared with an agent, so the visitor
+ * bucket alone would let one address multiply its budget by minting tokens.
+ * The visitor bucket therefore answers to a second, address-wide ceiling,
+ * `rl:customerip:<ip>` (`RATE_LIMIT_CUSTOMER_IP_PER_MIN`): high enough that a
+ * NAT's visitors do not meet it, low enough that a pile of tokens from one
+ * host does not buy an open channel. It counts only requests the visitor's own
+ * bucket let through, so one runaway visitor is stopped at its own ceiling and
+ * cannot spend its neighbours' share, and a request it refuses hands the
+ * visitor's slot back.
+ *
+ * What stays anonymous, per IP, at 30: everything without a good customer
+ * token — no credential, a forged or expired one — and every route that does
+ * not admit customers, the token mint (`POST /customer/token`) among them, so
+ * presenting a token cannot move minting onto a budget of its own.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
 import { randomUUID } from 'node:crypto';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
-import { costsTokenResolution, readCredential } from '../lib/credential.js';
+import {
+  costsTokenResolution,
+  isCustomerToken,
+  readCredential,
+  type Credential,
+} from '../lib/credential.js';
+import { CustomerTokenService } from '../services/auth/customer-token.js';
+import type { CustomerPrincipal, Principal } from '../services/auth/principal.js';
 
 /**
  * KEYS[1] window key · ARGV: now(ms), windowMs, limit, member id, record(1|0)
@@ -218,6 +264,12 @@ interface Bucket {
   key: string;
   limit: number;
   windowMs: number;
+  /**
+   * A second, wider bucket every request this one lets through is also charged
+   * to (tm 407): the address-wide ceiling over a widget's visitors. Absent on
+   * every other bucket.
+   */
+  ceiling?: Omit<Bucket, 'ceiling'>;
 }
 
 /**
@@ -252,9 +304,14 @@ export function authFailureBucket(ip: string, env: Env): Bucket {
  */
 export const IMPERSONATION_EXCHANGES_PER_MIN = 30;
 
-function bucketFor(request: FastifyRequest, env: Env): Bucket {
-  const principal = request.principal;
-
+/**
+ * The bucket `request` is metered by, given who it is known to come from:
+ * nobody yet (stage one, before authentication), the visitor a customer token
+ * names (stage one, tm 407), or the resolved principal (stage two). The same
+ * function at both stages, so the two always agree on a key — which is how
+ * stage two knows a request was already paid for.
+ */
+function bucketFor(request: FastifyRequest, env: Env, principal: Principal | undefined): Bucket {
   // Public KB reads (PUBKB-c) are the anonymous SEO surface: a crawler indexing
   // one workspace's articles would drain the shared 30/min anon bucket in
   // seconds. They get their own, higher per-IP bucket instead — keyed by IP like
@@ -340,6 +397,14 @@ function bucketFor(request: FastifyRequest, env: Env): Bucket {
       key: `rl:customer:${principal.organizationId}:${principal.customerId}`,
       limit: env.RATE_LIMIT_CUSTOMER_PER_MIN,
       windowMs: 60_000,
+      // Per address, not per workspace: what the ceiling bounds is how much one
+      // host can send by holding many visitors, and a workspace id in the key
+      // would multiply that by every workspace it could mint for.
+      ceiling: {
+        key: `rl:customerip:${request.ip}`,
+        limit: env.RATE_LIMIT_CUSTOMER_IP_PER_MIN,
+        windowMs: 60_000,
+      },
     };
   }
 
@@ -361,7 +426,8 @@ function bucketFor(request: FastifyRequest, env: Env): Bucket {
   // Unauthenticated callers share one bucket per IP. This covers sign-in (both
   // password doors) and widget token minting, so it is the limit an end-to-end
   // suite runs into first — hence configurable like the others (ADR-07), rather
-  // than the only hard-coded one.
+  // than the only hard-coded one. A widget's requests that carry its token are
+  // not in here (tm 407): the visitor's own bucket above meters them.
   return {
     key: `rl:anon:${request.ip}`,
     limit: env.RATE_LIMIT_ANON_PER_MIN,
@@ -372,6 +438,13 @@ function bucketFor(request: FastifyRequest, env: Env): Bucket {
 async function rateLimitPlugin(app: FastifyInstance, options: { env: Env }): Promise<void> {
   const { env } = options;
   const limiter = new RateLimiter(app.redis);
+  // The same verifier `plugins/auth.ts` builds, from the same secret: stateless,
+  // so two instances give one answer. Its own because this plugin is registered
+  // before `auth` (see `server.ts`) and so cannot borrow that one.
+  const customerTokens = new CustomerTokenService(
+    env.CUSTOMER_TOKEN_SECRET,
+    env.CUSTOMER_TOKEN_TTL,
+  );
 
   app.decorate('rateLimiter', limiter);
   app.decorateRequest('rateLimitChargedKey', undefined);
@@ -438,6 +511,84 @@ async function rateLimitPlugin(app: FastifyInstance, options: { env: Env }): Pro
   }
 
   /**
+   * Spend one slot of `bucket`, and of the `ceiling` it answers to if it has
+   * one — the widget visitor's case (tm 407, file header). Returns whether the
+   * bucket itself was charged: false only when Redis could not be reached and
+   * the request was let through.
+   *
+   * The visitor's own bucket decides first, so a request it refuses never
+   * reaches the shared ceiling: one runaway visitor is stopped at its own limit
+   * instead of draining the address for everybody behind it. A request the
+   * ceiling refuses hands the visitor's slot back — it was not served — which
+   * is why that slot is reserved rather than consumed.
+   */
+  async function charge(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    bucket: Bucket,
+  ): Promise<boolean> {
+    const { ceiling } = bucket;
+    if (!ceiling) return (await meter(request, reply, bucket, 'consume')) !== null;
+
+    let own: RateLimitReservation;
+    try {
+      own = await limiter.reserve(bucket.key, bucket.limit, bucket.windowMs);
+    } catch (error) {
+      // Fails open, like `meter` and for the same reason.
+      request.log.error({ err: error }, 'rate limiter unavailable — allowing request');
+      return false;
+    }
+
+    if (own.allowed) {
+      let shared: RateLimitDecision | null = null;
+      try {
+        shared = await limiter.consume(ceiling.key, ceiling.limit, ceiling.windowMs);
+      } catch (error) {
+        request.log.error({ err: error }, 'rate limiter unavailable — allowing request');
+      }
+      if (shared && !shared.allowed) {
+        try {
+          await limiter.release(bucket.key, own.member);
+        } catch (error) {
+          // The visitor loses one slot until the window passes; the refusal
+          // below stands either way.
+          request.log.error({ err: error }, 'visitor slot not handed back');
+        }
+        // Throws: the address is out of budget. Its own numbers, not the
+        // visitor's, since they are what the client is waiting on.
+        enforce(reply, shared, false);
+      }
+    }
+
+    // The visitor's bucket is the one the client spends from, so its numbers
+    // are the ones announced — and its refusal, when it refused, is thrown here.
+    enforce(reply, own, true);
+    return true;
+  }
+
+  /**
+   * The visitor a customer token speaks for, if it is a good one presented to
+   * a route that admits customers (tm 407); undefined otherwise, and the
+   * request is metered as anonymous.
+   *
+   * Both conditions are what keep this from being a way around the anonymous
+   * bucket. A forged or expired token names nobody, so it buys no budget of
+   * its own; and a route that does not admit customers — the token mint, the
+   * sign-in doors, the agent API — is refused to a customer token by
+   * authentication anyway, so metering it per visitor would only hand the
+   * mint a per-token budget to multiply.
+   */
+  function visitorOf(
+    request: FastifyRequest,
+    credential: Credential | null,
+  ): CustomerPrincipal | undefined {
+    if (!isCustomerToken(credential)) return undefined;
+    if (!request.routeOptions.config.principals?.includes('customer')) return undefined;
+    const verification = customerTokens.verify(credential.value);
+    return verification.ok ? verification.principal : undefined;
+  }
+
+  /**
    * Take one slot of the address's failure budget for the credential in a
    * token request's body, before anything is looked up (tm 259.3 — the file
    * header has the reasoning). Remembered on the request so `onSend` can hand
@@ -474,7 +625,7 @@ async function rateLimitPlugin(app: FastifyInstance, options: { env: Env }): Pro
       // send the request down the branch below, which reads the failure budget
       // without spending from it, and the body's guess would go uncounted.
       await reserveCredentialAttempt(request, reply);
-      const bucket = bucketFor(request, env);
+      const bucket = bucketFor(request, env, undefined);
       const decision = await meter(request, reply, bucket, 'consume');
       if (decision) request.rateLimitChargedKey = bucket.key;
       return;
@@ -493,16 +644,17 @@ async function rateLimitPlugin(app: FastifyInstance, options: { env: Env }): Pro
       return;
     }
 
-    // No credential (or one that is refused without a query): the caller is
-    // anonymous, so the per-IP bucket `preHandler` would have picked anyway is
-    // charged here instead. `bucketFor` returns it unchanged — there is no
-    // principal yet, and a route with its own IP bucket (`/health`, public KB)
-    // gets that one, exactly as it does later.
-    const bucket = bucketFor(request, env);
-    const decision = await meter(request, reply, bucket, 'consume');
+    // No credential, one refused without a query, or a customer token. With a
+    // good customer token on a customer route the caller is known already —
+    // the visitor it names (tm 407) — and that visitor's bucket is charged
+    // here, the key `preHandler` will pick once authentication agrees. Anyone
+    // else is anonymous, so the per-IP bucket `preHandler` would have picked
+    // anyway is charged here instead. Either way a route with its own IP
+    // bucket (`/health`, public KB) gets that one, exactly as it does later.
+    const bucket = bucketFor(request, env, visitorOf(request, credential));
     // Remember which bucket paid, so `preHandler` does not bill the same
     // request a second time for the same key.
-    if (decision) request.rateLimitChargedKey = bucket.key;
+    if (await charge(request, reply, bucket)) request.rateLimitChargedKey = bucket.key;
   });
 
   // Stage two. preHandler, not onRequest: the principal must already be
@@ -510,12 +662,12 @@ async function rateLimitPlugin(app: FastifyInstance, options: { env: Env }): Pro
   app.addHook('preHandler', async (request, reply) => {
     if (request.routeOptions.config.skipRateLimit) return;
 
-    const bucket = bucketFor(request, env);
+    const bucket = bucketFor(request, env, request.principal);
     // Already charged before authentication ran, and to the same key — this is
     // one request, not two.
     if (request.rateLimitChargedKey === bucket.key) return;
 
-    await meter(request, reply, bucket, 'consume');
+    await charge(request, reply, bucket);
   });
 
   // The other half of the token endpoint's reservation. A 401 is that route

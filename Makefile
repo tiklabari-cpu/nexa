@@ -114,6 +114,10 @@ load-rest: ## REST mix (list+transcript+send) → NFR-P2; raise RATE_LIMIT_AGENT
 load-rtm: ## N WS sockets + fan-out → NFR-P1/P8; one rung of the ladder (LOAD_RTM_CONNECTIONS)
 	cd apps/load && K6_VERSION="$$(k6 version)" k6 run scenarios/rtm.js
 
+.PHONY: load-widget
+load-widget: ## Widget visitors behind one address, at the default limits → no 429 (tm 407)
+	cd apps/load && K6_VERSION="$$(k6 version)" k6 run scenarios/widget.js
+
 # --- Containerised stack (local only — no deploy, no TLS, no real secrets) ---
 
 .PHONY: demo

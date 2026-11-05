@@ -642,6 +642,7 @@ value left at its default is a decision too, and the defaults are deliberately c
 | `RATE_LIMIT_SIGNUP_PER_HOUR`              | Sign-ups per IPv4 address, or per IPv6 `/64`, per hour                             | 10        | Default; a shared office or school may need more     |
 | `RATE_LIMIT_APPS_CONNECT_PER_HOUR`        | Apps connection attempts per account, per hour (a live card calls the provider)    | 20        | Default                                              |
 | `RATE_LIMIT_PUBLIC_CONFIG_PER_MIN`        | `GET /deployment` (the panel reads it on every load), per IP                       | 600       | Default                                              |
+| `RATE_LIMIT_CUSTOMER_IP_PER_MIN`          | Widget requests with a visitor token, per IP, summed over its visitors             | 600       | Default; a wrong `TRUST_PROXY_HOPS` puts all on one  |
 | `RATE_LIMIT_TOKEN_PER_MIN`                | `POST /auth/token` (sign-in's code exchange, every refresh), per IP                | 300       | Default; more only for 100+ agents on one address    |
 | `MAIL_DAILY_PER_WORKSPACE`                | Everything one workspace sends, per UTC day                                        | 200       | Default                                              |
 | `MAIL_DAILY_EXTERNAL_PER_WORKSPACE`       | Mail one workspace sends outside itself (invitations, ticket notices, transcripts) | 50        | Default                                              |

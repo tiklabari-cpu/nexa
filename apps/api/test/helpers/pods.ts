@@ -235,6 +235,9 @@ export async function startApiPod(
       // the limiter is Redis-backed, so it is shared across them too. The
       // limiter has its own suite; a 429 here would only ever be noise.
       RATE_LIMIT_ANON_PER_MIN: '2000',
+      // And the widget's per-address ceiling (tm 407), which visitor traffic
+      // spends instead of the anonymous bucket.
+      RATE_LIMIT_CUSTOMER_IP_PER_MIN: '2000',
       // The same reasoning for the hourly sign-up limit (tm 257.14).
       RATE_LIMIT_SIGNUP_PER_HOUR: '10000',
       // And for the widget's human check (tm 339.2): one address, many visitors.

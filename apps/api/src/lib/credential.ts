@@ -74,8 +74,18 @@ export function readCredential(request: FastifyRequest): Credential | null {
  */
 export function costsTokenResolution(credential: Credential | null): boolean {
   if (!credential) return false;
-  if (credential.scheme === 'bearer' && credential.value.startsWith(`${CUSTOMER_TOKEN_PREFIX}.`)) {
-    return false;
-  }
-  return true;
+  return !isCustomerToken(credential);
+}
+
+/**
+ * Whether this credential is a widget's customer token (`nxc1.…`) — verified by
+ * HMAC in this process, so the rate limiter can find out who it speaks for
+ * before authentication runs (tm 407) without spending anything to ask.
+ *
+ * Only the shape: whether it is *good* is `CustomerTokenService.verify`'s call.
+ */
+export function isCustomerToken(credential: Credential | null): credential is Credential {
+  return (
+    credential?.scheme === 'bearer' && credential.value.startsWith(`${CUSTOMER_TOKEN_PREFIX}.`)
+  );
 }

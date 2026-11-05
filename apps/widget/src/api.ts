@@ -105,6 +105,8 @@ export interface WidgetState {
    */
   can_start_chat?: boolean;
   answered_by?: 'human' | 'ai' | 'none';
+  /** The workspace refuses every message (trial over, ADR-10 · tm 406); absent from an older server. */
+  read_only?: boolean;
   /** Whether an agent is mid-reply, for the "…is typing" line (FR-MOD-02.9). */
   agent_typing?: boolean;
   customer: { id: string; name: string | null; email: string | null };

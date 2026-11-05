@@ -22,7 +22,8 @@ export const fr: Record<string, string> = {
   'error.uploadTooLarge': 'Ce fichier est trop volumineux pour être joint.',
   'error.uploadTooLargeMax': 'Ce fichier est trop volumineux. La limite est de {max}.',
   'error.uploadType': 'Ce type de fichier ne peut pas être joint.',
-  'error.readOnly': 'Cette conversation ne peut pas recevoir de nouveaux messages pour le moment.',
+  'error.readOnly':
+    'Cette conversation ne peut pas recevoir de nouveaux messages pour le moment. Contactez-nous par un autre moyen ou réessayez plus tard.',
   'attach.label': 'Joindre un fichier',
   'attach.remove': 'Supprimer la pièce jointe',
   'emoji.trigger': 'Insérer un emoji',

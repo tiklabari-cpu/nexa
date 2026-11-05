@@ -21,7 +21,8 @@ export const es: Record<string, string> = {
   'error.uploadTooLarge': 'Ese archivo es demasiado grande para adjuntarlo.',
   'error.uploadTooLargeMax': 'Ese archivo es demasiado grande. El límite es {max}.',
   'error.uploadType': 'Ese tipo de archivo no se puede adjuntar.',
-  'error.readOnly': 'Esta conversación no puede recibir mensajes nuevos en este momento.',
+  'error.readOnly':
+    'Esta conversación no puede recibir mensajes nuevos en este momento. Contáctanos por otra vía o inténtalo de nuevo más tarde.',
   'attach.label': 'Adjuntar un archivo',
   'attach.remove': 'Quitar adjunto',
   'emoji.trigger': 'Insertar emoji',

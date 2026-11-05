@@ -23,7 +23,8 @@ export const de: Record<string, string> = {
   'error.uploadTooLarge': 'Diese Datei ist zu groß zum Anhängen.',
   'error.uploadTooLargeMax': 'Diese Datei ist zu groß. Das Limit beträgt {max}.',
   'error.uploadType': 'Dieser Dateityp kann nicht angehängt werden.',
-  'error.readOnly': 'Diese Unterhaltung kann gerade keine neuen Nachrichten empfangen.',
+  'error.readOnly':
+    'Diese Unterhaltung kann gerade keine neuen Nachrichten empfangen. Bitte kontaktieren Sie uns auf anderem Weg oder versuchen Sie es später erneut.',
   'attach.label': 'Datei anhängen',
   'attach.remove': 'Anhang entfernen',
   'emoji.trigger': 'Emoji einfügen',

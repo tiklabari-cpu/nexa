@@ -1965,6 +1965,7 @@ const OVERDUE = {
   organizationName: 'Overdue Outfitters',
   slug: 'overdue',
   ownerName: 'Rae Overdue',
+  widgetDomain: 'overdue-outfitters.localhost',
 } as const;
 
 async function seedOverdueTrialWorkspace(passwordHash: string): Promise<void> {
@@ -2026,6 +2027,17 @@ async function seedOverdueTrialWorkspace(passwordHash: string): Promise<void> {
       clientType: 'public',
       redirectUris: ['http://localhost:5173/auth/callback', MOBILE_REDIRECT_URI],
       scopes: [],
+    },
+  });
+
+  // Where its widget may be embedded, so the widget's side of read-only can
+  // be seen too (tm 406): a visitor there is told the conversation is paused
+  // before they type. Any `*.localhost` host reaches the e2e demo page.
+  await prisma.trustedDomain.create({
+    data: {
+      organizationId: organization.id,
+      licenseId: license.id,
+      domain: OVERDUE.widgetDomain,
     },
   });
 

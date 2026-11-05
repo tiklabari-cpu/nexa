@@ -44,8 +44,15 @@ interface Harness {
   sends: () => number;
 }
 
+interface Options {
+  /** What each poll says about `read_only` (tm 406); absent, the field is not sent. */
+  readOnly?: () => boolean | undefined;
+  /** Holds every poll until it settles, to type ahead of the first one. */
+  gate?: Promise<void>;
+}
+
 /** A widget whose send answers with `sendResponse`; everything else works. */
-function setUp(sendResponse: () => Response, language = 'en'): Harness {
+function setUp(sendResponse: () => Response, language = 'en', options: Options = {}): Harness {
   let sends = 0;
   vi.stubGlobal(
     'fetch',
@@ -56,7 +63,9 @@ function setUp(sendResponse: () => Response, language = 'en'): Harness {
         return jsonResponse({ token: 'nxc1.test-token', customer_id: 'cus_test' });
       }
       if (path === '/customer/chat' && method === 'GET') {
+        await options.gate;
         return jsonResponse({
+          read_only: options.readOnly?.(),
           online: true,
           customer: { id: 'cus_test', name: null, email: null },
           agent: null,
@@ -106,6 +115,7 @@ beforeEach(() => {
 
 afterEach(() => {
   for (const stop of mounted.splice(0)) stop();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -122,6 +132,9 @@ describe('widget send on a read-only workspace (tm 257.15)', () => {
     // What the visitor typed is back in the box, and no bubble is left behind.
     expect(el<HTMLTextAreaElement>(h.doc, '.nx-input').value).toBe('is anyone there?');
     expect(el(h.doc, '.nx-transcript').textContent).not.toContain('is anyone there?');
+    // And it stays on screen, but Send is held: a retry would only be refused again (tm 406).
+    expect(el<HTMLElement>(h.doc, '.nx-form').hidden).toBe(false);
+    expect(el<HTMLButtonElement>(h.doc, '.nx-send').disabled).toBe(true);
   });
 
   it('answers in the visitor’s language', async () => {
@@ -151,5 +164,87 @@ describe('widget send on a read-only workspace (tm 257.15)', () => {
       });
       vi.unstubAllGlobals();
     }
+  });
+});
+
+/** Open the panel the way a visitor does. */
+function open(h: Harness): void {
+  el<HTMLButtonElement>(h.doc, '.nx-launcher').click();
+}
+
+const hidden = (h: Harness, selector: string): boolean => el<HTMLElement>(h.doc, selector).hidden;
+
+describe('a read-only workspace announced by the poll (tm 406)', () => {
+  it('says so before the visitor types, and offers no form and no composer', async () => {
+    const h = setUp(() => jsonResponse(LICENSE_EXPIRED, 402), 'en', { readOnly: () => true });
+    open(h);
+
+    await vi.waitFor(() => {
+      expect(el(h.doc, '.nx-status').textContent).toBe(CATALOGS.en['error.readOnly']);
+    });
+    // The way out is in the line itself: contact the business another way.
+    expect(el(h.doc, '.nx-status').textContent).toContain('contact us another way');
+    expect(hidden(h, '.nx-status')).toBe(false);
+    expect(hidden(h, '.nx-prechat')).toBe(true);
+    expect(hidden(h, '.nx-offline')).toBe(true);
+    expect(hidden(h, '.nx-form')).toBe(true);
+
+    // Enter does not reach the server either.
+    el<HTMLTextAreaElement>(h.doc, '.nx-input').value = 'hello?';
+    el(h.doc, '.nx-input').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+    await Promise.resolve();
+    expect(h.sends()).toBe(0);
+  });
+
+  it('answers in the visitor’s language', async () => {
+    const h = setUp(() => jsonResponse(LICENSE_EXPIRED, 402), 'tr', { readOnly: () => true });
+    open(h);
+    await vi.waitFor(() => {
+      expect(el(h.doc, '.nx-status').textContent).toBe(CATALOGS.tr['error.readOnly']);
+    });
+  });
+
+  it('keeps a line already typed in the pre-chat form, in the composer with Send held', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const h = setUp(() => jsonResponse(LICENSE_EXPIRED, 402), 'en', { readOnly: () => true, gate });
+    open(h);
+    await vi.waitFor(() => expect(hidden(h, '.nx-prechat')).toBe(false));
+    el<HTMLTextAreaElement>(h.doc, '.nx-prechat .nx-prechat-message').value =
+      'my order never arrived';
+
+    release();
+    await vi.waitFor(() => expect(hidden(h, '.nx-prechat')).toBe(true));
+    expect(el<HTMLTextAreaElement>(h.doc, '.nx-input').value).toBe('my order never arrived');
+    expect(hidden(h, '.nx-form')).toBe(false);
+    expect(el<HTMLButtonElement>(h.doc, '.nx-send').disabled).toBe(true);
+    expect(el(h.doc, '.nx-status').textContent).toBe(CATALOGS.en['error.readOnly']);
+    expect(h.sends()).toBe(0);
+  });
+
+  it('opens again on the poll that says the workspace is writable', async () => {
+    vi.useFakeTimers();
+    let readOnly = true;
+    const h = setUp(() => jsonResponse({ id: 'evt_1', chat_id: 'chat_test' }, 201), 'en', {
+      readOnly: () => readOnly,
+    });
+    // A document made by `createHTMLDocument` reports itself hidden, and a hidden page is not polled.
+    Object.defineProperty(h.doc, 'hidden', { value: false });
+    open(h);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(el(h.doc, '.nx-status').textContent).toBe(CATALOGS.en['error.readOnly']);
+
+    readOnly = false;
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(el(h.doc, '.nx-status').textContent).not.toBe(CATALOGS.en['error.readOnly']);
+    expect(hidden(h, '.nx-prechat') && hidden(h, '.nx-form')).toBe(false);
+    expect(el<HTMLButtonElement>(h.doc, '.nx-send').disabled).toBe(false);
+  });
+
+  it('changes nothing for a server that does not send the field', async () => {
+    const h = setUp(() => jsonResponse(LICENSE_EXPIRED, 402));
+    open(h);
+    await vi.waitFor(() => expect(hidden(h, '.nx-prechat')).toBe(false));
+    expect(el(h.doc, '.nx-status').textContent).not.toBe(CATALOGS.en['error.readOnly']);
   });
 });

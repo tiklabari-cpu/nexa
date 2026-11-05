@@ -115,6 +115,7 @@ import { resolveAttribution } from '../services/sales/attribution.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { missingPrechatFields, readCustomerPrechat } from '../services/websites/prechat.js';
 import { readCustomerAvailabilityMode } from '../services/websites/availability.js';
+import { trialState } from '../services/billing/metering.js';
 import { transcriptLines } from '../services/chat/transcript-export.js';
 import {
   latestTranscript,
@@ -914,8 +915,13 @@ export default async function customerRoutes(
       const availabilityMode = owned
         ? DEFAULT_WIDGET_AVAILABILITY_MODE
         : await readCustomerAvailabilityMode(tx, principal.brandId);
+      // A workspace whose trial is over refuses every write, the visitor's
+      // message included (`license-gate.ts`). Said on the poll so the widget
+      // tells the visitor before they type, not after a 402 (tm 406).
+      const { access } = await trialState(tx, request.tenant());
 
       return {
+        readOnly: access === 'read_only',
         chat,
         agentsOnline,
         customer,
@@ -986,6 +992,7 @@ export default async function customerRoutes(
       online: humansOnline,
       can_start_chat: availability.can_start_chat,
       answered_by: availability.answered_by,
+      read_only: state.readOnly,
       agent_typing: agentTyping,
       customer: {
         id: principal.customerId,

@@ -229,6 +229,11 @@ interface State {
   online: boolean;
   /** The server's `can_start_chat` (WG-09); undefined from a server predating it. */
   canStartChat?: boolean;
+  /**
+   * The workspace refuses every message (trial over, ADR-10 · tm 406): the
+   * poll's `read_only`, or a send's 402 `license_expired`. Undefined until known.
+   */
+  readOnly?: boolean;
   chatId: string | null;
   /**
    * The connection open in that chat (ID-02): the visitor's chat holds their
@@ -805,6 +810,12 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     // first-time visitor is not dialled before they open the panel, and a
     // guessed green dot would promise someone who may not be there.
     rootEl.dataset['presence'] = state.connected ? (state.online ? 'online' : 'offline') : '';
+    // A read-only workspace's line (tm 406) outranks the rest — the queue, "no
+    // one is available" — and is the visitor's way out: contact us another way.
+    // Reopened, the refusal of the last send goes with it.
+    const readOnly = t('error.readOnly');
+    if (state.readOnly) state.error = readOnly;
+    else if (state.error === readOnly) state.error = null;
     if (state.error) {
       ui.status.textContent = state.error;
       ui.status.dataset['tone'] = 'error';
@@ -1788,6 +1799,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
   function applyAvailability(snapshot: WidgetState): void {
     state.online = snapshot.answered_by ? snapshot.answered_by !== 'none' : snapshot.online;
     state.canStartChat = snapshot.can_start_chat;
+    state.readOnly = snapshot.read_only;
   }
 
   /**
@@ -1800,11 +1812,21 @@ export function mount(doc: Document = document, win: Window = window): () => voi
    * only shows up in whichever order a future caller happens to pick.
    */
   function renderPanelBody(): void {
+    // A read-only workspace (tm 406) takes no message through any door, so
+    // neither form nor an empty composer is offered: the status line says so
+    // and how to reach the business instead. A line already written in the
+    // pre-chat form moves to the composer, which stays up while it holds text —
+    // Send held — so nothing the visitor typed disappears from view.
+    const paused = state.readOnly === true;
+    if (paused && ui.prechatMessage.value) {
+      ui.input.value ||= ui.prechatMessage.value;
+      ui.prechatMessage.value = '';
+    }
     // The offline form outranks the pre-chat one: nobody is there to take the
     // conversation the pre-chat form would open, and the offline form asks for
     // the same details on its own.
-    const offline = offlineFormOpen();
-    const showPrechat = state.prechat && !offline;
+    const offline = offlineFormOpen() && !paused;
+    const showPrechat = state.prechat && !offline && !paused;
     // The human check takes the whole panel while it is up: the conversation,
     // the forms and the composer all wait behind it (tm 339.3).
     const challenging = pendingChallenge !== null;
@@ -1822,8 +1844,9 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     // form because the conversation has not started, and during the offline one
     // because there is nobody to receive a live message — offering both would
     // give the visitor two doors, one of which nobody is behind.
-    ui.form.hidden = showPrechat || offline || challenging;
+    ui.form.hidden = showPrechat || offline || challenging || (paused && !ui.input.value);
     ui.chip.hidden = showPrechat || offline || challenging || state.pendingAttachment === null;
+    renderSendButton();
   }
 
   /** Rebuilt whenever the mint reports the fields — `replaceChildren` inside. */
@@ -2308,7 +2331,8 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     const text = ui.input.value.trim();
     const attachment = state.pendingAttachment;
     // `connectionLost` too: Enter reaches here without the disabled button.
-    if ((!text && !attachment) || state.sending || sendPaused || connectionLost) return;
+    if ((!text && !attachment) || state.sending || sendPaused || connectionLost || state.readOnly)
+      return;
 
     state.sending = true;
     ui.send.disabled = true;
@@ -2378,7 +2402,10 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       // The other refusals are the server answering, so "check your connection"
       // is wrong for them too (tm 259.10): a message the spam filter or a ban
       // turned away needs different words, a 429 needs the visitor to wait.
-      state.error = t(sendRefusalKey(error));
+      const refusal = sendRefusalKey(error);
+      state.error = t(refusal);
+      // The trial ended since the last poll: stop offering Send until one says otherwise.
+      if (refusal === 'error.readOnly') state.readOnly = true;
       if (error instanceof WidgetApiError && error.status === 429) {
         pauseSending(error.retryAfter);
       }
@@ -2390,6 +2417,8 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       pendingBubbleIds = pendingBubbleIds.filter((id) => id !== optimistic.id);
       rerenderTranscript();
       renderStatus();
+      // After the text is back: a paused composer stays up only while it holds some.
+      renderPanelBody();
       console.warn('siyahtus widget: send failed', error);
     } finally {
       state.sending = false;
@@ -2564,7 +2593,8 @@ export function mount(doc: Document = document, win: Window = window): () => voi
   }
 
   function renderSendButton(): void {
-    ui.send.disabled = state.closed || state.sending || sendPaused || connectionLost;
+    ui.send.disabled =
+      state.closed || state.sending || sendPaused || connectionLost || state.readOnly === true;
   }
 
   // --- Realtime (FR-MOD-11.6) ----------------------------------------------

@@ -16994,6 +16994,15 @@ components:
             owner (`queue` reads `human` while anyone accepts chats, else
             `none`); without one, `ai` when an AI would answer a new chat,
             else `human` while anyone accepts chats, else `none`.
+        read_only:
+          type: boolean
+          description: |
+            Whether the workspace is read-only — its trial or subscription has
+            ended (ADR-10) — so every message the visitor sends would be
+            refused with 402 `license_expired`. The widget then says so before
+            the visitor types, instead of offering a pre-chat form, the
+            offline form or a composer. The conversation so far stays
+            readable.
         customer:
           type: object
           required: [id]

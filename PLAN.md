@@ -7291,13 +7291,13 @@ _Önceki maddeler: `docs/archive/plan-kanit/PLAN-kanit-arsiv-2026-10-14.md` (`##
 
 #### K10.2 — 10.2 · 14 günlük trial mantığı (rozet + kısıtlama)
 
-- ⚠ Kabul edilen sınır: `/auth/me` oturum başına bir kez okunur; deneme oturum ortasında biterse ajan şeridi yenilenene kadar yalnız 402 cümlesiyle öğrenir.
-
 - ✅ tm 382 · durum makinesi `trialing → active → past_due → read_only`: `past_due` yazılabilir ek süre (önceden salt-okuma sayılıyordu), `billing_dunning` işi kartla ödenmiş yenilemeyi 1/3/7. gün yeniden dener, son deneme de başarısızsa `read_only`; her yoldan ödeme `active`'e döndürür, her geçiş denetimde · `apps/api/src/services/billing/metering.ts` (`trialState`), `stripe-payments.ts` (`BillingDunning`), `payment-methods.ts` · int `billing-payments.test.ts` (dunning 3, salt-okuma geri dönüşü 1) · commit tm 382 · §D431
 
 - ✅ tm 384 · BL-03 abonelik iptali: kurucu dönem sonunda iptal eder (neden + çalışma alanı adıyla onay), dönem bitene kadar geri alır; dönem sonunda abonelik `canceled` + lisans `read_only` (okuma ve dışa aktarma 30 gün), sonra lisans `canceled`; silme saklama ayarına göre retention süpürmesinde; yönetici 403 · `apps/api/src/services/billing/subscription-cancel.ts`, `routes/billing-cancel.ts`, migration `20261218090000_subscription_cancel` · int `subscription-cancel.test.ts` (10), web `CancelSubscription.test.tsx` (4), e2e `subscription-cancel.spec.ts` (1) · commit tm 384 · §D435
 
-_Önceki maddeler: `docs/archive/plan-kanit/PLAN-kanit-arsiv-2026-10-14.md` (`#### K10.2`)_
+- ✅ tm 406 · widget deneme bitince ziyaretçiye yazmadan önce söyler: `GET /customer/chat` `read_only` (`routes/customer.ts`, `trialState`), widget pre-chat/çevrimdışı/boş composer'ı gizler, `error.readOnly` (8 dil) iletişim yolu der, yazılmış metin composer'da kalır, Send tutulur (`widget.ts` `renderPanelBody`/`renderStatus`) · `widget-read-only.test.ts` (4) · `widget.readOnly.test.ts` (8) · e2e `trial-expired.spec.ts` (+1) · commit bkz. git log (tm 406)
+
+_Önceki maddeler: `docs/archive/plan-kanit/PLAN-kanit-arsiv-2026-10-14.md`, `PLAN-kanit-arsiv-2026-11.md` (`#### K10.2`)_
 
 #### K11.1 — 11.1 · Launcher bubble + unread rozeti
 

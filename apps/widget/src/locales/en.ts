@@ -20,7 +20,8 @@ export const en: Record<string, string> = {
   'error.uploadTooLarge': 'That file is too large to attach.',
   'error.uploadTooLargeMax': 'That file is too large. The limit is {max}.',
   'error.uploadType': "That type of file can't be attached.",
-  'error.readOnly': "This conversation can't receive new messages right now.",
+  'error.readOnly':
+    "This conversation can't receive new messages right now. Please contact us another way, or try again later.",
   'attach.label': 'Attach a file',
   'attach.remove': 'Remove attachment',
   'emoji.trigger': 'Insert emoji',

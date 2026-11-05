@@ -14,9 +14,51 @@
  * never the database), so a signup in this file could only ever be a live,
  * fourteen-day-fresh trial, and proving read-only would mean waiting for it.
  */
-import { expect, OVERDUE_OWNER, signInAs, test } from './fixtures.js';
+import { API_BASE, expect, OVERDUE_OWNER, signInAs, test, widgetFrame } from './fixtures.js';
 
 test.describe('a trial past its end date (FR-MOD-10.2)', () => {
+  // First on purpose: the next test buys a plan, and the workspace is writable after it.
+  test('the widget says the conversation is paused before the visitor types (tm 406)', async ({
+    page,
+    request,
+  }) => {
+    const login = await request.post(`${API_BASE}/auth/login`, {
+      data: { email: OVERDUE_OWNER.email, password: OVERDUE_OWNER.password },
+    });
+    expect(login.ok(), `login failed: ${login.status()}`).toBe(true);
+    const { memberships } = (await login.json()) as {
+      memberships: Array<{ organization_id: string; organization_name: string }>;
+    };
+    const overdue = memberships.find((m) =>
+      m.organization_name.startsWith(OVERDUE_OWNER.orgPrefix),
+    );
+    expect(overdue, 'seeded Overdue tenant not found').toBeTruthy();
+
+    const polled = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/customer/chat') && response.request().method() === 'GET',
+    );
+    // The host its seed trusts (`seedOverdueTrialWorkspace`).
+    await page.goto(
+      `http://overdue-outfitters.localhost:5174/demo.html?organization_id=${overdue!.organization_id}`,
+    );
+    const frame = widgetFrame(page);
+    await frame.getByRole('button', { name: 'Open chat' }).click();
+    expect(((await (await polled).json()) as { read_only: boolean }).read_only).toBe(true);
+
+    // The line says why and where to go instead, and no door leads to a 402:
+    // no pre-chat form, no offline form, no composer.
+    await expect(
+      frame.getByRole('status').filter({ hasText: /contact us another way/ }),
+    ).toHaveText(
+      "This conversation can't receive new messages right now. Please contact us another way, or try again later.",
+    );
+    await expect(frame.getByRole('button', { name: 'Start chat' })).toHaveCount(0);
+    await expect(frame.getByRole('textbox', { name: 'Message', exact: true })).toBeHidden();
+    await expect(frame.getByRole('textbox', { name: 'Your message' })).toBeHidden();
+    await page.screenshot({ path: 'kanit/406-widget-trial-ended.png', fullPage: true });
+  });
+
   test('shows read-only everywhere, refuses a write, and a plan plus a card opens it again', async ({
     page,
   }) => {

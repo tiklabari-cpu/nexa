@@ -43,3 +43,7 @@ Canlı `PLAN.md` § K bloklarından taşınan eski kanıt maddeleri (CONVENTIONS
 #### KS8 — S8 · Rate limiting
 
 - ✅ tm 339.1 · GV-01 1/3: üye başına günlük AI turu (varsayılan 40, 0 = kapalı) — tek ifadeli artır-ve-denetle, 41. turda sabit cümle + insan + ajan notu + `cap_reached`/`customer`; ayar `PATCH /settings/security` · `apps/api/src/services/ai/customer-ai-quota.ts:65` · `ai-responder.ts` (üye iddiası, `#capNote`) · migration `20261024100000_ai_customer_daily_usage` · `test/integration/ai-customer-quota.test.ts` (9) · `feat/abuse-quota` · §D352
+
+#### K10.2 — 10.2 · 14 günlük trial mantığı (rozet + kısıtlama)
+
+- ⚠ Kabul edilen sınır: `/auth/me` oturum başına bir kez okunur; deneme oturum ortasında biterse ajan şeridi yenilenene kadar yalnız 402 cümlesiyle öğrenir.

@@ -20,7 +20,8 @@ export const tr: Record<string, string> = {
   'error.uploadTooLarge': 'Bu dosya eklenemeyecek kadar büyük.',
   'error.uploadTooLargeMax': 'Bu dosya çok büyük. Sınır: {max}.',
   'error.uploadType': 'Bu türde dosya eklenemez.',
-  'error.readOnly': 'Bu görüşme şu anda yeni mesaj alamıyor.',
+  'error.readOnly':
+    'Bu görüşme şu anda yeni mesaj alamıyor. Lütfen bize başka bir yoldan ulaşın ya da daha sonra tekrar deneyin.',
   'attach.label': 'Dosya ekle',
   'attach.remove': 'Eki kaldır',
   'emoji.trigger': 'Emoji ekle',

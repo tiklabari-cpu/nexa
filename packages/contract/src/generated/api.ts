@@ -25870,6 +25870,15 @@ export interface components {
        * @enum {string}
        */
       answered_by: 'human' | 'ai' | 'none';
+      /**
+       * @description Whether the workspace is read-only — its trial or subscription has
+       *     ended (ADR-10) — so every message the visitor sends would be
+       *     refused with 402 `license_expired`. The widget then says so before
+       *     the visitor types, instead of offering a pre-chat form, the
+       *     offline form or a composer. The conversation so far stays
+       *     readable.
+       */
+      read_only?: boolean;
       customer: {
         /** Format: uuid */
         id: string;

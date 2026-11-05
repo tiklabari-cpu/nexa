@@ -16339,10 +16339,10 @@
         "description": "Pilot denemesi bitmiş (read_only) bir lisansta widget launcher + pre-chat formu normal görünüyor; ziyaretçi gönderince mesaj 402 ile reddediliyor ve yalnız \"This conversation can't receive new messages right now.\" çıkıyor. Mesaj kayboluyor, iletişim yolu yok.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-04/05 tur 2 kapsamlı test koşusu (main @ 86ee661e; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT:\n- `trialState()` `apps/api/src/services/billing/metering.ts:218`: `status='trialing'` ve `trial_ends_at <= now()` → `read_only`; kapı `apps/api/src/plugins/license-gate.ts` (pilotta `reason: pilot_trial_ended`).\n- Yeniden üretim: kendi workspace'inde `UPDATE licenses SET trial_ends_at = now() - interval '1 hour' WHERE id = <id> AND status = 'trialing';` → widget formu doldur/gönder → `POST /customer/chat/events` 402.\n- Panel tarafı doğru: owner bandı \"Your pilot trial has ended — to continue, contact …\" (K6 karşılanıyor). Sorun yalnız widget.\n\nYAPILACAK: ziyaretçi metin yazmadan ÖNCE durumu bilsin. Seçenekler (en küçüğünü seç, kararını HANDOFF'a yaz): (a) widget config/session yanıtında lisansın yazmaya kapalı olduğu bilgisi → widget pre-chat/composer yerine çevrimdışı/iletişim ekranı gösterir (mevcut çevrimdışı/offline akışı varsa onu yeniden kullan); (b) en azından 402 sonrası ziyaretçinin yazdığı metin korunur ve iletişim yolu (varsa workspace iletişim e-postası, yoksa genel nazik metin) gösterilir. Metin 8 dilde (widget i18n parity). Kontrat değişirse contract-first sırası (MASTER-PROMPT).\n\nTUZAK: widget bundle bütçesi — 2026-11-04 ölçümü 64,562 / 66,304 B (1,742 B pay); memory widget-bundle-budget-and-css-minify. Yeni widget metni = 8 dil + glossary (memory web-glossary-and-plural-catalogue-traps). Bir OpenAPI alanı/yolu eklenirse memory openapi-path-breaks-mobile-parity-count.\n\nKAPSAM DIŞI: panel bandı, deneme süresi uzatma, faturalama.",
         "testStrategy": "api entegrasyon: süresi geçmiş deneme lisansında widget config/session yanıtı kapalı durumu bildirir (seçenek a) ya da 402 gövdesi tutarlı. Widget birim: kapalı durumda composer yerine iletişim ekranı; metin korunur. e2e: deneme bitmiş lisansta widget aç → iletişim ekranı görünür, ziyaretçi mesajı kaybolmaz. bundle-size.test.ts yeşil. DoD: CONVENTIONS §1.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-11-05T15:14:38.858Z",
+        "updatedAt": "2026-11-05T16:35:39.389Z",
         "subtasks": []
       },
       {
@@ -16468,9 +16468,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-05T15:14:38.859Z",
+      "lastModified": "2026-11-05T16:35:39.389Z",
       "taskCount": 416,
-      "completedCount": 403,
+      "completedCount": 404,
       "tags": [
         "master"
       ]

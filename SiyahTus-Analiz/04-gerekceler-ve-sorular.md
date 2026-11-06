@@ -70,14 +70,14 @@ Aşağıdaki kararlar birçok maddeyi etkiliyor. Kodlamaya başlamadan önce bun
 | K46 | **Pilot geri bildirim kanalı** (2026-11-06) | tm 478 | Panel menüsünde destek adresine mailto ya da basit form | ✅ Öneri onaylandı — mailto (#478) |
 | K47 | **Mock ödeme / mock virüs tarayıcısı production'da** (2026-11-06; F32, F21) | tm 442, 433 | Yalnız uyarı (boot engeli yok) | ✅ Öneri onaylandı |
 | K48 | **Pilotta deneme süresi** (2026-11-06; NY-33) | tm 474 | Pilot env şablonunda `TRIAL_DAYS` örn. 90; kod değişmez | ✅ Öneri onaylandı — şablon 90 |
-| K49 | **Ekip Lideri varsayılanında `ai.manage` açılsın mı?** (2026-11-06) | RL-03, AI-20, tm 476 | Hayır | ✅ **Evet:** Ekip Lideri AI yapılandırmasını hazırlar ve onaya gönderir; AI-20 sürüm yayını Yönetici'de kalır — #476. ⏳ Alt soru açık: aynı kapsam kural botu ve bilgi tabanı gibi canlıya yazan ekranları da açıyor |
+| K49 | **Ekip Lideri varsayılanında `ai.manage` açılsın mı?** (2026-11-06) | RL-03, AI-20, tm 476 | Hayır | ✅ **Evet:** Ekip Lideri AI yapılandırmasını hazırlar ve onaya gönderir; AI-20 sürüm yayını Yönetici'de kalır — #476. ✅ Alt soru (2026-11-06) **Evet, hepsi:** aynı kapsam AI taslağını, canlıya yazan kural botunu ve bilgi tabanı ekranlarını da Ekip Lideri'ne açar; kapsam bölünmez |
 | K50 | **Ticari/hukuki konular** (2026-11-06) | — | Aşama 2 | ✅ Öneri onaylandı; görev yok |
 
 > **Karar kaydı durumu (2026-10-14):** K1–K27'nin hepsi cevaplandı (K17–K27 görev planlama turunda eklendi; görev eşlemesi [07-gorev-plani.md](07-gorev-plani.md)). K4, K9, K13, K15, K16, K22, K25 ve K26 varsayılandan farklı ya da daha geniş cevaplandı. Bunların hangi maddeleri nasıl değiştirdiği hemen aşağıdaki "Kararların maddelere etkisi" bölümünde yazıyor. Uygulayıcı, maddelerin içindeki varsayılanlar yerine bu bölümü esas alır.
 >
 > **Güncelleme (2026-11-03):** K28 ve K29 eklendi. #388 ve #379 deferred'dan pending'e alındı; #322 ve #378 deferred kalır.
 >
-> **Güncelleme (2026-11-06):** K30–K50 eklendi (tm 417 önizlemesi ve 2026-11-06 denetimi sahip cevapları). K30, K32, K38, K45 ve K49 varsayılandan farklı cevaplandı; etkileri aşağıda. K39 (pilot dışı dosya paylaşımı varsayılanı) cevabı çelişkili olduğu için açık; görev yazılmadı. K49'un kapsam alt sorusu açık. #418 yeniden yazıldı (PILOT-UPLOADS-PERSIST); #415 deferred, yerine #477 (deferred epik); #458/#459 pending; yeni görevler #475–#478.
+> **Güncelleme (2026-11-06):** K30–K50 eklendi (tm 417 önizlemesi ve 2026-11-06 denetimi sahip cevapları). K30, K32, K38, K45 ve K49 varsayılandan farklı cevaplandı; etkileri aşağıda. K39 (pilot dışı dosya paylaşımı varsayılanı) cevabı çelişkili olduğu için açık; görev yazılmadı. K49'un kapsam alt sorusu 2026-11-06'da "Evet, hepsi" diye cevaplandı (kural botu + bilgi tabanı dahil; kapsam bölme görevi yok). #418 yeniden yazıldı (PILOT-UPLOADS-PERSIST); #415 deferred, yerine #477 (deferred epik); #458/#459 pending; yeni görevler #475–#478.
 
 ### Kararların maddelere etkisi
 
@@ -203,7 +203,7 @@ Aşağıdaki kararlar birçok maddeyi etkiliyor. Kodlamaya başlamadan önce bun
 **K49: Ekip Lideri varsayılanında `ai.manage` açık (2026-11-06)**
 - **Etkilediği maddeler:** RL-03 (soru 2'nin cevabı değişmez: Ekip Lideri hazırlar, Yönetici yayınlar), AI-20
 - Ekip Lideri rolünün varsayılan yetenekleri `ai.manage` içerir; Kurucu matriste kapatabilir. AI-20 sürüm yayını (`ai.config.publish`), geri alma ve AI duraklatma Yönetici'de kalır. Kod varsayılanı olduğu için mevcut workspace'lerde de geçerli olur (matriste 'kapalı' satırı olanlar hariç). #476.
-- **Açık alt soru:** `ai.manage`'in açtığı kapsam (`agents-bot--all:rw`) kural botu ve bilgi tabanı gibi doğrudan canlıya yazan ekranları da açıyor. #476 bunu değiştirmez; sahip "hayır" derse kapsamı bölen ayrı görev yazılır.
+- **Alt soru cevabı (2026-11-06): Evet, hepsi.** `ai.manage`'in açtığı kapsamın (`agents-bot--all:rw`) tamamı Ekip Lideri'ne açılır: AI taslağı, doğrudan canlıya yazan kural botu ve bilgi tabanı ekranları. Kapsamı bölen görev yazılmaz. AI sürüm yayını Yönetici'de kalır. #476.
 
 **K17–K50'nin görev karşılıkları:** [07-gorev-plani.md](07-gorev-plani.md) (Task Master #269–#388) ve 2026-11-06 turu (#415, #417–#478).
 

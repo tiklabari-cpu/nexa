@@ -16411,10 +16411,10 @@
         "description": "Widget tr iken boş zorunlu alanda balon \"Please fill out this field.\" (tarayıcı dili) gösteriyor; `validationMessage` anında \"Lütfen bu alanı doldurun.\".",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-04/05 tur 2 kapsamlı test koşusu (main @ 86ee661e; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT: `complain()` (`apps/widget/src/widget.ts` ~3311) `setCustomValidity(msg); reportValidity(); setCustomValidity('')` — Chromium balonu canlı `validationMessage`'ı gösterir, temizlenince tarayıcının yerel metnine döner (koddaki \"balloon keeps the text\" varsayımı Chromium'da tutmuyor).\n\nYAPILACAK: özel geçerliliği hemen temizleme; alanın bir sonraki `input`/`change` olayında temizle. Ya da yerel balon yerine widget'ın kendi satır içi hata metnini kullan (erişilebilir: `aria-invalid` + `aria-describedby`). Küçük olanı seç.\n\nTUZAK: widget bundle bütçesi 1,742 B pay (memory widget-bundle-budget-and-css-minify); widget test fetch mock'ları (memory widget-test-fetch-mocks-share-objects).",
         "testStrategy": "Widget birim: complain sonrası alanın validationMessage'ı widget dilinde kalır, kullanıcı yazınca temizlenir. e2e (Chromium, tarayıcı dili en, widget tr): boş gönderimde alanın validationMessage'ı Türkçe. bundle-size.test.ts yeşil. DoD: CONVENTIONS §1.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
-        "updatedAt": "2026-11-05T15:01:40.280Z",
+        "updatedAt": "2026-11-06T02:16:45.998Z",
         "subtasks": []
       },
       {
@@ -16468,9 +16468,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-06T00:19:31.544Z",
+      "lastModified": "2026-11-06T02:16:45.999Z",
       "taskCount": 416,
-      "completedCount": 409,
+      "completedCount": 410,
       "tags": [
         "master"
       ]

@@ -16459,18 +16459,18 @@
         "description": "Düşük öncelikli doküman/yorum sapmaları: rapor-1/2'de 11 kırık görsel linki, prd-uyum-denetimi.md'de olmayan dosyaya link, widget src'de bayat \"50 KB\" yorumları, production-checklist §9'da bayat satır, `node --test scripts/loop` dizin argümanıyla exit 1.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-04/05 tur 2 kapsamlı test koşusu (main @ 86ee661e; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT:\n- `rapor-1-fonksiyonel.md:613,744,1568,1624,1760,1859…` (9) ve rapor-2 (2) `gorseller/fonksiyonel/*.jpg`, `gorseller/teknik/*.jpg` gösteriyor, dosyalar o yolda yok.\n- `prd-uyum-denetimi.md` → `apps/api/src/services/ai/readiness.ts` (dosya yok).\n- widget `src/api.ts:5`, `emoji.ts:7`, `i18n.ts:5`, `socket.ts:13`, `widget.ts:5`, `widget.ts:3936` hâlâ \"50 KB\" diyor; gerçek bütçe `vite.config.ts:18` \"loader 8 KB, everything a page downloads 64.75 KB\".\n- `docs/production-checklist.md` §9 Known risks: \"Manual activation writes no audit entry…\" bayat (audit artık yazılıyor).\n- `node --test scripts/loop` (dizin argümanı) exit 1; glob ile çalışıyor.\n\nYAPILACAK: linkleri mevcut görsel yollarına ya da kaldırılmış görsel için açıklamaya çevir. SINIR: referans .md/görseller TAŞINMAZ (CLAUDE.md) — yalnız link metni düzelir; görsel hiç yoksa linki bırak ve not ekle. Yorumları güncelle. Checklist satırını gerçeğe çevir. scripts/loop test komutunu (package.json script ya da CONVENTIONS) çalışan biçime çek.",
         "testStrategy": "Markdown link denetimi (docs/archive hariç) bu 12 linki kırık göstermez; `pnpm format:check` yeşil; scripts/loop testi belgelenen komutla exit 0. DoD: CONVENTIONS §1.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
-        "updatedAt": "2026-11-06T05:29:57.481Z",
+        "updatedAt": "2026-11-06T05:36:08.004Z",
         "subtasks": []
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-06T05:29:57.482Z",
+      "lastModified": "2026-11-06T05:36:08.004Z",
       "taskCount": 416,
-      "completedCount": 412,
+      "completedCount": 413,
       "tags": [
         "master"
       ]

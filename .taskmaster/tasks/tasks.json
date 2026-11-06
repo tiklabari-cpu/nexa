@@ -16423,10 +16423,10 @@
         "description": "axe: koyu tema `/app/playbook?view=history` 2.81:1 kontrast ihlali. tr arayüzde `/app/apps` 15 uygulama açıklaması, `/app/settings/mcp` 3 araç açıklaması ve AI ajanı önizlemesi örnek yanıtı İngilizce.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-04/05 tur 2 kapsamlı test koşusu (main @ 86ee661e; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT:\n- axe color-contrast 2.81:1 — `.self-start`, #4a3fd6 on #09090c, 11 px (AI ajanı oluşturulunca geçmişte görünen rozet/link). Memory dark-theme-needs-content-brand-text ile aynı desen: `text-brand-600` yerine `text-content-brand`.\n- tr: `/app/apps` 15 açıklama İngilizce (+1 tr aria), `/app/settings/mcp` 3 araç açıklaması İngilizce, AI önizleme \"ÖRNEK YANIT: Standard delivery takes 3 to 5 working days…\".\n\nYAPILACAK: kontrastı token ile düzelt. Açıklamaların kaynağını bul: katalog metni web i18n'e taşınabiliyorsa taşı (8 dil); sunucudan geliyorsa (uygulama/MCP kataloğu, örnek yanıt) dil başına metin ya da istemci tarafı anahtar eşlemesi — küçük olanı seç, kararı HANDOFF'a yaz. Örnek yanıt seed/fixture metniyse memory ai-question-text-is-load-bearing ve guardrails-check-every-ai-reply'ı oku.\n\nTUZAK: memory new-web-component-must-be-registered-for-i18n, web-glossary-and-plural-catalogue-traps, panel-copy-cannot-carry-internal-codes.",
         "testStrategy": "web birim/i18n parity yeşil; axe e2e koyu playbook history 0 ihlal; tr ekranında açıklamalar Türkçe (e2e ya da birim). DoD: CONVENTIONS §1.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
-        "updatedAt": "2026-11-06T02:17:28.851Z",
+        "updatedAt": "2026-11-06T03:39:35.056Z",
         "subtasks": []
       },
       {
@@ -16468,9 +16468,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-06T02:17:28.851Z",
+      "lastModified": "2026-11-06T03:39:35.056Z",
       "taskCount": 416,
-      "completedCount": 410,
+      "completedCount": 411,
       "tags": [
         "master"
       ]

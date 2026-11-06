@@ -16435,10 +16435,10 @@
         "description": "Ürün hatası olmayan dört test kırmızısı/flake: entegrasyon gate'inde member-identity 2 kırmızı; e2e --shards=2'de ai-multilingual:28 ve customers:53; k6 rtm.js sync_recovered başka trafik varken kırmızı.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-04/05 tur 2 kapsamlı test koşusu (main @ 86ee661e; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT:\n1. `apps/api/test/**/member-identity.test.ts:213` ve `:293` gate'te RED (`expected { days: 7, verified: 1 } to match { verified: 0 }`; `expected 3 to be 2`), solo 49/49. `IdentityLedger` (`apps/api/src/services/auth/member-identity.ts`) günlük sayaçları Redis'te licenseId ile anahtarlıyor; resetDatabase id'leri yeniden kullanıyor, Redis anahtarları silinmiyor (memory reset-database-reuses-license-ids).\n2. `apps/e2e/**/ai-agent.spec.ts:42-63` persona `Tone` alanını marker'a çevirip geri almıyor → aynı shard'da sonra koşan `ai-multilingual.spec.ts:28` \"friendly\" tonun Rusça selamını bulamıyor (`--shards=1 ai-agent ai-multilingual` → RED, deterministik).\n3. `customers.spec.ts:53` \"filters to leads\" — shard-0 öneki (a11y…customers, 21 dosya) `--shards=1` ile RED, seed lead'leri listede yok (\"19 / 19 shown\"); tek suçlu spec izole edilemedi (yarı önekler ve ikililer yeşil). Birden çok spec'in birikimli durumu: seed müşterilerini birleştiren/silen ya da lead bayrağını değiştiren akışları ara.\n4. `apps/load/scenarios/rtm.js` `track()` `state.lastEventId`'yi chat filtresi olmadan her `incoming_event`'ten alıyor; widget trafiği yanında reconnect replay 20/20 FAIL, yalnız koşunca yeşil.\n\nYAPILACAK: (1) test teardown'ında ilgili Redis anahtarlarını temizle ya da lisans başına benzersiz anahtar öneki; (2) ai-agent.spec Tone'u geri alsın (memory mutation-restore-from-snapshot-not-head); (3) suçluyu bisect ile bul ve o spec'i temizlet, bulunamazsa customers.spec kendi lead verisini oluştursun; (4) cursor'ı yalnız izlenen chat'in olaylarından al. Ürün koduna dokunma.",
         "testStrategy": "`pnpm test:integration` api tam koşu (`--force`) member-identity yeşil; e2e `--shards=2` iki kez yeşil; k6 rtm.js widget senaryosuyla birlikte yeşil (k6: %LOCALAPPDATA%\\nexa-tools\\k6-v2.2.0-windows-amd64\\k6.exe). DoD: CONVENTIONS §1.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "low",
-        "updatedAt": "2026-11-05T15:01:40.280Z",
+        "updatedAt": "2026-11-06T03:40:28.618Z",
         "subtasks": []
       },
       {
@@ -16468,7 +16468,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-06T03:39:35.056Z",
+      "lastModified": "2026-11-06T03:40:28.618Z",
       "taskCount": 416,
       "completedCount": 411,
       "tags": [

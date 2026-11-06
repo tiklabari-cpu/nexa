@@ -7,6 +7,7 @@
  * crawls a URL into a searchable source — all in a real browser against the
  * real API.
  */
+import type { Page } from '@playwright/test';
 import {
   expect,
   openWidget,
@@ -15,6 +16,31 @@ import {
   visitorSends,
   widgetFrame,
 } from './fixtures.js';
+
+/**
+ * The persona's Tone is shared state: the database outlives a spec, and
+ * `ai-multilingual.spec` reads the seeded "friendly" tone (a friendly agent
+ * greets in the visitor's language). A spec that edits it puts it back, through
+ * the same form, in `finally` — the specs that change it do not decide who runs
+ * after them (tm 414).
+ */
+async function readTone(page: Page): Promise<string> {
+  const tone = page.getByLabel('Tone');
+  await expect(tone).not.toHaveValue('');
+  return tone.inputValue();
+}
+
+async function putToneBack(page: Page, seededTone: string): Promise<void> {
+  if (page.isClosed()) return;
+  await page.goto('/app/playbook?view=general');
+  const tone = page.getByLabel('Tone');
+  await expect(tone).not.toHaveValue('');
+  if ((await tone.inputValue()) === seededTone) return;
+  await tone.fill(seededTone);
+  const save = page.getByRole('button', { name: 'Save profile' });
+  await save.click();
+  await expect(save).toBeDisabled();
+}
 
 test.describe('AI Agent (MOD-06)', () => {
   test('switches between the four tabs, each showing its own surface', async ({ agentPage }) => {
@@ -60,17 +86,22 @@ test.describe('AI Agent (MOD-06)', () => {
     // never collides with widget.spec's persona-name assertion.
     const marker = `professional-${Date.now()}`;
     const tone = agentPage.getByLabel('Tone');
-    await tone.fill(marker);
-    await save.click();
-    // Save settles back to disabled once the PATCH persists and the agent refetches.
-    await expect(save).toBeDisabled();
+    const seededTone = await readTone(agentPage);
+    try {
+      await tone.fill(marker);
+      await save.click();
+      // Save settles back to disabled once the PATCH persists and the agent refetches.
+      await expect(save).toBeDisabled();
 
-    // Reload and reopen General settings — the edit round-tripped through the API.
-    await agentPage.reload();
-    await tabs.getByRole('tab', { name: 'General settings' }).click();
-    await expect(agentPage.getByLabel('Tone')).toHaveValue(marker);
+      // Reload and reopen General settings — the edit round-tripped through the API.
+      await agentPage.reload();
+      await tabs.getByRole('tab', { name: 'General settings' }).click();
+      await expect(agentPage.getByLabel('Tone')).toHaveValue(marker);
 
-    await agentPage.screenshot({ path: 'kanit/33-ai-agent-profile.png', fullPage: true });
+      await agentPage.screenshot({ path: 'kanit/33-ai-agent-profile.png', fullPage: true });
+    } finally {
+      await putToneBack(agentPage, seededTone);
+    }
   });
 
   test('a saved tone is in the change history with what it was and what it became (AI-21)', async ({
@@ -79,18 +110,23 @@ test.describe('AI Agent (MOD-06)', () => {
     await agentPage.goto('/app/playbook?view=general');
     const tabs = agentPage.getByRole('tablist', { name: 'AI Agent' });
     const marker = `calm-${Date.now()}`;
-    await agentPage.getByLabel('Tone').fill(marker);
-    const save = agentPage.getByRole('button', { name: 'Save profile' });
-    await save.click();
-    await expect(save).toBeDisabled();
+    const seededTone = await readTone(agentPage);
+    try {
+      await agentPage.getByLabel('Tone').fill(marker);
+      const save = agentPage.getByRole('button', { name: 'Save profile' });
+      await save.click();
+      await expect(save).toBeDisabled();
 
-    await tabs.getByRole('tab', { name: 'History' }).click();
-    const history = agentPage.getByRole('region', { name: 'Change history' });
-    const row = history.getByTestId('ai-history-row').first();
-    await expect(row).toContainText('Changed Profile · Ada');
-    await expect(row).toContainText('fields: tone');
-    await row.getByRole('button', { name: 'Show the change' }).click();
-    await expect(row.getByTestId('change-diff')).toContainText(marker);
+      await tabs.getByRole('tab', { name: 'History' }).click();
+      const history = agentPage.getByRole('region', { name: 'Change history' });
+      const row = history.getByTestId('ai-history-row').first();
+      await expect(row).toContainText('Changed Profile · Ada');
+      await expect(row).toContainText('fields: tone');
+      await row.getByRole('button', { name: 'Show the change' }).click();
+      await expect(row.getByTestId('change-diff')).toContainText(marker);
+    } finally {
+      await putToneBack(agentPage, seededTone);
+    }
   });
 
   test('adds a website knowledge source by crawling a URL (FR-MOD-06.3.2)', async ({

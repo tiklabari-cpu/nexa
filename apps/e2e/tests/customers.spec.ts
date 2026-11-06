@@ -50,12 +50,45 @@ test.describe('customers', () => {
     await expect(agentPage.getByText('Nobody matches that search')).toBeVisible();
   });
 
-  test('filters to leads', async ({ agentPage }) => {
+  test('filters to leads', async ({ browser, agentPage, organizationId }) => {
+    // A lead this test makes itself, not the seeded Alex: the shared workspace is
+    // written to by every spec before this one in the shard, and which of them a
+    // shard holds changes with the file timings — Alex was missing from the list
+    // on some splits and there for others (tm 414). A visitor who gives an email
+    // at the pre-chat form becomes a lead, which is the path that matters.
+    const stamp = Date.now().toString().slice(-6);
+    const leadName = `Lead Visitor ${stamp}`;
+    const visitorContext = await browser.newContext();
+    try {
+      const visitor = await visitorContext.newPage();
+      await openWidget(visitor, organizationId);
+      const recorded = visitor.waitForResponse(
+        (response) =>
+          response.url().includes('/customer/chat/events') &&
+          response.request().method() === 'POST' &&
+          response.ok(),
+      );
+      await introduceVisitor(widgetFrame(visitor), `Hello, this is ${leadName}`, {
+        name: leadName,
+        username: `lead_visitor_${stamp}`,
+        email: `lead-visitor-${stamp}@example.test`,
+      });
+      await recorded;
+    } finally {
+      await visitorContext.close();
+    }
+
     await agentPage.goto('/app/customers');
+    const search = agentPage.getByRole('searchbox', { name: 'Search customers' });
     await agentPage.getByRole('tab', { name: 'Leads' }).click();
 
     const table = agentPage.getByRole('table', { name: 'Customers' });
-    await expect(table.getByRole('row').filter({ hasText: 'Alex Moreau' })).toBeVisible();
+    await search.fill(leadName);
+    await expect(table.getByRole('row').filter({ hasText: leadName })).toBeVisible();
+
+    // The seeded Mira is a customer, not a lead: the segment keeps her out.
+    await search.fill('mira');
+    await expect(agentPage.getByText('Nobody matches that search')).toBeVisible();
     await expect(table.getByRole('row').filter({ hasText: 'Mira Haddad' })).toHaveCount(0);
   });
 

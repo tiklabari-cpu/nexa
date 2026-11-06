@@ -7532,3 +7532,7 @@ _Önceki maddeler: `docs/archive/plan-kanit/PLAN-kanit-arsiv-2026-10-14.md` (`##
 #### K413 — PANEL-DARK-CONTRAST-AND-TR-LEFTOVERS · Koyu geçmiş kontrastı + tr arayüzde İngilizce kalanlar (PRD satırı yok, damga değişmedi)
 
 - ✅ tm 413 · Playbook geçmişi bağlantısı `text-content-brand` (koyu 2.81:1 → axe 0); 103 uygulama kartı açıklaması, 4 MCP araç açıklaması ve AI ajanı önizleme örnek yanıtı web i18n'de en+tr (`translateOr`: anahtar yoksa API metni) · `apps/web/src/locales/{en,tr}/apps-catalog.ts`, `lib/i18n.ts`, `features/playbook/{History,ProfileForm}.tsx` · web `apps-catalog.test.ts` (3), `AppsMarketplace/McpConnection/ProfileForm.test` (+4), e2e `a11y.spec.ts` (+1 çift tema) · commit bkz. git log
+
+#### K414 — TEST-ISOLATION-ROUND2 · Tur 2 test izolasyonu (PRD satırı yok, damga değişmedi)
+
+- ✅ tm 414 · `ai-agent.spec.ts` iki Tone testi tohum tonunu `finally`'de geri yazar (`readTone`/`putToneBack`), `customers.spec.ts` "filters to leads" kendi lead'ini üretir, `rtm.js` cursor'ı yalnız izlenen chat'in olaylarından alır; member-identity sayaç temizliği tm 407'den vardı, karıştırılmış dosya sırasıyla mutantla doğrulandı · `apps/e2e/tests/ai-agent.spec.ts:20`, `customers.spec.ts:53`, `apps/load/scenarios/rtm.js:track` · e2e dört dosya birleşimi 20/20 ×2, k6 `rtm.js` widget trafiğiyle yeşil (eski kod 20/20 kırmızı) · `customers.spec:53` nedeni yeniden üretilemedi

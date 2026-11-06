@@ -218,7 +218,7 @@ async function connect(data, state) {
   let socket;
   try {
     socket = await openRtmSocket(url, {
-      onPush: (frame) => track(frame, state),
+      onPush: (frame) => track(frame, state, data.chatId),
       onDropped: (code) => {
         rtmSocketDropped.add(1);
         report(`socket dropped with close code ${code === null ? 'unknown' : code}`);
@@ -288,15 +288,20 @@ async function reconnect(data, state, socket) {
 }
 
 /** A push this run published, timed and counted. Anything else is ignored. */
-function track(frame, state) {
+function track(frame, state, chatId) {
   if (frame.action !== RTM_FANOUT_PUSH) return;
   const event = frame.payload && frame.payload.event;
   if (!event) return;
 
-  // The cursor follows every event on the chat, not only this suite's, so a
-  // reconnect asks `sync` for the right position even on a workspace where
-  // something else is also writing.
-  if (typeof event.id === 'string') state.lastEventId = event.id;
+  // The cursor follows every event on the chat this run publishes to — this
+  // suite's or anyone else's there — because `sync` is asked for that chat only
+  // (`cursors: { [chatId]: cursor }`). An event of another chat (a widget run
+  // beside this one writes to its own) is not a position in this chat's
+  // history: taken as the cursor it makes the replay empty and the reconnect
+  // check fail with nothing wrong in the gateway (tm 414).
+  if (typeof event.id === 'string' && frame.payload.chat_id === chatId) {
+    state.lastEventId = event.id;
+  }
 
   const sentAt = markerTimestamp(event.text);
   if (sentAt === null) return;

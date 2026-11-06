@@ -176,4 +176,21 @@ describe('McpConnection localisation (NFR-I18N2)', () => {
 
     expect(await screen.findByRole('region', { name: 'MCP sunucusu' })).toBeInTheDocument();
   });
+
+  it('writes the tool descriptions in Turkish (tm 413)', async () => {
+    stubFetch();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <McpConnection />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(
+      await screen.findByText(/Bu çalışma alanının taleplerini serbest metinle/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Bu çalışma alanının sohbetlerini listeleyin/)).toBeInTheDocument();
+    expect(screen.queryByText('Search tickets by free-text query.')).not.toBeInTheDocument();
+  });
 });

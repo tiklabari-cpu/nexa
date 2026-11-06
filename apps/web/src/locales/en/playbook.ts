@@ -748,6 +748,12 @@ export const playbook: Messages = {
   'playbook.profile.saving': 'Saving…',
   'playbook.profile.previewTitle': 'Preview',
   'playbook.profile.sampleReply': 'Sample reply',
+  'playbook.profile.previewPassage1':
+    'Standard delivery takes 3 to 5 working days. Tracking is emailed the moment a parcel is dispatched.',
+  'playbook.profile.previewPassage2':
+    'Returns are accepted within 30 days if the item is unused and in its original packaging.',
+  'playbook.profile.previewPassage3':
+    'Refunds are issued to the original payment method within 5 working days of receipt.',
   'playbook.profile.unnamedAssistant': 'Unnamed assistant',
   'playbook.profile.aiAssistant': 'AI assistant',
   'playbook.profile.online': 'Online',

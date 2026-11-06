@@ -275,7 +275,7 @@ function ChangeRow({
         type="button"
         aria-expanded={open}
         onClick={onOpen}
-        className="self-start text-2xs text-brand-600 hover:underline"
+        className="self-start text-2xs text-content-brand hover:underline"
       >
         {open ? t('playbook.history.hide') : t('playbook.history.show')}
       </button>

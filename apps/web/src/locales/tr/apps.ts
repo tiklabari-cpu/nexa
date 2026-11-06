@@ -1,4 +1,5 @@
 import type { Messages } from '../merge.js';
+import { appsCatalog } from './apps-catalog.js';
 
 /** Uygulama mağazası + Geliştirici portalı (I18N-k, tm 133.11). See the English file. */
 export const apps: Messages = {
@@ -313,4 +314,6 @@ export const apps: Messages = {
   'apps.developers.manifest.subscribeTitle': 'Abone ol / aboneliği kaldır',
   'apps.developers.manifest.subscribeDescription':
     'Bir REST Hooks entegrasyonunun bir aboneliği nerede kaydettiği ve kaldırdığı.',
+
+  ...appsCatalog,
 };

@@ -812,6 +812,14 @@ export const settings: Messages = {
   'settings.mcpConnection.examplePromptLabel': 'Example prompt',
   'settings.mcpConnection.examplePrompt': 'Find all tickets where customers ask about bulk orders',
   'settings.mcpConnection.availableToolsLabel': 'Available tools',
+  'settings.mcpConnection.tool.search_tickets':
+    'Search this workspace’s tickets by free-text query, optionally filtered by view.',
+  'settings.mcpConnection.tool.list_chats':
+    'List this workspace’s chats, optionally filtered by view.',
+  'settings.mcpConnection.tool.get_report':
+    'Fetch one of this workspace’s reports (overview, breakdown, ai-agent or reviews) for a date range.',
+  'settings.mcpConnection.tool.summarize_chat':
+    'Summarize a chat’s transcript. Read-only — does not file an internal note.',
   'settings.mcpConnection.empty.title': 'No tools published yet',
   'settings.mcpConnection.empty.description':
     'Tools appear here as they are connected to this server.',

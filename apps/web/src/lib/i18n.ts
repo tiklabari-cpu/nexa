@@ -188,6 +188,15 @@ export function useLocale(): { locale: Locale; setLocale: (locale: Locale) => vo
 export type TFunction = (key: string, params?: TranslateParams) => string;
 
 /**
+ * `t(key)` when the catalogue carries the key, otherwise `fallback`. For text the API sends
+ * in English (marketplace card and MCP tool descriptions): the panel translates the ones it
+ * knows and shows the API’s own text for any it does not, instead of the raw key.
+ */
+export function translateOr(t: TFunction, key: string, fallback: string): string {
+  return hasMessage('en', key) ? t(key) : fallback;
+}
+
+/**
  * A `t()` bound to the active locale. Subscribing here is what re-renders a
  * component when the agent switches languages.
  *

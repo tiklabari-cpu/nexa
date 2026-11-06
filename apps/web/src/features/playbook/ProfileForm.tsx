@@ -100,10 +100,10 @@ const ANSWER_LENGTH_LABEL_KEYS: Record<AnswerLength, string> = {
  * preview. Three passages, mirroring the seed's own "Delivery and returns"
  * knowledge base in shape, without depending on a workspace actually having one.
  */
-export const PERSONA_PREVIEW_PASSAGES = [
-  'Standard delivery takes 3 to 5 working days. Tracking is emailed the moment a parcel is dispatched.',
-  'Returns are accepted within 30 days if the item is unused and in its original packaging.',
-  'Refunds are issued to the original payment method within 5 working days of receipt.',
+export const PERSONA_PREVIEW_PASSAGE_KEYS = [
+  'playbook.profile.previewPassage1',
+  'playbook.profile.previewPassage2',
+  'playbook.profile.previewPassage3',
 ];
 
 export function ProfileForm({
@@ -730,7 +730,14 @@ function PersonaPreview({
   // to the first language the persona declares — the same fallback
   // `personaLanguageVerdict` uses when a message is too short to read.
   const answerLanguage = persona.languages.find(isPersonaLanguage) ?? null;
-  const sample = shapeAnswer(PERSONA_PREVIEW_PASSAGES, persona, { language: answerLanguage });
+  // The passages are catalogue text, so they follow the panel language (tm 413): a Turkish
+  // agent previewing a persona that answers in English would otherwise read English here.
+  // The tone opener follows the same language so the sample is not half and half.
+  const { locale } = useLocale();
+  const passages = PERSONA_PREVIEW_PASSAGE_KEYS.map((key) => t(key));
+  const sample = shapeAnswer(passages, persona, {
+    language: locale === 'tr' ? 'tr' : answerLanguage,
+  });
 
   return (
     <Card>

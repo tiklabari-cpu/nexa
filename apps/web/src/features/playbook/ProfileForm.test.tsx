@@ -9,6 +9,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readPersona, shapeAnswer } from '@siyahtus/types';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { translate } from '../../lib/i18n.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 import type { AiAgent } from './types.js';
 
@@ -19,7 +20,9 @@ vi.mock('../../lib/auth-store.js', async (importOriginal) => {
   return { ...actual, useApiClient: () => api };
 });
 
-const { ProfileForm, PERSONA_PREVIEW_PASSAGES } = await import('./ProfileForm.js');
+const { ProfileForm, PERSONA_PREVIEW_PASSAGE_KEYS } = await import('./ProfileForm.js');
+
+const PERSONA_PREVIEW_PASSAGES = PERSONA_PREVIEW_PASSAGE_KEYS.map((key) => translate('en', key));
 
 const AGENT: AiAgent = {
   id: 'agent-1',
@@ -356,6 +359,25 @@ describe('ProfileForm localisation (NFR-I18N2)', () => {
       'tr',
     );
     expect(screen.getByRole('button', { name: 'Profili kaydet' })).toBeInTheDocument();
+  });
+
+  it('writes the sample reply in Turkish too, even for an agent that answers in English (tm 413)', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <ProfileForm agent={{ ...AGENT, tone: null }} canEdit onSaved={() => {}} />
+      </QueryClientProvider>,
+      'tr',
+    );
+    const persona = readPersona({ tone: null, languages: ['en'], answerLength: 'short' });
+    const expected = shapeAnswer(
+      PERSONA_PREVIEW_PASSAGE_KEYS.map((key) => translate('tr', key)),
+      persona,
+      { language: 'tr' },
+    ).text;
+    expect(expected).toContain('Standart teslimat');
+    expect(screen.getByText(expected)).toBeInTheDocument();
+    expect(screen.queryByText(/Standard delivery/)).not.toBeInTheDocument();
   });
 });
 

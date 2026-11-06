@@ -1,4 +1,5 @@
 import type { Messages } from '../merge.js';
+import { appsCatalog } from './apps-catalog.js';
 
 /**
  * Apps marketplace + Developer portal (I18N-k, tm 133.11).
@@ -348,4 +349,6 @@ export const apps: Messages = {
   'apps.developers.manifest.subscribeTitle': 'Subscribe / unsubscribe',
   'apps.developers.manifest.subscribeDescription':
     'Where a REST Hooks integration registers and removes a subscription.',
+
+  ...appsCatalog,
 };

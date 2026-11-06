@@ -1029,6 +1029,48 @@ test.describe('WCAG 2.1 AA (axe)', () => {
       });
 
       /**
+       * The Playbook change history (tm 413). Its "Show the change" link was drawn in the
+       * fill colour (`text-brand-600`) and measured 2.81:1 on the dark theme. A fresh workspace
+       * has no changes, so the list is faked at the network edge for this page alone.
+       */
+      test('the playbook history has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.route('**/api/v1/ai/changes**', (route) =>
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              items: [
+                {
+                  id: '00000000-0000-4000-8000-0000000000c1',
+                  ai_agent_id: null,
+                  entity_type: 'ai_agent',
+                  entity_id: '00000000-0000-4000-8000-0000000000a1',
+                  entity_name: 'Ada',
+                  action: 'created',
+                  actor: { id: null, type: 'system', role: null, name: null },
+                  at: '2026-11-05T10:00:00.000Z',
+                  version_id: null,
+                  draft_revision: null,
+                  note: null,
+                  fields: [],
+                  diff: [],
+                },
+              ],
+              next_cursor: null,
+              visibility: 'all',
+            }),
+          }),
+        );
+        await agentPage.goto('/app/playbook?view=history');
+        await scanPanel(agentPage, 'Playbook history', theme, testInfo, async () => {
+          await expect(agentPage.getByRole('button', { name: 'Show the change' })).toBeVisible();
+        });
+      });
+
+      /**
        * The Knowledge tab, in its File state (FR-MOD-06.3.2).
        *
        * Not reachable from the scan above — Playbook opens on Skills, so the

@@ -14,7 +14,7 @@ import { useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { useApiClient } from '../../lib/auth-store.js';
-import { useTranslate } from '../../lib/i18n.js';
+import { translateOr, useTranslate } from '../../lib/i18n.js';
 
 interface McpToolDescriptor {
   name: string;
@@ -134,7 +134,13 @@ export function McpConnection(): ReactElement {
                     {manifest.data.tools.map((tool) => (
                       <li key={tool.name} className="flex flex-col gap-0.5 px-3 py-2">
                         <span className="font-mono text-sm">{tool.name}</span>
-                        <span className="text-2xs text-content-tertiary">{tool.description}</span>
+                        <span className="text-2xs text-content-tertiary">
+                          {translateOr(
+                            t,
+                            `settings.mcpConnection.tool.${tool.name}`,
+                            tool.description,
+                          )}
+                        </span>
                       </li>
                     ))}
                   </ul>

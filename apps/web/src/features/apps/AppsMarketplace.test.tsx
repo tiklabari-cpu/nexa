@@ -655,6 +655,43 @@ describe('AppsMarketplace localisation (NFR-I18N2)', () => {
     expect(screen.getByRole('heading', { name: 'Mağaza' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Bağlan' })).toBeInTheDocument();
   });
+
+  it('writes the card descriptions in Turkish, not the API’s English (tm 413)', async () => {
+    api.get.mockResolvedValue({ items: [notConnected, channelApp] });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <AppsMarketplace />
+        </MemoryRouter>
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(
+      await screen.findByText(/Sohbet ederken kişinin yaşam döngüsü aşamasını/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/WhatsApp mesajlarını yanıtlayın/)).toBeInTheDocument();
+    expect(screen.queryByText(/lifecycle stage/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Answer WhatsApp/)).not.toBeInTheDocument();
+  });
+
+  it('shows the API text for an app the panel has no translation for', async () => {
+    api.get.mockResolvedValue({
+      items: [{ ...notConnected, id: 'brand-new-app', description: 'A brand new thing.' }],
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <AppsMarketplace />
+        </MemoryRouter>
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(await screen.findByText('A brand new thing.')).toBeInTheDocument();
+  });
 });
 
 /**

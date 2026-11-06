@@ -806,6 +806,14 @@ export const settings: Messages = {
   'settings.mcpConnection.examplePrompt':
     'Toplu sipariş hakkında soran müşterilerin olduğu tüm talepleri bul',
   'settings.mcpConnection.availableToolsLabel': 'Kullanılabilir araçlar',
+  'settings.mcpConnection.tool.search_tickets':
+    'Bu çalışma alanının taleplerini serbest metinle arayın; isteğe bağlı olarak görünüme göre süzün.',
+  'settings.mcpConnection.tool.list_chats':
+    'Bu çalışma alanının sohbetlerini listeleyin; isteğe bağlı olarak görünüme göre süzün.',
+  'settings.mcpConnection.tool.get_report':
+    'Bu çalışma alanının raporlarından birini (genel bakış, döküm, yapay zekâ ajanı ya da değerlendirmeler) bir tarih aralığı için getirin.',
+  'settings.mcpConnection.tool.summarize_chat':
+    'Bir sohbetin dökümünü özetleyin. Salt okunur — iç not oluşturmaz.',
   'settings.mcpConnection.empty.title': 'Henüz araç yayımlanmadı',
   'settings.mcpConnection.empty.description': 'Araçlar bu sunucuya bağlandıkça burada görünür.',
 

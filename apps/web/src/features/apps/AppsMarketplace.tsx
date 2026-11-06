@@ -80,7 +80,7 @@ import { Modal } from '../../components/ui/index.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { formatDateTime } from '../../lib/format.js';
 import { FieldError, useForm } from '../../lib/form.js';
-import { useTranslate, type TFunction } from '../../lib/i18n.js';
+import { translateOr, useTranslate, type TFunction } from '../../lib/i18n.js';
 import { chunkIntoRows, columnsForWidth } from './app-grid.js';
 import { liveConnectErrorText } from './live-errors.js';
 
@@ -510,7 +510,9 @@ function ChannelAppCard({ app, t }: { app: AppListItem; t: TFunction }): ReactEl
 
         {/* Clamped: the row height is fixed, so a long description shortens
             rather than pushing the action out of its card. */}
-        <p className="line-clamp-3 flex-1 text-2xs text-content-secondary">{app.description}</p>
+        <p className="line-clamp-3 flex-1 text-2xs text-content-secondary">
+          {translateOr(t, `apps.catalog.${app.id}`, app.description)}
+        </p>
 
         <Link
           to={CHANNELS_HREF}
@@ -602,7 +604,9 @@ function DataAppCard({ app, t }: { app: AppListItem; t: TFunction }): ReactEleme
 
         {/* Clamped: the row height is fixed, so a long description shortens
             rather than pushing the action out of its card. */}
-        <p className="line-clamp-3 flex-1 text-2xs text-content-secondary">{app.description}</p>
+        <p className="line-clamp-3 flex-1 text-2xs text-content-secondary">
+          {translateOr(t, `apps.catalog.${app.id}`, app.description)}
+        </p>
 
         {app.installed ? (
           <div className="flex flex-col gap-1">

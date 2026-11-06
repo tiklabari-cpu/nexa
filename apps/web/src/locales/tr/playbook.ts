@@ -744,6 +744,12 @@ export const playbook: Messages = {
   'playbook.profile.saving': 'Kaydediliyor…',
   'playbook.profile.previewTitle': 'Önizleme',
   'playbook.profile.sampleReply': 'Örnek yanıt',
+  'playbook.profile.previewPassage1':
+    'Standart teslimat 3 ila 5 iş günü sürer. Takip bilgisi, paket yola çıktığı anda e-postayla gönderilir.',
+  'playbook.profile.previewPassage2':
+    'Ürün kullanılmamış ve orijinal ambalajındaysa 30 gün içinde iade kabul edilir.',
+  'playbook.profile.previewPassage3':
+    'Geri ödemeler, ürün elinize ulaştıktan sonra 5 iş günü içinde ilk ödeme yöntemine yapılır.',
   'playbook.profile.unnamedAssistant': 'Adsız asistan',
   'playbook.profile.aiAssistant': 'AI asistanı',
   'playbook.profile.online': 'Çevrimiçi',

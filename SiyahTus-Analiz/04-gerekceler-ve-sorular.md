@@ -51,10 +51,33 @@ Aşağıdaki kararlar birçok maddeyi etkiliyor. Kodlamaya başlamadan önce bun
 | K27 | **ADR ek notları nasıl görevlendirilsin?** | Dalga 0 | ADR başına bir görev | ✅ ADR başına bir görev |
 | K28 | **Operatörün imzaladığı oyuncu kimliği (ID-03 operatör yolu, #388) F2'de mi kalsın?** (2026-11-03) | ID-03, KN-06, GV-01 | F2 (deferred) | ✅ **Şimdi yapılsın** (pending). Kiracı açmadıkça kapalı; operatör geliştirme yapmazsa K4 yolu aynen sürer |
 | K29 | **Inbox'a gömülen panellerde (KN-05, #379) CSP `frame-src` nasıl yönetilsin?** (2026-11-03) | KN-05 | Kiracı origin'ine göre sunucu/proxy tarafında | ✅ **(a) Panel CSP'sine sabit `frame-src https:`**; asıl kapı veritabanındaki panel URL listesi + sandbox + origin kontrolü + kısa ömürlü token. Görev pending |
+| K30 | **Ziyaretçi taslak önizlemesi ajan ekranında ne kadar kalsın?** (2026-11-06, tm 417) | tm 417 (sahip isteği; 03'te madde yok) | Kutuda durdukça kalsın, 10 dk emniyet | ✅ **Sekme kapanınca ya da 30 sn güncelleme gelmezse kalkar** (kutuda durdukça kalma yok) |
+| K31 | **Önizleme kiracı ayarının varsayılanı** (2026-11-06) | tm 417 | Açık | ✅ Varsayılan açık |
+| K32 | **Ziyaretçiye KVKK/GDPR bildirimi** (2026-11-06) | tm 417 | Karar gerektirir | ✅ **Widget'ta bildirim yok;** özellik varsayılan açık gelir, kiracı bilgiyi kendi aydınlatma metnine ekler (ayar ekranı + kurulum rehberinde not) |
+| K33 | **Kuyruktaki sohbette takım ajanları önizlemeyi görsün mü?** (2026-11-06) | tm 417 | Hayır: yalnız atanmış temsilci + izleyen süpervizör | ✅ Öneri onaylandı |
+| K34 | **Önizleme mobil ajan uygulamasında olsun mu?** (2026-11-06) | tm 417 | Hayır | ✅ Öneri onaylandı |
+| K35 | **Önizleme uzunluğu** (2026-11-06) | tm 417 | İlk 500 karakter | ✅ Öneri onaylandı |
+| K36 | **zod 4.x geçişi** (2026-11-06; denetim F02/NY-29) | tm 415, tm 419, tm 477 | Şimdi değil; ara önlem #419; 4.x ayrı OPUS-MAX epiği | ✅ Öneri onaylandı — epik #477 deferred, sahip açınca başlar |
+| K37 | **tm 415 (sunucu bağımlılık denetimi) ne olsun?** (2026-11-06) | tm 415 | Deferred | ✅ Deferred; yerine #477 |
+| K38 | **Pilotta sohbete dosya eklenebilsin mi?** (2026-11-06; denetim F01, NY-34/NY-51) | tm 418, 433, 446, 465, 474 | Hayır (pilotta kapalı) | ✅ **Eklenebilsin:** pilotta dosya paylaşımı açık; dosyalar kalıcı volume'a, yedeğe ve restore provasına girer (#418 yeniden yazıldı) |
+| K39 | **Pilot dışı yeni workspace'lerde dosya paylaşımı varsayılan kapalı başlasın mı?** (2026-11-06) | tm 418 (eski kapsam dışı notu) | Evet, ayrı görev | ⏳ **Açık:** "önerilerin geçerli" genel cevabı K38'in ruhuyla çelişiyor; görev yazılmadı, sahibe tek soru olarak soruldu |
+| K40 | **Pilotta gerçek site taraması** (2026-11-06; AI-17) | tm 470 | SSRF doğrulaması (#470.1) sonrası açık | ✅ Öneri onaylandı — #470.2 yapılır |
+| K41 | **Pilotta gerçek virüs tarayıcı (ClamAV)** (2026-11-06; NY-51) | tm 433 | Pilotta yok | ✅ Öneri onaylandı (ekler açık olduğu için #433 uyarısı/etiketi pilotta da görünür) |
+| K42 | **Pilotta otomatik saklama/silme** (2026-11-06; F49, Ç-06) | tm 447, 441 | Kapalı kalır + panel "silme etkin değil" | ✅ Öneri onaylandı |
+| K43 | **Rapor gün/saat kovaları hangi saat dilimiyle?** (2026-11-06; F44, Ç-05) | tm 458, 459 (ID-04 / K3 ile tutarlılık) | Workspace saat dilimi | ✅ Öneri onaylandı — #458/#459 pending |
+| K44 | **Kalıcı e-posta outbox'ı pilot kapsamında mı?** (2026-11-06; NY-44) | tm 464 | Evet, low | ✅ Öneri onaylandı |
+| K45 | **Kuyruktaki atanmamış sohbete yanıt veren ajan sohbeti üstlensin mi?** (2026-11-06; tm 411) | IN (inbox), AI-11, WG-07, tm 411, tm 475 | Hayır (yanıt üstlenme sayılmaz) | ✅ **Yanıt için üstlenme şart:** ajan yanıt verebilmek için sohbeti üstüne alır ya da yetkili biri ona atar; üstlenmeden yanıt yok (farklı ajanların aynı anda yanıtlamasını önler) — #475 |
+| K46 | **Pilot geri bildirim kanalı** (2026-11-06) | tm 478 | Panel menüsünde destek adresine mailto ya da basit form | ✅ Öneri onaylandı — mailto (#478) |
+| K47 | **Mock ödeme / mock virüs tarayıcısı production'da** (2026-11-06; F32, F21) | tm 442, 433 | Yalnız uyarı (boot engeli yok) | ✅ Öneri onaylandı |
+| K48 | **Pilotta deneme süresi** (2026-11-06; NY-33) | tm 474 | Pilot env şablonunda `TRIAL_DAYS` örn. 90; kod değişmez | ✅ Öneri onaylandı — şablon 90 |
+| K49 | **Ekip Lideri varsayılanında `ai.manage` açılsın mı?** (2026-11-06) | RL-03, AI-20, tm 476 | Hayır | ✅ **Evet:** Ekip Lideri AI yapılandırmasını hazırlar ve onaya gönderir; AI-20 sürüm yayını Yönetici'de kalır — #476. ⏳ Alt soru açık: aynı kapsam kural botu ve bilgi tabanı gibi canlıya yazan ekranları da açıyor |
+| K50 | **Ticari/hukuki konular** (2026-11-06) | — | Aşama 2 | ✅ Öneri onaylandı; görev yok |
 
 > **Karar kaydı durumu (2026-10-14):** K1–K27'nin hepsi cevaplandı (K17–K27 görev planlama turunda eklendi; görev eşlemesi [07-gorev-plani.md](07-gorev-plani.md)). K4, K9, K13, K15, K16, K22, K25 ve K26 varsayılandan farklı ya da daha geniş cevaplandı. Bunların hangi maddeleri nasıl değiştirdiği hemen aşağıdaki "Kararların maddelere etkisi" bölümünde yazıyor. Uygulayıcı, maddelerin içindeki varsayılanlar yerine bu bölümü esas alır.
 >
 > **Güncelleme (2026-11-03):** K28 ve K29 eklendi. #388 ve #379 deferred'dan pending'e alındı; #322 ve #378 deferred kalır.
+>
+> **Güncelleme (2026-11-06):** K30–K50 eklendi (tm 417 önizlemesi ve 2026-11-06 denetimi sahip cevapları). K30, K32, K38, K45 ve K49 varsayılandan farklı cevaplandı; etkileri aşağıda. K39 (pilot dışı dosya paylaşımı varsayılanı) cevabı çelişkili olduğu için açık; görev yazılmadı. K49'un kapsam alt sorusu açık. #418 yeniden yazıldı (PILOT-UPLOADS-PERSIST); #415 deferred, yerine #477 (deferred epik); #458/#459 pending; yeni görevler #475–#478.
 
 ### Kararların maddelere etkisi
 
@@ -144,7 +167,45 @@ Aşağıdaki kararlar birçok maddeyi etkiliyor. Kodlamaya başlamadan önce bun
 - **Asıl kapılar:** (1) panel URL'leri yalnız yöneticinin kaydettiği `https://` adresleri (`custom_panels.url` CHECK, audit); (2) iframe her zaman `sandbox="allow-scripts allow-forms allow-popups"` ve farklı origin (`allow-same-origin` eklenmez); (3) postMessage köprüsü yalnız o panelin kayıtlı origin'inden gelen mesajı işler; (4) bağlam yalnız ≤5 dk imzalı token ile ve postMessage ile verilir, URL'ye oyuncu bilgisi yazılmaz (GV-05); (5) panel sohbet geçmişini okuyamaz, mesaj gönderemez.
 - `http:` açılmaz (karışık içerik; panel TLS ile sunulur). Ayrıca kiracı başına CSP üretimi yapılmaz; ileride gerekirse ayrı karar.
 
-**K17–K29'un görev karşılıkları:** [07-gorev-plani.md](07-gorev-plani.md) (Task Master #269–#388).
+**K30: Taslak önizlemesi 30 sn güncellemesizlikte ya da ziyaretçi sekmesi kapanınca kalkar (2026-11-06)**
+- **Etkilediği görevler:** #417 (K9), #417.4, #417.5, #417.6, #417.7
+- Paneldeki şerit, kabul edilen son kareden 30 sn sonra kalkar (`DRAFT_STALE_MS = 30_000`); ziyaretçi sekmesini kapatınca widget'ın pagehide temizlesiyle hemen kalkar. "Metin kutuda durdukça kalır" kuralı yok; widget heartbeat göndermez, ziyaretçi yeniden yazınca tam metin geri gelir.
+- Sıra koruması için tutulan görünmez tombstone (10 dk ya da kapanışa kadar) şerit süresi değildir; geç gelen eski karelerin hayalet taslak bırakmasını önler.
+
+**K31–K35: Önizlemenin kapsamı (2026-11-06)**
+- Ayar varsayılan açık (K31). Widget'ta ziyaretçiye bildirim gösterilmez (K32); Ayarlar › Widget anahtarının açıklaması ve kurulum rehberi kiracıya "ziyaretçilerinizi kendi aydınlatma metninizde bilgilendirin" der. Kuyruktaki takım görmez, yalnız atanmış temsilci + izleyen süpervizör (K33). Mobilde yok (K34). İlk 500 karakter (K35).
+
+**K36–K37: zod 4.x ayrı epikte (2026-11-06)**
+- #419 ara önlem olarak kalır (high). zod 4.x geçişi #477 epiğinde, deferred (alt görevleri de deferred); sahip açınca alt görevleriyle başlar. #415 deferred, #477 kapanınca kapatılır; #456 izin listesindeki zod satırı o zaman silinir.
+
+**K38: Pilotta dosya paylaşımı açık, depolama kalıcı (2026-11-06)**
+- **Etkilediği görevler:** #418 (tamamen yeniden yazıldı: PILOT-FILE-SHARING-OFF → PILOT-UPLOADS-PERSIST), #433, #446, #465, #471, #474
+- Pilotta sohbet ekleri ve bilgi belgeleri açık kalır. Denetimin yüksek bulgusu (dosyalar konteynerin /tmp'sinde, yedekte yok, yeniden oluşturmada kayboluyor) kalıcı named volume + backup.sh kapsamı (`COMPOSE_FILE=docker-compose.pilot.yml`) + restore provası + compose yorumu/checklist düzeltmesiyle kapatılır. PILOT_MODE'a bağlı ret eklenmez.
+- Pilotta virüs taraması olmadığı için (K41) #433'ün uyarısı ve "taranmadı" etiketi pilotta da görünür; #446'nın içerik türü + tek kullanım kontrolleri pilottaki tek içerik kapısıdır.
+
+**K41/K47: Mock tarayıcı ve mock ödeme yalnız uyarı (2026-11-06)**
+- #433 ve #442 boot'ta yalnız `warn` log'u (ve varsa /health bilgisi) üretir. `productionProblems` listesine madde eklenmez: o liste boş değilse production açılışı reddedilir; pilot `VIRUS_SCANNER=mock` ile çalıştığı için madde eklemek pilotu açılmaz hâle getirirdi.
+
+**K43: Rapor günleri workspace saat dilimine göre (2026-11-06)**
+- #458 ve #459 deferred'dan pending'e alındı. K3'ün gün sınırı (Europe/Istanbul 00:00) raporlarda da geçerli olur; `day-boundary.ts` başlığı doğru hâle gelir.
+
+**K45: Yanıt için üstlenme şart (2026-11-06)**
+- **Etkilediği maddeler/görevler:** AI-11 (örtük devralma), WG-07 (Take), tm 411 varsayımı ("yanıt üstlenme sayılmaz"), #475
+- Müşteriye görünür yanıt yalnız sohbetin aktif bağlantısına atanmış ajandan kabul edilir; API diğerlerini 409 ile reddeder. Kontrol thread satırı kilitlenerek yapılır: iki ajan aynı anda üstlenmeye çalışırsa yalnız biri kazanır; devralma ile yanıt yarışında iki yanıt birden müşteriye gitmez.
+- Dahili not kuraldan muaftır (müşteriye görünmez). Bot token'ları muaftır.
+- AI evresinde ve duraklatılmış AI'da "yazınca devralma" kalkar, yerine açık "Üstüne al" gelir (yetki aynı: sohbeti görebilen ajan). Otomatik takım kuyruğu da "Üstüne al"a açılır (limit ve üyelik kontrolleriyle). Başkasına atanmış sohbet yalnız "Devral" (chats.takeover yetkisi) ya da yetkili birinin atamasıyla.
+- Ajan sohbeti kendisi açıp müşteriye ilk mesajı yazıyorsa sohbet ona atanır.
+- Mobil uygulama aynı kurala uyar: atanmadığı sohbette yanıt kutusu kapalıdır; mobilde üstlenme düğmesi yoktur.
+
+**K48: Pilot şablonunda `TRIAL_DAYS=90` (2026-11-06)**
+- `.env.production.example` yorumdan çıkarılır ve 90 olur; kod varsayılanı (14) değişmez; root panel deneme süresi ayarı doluysa önceliklidir. #474 madde 4.
+
+**K49: Ekip Lideri varsayılanında `ai.manage` açık (2026-11-06)**
+- **Etkilediği maddeler:** RL-03 (soru 2'nin cevabı değişmez: Ekip Lideri hazırlar, Yönetici yayınlar), AI-20
+- Ekip Lideri rolünün varsayılan yetenekleri `ai.manage` içerir; Kurucu matriste kapatabilir. AI-20 sürüm yayını (`ai.config.publish`), geri alma ve AI duraklatma Yönetici'de kalır. Kod varsayılanı olduğu için mevcut workspace'lerde de geçerli olur (matriste 'kapalı' satırı olanlar hariç). #476.
+- **Açık alt soru:** `ai.manage`'in açtığı kapsam (`agents-bot--all:rw`) kural botu ve bilgi tabanı gibi doğrudan canlıya yazan ekranları da açıyor. #476 bunu değiştirmez; sahip "hayır" derse kapsamı bölen ayrı görev yazılır.
+
+**K17–K50'nin görev karşılıkları:** [07-gorev-plani.md](07-gorev-plani.md) (Task Master #269–#388) ve 2026-11-06 turu (#415, #417–#478).
 
 Maddelerin içinde bunların dışında daha ayrıntılı sorular da var. Onların hepsinin önerilen varsayılanı yazılı.
 

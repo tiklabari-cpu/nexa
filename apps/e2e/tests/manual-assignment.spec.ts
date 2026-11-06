@@ -16,8 +16,11 @@ import {
   WIDGET_ORIGIN,
   expect,
   freeARoutingSlot,
+  openWidget,
   ownerAccessToken,
   test,
+  visitorSends,
+  widgetFrame,
 } from './fixtures.js';
 
 test.describe('manual assignment (WG-07)', () => {
@@ -126,6 +129,109 @@ test.describe('manual assignment (WG-07)', () => {
       await expect(take).toHaveCount(0);
       const again = await request.post(`${API_BASE}/chats/${chatId}/claim`, { headers: auth });
       expect(again.status()).toBe(200);
+    } finally {
+      if (chatId) {
+        await request.post(`${API_BASE}/chats/${chatId}/deactivate`, { headers: auth });
+      }
+      await request.delete(`${API_BASE}/groups/${teamId}`, { headers: auth });
+    }
+  });
+
+  /**
+   * tm 411: a member answers a visitor who waits in the team's queue without
+   * pressing Take. Writing is not taking — the chat stays queued and nobody's
+   * (the routing record the Queued view shows) — but the visitor is no longer
+   * told "you are number 1 in the queue": a person is talking to them. Before
+   * the change the widget dropped the line on the reply's push (tm 399) and
+   * the next poll wrote it back, because the server still counted them.
+   */
+  test('a queued visitor a member answers is no longer told their place in the queue (tm 411)', async ({
+    page,
+    organizationId,
+    request,
+  }) => {
+    const auth = { authorization: `Bearer ${await ownerAccessToken(request)}` };
+    const me = (await (await request.get(`${API_BASE}/auth/me`, { headers: auth })).json()) as {
+      account_id: string;
+    };
+    const stamp = Date.now().toString().slice(-6);
+    const created = await request.post(`${API_BASE}/groups`, {
+      data: { name: `Queue reply desk ${stamp}`, assignment_mode: 'manual' },
+      headers: auth,
+    });
+    expect(created.status(), await created.text()).toBe(201);
+    const teamId = ((await created.json()) as { id: number }).id;
+    let chatId: string | undefined;
+    try {
+      const joined = await request.put(`${API_BASE}/groups/${teamId}/agents/${me.account_id}`, {
+        data: { priority: 'normal' },
+        headers: auth,
+      });
+      expect(joined.ok(), await joined.text()).toBe(true);
+
+      const question = `Para çekimim beklemede ${stamp}`;
+      await openWidget(page, organizationId);
+      await visitorSends(page, question);
+      await expect
+        .poll(
+          async () => {
+            const chats = await request.get(`${API_BASE}/chats?view=all&limit=50`, {
+              headers: auth,
+            });
+            if (!chats.ok()) return undefined;
+            const { items } = (await chats.json()) as {
+              items: Array<{ id: string; last_event?: { text?: string | null } | null }>;
+            };
+            chatId = items.find((c) => c.last_event?.text?.includes(stamp))?.id;
+            return chatId;
+          },
+          { timeout: 20_000, message: `no chat carrying "${stamp}"` },
+        )
+        .toBeTruthy();
+      const handed = await request.post(`${API_BASE}/chats/${chatId!}/transfer`, {
+        data: { group_id: teamId },
+        headers: auth,
+      });
+      expect(handed.ok(), await handed.text()).toBe(true);
+
+      const frame = widgetFrame(page);
+      const transcript = frame.getByRole('log', { name: 'Conversation' });
+      const status = frame.locator('.nx-status');
+      /** A fresh document: the first poll is the server's word alone. */
+      async function reopen(): Promise<void> {
+        await page.reload();
+        const launcher = frame.getByRole('button', { name: 'Open chat' });
+        await expect(launcher.or(transcript)).toBeVisible();
+        if (await launcher.isVisible()) await launcher.click();
+        await expect(transcript).toContainText(question);
+      }
+
+      await reopen();
+      await expect(status).toContainText('in the queue');
+
+      const answer = `Kontrol ediyorum, bir dakika ${stamp}`;
+      const sent = await request.post(`${API_BASE}/chats/${chatId!}/events`, {
+        headers: auth,
+        data: { type: 'message', text: answer },
+      });
+      expect(sent.ok(), `agent reply failed: ${sent.status()} ${await sent.text()}`).toBe(true);
+      await expect(transcript).toContainText(answer);
+      await expect(status).not.toContainText('in the queue');
+      // Past the refresh the reply sets off and the open panel's next poll.
+      await page.waitForTimeout(5_000);
+      await expect(status).not.toContainText('in the queue');
+      await page.screenshot({ path: 'kanit/tm411-queue-notice-after-reply.png', fullPage: true });
+
+      await reopen();
+      await expect(transcript).toContainText(answer);
+      await expect(status).not.toContainText('in the queue');
+
+      // Replying did not take it: still the team's, still waiting.
+      const chat = (await (
+        await request.get(`${API_BASE}/chats/${chatId!}`, { headers: auth })
+      ).json()) as { thread: { assignee_id: string | null; queue_position: number | null } };
+      expect(chat.thread.assignee_id).toBeNull();
+      expect(chat.thread.queue_position).not.toBeNull();
     } finally {
       if (chatId) {
         await request.post(`${API_BASE}/chats/${chatId}/deactivate`, { headers: auth });

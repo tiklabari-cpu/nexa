@@ -2448,11 +2448,15 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     );
   }
 
+  /** Agent messages pushed so far — a poll that left before one is stale about the queue. */
+  let agentReplies = 0;
+
   async function refresh(): Promise<void> {
     if (!state.connected) return;
     // Whose snapshot this is: a mint that lands meanwhile (`identify`) may
     // have made this browser another customer, and theirs must not be drawn.
     const token = api.token;
+    const replies = agentReplies;
     // The request alone, so that only *it* failing counts against the
     // connection — a rendering fault below is ours, not the network's.
     let snapshot: Awaited<ReturnType<typeof api.state>>;
@@ -2471,8 +2475,11 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       applyAvailability(snapshot);
       state.chatId = snapshot.chat?.id ?? null;
       state.threadId = snapshot.chat?.thread_id ?? null;
-      state.queuePosition = snapshot.chat?.queue_position ?? null;
-      state.estimatedWait = snapshot.chat?.estimated_wait ?? null;
+      // Asked before an agent's reply arrived, the server still counted the
+      // visitor in the queue; the reply's own refresh brings the truth (tm 411).
+      const queued = replies === agentReplies ? snapshot.chat : null;
+      state.queuePosition = queued?.queue_position ?? null;
+      state.estimatedWait = queued?.estimated_wait ?? null;
       state.customerEmail = snapshot.customer?.email ?? null;
 
       // The widget holds no socket (see `startPolling` below), so this poll is
@@ -2671,6 +2678,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     // A person answering means the queue is over for this visitor; with a socket
     // the next poll is half a minute off, so "you are number 1" would otherwise
     // outlive the reply. Ask now for who has the chat, too.
+    if (event.author_type === 'agent') agentReplies++;
     if (event.author_type === 'agent' && state.queuePosition !== null) {
       state.queuePosition = null;
       state.estimatedWait = null;

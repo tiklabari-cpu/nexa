@@ -16,6 +16,7 @@ import {
   readQueueWaitStats,
   type EstimatedWait,
 } from '../services/routing/queue-wait.js';
+import { visitorQueuePosition } from '../services/routing/visitor-queue.js';
 import { isMailLocale } from '../services/mail/templates/layout.js';
 import { visitorMessageMail } from '../services/mail/templates/messages.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -844,6 +845,9 @@ export default async function customerRoutes(
         },
       });
 
+      // Hidden once a person has answered them (tm 411) — the wait estimate too.
+      const queuePosition = await visitorQueuePosition(tx, chat?.threads[0]);
+
       const [agentsOnline, customer] = await Promise.all([
         tx.agentMembership.count({
           where: { routingStatus: 'accepting_chats', suspended: false },
@@ -923,6 +927,7 @@ export default async function customerRoutes(
       return {
         readOnly: access === 'read_only',
         chat,
+        queuePosition,
         agentsOnline,
         customer,
         responder,
@@ -973,14 +978,14 @@ export default async function customerRoutes(
     // a team, from that team's recent waits; a failure is no estimate.
     const latest = state.chat?.threads[0];
     let estimatedWait: EstimatedWait | null = null;
-    if (latest?.queuePosition && latest.queueGroupId !== null) {
+    if (latest && state.queuePosition && latest.queueGroupId !== null) {
       const licenseId = request.tenant().licenseId;
       const groupId = latest.queueGroupId;
       try {
         const stats = await cachedQueueWaitStats(app.redis, licenseId, groupId, () =>
           request.withTenant((tx) => readQueueWaitStats(tx, licenseId, groupId)),
         );
-        estimatedWait = estimateQueueWait(stats, latest.queuePosition);
+        estimatedWait = estimateQueueWait(stats, state.queuePosition);
       } catch (error) {
         request.log.warn({ err: error }, 'queue wait estimate failed');
       }
@@ -1003,7 +1008,7 @@ export default async function customerRoutes(
         ? {
             id: state.chat.id,
             thread_id: state.chat.threads[0]?.id ?? null,
-            queue_position: state.chat.threads[0]?.queuePosition ?? null,
+            queue_position: state.queuePosition,
             estimated_wait: estimatedWait,
           }
         : null,

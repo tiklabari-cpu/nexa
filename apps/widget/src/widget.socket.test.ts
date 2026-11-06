@@ -141,6 +141,8 @@ let rtmUrl: string | null = RTM;
 let chatId: string | null = 'chat-1';
 /** Overridable per test: the queue position the poll reports (a function so it can move). */
 let queuePosition: () => number | null = () => null;
+/** Set per test: the next poll's answer, read as it is asked, waits for this (once). */
+let holdNextPoll: Promise<void> | null = null;
 
 function stubFetch(): void {
   vi.stubGlobal(
@@ -161,7 +163,7 @@ function stubFetch(): void {
       }
       if (url.endsWith('/customer/chat')) {
         chatPolls += 1;
-        return jsonResponse({
+        const body = {
           online: true,
           agent_typing: false,
           customer: { id: 'cust-1', name: null, email: null },
@@ -169,7 +171,11 @@ function stubFetch(): void {
           chat: chatId ? { id: chatId, thread_id: 'thr-1', queue_position: queuePosition() } : null,
           events: eventsAt(chatPolls),
           campaign: null,
-        });
+        };
+        const held = holdNextPoll;
+        holdNextPoll = null;
+        await held;
+        return jsonResponse(body);
       }
       return jsonResponse({});
     }),
@@ -231,6 +237,7 @@ beforeEach(() => {
   rtmUrl = RTM;
   chatId = 'chat-1';
   queuePosition = () => null;
+  holdNextPoll = null;
   FakeSocket.instances = [];
   document.head.replaceChildren();
   document.body.replaceChildren();
@@ -283,6 +290,32 @@ describe('widget RTM connection (FR-MOD-11.6)', () => {
     await settle();
 
     expect(bubbles(root)).toEqual(['my order is late', 'let me look that up']);
+    expect(status.textContent).toBe('');
+  });
+
+  it('does not let a poll asked before the reply write the queue notice back (tm 411)', async () => {
+    let queued = true;
+    queuePosition = () => (queued ? 3 : null);
+    eventsAt = () => (queued ? [VISITOR_ASK] : [VISITOR_ASK, AGENT_REPLY]);
+    const root = mountWidget();
+    const socket = await openLive(root);
+    const status = root.querySelector<HTMLElement>('.nx-status')!;
+    expect(status.textContent).toContain('3');
+
+    // A poll leaves while the visitor still waits, and is slow to come back…
+    let release!: () => void;
+    holdNextPoll = new Promise<void>((resolve) => (release = resolve));
+    window.dispatchEvent(new Event('online'));
+    await settle();
+    // …the agent answers meanwhile, and the reply's own refresh lands first.
+    queued = false;
+    socket.push('incoming_event', { chat_id: 'chat-1', event: AGENT_REPLY });
+    await settle();
+    expect(status.textContent).toBe('');
+
+    // The old answer still says "number 3": it predates the reply.
+    release();
+    await settle();
     expect(status.textContent).toBe('');
   });
 

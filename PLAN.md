@@ -6491,13 +6491,13 @@ _Önceki maddeler: `docs/archive/plan-kanit/PLAN-kanit-arsiv-2026-11.md` ve `PLA
 
 #### K11.7 — 11.7 · Widget customization (Appearance/Position/Mobile)
 
-- ✅ tm 347 · WG-10 launcher görünürlüğü `always` / `until_opened` / `never` (marka başına, varsayılan `always`) + başlıkta marka logosu (`show_logo`, yalnız `https`): mint `launcher_visibility` + `logo_url` + `brand_name` taşır, ilk kez gelen oyuncu için mint'siz `GET /customer/launcher`; `until_opened`/`never` balon çizilmez ve çerçeve 0×0 olup köşeyi siteye bırakır, `siyahtus('open')` paneli açar (`until_opened` balonu da gösterir), `siyahtus:unread` olayı yalnız sayıyı iletir · `packages/types/src/widget.ts` (`brandLogoUrl`), `api/routes/auth.ts` (`/customer/launcher`, `widgetAppearance`), `routes/settings.ts`, migration `20261130090000_widget_launcher_visibility`, `widget/src/widget.ts` (`launcherShown`/`setLauncherMode`), `loader.ts`, web `WidgetCustomization.tsx` (`LauncherControl`) · int `widget-launcher.test.ts` (18), widget `widget.launcher.test.ts` (13) + `loader.launcher.test.ts` (3), types `widget-launcher.test.ts` (3), web `WidgetCustomization.test.tsx` (+2) · feat/launcher-visibility-logo · §D402
-
 - ✅ tm 394 · WIDGET-MOBILE-FULLSCREEN-DEFAULT: varsayılan snippet'te `mobileFullscreen` alanı yok (api yalnız varsayılandan farklı alanı yazar) ve yükleyici eksik alanı "kapalı" okuyordu → telefonda 400 px panel 14-68 px kırpılıyordu; yükleyici eksik alanı "açık" sayar (widget ile aynı), eski yapıştırılmış snippet'ler de düzelir · `apps/widget/src/loader.ts:241` (`!== false`) · `loader.appearance.test.ts` (+2: alansız dar ekran tam ekran, alansız geniş ekran kart) · e2e `widget.spec.ts` (+1: 375 px, iframe x=0, genişlik=375) · tm 394
 
 - ✅ tm 399 · WIDGET-QUEUE-NOTICE-AFTER-REPLY: soketli widget'ta ajan yanıtı gelince "sırada N" satırı bir sonraki yoklamaya (30 sn) kadar kalıyordu; `applyIncomingEvent` yazarı `agent` olan ilk olayda kuyruk konumunu/bekleme tahminini siler, durumu yeniden çizer ve sahibi sormak için `refresh()` çağırır (AI/ziyaretçi olayı dokunmaz) · `apps/widget/src/widget.ts` `applyIncomingEvent` · `widget.socket.test.ts` (+2; düzeltme geri alınınca kırmızı) · fix/widget-queue-notice-after-reply
 
-_Önceki maddeler: `docs/archive/plan-kanit/PLAN-kanit-arsiv-2026-10.md` ve `docs/archive/plan-kanit/PLAN-kanit-arsiv-2026-10-14.md` (`#### K11.7`)_
+- ✅ tm 411 · QUEUE-NOTICE-CLEARS-AFTER-AGENT-REPLY: ajanın kuyruktaki atanmamış sohbete yazması sohbeti üstlenmiyor (PRD açık değil → (b), varsayım HANDOFF'ta), `GET /customer/chat` kuyruğa girişten (`queued_at`) sonra ziyaretçiye giden bir ajan olayı varsa `queue_position`/`estimated_wait` null döner; atama/kuyruk kaydı değişmez; widget yanıttan önce çıkmış bir yoklamanın konumunu yazmaz · `apps/api/src/services/routing/visitor-queue.ts`, `routes/customer.ts` (`/customer/chat`), `widget/src/widget.ts` (`refresh`, `agentReplies`) · int `customer-chat.test.ts` (+3), `widget.socket.test.ts` (+1), e2e `manual-assignment.spec.ts` (+1); 4 mutant kırmızı · tm 411
+
+_Önceki maddeler: `docs/archive/plan-kanit/PLAN-kanit-arsiv-2026-11.md`, `docs/archive/plan-kanit/PLAN-kanit-arsiv-2026-10.md` ve `docs/archive/plan-kanit/PLAN-kanit-arsiv-2026-10-14.md` (`#### K11.7`)_
 
 #### K11.8 — 11.8 · Typing indicator (sneak-peek)
 

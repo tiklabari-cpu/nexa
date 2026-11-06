@@ -440,6 +440,75 @@ describe('customer chat api', () => {
       expect(state.json().chat.queue_position).toBe(1);
     });
 
+    describe('once a person has answered a queued visitor (tm 411)', () => {
+      /** The second visitor waits as number 1; the first holds the only free slot. */
+      async function queuedVisitor() {
+        await owner.agentMembership.updateMany({
+          where: { licenseId: fx.a.licenseId, agentId: fx.a.agentAccountId },
+          data: { concurrentChatsLimit: 1 },
+        });
+        await owner.agentMembership.updateMany({
+          where: { licenseId: fx.a.licenseId, agentId: fx.a.ownerAccountId },
+          data: { routingStatus: 'not_accepting_chats' },
+        });
+        const first = await widgetToken();
+        await server.post('/customer/chat/events', { text: 'first' }, auth(first.token));
+        const second = await widgetToken();
+        const started = await server.post(
+          '/customer/chat/events',
+          { text: 'second' },
+          auth(second.token),
+        );
+        const chatId = started.json().chat_id as string;
+        const before = await server.get('/customer/chat', auth(second.token));
+        expect(before.json().chat.queue_position).toBe(1);
+        return { token: second.token, chatId };
+      }
+
+      const reply = (chatId: string, recipients: 'all' | 'agents' = 'all') =>
+        server.post(
+          `/chats/${chatId}/events`,
+          { type: 'message', text: 'I can help with that', recipients },
+          auth(agentToken),
+        );
+
+      it('tells the visitor no queue position or wait, and leaves the routing as it was', async () => {
+        const { token, chatId } = await queuedVisitor();
+        expect((await reply(chatId)).statusCode).toBe(201);
+
+        const state = await server.get('/customer/chat', auth(token));
+        expect(state.json().chat.queue_position).toBeNull();
+        expect(state.json().chat.estimated_wait).toBeNull();
+        // Replying is not taking: the panel still has it queued for the team.
+        const thread = await owner.thread.findFirstOrThrow({
+          where: { chatId, active: true },
+          select: { queuePosition: true, assigneeId: true },
+        });
+        expect(thread).toEqual({ queuePosition: 1, assigneeId: null });
+      });
+
+      it('keeps the position after an internal note — the visitor heard nothing', async () => {
+        const { token, chatId } = await queuedVisitor();
+        expect((await reply(chatId, 'agents')).statusCode).toBe(201);
+
+        const state = await server.get('/customer/chat', auth(token));
+        expect(state.json().chat.queue_position).toBe(1);
+      });
+
+      it('shows the position again when the connection is queued anew after the reply', async () => {
+        const { token, chatId } = await queuedVisitor();
+        expect((await reply(chatId)).statusCode).toBe(201);
+        // As a transfer to a team with nobody free would: queued again, later.
+        await owner.thread.updateMany({
+          where: { chatId, active: true },
+          data: { queuedAt: new Date(Date.now() + 60_000) },
+        });
+
+        const state = await server.get('/customer/chat', auth(token));
+        expect(state.json().chat.queue_position).toBe(1);
+      });
+    });
+
     it('never shows an internal note', async () => {
       const { token } = await widgetToken();
       const started = await server.post('/customer/chat/events', { text: 'Hi' }, auth(token));

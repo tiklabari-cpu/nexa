@@ -16399,10 +16399,10 @@
         "description": "tm 399 sonrası da ajan yanıtı 89–203 ms'de geliyor ama \"You are number 3 in the queue\" +0/+1/+4 s'de görünüyor; panelde sohbet \"#1 in queue\", Assignee \"Unassigned\".",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-04/05 tur 2 kapsamlı test koşusu (main @ 86ee661e; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT: tm 399 istemcide `queuePosition=null` yapıp hemen `refresh()` çağırıyor; sunucu sohbeti hâlâ kuyrukta saydığı için (atanmamış ajanın yanıtı sohbeti kuyruktan çıkarmıyor) pozisyon geri yazılıyor. Kök sunucu tarafında: yanıt = üstlenme değil.\n\nYAPILACAK: ürün kararı gerektirir — iki seçenek: (a) ajanın kuyruktaki atanmamış sohbete ilk yanıtı sohbeti ona atar (üstlenme); (b) atama değişmez ama insan yanıtı gelmiş sohbet için ziyaretçiye kuyruk pozisyonu gösterilmez. Mevcut davranış/PRD'yi (PRD §8.4, routing kuralları) kontrol et; PRD açıksa onu uygula, değilse küçük olan (b)'yi uygula ve varsayımı HANDOFF'a yaz (memory underspecified-prd-row-needs-documented-assumption).\n\nTUZAK: memory team-drain-runs-in-group-id-order, ai-turns-merge-unanswered-visitor-messages; widget bundle bütçesi.",
         "testStrategy": "api entegrasyon: seçilen kurala göre ajan yanıtından sonra sohbet durumu / kuyruk pozisyonu. Widget birim: yanıt sonrası refresh pozisyonu geri yazmaz. e2e: kuyruktaki sohbete ajan yanıtı → widget'ta kuyruk bildirimi kalmaz. DoD: CONVENTIONS §1.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "low",
-        "updatedAt": "2026-11-05T15:01:40.280Z",
+        "updatedAt": "2026-11-05T23:01:34.296Z",
         "subtasks": []
       },
       {
@@ -16468,7 +16468,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-05T23:00:45.426Z",
+      "lastModified": "2026-11-05T23:01:34.296Z",
       "taskCount": 416,
       "completedCount": 408,
       "tags": [

@@ -16447,10 +16447,10 @@
         "description": "`pnpm audit --prod` 1 kritik + 30 yüksek veriyor; çoğu mobil/expo derleme zinciri (kritik: `shell-quote` <1.11.0). Sunucu tarafına dokunan tek kayıt `zod` 3.25.76 (api, rtm).",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-04/05 tur 2 kapsamlı test koşusu (main @ 86ee661e; kod değiştirilmeden yapıldı). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nKANIT: `pnpm audit --prod` — `zod` <4.6.6 (bellek tüketimi, oversized constraint), yollar `apps__api>zod`, `apps__rtm>zod`. Kritik `shell-quote` yolu `apps__mobile>expo>…` / `@react-navigation/*` (mobil pilot kapsamında dağıtılmıyor).\n\nYAPILACAK: (1) advisory'yi oku, api/rtm'de etkilenen API'nin (ör. kullanıcı girdisinden şema/kısıt) kullanılıp kullanılmadığını grep ile doğrula ve sonucu HANDOFF'a yaz. (2) Etkileniyorsa düzeltilmiş sürüme yükselt; zod 4 büyük sürüm geçişi gerekiyorsa görevi blocked bırak ve kapsamı (dosya sayısı, kırılan API'ler) raporla — büyük sürüm geçişi sahip kararıdır. (3) Mobil zinciri için yalnız pnpm.overrides ile güvenli yama yapılabiliyorsa ve expo export + mobil testler yeşilse yap; değilse not düş.\n\nTUZAK: memory pnpm-add-churns-the-lockfile (`--frozen-lockfile` doğrula), api-tsc-heap-at-the-edge.",
         "testStrategy": "`pnpm audit --prod` sunucu yollarında yüksek/kritik yok (ya da gerekçeli istisna HANDOFF'ta); tam DoD gate `--force` yeşil; mobil 523+ test ve expo export exit 0. DoD: CONVENTIONS §1.",
-        "status": "pending",
+        "status": "blocked",
         "dependencies": [],
         "priority": "low",
-        "updatedAt": "2026-11-05T15:01:40.280Z",
+        "updatedAt": "2026-11-06T05:21:30.217Z",
         "subtasks": []
       },
       {
@@ -16468,7 +16468,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-06T05:17:21.934Z",
+      "lastModified": "2026-11-06T05:21:30.218Z",
       "taskCount": 416,
       "completedCount": 412,
       "tags": [

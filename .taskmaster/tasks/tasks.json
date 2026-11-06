@@ -16464,12 +16464,1168 @@
         "priority": "low",
         "updatedAt": "2026-11-06T05:36:08.004Z",
         "subtasks": []
+      },
+      {
+        "id": "417",
+        "title": "VISITOR-TYPING-PREVIEW [OPUS-XHIGH] (Opus 5.5) Ziyaretçinin gönderilmemiş taslağı yalnız sohbete atanmış insan ajanın ekranında canlı görünsün: AI evresinde trafik yok, yalnız metin değişince ≤1/sn, seq ile sıralı, ayrı hız kovası, RTM'de birleştirme + yalnız insan soketi, panelde kalıcı taslak şeridi",
+        "description": "Sahip isteği 2026-11-06: AI çözemeyip sohbet insana devredildiğinde, ziyaretçinin widget metin kutusunda yazdığı ama göndermediği metin, sohbeti üstlenmiş insan ajanın panelinde görünsün. Yer: mesaj akışının altı, yanıt kutusunun (Yanıt / Dahili not) üstü. Yenileme ~1 sn'de 1 olur, yalnız gerektiğinde gönderilir (sürekli gönder-dinle yok). Önizlemeler loglanmaz, kalıcı değildir; botlar, API token'ları ve sohbetten ayrılmış ajanlar görmez. Mevcut sneak-peek altyapısı (tm 41; PLAN'da ✅ olan ilgili PRD satırları details'te) yeniden kullanılır; bu görev yalnız sahibin yeni isteğinin gerektirdiği farkları kapatır. Kapatılan farklar: son metnin kaybolması, önizlemenin 4 sn/blur/6 sn'de silinmesi, 429 riski, AI evresinde süzme olmaması, alıcının fazla geniş olması (tüm takım, present:false ajanlar, botlar), sıra koruması olmaması, RTM'de backpressure olmaması, ekran okuyucunun her harfi okuması.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → close). DoD CONVENTIONS.md §1: `pnpm test:gate` arka planda çalışır; log yolu ilk satırdan alınır, bitince son satırlar (`Tasks:`/`Failed:`/`exit`) okunur. Turbo `--force` ile çalışır, çıktıda \"0 cached\" görülür. Önce `docker info`; e2e ve db:migrate için kök .env source edilir. git §2 (`feat/<slug>` → main, force-push yok); handoff §3; kapsam §5; migration §6.3. Gereksinim etiketi §7: test başlığında YALNIZ prd-uyum-denetimi.md Ek A kimlikleri (`FR-MOD-02.9`, `FR-MOD-11.8`). Bu üst görev, 417.1→417.7 alt görevleri bitince done olur (CONVENTIONS §4).\n\nKAYNAK: sahip isteği 2026-11-06 (sohbette verildi; aynen alıntı PLAN'a yazılmaz) + ekran görüntüsü (panelde son mesaj ile yanıt kutusu arasında \"üyenin mesajının göndermeden önceki önizlemesi burada gözükecek…\" şeridi). Teknik harita 2026-11-06 salt okuma turunda main 0329e66c üzerinde çıkarıldı. Satır numaraları o güne aittir; HEAD'de yeniden okunmalı.\n\nBUGÜNKÜ AKIŞ (özet):\n- Widget: `ui.input` `input` olayı → `notifyTyping()` (apps/widget/src/widget.ts:2976); `blur` → `stopTyping()` (:2978); gönderimde `stopTyping()` (:2342). `notifyTyping` (widget.ts:1346-1362) yalnız İLK vuruşta gönderen 800 ms throttle kullanıyor (:1353-1358), trailing yok; 4 sn sessizlikte stop (:1360-1361). İstekler beklenmeden gidiyor (`void api.typing`, :1355; apps/widget/src/api.ts:619-624). Widget soketi yalnız `incoming_event`, `chat_deactivated`, `event_updated`, `sync_required` dinliyor (apps/widget/src/socket.ts:61). Soket açıkken poll 30 sn (widget.ts:115, :2836-2844).\n- Widget kimin cevapladığını poll yanıtındaki `answered_by` alanından biliyor (api.ts:107; sunucu apps/api/src/routes/customer.ts:964-975, :999). Sahiplik: `customerChatOwner` packages/types/src/ai-disclosure.ts:43-54; `HumanRequestService.ownerOf` apps/api/src/services/ai/human-request.ts:154-176; rota bunu zaten kullanıyor (customer.ts:897).\n- API rota customer.ts:1693-1722 (sohbet `withTenant` + `customerId` + `active` ile bulunuyor :1702-1707; maskeleme :1713-1715) → `ChatService.publishCustomerTyping` (apps/api/src/services/chat/chat-service.ts:2519-2571). Servis aiMode'a bakmıyor; `resolveVisibility` + `#loadVisibleChat` :2527-2536; iki publish :2545 ve :2559; zaman damgası varışta :2543. `#audienceFor` (:601-607) tüm `chat.access` gruplarını ve `userType==='agent'` olan TÜM `chat.users` satırlarını alıyor, `present` alanına bakmıyor. Oysa devredilen ve serbest kalan ajan satırı `present:false` olarak kalıyor (:3780-3784, :4117-4121, :2783).\n- Hız: rotanın kendi kovası yok; ziyaretçi 60/dk + IP 600/dk (apps/api/src/plugins/rate-limit.ts:395-409, env.ts:491).\n- RTM fan-out apps/rtm/src/fanout.ts:150-189. `#isAddressed` (:191-207) `unrestricted` ve grup üyesi bağlantılara (bot dahil; apps/rtm/src/auth.ts:255-271) veriyor. `ws.send` bufferedAmount'a bakmıyor (:174). Bağlantının giriş türü `actorType` alanında (apps/rtm/src/connection.ts, `agent`/`bot`/`customer`).\n- Panel: işleyiciler useInbox.ts:1415-1437 (tek tüketici; global abonelik :1213-1214). Store müşteri mesajında (:1316) ve sohbet kapanınca (:1583) temizleniyor; `chat_taken_over` :1590, `chat_transferred` :1827 store'u temizlemiyor. Store apps/web/src/features/inbox/typing.ts: TYPING_IDLE_MS=6000 (:25), 6 sn'de metni de siliyor (:68-71). Çizim TypingIndicator.tsx: `!isTyping` iken null (:22); tüm içerik `aria-live=polite` içinde (:28-29). Bağlama InboxPage.tsx:1321-1325.\n- HIPAA kapsamı: apps/api/src/lib/hipaa.ts:46 `inHipaaScope(licence)`.\n- Mobil: sneak-peek yok (apps/mobile/src/features/inbox/InboxProvider.tsx:10-37); bu bilinçli bir karar.\n\nKARARLAR (tüm alt görevler için tek kaynak; pencere ölçülmüş gerekçeyle değiştirebilir, değişikliği HANDOFF'a yazar):\nK1 Taşıma: mevcut HTTP ucu `POST /customer/chat/typing`. Yeni yol YOK, böylece mobil parity sayısı değişmez. Widget→RTM WebSocket seçilmedi: (a) widget soketi her zaman açık değil, HTTP yine yedek kalırdı (iki yol = iki test yüzeyi); (b) maskeleme (`maskForWrite`, apps/api/src/lib/sensitive-mask.ts:700) ve alıcı hesabı API'de; (c) RTM müşteri mesajlarını bilinçli reddediyor (apps/rtm/src/dispatcher.ts:255-263). Maliyet: aktif yazımda ≤1 istek/sn. İstek başına HMAC + kova Lua eval'leri + ≤4 DB sorgusu + 1 Redis PUBLISH (≤~2,5 KB). Alıcı yalnız atanmış ajan(lar) olduğu için fan-out ≈ 1 soket/istek.\nK2 Gönderim ritmi (widget): yalnız normalize metin (trim + 500 kod noktası) bir önceki GÖNDERİLENDEN farklıysa gönderilir. Leading + trailing throttle, pencere 1000 ms; son değişiklik pencere sonunda MUTLAKA gider. Değişmeyen metin sıfır trafik üretir; heartbeat YOK. Her istek, mount başına 0'dan artan `seq` taşır (temizle dahil). \"Temizle\" (`is_typing:false`) yalnız şu durumlarda gider: kutu boşalınca, mesaj gönderilince (gönderimden hemen sonra artırılmış seq ile), sohbet bitince/teardown, `pagehide` (keepalive fetch), kapı true→false dönünce. Hepsi yalnız daha önce bir şey gönderildiyse. Blur TEMİZLEMEZ. 4 sn sessizlik stop'u kaldırılır. Yalnız görünür sekme gönderir (`document.visibilityState==='visible'`). 429'da `Retry-After` kadar susulur, sonra yalnız son durum bir kez gönderilir; Send kilitlenmez, ziyaretçiye hata gösterilmez.\nK3 Kime: tek kural `typingPreviewAllowed({ owner, enabled, hipaa })` = `enabled && !hipaa && owner === 'human'`. Saf fonksiyon olarak packages/types'ta durur. Rota ve poll aynı fonksiyonu kullanır. Poll yanıtı `typing_preview` döner. 'queue' (devredildi, insan bekliyor) varsayılan olarak DAHİL DEĞİL; sahip onaylarsa tek satırla açılır (ownerQuestions). Önizleme alıcısı ayrı yardımcı `#previewAudienceFor`: `agentIds` = `chat.users` içinde `userType==='agent' && present===true` olanlar (atanan + izleyen süpervizör), `groupIds` boş, `customerId` yok. `#audienceFor` değişmez (diğer olaylar kullanıyor). Rota kapı kapalıyken publish yapmaz ve 200 `{typing_preview:false}` döner, widget bir sonraki kapı sinyaline kadar susar. Kapı açıkken bugünkü gibi 204 döner. `is_typing:false` (temizle) kapıdan bağımsız, yine `#previewAudienceFor` alıcısına yayınlanır. Bu, AI'a geri dönen sohbette ekranda kalmış taslağı kaldırır.\nK4 Kalıcılık: DB, events, audit_log, AI hafızası/bağlamı ve pino log satırlarında önizleme YOK. Redis'te metin taşıyan anahtar yok (yalnız PUBLISH; kova anahtarları metin taşımaz). Pino redaksiyonuna `req.body.text` eklenir (apps/api/src/lib/fastify-options.ts:53-90). Hata logları yalnız action adı ve hata taşır, payload asla.\nK5 Temizleyici (yeni saf fonksiyon `apps/api/src/lib/typing-preview.ts`). Sıra: 500 kod noktasına kes → C0/C1 kontrol (\\n ve \\t hariç) ve bidi override/isolate (U+202A–202E, U+2066–2069) at → NFKC (tam genişlik ve diğer rakam biçimleri ASCII'ye döner) → `maskForWrite(text,'customer')` → metnin SONUNDAKİ yarım kart benzeri diziyi `•` ile maskele → trim → son güvenlik kesmesi (≤500). Kart benzeri dizi, ayraçları `[\\s.\\-/]` olan bir rakam dizisidir ve şu iki koşuldan birini sağlar: (a) en az bir tam 4'lü grup + ayraç + devamında rakam (ör. `4111 11`, `4111.1111.11`); (b) ≥12 bitişik rakam. `siparişim 1234567` maskesiz kalır. Sondaki dizi regex'le değil, sondan geriye tek geçişli döngüyle bulunur (doğrusal). `SNEAK_PEEK_MAX_LENGTH` 500 kalır (packages/types/src/realtime-bus.ts:52).\nK6 Yayın (kesin): metin varken yalnız `incoming_sneak_peek` (panel işleyicisi :1427-1437 isTyping'i zaten true yapıyor); temizlemede yalnız `incoming_typing_indicator`. Kanıt: `incoming_typing_indicator`'ün kodda tek yayın noktası chat-service.ts:2545, tek tüketicisi useInbox.ts:1415; apps/mobile, webhook ve entegrasyonlarda geçmiyor. apps/api/test/integration/customer-chat.test.ts:575-578 güncellenir.\nK7 RTM: (a) `HUMAN_ONLY_ACTIONS = {incoming_sneak_peek, incoming_typing_indicator}` yalnız `actorType==='agent'` olan bağlantıya teslim edilir; bot ve unrestricted bot/PAT bağlantısına teslim edilmez. (b) `incoming_sneak_peek` kareleri DÜŞÜRÜLMEZ, BİRLEŞTİRİLİR. `bufferedAmount > 64 KiB` iken her sohbetin son karesi bağlantı başına bir `Map<chat_id, frame>` içinde bekletilir. Bağlantı başına tek bir 250 ms zamanlayıcı eşiğin altına inildiğini yoklar ve bekleyen son kareyi gönderir. Aynı sohbet için temizle gelince bekleyen kare silinir, temizle hemen gider. Bağlantı kapanınca map silinir. Diğer olaylar bugünkü gibi.\nK8 Kiracı ayarı: `widget_settings.sneak_peek_enabled boolean NOT NULL DEFAULT true`. HIPAA kapsamındaki çalışma alanında ayardan bağımsız olarak kapalıdır; panelde anahtar kilitli görünür ve açıklama taşır. Widget'ta ziyaretçiye bildirim olup olmayacağı sahip kararıdır (ownerQuestions 3, 'karar gerektirir').\nK9 Panel: şerit mesaj listesinin altında, ConflictBanner'ın üstünde (InboxPage.tsx:1321-1325). `role=status aria-live=polite` canlı bölgesi sohbet açıkken DAİMA DOM'da durur. Duyuru taslak oturumu başına bir kez yapılır: ilk önizlemede \"{ad} yazıyor\", temizle/mesaj/kapanışta boşalır. 6 sn idle geçişi canlı bölge metnini değiştirmez. Önizleme metni canlı bölgenin DIŞINDA durur; düz metindir (linkify/markdown/HTML yok). Vuruş gelirken noktalar + \"{ad}: “metin”\" gösterilir. 6 sn vuruş yoksa noktalar söner ve metin \"{ad} henüz göndermedi: “…”\" olarak kalır. Şerit şu durumlarda kalkar: temizle olayı, müşteri mesajı, sohbet kapanması, transfer/devralma/atama değişikliği, `sync_required`/yeniden bağlanma ya da 10 dk güncelleme gelmemesi (`DRAFT_STALE_MS`). Sıra koruması: store sohbet başına `maxSeq` tutar; seq ≤ maxSeq olan kare atılır. Temizlemeler maxSeq'i tombstone olarak korur (10 dk ya da kapanışa kadar). Yükseklik sabittir: taslak varken `min-h` 3 satır (`line-clamp-3`), dar ekranda 2 satır; satır sayısı değişince akış zıplamaz. Dark temada `text-content-*` tokenları kullanılır. i18n en + tr.\nK10 Mobil (apps/mobile): KAPSAM DIŞI; sahibe soru.\nK11 Bundle: widget değişikliği gzip'te ≤ +400 B. 2026-11-06 ölçümünde pay ≈1 328 B, tavan 66 304 B (apps/widget/test/bundle-size.test.ts:56). seq, visibility ve pagehide eklendiği için +300'den +400'e çıkarıldı; aşılırsa lazy-chunks.ts.\n\nALT GÖREV SIRASI (contract-first): 417.1 kontrat + ayar deposu → 417.2 API kapısı/alıcı/maskeleme → 417.3 hız kovaları → 417.4 RTM insan-yalnız + birleştirme → 417.5 widget ritmi → 417.6 panel şeridi + ayar anahtarı → 417.7 e2e + doküman + kapanış.\n\nKAPSAM DIŞI: mobil uygulama, widget→RTM WS kanalı, ajanın kendi typing'i (ters yön), önizlemenin kaydı/geçmişi, sohbeti yeni açan ajanın mevcut taslağı görmesi (bir sonraki değişiklikte görür), genel RTM backpressure, kuyruk evresinde takıma önizleme (sahip onayına bağlı), widget'ta ziyaretçi bildirimi (sahip kararına bağlı).\nTUZAKLAR: widget bundle bütçesi (hafıza widget-bundle-budget-and-css-minify); yeni panel metni i18n kaydı + glossary (new-web-component-must-be-registered-for-i18n, web-glossary-and-plural-catalogue-traps); `widget_settings` alanı `DEFAULT_WIDGET_APPEARANCE` (packages/types/src/widget.ts:159), `serialiseWidget` (settings.ts:4258) ve website-service.ts üzerinden dalgalanır; kontrata yanıt alanı eklemek parity sayısını DEĞİŞTİRMEZ, ama `contract:generate` sonrası generated temiz olmalı; ReDoS (redos-timing-tests-need-1m-chars); test verisindeki rakamlar maskelenir (test-data-digits-near-code-words-get-masked); ChatService services/ai'yi import edemez (chat-service-must-not-import-ai).\nDENETİM BULGULARI: Son metin gönderilmiyor (leading-only throttle, widget.ts:1353-1358); Önizleme 4 sn/blur/6 sn'de siliniyor (widget.ts:1361, :2978; typing.ts:25); 800 ms HTTP + 60/dk ziyaretçi kovası 429 riski (rate-limit.ts:395-409); AI evresi süzülmüyor (chat-service.ts:2527-2535); Alıcı fazla geniş: tüm takım, present:false ajanlar (chat-service.ts:601-607), unrestricted botlar (fanout.ts:205); Sıra koruması yok, geç kare hayalet taslak bırakır (api.ts:619-624, chat-service.ts:2543); RTM backpressure yok (fanout.ts:174); Ekran okuyucu her harfi okuyor ve canlı bölge sonradan ekleniyor (TypingIndicator.tsx:22, :28-29)",
+        "testStrategy": "Alt görevlerin kabul testlerinin toplamı. Uçtan uca kabul: e2e `visitor-typing-preview.spec.ts` (iki bağlam). AI evresinde yazım `/customer/chat/typing` isteği üretmez. Devirden sonra `typing_preview:true` poll/push beklenir; ziyaretçi yazar, ajan şeridi ≤2 sn içinde son metni gösterir. Blur sonrası şerit kalır. Gönderince şerit kalkar ve mesaj akışta görünür. Entegrasyon testlerinde şunlar önizlemeyi almaz: başka kiracı, başka ziyaretçi, aynı takımdaki atanmamış ajan, present:false eski ajan, bot soketi, ziyaretçi soketi. DB/audit/Redis değerleri/log'da gözcü metin yok; typing 429'u mesaj gönderimini etkilemez. Sıra testi: geç gelen düşük seq'li kare panelde hayalet taslak bırakmaz. Widget birim: trailing throttle son metni kaçırmaz, değişmeyen metinde istek yok. bundle-size.test.ts yeşil. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "TYPING-PREVIEW-CONTRACT-SETTING [SONNET-HIGH] (Sonnet 5.5) Kontrat: CustomerChatState.typing_preview, typing gövdesi/yanıtı (seq, 200 typing_preview:false), sneak_peek/typing_indicator yüklerine seq, widget ayarı sneak_peek_enabled; migration + GET/PUT /settings/widget + typingPreviewAllowed saf fonksiyonu",
+            "description": "Contract-first ilk halka. Widget'ın ne zaman önizleme göndereceğini sunucudan öğrenmesi için poll yanıtına `typing_preview` eklenir. Sıra koruması için typing gövdesine ve RTM yüklerine opsiyonel `seq` eklenir. Kapı kapalıyken rotanın döneceği 200 gövdesi tanımlanır. Kiracının özelliği kapatması için widget ayarına `sneak_peek_enabled` eklenir. Ayrıca DB kolonu, ayar ucu ve tek kural fonksiyonu `typingPreviewAllowed` yazılır.",
+            "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1 (test:gate arka planda; migration §6.3; `prisma format` ÇALIŞTIRMA; `prisma generate` dev API açıkken EPERM verebilir). Üst görev #417 KARARLAR K2, K3, K8 bu alt görevin tek kaynağıdır.\n\nBAĞLAM: Sahip 2026-11-06'da ziyaretçinin gönderilmemiş taslağının sohbete atanmış insan ajana canlı görünmesini istedi. Mevcut sneak-peek AI evresinde de çalışıyor, kapatılamıyor ve sıra taşımıyor. Bu halka yalnız sözleşme, depolama ve saf kural; davranış 417.2'den sonra gelir.\n\nKODDA BUGÜN (HEAD'de yeniden oku):\n- packages/contract/openapi/openapi.yaml:16973 `CustomerChatState` (poll yanıtı, `GET /customer/chat`, packages/contract/openapi/paths/customer-chat.yaml:14). `answered_by`, `read_only`, `agent_typing` burada.\n- packages/contract/openapi/paths/customer-chat.yaml:203-240 `typing` yolu (açıklamada \"debounced\"; yanıt 204).\n- apps/api/src/routes/customer.ts:283-288 `typingSchema`.\n- packages/types/src/rtm.ts:172 `incoming_sneak_peek`, :389 civarı `sneak_peek` / `typing_indicator` yükleri; packages/types/src/realtime-bus.ts:52 `SNEAK_PEEK_MAX_LENGTH`.\n- packages/types/src/ai-disclosure.ts:43-54 `customerChatOwner` (yeni fonksiyonun yanına).\n- apps/api/prisma/schema.prisma:4168 `model WidgetSettings`. :4166-4167'deki not, kolon varsayılanlarının packages/types/src/widget.ts:159 `DEFAULT_WIDGET_APPEARANCE` ile birebir aynı olması gerektiğini söylüyor.\n- apps/api/src/routes/settings.ts:3332 GET (brand kapsamlı, :3338-3339) ve :3356 PUT (`minimumRole: 'admin'`); `serialiseWidget` :4258; apps/api/src/services/websites/website-service.ts.\n- apps/widget/src/api.ts:100-121 `WidgetState` (yalnız tip; davranış 417.5'te).\n\nAMAÇ:\n1) `CustomerChatState.typing_preview: boolean` opsiyonel. Açıklama: \"true iken widget ziyaretçinin gönderilmemiş taslağını `/customer/chat/typing` ile gönderir. AI cevaplarken, sohbet bir insana atanmamışken, HIPAA kapsamında ya da kiracı kapattığında false. Eski sunucuda bulunmaz.\" KARAR: alan bu halkada YALNIZ kontrat ve tipte durur; sunucu 417.2'de doldurur.\n2) Typing gövdesi: opsiyonel `seq: integer (≥0)`. `typingSchema`'ya da opsiyonel `seq` eklenir. `text` maxLength 500 DEĞİŞMEZ.\n3) Typing yanıtı: 204 (yayınlandı/kabul edildi) korunur; ek olarak 200 `{ typing_preview: false }` (kapı kapalı, yayın yok; widget susar) tanımlanır. Yol açıklaması: \"yalnız metin değişince, en çok saniyede bir; seq artan; temizleme `is_typing:false`; 429 kendi kovasından (417.3); yalnız sohbete atanmış insan ajan görür, botlar ve API token'ları almaz, kaydedilmez\".\n4) packages/types RTM yükleri: `sneak_peek` ve `typing_indicator`'a opsiyonel `seq?: number` eklenir (geriye uyumlu).\n5) packages/types: saf `typingPreviewAllowed({ owner, enabled, hipaa }): boolean` = `enabled && !hipaa && owner === 'human'`. Top-level çağrı yok (types-top-level-calls-bloat-widget-loader). Birim tablo testi yazılır.\n6) Widget ayarları kontratına `sneak_peek_enabled: boolean` (GET yanıtı + PUT gövdesinde opsiyonel) ve `sneak_peek_locked: boolean` (GET; HIPAA kapsamındaysa true, sunucu hesaplar) eklenir.\n7) Migration: `widget_settings.sneak_peek_enabled BOOLEAN NOT NULL DEFAULT true`. Prisma: `sneakPeekEnabled Boolean @default(true) @map(\"sneak_peek_enabled\")`, mevcut kolonların yanına (yeni brand_id yok).\n8) `DEFAULT_WIDGET_APPEARANCE`'a (ya da widget.ts'teki uygun varsayılan nesneye) `sneak_peek_enabled: true`. `serialiseWidget` ve website-service.ts güncellenir. settings.ts GET/PUT bağlantısı mevcut alan desenini izler; audit mevcut widget ayarı audit'iyle aynı yoldan gider; `sneak_peek_locked` için `inHipaaScope(licence)` (apps/api/src/lib/hipaa.ts:46) kullanılır. HIPAA kapsamında PUT `sneak_peek_enabled:true` 409/422 döner (mevcut HIPAA kilit hata desenini `git grep -n inHipaaScope apps/api/src/routes` ile bul).\n9) `pnpm contract:generate`; generated temiz; `db:check-drift` yeşil.\n\nKARARLAR: varsayılan true. Yeni YOL eklenmez, mobil parity sayısı değişmez.\nKAPSAM DIŞI: typing_preview'un sunucuda doldurulması ve rota kapısı (417.2), panel anahtarı (417.6), widget davranışı (417.5).\nTUZAKLAR: dalga taraması `git grep -n -l \"DEFAULT_WIDGET_APPEARANCE\\|serialiseWidget\"` ve `git grep -n -l \"welcome_text\" apps/api/test apps/web/src`; sabitlenmiş fixture'lar güncellenir. Türkçe metin Write/Edit ile yazılır; heredoc ve `node -e` kullanılmaz.\nKABUL: kontrat, generated, migration, ayar uç testleri ve typingPreviewAllowed tablosu yeşil; drift yok.",
+            "testStrategy": "api entegrasyon (settings, başlıkta `FR-MOD-02.9`):\n- admin `PUT /settings/widget {sneak_peek_enabled:false}` → GET false döner; alan verilmezse true.\n- admin olmayan rol PUT → 403.\n- HIPAA kapsamlı lisansta GET `sneak_peek_locked:true`; PUT true reddedilir.\npackages/types birim: `typingPreviewAllowed` tablosu (ai/human/queue/none × enabled × hipaa); yalnız human+enabled+!hipaa true döner.\nAyrıca: `db:check-drift` exit 0; `contract:generate` sonrası `git status` generated'da temiz. DoD: CONVENTIONS §1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "417",
+            "priority": "high",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          },
+          {
+            "id": 2,
+            "title": "TYPING-PREVIEW-API-GATE [OPUS-XHIGH] (Opus 5.5) Typing ucu: rotada typingPreviewAllowed kapısı (AI/queue/ayar kapalı/HIPAA → 200 typing_preview:false, yayın yok), yalnız present atanmış ajanlara #previewAudienceFor, seq taşıma, önizleme temizleyici, tek publish, redaksiyon + kalıcılık/log yokluğu kanıtı",
+            "description": "Sunucu otorite kapısı. owner 'human' değilse, ayar kapalıysa ya da HIPAA kapsamındaysa `/customer/chat/typing` hiçbir şey yayınlamaz ve widget'a kapalı olduğunu söyler. Poll yanıtı `typing_preview` döner. Alıcı yalnız sohbette present olan agent kullanıcılardır; tüm takım, eski ajan, bot ve müşteri alıcı değildir. Yarım kart dizileri ve kontrol karakterleri temizlenir. Metin varken tek olay yayınlanır, seq korunur. DB/audit/log/Redis'te iz kalmadığı testle kanıtlanır.",
+            "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1. Bağımlılık: 417.1 (kontrat alanları, `seq`, `sneakPeekEnabled` kolonu, `typingPreviewAllowed`). Üst görev #417 KARARLAR K3, K4, K5, K6 tek kaynaktır.\n\nXHIGH GEREKÇESİ: güvenlik yüzeyi. Ziyaretçinin göndermediği metnin kime gittiği ve iz bırakmaması bir gizlilik sınırıdır; kiracılar arası, ziyaretçiler arası ve ajanlar arası sızıntı burada önlenir.\n\nBAĞLAM: Ziyaretçi taslağı bugün AI evresinde de, sohbete hiç bakmayan tüm takıma da, sohbetten çıkarılmış (`present:false`) ajanlara da gidiyor. Maskeleme yarım kart numarasını kaçırabiliyor; iki ayrı publish yapılıyor. Sahip: \"loglanmasına gerek yok, insan agent'ın görmesi yeterli\".\n\nKODDA BUGÜN:\n- apps/api/src/routes/customer.ts:283-288 `typingSchema`. Rota :1693-1722: sohbet `withTenant` içinde `customerId: principal.customerId, active: true` ile bulunuyor (:1702-1707); maskeleme :1713-1715. Rota `HumanRequestService.ownerOf`'u zaten kullanıyor (:897).\n- Poll yanıtı customer.ts:894-906 (`owned`, `aiAgent` sorgusu), :921-923 (`readCustomerAvailabilityMode`, owned iken ATLANIYOR; apps/api/src/services/websites/availability.ts:19-33), :964-975 (`answered_by`), :994-1001.\n- apps/api/src/services/chat/chat-service.ts:2519-2571 `publishCustomerTyping` (`resolveVisibility` + `#loadVisibleChat` :2527-2536; boş alıcıda çıkış :2540; publish :2545 ve :2559-2569). `#audienceFor` :601-607. `chat.users` okumaları yalnız `{ userId, userType }` seçiyor (:2133, :2190, :2223). present:false yazan yerler: :2783, :3780-3784, :4117-4121.\n- Sahiplik: human-request.ts:154-176 `ownerOf`. HIPAA: apps/api/src/lib/hipaa.ts:46 `inHipaaScope`.\n- Maskeleme sensitive-mask.ts:700 `maskForWrite`. Yayıncı apps/api/src/services/realtime/publisher.ts:36-69. Pino redaksiyonu apps/api/src/lib/fastify-options.ts:53-90.\n- Mevcut test apps/api/test/integration/customer-chat.test.ts:542 (`sub.subscribe(licenseChannel(...))` deseni), :562-595 (iki olay bekliyor, :575-578), :597-610 (temizle testi).\n- Log yakalama deseni: apps/api/test/helpers/ai-workspace.ts `LineSink` (apps/api/test/.../log-context.test.ts:24'te kullanılıyor).\n\nAMAÇ:\n1) Poll: `typing_preview = typingPreviewAllowed({owner, enabled, hipaa}) && answered_by === 'human'`. `enabled` için `owned` iken de okunan ayrı bir `tx.widgetSettings.findFirst({ where: { brandId: <sohbetin markası ya da varsayılan marka> }, select: { sneakPeekEnabled: true } })` eklenir (mevcut availability okuması owned iken atlandığı için ona kolon eklemek YETMEZ). Önbellek YOK (reset-database-reuses-license-ids). `hipaa` = `inHipaaScope(licence)` (lisans poll'da zaten okunuyorsa oradan).\n2) Rota (kapı rotada uygulanır, ChatService'e services/ai importu girmez): mevcut sorgu `withTenant` + `customerId = principal.customerId` + `active = true` koşullarını KORUR, raw SQL kullanılmaz. Select'e aktif thread eklenir; `ownerOf` çağrılır; ayar ve HIPAA aynı tx içinde okunur. Kapı kapalıysa ve `is_typing:true` ise publish YOK, yanıt 200 `{typing_preview:false}`. `is_typing:false` (temizle) kapıdan bağımsız yayınlanır. \"Tek sorgu\" şartı YOK; ölçülebilir şart: istek başına ≤4 DB sorgusu (Prisma query event sayacıyla test edilir).\n3) ChatService: `publishCustomerTyping` imzası `seq`'i taşır. `#loadVisibleChat` select'ine `chat.users.present` eklenir (yalnız bu yol için; diğer okumalar değişmez). Yeni `#previewAudienceFor(chat)` = `{ agentIds: users.filter(u => u.userType==='agent' && u.present).map(u=>u.userId), groupIds: [] }`; `customerId` yok. Sneak-peek ve temizle bu alıcıyı kullanır; `#audienceFor` DEĞİŞMEZ. agentIds boşsa yayın yok. `seq` varsa yüklere eklenir.\n4) Önizleme temizleyici (`apps/api/src/lib/typing-preview.ts`), K5 sırası: 500 kod noktasına kes → kontrol/bidi at → NFKC → `maskForWrite(text,'customer')` → sondaki kart benzeri yarım dizi maskesi (sondan geriye tek geçiş) → trim → ≤500 güvenlik kesmesi. Regex yok ya da doğrusal.\n5) K6 kesin: metin varken yalnız `incoming_sneak_peek`, temizlemede yalnız `incoming_typing_indicator`.\n6) K4: fastify-options.ts redaksiyon listesine `req.body.text` (yalnız bu rota için `req.body` tamamen de olabilir; seçimi HANDOFF'a yaz).\n\nKARARLAR: owner 'queue' varsayılan olarak DAHİL DEĞİL (sahip onaylarsa `typingPreviewAllowed`'a 'queue' eklenir ve alıcı o durumda `chat.access` grupları olur; ayrı satır). owner 'ai' (parallel atamada AI yanında bekleyen ajan dahil) dahil değil. Uzunluk 500 sabit.\nKAPSAM DIŞI: hız kovaları (417.3), RTM (417.4), widget (417.5), panel (417.6). Sunucu içi süreç zamanlayıcıyla birleştirme yapılmaz (notes'taki gerekçe).\nTUZAKLAR:\n- customer-chat.test.ts:575-578 güncellenir: metinli istekte typing_indicator YOK, sneak_peek VAR. :597-610 değişmez. Fixture sohbeti insana atanmış ve present hâle getirilir; test silinmez.\n- Zarf yakalama mevcut `sub.subscribe(licenseChannel(...))` deseniyle yapılır (psubscribe değil).\n- Transfer sonrası eski takımın `chat.access` satırının kalıp kalmadığı doğrulanır ve HANDOFF'a yazılır. Önizleme grupları kullanmadığı için bu sonucu etkilemez; yalnız kayıt amaçlıdır.\n- Rakam maskeleme test verisini de maskeler; gözcü metinde rakam kullanılmaz.\n- ReDoS testi 1M karakterle yapılır.\n- resetDatabase ile yarış: publish await edilir (background-db-work-races-reset-database).\nKABUL: aşağıdaki testler yeşil; log/DB/Redis yokluğu gözcü metinle kanıtlı.",
+            "testStrategy": "api entegrasyon (başlıkta `FR-MOD-02.9` / `FR-MOD-11.8`), `sub.subscribe(licenseChannel(...))` ile zarf yakalanır:\n(a) owner 'ai' → 200 `{typing_preview:false}`, zarf yok.\n(b) insana atanmış sohbet → tek `incoming_sneak_peek`; `agentIds` = present atanan ajan; `groupIds` boş; `customerId` yok; seq yükte. Aynı takımdaki ikinci ajan alıcı DEĞİL.\n(c) ayar kapalı ya da HIPAA → zarf yok; poll `typing_preview:false`.\n(d) poll tablosu: ai / human / queue+online / queue+offline / none → yalnız human true. Rota sonucu da tabloda.\n(e) gözcü `ZZ-PREVIEW-SENTINEL-ABC`: events ve audit_log satır sayısı değişmez. Redis SCAN ile her anahtarın TYPE'ı alınır, değeri okunur (GET/HGETALL/LRANGE/ZRANGE); hiçbirinde gözcü yok. Sunucu `LineSink` ile `trace` seviyesinde kurulur; satırlarda gözcü yok.\n(f) temizleyici: `4111 1111 11` ve `4111.1111.11` sonda maskeli; tam genişlik rakamlar maskeli; 499. karakterde başlayan kart maskeli; `siparişim 1234567` maskesiz; bidi/kontrol karakteri atılır; 1M karakter ('1' + 'a' tekrarı) girişte < 200 ms.\n(g) süpervizör devraldıktan sonra eski ajan (present:false) zarf almaz.\n(h) başka takıma transferden sonra eski takım ve eski ajan zarf almaz.\n(i) A kiracısının token'ı B kiracısındaki sohbete önizleme üretmez.\n(j) aynı kiracıda X ziyaretçisi Y'nin sohbetine yayın tetikleyemez.\n(k) istek başına DB sorgusu ≤4.\nBirim: temizleyici tablo testleri. Mutasyonlar: owner kapısını kaldır → (a) kırmızı; `present` süzgecini kaldır → (g) kırmızı. DoD: CONVENTIONS §1.",
+            "status": "pending",
+            "dependencies": [
+              "417.1"
+            ],
+            "parentId": "417",
+            "priority": "high",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          },
+          {
+            "id": 3,
+            "title": "TYPING-PREVIEW-RATE-BUCKET [OPUS-HIGH] (Opus 5.5) Typing ucuna ayrı kovalar: ziyaretçi 150/dk + sohbet 90/dk + IP tavanı 3000/dk; mesaj/poll 60/dk kovasından ayrılır, 429 yalnız önizlemeyi susturur",
+            "description": "`POST /customer/chat/typing` bugün ziyaretçinin 60/dk kovasından yiyor; kesintisiz yazım 429 ile mesaj gönderimini ve poll'u da kesebiliyor. Rota üç kova alır: ziyaretçi başına, sohbet başına ve IP tavanı. Geçersiz token yine anonim 30/dk kovasında kalır.",
+            "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1. Bağımlılık: 417.1 (yalnız sıra için; kod bağımlılığı yok). Üst görev #417 K1, K2.\n\nBAĞLAM: Bugünkü en kötü durum 75 typing/dk + 15 poll/dk = 90 > 60, sonuç 429 (hesap, ölçüm değil). Yeni widget ritmi sekme başına ≤60/dk + temizle olaylarıdır; yalnız görünür sekme gönderir. Ziyaretçi kimliği ucuza üretilebildiği (`POST /customer/token`) için sohbet başına kova amplifikasyonu keser. Alıcı 417.2'de present atanmış ajan(lar)la sınırlı, bu yüzden istek başına fan-out ≈1.\n\nKODDA BUGÜN:\n- apps/api/src/plugins/rate-limit.ts:314-436 `bucketFor`: rotaya özel kovalar `publicKbRateLimit` :321, `healthRateLimit` :335, `publicConfigRateLimit` :349, `tokenRateLimit` :363, `impersonationRateLimit` :376; müşteri kovası :395-409 (`ceiling` ile). Stage-one `visitorOf` :581-589, hook :617-658; stage-two :662-671 (`rateLimitChargedKey` :668); `FastifyContextConfig` bayrakları :720-751.\n- apps/api/src/config/env.ts:491 `RATE_LIMIT_CUSTOMER_PER_MIN` (60), :504 civarı IP tavanı.\n- apps/api/src/routes/customer.ts:1693-1696 rota config `{ principals: ['customer'] }`.\n\nAMAÇ: yeni bayrak `customerTypingRateLimit`. `bucketFor` içinde YALNIZ `principal?.kind === 'customer'` iken (stage-one'da `visitorOf` sonucu, stage-two'da çözülmüş principal; iki aşama AYNI anahtarı seçmeli) şu kovalar kullanılır:\n- `rl:customertyping:<organizationId>:<customerId>` limit `RATE_LIMIT_CUSTOMER_TYPING_PER_MIN` (varsayılan 150);\n- `ceiling` `rl:customertypingip:<ip>` limit `RATE_LIMIT_CUSTOMER_TYPING_IP_PER_MIN` (varsayılan 3000).\nSohbet başına kova `rl:customertypingchat:<chatId>` (`RATE_LIMIT_CUSTOMER_TYPING_CHAT_PER_MIN`, varsayılan 90) rota içinde, aktif sohbet bulunduktan sonra mevcut kova yardımcısıyla uygulanır. Hook aşamasında chatId bilinmez; yardımcının bunu destekleyip desteklemediği okunur, en küçük yol seçilir ve HANDOFF'a yazılır. Principal yoksa anonim kovaya düşülür; bayrak anonim akışı GENİŞLETMEZ. Dosya başı yorumuna kısa bölüm eklenir (tm 417). Env şemasına üç anahtar + .env.example satırları eklenir.\n\nKARARLAR: ziyaretçi anahtarlı, çünkü NAT arkasındaki ziyaretçiler birbirini kesmemeli. 150/dk = iki görünür sekme × 60 + temizlemeler (yalnız görünür sekme gönderdiği için pay bol). IP tavanı 3000/dk = Türk mobil CGNAT'ında ~50 eşzamanlı yazan ziyaretçi. Önizleme kozmetik ve kendi kovasında olduğundan mesaj/poll etkilenmez. Sohbet kovası 90/dk: aynı sohbete çoklu kimlik basılmasını keser. Değerler ölçümle değiştirilebilir; ölçüm HANDOFF'a yazılır. Mesaj/poll kovası değişmez.\nKAPSAM DIŞI: widget'ın 429 tepkisi (417.5), diğer müşteri rotaları.\nTUZAKLAR: stage-one ve stage-two farklı anahtar seçerse istek iki kez faturalanır (:668). `git grep -n RATE_LIMIT_CUSTOMER_IP_PER_MIN` ile tüm yerler (compose, .env.example, docs, testler) bulunur ve aynısı yapılır. 00:00-01:00 UTC entegrasyon kırmızıları (integration-reds-between-00-and-01-utc). Fastify gate'i rota desenine uymalı (fastify-gates-must-match-route-pattern).\nKABUL: typing 429'u aynı ziyaretçinin `POST /customer/chat/events` ve `GET /customer/chat` isteklerini etkilemez; sohbet kovası çoklu kimlikte devreye girer.",
+            "testStrategy": "api entegrasyon (rate-limit), env limitleri 3'e indirilmiş sunucuda:\n- aynı ziyaretçinin 4. typing isteği → 429 + `Retry-After` + `X-RateLimit-*`; ardından `POST /customer/chat/events` ve `GET /customer/chat` 2xx döner.\n- tek istek tek kez faturalanır (Redis ZCARD = 1).\n- geçersiz token ile typing anonim kovadan yer.\n- IP tavanı ayrı ziyaretçilerle aşılınca 429; ziyaretçi slotu geri verilir.\n- aynı IP'den 10 ziyaretçi kimliği aynı sohbet anahtarına yazınca sohbet kovası 429 verir; ajan başına zarf sayısı sohbet limitiyle sınırlı kalır.\nMutasyon: bayrağı rotadan kaldır → \"mesaj etkilenmez\" testi kırmızı. DoD: CONVENTIONS §1.",
+            "status": "pending",
+            "dependencies": [
+              "417.1"
+            ],
+            "parentId": "417",
+            "priority": "high",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          },
+          {
+            "id": 4,
+            "title": "TYPING-PREVIEW-RTM-HUMAN-COALESCE [OPUS-HIGH] (Opus 5.5) RTM fan-out: önizleme olayları yalnız insan ajan soketine; dolu sokette sneak-peek karesi birleştirilir (son kare bekletilir, düşmez), temizle bekleyeni siler, diğer olaylar değişmez",
+            "description": "RTM bugün grup adresli olayları unrestricted bot/PAT bağlantılarına da veriyor ve `ws.send` bufferedAmount'a bakmıyor. Önizleme olayları yalnız `actorType==='agent'` bağlantılara gider. Dolu bir sokette sohbet başına yalnız son sneak-peek karesi bekletilir ve soket boşalınca gönderilir. Böylece son kare asla kaybolmaz (K2'de heartbeat yok) ve eski kareler birikmez.",
+            "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1. Bağımlılık: 417.1 (`seq` yük tipi, sıra için). Üst görev #417 K7.\n\nBAĞLAM: (1) Sahip \"insan agent'ın görmesi yeterli\" dedi; ama `#isAddressed` (apps/rtm/src/fanout.ts:191-207) `connection.unrestricted && groupIds.length>0` iken (:205) her grup adresli olayı veriyor; bot token'ları unrestricted olabiliyor (apps/rtm/src/auth.ts:255-271), kapsamı sınırlı bot sahibinin gruplarını alıyor (:258-260). 417.2 önizlemede grupları boş gönderse de agentIds adreslemesi ve gelecekte 'queue' grupları için RTM'de de kapı gerekiyor (derinlemesine savunma). (2) Backpressure yok (:174). Kare düşürmek yanlış olur: ziyaretçi durunca son kare düşerse bir daha kare gelmez ve ajan 10 dk eksik taslak görür.\n\nKODDA BUGÜN:\n- apps/rtm/src/fanout.ts:150-189 `#handle` (`encodePush` :164, filtreler :166-172, `connection.ws.send(frame)` :174-187, telemetri `fanoutDelay` :182); resync dağıtımı :130-147 (dokunma).\n- apps/rtm/src/connection.ts: `actorType` (`agent`/`bot`/`customer`), `unrestricted`, `groupIds`, `side`.\n- apps/rtm/src/server.ts:401 `maxPayload: 256 KB`; :971-977 `send()`; bağlantı kapanış yolu.\n- packages/types/src/rtm.ts:172 `incoming_sneak_peek`, :389 civarı yükler (`chat_id`).\n- Test dosyası: apps/rtm/src/fanout.test.ts (apps/rtm/test altında DEĞİL); sahte registry deseni oradan alınır.\n\nAMAÇ:\n1) `HUMAN_ONLY_ACTIONS = new Set(['incoming_sneak_peek','incoming_typing_indicator'])`: bu action'lar yalnız `connection.actorType === 'agent'` olan bağlantıya teslim edilir; `bot`, `customer` ve kimliği doğrulanmamış bağlantılara teslim edilmez (unrestricted ve grup üyesi olsalar da).\n2) `COALESCIBLE_ACTIONS = new Set(['incoming_sneak_peek'])` ve `SNEAK_PEEK_COALESCE_BUFFERED_BYTES = 64 * 1024`. Action bu kümedeyse ve `bufferedAmount > eşik` ise kare bağlantı başına `Map<chat_id, frame>` içine yazılır (eskinin üstüne) ve gönderilmez. Bağlantı başına tek bir `setTimeout(250 ms)` kurulur (her karede yeniden kurulmaz). Zamanlayıcı tetiklenince eşiğin altındaysa map boşaltılıp son kareler gönderilir; değilse yeniden kurulur.\n3) Aynı bağlantıya aynı `chat_id` için `incoming_typing_indicator` geldiğinde önce bekleyen kare silinir, sonra temizle hemen gönderilir (temizle asla bekletilmez ya da düşürülmez). Eşik altındayken gelen yeni sneak-peek de, varsa aynı sohbetin bekleyenini siler.\n4) Bağlantı kapanınca map ve zamanlayıcı silinir.\n5) Telemetri: mevcut instruments'a sayaç eklenebiliyorsa `fanout_coalesced_total{action}` eklenir; yoksa yalnız `this.log.debug({ connection_id, action }, 'coalesced a push on a congested socket')`. Payload ya da metin ASLA loglanmaz.\n\nKARARLAR: eşik 64 KiB (en büyük sneak-peek karesi ≈2,5 KB). Diğer tüm action'lar bugünkü gibi.\nKAPSAM DIŞI: genel backpressure (tüm olaylar için kuyruk ya da soket kapatma) ayrı iş; HANDOFF'a not.\nTUZAKLAR: telemetri sayacı RTM health/metrics pin'li testlerini dalgalandırabilir, önce `git grep -n fanout_ apps/rtm`. Sahte zamanlayıcıyla test edilir; gerçek ws yerine `bufferedAmount` alanı ayarlanabilen sahte bağlantı kullanılır.\nKABUL: bot bağlantısı önizleme almaz; dolu sokette yalnız son kare gecikmeli gider; temizle hemen gider ve bekleyeni iptal eder; log'da metin yok.",
+            "testStrategy": "rtm birim (apps/rtm/src/fanout.test.ts, başlıkta `FR-MOD-11.8`):\n(a) unrestricted + grup üyesi bot bağlantısı `incoming_sneak_peek` ve `incoming_typing_indicator` almaz; aynı adreslemedeki insan ajan alır; bot `incoming_event` almaya devam eder.\n(b) `bufferedAmount = 70_000` iken aynı sohbet için A ve B kareleri gelir → send çağrılmaz; ardından 0'a iner ve zamanlayıcı 250 ms ilerletilir → YALNIZ B gönderilir.\n(c) bekleyen kare varken temizle gelir → temizle hemen gönderilir; bekleyen kare hiç gönderilmez.\n(d) `incoming_event` dolu sokette bugünkü gibi gönderilir.\n(e) bağlantı kapanınca zamanlayıcı temizlenir (sahte zamanlayıcıda bekleyen yok).\n(f) yakalanan log'da gözcü metin yok.\nMutasyonlar: `actorType` kontrolünü kaldır → (a) kırmızı; birleştirme yerine düşür → (b) kırmızı. DoD: CONVENTIONS §1.",
+            "status": "pending",
+            "dependencies": [
+              "417.1"
+            ],
+            "parentId": "417",
+            "priority": "high",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          },
+          {
+            "id": 5,
+            "title": "TYPING-PREVIEW-WIDGET-CADENCE [OPUS-HIGH] (Opus 5.5) Widget: yalnız metin değişince ≤1/sn leading+trailing throttle, seq, typing_preview kapısı + devirde anında yenileme, kapalı yanıtında susma, blur temizlemez, pagehide keepalive temizle, yalnız görünür sekme, 429 susması; bundle ≤ +400 B",
+            "description": "Widget'ın önizleme ritmini sahibin şartına getirir. Değişmeyen metinde sıfır trafik olur, son değişiklik asla kaybolmaz, AI evresinde hiç istek gitmez. Devirde poll beklenmeden açılır. Metin kutuda durdukça ajan ekranında kalır; sekme kapanınca temizlenir.",
+            "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1. Bağımlılık: 417.1 (`typing_preview`, `seq`, 200 gövdesi), 417.2 (sunucu doldurur), 417.3 (429 ayrı kova). Üst görev #417 K2, K3, K11.\n\nBAĞLAM: Bugünkü throttle yalnız ilk vuruşta gönderiyor; 800 ms içinde yazılan son karakterler gitmiyor. 4 sn sessizlik ve blur önizlemeyi siliyor. AI evresinde de gönderiyor. Soket açıkken poll 30 sn olduğu için devirde kapı geç açılır. Sahip: \"gönderilmese dahi metin kutusundaki mesaj gözükmeli\", \"sürekli gönder-dinle değil, gerektiğinde\".\n\nKODDA BUGÜN:\n- apps/widget/src/widget.ts:1337-1379 (`typingThrottle`, `typingStop`, `typingSent`, `notifyTyping`, `stopTyping`); dinleyiciler :2976 (`input`), :2978 (`blur`); gönderimde temizle :2340-2342.\n- Poll anlık görüntüsü :1800 (`answered_by`), :2112 ve :2523 (`agent_typing`). Poll aralığı :2836-2844 (`SOCKET_POLL_INTERVAL_MS` 30 sn soket canlıyken, `POLL_INTERVAL_MS` 4 sn); sabitler :72, :115.\n- `applyIncomingEvent` widget.ts:2641. Mevcut refresh tetikleyicileri: ziyaretçi kuyruktayken ajan mesajı (:2682-2687), AI konuşunca (:2693).\n- apps/widget/src/socket.ts:61 `PUSHES` (yalnız `incoming_event`, `chat_deactivated`, `event_updated`, `sync_required`).\n- apps/widget/src/api.ts:100-121 `WidgetState`; :619-624 `typing()`; `#request` 429'da `WidgetApiError` fırlatır (`status`, `retryAfter`; :750, :757-802).\n- Mesaj 429 deseni `pauseSending` / `MAX_PAUSE_SECONDS` widget.ts:2409-2447, :4682 (typing İÇİN KULLANILMAZ).\n- Bütçe testi apps/widget/test/bundle-size.test.ts:56 (66 304 B; 2026-11-06 ≈1 328 B pay).\n\nAMAÇ:\n1) Kapı: `previewAllowed = snapshot.typing_preview ?? (snapshot.answered_by === 'human')`. False iken hiçbir typing isteği gitmez (önceden bir şey gönderilmediyse temizle de gitmez).\n2) Ritim: `lastSent` = son gönderilen normalize metin (trim + 500 kod noktası). `input` olayında metin normalize edilir:\n   - boşsa ve `lastSent` doluysa tek `typing(false)`;\n   - doluysa ve `!== lastSent` ise throttle: pencere boşsa hemen gönder ve 1000 ms pencere aç; pencere doluysa `pending = true`; pencere bitince `pending` ve metin `!== lastSent` ise bir kez daha gönder (trailing) ve pencereyi yeniden aç.\n   Her istek `seq = ++typingSeq` taşır (mount başına 0'dan).\n3) 4 sn sessizlik stop'u ve blur → stop KALDIRILIR (:2978 dinleyicisi silinir).\n4) Temizle yalnız şu durumlarda gider (hepsinde yalnız önceden bir şey gönderildiyse, artırılmış seq ile): kutu boşalınca; mesaj gönderildikten hemen sonra (:2342 korunur); sohbet bitince/teardown; `previewAllowed` true→false dönünce; `pagehide`. `pagehide`'da `fetch(url, { method:'POST', keepalive:true, headers: <mevcut kimlik başlıkları> })` kullanılır (kimlik başlığı gerektiği için sendBeacon değil). api.ts'de en küçük `keepalive` seçeneği eklenir.\n5) Görünürlük: `document.visibilityState !== 'visible'` iken input olayı önizleme üretmez; sekme görünür olunca metin `lastSent`'ten farklıysa bir kez gönderilir.\n6) Devir anı (KESİN KURAL): `previewAllowed` false iken `author_type` 'agent' ya da 'system' olan her `incoming_event`'te `applyIncomingEvent` içinde tek seferlik `void refresh()` çağrılır (mevcut :2682-2693 refresh'leriyle birleşerek, çift çağrı olmadan). Refresh `typing_preview:true` getirince kutuda metin varsa bir kez gönderilir. Takeover ve atamanın müşteriye `incoming_event` (system) olarak ulaştığı entegrasyon testiyle doğrulanır. Ulaşmıyorsa `chat_taken_over` widget `PUSHES`'a eklenir (audience'ında `customerId` var, chat-service.ts:3836) ve bu olayda da refresh yapılır. Sonuç HANDOFF'a yazılır.\n7) Kapı kapalı yanıtı: typing isteği 200 `{typing_preview:false}` dönerse `previewAllowed=false` yapılır; bir sonraki poll ya da refresh true getirene kadar istek gitmez.\n8) 429: api.ts'ye dokunulmaz. `.catch(e => { if (e instanceof WidgetApiError && e.status === 429) suspendedUntil = Date.now() + Math.min(e.retryAfter ?? DEFAULT_PAUSE_SECONDS, MAX_PAUSE_SECONDS) * 1000 })`. Süre bitince son durum bir kez gönderilir. `pauseSending` KULLANILMAZ, Send kilitlenmez. Diğer hatalar yutulur.\n\nKARARLAR: heartbeat yok; değişmeyen metin = sıfır istek. Pencere 1000 ms (sahibin \"1 sn'de 1\" önerisi; 10 vuruş kuralı yerine zaman kuralı seçildi: yavaş yazanda daha az, hızlı yazanda en çok 60/dk).\nKAPSAM DIŞI: widget→RTM WS gönderimi, ziyaretçiye görünür yeni metin (yeni i18n anahtarı YOK; bildirim sahip kararına bağlı).\nTUZAKLAR: bundle bütçesi (gzip artış ≤400 B; lazy chunk gerekirse yalnız lazy-chunks.ts yoluyla). Widget testlerinde fetch mock'ları nesne paylaşıyor (widget-test-fetch-mocks-share-objects); catch-all fetch mock'ları yeni alanı bozar (catch-all-fetch-mocks-break-new-profile-queries). ~30 test dosyası poll mock'unda `agent_typing:false` taşıyor; alan opsiyonel olduğu için dokunmak gerekmemeli, gerekirse sebebi HANDOFF'a. `mount()` teardown döner (widget-mount-returns-teardown); pagehide dinleyicisi teardown'da kaldırılır. Top-level çağrı eklenmez.\nKABUL: aşağıdaki birim + entegrasyon testleri ve bundle-size yeşil.",
+            "testStrategy": "widget birim (yeni `widget.typingPreview.test.ts`, sahte zamanlayıcı, başlıkta `FR-MOD-11.8`):\n(a) `typing_preview:false` → 20 vuruşta 0 istek.\n(b) true; \"m\",\"me\",\"mer\" 100 ms arayla → t=0'da \"m\", t=1000'de \"mer\"; toplam 2 istek; seq artan.\n(c) aynı metin 5 kez → ek istek yok.\n(d) 10 sn bekle → ne istek ne temizle.\n(e) blur → istek yok.\n(f) kutu boşaltılır → tek `is_typing:false`.\n(g) gönderim → tek temizle, seq son önizlemeden büyük.\n(h) false→true geçişinde kutudaki metin bir kez gider.\n(i) 429 + Retry-After 2 → 2 sn sessiz, sonra son durum bir kez; `ui.send.disabled` false kalır.\n(j) alan yok + `answered_by:'human'` → gönderir; `'ai'` → göndermez.\n(k) false iken system `incoming_event` → refresh → true → kutudaki metin poll beklenmeden tek istekle gider.\n(l) 200 `{typing_preview:false}` sonrası 10 vuruşta istek yok.\n(m) gizli sekmede vuruş → istek yok.\n(n) pagehide → önceden gönderilmişse tek keepalive temizle; gönderilmemişse istek yok.\napi entegrasyon: takeover ve atama müşteri kanalına `incoming_event` (system) üretir ya da `chat_taken_over` müşteriye ulaşır.\nbundle-size.test.ts yeşil; gzip farkı HANDOFF'a yazılır. Mutasyon: trailing adımı kaldır → (b) kırmızı. DoD: CONVENTIONS §1.",
+            "status": "pending",
+            "dependencies": [
+              "417.1",
+              "417.2",
+              "417.3"
+            ],
+            "parentId": "417",
+            "priority": "high",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          },
+          {
+            "id": 6,
+            "title": "TYPING-PREVIEW-PANEL-STRIP [OPUS-HIGH] (Opus 5.5) Panel: kalıcı ziyaretçi taslağı şeridi (yazıyor → \"henüz göndermedi\"), seq/tombstone sırası, transfer/devralma/sync'te silme, her zaman bağlı canlı bölge, sabit yükseklik, düz metin, 10 dk emniyet, en+tr; Ayarlar › Widget anahtarı (HIPAA'da kilitli)",
+            "description": "Ajan ekranında son mesaj ile yanıt kutusu arasındaki şerit, ziyaretçinin gönderilmemiş metnini gösterir. Vuruş durunca kaybolmaz, \"{ad} henüz göndermedi\" olarak kalır. Geç gelen kareler hayalet taslak bırakmaz; erişimi kalkan ajanın ekranından hemen silinir. Ekran okuyucu her harfi okumaz, akış zıplamaz. Kiracı özelliği Ayarlar › Widget'tan kapatabilir.",
+            "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1. Bağımlılık: 417.1 (`sneak_peek_enabled`, `sneak_peek_locked`, `seq`), 417.2 (sunucu olay biçimi). Üst görev #417 K8, K9.\n\nBAĞLAM: Sahibin ekran görüntüsünde şerit sohbet akışının en altında, yanıt kutusunun (Yanıt / Dahili not) üstünde. Bugün şerit 6 sn vuruş yoksa metniyle birlikte siliniyor; `!isTyping` iken bileşen null dönüyor; tüm metin `aria-live` içinde.\n\nKODDA BUGÜN:\n- apps/web/src/features/inbox/typing.ts:1-85 (Zustand; `TYPING_IDLE_MS = 6000` :25; `noteCustomer` :49-72; false gelince `clear`; 6 sn'de `clear` :68-71).\n- apps/web/src/features/inbox/TypingIndicator.tsx:14-46 (`!typing?.isTyping` → null :22; `role=status aria-live=polite` :26-30; `data-testid=typing-indicator` canlı bölgede; metin `truncate italic` :37); test TypingIndicator.test.tsx.\n- apps/web/src/features/inbox/useInbox.ts: abonelik listesi :1169-1172 (`chat_transferred`, `chat_taken_over`), :1213-1214; müşteri mesajında clear :1316; typing/sneak-peek işleyicileri :1415-1437; sohbet kapanınca clear :1583; `retireDraft` :1584 (ajanın kendi taslağı); `chat_taken_over` :1590; `chat_transferred` :1827; `sync_required`/yeniden bağlanma yolu (`git grep -n sync_required apps/web/src/features/inbox`).\n- apps/web/src/features/inbox/InboxPage.tsx:1321-1325 (şeridin yeri, doğru); :1327 composer taslağı; phone düzeni :237.\n- Metinler apps/web/src/locales/en/inbox.ts:332-333, tr/inbox.ts:313-314.\n- Ayar ekranı apps/web/src/features/settings/WidgetCustomization.tsx (mevcut toggle deseni).\n\nAMAÇ:\n1) Store: kayıt `{ isTyping, text, updatedAt, maxSeq }`.\n   - `noteCustomer(true, text, seq)`: `seq <= maxSeq` ise atılır; değilse maxSeq güncellenir, isTyping true olur. 6 sn sonra yalnız `isTyping=false` (metin KALIR). `DRAFT_STALE_MS = 600_000` sonra tam silme.\n   - `noteCustomer(false, seq)` → metin silinir, `maxSeq` tombstone olarak korunur (10 dk ya da sohbet kapanınca silinir).\n   - Müşteri `incoming_event` (:1316) metni siler, tombstone'u korur.\n   - seq'siz eski kareler bugünkü gibi işlenir. Metinsiz bare typing push mevcut metni korur.\n2) Ek silme olayları: `chat_transferred` (:1827) ve `chat_taken_over` (:1590) push'larında, atama değişikliğinde sohbet artık bu ajanda değilse, sohbet listeden düşünce, `chat_deactivated` (:1583) ve `sync_required`/RTM yeniden bağlanmada kayıt tamamen silinir. Önce `git grep -n \"case 'chat_transferred'\\|case 'chat_taken_over'\\|case 'thread_assign\" apps/web/src/features/inbox` ile işleyiciler doğrulanır.\n3) Çizim: koşul `typing && (typing.isTyping || typing.text)`. testid'ler: dış kap `typing-indicator`, durum metni `typing-indicator-status`, önizleme metni `typing-preview-text`, taslak etiketi `typing-preview-draft`.\n   - isTyping iken: noktalar + \"{ad}: “metin”\".\n   - isTyping false + metin varken: noktasız, soluk italik \"{ad} henüz göndermedi: “metin”\".\n   Metin DÜZ METİNDİR: linkify, markdown ya da HTML yorumu yok; `title`/tooltip yok. `whitespace-pre-wrap break-words`. Renkler `text-content-secondary/tertiary` (`text-brand-600` KULLANILMAZ).\n4) Sabit yükseklik: taslak varken şerit kabı `min-h` 3 satır + `line-clamp-3` + `overflow-hidden`; dar ekranda (phone düzeni) 2 satır + `line-clamp-2`. Satır sayısı değişince kabın yüksekliği değişmez. 375 px'te yatay taşma yok.\n5) Erişilebilirlik: `role=status aria-live=polite` öğesi InboxPage.tsx:1321 yerinde, sohbet açıkken DAİMA DOM'da durur (boşken içi boş). Görsel şerit ayrı elementtir. Canlı bölge taslak oturumu başına bir kez \"{ad} yazıyor\" der; temizle/mesaj/kapanma/silmede boşalır. 6 sn idle ve yeniden yazma canlı bölge metnini DEĞİŞTİRMEZ. Önizleme metni canlı bölgenin dışındadır.\n6) i18n en + tr: `inbox.typing.visitorDraftLabel` (en \"{name} has not sent this yet\" / tr \"{name} henüz göndermedi\"), `inbox.typing.statusTyping` ve gerekirse diğerleri. Mevcut `inbox.typing.*` anahtarlarının yanına eklenir; glossary ve kayıt listesine girilir.\n7) Ayarlar › Widget: \"Ziyaretçinin yazdığını gönderilmeden göster\" anahtarı + açıklama (\"Yalnız sohbete atanmış insan temsilci görür; botlar ve API erişimi görmez; kaydedilmez.\") → `PUT /settings/widget {sneak_peek_enabled}`. `sneak_peek_locked` true iken anahtar devre dışı ve kapalı görünür; açıklama: \"Sağlık verisi (HIPAA) kapsamındaki çalışma alanlarında kapalıdır.\" en + tr.\n\nKARARLAR: 6 sn sonra yalnız noktalar söner; metin temizle/mesaj/kapanma/erişim kaybı/10 dk ile kalkar (sahip \"göndermese dahi gözükmeli\" dedi; 10 dk değeri sahibe soru). Mobil yok.\nKAPSAM DIŞI: widget, API, RTM; mobil uygulama; şeridin yerini değiştirmek.\nTUZAKLAR: yeni `t()` çağıran bileşen i18n kaydına girer (new-web-component-must-be-registered-for-i18n); glossary/plural (web-glossary-and-plural-catalogue-traps); panel metninde iç kod yok (panel-copy-cannot-carry-internal-codes: \"FR-MOD\" ya da \"HIPAA kodu\" yazılmaz; \"HIPAA\" adı kullanıcıya anlamlı olduğu için kalabilir, locale-copy denetimi geçmezse \"sağlık verisi\" yazılır). `role=status` başka testlerle çakışabilir (settings-savebar-test-traps): sorgular testid ya da `within` ile daraltılır. Etiket metni alan adına sızar (label-text-leaks-into-the-fields-name). Dark tema axe (dark-theme-needs-content-brand-text). useInbox testlerinde push enjeksiyonu mevcut desenle yapılır (react-query-push-asserts-need-the-cache). Web vitest CPU yükünde zaman aşımı verebilir (web-vitest-flakes-under-cpu-load).\nKABUL: aşağıdaki testler yeşil, axe ihlali yok.",
+            "testStrategy": "web birim (başlıkta `FR-MOD-02.9`):\ntyping.ts (sahte zamanlayıcı):\n- 6 sn sonra isTyping false, metin duruyor; 600 sn sonra kayıt siliniyor; `noteCustomer(false)` hemen siliyor.\n- önce temizle (seq 5), sonra geç önizleme (seq 4) → kayıt oluşmuyor; müşteri mesajı sonrası düşük seq'li önizleme atılıyor.\nTypingIndicator:\n- yazarken noktalar + metin; 6 sn sonra `typing-preview-draft` \"henüz göndermedi\"; tr yerelinde \"henüz göndermedi\".\n- `getByRole('status')` ilk vuruştan önce de var; içeriği önizleme metnini içermiyor; idle→yeniden yazma döngüsünde textContent değişmiyor.\n- `https://evil.test` içeren önizlemede şeritte `<a>` yok.\n- metin 1 satırdan 3 satıra çıkınca kabın yüksekliği değişmiyor (sınıf/stil assert'i; jsdom ölçümü yoksa e2e'de getBoundingClientRect).\n- dar düzende `line-clamp-2`.\nuseInbox:\n- sneak-peek push → şerit; müşteri `incoming_event` → silinir; `chat_deactivated` → silinir.\n- başka ajana `chat_transferred` / `chat_taken_over` → hemen silinir; `sync_required` → silinir.\nWidgetCustomization: toggle PUT gövdesinde `sneak_peek_enabled:false`; `sneak_peek_locked:true` iken toggle disabled ve açıklama görünür.\naxe (light + dark) temiz. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` 417.7 kapanışında.",
+            "status": "pending",
+            "dependencies": [
+              "417.1",
+              "417.2"
+            ],
+            "parentId": "417",
+            "priority": "high",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          },
+          {
+            "id": 7,
+            "title": "TYPING-PREVIEW-E2E-CLOSE [OPUS-HIGH] (Opus 5.5) e2e iki bağlam (AI evresinde istek yok → devir → typing_preview:true beklenir → ajan taslağı ≤2 sn'de görür → blur'da kalır → gönderince kalkar) + doküman + PLAN/HANDOFF kapanışı",
+            "description": "Özelliğin tarayıcı kanıtı ve kapanışı. Gerçek widget ve gerçek panel iki bağlamda çalışır. AI evresinde ağda typing isteği olmadığı, devirden sonra ajanın son metni ≤2 sn'de gördüğü, blur'da şeridin kaldığı ve gönderimle kalktığı gösterilir. Gizlilik notu dokümana, kanıt PLAN/HANDOFF'a yazılır.",
+            "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1 (`pnpm test:gate --e2e` kapanışta bir kez, arka planda; e2e için kök .env source). Bağımlılık: 417.4, 417.5, 417.6 (dolaylı olarak 417.1–417.3). Üst görev #417'nin tüm KARARLARI.\n\nBAĞLAM: 417.1–417.6 birim ve entegrasyon kanıtlarını verdi. Bu halka uçtan uca tarayıcı kanıtını ve kapanış kayıtlarını yapar. Bitince üst görev 417 done olur.\n\nKODDA BUGÜN:\n- apps/e2e/tests/widget.spec.ts ve apps/e2e/tests/inbox-assign.spec.ts: iki bağlamlı widget + panel desenleri. Panel soketine push enjekte etme deseni `page.routeWebSocket(/:4001\\//, ws => { ws.connectToServer(); })` inbox-assign.spec.ts \"when the system changes availability\" testinde.\n- prd-uyum-denetimi.md:298 (`FR-MOD-02.9` TAM) ve :430 (`FR-MOD-11.8` TAM).\n- PLAN.md:6345 ve :6504 (sneak-peek'in ilk kayıtları; yeni kanıt maddesi yakınlarına tek satır).\n\nAMAÇ:\n1) Yeni `apps/e2e/tests/visitor-typing-preview.spec.ts` (başlıkta `FR-MOD-11.8`). Bağlam A ziyaretçi widget'ı, bağlam B ajan paneli.\n   - AI evresi: seed'deki AI ajanı yayınlanmamış olabilir (e2e-seeded-ai-agent-never-published). AI evresi mevcut yolla kurulur; kurulamazsa `page.route` ile `typing_preview:false` dönen poll zorlanır ve nedeni HANDOFF'a yazılır. Ziyaretçi yazar → `page.on('request')` ile `/customer/chat/typing` sayısı 0.\n   - Devir: ajan sohbeti alır (mevcut takeover/assign akışı). Ziyaretçi yazmadan ÖNCE `page.waitForResponse` ile `typing_preview:true` taşıyan `GET /customer/chat` yanıtı beklenir (417.5 refresh kuralı sayesinde poll aralığından bağımsız). ≤2 sn ölçümü bu andan başlar. Ziyaretçi \"Merhaba, siparişim\" yazar → B'de `typing-preview-text` ≤2 sn içinde tam metni gösterir.\n   - Ziyaretçi kutudan çıkar (blur) ve 7 sn bekler → B'de `typing-preview-draft` görünür, metin duruyor.\n   - Aynı metin bekletilirken 5 sn içinde typing isteği sayısı 0.\n   - Ziyaretçi gönderir → B'de şerit kalkar, mesaj akışta. 3 sn daha beklenir, şerit geri gelmez (hayalet taslak yok).\n   - B'de `role=status` öğesi ilk vuruştan önce de DOM'da.\n2) Doküman: `git grep -n -i \"widget\" docs/ | grep -i -E \"ayar|settings|guide|rehber\" | head` ile mevcut operatör/kurulum rehberi bulunur. \"Ziyaretçi taslak önizlemesi\" kısa bölümü yazılır: ne gösterilir; kim görür (yalnız sohbete atanmış insan temsilci; botlar, API token'ları, takımın diğer ajanları ve sohbetten ayrılmış ajanlar görmez); kaydedilmez/loglanmaz; maskeleme; HIPAA kapsamında kapalı; ayardan kapatma; KVKK/GDPR açısından ziyaretçi bilgilendirmesi (sahip kararı ownerQuestions 3'e göre). Karar 417.7'ye kadar verilmediyse doküman yalnız \"kiracının aydınlatma metnine eklemesi\" önerisini yazar ve HANDOFF'ta \"sahip kararı bekliyor\" olarak işaretlenir. Uygun rehber yoksa HANDOFF'a yazılır; yeni dosya açılmaz.\n3) PLAN: §D altına ya da PLAN.md:6504 yakınına tek satır kanıt maddesi (tablo hücresine kanıt yazılmaz). HANDOFF bloğu: K1–K11 kararları, ölçülen bundle farkı, 417.5 devir kuralı ve takeover'ın müşteriye ulaşma yolu, 417.3 kova değerleri, transfer sonrası `chat.access` gözlemi, açık sahip soruları.\n4) `audit:req-coverage` exit 0.\n\nKARARLAR: e2e iki bağlamlı gerçek akış; RTM push enjeksiyonu yalnız gerçek akış kurulamazsa.\nKAPSAM DIŞI: mobil, yük testi (k6), yeni özellik.\nTUZAKLAR: e2e dev server StrictMode (e2e-runs-dev-server-strictmode); ikinci sekme sessionStorage paylaşır (e2e-second-tab-shares-session-storage); 1024 altı dar bildirim (e2e-below-1024-hits-narrow-notice); yeni spec shard paketlemesini karıştırır (new-e2e-spec-reshuffles-shard-packing); auth kovası 30/dk (browser-ux-probe-traps); e2e PNG değişimi (dod-gate-wall-clock-and-e2e-png-churn); hedefli e2e tekrarında retry yok (targeted-e2e-rerun-has-no-retry). Kapanış dokümanları gate koşarken yazılabilir (closing-docs-can-be-written-during-the-gate). Widget arka plan sekmesinde visibilityState gizli olabilir; A bağlamı ön planda tutulur ya da `page.bringToFront()` kullanılır.\nKABUL: spec yeşil; test:gate --e2e yeşil (\"0 cached\"); req-coverage exit 0; PLAN tek satır + HANDOFF bloğu.",
+            "testStrategy": "e2e `visitor-typing-preview.spec.ts` (başlıkta `FR-MOD-11.8`) yukarıdaki adımlarla koşar. `pnpm test:gate --e2e` arka planda; log son satırları `Tasks:`/`Failed:`/`exit`; turbo `--force` ve \"0 cached\". `audit:req-coverage` exit 0. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
+            "status": "pending",
+            "dependencies": [
+              "417.4",
+              "417.5",
+              "417.6"
+            ],
+            "parentId": "417",
+            "priority": "high",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          }
+        ]
+      },
+      {
+        "id": "418",
+        "title": "PILOT-FILE-SHARING-OFF [OPUS-XHIGH] (Opus 5.5) Pilotta sohbet dosya eki kapalı olsun: PILOT_MODE'da sohbet eki grant'i ve imzalı PUT reddi (knowledge_document açık), /uploads-policy false",
+        "description": "Belgeler pilotta dosya paylaşımının kapalı olduğunu söylüyor ama kod varsayılanı açık: yeni workspace ayarlara dokunmadan ziyaretçi dosya yükleyebiliyor, dosya /tmp'ye yazılıyor ve `up --build` sonrası kayboluyor; sohbetteki /api/v1/uploads/<key> bağlantısı ölü kalıyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c; kod değiştirilmeden yapıldı), bulgu F01 + gereksinim NY-34 (not_met) / NY-51 (partial). Aşağıdaki kanıt bu görev için yeterlidir; rapor dosyası repoda değildir.\n\nXHIGH GEREKÇESİ: (3) teslim güvencesi — kullanıcı verisi (yüklenen dosya) sessizce kayboluyor; (4) pencere içinde verilecek karar.\n\nKODDA BUGÜN (HEAD'de doğrulandı):\n- `apps/api/prisma/schema.prisma:4054` `fileSharingEnabled Boolean @default(true)`; migration `20260722154008` (~:370) DEFAULT true.\n- `apps/api/src/routes/uploads.ts:16-19` purpose'lar (sohbet eki ve `knowledge_document`); `:87-88` `DEFAULTS = { fileSharingEnabled: true, ... }` (uploads.ts:159 de aynı varsayılanı okur).\n- `apps/web/src/features/playbook/knowledge-document-upload.ts:99` bilgi tabanı belgesi AYNI `POST /uploads`'u `purpose: knowledge_document` ile çağırıyor → yol düzeyinde ret bilgi kaynağı yüklemesini bozar.\n- `apps/web/src/features/inbox/Composer.tsx:196-198` `/uploads-policy` okuyor, `file_sharing_enabled ?? true` (hata/yükleniyor → ataç görünür).\n- `apps/api/src/plugins/pilot-gate.ts:79-86` `PILOT_REFUSED_PATHS` yalnız `/api/v1/billing/` yazmalarını içeriyor.\n- `apps/api/src/routes/settings.ts:~2521` security settings upsert yalnız kayıtta; `apps/api/src/routes/auth.ts:~2342` `?? true`.\n- `docker-compose.pilot.yml:146-149` yorumu \"file sharing stays off (tm 255.13)\"; `STORAGE_LOCAL_DIR: /tmp/siyahtus/uploads` (:149); volume yalnız pgdata + redisdata.\n\nYAPILACAK (varsayılan karar; ölçülmüş gerekçeyle değiştirilebilir, kararını HANDOFF'a yaz):\n1) PILOT_MODE=true iken ret YOL düzeyinde değil PURPOSE düzeyinde: sohbet eki (widget ve panel composer) için upload grant'i ve o grant'in imzalı `PUT /api/v1/uploads/*`'i mevcut `pilotRefused` yanıtını döner; `purpose: knowledge_document` açık kalır. İmzalı PUT'ta purpose imzadan/key'den okunur (yoksa grant anında reddetmek yeterli — HANDOFF'a). pilot-gate'in yol listesi yeterli değilse ret uploads.ts içinde pilot bayrağıyla yapılır (aynı `pilotRefused` gövdesi). GET (mevcut dosyayı sunma) açık kalır.\n2) PILOT_MODE=true iken `GET /uploads-policy` `file_sharing_enabled=false` döner (ayarın değerinden bağımsız) → panel ve widget ataç düğmesini gizler. Widget config'inin false'ta ataç düğmesini gizlediğini doğrula.\n3) `Composer.tsx:198` `?? true`: pilotta yanlış pozitif vermesin — politika okunamazsa davranışı kararla (varsayılan: okunamazsa gizli; fail-open yorumunu güncelle) ve testle sabitle.\n4) Panel ayarında pilotta dosya paylaşımı anahtarı devre dışı + kısa açıklama (en+tr; i18n kaydı).\n\nTUZAK: memory never-add-boot-blocking-rules-unasked (boot engeli yok, istek bazlı ret). Pilot-gate testleri pinli liste tutuyorsa güncelle. Varsayılanı true kabul eden mevcut testler (uploads-parity, widget dosya testleri) pilot bayrağıyla ripple edebilir; `rg fileSharingEnabled` ve `rg file_sharing_enabled` ile tara. Bilgi belgesi e2e'si (playbook knowledge) pilot env'de koşuyorsa yeşil kalmalı.\n\nKAPSAM DIŞI: PILOT_MODE'dan bağımsız DB/DEFAULTS/auth.ts varsayılanını false yapmak (pilot dışı ürün kararı — ownerQuestions; cevap evet ise ayrı görev: migration `SET DEFAULT false` + uploads.ts DEFAULTS + auth.ts `?? true` + Composer aynı commit'te), kalıcı uploads volume + backup kapsamı, checklist/compose yorum düzeltmesi (DOCS-AUDIT-CONTRADICTIONS), virüs tarayıcısı (UPLOAD-VIRUS-SCANNER-MOCK-WARNING), içerik türü/tek kullanım (UPLOAD-PUT-CONTENT-TYPE-SINGLE-USE).\nDENETİM BULGULARI: F01; G-01; G-02",
+        "testStrategy": "api entegrasyon: PILOT_MODE=true → sohbet eki grant'i ve imzalı PUT pilotRefused (mevcut kod/gövde biçimi); aynı pilotta `purpose: knowledge_document` grant + PUT başarılı; `/uploads-policy` false; PILOT_MODE=false → mevcut davranış değişmez. web birim: Composer politika false → ataç yok; politika hatası → kararlaştırılan davranış. Widget birim: false'ta ataç yok. Mutasyon: purpose kontrolünü kaldır → ya sohbet eki ya knowledge testi kırmızı. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "high",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "419",
+        "title": "ZOD-INTERIM-MITIGATION [OPUS-XHIGH] (Opus 5.5) zod GHSA-mrhx-c7xc-m3w5 ara önlemi: public uçlarda dizi ön sınırı (ortak boundedArray), ValidationError issues kırpma, /customer/token gövde limiti",
+        "description": "zod'un 3.x hattında yama yok (kilitteki sürüm details'te; tm 415 blocked). Kimlik doğrulamasız `POST /customer/token` 500k elemanlı `browser_languages` dizisiyle istek başına ~160 MB heap, ~240 ms senkron CPU ve ~72 MB'lık 400 yanıtı üretiyor. 4.x geçişi sahip kararına kadar ara önlem.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgular F02 (high) + F15, gereksinim NY-29. Aşağıdaki kanıt yeterlidir.\n\nXHIGH GEREKÇESİ: (1) güvenlik yüzeyi — kimlik doğrulamasız DoS.\n\nKODDA BUGÜN (HEAD'de doğrulandı):\n- `apps/api/src/routes/auth.ts:279` `browser_languages: z.array(z.string().max(35)).max(10).optional()`; rota `public: true` (~:1759).\n- `apps/api/src/plugins/error-handler.ts:14-18` `zodToApiError` TÜM `error.issues`'ı `fields`'a map'liyor.\n- `apps/api/src/lib/fastify-options.ts:157` `bodyLimit: 1_048_576`.\n- `apps/api/package.json:77` ve `apps/rtm/package.json:29` `\"zod\": \"^3.24.1\"` (kilitte 3.25.76).\n- rtm: widget'in soketi yok (`apps/rtm/src/dispatcher.ts:248-250`); customer tarafı soketi `/v1/customer/rtm/ws`.\n\nYAPILACAK:\n1) `zodToApiError`: `fields` en fazla N=20 issue (sabit, yorumla); fazlası için `truncated: true` ya da toplam sayı. Yanıt biçimi kontratta tanımlıysa kontrat-first.\n2) Kök neden zod'un `.max()` kontrolünü elemanları doğruladıktan SONRA yapması: ortak yardımcı `boundedArray(schema, max)` (ör. `z.preprocess` ya da `z.custom` ile önce `Array.isArray(v) && v.length <= max`, sonra eleman şeması) bu görevde doğar ve api ortak lib'inde yaşar (WIDGET-TOKEN-REUSE ve VISITOR-URL-SCHEME bunu kullanır). Uygula: en az `/customer/token`, `/customer/*` widget uçları, `/auth/*` public uçlar. Uygulanan uçları `rg \"z.array\\(\"` ile listele, kararını HANDOFF'a yaz.\n3) `/customer/token` için rota bazlı `bodyLimit` (ör. 16 KiB) — gerçek gövde boyutunu ölç ve pay bırak.\n4) rtm: yalnız customer tarafı (`/v1/customer/rtm/ws`) login ve sync mesaj şemalarındaki diziler aynı ön sınırla (rtm'de aynı küçük yardımcı); rtm'nin mevcut mesaj boyutu tavanını (ws maxPayload) not et. Agent tarafı şemaları kapsam dışı (kimlik doğrulamalı).\n\nTUZAK: ReDoS/DoS zaman testleri büyük girdi ister (memory redos-timing-tests-need-1m-chars) — test 500k elemanlı gövdeyle heap/süre değil yanıt boyutu + 400 kodu üzerinden sabitlensin (zaman ölçümü flaky, memory gate-timing-reds-from-concurrent-runs). `fields` biçimini okuyan web/widget/mobil kodu var mı kontrol et. zod sürümüne dokunma. VISITOR-TYPING-PREVIEW'in `typingSchema` sınırını koru.\n\nKAPSAM DIŞI: zod 4.x geçişi (tm 415, sahip kararı), pnpm audit CI adımı (CI-DEPENDENCY-AUDIT), /customer/token hız kovası (WIDGET-TOKEN-REUSE).\nDENETİM BULGULARI: F02; F15; G-03",
+        "testStrategy": "api entegrasyon: 500k elemanlı `browser_languages` → 400 (ya da 413), yanıt gövdesi < 8 KB; 11 elemanlı dizi → 400 tek issue; geçerli gövde → 200 değişmeden. error-handler birim: 100 issue → fields.length 20 + truncated. boundedArray birim: max+1 elemanda eleman şeması hiç çağrılmaz (spy). Mutasyon: ön kontrolü kaldır → yanıt boyutu testi kırmızı. rtm birim: customer login/sync şemasında aynı ön sınır. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "high",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "420",
+        "title": "CHAT-APPS-VISIBILITY [OPUS-MAX] (Opus 5.5) GET /chats/:chatId/apps sohbet görünürlük kuralını (team/own/none) uygulasın, görünmeyen sohbette 404",
+        "description": "Yalnız A takımında olan ajan B takımındaki sohbetin id'siyle o müşterinin bağlı uygulama (Freshdesk vb.) verisini okuyabiliyor; rota yalnız scope kontrolü yapıyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F03 (authz-tenancy). Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı):\n- `apps/api/src/routes/apps.ts:284-297` yalnız `config.scopes`; `apps.chatDataPlan(tx, tenant, chatId)`.\n- `apps/api/src/services/apps/app-service.ts:~687-694` sohbeti yalnız `{id, licenseId}` ile buluyor.\n- Diğer sohbet rotalarının kullandığı yardımcılar: `resolveVisibility`, `chatVisibilityFilter`, `visibleChat` (`rg -n \"visibleChat|chatVisibilityFilter\" apps/api/src`).\n\nYAPILACAK: `chatDataPlan` öncesinde (ya da içinde) diğer sohbet okuma rotalarıyla AYNI görünürlük yardımcısını uygula; görünmeyen sohbette 404 (`chat_not_found` — mevcut kodu kullan, var olmayı sızdırma). Aynı dosyada sohbet id'si alan başka uç varsa aynı kontrolü ekle ve HANDOFF'a listele.\n\nTUZAK: PILOT_MODE erken dönüşü (`pilotCards.length === 0` → boş liste) görünürlük kontrolünden ÖNCE; sıralamayı değiştirip değiştirmeyeceğini testle sabitle (görünmeyen sohbette pilotta da 404 tercih). Race testleri ayrı bağlantı ister (memory race-tests-need-separate-connections). Görünürlük kuralı capability'den geliyorsa memory capability-level-change-ripples.\n\nKAPSAM DIŞI: uygulama kartlarının içeriği, görünürlük modelinin kendisi.\nDENETİM BULGULARI: F03",
+        "testStrategy": "api entegrasyon: visibility=team ajan, başka takımın sohbeti → 404; kendi takımı → 200; visibility=own başkasının sohbeti → 404; admin → 200; çapraz kiracı → 404. Mutasyon: görünürlük çağrısını kaldır → 404 testi kırmızı. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "421",
+        "title": "INVITE-ACCEPT-VERIFIED-ACCOUNT [OPUS-MAX] (Opus 5.5) Davet kabulü doğrulanmış hesapta kimlik kanıtı istesin, yanıt yalnız katılınan workspace'i dönsün",
+        "description": "Saldırgan kendi workspace'ine kurbanın doğrulanmış e-postasını davet edip token'la kimlik bilgisi olmadan `/auth/invitations/accept` çağırıyor: 200, kurban hesabı workspace'e ekleniyor ve yanıttaki `memberships` kurbanın tüm license_id/organizasyonlarını gösteriyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F04 (medium ← high, auth-session). Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı):\n- Rota `apps/api/src/routes/account-lifecycle.ts:870` `app.post('/auth/invitations/accept', { config: { public: true } }, ...)`; ~:908 `reply.send(session)` filtresiz.\n- Migration `apps/api/prisma/migrations/20261022190000_invitation_groups_on_join/migration.sql:124,137,171`: parola yalnız doğrulanmamış hesapta; doğrulanmış hesapta doğrudan `INSERT agent_memberships`.\n\nYAPILACAK (varsayılan karar; değiştirirsen HANDOFF'a yaz): doğrulanmış (parolası olan) hesap için kabul, (a) gövdede doğru parola ya da (b) aynı hesaba ait geçerli oturum (Bearer) ister; yoksa 401 `invitation_requires_sign_in` → web kabul ekranı giriş formuna yönlendirir (mevcut ekranda giriş yolu varsa onu kullan). SSO zorunlu workspace hesabı için SSO yolu notu. Yanıtta `memberships` yalnız katılınan workspace (ya da oturum kurulumu için gereken tek kayıt). Kontrat değişirse contract-first; yeni hata türü en+tr cümle (memory gate-rerun-hint-fails-for-web).\n\nTUZAK: Fonksiyon SQL'de (SECURITY DEFINER) — değişiklik yeni migration ile `CREATE OR REPLACE`; RLS/plan cache (memory hub-prisma-postgres-traps). Login 30/dk auth kovası (browser-ux-probe-traps). Mevcut e2e davet akışları (team/invite spec) doğrulanmış davetliyle çalışıyor olabilir.\n\nKAPSAM DIŞI: davet kotası, e-posta doğrulama akışı.\nDENETİM BULGULARI: F04",
+        "testStrategy": "api entegrasyon: doğrulanmış hesap + parolasız kabul → 401, üyelik eklenmez; doğru parola → 200 ve memberships yalnız yeni workspace; yanlış parola → 401 (sayaç/rate limit); doğrulanmamış hesap akışı değişmez. web birim: 401'de giriş formu. e2e: davet kabulü (mevcut spec) yeşil. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "422",
+        "title": "LOGIN-BRUTEFORCE-NETWORK-KEY [OPUS-MAX] (Opus 5.5) Parola denemesi: anon/authfail kovası /64 ağ anahtarıyla, kilitleme-DoS'a dayanıklı hesap başına kova, başarısız login audit",
+        "description": "Anonim kova tam IPv6 adresine göre tutuluyor; /64 bloğundaki her adresten /auth/login denenince 30/dk sınırına ulaşılmıyor ve hesap başına sayaç yok. Başarısız login audit'e yazılmıyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F05 (auth-session). Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı):\n- `apps/api/src/plugins/rate-limit.ts:431-435` `key: rl:anon:${request.ip}`.\n- `clientNetworkKey` yalnız `apps/api/src/routes/account-lifecycle.ts:~332` (signup) kullanıyor.\n- `apps/api/src/routes/auth.ts:~644-650` başarısız login audit yazmıyor.\n\nYAPILACAK: (1) anon ve authfail kovalarını `clientNetworkKey` (IPv6 /64, IPv4 tam adres) ile anahtarla. (2) Hesap (normalize e-posta) başına başarısız deneme kovası: ör. 10/15 dk (var olmayan e-posta için de aynı davranış — hesap varlığını sızdırma). Kilitleme DoS'una karşı: hesap kovası, kovayı dolduran ağ anahtarlarını kısıtlar; bu hesapta daha önce başarılı girişi olan ağ anahtarından (ya da hesap kovasına hiç katkısı olmayan yeni bir ağ anahtarından gelen ilk deneme) doğru parola kabul edilir — alternatif: sert 429 yerine artan gecikme. Seçimi HANDOFF'a yaz. (3) Başarısız login `audit_log`'a (e-posta hash'i ya da maskeli; düz parola/ham e-posta yok — memory log-keys/url-pii audit'leri). Değerler env ile yapılandırılabilir (ADR-07 deseni); yeni env alanı → memory deployment-config-field-ripples.\n\nTUZAK: e2e ve entegrasyon testleri aynı IP'den çok login yapıyor (memory browser-ux-probe-traps 30/dk); test env'de sınırlar yüksek. Widget token'ı ile gelen istekler anon kovasında değil (tm 407) — onu bozma. resetDatabase sonrası Redis kovaları (memory reset-database-reuses-license-ids).\n\nKAPSAM DIŞI: CAPTCHA, hesap kilitleme e-postası, platform girişi (PLATFORM-AUTH-FAIL-CLOSED), /customer/token kovası (WIDGET-TOKEN-REUSE).\nDENETİM BULGULARI: F05",
+        "testStrategy": "api birim: `::1:2::a` ve `::1:2::b` aynı anon anahtarı; IPv4 değişmez. api entegrasyon: aynı e-postaya farklı IP'lerden 11 başarısız deneme → 429; var olmayan e-posta aynı yanıt; saldırgan IP'leri kovayı doldurduktan sonra kurban başka ağdan (ya da önceden başarılı ağından) doğru parolayla girebiliyor; başarısız login audit satırı (ham e-posta yok). Mutasyon: hesap kovasını kaldır → 429 testi kırmızı. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "423",
+        "title": "ERASE-DELETES-UPLOADED-FILES [OPUS-XHIGH] (Opus 5.5) Unutulma hakkı (customer erase) müşterinin yüklediği dosyaları da silsin, makbuz dosya sayısını göstersin",
+        "description": "Erase 200 dönüyor ve satırları siliyor ama `<lic>-m-<uuid>.jpg` gibi ekler store'da kalıyor; sweep dosyayı satır üzerinden bulduğu için satır gidince dosya hiç silinmiyor (öksüz hassas veri).",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F06 (medium ← high) + belge çelişkisi Ç-07. Kanıt yeterlidir.\n\nXHIGH GEREKÇESİ: (1) güvenlik/gizlilik yüzeyi — GDPR md.17 / KVKK silme; (3) silme garantisi.\n\nKODDA BUGÜN: `apps/api/src/services/retention/erasure.ts:~137-144` ObjectStore çağırmıyor; `apps/api/src/services/storage/object-store.ts:21-22` yorumu \"Uploads are still never deleted\"; saklama sweep'i dosyayı `ticket_messages.attachments` üzerinden buluyor.\n\nYAPILACAK: erase transaction'ında silmeden ÖNCE müşterinin chat event ekleri + ticket mesaj eklerinin key'lerini topla; commit SONRASI `store.delete(key)`; hata olursa kalıcı yeniden deneme (mevcut job kuyruğu/outbox deseni varsa onu kullan; yoksa erase makbuzuna `files_pending` yaz ve bir sonraki retention turunda tekrar dene — seçimi HANDOFF'a yaz). Makbuza `files_deleted` sayısı (kontrat-first). `object-store.ts` yorumunu güncelle.\n\nTUZAK: key yalnız bu kiracıya ait olmalı (`<lic>-` öneki doğrulanır; başka kiracının dosyası silinemez). Mock/local store'da `delete` var mı kontrol et. Background DB işi resetDatabase ile yarışır (memory background-db-work-races-reset-database). Bilgi kaynağı belgeleri müşteri verisi değil — silme.\n\nKAPSAM DIŞI: genel öksüz dosya süpürücüsü, skill_runs (SKILL-RUNS-RETENTION-ERASE).\nDENETİM BULGULARI: F06",
+        "testStrategy": "api entegrasyon: ekli sohbet + ticket'ı olan müşteri erase → store'da key yok, makbuz files_deleted=2; store.delete hata verirse erase yine 200 ve dosya sonraki turda silinir; başka kiracının key'i dokunulmaz. Mutasyon: delete çağrısını kaldır → test kırmızı. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "424",
+        "title": "SKILL-RUNS-RETENTION-ERASE [OPUS-HIGH] (Opus 5.5) skill_runs.log (oyuncu alıntıları) saklama taramasında ve customer erase'de temizlensin",
+        "description": "Thread saklama süresi dolduğunda ya da erase yapıldığında `skill_runs` satırı (FK SetNull) oyuncunun serbest metniyle kalıyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F25 (medium ← low). Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/api/prisma/schema.prisma:2999-3000` SkillRun chat/thread ilişkisi `onDelete: SetNull`; `services/ai/.../ai-responder.ts:~959-960` yorum \"may quote the player\", yalnız `maskDeep`; retention (`services/retention/retention.ts`) ve `eraseCustomer` (`erasure.ts`) skill_runs'a dokunmuyor; ilk tablo `domain_model/migration.sql:~613`.\n\nYAPILACAK (varsayılan): FK'yi değiştirmek yerine (geçmiş metrikleri korumak için) retention ve erase'e açık temizlik: thread/chat silinirken bağlı skill_runs satırlarının `log` alanını boşalt (ya da satırı sil — metrik/raporlar skill_runs sayıyorsa log'u null'la; hangisi olduğunu ölç ve HANDOFF'a yaz). Copilot özeti benzeri başka serbest metin alanı aynı ilişkide ise aynı işlem.\n\nTUZAK: migration gerekirse §6.3, `prisma format` yok. Retention tenant transaction 10 sn (tenant.ts:50) — toplu güncellemeyi parti parti yap. Raporlar skill_runs'ı sayıyorsa entegrasyon testleri ripple.\n\nKAPSAM DIŞI: retention döngü izolasyonu (RETENTION-PER-TENANT-ISOLATION).\nDENETİM BULGULARI: F25",
+        "testStrategy": "api entegrasyon: süresi dolan thread → bağlı skill_runs log'u yok; customer erase → müşterinin sohbetlerine bağlı skill_runs log'u yok; başka müşterinin satırı dokunulmaz. Mutasyon: temizlik satırını kaldır → kırmızı. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "425",
+        "title": "RTM-LOGIN-SIDE-AND-LOCK [OPUS-MAX] (Opus 5.5) rtm login: principal türü bağlantı tarafıyla eşleşsin (ziyaretçi token'ı agent soketinde reddedilsin) + eşzamanlı ikinci login kilidi",
+        "description": "Widget token'ı `/v1/agent/rtm/ws` üzerinden login olup allAgents push'larını (routing_status_set, traffic_visitor_updated, ai_config_published) alıyor. Ayrıca aynı sokette eşzamanlı iki login'in ikisi de başarılı oluyor ve #byActor'da anahtar sızıyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgular F07 (medium ← high) ve F26 (low) — ikisi de `dispatcher.ts` `#login` kökünden. Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı):\n- `apps/rtm/src/server.ts:~439-444` side yalnız URL'den.\n- `apps/rtm/src/auth.ts:~182-190` side almıyor.\n- `apps/rtm/src/dispatcher.ts:97-100` `if (connection.authenticated)` kontrolü, ~:120 await, ~:166 authenticate; `principal.kind` ile `connection.side` karşılaştırılmıyor.\n- `apps/rtm/src/fanout.ts:194` `connection.side === 'customer'` filtresi side'a bağlı (principal'a değil).\n\nYAPILACAK: (1) login'de `principal.kind` ↔ `connection.side` eşleşmesi zorunlu (agent soketi: agent/bot/platform impersonation türleri; customer soketi: customer); eşleşmezse `authentication` hatası ve soket kapatılır. (2) Fanout filtresi principal türüne bağlanır (savunma derinliği). (3) `#login` başında kontrolden hemen sonra `connection.loggingIn = true` kilidi; ikinci login `not_allowed`; hata yolunda kilit bırakılır.\n\nTUZAK: Bot ve impersonation principal türlerini doğru tarafa eşle (`rg \"kind ===\" apps/rtm/src`). Race testi gerçek eşzamanlılık ister (iki login aynı tick'te gönderilir). Mobil istemci agent soketini kullanıyor — türü agent.\n\nKAPSAM DIŞI: token iptali (RTM-REVOKE-CLOSES-SOCKETS), soket tavanı.\nDENETİM BULGULARI: F07; F26",
+        "testStrategy": "rtm birim/entegrasyon: customer token'ı agent URL'sinde login → hata + kapanış, allAgents push'u gelmez; agent token'ı customer URL'sinde → hata; eşzamanlı iki login → biri success biri not_allowed, #byActor tek kayıt. Mutasyon: eşleşme kontrolünü kaldır → kırmızı. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "426",
+        "title": "RTM-REVOKE-CLOSES-SOCKETS [OPUS-MAX] (Opus 5.5) Token iptali, logout, üyelik/lisans askısı ve token süresi dolunca açık rtm soketleri kapansın",
+        "description": "İşten çıkarılan ajan açık sekmesiyle müşteri mesaj push'larını almaya devam ediyor: rtm yalnız permissions_version değişince yeniden değerlendiriyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F08 (medium ← high). Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/rtm/src/permissions.ts:108`, `:126-140` yeniden değerlendirme yalnız `permissions_version`; sürümü artıran tek yer `apps/api/src/.../permission-matrix.ts:~281`; rtm'de login dışı revoke/logout/exp kontrolü yok (yalnız `server.ts:~887` impersonation). Mobil istemci auth reddinde `#stopped=true` (`apps/mobile/src/rtm/client.ts:285-291`) — bu yüzden MOBILE-RTM-TOKEN-REFRESH önce kapanmalı, yoksa exp zamanlayıcısı mobil uygulamayı her saat kalıcı offline'a düşürür.\n\nYAPILACAK: alt görevler sırayla (a → b → c). Hangi olay noktalarını bağladığını HANDOFF'a liste olarak yaz.\n\nTUZAK: Zamanlayıcılar soket kapanınca temizlenmeli (sızıntı). Yeni bus zarfı türü kapalı sözlükse memory closed-vocabularies-ripple-into-web. Post-commit publish → memory post-commit-publish-needs-an-in-publish-probe.\n\nKAPSAM DIŞI: impersonation sonlandırma (IMPERSONATION-ENDS-ON-OPERATOR-DISABLE).\nDENETİM BULGULARI: F08",
+        "testStrategy": "Alt görevlerde. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417",
+          "436"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "REVOKE-BUS-AND-RTM-CLOSE [OPUS-MAX] (Opus 5.5) principal_revoked bus zarfı + rtm'de eşleşen soketleri kapatma",
+            "description": "Mevcut Redis bus'a `principal_revoked` zarfı (token id / agent+license / license) tanımla; rtm zarfta eşleşen soketleri 4001/1008 benzeri mevcut kodla kapatsın.",
+            "details": "Zarf türünü types/kontratta tanımla (kapalı sözlükse ripple). rtm abonesi #byActor/lisans indeksiyle eşleşen bağlantıları bulur ve kapatır; istemci yeniden bağlanınca login'de reddedilir. Bu alt görevde zarfı yayınlayan bir test yardımcısı yeterli; api olay noktaları alt görev 2.",
+            "testStrategy": "rtm entegrasyon: test yayıncısı token-id zarfı → yalnız o soket kapanır; license zarfı → lisansın tüm soketleri; başka lisans etkilenmez. Mutasyon: abone dinleyicisini kaldır → kırmızı.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "426",
+            "priority": "medium",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          },
+          {
+            "id": 2,
+            "title": "REVOKE-API-EVENT-POINTS [OPUS-XHIGH] (Opus 5.5) api: revoke, logout, üyelik askısı/silinmesi, hesap askısı ve lisans askısında zarf yayını",
+            "description": "api'deki her iptal noktası commit sonrası `principal_revoked` yayınlar.",
+            "details": "Olay noktalarını `rg` ile bul (token revoke, logout, membership suspend/delete, account suspend, license suspend); her biri commit SONRASI yayın (post-commit-publish-needs-an-in-publish-probe). Liste HANDOFF'a.",
+            "testStrategy": "api+rtm entegrasyon: login olmuş ajan soketi → üyelik askısı / logout / token revoke / lisans askısı → soket kapanır, sonraki push gelmez. Mutasyon: bir olay noktasındaki yayını kaldır → ilgili test kırmızı.",
+            "status": "pending",
+            "dependencies": [
+              "426.1"
+            ],
+            "parentId": "426",
+            "priority": "medium",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          },
+          {
+            "id": 3,
+            "title": "REVOKE-EXP-TIMER-AND-CLIENTS [OPUS-HIGH] (Opus 5.5) Soket başına token exp zamanlayıcısı + web/mobil refresh+reconnect doğrulaması",
+            "description": "Token exp'i geçince soket kapanır; web ve mobil istemci refresh edip yeniden bağlanır.",
+            "details": "Zamanlayıcı login'de kurulur, kapanışta temizlenir. Web istemcisinin kapanış kodunda refresh+reconnect yaptığını doğrula (yoksa ekle); mobil yol MOBILE-RTM-TOKEN-REFRESH'ten gelir — aynı kapanış kodunu tanıdığını test et.",
+            "testStrategy": "rtm birim (sahte saat): exp geçince soket kapanır, zamanlayıcı sızmaz. web birim: kapanış sonrası refresh+reconnect. mobil jest: aynı kapanış kodunda bir kez refresh + yeniden bağlanma, #stopped false.",
+            "status": "pending",
+            "dependencies": [
+              "426.2"
+            ],
+            "parentId": "426",
+            "priority": "medium",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          }
+        ]
+      },
+      {
+        "id": "427",
+        "title": "RTM-POSTLOGIN-SOCKET-CAP [OPUS-XHIGH] (Opus 5.5) rtm giriş sonrası soket tavanı: kaynak IP ve müşteri token'ı başına; pilot env'de RTM_MAX_CONNECTIONS",
+        "description": "Giriş öncesi IP tavanı (tm 405/409) login anında release ediliyor; tek widget token'ıyla aynı IP'den saniyede 50 soket açılıyor ve 429 hiç tetiklenmiyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F09 (canlı ölçüm yapılmadı). Kanıt yeterlidir.\n\nXHIGH GEREKÇESİ: (1) güvenlik yüzeyi — kaynak tükenmesi.\n\nKODDA BUGÜN: `apps/rtm/src/server.ts:290` `preLogin?.release(connection.id)` onAuthenticated'in ilk satırı; `apps/rtm/src/prelogin-limit.ts:10-12`; müşteri token doğrulaması DB'siz/sayaçsız (`apps/rtm/src/auth.ts:~399-451`); `.env.production.example:~138` `RTM_MAX_CONNECTIONS` yorumlu.\n\nYAPILACAK: (1) Giriş sonrası sayaç: müşteri principal'ı (customerId) başına en fazla N soket (ör. 5 — çoklu sekme), kaynak IP (/64) başına en fazla M customer soketi (ör. 50); aşılırsa yeni soket kapatılır (mevcut aşırı yük kodu). Değerler env (ADR-07). (2) Pilot env şablonunda `RTM_MAX_CONNECTIONS` açık bir değerle (yorumdan çıkar) + kısa açıklama. Değerlerin gerekçesini HANDOFF'a yaz.\n\nTUZAK: Yeni env alanı → memory deployment-config-field-ripples (~13 test). e2e çok sekme/çok soket açıyorsa test env sınırı yüksek. Sayaç soket kapanınca azalmalı (login yarışında sızmasın — tm 405 yorumu). Agent soketlerini kısıtlama.\n\nKAPSAM DIŞI: backpressure (RTM-BACKPRESSURE), health limiti.\nDENETİM BULGULARI: F09",
+        "testStrategy": "rtm entegrasyon: aynı customer token'ıyla N+1. soket → kapanır; sekme kapatınca yeni soket açılabilir; farklı IP'ler etkilenmez; agent soketleri sınırsız. Mutasyon: sayaç artışını kaldır → kırmızı. pilot-config testleri yeşil. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "428",
+        "title": "RTM-BACKPRESSURE [OPUS-XHIGH] (Opus 5.5) rtm yavaş tüketici koruması: ws.bufferedAmount eşiği aşılınca kapat, sync yankısını sınırla",
+        "description": "Ziyaretçi saniyede 10 sync isteği gönderip uzun cursor anahtarlarını yankılatıyor ama TCP'den okumuyor; ws.send tamponu sınırsız büyüyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F10 (bellek canlı ölçülmedi). Kanıt yeterlidir.\n\nXHIGH GEREKÇESİ: (1) güvenlik yüzeyi (DoS) + (3) teslim güvencesi — kapatma kararı mesaj kaybına yol açmamalı (istemci sync ile telafi eder).\n\nKODDA BUGÜN: `rg \"bufferedAmount|highWaterMark\" apps/rtm/src` sonuç yok; `apps/rtm/src/server.ts:~971-977` ve `apps/rtm/src/fanout.ts:~175` doğrudan `ws.send`; `apps/rtm/src/sync.ts:~128-130` `removed_chat_ids` yankısı.\n\nYAPILACAK: tek gönderim yardımcısı (`safeSend(connection, data)`): `ws.bufferedAmount > LIMIT` (env, ör. 1 MiB) ise soketi 1013 (try again later) ile kapat ve logla; tüm `ws.send` çağrıları bundan geçer. `sync` isteğinde yankılanan `removed_chat_ids` / cursor alanlarını eleman sayısı ve uzunlukla sınırla (şema; ZOD-INTERIM-MITIGATION rtm yardımcısı varsa onu kullan).\n\nTUZAK: Kapanan istemci yeniden bağlanınca sync ile kaçırdığını alıyor mu — web istemcisinin ve customer-side rtm istemcisinin 1013'te yeniden bağlandığını doğrula. Test için gerçek yavaş tüketici zor: `bufferedAmount` getter'ını taklit eden birim testi + bir entegrasyon testi. Yeni env → memory deployment-config-field-ripples.\n\nKAPSAM DIŞI: soket tavanı (RTM-POSTLOGIN-SOCKET-CAP).\nDENETİM BULGULARI: F10",
+        "testStrategy": "rtm birim: bufferedAmount eşik üstü → send yapılmaz, kapanış 1013; eşik altı → normal. `rg \"\\.send\\(\" apps/rtm/src` yalnız yardımcıda (test ile sabitle). sync şeması: uzun removed_chat_ids → hata. istemci birim: 1013 sonrası yeniden bağlanma. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "429",
+        "title": "WIDGET-TOKEN-REUSE [OPUS-HIGH] (Opus 5.5) Widget token'ı sayfa geçişlerinde yeniden kullansın; /customer/token anon giriş kovasından ayrılsın",
+        "description": "Geri dönen ziyaretçi her sayfa yüklemesinde yeni token basıyor ve basım IP başına anonim 30/dk kovasında; NAT arkasında 10 kişi 3-4 sayfa gezince 31. basım 429 alıyor, widget \"error.connect\" gösteriyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F11 (tm 407 commit a798fd66 sonrası). Kanıt yeterlidir.\n\nKODDA BUGÜN: `/customer/token` rotası `apps/api/src/routes/auth.ts:~1759` (`public: true`, `tokenRateLimit` yok) → `rl:anon:${request.ip}` (`apps/api/src/plugins/rate-limit.ts:432`); `apps/widget/src/widget.ts:~3190` her mount'ta `connect()`; `apps/widget/src/api.ts:~395-405` `#mint`.\n\nYAPILACAK: (1) Widget: token + exp sessionStorage'da (organization/brand anahtarlı); süresi dolana kadar (pay ile) yeniden kullan; 401'de bir kez yeniden bas. Erişim hatasında (private mode) sessizce mevcut davranış. (2) api: `/customer/token` için ayrı kova `rl:custtoken:<organization>:<networkKey>` daha geniş limit (env, ör. 120/dk); login uçlarıyla paylaşılmaz. networkKey için LOGIN-BRUTEFORCE-NETWORK-KEY'in `clientNetworkKey` kullanımıyla aynı yardımcı.\n\nTUZAK: widget bundle bütçesi (memory widget-bundle-budget-and-css-minify; VISITOR-TYPING-PREVIEW payı yedikten sonra yeniden ölç). Widget test fetch mock'ları nesne paylaşıyor (memory widget-test-fetch-mocks-share-objects). Token visitor kimliğini taşıyorsa sessionStorage → aynı sekmede kalır, sekmeler arası localStorage kararı HANDOFF'a. ZOD-INTERIM-MITIGATION bu rotaya bodyLimit ve boundedArray ekledi (önce kapanır) — üzerine kur, geri alma. Yeni env → deployment-config-field-ripples.\n\nKAPSAM DIŞI: token TTL değişikliği.\nDENETİM BULGULARI: F11",
+        "testStrategy": "widget birim: ikinci mount geçerli token'la mint çağırmaz; süresi dolmuşta çağırır; 401'de bir kez yeniden basar. api entegrasyon: aynı IP'den 31 token basımı 200, login 30/dk kovası etkilenmez; yeni kova limiti aşınca 429; ZOD bodyLimit testi hâlâ yeşil. bundle-size.test.ts yeşil. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417",
+          "419"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "430",
+        "title": "IMPERSONATION-ENDS-ON-OPERATOR-DISABLE [OPUS-MAX] (Opus 5.5) Operatör devre dışı/rol düşürme/oturum iptali açık impersonation oturumlarını ve token'larını sonlandırsın",
+        "description": "Ele geçirilmiş superadmin mode: full impersonation başlatıyor; başka admin onu disable ediyor ama kiracı token'ı çalışmaya devam ediyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F12 (admin-platform). Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/api/src/services/platform/admin-directory.ts:~163/168/176/202/213` yalnız `platformSession.deleteMany`; dosyada \"impersonation\" geçmiyor; `apps/api/prisma/migrations/20261101150000_impersonation_tokens/migration.sql:70-83` `auth_resolve_token` operatör durumuna bakmıyor.\n\nYAPILACAK: (1) disable / rol düşürme / oturum iptali transaction'ında operatörün açık `platform_impersonation_sessions` kayıtlarını sonlandır (ended_at + reason) ve bağlı kiracı token'larını iptal et; platform_audit_log + kiracı audit_log (actor_type='platform') çift audit. (2) `auth_resolve_token` (yeni migration, CREATE OR REPLACE) impersonation token'ında operatörün `disabled_at IS NULL` ve aktif oturum kontrolü. (3) rtm: RTM-REVOKE-CLOSES-SOCKETS zarfı varsa yayınla; yoksa HANDOFF'a not.\n\nTUZAK: Platform rotaları yalnız platform-api sürecinde (memory new-platform-route-ripples; platform-integration-test-traps: reset ownerClient ile). SECURITY DEFINER fonksiyon değişince plan cache (hub-prisma-postgres-traps). Rol düşürmenin impersonation yetkisini gerçekten kaldırıp kaldırmadığını kontrol et (yalnız impersonation yetkisi düşüyorsa sonlandır).\n\nKAPSAM DIŞI: impersonation UI.\nDENETİM BULGULARI: F12",
+        "testStrategy": "platform entegrasyon: operatör impersonation başlatır → başka admin disable eder → kiracı token'ı 401, oturum ended, iki audit satırı; rol düşürme ve oturum iptali için aynı; başka operatörün oturumu etkilenmez. Mutasyon: auth_resolve_token kontrolünü kaldır → kırmızı. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "431",
+        "title": "INVOICE-FREEZE-PAID-STATUS [OPUS-XHIGH] (Opus 5.5) Donmuş dönem faturası ödemeye göre paid/open olsun (mevcut 'open' statüsü), deneme durumu dönem penceresinden hesaplansın",
+        "description": "PILOT_MODE=false, deneme 10 Ekim'de bitti ve ödeme yok; 1 Kasım süpürmesi Ekim'i 'paid' donduruyor, gelir raporu şişiyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F13. Kanıt yeterlidir.\n\nXHIGH GEREKÇESİ: (2) para doğruluğu.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/services/billing/invoice-close-sweep.ts:298` `status: composed.trialing ? 'trial' : 'paid'`; `apps/api/src/services/billing/invoice-service.ts:60` `InvoiceStatus = 'paid' | 'open' | 'trial'` ('open' sözlükte ZATEN var, tahmin yolu `:309` kullanıyor); `:~361` anlık `trialState`; `:~452` `periodPaid` yalnız tahmin yolunda; `apps/api/src/services/platform/billing.ts:~534` `status='paid'` toplamı.\n\nYAPILACAK: `#freeze` içinde dönem için `periodPaid` (mevcut hesap) kullan: ödenmiş → 'paid', değil → mevcut 'open'; deneme durumu `trial_ends_at` ile dönem penceresinin kesişiminden (dönemin tamamı deneme içindeyse 'trial'; kısmen ise kısmi tutar + 'open' — mevcut composer kısmi dönemi hesaplıyorsa onu kullan; değilse varsayımı HANDOFF'a yaz, memory underspecified-prd-row-needs-documented-assumption). Kontrat ve web etiketi değişmez ('open' zaten tanımlı) — web'in donmuş faturada 'open'ı gösterdiğini yalnız doğrula.\n\nTUZAK: Platform gelir raporu 'paid' topluyor — donmuş 'open' faturalar platform testlerini ripple edebilir. Saat/dönem testleri UTC 00-01 arasında kırmızı olabilir (memory integration-reds-between-00-and-01-utc). Para birimi kuruş (cents) tamsayı.\n\nKAPSAM DIŞI: tahsilat, Stripe (sahip kararı H-06).\nDENETİM BULGULARI: F13",
+        "testStrategy": "api entegrasyon (sahte saat): deneme 10 Ekim'de biter, ödeme yok → 1 Kasım süpürmesi Ekim faturasını 'open' dondurur; ödeme kaydı varsa 'paid'; dönemin tamamı denemedeyse 'trial'; süpürme sonradan koşsa da sonuç aynı. platform billing toplamı open'ı paid saymaz. Mutasyon: periodPaid yerine sabit 'paid' → kırmızı. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "432",
+        "title": "ENTERPRISE-PLAN-NOT-SELF-SERVE [OPUS-XHIGH] (Opus 5.5) Self-servis plan değişiminde teklifli (pricingForPlan === 'quoted') plan reddedilsin, plan değişiminde birim fiyat yeniden atansın",
+        "description": "`PATCH /billing/subscription {\"plan\":\"enterprise\"}` 200 dönüyor; SSO, SIEM, white-label, sandbox açılıyor; ücret Growth fiyatında kalıyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F14. Kanıt yeterlidir.\n\nXHIGH GEREKÇESİ: (1) yetki yükseltme + (2) para doğruluğu.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/services/billing/subscription-service.ts:193-196` yalnız `plan in PLANS`; `:~262` `unitPriceCents` eski değerde; `apps/api/src/routes/reports.ts:~249-255` gövdede enum yok; `apps/api/src/lib/entitlements.ts:~115-127`. Teklifli plan tanımı ZATEN var: `pricingForPlan` ve 'quoted' (`payment-methods.ts:202`, `billing-views.ts:78`).\n\nYAPILACAK: self-servis yolda `pricingForPlan(plan) === 'quoted'` olan planları 403/400 `plan_requires_sales` ile reddet (yeni meta alanı EKLEME); enterprise'a geçiş yalnız platform tarafından (mevcut platform plan atama yolu varsa onu kullan; yoksa KAPSAM DIŞI not). Self-servis plan değişiminde `unitPriceCents` yeni planın liste fiyatından yeniden atanır. Kontrat gövdesine self-servis plan enum'u (contract-first; mobil parity etkilenmez çünkü yol eklenmiyor). Web plan seçicide enterprise \"Satışla görüş\" olarak kalır (zaten öyleyse dokunma).\n\nTUZAK: Pilotta billing yazmaları zaten pilotRefused (pilot-gate.ts:86) — test PILOT_MODE=false. Seed'de enterprise lisans varsa mevcut aboneliğe dokunma. Yeni hata türü en+tr cümle.\n\nKAPSAM DIŞI: fiyat tablosu, tahsilat.\nDENETİM BULGULARI: F14",
+        "testStrategy": "api entegrasyon: owner PATCH plan=enterprise → reddedilir, entitlements değişmez; growth→pro (ya da mevcut iki self-servis plan) → unitPriceCents yeni plan fiyatı; platform yoluyla enterprise atanabiliyor (varsa). Mutasyon: quoted kontrolünü kaldır → kırmızı. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "433",
+        "title": "UPLOAD-VIRUS-SCANNER-MOCK-WARNING [OPUS-HIGH] (Opus 5.5) Mock virüs tarayıcısı production'da uyarı versin (ortak mock-provider uyarı yardımcısı), panel dosyayı \"taranmadı\" diye etiketlesin",
+        "description": "VIRUS_SCANNER yalnız mock/unavailable olabiliyor; mock yalnız EICAR'ı yakalıyor ve diğer her şeye clean:true dönüyor, ajan dosyayı taranmış sanıyor. Açılışta uyarı yok.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F21 (medium ← high), gereksinim NY-51. Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/config/env.ts:1220-1225` `VIRUS_SCANNER: z.enum(['mock','unavailable']).default('mock')`; `apps/api/src/services/.../virus-scanner.ts:~42-48`, `:~58-60` yalnız EICAR; `.env.production.example:~422` `VIRUS_SCANNER=mock`; `infra/helm/siyahtus/values.yaml:508` `VIRUS_SCANNER: mock`; `apps/api/src/server.ts:~318-319` yalnız crawler mock uyarısı.\n\nYAPILACAK: (1) Ortak 'mock provider in production' uyarı yardımcısı (crawler uyarısını da ona taşı): production'da VIRUS_SCANNER=mock → boot `warn` (engel yok, memory never-add-boot-blocking-rules-unasked) + varsa productionProblems maddesi. MOCK-PAYMENT-PROD-WARNING bu yardımcıyı kullanacak. (2) Tarama sonucu ek meta'sına `scanner: 'mock'|...` ya da `scanned: false` taşı; panelde ekte \"Virüs taraması yapılmadı\" etiketi (en+tr; i18n kaydı; ajan için tooltip). Kontrat alanı eklenirse contract-first. Helm values satırına açıklama yorumu (değer değişmez).\n\nTUZAK: Mevcut ek meta biçimini okuyan widget/mobil kodu; memory new-web-component-must-be-registered-for-i18n, panel-copy-cannot-carry-internal-codes. productionProblems/health ripple (deployment-config-field-ripples). Pilotta sohbet eki PILOT-FILE-SHARING-OFF ile kapandı — etiket yine de PILOT_MODE=false için gerekli.\n\nKAPSAM DIŞI: gerçek ClamAV sağlayıcısı (sahip kararı, ownerQuestions).\nDENETİM BULGULARI: F21",
+        "testStrategy": "api birim: production+mock → uyarı log'u; crawler uyarısı yardımcıya taşındıktan sonra da aynı; api entegrasyon: yüklenen ekin meta'sında scanned=false (mock). web birim: ek kartında \"taranmadı\" etiketi; scanned=true'da yok. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "434",
+        "title": "CSP-SMOKE-E2E [OPUS-HIGH] (Opus 5.5) Üretim CSP'si gerçek tarayıcıda test edilsin: built nginx imajı üzerinden küçük CSP smoke projesi",
+        "description": "e2e Vite dev sunucusunda koşuyor ve CSP göndermiyor; yeni bir dış kaynak prod CSP'si tarafından engellense de tüm testler yeşil kalıyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F16 (tests-quality). Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/e2e/playwright.config.ts:~377`, `~434` dev sunucu webServer; `apps/e2e/.../developer-docs.spec.ts:10-12` \"dev server sends no CSP\"; `nginx-security.test.ts` yalnız metin kontrolü; CSP yalnız `apps/web/nginx.conf:~80`, widget nginx, `apps/admin/nginx.conf:~31` (memory panel-csp-lives-only-in-nginx).\n\nYAPILACAK (en küçüğünü seç, HANDOFF'a yaz): (a) pilot smoke betiğine (built image + nginx ayakta iken) Playwright ile panel girişi + inbox + widget demo sayfası açılır, `securitypolicyviolation` dinleyicisi ve console CSP hatası → kırmızı; ya da (b) ayrı Playwright projesi `csp-smoke` (yalnız elle/CI'da imaj ayaktayken koşar, varsayılan e2e'ye girmez). CI'da imaj zaten derleniyor (memory tm257-epic-opened) — CI adımı eklenirse süre etkisini ölç.\n\nTUZAK: Docker Desktop bind mount/TMPDIR (memory docker-desktop-bind-mounts-broken-smoke-needs-tmpdir); smoke için unique compose project (clean-install-rehearsal-needs-unique-compose-project). Sandboxed panel frame null origin (memory sandboxed-panel-frame-has-null-origin). Döngüde docker ağır komut: run_in_background.\n\nKAPSAM DIŞI: CSP politikasının kendisini değiştirmek.\nDENETİM BULGULARI: F16",
+        "testStrategy": "Smoke: temiz CSP ile yeşil; mutasyon — nginx.conf CSP'sinden `connect-src` içindeki api kökünü çıkar → smoke kırmızı (ihlal yakalandı), geri al → yeşil. nginx-security.test.ts yeşil. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "435",
+        "title": "MOBILE-RESTORE-RETRY [OPUS-HIGH] (Opus 5.5) Mobil soğuk açılış: session.restore reddi yakalansın, geri çekilmeli yeniden deneme + \"Tekrar dene\"",
+        "description": "Sinyal yokken ya da sunucu 503 dönerken açılışta uygulama 'Opening SiyahTuş…' ekranında sonsuza kadar kalıyor; status='unknown' kalıcı, bağlantı gelse de yeniden denenmiyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F17 (medium ← high). Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/mobile/src/app/services.tsx:66-72` `void value.session.restore();` (catch yok); `apps/mobile/src/auth/session.ts:~435` retryable hatayı yeniden fırlatıyor; `apps/mobile/src/navigation/RootNavigator.tsx:~63` unknown → LoadingScreen.\n\nYAPILACAK: restore reddini yakala; retryable hatada üstel geri çekilme (1, 2, 4 … 30 sn tavan) ile yeniden dene; uygulama ön plana gelince / connectivity değişince hemen dene (mevcut connectivity kaynağı varsa; yoksa AppState). LoadingScreen'de belli bir süre sonra (ör. 5 sn) \"Bağlanılamıyor — Tekrar dene\" düğmesi (mobil i18n). Kalıcı (auth) hata mevcut davranışla signed-out.\n\nTUZAK: memory mobile-tests-have-no-node-types (jest.mock hoisting, Node tipleri yok). Zamanlayıcılar unmount'ta temizlenmeli.\n\nKAPSAM DIŞI: RTM token yenileme (MOBILE-RTM-TOKEN-REFRESH).\nDENETİM BULGULARI: F17",
+        "testStrategy": "mobil jest: restore iki kez retryable hata sonra başarı → status signed-in (sahte zamanlayıcı); kalıcı auth hatası → signed-out; 5 sn sonra Tekrar dene düğmesi görünür ve basınca restore çağrılır; unhandled rejection yok. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "436",
+        "title": "MOBILE-RTM-TOKEN-REFRESH [OPUS-HIGH] (Opus 5.5) Mobil RTM: login auth hatasında ve sunucu kapanış kodunda bir kez session refresh + yeniden bağlan; getToken async ve süre kontrollü",
+        "description": "Arka planda 1 saatten uzun beklendikten sonra ön plana dönülünce süresi dolmuş token'la RTM login reddediliyor, #stopped=true oluyor ve canlı mesaj gelmiyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F18 (medium ← high). Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/mobile/src/rtm/client.ts:~285-291`, `:~404` auth reddinde `#stopped=true`; `apps/mobile/src/features/inbox/InboxProvider.tsx:~72` `getToken: () => session.getAccessToken()` (senkron, süre kontrolsüz); access TTL 3600 (`apps/api/src/config/env.ts:~444`).\n\nYAPILACAK: `getToken` async: token exp'e < 60 sn kaldıysa önce `session.refresh()`. Login auth hatasında bir kez refresh + yeniden bağlan; ikinci auth hatasında mevcut stop davranışı (signed-out akışı). Sunucunun token süresi/iptal için kullanacağı kapanış kodu (RTM-REVOKE-CLOSES-SOCKETS bu görevden SONRA gelir; mevcut 4001/1008 benzeri kodu varsay ve sabitle) aynı yoldan geçer. Kodu HANDOFF'a yaz ki RTM-REVOKE aynı kodu kullansın.\n\nTUZAK: Eşzamanlı refresh çağrılarını tekille (aynı promise). memory mobile-tests-have-no-node-types.\n\nKAPSAM DIŞI: push bildirimleri, sunucu tarafı kapatma (RTM-REVOKE-CLOSES-SOCKETS).\nDENETİM BULGULARI: F18",
+        "testStrategy": "mobil jest: süresi dolmuş token → login reddi → refresh → yeni token'la login success, #stopped false; sunucu kapanış kodu → aynı tek refresh + yeniden bağlanma; refresh de başarısızsa stop; eşzamanlı iki getToken tek refresh. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "437",
+        "title": "MOBILE-COMPOSER-NO-LOSS [OPUS-XHIGH] (Opus 5.5) Mobil composer: gönderilemeyen yanıt kaybolmasın, \"tekrar dene\" aynı idempotency_key ile",
+        "description": "Zayıf sinyalde Send'e basınca composer boşalıyor ve hata alınca balon siliniyor; yanıt kayboluyor. Timeout'ta sunucu mesajı kaydetmişse yeniden yazılan yanıt yeni anahtarla iki kez gidiyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F19. Kanıt yeterlidir.\n\nXHIGH GEREKÇESİ: (3) teslim güvencesi — mesaj kaybı ve çift gönderim.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/mobile/src/features/inbox/Composer.tsx:52-58` koşulsuz `setText('')`; `apps/mobile/src/features/inbox/store.ts:~301-308` hata alınca balonu siliyor; `store.ts:~285` her denemede yeni idempotency_key.\n\nYAPILACAK: başarısız gönderimde balon \"Gönderilemedi — tekrar dene\" durumunda kalır (metin + orijinal idempotency_key saklı); dokununca aynı anahtarla yeniden gönderir; sunucu replay ederse balon onaylanır. İptal seçeneği metni composer'a geri koyar. Mobil i18n.\n\nTUZAK: Sunucu tarafı idempotency eşzamanlı tekrarda tam değil (IDEMPOTENCY-RESERVE) — bu görev istemciyi düzeltir; sıralı tekrar replay'i zaten çalışıyor. memory mobile-tests-have-no-node-types.\n\nKAPSAM DIŞI: çevrimdışı kuyruk.\nDENETİM BULGULARI: F19",
+        "testStrategy": "mobil jest: send hata → balon failed durumda, metin kaybolmaz; tekrar dene → aynı idempotency_key ile ikinci çağrı; başarı → balon sent; iptal → metin composer'da. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "438",
+        "title": "SAML-FIRST-PARTY-CLIENT [OPUS-MAX] (Opus 5.5) SAML: IdP-initiated girişte ve /login'de yalnız first-party sign-in client'ı kullanılsın (partner app'e sessiz code yok)",
+        "description": "Workspace'te ikinci OAuth client (partner app) olunca IdP-initiated SSO client_id:null dönüp bozuluyor; ayrıca SAML /login herhangi bir client'a (partner dahil) kullanıcı onayı olmadan authorization code veriyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgular F20 (medium) ve F40 (low ← medium) — aynı kök: saml.ts first-party client seçimi. Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/routes/saml.ts:355` `oauthClient.findMany({ select: {id:true}, take: 2 })` orderBy yok; `:363` `client_id: found.clients.length === 1 ? ... : null`; `:~385-393` /login first-party kontrolü yok; `:~584-588` `defaultScopesForRole`. First-party tanımı: `apps/api/prisma/migrations/20260826230000_two_factor_enforcement/migration.sql:72-75` \"en eski client\" (kodda `firstPartyClientId` benzeri yardımcı var mı `rg firstParty` ile bak).\n\nYAPILACAK: tek ortak `firstPartyClient(tx)` (migration tanımıyla aynı: ORDER BY created_at, id LIMIT 1) — IdP-initiated discovery bunu döner; SAML /login yalnız bu client_id için code verir, başka client_id → 400 `client_not_first_party` (partner'lar OAuth consent akışını kullanır).\n\nTUZAK: SAML testleri fixture client sayısına bağlı olabilir. Yeni hata türü en+tr. OAuth scope ceiling davranışı değişmemeli.\n\nKAPSAM DIŞI: OAuth consent ekranı, SCIM.\nDENETİM BULGULARI: F20; F40",
+        "testStrategy": "api entegrasyon: workspace'te first-party + partner client → IdP-initiated discovery first-party client_id döner (null değil); /login partner client_id ile → 400, code verilmez; first-party ile → mevcut akış. Mutasyon: orderBy'ı kaldır/ters çevir → kırmızı. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "439",
+        "title": "NGINX-API-BODY-SIZE [SONNET-HIGH] (Sonnet 5.5) Panel nginx /api/ proxy'sine client_max_body_size 26m, nginx-security testinde sabitle",
+        "description": "docker-compose.full.yml/Helm kurulumunda panel nginx'i üzerinden 1 MiB üstü yüklemeler (3 MiB PDF, 5 MiB bilgi belgesi) 413 alıyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F22. Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/web/nginx.conf:188-195` `location /api/` bloğunda `client_max_body_size` yok (repoda hiç geçmiyor); `apps/api/src/routes/uploads.ts:~111` `HARD_CEILING = 26_214_400`; `docker-compose.full.yml:~267-270`.\n\nYAPILACAK: `location /api/` içine `client_max_body_size 26m;` (HARD_CEILING ile aynı; yorumla uploads.ts sabitine bağla). Widget nginx'inde de /api proxy varsa aynı. `nginx-security.test.ts`'e değer kontrolü (HARD_CEILING'den türetilmiş).\n\nTUZAK: nginx.conf şablonu envsubst kullanıyor (`${API_UPSTREAM}`) — yeni satırda `$` yok. CSP satırına dokunma.\n\nKAPSAM DIŞI: Caddy/cloudflared (pilot yolu api'ye doğrudan gidiyor).\nDENETİM BULGULARI: F22",
+        "testStrategy": "nginx-security.test.ts: /api/ bloğunda client_max_body_size = 26m (HARD_CEILING ile eşleşir). Mutasyon: satırı sil → test kırmızı. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "440",
+        "title": "SCHEDULED-REPORT-RECIPIENT-ROSTER [OPUS-HIGH] (Opus 5.5) Zamanlanmış rapor gönderim anında alıcıları aktif ve yetkili üyelerle kesiştirsin",
+        "description": "Askıya alınan ya da çıkarılan üyeye günlük rapor e-postası gitmeye devam ediyor; alıcı doğrulaması yalnız oluşturma anında.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F23 (medium ← high). Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/services/reports/scheduled-report-sweeper.ts:~243-250` alıcılar roster kontrolü olmadan; `:381` `for (const to of definition.recipients)`; doğrulama `scheduled-report-service.ts:~265-298` (oluşturma).\n\nYAPILACAK: gönderimden önce alıcıları lisansın aktif (askıda olmayan, silinmemiş) ve rapor yetkisi olan üyelerinin e-postalarıyla (küçük harf) kesiştir; düşenleri yapılandırılmış log'a (e-posta maskeli) ve run kaydına `skipped_recipients` sayısı. Hiç alıcı kalmazsa run 'skipped'. Oluşturma anı doğrulamasıyla aynı yardımcıyı paylaş.\n\nTUZAK: Log'da ham e-posta yok (log-keys/url-pii audit'leri). memory new-scheduler-job-ripples (job listesi değişmiyor; yalnız davranış). UTC 00-01 kırmızıları (integration-reds-between-00-and-01-utc).\n\nKAPSAM DIŞI: kaçırılan dönem (SCHEDULED-REPORT-MISSED-PERIOD).\nDENETİM BULGULARI: F23",
+        "testStrategy": "api entegrasyon: alıcı üye askıya alınır → sweep o adrese mail göndermez, diğerine gönderir, run'da skipped_recipients=1; rapor yetkisi kaldırılan üye aynı; tüm alıcılar düşerse run skipped. Mutasyon: kesişimi kaldır → kırmızı. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "441",
+        "title": "RETENTION-PER-TENANT-ISOLATION [OPUS-HIGH] (Opus 5.5) Saklama turu: kiracı başına hata yalıtımı, partili silme, adil sıralama",
+        "description": "Tek kiracıdaki hata (ör. 10 sn transaction zaman aşımı P2028) tüm saklama turunu durduruyor; sabit sıralama yüzünden sonraki kiracılar hiç taranmıyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F24. Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/services/retention/retention.ts:201-205` `for (const tenant of tenants) results.push(await this.#pruneTenant(...))` try/catch yok; `:~589-591` StorageUnavailable dışını yeniden fırlatıyor; `apps/api/src/lib/tenant.ts:~50` transaction 10_000 ms.\n\nYAPILACAK: (1) Döngüde kiracı başına try/catch: hatayı log + sonuçta `error` alanı, tura devam. (2) Toplu silmeleri sabit parti boyutuyla (ör. 1000 satır) ayrı kısa transaction'larda yap. (3) Sıralama: en uzun süredir başarılı taranmamış kiracı önce (mevcut bir `last_pruned_at` yoksa tur başına dönen ofset; seçimi HANDOFF'a). Turun genel sonucu: en az bir kiracı hatası varsa job sonucu 'partial'.\n\nTUZAK: Background DB işi resetDatabase ile yarışır (memory background-db-work-races-reset-database). Yeni sütun gerekirse migration §6.3. Job sonuç sözlüğü health testlerinde pinli olabilir (new-scheduler-job-ripples).\n\nKAPSAM DIŞI: RETENTION_ENABLED varsayılanı (RETENTION-ENFORCED-FLAG + ownerQuestions), skill_runs.\nDENETİM BULGULARI: F24",
+        "testStrategy": "api entegrasyon: 3 kiracı, ikincisinin prune'u hata fırlatır (enjekte) → birinci ve üçüncü yine temizlenir, sonuç partial; büyük veri partilerle silinir (parti sayısı ≥2); bir sonraki tur hata veren kiracıyı önce dener. Mutasyon: try/catch'i kaldır → kırmızı. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "medium",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "442",
+        "title": "MOCK-PAYMENT-PROD-WARNING [OPUS-HIGH] (Opus 5.5) Production'da (PILOT_MODE=false) mock ödeme sağlayıcısı productionProblems/boot uyarısıyla işaretlensin",
+        "description": "Production, PILOT_MODE=false ve STRIPE_PROVIDER boşken `PUT /billing/payment-method` sahte maskeli kartla lisansı ücretsiz 'active' yapıyor; uyaran hiçbir şey yok.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F32. Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/api/src/services/billing/license-activation.ts:62-80` kart kaydı varsa aktivasyon; `apps/api/src/config/env.ts:~1200` ödeme sağlayıcı varsayılanı 'mock'; `apps/api/src/routes/reports.ts:~2801-2803` payment-method yolu. UPLOAD-VIRUS-SCANNER-MOCK-WARNING'in kurduğu ortak mock-provider uyarı yardımcısı.\n\nYAPILACAK: NODE_ENV=production ve PILOT_MODE=false ve ödeme sağlayıcı mock ise ortak yardımcıyla boot'ta tek `warn` log + (varsa) `/health` ayrıntısındaki/productionProblems listesine madde. BOOT ENGELİ YOK (memory never-add-boot-blocking-rules-unasked; engel istenirse sahip kararı — ownerQuestions).\n\nTUZAK: productionProblems'a madde eklemek pilot-config/health testlerini ripple edebilir; pilot env (PILOT_MODE=true) uyarı vermemeli. memory deployment-config-field-ripples.\n\nKAPSAM DIŞI: gerçek Stripe (H-06).\nDENETİM BULGULARI: F32",
+        "testStrategy": "api birim: production+PILOT_MODE=false+mock → uyarı listesinde madde; PILOT_MODE=true → yok; sağlayıcı stripe → yok. Boot devam eder (test). DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417",
+          "433"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "443",
+        "title": "MOBILE-DEVICE-REVOKE-QUEUE [OPUS-HIGH] (Opus 5.5) Mobil: oturum süresi dolunca/revoke başarısız olunca cihaz kaydı sunucuda canlı kalmasın",
+        "description": "A workspace'inde refresh süresi dolunca #drop revoke göndermiyor; B'ye girildiğinde A'nın bildirimleri cihaza gelmeye devam ediyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F36. Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/mobile/src/auth/session.ts:~464` `#drop` → `onSignedOut(null)`; `apps/mobile/src/.../device-token.ts` accessToken null ise revoke yok ama `clearDeviceToken` çalışıyor.\n\nYAPILACAK (varsayılan: sunucu tarafı, istemciye bağımlı değil): api'de cihaz token'ı yeni bir lisans/hesap için kaydedilirken aynı cihaz değerinin diğer kayıtlarını iptal et (aynı push token'ı tek aktif kayıt). İstemci tarafında ek olarak: accessToken yoksa deviceId'yi silmeden önce bekleyen revoke kaydı tut ve sonraki oturumda gönder. Hangisini uyguladığını HANDOFF'a yaz.\n\nTUZAK: Push sağlayıcısı mock (memory provider-seams-mostly-have-no-real-impl). Cihaz kaydı uçları mobil parity sayısını etkilemez (yol eklenmiyorsa).\n\nKAPSAM DIŞI: gerçek push sağlayıcısı (H-09).\nDENETİM BULGULARI: F36",
+        "testStrategy": "api entegrasyon: aynı push token'ı lisans A sonra B için kaydet → A kaydı iptal, A bildirimleri o cihaza gitmez. mobil jest (uygulandıysa): token yokken drop → revoke kuyruğu, sonraki oturumda gönderilir. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "444",
+        "title": "MOBILE-AUDIT-OVERRIDES [SONNET-HIGH] (Sonnet 5.5) apps/mobile bağımlılık açıkları: pnpm.overrides ile aralık içi yamalar (shell-quote, xmldom, js-yaml, nanoid…)",
+        "description": "pnpm audit: 56 açığın 46'sı apps/mobile ağacında (1 critical shell-quote, 30 high'ın çoğu), yollar apps__mobile>expo>@expo/cli…",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F37. Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/mobile/package.json` expo zinciri; kök `package.json` `pnpm.overrides` (varsa) — oku.\n\nYAPILACAK: `pnpm audit --json` ile mobil yollardaki critical+high paketlerin yamalı sürümlerini listele; yalnız aynı majör içinde kalan yamaları `pnpm.overrides`'a ekle (shell-quote >=1.11.0, @xmldom/xmldom, js-yaml, nanoid vb.). Majör gerektirenleri HANDOFF'a \"kalan\" olarak yaz. Lockfile'ı elle uygula ve `pnpm install --frozen-lockfile` ile doğrula (memory pnpm-add-churns-the-lockfile). Ardından mobil jest + `expo export` (varsa script) koş.\n\nTUZAK: Yeni override @types/react hoist'unu değiştirebilir (memory new-workspace-app-flips-types-react-hoist). Sunucu paketlerini (zod) burada değiştirme.\n\nKAPSAM DIŞI: zod (tm 415 / ZOD-INTERIM-MITIGATION), CI audit adımı.\nDENETİM BULGULARI: F37",
+        "testStrategy": "`pnpm audit --prod` çıktısında mobil critical 0, high sayısı önceki değerden düşük (önce/sonra sayılar HANDOFF'a); `pnpm install --frozen-lockfile` exit 0; mobil testler yeşil. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "445",
+        "title": "SCIM-ACTIVE-FILTER-STRING [OPUS-HIGH] (Opus 5.5) SCIM filtresi active eq \"false\" (tırnaklı) doğru yorumlansın, geçersiz değerde 400",
+        "description": "`active eq \"false\"` tırnaklı değer string kaldığı için `!(value as boolean)` false veriyor ve aktif kullanıcılar dönüyor; reconciliation yanlış kümeyle çalışıyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F41. Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/routes/scim.ts:378` `if (attribute === 'active') return { suspended: !(value as boolean) };`; `apps/api/src/lib/scim.ts:~292-297` tırnaklı değer string.\n\nYAPILACAK: `active` için boolean true/false ve string 'true'/'false' (büyük/küçük harf duyarsız) kabul; başka değer → SCIM 400 `invalidFilter` (mevcut `rejectFilter`).\n\nTUZAK: SCIM hata gövdesi biçimi RFC 7644 (mevcut yardımcıyı kullan).\n\nKAPSAM DIŞI: diğer filtre öznitelikleri.\nDENETİM BULGULARI: F41",
+        "testStrategy": "api entegrasyon: `active eq \"false\"` → yalnız askıdaki kullanıcılar; `active eq false` aynı; `active eq \"maybe\"` → 400 invalidFilter. Mutasyon: string dönüşümünü kaldır → kırmızı. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "446",
+        "title": "UPLOAD-PUT-CONTENT-TYPE-SINGLE-USE [OPUS-XHIGH] (Opus 5.5) İmzalı PUT /uploads: gerçek Content-Type + magic-byte kontrolü, key tek kullanımlık (ikinci PUT 409)",
+        "description": "PUT /uploads içerik türü kontrolü query parametresini kendisiyle karşılaştırdığı için işlevsiz (PDF beyanıyla .exe yüklenebiliyor); imzalı URL TTL boyunca üzerine yazılabiliyor ve GET 1 yıl immutable önbellekle sunuluyor (ajanlar farklı dosya görebiliyor).",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgular F42 ve F43 (aynı dosya, aynı imzalı-yükleme kökü), gereksinim NY-51. Kanıt yeterlidir.\n\nXHIGH GEREKÇESİ: (1) güvenlik yüzeyi.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/routes/uploads.ts:268-277` `signer.verify({ contentType: query.content_type, ...}, { contentType: query.content_type ?? '', ... })`; `apps/api/src/lib/upload-url.ts:~246-248` mismatch dalı ölü, `:~216-218` belge başlık+bayt kontrolünü anlatıyor; `uploads.ts:307` `store.put` öncesi exists kontrolü yok; `:347` `cache-control: private, max-age=31536000, immutable`; `uploads-parity.test.ts:~379-397` \"single-key not single-use\" sabitliyor.\n\nYAPILACAK: (1) `actual.contentType` = isteğin `Content-Type` başlığı (parametreler atılmış). (2) İzin verilen türler için (png, jpeg, pdf, + allowedFileTypes'taki bilinenler) magic-byte koklaması; uyuşmazlık → 400 `content_type_mismatch`. (3) Tek kullanım: ilk başarılı PUT'ta key tüketilir (Redis `SET NX` ya da `store.exists` → 409 `upload_already_written`). `uploads-parity.test.ts` beklentisini yeni davranışa çevir (yorumla). knowledge_document yolu (pilotta açık) aynı kontrollerden geçer — bilgi belgesi türlerini (docx vb.) magic-byte listesinde unutma.\n\nTUZAK: Widget/panel yükleyicisi Content-Type başlığını gönderiyor mu doğrula (fetch body Blob → tip). Yeniden deneme (ağ hatası sonrası aynı URL'ye ikinci PUT) artık 409 — istemci 409'u başarı say ya da yeni URL iste; kararı HANDOFF'a. Widget bundle bütçesi. Yeni hata türleri en+tr. PILOT-FILE-SHARING-OFF'un purpose kontrolüyle çakışma: aynı PUT handler'ı — sırayı koru (pilot reddi önce).\n\nKAPSAM DIŞI: virüs taraması, pilot kapatma (PILOT-FILE-SHARING-OFF).\nDENETİM BULGULARI: F42; F43; G-02",
+        "testStrategy": "api entegrasyon: PDF imzalı URL'ye MZ başlıklı bayt → 400; Content-Type başlığı query ile uyuşmaz → 400; geçerli PUT 201, ikinci PUT 409; GET ilk dosyayı döner; knowledge_document docx geçerli yüklemesi başarılı. Mutasyon: actual.contentType'ı query'ye geri çevir → kırmızı. widget/web birim: 409 davranışı. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417",
+          "418"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "447",
+        "title": "RETENTION-ENFORCED-FLAG [OPUS-HIGH] (Opus 5.5) Saklama ayarı yanıtında enforced alanı; RETENTION_ENABLED kapalıyken panel \"silme etkin değil\" desin",
+        "description": "Saklama taraması varsayılan olarak kapalı (RETENTION_ENABLED=false) ama panel ve API \"30 gün sonra siliniyor\" diyor; pilotta hiçbir şey silinmiyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F49 (low ← medium) + belge çelişkisi Ç-06. Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/routes/settings.ts:1149` `function serialiseRetention(env, licence)` (~1149-1175); `apps/api/src/config/env.ts:~1384-1387` RETENTION_ENABLED varsayılan false; `.env.production.example:~484` yorumlu; `apps/api/src/.../jobs.ts:~367-369`, `scheduler.ts:~314`.\n\nYAPILACAK: `serialiseRetention` yanıtına `enforced: env.RETENTION_ENABLED` (kontrat-first; mevcut yol, mobil parity değişmez). Panel saklama ayarında enforced=false iken uyarı bandı: \"Otomatik silme bu kurulumda etkin değil; süreler kaydedilir ama uygulanmaz\" (en+tr, i18n kaydı). Pilot env şablonundaki satır ve yorum sahip kararına kadar değişmez (ownerQuestions).\n\nTUZAK: memory panel-copy-cannot-carry-internal-codes (env adı panel metninde yok), settings-savebar-test-traps (role=status çakışması — banda farklı rol), dark-theme-needs-content-brand-text.\n\nKAPSAM DIŞI: RETENTION_ENABLED varsayılanını değiştirmek.\nDENETİM BULGULARI: F49",
+        "testStrategy": "api entegrasyon: RETENTION_ENABLED=false → enforced:false; true → true. web birim: enforced=false iken uyarı bandı görünür, true iken yok; axe temiz. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "448",
+        "title": "IDEMPOTENCY-RESERVE [OPUS-XHIGH] (Opus 5.5) Mesaj idempotency anahtarı eşzamanlı tekrarda çift event ve çift AI turu üretmesin",
+        "description": "İlk istek uçuştayken aynı anahtarla tekrar deneme iki event yazıyor (ve iki AI turu tetikleyebiliyor): GET transaction'dan önce, SET NX commit'ten sonra.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F27 (chat-ai-engine). Kanıt yeterlidir.\n\nXHIGH GEREKÇESİ: (3) teslim güvencesi — çift gönderim.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/services/chat/chat-service.ts:1672-1677` `redis.get(idempotencyKey)` transaction öncesi; `:~1780-1782` `SET NX` commit sonrası; ziyaretçi yolu `:~1291-1298`, `:~1401`, `:~1424`; DB'de unique kısıt yok.\n\nYAPILACAK (varsayılan: Redis rezervasyonu): transaction öncesi `SET key \"pending:<reqId>\" NX PX <ttl>`; alınamazsa: değer event id ise replay; `pending` ise kısa bekleme/yeniden okuma (ör. 3×100 ms) sonra 409 `idempotency_in_flight`; commit sonrası değeri event id ile değiştir; hata yolunda rezervasyonu sil. Agent ve ziyaretçi yollarının ikisi de. Alternatif (events tablosuna unique sütun) ölçülmüş gerekçeyle seçilebilir — HANDOFF'a yaz.\n\nTUZAK: Race testleri ayrı bağlantı/eşzamanlı istek ister (memory race-tests-need-separate-connections). AI turu birleştirme (memory ai-turns-merge-unanswered-visitor-messages). ChatService services/ai'yi import edemez (chat-service-must-not-import-ai). Redis yokken davranış: mevcut fail-open/closed kararını koru.\n\nKAPSAM DIŞI: mobil istemci (MOBILE-COMPOSER-NO-LOSS).\nDENETİM BULGULARI: F27",
+        "testStrategy": "api entegrasyon: aynı idempotency_key ile iki eşzamanlı POST → tek event, ikinci yanıt replay ya da 409; sıralı tekrar → replay (değişmez); ilk istek hata verirse rezervasyon kalkar ve tekrar başarılı. Ziyaretçi yolu için aynı. Mutasyon: NX rezervasyonunu kaldır → çift event testi kırmızı. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "449",
+        "title": "WIDGET-POSTMESSAGE-SOURCE [OPUS-HIGH] (Opus 5.5) Widget: trackSale, trackEvent ve host-open/close yalnız gömüldüğü sayfadan (event.source === win.parent) kabul edilsin",
+        "description": "Üçüncü taraf bir iframe sahte, çok yüksek tutarlı bir trackSale ya da host-open gönderebiliyor; hemen alttaki komutlarda kaynak şartı var, bu üçünde yok.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F28 (low ← medium). Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/widget/src/widget.ts:3133-3138` host-open, host-close, trackSale, trackEvent kaynak kontrolsüz; `:3139-` sonraki komutlar \"Only from the page the widget is embedded in\" yorumuyla `event.source === win.parent` şartlı.\n\nYAPILACAK: aynı `event.source === win.parent` şartını bu dört mesaja uygula (tek erken dönüşle tüm `siyahtus:*` komutlarına uygulamak daha küçükse onu yap; loader'dan gelen mesajların kaynağının parent olduğunu doğrula).\n\nTUZAK: widget bundle bütçesi; widget testleri postMessage'ı `source` vermeden simüle ediyor olabilir — test yardımcısını güncelle (memory widget-test-fetch-mocks-share-objects, widget-mount-returns-teardown).\n\nKAPSAM DIŞI: origin allowlist.\nDENETİM BULGULARI: F28",
+        "testStrategy": "widget birim: source=başka pencere ile trackSale → çağrılmaz; source=parent → çağrılır; host-open aynı. Mutasyon: şartı kaldır → kırmızı. bundle-size.test.ts yeşil. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "450",
+        "title": "WIDGET-LOADER-RESIZE-GEOMETRY [SONNET-HIGH] (Sonnet 5.5) Widget loader: resize/orientationchange'de applyGeometry yeniden çalışsın, teardown'da dinleyici kalksın",
+        "description": "Yatayda açılan mobil tam ekran panel dikeye çevrilince 360 px'lik ekrandan taşıyor; geometri yalnız mesajda yeniden hesaplanıyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F29. Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/widget/src/loader.ts:240` `const applyGeometry = (): void => {` (`win.innerWidth <= MOBILE_MAX_WIDTH`); yalnız `onMessage`'dan çağrılıyor (~:333); resize/orientationchange dinleyicisi yok (~:336/449/466/467 teardown bölgesi).\n\nYAPILACAK: `win.addEventListener('resize', applyGeometry)` + `orientationchange`; mount teardown'unda `removeEventListener`. Gerekirse rAF ile tek çağrıya indir.\n\nTUZAK: loader bütçesi (memory widget-bundle-budget-and-css-minify; types-top-level-calls-bloat-widget-loader). Teardown testleri `mounted` dizisi (widget-mount-returns-teardown).\n\nKAPSAM DIŞI: masaüstü geometrisi.\nDENETİM BULGULARI: F29",
+        "testStrategy": "widget birim (jsdom): açık panel, innerWidth 800→360 + resize olayı → tam ekran stilleri uygulanır; teardown sonrası resize stil değiştirmez. bundle-size.test.ts yeşil. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "451",
+        "title": "VISITOR-URL-SCHEME [OPUS-HIGH] (Opus 5.5) Ziyaretçi sayfa adresi yalnız http/https kabul edilsin; panel href basmadan şema kontrolü yapsın",
+        "description": "`{\"url\":\"javascript:alert(document.domain)\"}` saklanıyor ve panelde `<a href>` olarak basılıyor; stored XSS'i yalnız CSP engelliyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F30 (low ← medium). Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/routes/customer.ts:141` `url: z.string().max(2048).optional()` (ve :139 `attachment_url` aynı); `:~1497-1499`; `apps/api/src/services/.../customer-service.ts:~322`; `log-redact.ts:~279-285` yalnız ?/# maskeliyor.\n\nYAPILACAK: (1) api: ortak `httpUrl` şeması (URL parse + protocol http:/https:) — ZOD-INTERIM-MITIGATION'ın ortak şema yardımcıları dosyasına eklenir; `url`, `referrer` ve ziyaretçinin gönderdiği diğer sayfa adresi alanlarına (`rg \"z.string\\(\\).max\\(2048\\)\" apps/api/src/routes`). Geçersiz → alan düşürülür mü 400 mü: routing için kayıt kaybı olmasın diye varsayılan 400 değil sessiz düşürme — kararı HANDOFF'a. (2) web: ziyaretçi/müşteri URL'sini href'e basan bileşenler ortak `safeHref()` yardımcısından geçer (http/https değilse düz metin). Mevcut kayıtlı kötü değerler için de (2) korur.\n\nTUZAK: ZOD-INTERIM-MITIGATION aynı customer.ts şemalarına boundedArray ekledi (önce kapanır) — üzerine kur. memory test-data-digits-near-code-words-get-masked. Web bileşeni yeni t() çağırıyorsa i18n kaydı.\n\nKAPSAM DIŞI: CSP.\nDENETİM BULGULARI: F30",
+        "testStrategy": "api entegrasyon: javascript: url → saklanmaz; https url → saklanır. web birim: safeHref('javascript:…') → link değil düz metin; https → link. Mutasyon: protokol kontrolünü kaldır → kırmızı. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417",
+          "419"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "452",
+        "title": "PLATFORM-AUTH-FAIL-CLOSED [OPUS-XHIGH] (Opus 5.5) Root panel giriş ve TOTP/kurtarma kodu bütçesi Redis yokken fail-closed (503)",
+        "description": "Redis erişilemezken platform girişi \"allowing attempt\" ile devam ediyor; parolayı bilen saldırgan sınırsız TOTP veya kurtarma kodu deneyebiliyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F31. Kanıt yeterlidir.\n\nXHIGH GEREKÇESİ: (1) güvenlik yüzeyi — platform authN.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/routes/platform/auth.ts:129-131` catch → `'platform sign-in budget unavailable — allowing attempt'`, `return null`; `spendCodeAttempt` `allowed = true` kalıyor; `platform-rate-limit.ts` aynı desen.\n\nYAPILACAK: platform giriş ve kod bütçesinde limiter hatası → 503 `rate_limit_unavailable` (log error kalır, metin \"refusing attempt\"). Kiracı API'deki fail-open davranışına DOKUNMA.\n\nTUZAK: Platform rotaları yalnız platform-api sürecinde (new-platform-route-ripples, platform-integration-test-traps). Yeni hata türü admin SPA'da en+tr metin.\n\nKAPSAM DIŞI: kiracı rate limit.\nDENETİM BULGULARI: F31",
+        "testStrategy": "platform entegrasyon/birim: limiter reserve hata fırlatır → giriş 503, parola doğrulanmaz; TOTP ve kurtarma kodu yolu 503; Redis sağlıklıyken mevcut davranış. Mutasyon: return null'a geri dön → kırmızı. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "453",
+        "title": "CHANNEL-SPLIT-SURROGATE [SONNET-HIGH] (Sonnet 5.5) Ortak splitText: Telegram/WhatsApp/Meta giden mesaj bölmesi UTF-16 vekil çiftini kesmesin",
+        "description": "4095 'a' ve ardından '😀b' içeren cevap iki parçaya bölünüyor ve iki parçada da \"�\" görünüyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F33 (Node probu ile doğrulandı). Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/services/channels/telegram-live.ts:163-165` `text.slice(start, start + TELEGRAM_TEXT_MAX)`; `whatsapp-live.ts:~399-400`; `meta-messaging-live.ts:~382-385` aynı desen.\n\nYAPILACAK: `services/channels/split-text.ts` `splitText(text, max)`: tercihen max içinde son boşlukta böl; yoksa kesim yüksek vekile (0xD800-0xDBFF) denk gelirse bir geri çek. Üç sağlayıcı bunu kullanır.\n\nTUZAK: Kanal sağlayıcıları canlı değil, mock testli (memory provider-seams-mostly-have-no-real-impl). Telegram limiti karakter mi UTF-16 birimi mi — mevcut sabiti koru.\n\nKAPSAM DIŞI: grapheme kümesi (ZWJ emoji) tam desteği — not düş.\nDENETİM BULGULARI: F33",
+        "testStrategy": "api birim: 'a'×4095+'😀b' max 4096 → parçalarda yalnız geçerli vekil çiftleri, birleşim orijinale eşit; boşluk varsa boşlukta böler; üç sağlayıcı testi yardımcıyı kullanır. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "454",
+        "title": "HEALTH-RTM-PROBE-CACHE [OPUS-HIGH] (Opus 5.5) rtm /health ve /health/ready: probe sonucu kısa TTL önbellek, eşzamanlı istekler tek probe",
+        "description": "rtm'nin public health uçlarında hız sınırı yok, her istek SELECT 1 + PING atıyor (havuz tükenmesi).",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F34 (low ← medium). Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/rtm/src/server.ts:~342-358` `/health/ready`, `:~800-803` `/health`; rtm HTTP yolunda limiter yok; api'de `healthRateLimit` (`apps/api/src/plugins/rate-limit.ts:~335`).\n\nYAPILACAK: probe sonucunu 1-2 sn TTL ile önbelleğe al; uçuştaki probe promise'i paylaşılır (single-flight). Draining kısa devresi önbellekten ÖNCE kalır (draining hemen 503). Gerekirse api'deki health limiter desenine benzer basit IP kovası (yeni env yoksa sabit) — ölç ve HANDOFF'a.\n\nTUZAK: compose/k8s healthcheck aralığı TTL'den uzun olmalı (doğrula). Sahte saat.\n\nKAPSAM DIŞI: health ayrıntı yetkisi (HEALTH-DETAIL-PLATFORM-ONLY), metrics uçları.\nDENETİM BULGULARI: F34",
+        "testStrategy": "rtm birim: 100 eşzamanlı /health/ready → tek DB probe; TTL sonrası yeni probe; draining 503 değişmez ve önbellekten bağımsız. Mutasyon: single-flight'ı kaldır → probe sayısı testi kırmızı. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "455",
+        "title": "HEALTH-DETAIL-PLATFORM-ONLY [OPUS-HIGH] (Opus 5.5) api/rtm /health ayrıntısı kiracı admin'ine değil yalnız platform principal'ına; kiracı yalnız {status, service}",
+        "description": "Self-servis kaydolan her workspace admin'i /health ayrıntısında sürüm, scheduler ve diğer kiracıların AI kuyruk derinliğini görüyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F35 (low). Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/routes/health.ts:116` `isAdmin = principal?.kind === 'agent' && roleAtLeast(principal.role, 'admin')` → ayrıntı; `health-snapshot.ts:~142-170`; `ai_jobs_health()` SECURITY DEFINER (deployment geneli). Repoda ops/health token mekanizması YOK (env.ts'de OPS/HEALTH token yok). Admin SPA yalnız `/dashboard/health` kullanıyor; kiracı web'de `/health` tüketicisi yok (`rg \"/health\" apps/web/src` ile yeniden doğrula).\n\nYAPILACAK: (1) Ayrıntılı gövde önce mevcut platform principal'ıyla (platform-api oturumu / impersonation değil) koşullanır; kiracı agent admin dahil herkes yalnız `{status, service}`. (2) Platform principal'ı api /health'e ulaşamıyorsa (ayrı süreç) admin SPA'nın `/dashboard/health`'i zaten ayrıntıyı veriyorsa api /health ayrıntısı tamamen kaldırılır; yeni token/env alanı ancak ölçülmüş ihtiyaçla (deployment-config-field-ripples) — kararı HANDOFF'a. (3) rtm aynı kural. (4) Compose/Helm healthcheck'lerinin yalnız status okuduğunu testle sabitle.\n\nTUZAK: memory new-scheduler-job-ripples (health.test job listesini pinliyor — ayrıntı testleri platform principal'ına taşınır), platform-integration-test-traps. Draining kısa devresi korunmalı.\n\nKAPSAM DIŞI: metrics uçları, probe önbelleği (HEALTH-RTM-PROBE-CACHE).\nDENETİM BULGULARI: F35",
+        "testStrategy": "api entegrasyon: kiracı admin token → yalnız status/service; platform principal (ya da /dashboard/health) → ayrıntı; anonim → status. rtm aynı. Compose healthcheck komutları status alanını okur (metin testi). Mutasyon: isAdmin dalını geri koy → kırmızı. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "456",
+        "title": "CI-DEPENDENCY-AUDIT [SONNET-HIGH] (Sonnet 5.5) CI'a sunucu yolları için pnpm audit --prod adımı (uyarı modu + izin listesi) ve .github/dependabot.yml",
+        "description": "CI'da bağımlılık açığı taraması yok, dependabot/renovate yapılandırılmamış; yeni high advisory çıkınca CI yeşil kalıyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F38. Kanıt yeterlidir.\n\nKODDA BUGÜN: `.github/workflows/ci.yml` yalnız `audit:req-coverage` (~:121), `log-keys` (~:126), `url-pii` (~:131); `.github/` altında yalnız `workflows/`.\n\nYAPILACAK: (1) `scripts/` altında küçük betik: `pnpm audit --prod --json` çıktısından api, rtm, web, widget, admin köklerine ulaşan high/critical'ları süz; izin listesi dosyası (ör. `scripts/audit-allowlist.json`: GHSA id + gerekçe + son tarih — zod GHSA-mrhx-c7xc-m3w5 tm 415 gerekçesiyle). İlk sürüm uyarı modu (exit 0 + özet); `--strict` bayrağıyla izin listesi dışı → exit 1. (2) ci.yml'e adım (ağ gerektirir; CI'da). (3) `.github/dependabot.yml` (npm haftalık, github-actions aylık, PR sınırı küçük). CONVENTIONS §1 ve ci.yml senkron (memory ci-gates-beyond-the-dod-list) — DoD listesine eklenmeyecekse bunu yaz.\n\nTUZAK: Yerelde ağ yoksa betik testi örnek JSON fixture ile (memory network-tests-without-egress). Scratch dosyaları format:check'i bozar. `test:loop-tools` kapsamına girer mi kontrol et.\n\nKAPSAM DIŞI: açıkların kendisini kapatmak.\nDENETİM BULGULARI: F38",
+        "testStrategy": "Betik birim testi (fixture JSON): sunucu yolunda izinsiz high → strict exit 1, uyarı modunda exit 0 + özet; izin listesindeki → yok sayılır; süresi geçmiş izin → uyarı. ci.yml'de adım var (yaml testi varsa). DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "457",
+        "title": "AI-MOCK-VITEST-ALIGN [SONNET-HIGH] (Sonnet 5.5) packages/ai-mock vitest ^2.1.8 → ^3.2.4 (diğer paketlerle hizalı), lockfile elle",
+        "description": "packages/ai-mock vitest ^2.1.8'de kalmış; dev zincirinde critical vitest 2.1.9 GHSA-5xrq-8626-4rwp, tinypool, esbuild 0.21.5.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F39. Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `packages/ai-mock/package.json:20` `\"vitest\": \"^2.1.8\"`; diğer paketlerin sürümü `rg '\"vitest\"' --glob package.json`.\n\nYAPILACAK: ai-mock'u depodaki diğer paketlerin vitest aralığına hizala; lockfile'ı elle uygula, `pnpm install --frozen-lockfile` exit 0 (memory pnpm-add-churns-the-lockfile). tinypool (admin, api) için kalan yolları audit ile doğrula ve HANDOFF'a yaz.\n\nTUZAK: vitest 3 config farkları (ai-mock'un config'i varsa). Vitest shard membership hash tabanlı (memory vitest-shard-membership-is-hash-based) — etkilenmez ama not.\n\nKAPSAM DIŞI: mobil ağacı.\nDENETİM BULGULARI: F39",
+        "testStrategy": "`pnpm --filter @siyahtus/ai-mock test` yeşil; `pnpm install --frozen-lockfile` exit 0; `pnpm audit` çıktısında vitest 2.x critical yok (önce/sonra HANDOFF'a). DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "458",
+        "title": "REPORT-DAY-BUCKET-TIMEZONE [OPUS-HIGH] (Opus 5.5) Rapor gün/saat kovaları workspace saat dilimiyle (varsayılan Europe/Istanbul) hesaplansın — SAHİP ONAYINA BAĞLI (deferred)",
+        "description": "21:30Z'de açılan sohbet listede 5 Kasım'da, raporda 4 Kasım'da görünüyor: rapor kovaları UTC, workspace gün sınırı yerel. Tasarım sorusu (F44-D) — sahip cevabı gelene kadar döngü seçmemeli.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F44 (low ← medium) + belge çelişkisi Ç-05; tur 2 bulgu 11 (görevsiz kalmıştı). Kanıt yeterlidir.\n\nDURUM KURALI: Uygulayan betik bu görevi `status: deferred` yazar. Sahip ownerQuestions'taki saat dilimi sorusuna 'evet' derse `pending` yapılır; 'hayır' derse görev iptal edilir, `day-boundary.ts` başlığı UTC gerçeğine göre düzeltilir (DOCS benzeri küçük iş) ve REPORT-SINGLE-DAY-RANGE'in bu göreve bağımlılığı kaldırılır.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/services/reports/report-csv.ts:404` `to_char((created_at AT TIME ZONE 'UTC')::date, ...)`, `:~879` aynı; `day-boundary.ts` başlığı rapor ile sohbet gününün çelişemeyeceğini iddia ediyor.\n\nYAPILACAK (onay sonrası): tüm rapor gün/saat kovaları `AT TIME ZONE <workspace tz>` (day-boundary.ts'in kullandığı kaynaktan; parametre olarak, string birleştirme YOK) ya da mevcut `local_day` sütunu varsa o. Aralık filtresi (from/to) aynı dilimde. `day-boundary.ts` başlığı doğru hâle gelir. Varsayımı HANDOFF'a yaz. Gün sınırı yardımcısını export et (REPORT-SINGLE-DAY-RANGE kullanacak).\n\nTUZAK: memory data-model-explain-plan-flakes-under-load (indeks kullanımı değişebilir — EXPLAIN testi), integration-reds-between-00-and-01-utc (tam bu sorun; test sahte saat/sabit tarihlerle). Raw SQL parametre tipi (hub-prisma-postgres-traps).\n\nKAPSAM DIŞI: kullanıcı başına saat dilimi.\nDENETİM BULGULARI: F44",
+        "testStrategy": "api entegrasyon: tz=Europe/Istanbul, 2026-11-04T21:30Z sohbet → raporda 2026-11-05; tz=UTC → 2026-11-04; CSV ve JSON rapor aynı. Mutasyon: 'UTC'ye geri dön → kırmızı. DoD: CONVENTIONS §1.",
+        "status": "deferred",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "459",
+        "title": "REPORT-SINGLE-DAY-RANGE [SONNET-HIGH] (Sonnet 5.5) Rapor API: yalnız tarih içeren to günün sonuna genişlesin, sıfır genişlikli aralık 400",
+        "description": "`?from=2026-11-05&to=2026-11-05` 200 ve sıfırlar dönüyor: z.coerce.date gece yarısına çeviriyor, yalnız from > to reddediliyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F45. Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/routes/reports.ts:278-280` `rangeQuery = z.object({ from: z.coerce.date().optional(), to: z.coerce.date().optional(), ...`; `:~410` yalnız `from > to`; `report-csv.ts:~158` kapalı aralık.\n\nYAPILACAK: `to` yalnız tarih (`/^\\d{4}-\\d{2}-\\d{2}$/`) ise günün sonuna (ertesi gün 00:00, yarı açık aralık — mevcut kapalı aralıkla tutarlı olanı seç) genişlet; tam date-time ise olduğu gibi; `from === to` (date-time) → 400 `range_empty`. Gün sınırı REPORT-DAY-BUCKET-TIMEZONE'un export ettiği yardımcıyla hesaplanır (bağımlılık). O görev sahip kararıyla iptal edilirse bağımlılık kaldırılır ve UTC gün sınırı kullanılır (HANDOFF notu).\n\nTUZAK: Web rapor ekranının gönderdiği biçimi kontrol et (yalnız tarih mi). Yeni hata türü en+tr.\n\nKAPSAM DIŞI: saat dilimi kovaları.\nDURUM: deferred — bağımlı olduğu REPORT-DAY-BUCKET-TIMEZONE (tm 458) sahip kararına bağlı; karar gelince ikisi birlikte pending yapılır (hayır ise bu görevin bağımlılığı kaldırılıp pending yapılır).\nDENETİM BULGULARI: F45",
+        "testStrategy": "api entegrasyon: from=to=2026-11-05 (tarih) → o günün verisi; from=to tam date-time → 400; from>to → mevcut 400. DoD: CONVENTIONS §1.",
+        "status": "deferred",
+        "dependencies": [
+          "417",
+          "458"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "460",
+        "title": "SCHEDULED-REPORT-MISSED-PERIOD [OPUS-HIGH] (Opus 5.5) Kaçırılan zamanlanmış rapor dönemleri sınırlı telafi edilsin ya da \"atlandı\" run kaydı yazılsın",
+        "description": "Sunucu 6 Kasım boyunca kapalıysa 5 Kasım raporu hiç gönderilmiyor ve iz bırakmıyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F46. Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/api/src/services/reports/scheduled-report-period.ts:~57-62` tek dönem hesaplanıyor; `scheduled-report-sweeper.ts:~270`, `:~289` claim.\n\nYAPILACAK (varsayılan): `last_run_at`'ten bugüne kaçan dönemler için en fazla 7 dönem (günlük) / 2 dönem (haftalık) sırayla claim edilip gönderilir; sınırı aşanlar için `status='skipped'` run satırı (neden: `missed_window`). Mevcut claim tekilliği (çift gönderim yok) korunur.\n\nTUZAK: Çift gönderim — claim unique kısıtını testle sabitle (race testleri ayrı bağlantı). Sahte saat; UTC 00-01 kırmızıları.\n\nKAPSAM DIŞI: rapor içeriği.\nDENETİM BULGULARI: F46",
+        "testStrategy": "api entegrasyon (sahte saat): last_run 4 Kasım, şimdi 7 Kasım → 5 ve 6 Kasım raporları birer kez; iki eşzamanlı sweep çift göndermez; 10 gün kesinti → 7 gönderim + skipped satırları. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417",
+          "440"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "461",
+        "title": "KB-ROBOTS-AT-HOST-ROOT [SONNET-HIGH] (Sonnet 5.5) Public KB robots.txt: Allow yolu gerçek KB URL'siyle (API öneki dahil) eşleşsin, kök sunum yolu belgelensin",
+        "description": "Workspace robots.txt alt yolda (/public/kb/<slug>/robots.txt) sunuluyor; arama motoru /robots.txt'de 404 alıyor ve Allow yolu API önekini içermiyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F47. Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/routes/public-kb-sitemap.ts:128-129` rota `/public/kb/:workspaceSlug/robots.txt`; `:143-146` `Allow: /public/kb/${workspaceSlug}/` (önek yok); `apps/api/src/server.ts:~137` `API_PREFIX`, `:~753-755`.\n\nYAPILACAK: (1) Allow yolu `kbHomeUrl(slug)`'ın path'inden türetilsin (API_PREFIX dahil). (2) KB'nin sunulduğu host kökünde `/robots.txt` (web nginx ya da api kökü) — mevcut dağıtımda KB hangi host/path'ten sunuluyor ölç; kök robots mümkün değilse sitemap'in Search Console'a bildirileceğini `docs/` (production-checklist KB bölümü) altında belgele. Kararı HANDOFF'a.\n\nTUZAK: nginx değişirse nginx-security.test.ts; CSP'ye dokunma.\n\nKAPSAM DIŞI: SEO meta.\nDENETİM BULGULARI: F47",
+        "testStrategy": "api entegrasyon: robots.txt Allow satırı sitemap/kbHomeUrl ile aynı öneki taşır; bilinmeyen slug Disallow. (kök robots eklendiyse) GET /robots.txt 200. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "462",
+        "title": "TICKET-MAIL-CUSTOMER-LOCALE [SONNET-HIGH] (Sonnet 5.5) Ticket bildirimi, yanıt ve otomatik onay e-postası customer.locale (yoksa workspace dili) ile",
+        "description": "locale='tr' müşteriye ticket e-postaları İngilizce alt bilgi ve Content-Language: en ile gidiyor; transcript maili ise müşteri dilini kullanıyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F48. Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/routes/tickets.ts:552-555` yorum \"The customer's language is not known to the server\" + `ticketNoticeMail({ locale: 'en' }, ...)`; `:~265-266` aynı; `apps/api/src/services/.../ticket-auto-ack.ts:~246` `{locale:'en'}`; `schema.prisma:~547-550` `Customer.locale`; transcript maili örneği `apps/api/src/routes/customer.ts:~1165`.\n\nYAPILACAK: üç yerde transcript'teki seçim yardımcısını kullan: `customer.locale` → desteklenen şablon dili; yoksa workspace dili; yoksa en. Yanlış yorumu düzelt.\n\nTUZAK: Şablon dilleri listesi (8 dil mi 2 mi) — yalnız mevcut şablon dilleri; desteklenmeyen locale en'e düşer. Mail testleri İngilizce metin pinliyor olabilir. MAIL-DURABLE-OUTBOX çağıranları taşırken bu yolları da taşır — bu görev önce kapanırsa sorun yok.\n\nKAPSAM DIŞI: yeni şablon çevirileri.\nDENETİM BULGULARI: F48",
+        "testStrategy": "api entegrasyon: customer.locale='tr' ticket yanıtı → tr şablonu + Content-Language: tr; locale yok + workspace tr → tr; desteklenmeyen 'xx' → en. Auto-ack için aynı. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "463",
+        "title": "E2E-FLAKE-TRIAGE [OPUS-HIGH] (Opus 5.5) Bilinen flaky e2e'lerin kök nedeni — spec başına alt görev: two-factor:314, ai-multilingual:28, customers:53, ai-guardrails:130, offline-form",
+        "description": "NY-41 (kesintisiz/hatasız çalışma) kısmen karşılanıyor: HANDOFF tm 411–414'te tekrar eden flaky e2e'ler kök nedeni bilinmeden rerun ile geçiyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-04 / NY-41 (partial). Kanıt: HANDOFF tm 411–414 blokları (eski kayıt gerekirse `docs/archive/` altında grep).\n\nKODDA BUGÜN: `apps/e2e/.../two-factor.spec.ts:314`, `ai-multilingual.spec.ts:28`, `customers.spec.ts:53`, `ai-guardrails.spec.ts:130`, `offline-form.spec.ts` (satırları HEAD'de doğrula).\n\nORTAK YÖNTEM (her alt görev): spec'i tek başına `--repeat-each=20` (ilgili shard stack'iyle, run_in_background) koş; başarısızlık oranını ve trace'i topla; kök nedeni (zamanlama, sıra bağımlılığı, 30/dk auth kovası, TOTP pencere sınırı, mock embedding) belirle ve düzelt. Düzeltilemeyen için kanıtlı not — `test.fixme` DEĞİL; HANDOFF'a önce/sonra oran ve hipotez.\n\nTUZAK: memory hub-e2e-traps, browser-ux-probe-traps (30/dk), ai-question-text-is-load-bearing, guardrails-check-every-ai-reply, dod-gate-wall-clock-and-e2e-png-churn. Uzun koşular run_in_background (10 dk komut tavanı).\n\nKAPSAM DIŞI: yeni e2e.\nDENETİM BULGULARI: G-04",
+        "testStrategy": "Alt görevlerde. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` son alt görevin kapanışında bir kez.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "FLAKE-TWO-FACTOR [OPUS-HIGH] (Opus 5.5) two-factor.spec.ts:314 kök nedeni",
+            "description": "TOTP pencere sınırı / auth kovası hipotezleri; --repeat-each=20.",
+            "details": "Üst görev ORTAK YÖNTEM. Önce/sonra oran HANDOFF'a.",
+            "testStrategy": "two-factor.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "463",
+            "priority": "low",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          },
+          {
+            "id": 2,
+            "title": "FLAKE-AI-MULTILINGUAL [OPUS-HIGH] (Opus 5.5) ai-multilingual.spec.ts:28 kök nedeni",
+            "description": "Mock embedding / dil algılama zamanlaması hipotezleri.",
+            "details": "Üst görev ORTAK YÖNTEM. memory ai-question-text-is-load-bearing.",
+            "testStrategy": "ai-multilingual.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez.",
+            "status": "pending",
+            "dependencies": [
+              "463.1"
+            ],
+            "parentId": "463",
+            "priority": "low",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          },
+          {
+            "id": 3,
+            "title": "FLAKE-CUSTOMERS [OPUS-HIGH] (Opus 5.5) customers.spec.ts:53 kök nedeni",
+            "description": "Sıra bağımlılığı / paged query hipotezleri.",
+            "details": "Üst görev ORTAK YÖNTEM. memory paged-query-drops-fetchnext-during-refresh.",
+            "testStrategy": "customers.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez.",
+            "status": "pending",
+            "dependencies": [
+              "463.2"
+            ],
+            "parentId": "463",
+            "priority": "low",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          },
+          {
+            "id": 4,
+            "title": "FLAKE-AI-GUARDRAILS [OPUS-HIGH] (Opus 5.5) ai-guardrails.spec.ts:130 kök nedeni",
+            "description": "Guardrail fixture'ları / AI turu birleştirme hipotezleri.",
+            "details": "Üst görev ORTAK YÖNTEM. memory guardrails-check-every-ai-reply, ai-turns-merge-unanswered-visitor-messages.",
+            "testStrategy": "ai-guardrails.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez.",
+            "status": "pending",
+            "dependencies": [
+              "463.3"
+            ],
+            "parentId": "463",
+            "priority": "low",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          },
+          {
+            "id": 5,
+            "title": "FLAKE-OFFLINE-FORM [OPUS-HIGH] (Opus 5.5) offline-form.spec.ts kök nedeni + spec tablosu",
+            "description": "Çevrimdışı form zamanlaması; son alt görev tüm spec'lerin sonuç tablosunu HANDOFF'a yazar.",
+            "details": "Üst görev ORTAK YÖNTEM. Kapanışta `pnpm test:gate --e2e` bir kez.",
+            "testStrategy": "offline-form.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez; HANDOFF'ta 5 satırlık tablo.",
+            "status": "pending",
+            "dependencies": [
+              "463.4"
+            ],
+            "parentId": "463",
+            "priority": "low",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          }
+        ]
+      },
+      {
+        "id": "464",
+        "title": "MAIL-DURABLE-OUTBOX [OPUS-XHIGH] (Opus 5.5) Kalıcı e-posta outbox'ı (DB) + yeniden deneme; panelde \"test e-postası gönder\"",
+        "description": "NY-44 kısmen: SMTP yeniden denemesi yalnız bellek içinde; süreç yeniden başlarsa bekleyen mail kayboluyor. Panelde operatörün SMTP'yi doğrulayacağı test e-postası yok.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-05 / NY-44 (partial). Kanıt yeterlidir. Pilot kapsamı sahip önceliği — ownerQuestions (varsayılan: evet, low öncelik).\n\nXHIGH GEREKÇESİ: (3) teslim güvencesi — mail kaybı ve çift gönderim.\n\nKODDA BUGÜN: `apps/api/src/services/.../smtp-mailer.ts:8-16`, `:~53` bellek içi retry; schema.prisma'da outbox modeli yok.\n\nYAPILACAK: alt görevlere bak. Kontrat-first; yeni yol mobil parity sayısını bump eder (memory openapi-path-breaks-mobile-parity-count); yeni scheduler işi iki pinli suite'i ripple eder (new-scheduler-job-ripples).\n\nTUZAK: log-keys audit (alıcı maskeli). brand_id sütunu eklenirse brand-isolation matrisi (brand-id-column-joins-brand-isolation-matrix).\n\nKAPSAM DIŞI: gelen e-posta (H-10), DNS/SPF (H-04).\nDENETİM BULGULARI: G-05",
+        "testStrategy": "Alt görevlerde. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "OUTBOX-TABLE-AND-WORKER [OPUS-XHIGH] (Opus 5.5) mail_outbox tablosu + gönderici scheduler işi + yeniden deneme",
+            "description": "Tablo, enqueue API'si ve SKIP LOCKED gönderici işi; henüz hiçbir mevcut çağıran taşınmaz (yalnız test çağıranı).",
+            "details": "Migration: mail_outbox (license_id, kind, to (şifresiz ama loglanmaz), payload json, status pending|sent|failed, attempts, next_attempt_at, last_error, idempotency key unique). `enqueueMail(tx, ...)` yardımcısı. İş `FOR UPDATE SKIP LOCKED` ile partiler hâlinde gönderir; üstel geri çekilme; 5 deneme sonrası failed. Yeni scheduler işi health.test + scheduler-e2e pinli listelerine eklenir (new-scheduler-job-ripples). Ayrıntı: üst görev details.",
+            "testStrategy": "api entegrasyon: SMTP mock ilk iki denemede hata → üçüncüde sent; süreç yeniden başlarsa pending satır gönderilir; iki eşzamanlı iş aynı satırı iki kez göndermez. Mutasyon: SKIP LOCKED'ı kaldır → çift gönderim testi kırmızı. `pnpm test:gate`.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "464",
+            "priority": "low",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          },
+          {
+            "id": 2,
+            "title": "OUTBOX-MIGRATE-CALLERS [OPUS-HIGH] (Opus 5.5) Mevcut deliver() çağıranlarını outbox'a taşı",
+            "description": "Transcript, ticket bildirimi/yanıt/auto-ack, davet, şifre sıfırlama, zamanlanmış rapor vb. gönderimler enqueueMail üzerinden (mümkünse aynı transaction'da).",
+            "details": "`rg \"deliver\\(\" apps/api/src` ile liste HANDOFF'a. Pilot MAIL_PROVIDER=smtp davranışı korunur; senkron sonuç bekleyen akış (ör. şifre sıfırlama yanıtı) varsa yanıt sözleşmesi değişmez. Mail testleri outbox işini tetikleyerek doğrular.",
+            "testStrategy": "api entegrasyon: her taşınan akış outbox'a satır yazar ve iş tetiklenince gönderir; mevcut mail testleri yeşil. Mutasyon: bir çağıranı doğrudan deliver'a geri çevir → outbox satır testi kırmızı. `pnpm test:gate`.",
+            "status": "pending",
+            "dependencies": [
+              "464.1"
+            ],
+            "parentId": "464",
+            "priority": "low",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          },
+          {
+            "id": 3,
+            "title": "SMTP-TEST-EMAIL [OPUS-HIGH] (Opus 5.5) Panel: \"test e-postası gönder\" (admin+) — POST /settings/email/test",
+            "description": "Admin kendi adresine test maili gönderip SMTP yapılandırmasını doğrular; sonuç (gönderildi/hata kodu) panelde.",
+            "details": "Kontrat-first yeni yol (mobil parity bump yorumla; mutating yol impersonation sınıflandırması — memory openapi-path-breaks-mobile-parity-count); admin+ rolü; hız sınırı (ör. 5/saat); yalnız oturumdaki admin'in kendi adresi (başka alıcı yok). Web: Ayarlar e-posta bölümüne düğme + sonuç (en+tr, i18n kaydı). Ayrıntı: üst görev details.",
+            "testStrategy": "api entegrasyon: admin → 202 ve outbox'ta kind=smtp_test; agent → 403; 6. istek 429. web birim: düğme → başarı/hata mesajı. `pnpm test:gate`.",
+            "status": "pending",
+            "dependencies": [
+              "464.1"
+            ],
+            "parentId": "464",
+            "priority": "low",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          }
+        ]
+      },
+      {
+        "id": "465",
+        "title": "PILOT-BACKUP-SCHEDULE-AND-DRILL [OPUS-HIGH] (Opus 5.5) Pilot yedeği: zamanlanmış backup (compose servisi ya da host cron birimi) + yeşil restore provası kaydı",
+        "description": "NY-30/NY-46 kısmen: compose içinde backup servisi ya da zamanlaması yok (yalnız host cron belgesi), yeşil restore provası kaydı yok (arşivdeki son prova dev DB'de 2 kırmızı).",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinimler G-06 / NY-46 ve G-10 / NY-30. Kanıt yeterlidir.\n\nKODDA BUGÜN: `scripts/backup.sh:37`, `:51-53`, `:68`; `scripts/restore-drill.sh`; `docker-compose.pilot.yml:~94`, `~117`, `~280-282` (volume'lar), Redis AOF ~:116; arşiv `docs/archive/HANDOFF-arsiv-2026-11.md:138` (2 kırmızı).\n\nYAPILACAK: (1) Zamanlama: pilot host Ubuntu (memory pilot-owner-decisions-2026-10-02) — `infra/pilot/` altında systemd timer + service örneği (ya da compose'da `backup` profili, ölç ve küçük olanı seç) — günlük `backup.sh`, yerel saklama N gün. (2) `restore-drill.sh`'yi geçici unique compose project ile koş (memory clean-install-rehearsal-needs-unique-compose-project, docker-compose-down-v-is-project-scoped — gerçek pilot volume'larına DOKUNMA); 2 kırmızının kök nedenini düzelt; yeşil koşu çıktısını HANDOFF'a. (3) production-checklist yedek bölümüne zamanlama adımı.\n\nTUZAK: Docker ağır komut → run_in_background; Docker Desktop bind mount/TMPDIR (memory docker-desktop-bind-mounts-broken-smoke-needs-tmpdir); `docker compose down -v` yalnız geçici projede. Pilotta sohbet eki PILOT-FILE-SHARING-OFF ile kapalı; knowledge_document yüklemeleri açık kaldığı için bilgi belgelerinin nerede saklandığını ölç (veri DB'de mi store'da mı) ve backup kapsamını HANDOFF'a yaz.\n\nKAPSAM DIŞI: host dışı kopya hedefi (H-07, sahip kararı).\nDENETİM BULGULARI: G-06; G-10",
+        "testStrategy": "restore-drill.sh geçici projede exit 0 (son satırlar HANDOFF'a); systemd unit dosyaları `systemd-analyze verify` (mümkünse) ya da betik testi; checklist adımı mevcut. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "466",
+        "title": "PILOT-HIDE-CERT-SCREENS [SONNET-HIGH] (Sonnet 5.5) Pilotta HIPAA BAA ve SIEM (SOC2/ISO atıflı) ayar ekranları gizlensin",
+        "description": "NY-40 kısmen: pilot panelinde HIPAA BAA ve SOC2/ISO atıflı SIEM ekranları görünüyor; kurumsal sertifika izlenimi veriyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-08 / NY-40 (partial). Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/web/src/features/settings/settings-sections.ts:484-490` (compliance/SIEM bölümleri), `apps/web/src/features/settings/Compliance.tsx:13`. Pilot bayrağının web'e nasıl ulaştığını bul (`rg -n \"pilot\" apps/web/src/lib` — tm 257 deseni).\n\nYAPILACAK: pilotta (ve plan yetkisi yoksa) bu bölümleri settings listesinden ve komut paletinden çıkar; doğrudan URL → \"bu kurulumda kullanılamaz\" boş durumu. Metinlerde sertifika iddiası varsa (\"SOC 2 uyumlu\" gibi) yalnız özellik adı kalsın (en+tr).\n\nTUZAK: settings-sections pinli testler; komut paleti testleri; memory panel-copy-cannot-carry-internal-codes.\n\nKAPSAM DIŞI: SIEM export özelliği.\nDENETİM BULGULARI: G-08",
+        "testStrategy": "web birim: pilot bayrağı açıkken settings listesi ve komut paleti HIPAA/SIEM içermez, doğrudan URL boş durum; kapalıyken mevcut. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "467",
+        "title": "PILOT-HTTPS-REDIRECT [SONNET-HIGH] (Sonnet 5.5) Pilot HTTP→HTTPS yönlendirmesi: Caddyfile/cloudflared örneklerinde açık yapılandırma + checklist adımı",
+        "description": "NY-18 kısmen: HTTP→HTTPS yönlendirmesi açık yapılandırılmamış; checklist'te Cloudflare \"Always Use HTTPS\" adımı yok.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-09 / NY-18 (partial). Kanıt yeterlidir.\n\nKODDA BUGÜN: `infra/pilot/Caddyfile.example:1-60`, `infra/pilot/cloudflared/config.example.yml`; `docs/production-checklist.md` TLS bölümü.\n\nYAPILACAK: Caddyfile örneğinde HTTP→HTTPS davranışını açık yaz (Caddy otomatik HTTPS kapalı/`http://` blok varsa `redir https://{host}{uri} permanent`); cloudflared yolunda Cloudflare \"Always Use HTTPS\" + HSTS adımı checklist'e. Gerçek DNS/TLS yok (CLAUDE.md sınırı) — yalnız örnek dosya + belge.\n\nTUZAK: Caddyfile örneği bir testte okunuyorsa (pilot config testi) güncelle. Scratch dosyaları format:check.\n\nKAPSAM DIŞI: DNS kurulumu (H-04).\nDENETİM BULGULARI: G-09",
+        "testStrategy": "Varsa pilot config testi: Caddyfile örneğinde redir satırı; yoksa küçük metin testi ekle. Checklist'te adım (grep). DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "468",
+        "title": "HANDOFF-CARD-IDS [SONNET-HIGH] (Sonnet 5.5) AI devir kartında Thread ID / Chat ID gösterimi ve kopyalama (CopyId)",
+        "description": "ID-05 kısmen: thread başlığı, arşiv ve müşteri panelinde CopyId var; AI devir kartında (AiHandoffCard) ID gösterimi/kopyalaması yok.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-11 / ID-05 (partial). Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/web/src/.../CopyId.tsx`; kullanım örnekleri `ThreadHeader.tsx:102-103`, `159-160`, `ArchiveDetail.tsx:183-184`, `CustomerDetailPanel.tsx:320`, `335`; `AiHandoffCard.tsx` (memory case-only-filename-clash: `aiHandoffCard.ts` yanında).\n\nYAPILACAK: AiHandoffCard'a ThreadHeader'daki desenle Chat ID + Thread ID satırı (CopyId). Etiketler mevcut i18n anahtarlarını kullanır.\n\nTUZAK: memory case-only-filename-clash, label-text-leaks-into-the-fields-name (erişilebilir ad), new-web-component-must-be-registered-for-i18n.\n\nKAPSAM DIŞI: ID arama.\nDENETİM BULGULARI: G-11",
+        "testStrategy": "web birim: AiHandoffCard chat ve thread id'lerini gösterir, kopyala düğmesi panoya yazar (mock). DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "469",
+        "title": "ARCHIVE-SEARCH-BY-ID [OPUS-HIGH] (Opus 5.5) Arşiv arama çubuğu ID (chat/thread), müşteri adı ve e-posta ile de bulsun",
+        "description": "ID-06 kısmen: arşiv arama çubuğu yalnız mesaj metnini arıyor; ID, ad ve e-posta araması yalnız Ctrl+K'da.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-12 / ID-06 (partial). Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/api/src/routes/search.ts:75-100`; `apps/api/src/services/search/lookup.ts:1-40` (Ctrl+K'nın kullandığı ID/ad/e-posta araması).\n\nYAPILACAK: arşiv arama sorgusu ID biçimine (chat/thread id deseni) uyuyorsa ya da e-posta biçimindeyse önce `lookup` ile tam eşleşme; sonuç varsa listenin başında; metin araması devam eder. Sunucu tarafında mı (search route'una `lookup` birleşimi) istemcide mi yapılacağını kontrat etkisine göre seç (yol eklemeden). Görünürlük kuralı aynı (CHAT-APPS-VISIBILITY deseni).\n\nTUZAK: Paged query fetchNext (memory paged-query-drops-fetchnext-during-refresh); test-data-digits-near-code-words-get-masked (ID'ler maskelenebilir).\n\nKAPSAM DIŞI: tam metin indeksi.\nDENETİM BULGULARI: G-12",
+        "testStrategy": "api entegrasyon (sunucu tarafıysa): chat id ile arama → o sohbet ilk sırada; e-posta → müşterinin sohbetleri; görünmeyen sohbet dönmez. web birim/e2e: arşiv çubuğuna id yaz → sonuç. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417",
+          "420"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "470",
+        "title": "PILOT-CRAWLER-HTTP-TEMPLATE [SONNET-HIGH] (Sonnet 5.5) http crawler SSRF doğrulaması (karardan bağımsız) + sahip onayıyla pilot şablonunda CRAWLER_PROVIDER=http",
+        "description": "AI-17 kısmen: gerçek crawler sağlayıcısı var ama pilot şablonu `.env.production.example` CRAWLER_PROVIDER=mock; pilotta site taraması uydurma içerik üretiyor. Şablonu http yapmak ev Ubuntu host'undan dış ağa gerçek tarama trafiği açar — sahip kararı (ownerQuestions).",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-13 / AI-17 (partial). Kanıt yeterlidir.\n\nKODDA BUGÜN: `.env.production.example:~426` `CRAWLER_PROVIDER=mock`; `apps/api/src/services/ai/crawler/*`; `apps/api/src/config/env.ts:1219` `CRAWLER_PROVIDER: z.enum(CRAWLER_PROVIDERS).default('mock')`; `job-runner.ts:~590-591`, `jobs.ts:~104`; mock uyarısı `server.ts:~318-319`.\n\nYAPILACAK: alt görevler. Alt görev 1 karardan bağımsızdır; alt görev 2 yalnız sahip 'pilotta gerçek tarama açılsın' derse yapılır — cevap yoksa ya da hayırsa alt görev 2 iptal edilir ve görev alt görev 1 ile kapanır (HANDOFF'a not).\n\nTUZAK: memory network-tests-without-egress (dns.lookup stub), pilot-rehearsal-with-fake-env, deployment-config-field-ripples (değer değişimi testleri ripple edebilir).\n\nKAPSAM DIŞI: crawler kalitesi.\nDENETİM BULGULARI: G-13",
+        "testStrategy": "Alt görevlerde. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "CRAWLER-SSRF-VERIFY [SONNET-HIGH] (Sonnet 5.5) http crawler özel/loopback/link-local IP'lere ve yönlendirme sonrası özel IP'lere istek yapmasın",
+            "description": "Mevcut http sağlayıcısının SSRF korumasını testle sabitle; eksikse ekle.",
+            "details": "DNS çözümü sonrası IP kontrolü (10/8, 172.16/12, 192.168/16, 127/8, 169.254/16, ::1, fc00::/7, fe80::/10), yönlendirme her adımda yeniden kontrol; DNS rebinding için bağlantı çözülen IP'ye yapılır. Mevcutsa yalnız test.",
+            "testStrategy": "api birim (dns.lookup stub): özel IP'ye çözülen host → istek yapılmaz; public → yapılır; public'ten özel IP'ye 302 → durur. Mutasyon: IP kontrolünü kaldır → kırmızı.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "470",
+            "priority": "low",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          },
+          {
+            "id": 2,
+            "title": "CRAWLER-PILOT-TEMPLATE [SONNET-HIGH] (Sonnet 5.5) SAHİP ONAYI SONRASI: pilot şablonunda CRAWLER_PROVIDER=http + checklist satırı",
+            "description": "Yalnız sahip pilotta gerçek taramayı onaylarsa: şablon değeri, egress notu ve checklist.",
+            "details": "`.env.production.example:~426` http + SSRF/egress açıklaması; pilot config/şablon testleri; checklist crawler satırı.",
+            "testStrategy": "Şablon testi: CRAWLER_PROVIDER=http; pilot-config testleri yeşil.",
+            "status": "pending",
+            "dependencies": [
+              "470.1"
+            ],
+            "parentId": "470",
+            "priority": "low",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          }
+        ]
+      },
+      {
+        "id": "471",
+        "title": "BRAND-LOGO-URL-FIELD [OPUS-HIGH] (Opus 5.5) Panel Markalar: logo_url alanı (widget logosu) + ipucu metni düzeltmesi",
+        "description": "WG-10 kısmen: API logo_url'i kabul ediyor ama panel Markalar formu yalnız name gönderiyor; ipucu metni olmayan bir alandan söz ediyor.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-14 / WG-10 + belge çelişkisi Ç-08. Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/web/src/features/settings/Brands.tsx:25` (yalnız tip), `:44`, `:152` yalnız name; `apps/api/src/routes/settings.ts:~826-830`, `~3379-3382`, `~4289-4290`; `WidgetCustomization.tsx:~197-198` ipucu.\n\nYAPILACAK: Markalar formuna https logo URL alanı (doğrulama API ile aynı — memory form-validator-must-match-its-own-endpoint), önizleme küçük resim; ipucu metni gerçek alana işaret eder (en+tr). Dosya yükleme ucu YOK (pilotta sohbet eki kapalı; logo URL ile).\n\nTUZAK: memory label-text-leaks-into-the-fields-name, inline-link-in-a-screen-has-two-traps, settings-savebar-test-traps, dark-theme-needs-content-brand-text. VISITOR-URL-SCHEME'deki safeHref ile tutarlı şema (o görev önce kapanır).\n\nKAPSAM DIŞI: logo yükleme ucu.\nDENETİM BULGULARI: G-14",
+        "testStrategy": "web birim: logo URL girilip kaydedilince PATCH gövdesinde logo_url; http:// ya da javascript: → API ile aynı hata; ipucu metni alana işaret eder. e2e (varsa brands spec): logo widget'ta görünür. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
+        "status": "pending",
+        "dependencies": [
+          "417",
+          "451"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "472",
+        "title": "NARROW-SCREEN-PAGES [OPUS-HIGH] (Opus 5.5) Dar ekran: Ayarlar, Müşteriler, Arşiv ve Raporlar \"masaüstü için tasarlandı\" bandı olmadan kullanılabilir olsun",
+        "description": "GV-04 kısmen: yalnız Inbox responsive; diğer sayfalar dar ekranda uyarı bandıyla açılıyor. Büyük iş — sayfa başına alt görev.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-15 / GV-04 (partial). Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/web/src/.../navigation.ts:~106` responsive sayfa listesi (yalnız inbox); `NarrowScreenNotice.tsx:2`; `apps/e2e/.../narrow-screen.spec.ts:5-9`.\n\nYAPILACAK: her alt görev bir sayfayı 375 px'te yatay kaydırmasız (tablolar kart/yığın görünümüne), dokunma hedefleri ≥ 44 px yapar ve sayfayı responsive listesine ekler; narrow-screen.spec beklentisi güncellenir. Inbox desenini kopyala.\n\nTUZAK: memory hub-e2e-traps, dod-gate-wall-clock-and-e2e-png-churn (ekran görüntüsü churn'ü), dark-theme-needs-content-brand-text.\n\nKAPSAM DIŞI: mobil uygulama.\nDENETİM BULGULARI: G-15",
+        "testStrategy": "Alt görevlerde. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "NARROW-SETTINGS [OPUS-HIGH] (Opus 5.5) Ayarlar sayfası dar ekran düzeni",
+            "description": "Ayarlar gezinmesi dar ekranda liste→detay; formlar tek sütun.",
+            "details": "Üst görev details (tek kaynak). navigation.ts responsive listesine settings.",
+            "testStrategy": "e2e narrow-screen: 375 px'te ayarlar bandsız, scrollWidth <= clientWidth. `pnpm test:gate --e2e`.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "472",
+            "priority": "low",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          },
+          {
+            "id": 2,
+            "title": "NARROW-CUSTOMERS [OPUS-HIGH] (Opus 5.5) Müşteriler sayfası dar ekran düzeni",
+            "description": "Müşteri tablosu dar ekranda kart listesi; detay paneli tam ekran.",
+            "details": "Üst görev details (tek kaynak).",
+            "testStrategy": "e2e narrow-screen: 375 px'te müşteriler bandsız, yatay kaydırma yok. `pnpm test:gate --e2e`.",
+            "status": "pending",
+            "dependencies": [
+              "472.1"
+            ],
+            "parentId": "472",
+            "priority": "low",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          },
+          {
+            "id": 3,
+            "title": "NARROW-ARCHIVE [OPUS-HIGH] (Opus 5.5) Arşiv sayfası dar ekran düzeni",
+            "description": "Arşiv listesi ve detayı dar ekranda liste→detay.",
+            "details": "Üst görev details (tek kaynak).",
+            "testStrategy": "e2e narrow-screen: 375 px'te arşiv bandsız. `pnpm test:gate --e2e`.",
+            "status": "pending",
+            "dependencies": [
+              "472.2"
+            ],
+            "parentId": "472",
+            "priority": "low",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          },
+          {
+            "id": 4,
+            "title": "NARROW-REPORTS [OPUS-HIGH] (Opus 5.5) Raporlar sayfası dar ekran düzeni",
+            "description": "Rapor grafikleri ve tablolar dar ekranda tek sütun, tablolar yatay kaydırma kabında değil kart görünümünde.",
+            "details": "Üst görev details (tek kaynak). Son alt görev NarrowScreenNotice'ın artık hangi sayfada kaldığını HANDOFF'a yazar.",
+            "testStrategy": "e2e narrow-screen: 375 px'te raporlar bandsız. `pnpm test:gate --e2e`.",
+            "status": "pending",
+            "dependencies": [
+              "472.3"
+            ],
+            "parentId": "472",
+            "priority": "low",
+            "updatedAt": "2026-11-06T16:24:47.953Z"
+          }
+        ]
+      },
+      {
+        "id": "473",
+        "title": "EMPTY-STATES-WALKTHROUGH [OPUS-HIGH] (Opus 5.5) Yeni workspace boş durumları ekran ekran: hiçbiri çıkmaz sokak olmasın (tm 400 doğrulaması) + e2e",
+        "description": "NY-11'in kodla kapatılabilecek kısmı: yeni kayıt olan KOBİ workspace'inde her ana ekranın boş durumu bir sonraki adıma (oluştur/bağla/davet) götürmeli.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-16 / NY-11 (partial; \"az personel\" ölçülemez kısmı kapsam dışı). Kanıt: `apps/api/src/routes/account-lifecycle.ts:288` (signup), `OnboardingWizard.tsx`, tm 400.\n\nYAPILACAK: yeni kayıt → Inbox, Arşiv, Müşteriler, Raporlar, Playbook › AI Agent, Bilgi, Ayarlar › Ekip, Kanallar boş durumlarını gez; eylem düğmesi olmayanlara uygun eylem ekle (en+tr); tek e2e `empty-states.spec.ts` her ekranda bir eylem düğmesi/bağlantısı olduğunu doğrular. Bulunanları HANDOFF'a tablo.\n\nTUZAK: memory browser-ux-probe-traps (30/dk signup/auth), dark-theme-needs-content-brand-text (h4 under h1 heading-order), new-web-component-must-be-registered-for-i18n.\n\nKAPSAM DIŞI: onboarding sihirbazını yeniden tasarlamak.\nDENETİM BULGULARI: G-16",
+        "testStrategy": "e2e empty-states.spec.ts: yeni workspace'te listelenen her ekranda en az bir eylem; axe temiz. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
+        "status": "pending",
+        "dependencies": [
+          "417"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
+      },
+      {
+        "id": "474",
+        "title": "DOCS-AUDIT-CONTRADICTIONS [SONNET-HIGH] (Sonnet 5.5) Denetim belge çelişkileri: production-checklist dosya paylaşımı + audit satırları, compose yorumu, task_374.md durumu",
+        "description": "production-checklist ve docker-compose.pilot.yml yorumu pilotta dosya paylaşımının kapalı olduğunu söylüyor (kod tersini yapıyordu); checklist'in pnpm audit satırı (27 açık, sunucuya ulaşmıyor) eskimiş; task_374.md pending yazıyor, tasks.json'da done.",
+        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), belge çelişkileri Ç-01, Ç-02, Ç-03 (+ compose yorumu). Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı):\n- `docs/production-checklist.md:895-896` \"Uploads: the pilot keeps file sharing off (tm 255.13)...\"; `:~1002-1004` uploads \"Outside the pilot\".\n- `docker-compose.pilot.yml:146-148` \"file sharing stays off (tm 255.13) — a workspace that turns it on keeps its uploads only until the next `up --build`\".\n- `docs/production-checklist.md:992-995` \"`pnpm audit --prod` on 2026-10-01 reported 27 advisories (7 moderate, 20 high). Every path starts at `apps/mobile` ... none reaches the api, rtm ...\"; bugün 56 (1 critical, 30 high, 16 moderate, 9 low), zod high api+rtm'ye, fastify/fast-uri sunucu tarafında.\n- `.taskmaster/tasks/task_374.md:5` `**Status:** pending`; tasks.json'da 374 done (commit 76d2170d, 44dcb841).\n\nYAPILACAK: (1) Checklist :895-896 ve compose yorumunu PILOT-FILE-SHARING-OFF'un uyguladığı gerçek davranışa göre yaz (pilotta sohbet eki yazmaları reddedilir, /uploads-policy false; bilgi belgesi yüklemesi açık; pilot dışı varsayılan sahip kararına göre). (2) Audit satırını bugünkü sayılar + sunucu yolundaki açıklar (zod: tm 415 + ZOD-INTERIM-MITIGATION ara önlemi) + \"yolları oku\" uyarısıyla güncelle; tarih 2026-11-06 (pencere tekrar ölçerse kendi tarihini yazar). (3) task_374.md: `task_*.md` dosyaları task-master tarafından üretilir; elle düzeltme sonraki generate'te ezilebilir. Önce son üretilen dosyayı ölç (`ls .taskmaster/tasks/task_*.md | sort -V | tail -1`; 2026-11-06'da task_388.md). Seçenekler (birini seç, HANDOFF'a yaz): (a) task-master generate yolu (tüm dosyaları yeniden üretir — churn'ü ölç), (b) yalnız README ya da CONVENTIONS'ta 'task_NNN.md dosyaları güncel tutulmaz; durum kaynağı tasks.json' notu, task_374.md'ye dokunmadan. Referans .md dosyalarını TAŞIMA (CLAUDE.md).\n\nTUZAK: compose dosyası pilot config testlerinde okunuyorsa yorum değişikliği güvenli; anahtarlara dokunma. format:check (.taskmaster prettierignore'da). Türkçe metin Write/Edit ile.\n\nKAPSAM DIŞI: tm 415 durum değişikliği (sahip kararı, Ç-04 ownerQuestions'ta), SiyahTus-Analiz masaüstü kopyası (Ç-09), tur 2 raporları (Ç-10), rapor içi tutarsızlık (Ç-11).\nDENETİM BULGULARI: Ç-01; Ç-02; Ç-03",
+        "testStrategy": "grep: checklist ve compose'da \"file sharing stays off\" ifadesi gerçek davranışla uyumlu; audit satırında 2026-10-01/27 yok; task_374.md seçilen yolla tutarlı (generate ise Status done; not ise README/CONVENTIONS'ta not). format:check ve test:loop-tools yeşil. DoD: CONVENTIONS §1.",
+        "status": "pending",
+        "dependencies": [
+          "417",
+          "418",
+          "419"
+        ],
+        "priority": "low",
+        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "subtasks": []
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-06T05:36:08.004Z",
-      "taskCount": 416,
+      "lastModified": "2026-11-06T16:24:47.953Z",
+      "taskCount": 474,
       "completedCount": 413,
       "tags": [
         "master"

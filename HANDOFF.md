@@ -16,6 +16,7 @@
 - **Sahip kararı / sonraki görev önerisi:** (a) zod 4.6.7'ye geçiş (yukarıdaki kapsam, ayrı görev); ya da (b) ara önlem: `parse()` yardımcısında issue sayısını sınırlamak (`fields` ilk N) + dizileri parse öncesi uzunluk kontrolü — bellek patlamasını gidermez (issue'lar parse sırasında oluşur), yalnız yanıtı küçültür; gerçek çözüm (a). Audit çıktısı: `.loop-logs/audit-415.json` (repoda değil).
 - **Yeniden deneme (2026-11-06, ikinci pencere):** `npm view zod` — 3.x'te hâlâ `3.25.76` son, yama yok (latest `4.6.7`); sahip kararı kaydı yok → kod değişmeden yine blocked. Sahip (a)/(b)'yi seçip yeni görev açmadan bu görevi döngüye yeniden vermek tur harcar.
 - **Üçüncü pencere (2026-11-06):** `npm view zod` — son kararlı 3.x yine `3.25.76` (yalnız `3.26.0-canary.202507*`), latest `4.6.7`; tasks.json'da zod geçiş görevi/sahip kararı yok → blocked. Döngü bu görevi sahip kararı gelene kadar seçmemeli (ör. `deferred`).
+- **Dördüncü pencere (2026-11-06):** `npm view zod` aynı (3.x son `3.25.76`, latest `4.6.7`); tasks.json'da zod 4 geçiş görevi yok → kod değişmeden blocked. Sahip: (a)/(b) kararı verilmeden bu görev döngüye verilmesin.
 
 ## tm 414 — TEST-ISOLATION-ROUND2: tur 2 test izolasyonu (member-identity sayaçları, ai-agent Tone, customers leads, rtm.js cursor) — done — 2026-11-06 UTC
 

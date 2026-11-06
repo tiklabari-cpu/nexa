@@ -60,7 +60,7 @@ Aşağıdaki kararlar birçok maddeyi etkiliyor. Kodlamaya başlamadan önce bun
 | K36 | **zod 4.x geçişi** (2026-11-06; denetim F02/NY-29) | tm 415, tm 419, tm 477 | Şimdi değil; ara önlem #419; 4.x ayrı OPUS-MAX epiği | ✅ Öneri onaylandı — epik #477 deferred, sahip açınca başlar |
 | K37 | **tm 415 (sunucu bağımlılık denetimi) ne olsun?** (2026-11-06) | tm 415 | Deferred | ✅ Deferred; yerine #477 |
 | K38 | **Pilotta sohbete dosya eklenebilsin mi?** (2026-11-06; denetim F01, NY-34/NY-51) | tm 418, 433, 446, 465, 474 | Hayır (pilotta kapalı) | ✅ **Eklenebilsin:** pilotta dosya paylaşımı açık; dosyalar kalıcı volume'a, yedeğe ve restore provasına girer (#418 yeniden yazıldı) |
-| K39 | **Pilot dışı yeni workspace'lerde dosya paylaşımı varsayılan kapalı başlasın mı?** (2026-11-06) | tm 418 (eski kapsam dışı notu) | Evet, ayrı görev | ⏳ **Açık:** "önerilerin geçerli" genel cevabı K38'in ruhuyla çelişiyor; görev yazılmadı, sahibe tek soru olarak soruldu |
+| K39 | **Pilot dışı yeni workspace'lerde dosya paylaşımı varsayılan kapalı başlasın mı?** (2026-11-06) | tm 418 (eski kapsam dışı notu) | Evet, ayrı görev | ✅ **Açık başlasın** (2026-11-06): pilot dışı yeni workspace'lerde de dosya paylaşımı açık başlar; bugünkü davranış, kod değişikliği ve yeni görev yok (pilotta da açık: K38, #418) |
 | K40 | **Pilotta gerçek site taraması** (2026-11-06; AI-17) | tm 470 | SSRF doğrulaması (#470.1) sonrası açık | ✅ Öneri onaylandı — #470.2 yapılır |
 | K41 | **Pilotta gerçek virüs tarayıcı (ClamAV)** (2026-11-06; NY-51) | tm 433 | Pilotta yok | ✅ Öneri onaylandı (ekler açık olduğu için #433 uyarısı/etiketi pilotta da görünür) |
 | K42 | **Pilotta otomatik saklama/silme** (2026-11-06; F49, Ç-06) | tm 447, 441 | Kapalı kalır + panel "silme etkin değil" | ✅ Öneri onaylandı |
@@ -77,7 +77,7 @@ Aşağıdaki kararlar birçok maddeyi etkiliyor. Kodlamaya başlamadan önce bun
 >
 > **Güncelleme (2026-11-03):** K28 ve K29 eklendi. #388 ve #379 deferred'dan pending'e alındı; #322 ve #378 deferred kalır.
 >
-> **Güncelleme (2026-11-06):** K30–K50 eklendi (tm 417 önizlemesi ve 2026-11-06 denetimi sahip cevapları). K30, K32, K38, K45 ve K49 varsayılandan farklı cevaplandı; etkileri aşağıda. K39 (pilot dışı dosya paylaşımı varsayılanı) cevabı çelişkili olduğu için açık; görev yazılmadı. K49'un kapsam alt sorusu 2026-11-06'da "Evet, hepsi" diye cevaplandı (kural botu + bilgi tabanı dahil; kapsam bölme görevi yok). #418 yeniden yazıldı (PILOT-UPLOADS-PERSIST); #415 deferred, yerine #477 (deferred epik); #458/#459 pending; yeni görevler #475–#478.
+> **Güncelleme (2026-11-06):** K30–K50 eklendi (tm 417 önizlemesi ve 2026-11-06 denetimi sahip cevapları). K30, K32, K38, K45 ve K49 varsayılandan farklı cevaplandı; etkileri aşağıda. K39 (pilot dışı dosya paylaşımı varsayılanı) 2026-11-06'da "Açık başlasın" diye cevaplandı (bugünkü davranış; kod değişikliği ve görev yok). K49'un kapsam alt sorusu 2026-11-06'da "Evet, hepsi" diye cevaplandı (kural botu + bilgi tabanı dahil; kapsam bölme görevi yok). #418 yeniden yazıldı (PILOT-UPLOADS-PERSIST); #415 deferred, yerine #477 (deferred epik); #458/#459 pending; yeni görevler #475–#478.
 
 ### Kararların maddelere etkisi
 

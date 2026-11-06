@@ -2,7 +2,7 @@
  * Widget internationalisation (I18N1).
  *
  * The widget cannot afford the panel's React-bound i18n store: it renders to the
- * DOM by hand under a 50 KB budget (NFR-P3), and its locale is fixed for the
+ * DOM by hand under a 64.75 KB budget (NFR-P3), and its locale is fixed for the
  * life of a page load — the embedding site chooses it via `data-language` and it
  * never changes underneath the visitor. So this is the smallest thing that
  * works: flat per-locale string tables (`./locales/<lang>.ts`, NFR-I18N1) and a

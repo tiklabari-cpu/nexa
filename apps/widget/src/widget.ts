@@ -2,7 +2,7 @@
  * Widget document — runs inside the sandboxed iframe.
  *
  * Written against the DOM directly rather than with a framework: the whole
- * artifact has a 50 KB budget (NFR-P3) and React alone is three times that.
+ * artifact has a 64.75 KB budget (NFR-P3) and React alone would use most of it.
  *
  * Hard rule throughout: every piece of customer- or agent-authored text reaches
  * the DOM as `textContent` or a text node. Never `innerHTML` — the eslint config
@@ -3979,7 +3979,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   attach.type = 'button';
   attach.className = 'nx-attach';
   attach.setAttribute('aria-label', t('attach.label'));
-  // A paperclip glyph rather than an SVG, to stay inside the 50 KB budget.
+  // A paperclip glyph rather than an SVG, to stay inside the 64.75 KB budget.
   attach.textContent = '📎';
 
   const file = doc.createElement('input');

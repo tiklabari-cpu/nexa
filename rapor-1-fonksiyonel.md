@@ -610,7 +610,7 @@ Sağ panel; müşteri kimliği + canlı bağlam bölümlerinden oluşur. Gözlem
 
 ### [MOD-02.8] Archive (Sohbet Geçmişi)
 
-![Archive transcript + Copilot özeti](gorseller/fonksiyonel/19-archive-chat-history.jpg)
+> *[Görsel repoda yok] Archive transcript + Copilot özeti — özgün dosya `gorseller/fonksiyonel/19-archive-chat-history.jpg` (referans görseller taşınmaz; yalnız açıklama bırakıldı).*
 
 **① TEKNİK VE FONKSİYONEL ÖZELLİKLER**
 - **Element Tipi:** Salt-okuma sohbet geçmişi + transcript görüntüleyici.
@@ -741,7 +741,7 @@ Rota: `/app/customers/contacts/{all|leads|last-30d}?sortBy=last_activity&sortOrd
 
 ### [MOD-03.3] Campaigns — Hedefli Mesaj / Karşılama Motoru
 
-![Campaigns (2 greeting kampanyası)](gorseller/fonksiyonel/04-customers-campaigns.jpg)
+> *[Görsel repoda yok] Campaigns (2 greeting kampanyası) — özgün dosya `gorseller/fonksiyonel/04-customers-campaigns.jpg` (referans görseller taşınmaz; yalnız açıklama bırakıldı).*
 
 Rota: `/app/customers/campaigns/{all|ongoing|scheduled|inactive}`. Ziyaretçilere kural bazlı otomatik karşılama/hedefli mesaj (targeted messages / greetings) gönderen motor.
 
@@ -1565,7 +1565,7 @@ Omnichannel'ın kalbi. "All channels" sayfasında her kanal bir kart: ikon + isi
 
 ### [MOD-08.6] Routing (Yönlendirme)
 
-![Chat routing kuralları](gorseller/fonksiyonel/15-chat-routing.jpg)
+> *[Görsel repoda yok] Chat routing kuralları — özgün dosya `gorseller/fonksiyonel/15-chat-routing.jpg` (referans görseller taşınmaz; yalnız açıklama bırakıldı).*
 
 #### [MOD-08.6.1] Chat Routing
 
@@ -1621,7 +1621,7 @@ Omnichannel'ın kalbi. "All channels" sayfasında her kanal bir kart: ikon + isi
 
 #### [MOD-08.7.2] Canned Responses (Form Mantığı)
 
-![Canned responses](gorseller/fonksiyonel/16-canned-responses.jpg)
+> *[Görsel repoda yok] Canned responses — özgün dosya `gorseller/fonksiyonel/16-canned-responses.jpg` (referans görseller taşınmaz; yalnız açıklama bırakıldı).*
 
 **① TEKNİK VE FONKSİYONEL ÖZELLİKLER**
 - **Element Tipi:** Hazır yanıt yönetimi + [New canned response ▾].
@@ -1757,7 +1757,7 @@ Omnichannel'ın kalbi. "All channels" sayfasında her kanal bir kart: ikon + isi
 
 #### [MOD-08.8.3] MCP Server
 
-![MCP server — teknik](gorseller/teknik/02-mcp-server.jpg)
+> *[Görsel repoda yok] MCP server — teknik — özgün dosya `gorseller/teknik/02-mcp-server.jpg` (referans görseller taşınmaz; yalnız açıklama bırakıldı).*
 
 **① TEKNİK VE FONKSİYONEL ÖZELLİKLER**
 - **Element Tipi:** MCP bağlantı sayfası.
@@ -1856,7 +1856,7 @@ Omnichannel'ın kalbi. "All channels" sayfasında her kanal bir kart: ikon + isi
 ---
 ## [MOD-09] Apps Marketplace
 
-![Apps marketplace](gorseller/fonksiyonel/14-apps-marketplace.jpg)
+> *[Görsel repoda yok] Apps marketplace — özgün dosya `gorseller/fonksiyonel/14-apps-marketplace.jpg` (referans görseller taşınmaz; yalnız açıklama bırakıldı).*
 
 Rota: `/app/settings/integrations/apps`. Başlık: "Connect your tools with Text — Work with customer data and business tools without leaving conversations." Her entegrasyon bir kart (ikon + isim + açıklama + Connect/Install). OAuth app dizini.
 
@@ -2014,9 +2014,9 @@ Rota: `/app/settings/billing/subscription/manage`. Yeni Text modeli: **koltuk-ba
 ---
 ## [MOD-11] Customer Widget (Müşteri Tarafı)
 
-![Widget launcher demo sitede](gorseller/fonksiyonel/17-customer-widget-embedded.jpg)
+> *[Görsel repoda yok] Widget launcher demo sitede — özgün dosya `gorseller/fonksiyonel/17-customer-widget-embedded.jpg` (referans görseller taşınmaz; yalnız açıklama bırakıldı).*
 
-![Müşteri widget'ı açık (greeting)](gorseller/fonksiyonel/18-customer-widget-open.jpg)
+> *[Görsel repoda yok] Müşteri widget'ı açık (greeting) — özgün dosya `gorseller/fonksiyonel/18-customer-widget-open.jpg` (referans görseller taşınmaz; yalnız açıklama bırakıldı).*
 
 Müşteri tarafında, web sitesine JS snippet ile gömülen cross-origin iframe. Loader = async JS + `window.__lc` config (license-scoped). Demo sitesi: `livechat-demo.surge.sh`. Alt bilgi "Powered by text.com".
 
@@ -2115,7 +2115,7 @@ Müşteri tarafında, web sitesine JS snippet ile gömülen cross-origin iframe.
 ---
 ## [MOD-12] Copilot (Ajan-Yardımcı AI)
 
-![Copilot özeti — arşiv transcript içinde](gorseller/fonksiyonel/19-archive-chat-history.jpg)
+> *[Görsel repoda yok] Copilot özeti — arşiv transcript içinde — özgün dosya `gorseller/fonksiyonel/19-archive-chat-history.jpg` (referans görseller taşınmaz; yalnız açıklama bırakıldı).*
 
 AI Agent (müşteriyle konuşan) ile **Copilot** (ajanı destekleyen) iki ayrı AI varlığıdır. Copilot her sohbette erişilebilir; kendi bilgi tabanına sahiptir (`/app/team/ai-agents/copilot/knowledge`); sohbet özeti ve yanıt yardımı üretir. Sağ panelde "Copilot" sekmesi olarak açılır ([MOD-01.3]).
 

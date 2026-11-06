@@ -807,7 +807,7 @@ Doküman: "there are rate limits for method calls. After exceeding those limits,
 
 ### 4.10. MCP server
 
-![MCP server sayfası — mcp.text.com bağlantısı ve Claude kurulum yönergesi](gorseller/teknik/02-mcp-server.jpg)
+> *[Görsel repoda yok] MCP server sayfası — mcp.text.com bağlantısı ve Claude kurulum yönergesi — özgün dosya `gorseller/teknik/02-mcp-server.jpg` (referans görseller taşınmaz; yalnız açıklama bırakıldı).*
 
 Uygulama içindeki **Settings → Integrations → MCP server** (`/app/settings/integrations/mcp`) sayfası, dışa dönük bir **Model Context Protocol** sunucusu sunar: **`https://mcp.text.com/`** ("Connect with AI assistants — Ask AI assistants about your Text data. Works with Claude, ChatGPT, and any MCP-compatible tool."). Sayfada "Claude setup — Connect Claude to Text MCP" yönergesi ve örnek prompt ("Find all tickets where customers ask about bulk orders") bulunur.
 
@@ -1701,7 +1701,7 @@ router.post(
 
 ### 7.5. React müşteri widget bileşeni
 
-![Customer widget — istemci render'ı (greeting kartı + composer)](gorseller/teknik/03-customer-widget.jpg)
+> *[Görsel repoda yok] Customer widget — istemci render'ı (greeting kartı + composer) — özgün dosya `gorseller/teknik/03-customer-widget.jpg` (referans görseller taşınmaz; yalnız açıklama bırakıldı).*
 
 Yukarıdaki ekran, müşteri tarafında render edilen widget'tır. Aşağıdaki bileşen, Customer Chat API'yi (cookie grant + `start_chat`/`send_event` + polling) kullanan minimal ama üretime yakın bir implementasyondur:
 

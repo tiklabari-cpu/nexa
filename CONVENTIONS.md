@@ -119,6 +119,8 @@ Gerekçe/ölçümler: `docs/conventions-gerekce.md` §1.1.
   `birim` → `entegrasyon` → isteğe bağlı `e2e` (`--e2e`). Yalnız bazı başlıklar:
   `pnpm test:gate birim entegrasyon`; önbelleksiz: `--force`. Tam kapı ~11 dk, pencerenin 10 dk
   komut tavanını aşabilir: arka planda koş, log yolu ilk satırda.
+  Döngü/prova betiklerinin `node --test` birimleri tek başına: `pnpm test:loop-tools` (dosya glob'u;
+  `node --test scripts/loop` gibi **dizin argümanı** exit 1 verir — Node dizini test dosyası sanır).
   **KURAL — kapı nasıl koşulur:** Tam kapı ~11 dk, tek komutta pencerenin 10 dk tavanını aşar.
   Kapı (ve tam test/e2e/build) **her zaman `run_in_background` ile** koşulur ve sonucu aynı sırada
   beklenir. Bunu metin değil mekanizma tutar (2026-10-26): `scripts/test-gate.mjs` koşarken

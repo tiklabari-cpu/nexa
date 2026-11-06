@@ -10,7 +10,7 @@
  *
  * It is not the agent client, though, and could not be:
  *
- * **The budget.** The widget has a hard 50 KB gzipped ceiling (NFR-P3) and no
+ * **The budget.** The widget has a hard 64.75 KB gzipped ceiling (NFR-P3) and no
  * bundler in common with `apps/web`. Importing that client would drag in status
  * plumbing, typing indicators and a cursor model for many chats at once, for a
  * document that has exactly one conversation.

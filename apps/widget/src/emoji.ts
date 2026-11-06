@@ -4,7 +4,7 @@
  * A small curated, categorised set — not a full Unicode board or a
  * third-party picker library, the same call `apps/web`'s composer made for
  * the same tool (tm 189.5, `apps/web/src/features/inbox/emoji.ts`). The two
- * do not share this module: the widget's gzip budget (NFR-P3, 50 KB for the
+ * do not share this module: the widget's gzip budget (NFR-P3, 64.75 KB for the
  * *whole* artifact) is far tighter than the panel's, and importing across
  * `apps/web`/`apps/widget` would couple two independently built bundles for
  * the sake of ~24 glyphs — more coupling than the saving is worth.

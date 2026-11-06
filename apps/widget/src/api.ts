@@ -2,7 +2,7 @@
  * Customer Chat API client for the widget.
  *
  * Keeps its own tiny client rather than sharing the agent app's: the widget has
- * a hard 50 KB budget (NFR-P3) and the agent client pulls in error taxonomy,
+ * a hard 64.75 KB budget (NFR-P3) and the agent client pulls in error taxonomy,
  * retry policy and typed routes it will never use.
  */
 

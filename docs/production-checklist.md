@@ -943,7 +943,9 @@ Open, not fixed by this checklist (tm 255.16, re-checked at the tm 256 closing g
   internet.
 - `RTM_MAX_CONNECTIONS` unset means no connection ceiling. Set it (**Sign-up, caps and abuse
   limits**).
-- Manual activation writes no audit entry and does not lift `past_due`.
+- Manual activation (`POST /workspaces/{licenseId}/activate`, platform) writes the `workspace.activated`
+  audit entry and lifts `past_due`/`read_only` to `active`; it refuses a suspended or
+  cancelled workspace.
 - The MCP `summarize_chat` tool answers from the `ai-mock` summarizer, not from the model the
   panel's summary button uses, so its text differs from the panel's. MCP itself is outside the
   pilot.

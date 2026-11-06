@@ -117,7 +117,7 @@ Birkaç yerde test var ama kabul kriterini korumuyor:
 
 ### D8. Kural tersine uygulanmış
 
-`FR-MOD-06.1` readiness check: PRD "Knowledge boş **VEYA** hiç aktif skill yokken uyarı göster" diyor. Kod `ready = hasKnowledge || hasSkill` ([readiness.ts:42](apps/api/src/services/ai/readiness.ts:42)) — yani uyarı **yalnızca ikisi birden boşken** çıkıyor. Bilgi tabanı dolu ama hiç skill yokken AI Agent "hazır" görünüyor. Mantık operatörü ters.
+`FR-MOD-06.1` readiness check: PRD "Knowledge boş **VEYA** hiç aktif skill yokken uyarı göster" diyor. Kod `ready = hasKnowledge || hasSkill` ([readiness.ts:42](apps/web/src/features/playbook/readiness.ts)) — yani uyarı **yalnızca ikisi birden boşken** çıkıyor. Bilgi tabanı dolu ama hiç skill yokken AI Agent "hazır" görünüyor. Mantık operatörü ters. _(2026-11 notu: bu denetim anındaki dosya `apps/api/src/services/ai/readiness.ts` repoda artık yok; mantık web tarafında `readiness.ts`'te ve şimdi `hasKnowledge && hasSkill`.)_
 
 ---
 

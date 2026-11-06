@@ -7536,3 +7536,7 @@ _Önceki maddeler: `docs/archive/plan-kanit/PLAN-kanit-arsiv-2026-10-14.md` (`##
 #### K414 — TEST-ISOLATION-ROUND2 · Tur 2 test izolasyonu (PRD satırı yok, damga değişmedi)
 
 - ✅ tm 414 · `ai-agent.spec.ts` iki Tone testi tohum tonunu `finally`'de geri yazar (`readTone`/`putToneBack`), `customers.spec.ts` "filters to leads" kendi lead'ini üretir, `rtm.js` cursor'ı yalnız izlenen chat'in olaylarından alır; member-identity sayaç temizliği tm 407'den vardı, karıştırılmış dosya sırasıyla mutantla doğrulandı · `apps/e2e/tests/ai-agent.spec.ts:20`, `customers.spec.ts:53`, `apps/load/scenarios/rtm.js:track` · e2e dört dosya birleşimi 20/20 ×2, k6 `rtm.js` widget trafiğiyle yeşil (eski kod 20/20 kırmızı) · `customers.spec:53` nedeni yeniden üretilemedi
+
+#### K416 — DOCS-DRIFT-ROUND2 · Tur 2 doküman sapmaları (PRD satırı yok, damga değişmedi)
+
+- ✅ tm 416 · rapor-1/2'de 11 kırık görsel linki açıklamaya çevrildi (görseller repoda yok, taşınmadı), `prd-uyum-denetimi.md` readiness linki web `readiness.ts`'e, widget yorumlarında "50 KB" → 64.75 KB, `production-checklist.md` §9 manual-activation satırı (audit `workspace.activated` yazılıyor) gerçeğe, `pnpm test:loop-tools` (dizin argümanı exit 1 yerine glob) · `package.json`, `CONVENTIONS.md` §1, `apps/widget/src/*.ts` · `test:gate build statik birim` yeşil, link denetimi 0 kırık

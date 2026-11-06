@@ -3343,8 +3343,10 @@ function labelledField(
 /**
  * Say what is wrong with a field in the widget's own language and take the
  * visitor to it. The browser's balloon follows the browser's language, not
- * the widget's, so the forms are `noValidate` and the message is set here —
- * cleared at once, as the balloon keeps the text it was shown with.
+ * the widget's, so the forms are `noValidate` and the message is set here.
+ * It stays on the field until the visitor edits it: Chromium draws the live
+ * `validationMessage`, so clearing it straight after `reportValidity()` made the
+ * balloon fall back to the browser's own sentence (tm 412).
  */
 function complain(
   field: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement,
@@ -3352,8 +3354,14 @@ function complain(
 ): void {
   field.setCustomValidity(message);
   field.reportValidity();
-  field.setCustomValidity('');
   field.focus();
+  const clear = (): void => {
+    field.setCustomValidity('');
+    field.removeEventListener('input', clear);
+    field.removeEventListener('change', clear);
+  };
+  field.addEventListener('input', clear);
+  field.addEventListener('change', clear);
 }
 
 /**

@@ -548,7 +548,15 @@ describe('validation speaks the widget’s language, not the browser’s', () =>
     expect(document.activeElement).toBe(
       root.querySelector('.nx-prechat-card > .nx-field:nth-child(3) .nx-prechat-input'),
     );
-    // Cleared at once: the next, valid attempt must not be held by a stale message.
+    // Chromium draws the live validationMessage, so it stays until the visitor edits the field…
+    const username = root.querySelector<HTMLInputElement>(
+      '.nx-prechat-card > .nx-field:nth-child(3) .nx-prechat-input',
+    )!;
+    expect(username.validationMessage).toBe('Please fill in this field.');
+    // …and goes on the next edit, so the valid attempt is not held by a stale message.
+    username.value = 'jodoe';
+    username.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(username.validationMessage).toBe('');
     fillFixedFields(root);
     submit(root.querySelector('.nx-prechat')!);
     await waitFor(() => sentMessage() !== undefined);

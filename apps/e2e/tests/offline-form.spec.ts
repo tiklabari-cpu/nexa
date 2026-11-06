@@ -277,4 +277,54 @@ test.describe('offline form — ticket + prospect (FR-MOD-08.7.7)', () => {
       });
     }
   });
+
+  test('an empty required field names itself in the widget’s language, not the browser’s (tm 412)', async ({
+    browser,
+    request,
+    organizationId,
+  }) => {
+    test.slow();
+    const stamp = Date.now().toString().slice(-6);
+    const auth = { authorization: `Bearer ${await ownerAccessToken(request)}` };
+    const site = tenantSubdomain(`bubble-${stamp}`);
+    try {
+      const put = await request.put(`${API_BASE}/settings/widget`, {
+        headers: auth,
+        data: { availability_mode: 'agents_only' },
+      });
+      expect(put.status(), await put.text()).toBe(200);
+
+      // A browser that speaks English, a widget pinned to Turkish.
+      const visitorContext = await browser.newContext({ locale: 'en-US' });
+      const visitor = await visitorContext.newPage();
+      try {
+        await nobodyAvailable(visitor);
+        await visitor.goto(
+          `${site.origin}/demo.html?organization_id=${organizationId}&language=tr`,
+        );
+        const frame = widgetFrame(visitor);
+        await frame.getByRole('button', { name: 'Sohbeti aç' }).click();
+        const form = frame.locator('form.nx-offline');
+        await expect(form).toBeVisible({ timeout: 20_000 });
+
+        const subject = form.locator('input[type="text"]').first();
+        await form.locator('button[type="submit"]').click();
+        // Chromium draws the field's live validationMessage in its balloon.
+        await expect(subject).toBeFocused();
+        expect(await subject.evaluate((el: HTMLInputElement) => el.validationMessage)).toBe(
+          'Lütfen bu alanı doldurun.',
+        );
+        // The visitor typing clears it.
+        await subject.fill('Merhaba');
+        expect(await subject.evaluate((el: HTMLInputElement) => el.validationMessage)).toBe('');
+      } finally {
+        await visitorContext.close();
+      }
+    } finally {
+      await request.put(`${API_BASE}/settings/widget`, {
+        headers: auth,
+        data: { availability_mode: 'always' },
+      });
+    }
+  });
 });

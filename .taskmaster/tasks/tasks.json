@@ -16474,7 +16474,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-11-07T09:06:31.494Z",
+        "updatedAt": "2026-11-07T09:07:18.994Z",
         "subtasks": [
           {
             "id": 1,
@@ -16567,7 +16567,7 @@
             "description": "Özelliğin tarayıcı kanıtı ve kapanışı. Gerçek widget ve gerçek panel iki bağlamda çalışır. AI evresinde ağda typing isteği olmadığı, devirden sonra ajanın son metni ≤2 sn'de gördüğü, blur'da şeridin kaldığı ve gönderimle kalktığı gösterilir. Gizlilik notu dokümana, kanıt PLAN/HANDOFF'a yazılır.",
             "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1 (`pnpm test:gate --e2e` kapanışta bir kez, arka planda; e2e için kök .env source). Bağımlılık: 417.4, 417.5, 417.6 (dolaylı olarak 417.1–417.3). Üst görev #417'nin tüm KARARLARI.\n\nBAĞLAM: 417.1–417.6 birim ve entegrasyon kanıtlarını verdi. Bu halka uçtan uca tarayıcı kanıtını ve kapanış kayıtlarını yapar. Bitince üst görev 417 done olur.\n\nKODDA BUGÜN:\n- apps/e2e/tests/widget.spec.ts ve apps/e2e/tests/inbox-assign.spec.ts: iki bağlamlı widget + panel desenleri. Panel soketine push enjekte etme deseni `page.routeWebSocket(/:4001\\//, ws => { ws.connectToServer(); })` inbox-assign.spec.ts \"when the system changes availability\" testinde.\n- prd-uyum-denetimi.md:298 (`FR-MOD-02.9` TAM) ve :430 (`FR-MOD-11.8` TAM).\n- PLAN.md:6345 ve :6504 (sneak-peek'in ilk kayıtları; yeni kanıt maddesi yakınlarına tek satır).\n\nAMAÇ:\n1) Yeni `apps/e2e/tests/visitor-typing-preview.spec.ts` (başlıkta `FR-MOD-11.8`). Bağlam A ziyaretçi widget'ı, bağlam B ajan paneli.\n   - AI evresi: seed'deki AI ajanı yayınlanmamış olabilir (e2e-seeded-ai-agent-never-published). AI evresi mevcut yolla kurulur; kurulamazsa `page.route` ile `typing_preview:false` dönen poll zorlanır ve nedeni HANDOFF'a yazılır. Ziyaretçi yazar → `page.on('request')` ile `/customer/chat/typing` sayısı 0.\n   - Devir: ajan sohbeti alır (mevcut takeover/assign akışı). Ziyaretçi yazmadan ÖNCE `page.waitForResponse` ile `typing_preview:true` taşıyan `GET /customer/chat` yanıtı beklenir (417.5 refresh kuralı sayesinde poll aralığından bağımsız). ≤2 sn ölçümü bu andan başlar. Ziyaretçi \"Merhaba, siparişim\" yazar → B'de `typing-preview-text` ≤2 sn içinde tam metni gösterir.\n   - Ziyaretçi kutudan çıkar (blur) ve 7 sn bekler → B'de `typing-preview-draft` görünür, metin duruyor.\n   - Aynı metin bekletilirken 5 sn içinde typing isteği sayısı 0.\n   - Sekme kapanışı: ikinci bir taslak yazılır, B'de görünür; A sayfası kapatılır (`page.close({ runBeforeUnload: true })` → pagehide keepalive temizle) → B'de şerit ≤2 sn'de kalkar. (Bu adım ayrı bir widget sayfasıyla yapılır ya da gönderim adımından sonra yeni sayfa açılır; 30 sn bayatlama e2e'de BEKLENMEZ, 417.6 birim testinde sahte saatle kanıtlıdır.)\n   - Ziyaretçi gönderir → B'de şerit kalkar, mesaj akışta. 3 sn daha beklenir, şerit geri gelmez (hayalet taslak yok).\n   - B'de `role=status` öğesi ilk vuruştan önce de DOM'da.\n2) Doküman: `git grep -n -i \"widget\" docs/ | grep -i -E \"ayar|settings|guide|rehber\" | head` ile mevcut operatör/kurulum rehberi bulunur. \"Ziyaretçi taslak önizlemesi\" kısa bölümü yazılır: ne gösterilir; kim görür (yalnız sohbete atanmış insan temsilci ve izleyen süpervizör; botlar, API token'ları, takımın diğer ajanları, kuyruktaki takım ve sohbetten ayrılmış ajanlar görmez); kaydedilmez/loglanmaz; maskeleme; ilk 500 karakter; şerit 30 sn güncellemesizlikte ya da ziyaretçi sekmesi kapanınca kalkar; HIPAA kapsamında kapalı; varsayılan açık ve Ayarlar › Widget'tan kapatılır; KVKK/GDPR: widget'ta ziyaretçiye bildirim gösterilmez (sahip 2026-11-06 S3) — kiracı bu işlemeyi kendi aydınlatma metnine ekler (rehberde kiracıya talimat cümlesi). Uygun rehber yoksa HANDOFF'a yazılır; yeni dosya açılmaz.\n3) PLAN: §D altına ya da PLAN.md:6504 yakınına tek satır kanıt maddesi (tablo hücresine kanıt yazılmaz). HANDOFF bloğu: K1–K11 kararları, ölçülen bundle farkı, 417.5 devir kuralı ve takeover'ın müşteriye ulaşma yolu, 417.3 kova değerleri, transfer sonrası `chat.access` gözlemi, sahip kararları 2026-11-06 S1–S6 (04 K30–K35) uygulandı.\n4) `audit:req-coverage` exit 0.\n\nKARARLAR: e2e iki bağlamlı gerçek akış; RTM push enjeksiyonu yalnız gerçek akış kurulamazsa.\nKAPSAM DIŞI: mobil, yük testi (k6), yeni özellik.\nTUZAKLAR: e2e dev server StrictMode (e2e-runs-dev-server-strictmode); ikinci sekme sessionStorage paylaşır (e2e-second-tab-shares-session-storage); 1024 altı dar bildirim (e2e-below-1024-hits-narrow-notice); yeni spec shard paketlemesini karıştırır (new-e2e-spec-reshuffles-shard-packing); auth kovası 30/dk (browser-ux-probe-traps); e2e PNG değişimi (dod-gate-wall-clock-and-e2e-png-churn); hedefli e2e tekrarında retry yok (targeted-e2e-rerun-has-no-retry). Kapanış dokümanları gate koşarken yazılabilir (closing-docs-can-be-written-during-the-gate). Widget arka plan sekmesinde visibilityState gizli olabilir; A bağlamı ön planda tutulur ya da `page.bringToFront()` kullanılır.\nKABUL: spec yeşil; test:gate --e2e yeşil (\"0 cached\"); req-coverage exit 0; PLAN tek satır + HANDOFF bloğu.",
             "testStrategy": "e2e `visitor-typing-preview.spec.ts` (başlıkta `FR-MOD-11.8`) yukarıdaki adımlarla koşar. `pnpm test:gate --e2e` arka planda; log son satırları `Tasks:`/`Failed:`/`exit`; turbo `--force` ve \"0 cached\". `audit:req-coverage` exit 0. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "417.4",
               "417.5",
@@ -16575,7 +16575,7 @@
             ],
             "parentId": "417",
             "priority": "high",
-            "updatedAt": "2026-11-06T17:34:51.966Z"
+            "updatedAt": "2026-11-07T09:07:18.994Z"
           }
         ]
       },
@@ -17837,7 +17837,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-07T09:06:31.494Z",
+      "lastModified": "2026-11-07T09:07:18.994Z",
       "taskCount": 478,
       "completedCount": 413,
       "tags": [

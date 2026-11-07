@@ -71,6 +71,7 @@
           <li><a href="#platform">iGaming platformunun içerik panelinde</a></li>
           <li><a href="#noscript">JavaScript kapalı ziyaretçiler</a></li>
           <li><a href="#kimlik">Giriş yapmış üyeyi tanıtın (operatör imzalı kimlik)</a></li>
+          <li><a href="#taslak">Ziyaretçi taslak önizlemesi</a></li>
           <li><a href="#sorun">Sorun giderme</a></li>
         </ul>
       </nav>
@@ -249,7 +250,45 @@ function siyahtus_identity(array $user): array {
         sayılanların nedenini gösterir; yanlış imza oyuncuya hiçbir zaman hata olarak görünmez.
       </p>
 
-      <h2 id="sorun">7. Sorun giderme</h2>
+      <h2 id="taslak">7. Ziyaretçi taslak önizlemesi</h2>
+      <p>
+        Bir temsilci sohbeti üstlendiğinde ziyaretçinin henüz göndermediği yazı, temsilcinin
+        ekranında mesaj kutusunun üstünde canlı görünür. Ziyaretçi kutudan çıksa da taslak soluk
+        olarak “henüz göndermedi” diye durur. Ziyaretçi gönderince, kutuyu boşaltınca ya da sekmeyi
+        kapatınca, sohbet kapanınca ya da başka birine geçince ve 30 saniye hiç güncelleme gelmezse
+        kalkar.
+      </p>
+      <ul>
+        <li>
+          <strong>Kim görür:</strong> yalnız sohbete atanmış insan temsilci ve sohbeti o an izleyen
+          süpervizör. Botlar, AI ajanı, API token’ları, takımın diğer temsilcileri, kuyrukta
+          bekleyen sohbetin takımı ve sohbetten ayrılmış (aktarmış) temsilciler görmez. AI sohbeti
+          yanıtlarken widget hiçbir taslak göndermez.
+        </li>
+        <li>
+          <strong>Ne gösterilir:</strong> taslağın ilk 500 karakteri, düz metin olarak. Kart
+          numarası, kod ve parola gibi parçalar ziyaretçi mesajlarındaki maskeyle gizlenir;
+          yazılmakta olan yarım bir kart numarası da maskelenir.
+        </li>
+        <li>
+          <strong>Kaydedilmez:</strong> taslak veritabanına, sohbet geçmişine, denetim kaydına ya da
+          loglara yazılmaz; yalnız o an temsilcinin ekranına gider.
+        </li>
+        <li>
+          <strong>Açma ve kapama:</strong> varsayılan olarak açıktır;
+          <strong>Ayarlar → Kanallar → Widget görünümü</strong> ekranındaki “Ziyaretçinin yazdığını
+          gönderilmeden göster” anahtarıyla kapatılır. Sağlık verisi (HIPAA) kapsamındaki çalışma
+          alanlarında kapalıdır ve açılamaz.
+        </li>
+        <li>
+          <strong>Ziyaretçiyi bilgilendirme (KVKK / GDPR):</strong> widget ziyaretçiye bu konuda bir
+          bildirim göstermez. Özelliği açık tutuyorsanız, gönderilmemiş yazının sohbete atanmış
+          temsilciye canlı gösterildiğini kendi aydınlatma metninize ve gizlilik bildiriminize
+          ekleyin.
+        </li>
+      </ul>
+
+      <h2 id="sorun">8. Sorun giderme</h2>
       <ul>
         <li>
           <strong>Durum “İlk mesaj bekleniyor”da kalıyor.</strong> Kodun sayfada gerçekten
@@ -387,7 +426,42 @@ function siyahtus_identity(array $user): array {
           shown to the player as an error.
         </p>
 
-        <h2>7. Troubleshooting</h2>
+        <h2 id="draft-preview">7. Visitor draft preview</h2>
+        <p>
+          Once a person has the chat, what the visitor has typed but not yet sent shows live on that
+          agent’s screen, above the reply box. It stays, faded, as “has not sent this yet” when the
+          visitor leaves the box. It goes when the visitor sends it, empties the box or closes the
+          tab, when the chat closes or moves to someone else, and after 30 seconds with no update.
+        </p>
+        <ul>
+          <li>
+            <strong>Who sees it:</strong> only the human agent assigned to the chat and a supervisor
+            watching it right then. Bots, the AI agent, API tokens, the team’s other agents, the
+            team of a chat waiting in the queue and agents who have left the chat (transferred it)
+            do not. While the AI answers, the widget sends no draft at all.
+          </li>
+          <li>
+            <strong>What is shown:</strong> the first 500 characters, as plain text. Card numbers,
+            codes and passwords are hidden by the same mask visitor messages get; a card number
+            still being typed is masked too.
+          </li>
+          <li>
+            <strong>Not stored:</strong> the draft is never written to the database, the transcript,
+            the audit log or the logs; it only goes to the agent’s screen, then and there.
+          </li>
+          <li>
+            <strong>On and off:</strong> on by default; turn it off with “Show what visitors type
+            before they send it” under <strong>Settings → Channels → Widget appearance</strong>.
+            Workspaces covered for health data (HIPAA) have it off, and it cannot be turned on.
+          </li>
+          <li>
+            <strong>Telling visitors (GDPR / KVKK):</strong> the widget shows the visitor no notice
+            about it. If you keep it on, add to your own privacy notice that an unsent message is
+            shown live to the agent assigned to the chat.
+          </li>
+        </ul>
+
+        <h2>8. Troubleshooting</h2>
         <ul>
           <li>
             <strong>Stuck on “Waiting for first message”.</strong> View the page source to confirm

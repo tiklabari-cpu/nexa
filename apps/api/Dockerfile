@@ -130,6 +130,12 @@ COPY --from=build --chown=siyahtus:siyahtus /repo/apps/api/prisma ./apps/api/pri
 COPY --from=build --chown=siyahtus:siyahtus /repo/apps/api/package.json ./apps/api/package.json
 COPY --chown=siyahtus:siyahtus apps/api/docker-entrypoint.sh ./apps/api/docker-entrypoint.sh
 RUN chmod +x ./apps/api/docker-entrypoint.sh
+# Where the pilot keeps uploads (docker-compose.pilot.yml mounts the named volume
+# `siyahtus_pilot_uploads` here and sets STORAGE_LOCAL_DIR to it, tm 418). An empty
+# named volume takes the owner of the image's directory on its first mount, so the
+# app can write to it as `siyahtus`; everywhere else /repo stays root-owned.
+RUN mkdir -p /var/lib/siyahtus/uploads \
+    && chown siyahtus:siyahtus /var/lib/siyahtus/uploads
 
 WORKDIR /repo/apps/api
 USER siyahtus

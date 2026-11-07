@@ -139,17 +139,27 @@ services:
     env_file: *app-env-file
     environment:
       <<: *app-environment
+      # File sharing is on in the pilot (owner decision 2026-11-06): chat
+      # attachments and knowledge-base documents are written here, on the
+      # named volume below, so they survive `up --build`, a re-created
+      # container and a reboot. scripts/backup.sh archives this directory
+      # beside every database dump (`COMPOSE_FILE=docker-compose.pilot.yml`).
+      # The image creates it owned by `siyahtus` (apps/api/Dockerfile), and an
+      # empty named volume takes that owner on its first mount.
+      STORAGE_LOCAL_DIR: /var/lib/siyahtus/uploads
       # `.env.production.example` leaves these relative to the working
       # directory, which is root-owned inside the image (the app runs as
-      # `siyahtus`). /tmp is writable. What lives there does not survive a
-      # container re-create: with MAIL_PROVIDER=smtp nothing is spooled to
-      # MAIL_DIR, push and the SIEM export are outside the pilot, and file
-      # sharing stays off (tm 255.13) — a workspace that turns it on keeps
-      # its uploads only until the next `up --build`.
-      STORAGE_LOCAL_DIR: /tmp/siyahtus/uploads
+      # `siyahtus`). /tmp is writable, and what lives there does not survive a
+      # container re-create — nothing the pilot keeps: with MAIL_PROVIDER=smtp
+      # nothing is spooled to MAIL_DIR, and push and the SIEM export are
+      # outside the pilot.
       MAIL_DIR: /tmp/siyahtus/mail
       PUSH_DIR: /tmp/siyahtus/push
       SIEM_DIR: /tmp/siyahtus/siem
+    volumes:
+      # Only `down -v` removes it, together with the database — never run
+      # that here.
+      - siyahtus_pilot_uploads:/var/lib/siyahtus/uploads
     ports:
       - '127.0.0.1:${SIYAHTUS_API_HOST_PORT:-4000}:4000'
     depends_on:
@@ -199,6 +209,11 @@ services:
       DATABASE_PLATFORM_URL: postgresql://siyahtus_platform:${SIYAHTUS_PLATFORM_DB_PASSWORD:-}@db:5432/siyahtus
       # The api service migrates; this one starts after it is healthy.
       SIYAHTUS_MIGRATE_ON_START: 'false'
+      # The api's file store, read-only: the back office serves the invoice
+      # PDFs the api's scheduler writes there.
+      STORAGE_LOCAL_DIR: /var/lib/siyahtus/uploads
+    volumes:
+      - siyahtus_pilot_uploads:/var/lib/siyahtus/uploads:ro
     healthcheck:
       test: ['CMD-SHELL', 'curl -fsS http://127.0.0.1:4002/platform/v1/health/ready || exit 1']
       interval: 10s
@@ -280,3 +295,4 @@ services:
 volumes:
   siyahtus_pilot_pgdata:
   siyahtus_pilot_redisdata:
+  siyahtus_pilot_uploads:

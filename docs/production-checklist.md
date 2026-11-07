@@ -191,8 +191,10 @@ failing.
 
 - [ ] A backup is scheduled:
       [`templates/backup-cronjob.yaml`](../infra/helm/siyahtus/templates/backup-cronjob.yaml)
-      (nightly `pg_dump` into a PersistentVolumeClaim) for a real deployment, or `make backup`
-      for the local/dev stack. Retention: `BACKUP_RETENTION_DAYS` (default 30).
+      (nightly `pg_dump` into a PersistentVolumeClaim) for a real deployment, `make backup`
+      for the local/dev stack, and for the pilot on Docker Compose the systemd timer in
+      `infra/pilot/systemd/` (§9, **Data and backups**). Retention: `BACKUP_RETENTION_DAYS`
+      (default 30).
 - [ ] A restore drill has actually been run against a real backup — a backup **existing** is
       not the claim this repo makes, a backup **restoring** is: `make restore-drill` (backs up,
       then drills that backup) or `./scripts/restore-drill.sh --dump backups/db-….dump` (drill
@@ -202,7 +204,8 @@ failing.
       row-level-security surface (every table, policy name, `USING`/`WITH CHECK` body) is
       identical; extensions and `SECURITY DEFINER` functions match; every `events` partition
       has RLS on with exactly one policy; connecting as the non-owner `siyahtus_app` role returns
-      no rows without a tenant context and the right rows with one. See README
+      no rows without a tenant context and the right rows with one; the uploads archive beside
+      the dump matches its store file by file (sha256, tm 418). See README
       ["Restore drill"](../README.md#restore-drill).
 - [ ] Uploads are covered by the **bucket's** own durability settings, not by this CronJob:
       the scheduled backup is `pg_dump` only, deliberately
@@ -844,23 +847,48 @@ Without the back office, the by-hand path is a footnote.[^psql-activation]
       `docker compose -f docker-compose.pilot.yml exec db psql -U siyahtus -d siyahtus -c "ALTER ROLE siyahtus_platform NOLOGIN PASSWORD NULL"`
       — and unlock it with `ALTER ROLE siyahtus_platform LOGIN PASSWORD '<new>'` when the root
       panel is deployed.
+- [ ] Uploads: file sharing is on in the pilot (owner decision 2026-11-06). Chat attachments and
+      knowledge-base documents are kept on the named volume `siyahtus_pilot_uploads`
+      (`siyahtus-pilot_siyahtus_pilot_uploads` on the host), mounted in the api container at
+      `/var/lib/siyahtus/uploads` (tm 418). Like the database, it survives `down`, `up --build`
+      and a reboot, it goes into the daily backup (`COMPOSE_FILE=docker-compose.pilot.yml`, next
+      item), and `docker compose down -v` deletes the files too. Virus scanning is not in the
+      pilot: `VIRUS_SCANNER=mock` passes every file (a boot warning and a "not scanned" label are
+      tm 433, still open). A visitor's erasure does not delete their files yet (tm 423, open);
+      the backup retention below still ages them out of the archives.
 - [ ] Backups use the same scripts as §6, pointed at this file: `make pilot-backup`
       (`COMPOSE_FILE=docker-compose.pilot.yml ./scripts/backup.sh`) writes
-      `backups/db-<UTC>.dump`, and `make pilot-restore-drill` proves one restores (on a
+      `backups/db-<UTC>.dump` and, under the same timestamp, `backups/uploads-<UTC>.tar.gz`: the
+      uploads volume, read from inside the api container (the script does this whenever
+      `COMPOSE_FILE` names the pilot file; it fails if the api container is not running).
+      `make pilot-restore-drill` proves both restore: the dump into a scratch database, the
+      archive into a scratch directory, every file compared by sha256 with the volume (on a
       database with no chat yet it fails "RLS enforcement not exercised" — it will not call
       isolation verified without rows to verify it on; run it again after the first
       conversation). Take the first backup on opening day, before sign-up opens.
-- [ ] Backups run every day without anyone remembering to (tm 256.5), and nobody else can read
-      them: the dump holds every workspace's personal data, and a cron job's default umask makes
-      it world-readable. A line in `/etc/cron.d/siyahtus-backup`, with the repository at
-      `/opt/siyahtus`:
-      `15 3 * * * root umask 077; cd /opt/siyahtus && COMPOSE_FILE=docker-compose.pilot.yml ./scripts/backup.sh >>/var/log/siyahtus-backup.log 2>&1`.
-      The script deletes its own archives older than `BACKUP_RETENTION_DAYS` (default 30,
-      NFR-C8). Read the log after the first night: it ends in `Done.` and a size, and
-      `ls -l /opt/siyahtus/backups` shows no file readable by anyone but root.
+- [ ] Backups run every day without anyone remembering to (tm 465), and nobody else can read
+      them: the archives hold every workspace's personal data. A systemd timer starts the
+      backup at 03:15 UTC, and a night the machine was off is caught up at the next boot
+      (`Persistent=true`, which a cron line does not do). The two units,
+      [`infra/pilot/systemd/siyahtus-backup.service`](../infra/pilot/systemd/siyahtus-backup.service)
+      and [`infra/pilot/systemd/siyahtus-backup.timer`](../infra/pilot/systemd/siyahtus-backup.timer),
+      assume the repository at `/opt/siyahtus` (edit `WorkingDirectory=` and `ExecStart=` if
+      not); the service sets `COMPOSE_FILE=docker-compose.pilot.yml` and `UMask=0077`, and
+      retries a failed run three times:
+      `sudo cp infra/pilot/systemd/siyahtus-backup.service infra/pilot/systemd/siyahtus-backup.timer /etc/systemd/system/`,
+      `sudo systemctl daemon-reload`, `sudo systemctl enable --now siyahtus-backup.timer`, then
+      the first backup at once: `sudo systemctl start siyahtus-backup.service`. A host that
+      still has the earlier `/etc/cron.d/siyahtus-backup` line deletes it, or two backups run
+      every night. The script deletes its own archives older than `BACKUP_RETENTION_DAYS`
+      (30 in the unit, NFR-C8). Read the log after the first run:
+      `journalctl -u siyahtus-backup.service -n 5` ends in `Done.` and a size,
+      `systemctl list-timers siyahtus-backup.timer` shows the next run, and
+      `sudo ls -l /opt/siyahtus/backups` shows a `db-` and an `uploads-` file with the same
+      timestamp, neither readable by anyone but root.
 - [ ] A copy leaves the host. A backup on the same disk as the database is lost with it, and the
       home server is one machine. The archives hold every workspace's personal data, so the copy is
-      encrypted and the place it goes is the owner's. Any one of these, after the backup line:
+      encrypted and the place it goes is the owner's. Any one of these, after the backup timer
+      (at 03:15 UTC):
   - an S3-compatible bucket in another account or provider, through `rclone` with a `crypt`
     remote: `45 3 * * * root rclone copy /opt/siyahtus/backups <remote>: --max-age 24h && rclone delete <remote>: --min-age 30d`;
   - another machine over SSH: `rsync -a --delete /opt/siyahtus/backups/ <user>@<host>:siyahtus-backups/`
@@ -878,7 +906,17 @@ Without the back office, the by-hand path is a footnote.[^psql-activation]
       It restores into a scratch database, verifies it and drops it; exit 0 is the claim. Do it
       at once because the drill compares row counts with the live database: last night's
       archive reports every chat written since as a failure. A copy that was never restored
-      is not yet a backup.
+      is not yet a backup. The drill looks for the uploads archive beside the fetched dump, so
+      fetch both files of one timestamp into the same directory.
+- [ ] Putting the files back (after a lost volume, or to roll the files back with the
+      database). With the api stopped, unpack the archive of the same timestamp as the dump
+      into the volume, as the api's own user, then start the stack again:
+      `docker compose -f docker-compose.pilot.yml stop api platform-api`,
+      `docker compose -f docker-compose.pilot.yml run --rm --no-deps -T --entrypoint tar api -xzf - -C /var/lib/siyahtus < backups/uploads-<UTC>.tar.gz`,
+      `docker compose -f docker-compose.pilot.yml up -d`. Files in the volume that the archive
+      does not hold stay; unpacking into an emptied volume
+      (`docker volume rm siyahtus-pilot_siyahtus_pilot_uploads` with the stack down) gives
+      exactly the archive.
 - [ ] Dumps stay out of the Docker build context. `.dockerignore` excludes `backups/` and the
       env, key and tunnel-credential patterns (tm 257.10), but earlier builds on a host that kept
       dumps in the repository directory left them in cached build layers: run
@@ -892,14 +930,13 @@ Without the back office, the by-hand path is a footnote.[^psql-activation]
       (another address, SMS, a phone app), and check every one to five minutes:
       `https://api.…/api/v1/health/ready` and `https://rtm.…/health/ready` (both 200 only with
       Postgres and Redis reachable), `https://panel.…/` and `https://widget.…/loader.js`. Most
-      such services also take a heartbeat: add `&& curl -fsS <heartbeat URL>` to the backup
-      line, and a night without a backup raises an alert too.
+      such services also take a heartbeat: uncomment the `ExecStartPost=` line in
+      `siyahtus-backup.service` with its URL (it runs only after a backup that succeeded), and a
+      night without a backup raises an alert too.
 - [ ] `OTEL_EXPORTER=none` (the template sets it): there is no collector in the pilot, and
       the `console` default prints every span into the container log — measured, only 33 of
       566 lines in five minutes were the api's own log records. `docker compose -f docker-compose.pilot.yml logs api` should read
       as one JSON record per line.
-- [ ] Uploads: the pilot keeps file sharing off (tm 255.13). A workspace that turns it on
-      stores files under `/tmp` inside the api container; they do not survive `up --build`.
 
 ### The host
 
@@ -910,8 +947,8 @@ The pilot runs on a home Ubuntu machine. Every service in the compose file has
 
 - [ ] Docker Engine from the distribution's `docker-ce` packages, not Docker Desktop, starts at
       boot: `sudo systemctl enable --now docker.service containerd.service`, and
-      `systemctl is-enabled docker.service` prints `enabled`. Cron runs the backup line:
-      `systemctl is-enabled cron` prints `enabled`.
+      `systemctl is-enabled docker.service` prints `enabled`. The backup timer is on:
+      `systemctl is-enabled siyahtus-backup.timer` prints `enabled`.
 - [ ] The machine never suspends: `sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target`.
       On a laptop also set `HandleLidSwitch=ignore` and `HandleLidSwitchExternalPower=ignore` in
       `/etc/systemd/logind.conf`, then `sudo systemctl restart systemd-logind` (it can end the
@@ -975,7 +1012,7 @@ Open, not fixed by this checklist (tm 255.16, re-checked at the tm 256 closing g
   does not. The assignee's e-mail is also held to one per chat and assignee per
   `ASSIGNEE_EMAIL_COOLDOWN_MS` (default 15 min, `0` mails every message). Handset push is not
   held. In the pilot a ticket notice ends with a line that this mailbox does not read replies.
-- One home server is one point of failure. The database, the tunnel and the backup line all live
+- One home server is one point of failure. The database, the tunnel and the backup timer all live
   on it; the off-host copy of the backup is what makes a lost machine survivable, and the external
   uptime check is the only thing that notices it is down.
 - Memory pressure stalls requests without failing them. On the development machine a host
@@ -1006,8 +1043,9 @@ Open, not fixed by this checklist (tm 255.16, re-checked at the tm 256 closing g
   transitions before it reads colours.
 - Outside the pilot by the owner's decisions (2026-09-22 and 2026-10-02): payments/Stripe,
   messaging channels, mobile push, S3 + virus scanning + SIEM + load testing, the MCP protocol,
-  social sign-in, uploads, OpenTelemetry collection, and Kubernetes (the Helm chart is kept, not
-  used).
+  social sign-in, OpenTelemetry collection, and Kubernetes (the Helm chart is kept, not used).
+  Uploads were on this list until the owner's decision of 2026-11-06: the pilot shares files,
+  on a volume that is backed up (**Data and backups**).
 
 ## Explicitly out of scope
 

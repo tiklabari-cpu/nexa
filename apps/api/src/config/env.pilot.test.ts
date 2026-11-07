@@ -361,6 +361,27 @@ describe('docker-compose.pilot.yml runs the product the production way (tm 255.1
     );
   });
 
+  it('keeps uploads on a named volume, in a directory the image hands the app user (tm 418)', () => {
+    // File sharing is on in the pilot (owner decision 2026-11-06): what is uploaded
+    // must outlive a re-created container, so it is not under /tmp.
+    const api = block(/^ {2}api:$/);
+    expect(api).toContain('- siyahtus_pilot_uploads:/var/lib/siyahtus/uploads');
+    expect(block(/^volumes:/)).toMatch(/^\s+siyahtus_pilot_uploads:$/m);
+    expect(PILOT_ENV['STORAGE_LOCAL_DIR']).toBe('/var/lib/siyahtus/uploads');
+    expect(uncommented).not.toMatch(/STORAGE_LOCAL_DIR: \/tmp\//);
+    // The back office serves the invoice PDFs the api writes there: same store, read-only.
+    const platform = block(/^ {2}platform-api:$/);
+    expect(platform).toContain('STORAGE_LOCAL_DIR: /var/lib/siyahtus/uploads');
+    expect(platform).toContain('- siyahtus_pilot_uploads:/var/lib/siyahtus/uploads:ro');
+    // An empty named volume takes the owner of the image's directory on first mount,
+    // so the directory exists, owned by `siyahtus`, before the image drops root.
+    const dockerfile = read('apps/api/Dockerfile');
+    const mkdir = dockerfile.indexOf('mkdir -p /var/lib/siyahtus/uploads');
+    expect(mkdir).toBeGreaterThan(0);
+    expect(dockerfile).toContain('chown siyahtus:siyahtus /var/lib/siyahtus/uploads');
+    expect(mkdir).toBeLessThan(dockerfile.indexOf('\nUSER siyahtus'));
+  });
+
   it('replaces or locks the published siyahtus_platform password, without making it required (tm 389.1)', () => {
     const db = block(/^ {2}db:$/);
     expect(db).toContain('infra/db/pilot/20-platform-role-password.sh');
@@ -666,5 +687,74 @@ describe("the pilot's Cloudflare Tunnel edge (tm 257.10)", () => {
     const docker = lines('.dockerignore');
     expect(docker.indexOf('**/.env.*')).toBeGreaterThanOrEqual(0);
     expect(docker.lastIndexOf('!.env.example')).toBeGreaterThan(docker.indexOf('**/.env.*'));
+  });
+});
+
+/**
+ * The pilot's backup (tm 418 · tm 465): a database dump and an archive of the
+ * uploads volume, both from the compose project COMPOSE_FILE names, once a day
+ * from a systemd timer. The rehearsal that measured it end to end (upload,
+ * re-create, back up, drill) is in HANDOFF; these pin the joins between the
+ * files, which nothing else connects: the directory compose mounts and the one
+ * the scripts archive, the variable the unit sets and the one the scripts read.
+ */
+describe("the pilot's files and backups (tm 418 · tm 465)", () => {
+  const BACKUP = read('scripts/backup.sh');
+  const DRILL = read('scripts/restore-drill.sh');
+  const SERVICE = read('infra/pilot/systemd/siyahtus-backup.service');
+  const TIMER = read('infra/pilot/systemd/siyahtus-backup.timer');
+  const CHECKLIST = read('docs/production-checklist.md');
+  /** `KEY=value` lines of a unit file, comments left out. */
+  const directives = (unit: string): string[] =>
+    unit.split(/\r?\n/).filter((line) => /^[A-Za-z]+=/.test(line));
+
+  it("archives the uploads from the api container, from the directory compose mounts, when COMPOSE_FILE is the pilot's", () => {
+    for (const script of [BACKUP, DRILL]) {
+      expect(script).toContain(
+        '*docker-compose.pilot.yml*) UPLOADS_SERVICE="${UPLOADS_SERVICE:-api}" ;;',
+      );
+      expect(script).toContain(
+        'UPLOADS_CONTAINER_DIR="${UPLOADS_CONTAINER_DIR:-/var/lib/siyahtus/uploads}"',
+      );
+      // No `-f`: COMPOSE_FILE alone picks the project, for the dump and the files alike.
+      expect(script).not.toMatch(/docker compose -f/);
+    }
+    expect(block(/^ {2}api:$/)).toContain('- siyahtus_pilot_uploads:/var/lib/siyahtus/uploads');
+    expect(BACKUP).toContain('docker compose exec -T "$UPLOADS_SERVICE" \\\n    tar -czf - -C');
+    // One timestamp for both halves; the drill finds the archive by it.
+    expect(BACKUP).toContain('db_dump="$BACKUP_DIR/db-$timestamp.dump"');
+    expect(BACKUP).toContain('uploads_archive="$BACKUP_DIR/uploads-$timestamp.tar.gz"');
+    expect(DRILL).toContain('uploads_archive="$(dirname "$dump_file")/uploads-$timestamp.tar.gz"');
+  });
+
+  it('runs every day from a systemd timer, against the pilot file, leaving archives only root can read', () => {
+    const service = directives(SERVICE);
+    expect(service).toContain('Type=oneshot');
+    expect(service).toContain('After=docker.service');
+    expect(service).toContain('Environment=COMPOSE_FILE=docker-compose.pilot.yml');
+    expect(service).toContain('UMask=0077');
+    expect(service).toContain('WorkingDirectory=/opt/siyahtus');
+    expect(service).toContain('ExecStart=/opt/siyahtus/scripts/backup.sh');
+    expect(service.find((line) => line.startsWith('Environment=BACKUP_RETENTION_DAYS='))).toMatch(
+      /=\d+$/,
+    );
+    const timer = directives(TIMER);
+    expect(timer).toContain('OnCalendar=*-*-* 03:15:00 UTC');
+    // A night the home server was off is caught up at boot, not skipped.
+    expect(timer).toContain('Persistent=true');
+    expect(timer).toContain('Unit=siyahtus-backup.service');
+    expect(timer).toContain('WantedBy=timers.target');
+  });
+
+  it('says what the pilot does with files, and how to get them back (owner decision 2026-11-06)', () => {
+    for (const text of [CHECKLIST, COMPOSE]) {
+      expect(text).not.toMatch(/file sharing stays off|keeps file sharing off/i);
+    }
+    expect(CHECKLIST).toContain('siyahtus_pilot_uploads');
+    expect(CHECKLIST).toContain('infra/pilot/systemd/siyahtus-backup.timer');
+    // The restore step for the files, with the api stopped.
+    expect(CHECKLIST).toContain(
+      'run --rm --no-deps -T --entrypoint tar api -xzf - -C /var/lib/siyahtus',
+    );
   });
 });

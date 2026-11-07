@@ -1,0 +1,15 @@
+# SiyahTuş pilot — starts siyahtus-backup.service once a day (tm 465).
+# Installed and enabled beside it; see the comment at the top of that file.
+[Unit]
+Description=Daily SiyahTuş pilot backup
+
+[Timer]
+# 03:15 UTC, the time of the cron line this replaces.
+OnCalendar=*-*-* 03:15:00 UTC
+# A night the machine was off (a power cut on a home server) is not skipped:
+# the missed run starts at the next boot.
+Persistent=true
+Unit=siyahtus-backup.service
+
+[Install]
+WantedBy=timers.target

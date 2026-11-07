@@ -42,6 +42,13 @@
 # command (e.g. `docker compose exec -T platform-api node
 # dist/src/services/platform/restore-chain-check-run.js` where the host has no
 # pnpm); the restored rows reach it on stdin, so it needs no database access.
+#
+# The uploads archive beside the dump (tm 418) is extracted and compared with the
+# store it was taken from, file by file, by sha256. With
+# `COMPOSE_FILE=docker-compose.pilot.yml` that store is the api container's
+# volume (UPLOADS_SERVICE / UPLOADS_CONTAINER_DIR, the same switches and defaults
+# as scripts/backup.sh), and a missing archive is a failure: the pilot always
+# has the directory.
 set -euo pipefail
 
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -51,6 +58,14 @@ DB_SERVICE="${DB_SERVICE:-db}"
 DB_USER="${DB_USER:-siyahtus}"
 DB_NAME="${DB_NAME:-siyahtus}"
 UPLOADS_DIR="${UPLOADS_DIR:-.data/uploads}"
+case "${COMPOSE_FILE:-}" in
+  *docker-compose.pilot.yml*) UPLOADS_SERVICE="${UPLOADS_SERVICE:-api}" ;;
+  *) UPLOADS_SERVICE="${UPLOADS_SERVICE:-}" ;;
+esac
+UPLOADS_CONTAINER_DIR="${UPLOADS_CONTAINER_DIR:-/var/lib/siyahtus/uploads}"
+# Git Bash would rewrite the container path above into a Windows one before
+# docker sees it. No effect anywhere else.
+export MSYS_NO_PATHCONV=1
 # The non-owner runtime role. Postgres exempts owners and superusers from row
 # level security, so the behavioural RLS check below is only worth anything from
 # this role — the same one the API connects as (DATABASE_APP_URL). Defaults are
@@ -209,6 +224,34 @@ events_partitions() {
 
 extensions() { psql_q "$1" "SELECT extname FROM pg_extension ORDER BY 1"; }
 
+# `<sha256>  <path>` lines, sorted bytewise. sha256sum marks a binary read with
+# `*` before the name (Git Bash does, the Linux container does not); one
+# separator for both, so the two sides compare as text.
+normalise_manifest() {
+  sed -E 's/^([0-9a-f]{64}) [ *]/\1  /' | LC_ALL=C sort
+}
+
+# The store the uploads archive was taken from, as a manifest whose paths start
+# with the directory's own name — the way the archive holds them
+# (`uploads/<licence>/<uuid>.png`). Empty, with exit 0, for a host directory that
+# does not exist yet; a container that cannot be read is an error.
+live_uploads_manifest() {
+  if [ -n "$UPLOADS_SERVICE" ]; then
+    docker compose exec -T "$UPLOADS_SERVICE" sh -c \
+      'cd "$1" && find "$2" -type f -exec sha256sum {} +' sh \
+      "$(dirname "$UPLOADS_CONTAINER_DIR")" "$(basename "$UPLOADS_CONTAINER_DIR")" \
+      </dev/null | normalise_manifest
+  elif [ -d "$UPLOADS_DIR" ]; then
+    (cd "$(dirname "$UPLOADS_DIR")" && find "$(basename "$UPLOADS_DIR")" -type f -exec sha256sum {} +) |
+      normalise_manifest
+  fi
+}
+
+# Lines of the first manifest that the second does not have, as `<path>` only.
+manifest_minus() { # manifest_minus <a> <b>
+  LC_ALL=C comm -23 <(sed '/^$/d' <<<"$1") <(sed '/^$/d' <<<"$2") | sed -E 's/^[0-9a-f]{64}  //'
+}
+
 # proconfig is part of the identity here on purpose: a SECURITY DEFINER function
 # that comes back without its `SET search_path` is a privilege-escalation seam,
 # not a cosmetic difference.
@@ -269,6 +312,15 @@ psql_q postgres 'SELECT 1' >/dev/null 2>&1 ||
 
 printf 'SiyahTuş restore drill — scratch database %s\n' "$DRILL_DB"
 
+# The uploads store as it stands before the archive is read — before the backup
+# in the default mode: everything in it has to be in the archive (the uploads
+# check below). With --dump, as with the row counts, a store that has taken files
+# since the archive was made is reported, not excused.
+uploads_before=''
+uploads_before_ok=0
+if uploads_before="$(live_uploads_manifest 2>"$tmpdir/uploads-before.err")"; then
+  uploads_before_ok=1
+fi
 if [ "$fresh_backup" -eq 1 ]; then
   printf '\nTaking a fresh backup first (scripts/backup.sh)\n'
   ./scripts/backup.sh
@@ -276,7 +328,7 @@ if [ "$fresh_backup" -eq 1 ]; then
   [ -n "$dump_file" ] || fatal "scripts/backup.sh produced no db-*.dump in $BACKUP_DIR"
 else
   [ -f "$dump_file" ] || fatal "no such archive: $dump_file"
-  note "drilling an existing archive — row counts will differ if $DB_NAME has moved on since"
+  note "drilling an existing archive — row counts and uploads will differ if $DB_NAME has moved on since"
 fi
 
 printf '\nArchive: %s (%s bytes)\n' "$dump_file" "$(wc -c <"$dump_file" | tr -d ' ')"
@@ -362,10 +414,16 @@ else
 fi
 
 # A row with no finished_at is the P3009 state (CONVENTIONS §6.2): the next
-# `migrate deploy` against this database would refuse to run.
-unfinished="$(psql_q "$DRILL_DB" 'SELECT count(*) FROM _prisma_migrations WHERE finished_at IS NULL')"
+# `migrate deploy` against this database would refuse to run — unless it was
+# rolled back. `prisma migrate resolve --rolled-back` (the §6.2 recovery) sets
+# rolled_back_at on the failed row and leaves it there, and the next deploy
+# applies the migration again in a row of its own; Prisma itself skips the old
+# one. Counting it was this check's red on the dev database (tm 418: one such
+# row, 20261116090000_ai_suggestions, rolled back and re-applied 2026-10-28).
+unfinished="$(psql_q "$DRILL_DB" \
+  'SELECT count(*) FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL')"
 if [ "$unfinished" = '0' ]; then
-  pass 'no half-applied migration in the restore (finished_at IS NULL: 0)'
+  pass 'no half-applied migration in the restore (finished_at IS NULL, not rolled back: 0)'
 else
   fail "restored database carries $unfinished half-applied migration(s)" \
     'a later migrate deploy would fail with P3009'
@@ -483,8 +541,15 @@ fi
 # tenant's rows also came back 0 and 0 — a silently empty application, not an
 # open one. So "sees nothing" is not evidence of a good restore, and the check
 # fails unless the rows come back when they are asked for properly.
-sample_partition="$(psql_q "$DRILL_DB" 'SELECT tableoid::regclass::text FROM events LIMIT 1')"
-sample_license="$(psql_q "$DRILL_DB" 'SELECT license_id FROM chats LIMIT 1')"
+#
+# The partition and the licence come from one event row (tm 418). Taken from two
+# unrelated rows — any partition, any chat's licence — the scoped read could ask
+# a partition for a workspace that has no event in it, see 0 there, and call a
+# sound restore "vacuous". An event's licence always has that event in that
+# partition, and the chat the event belongs to.
+sample="$(psql_q "$DRILL_DB" 'SELECT tableoid::regclass::text||'"'|'"'||license_id FROM events LIMIT 1')"
+sample_partition="${sample%%|*}"
+sample_license="${sample#*|}"
 if [[ ! "$sample_partition" =~ ^[a-z0-9_]+$ ]] || [[ ! "$sample_license" =~ ^[0-9]+$ ]]; then
   fail 'RLS enforcement not exercised' 'the restore holds no events/chats rows to test against'
 elif ! blind="$(psql_app "$DRILL_DB" \
@@ -506,26 +571,61 @@ else
 fi
 
 # --- Uploads half of the backup ---
+#
+# Extracting proves the archive is a tar; it does not prove it holds the files.
+# So what comes out is compared with the store it was taken from, by sha256, file
+# by file (tm 418). Files only accumulate in that store, so for one written to
+# during the drill the honest claim is the one the row counts make: everything
+# stored before the backup is in the archive, and everything in the archive is
+# still in the store with the same bytes. The archive is looked for beside the
+# dump, which is where a copy fetched back from off the host also has it.
 timestamp="$(basename "$dump_file" .dump)"
 timestamp="${timestamp#db-}"
-uploads_archive="$BACKUP_DIR/uploads-$timestamp.tar.gz"
+uploads_archive="$(dirname "$dump_file")/uploads-$timestamp.tar.gz"
+if [ -n "$UPLOADS_SERVICE" ]; then
+  uploads_source="$UPLOADS_CONTAINER_DIR in the $UPLOADS_SERVICE container"
+  uploads_name="$(basename "$UPLOADS_CONTAINER_DIR")"
+else
+  uploads_source="$UPLOADS_DIR"
+  uploads_name="$(basename "$UPLOADS_DIR")"
+fi
 if [ -f "$uploads_archive" ]; then
-  if tar -tzf "$uploads_archive" >"$tmpdir/uploads.list" 2>"$tmpdir/uploads.err"; then
-    mkdir -p "$tmpdir/uploads"
-    if tar -xzf "$uploads_archive" -C "$tmpdir/uploads" 2>>"$tmpdir/uploads.err"; then
-      listed="$(grep -vc '/$' "$tmpdir/uploads.list" || true)"
-      extracted="$(find "$tmpdir/uploads" -type f | wc -l | tr -d ' ')"
-      if [ "$listed" = "$extracted" ]; then
-        pass "uploads archive restores ($extracted files)"
-      else
-        fail "uploads archive lists $listed files but extracted $extracted"
-      fi
-    else
-      fail 'uploads archive does not extract' "$(tr '\n' ' ' <"$tmpdir/uploads.err")"
-    fi
-  else
+  mkdir -p "$tmpdir/uploads"
+  if ! tar -tzf "$uploads_archive" >"$tmpdir/uploads.list" 2>"$tmpdir/uploads.err"; then
     fail 'uploads archive is unreadable' "$(tr '\n' ' ' <"$tmpdir/uploads.err")"
+  elif ! tar -xzf "$uploads_archive" -C "$tmpdir/uploads" 2>>"$tmpdir/uploads.err"; then
+    fail 'uploads archive does not extract' "$(tr '\n' ' ' <"$tmpdir/uploads.err")"
+  else
+    listed="$(grep -vc '/$' "$tmpdir/uploads.list" || true)"
+    extracted="$(find "$tmpdir/uploads" -type f | wc -l | tr -d ' ')"
+    if [ "$listed" != "$extracted" ]; then
+      fail "uploads archive lists $listed files but extracted $extracted"
+    elif ! archived="$( (cd "$tmpdir/uploads" && find "$uploads_name" -type f -exec sha256sum {} +) \
+      2>>"$tmpdir/uploads.err" | normalise_manifest)"; then
+      fail "uploads archive holds no $uploads_name/ directory" "$(tr '\n' ' ' <"$tmpdir/uploads.err")"
+    elif ! live_after="$(live_uploads_manifest 2>"$tmpdir/uploads-after.err")"; then
+      fail "could not read the uploads store ($uploads_source)" \
+        "$(tr '\n' ' ' <"$tmpdir/uploads-after.err")"
+    elif [ "$uploads_before_ok" -ne 1 ]; then
+      fail "could not read the uploads store ($uploads_source) before the drill" \
+        "$(tr '\n' ' ' <"$tmpdir/uploads-before.err")"
+    else
+      changed="$(manifest_minus "$archived" "$live_after")"
+      missing="$(manifest_minus "$uploads_before" "$archived")"
+      if [ -n "$changed" ]; then
+        fail "uploads archive: $(grep -c . <<<"$changed") file(s) differ from the store or are gone from it" \
+          "$(head -3 <<<"$changed" | tr '\n' ' ')"
+      elif [ -n "$missing" ]; then
+        fail "uploads archive: $(grep -c . <<<"$missing") file(s) in the store are not in it" \
+          "$(head -3 <<<"$missing" | tr '\n' ' ')"
+      else
+        pass "uploads archive restores: $extracted files, each identical (sha256) to $uploads_source, none missing"
+      fi
+    fi
   fi
+elif [ -n "$UPLOADS_SERVICE" ]; then
+  fail 'no uploads archive beside the dump' \
+    "the uploads live in $uploads_source, so $uploads_archive should have been produced"
 elif [ -d "$UPLOADS_DIR" ]; then
   fail 'no uploads archive beside the dump' \
     "$UPLOADS_DIR exists, so $uploads_archive should have been produced"

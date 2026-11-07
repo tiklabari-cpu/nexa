@@ -16474,7 +16474,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-11-07T03:09:55.138Z",
+        "updatedAt": "2026-11-07T05:23:06.982Z",
         "subtasks": [
           {
             "id": 1,
@@ -16508,13 +16508,13 @@
             "description": "`POST /customer/chat/typing` bugün ziyaretçinin 60/dk kovasından yiyor; kesintisiz yazım 429 ile mesaj gönderimini ve poll'u da kesebiliyor. Rota üç kova alır: ziyaretçi başına, sohbet başına ve IP tavanı. Geçersiz token yine anonim 30/dk kovasında kalır.",
             "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1. Bağımlılık: 417.1 (yalnız sıra için; kod bağımlılığı yok). Üst görev #417 K1, K2.\n\nBAĞLAM: Bugünkü en kötü durum 75 typing/dk + 15 poll/dk = 90 > 60, sonuç 429 (hesap, ölçüm değil). Yeni widget ritmi sekme başına ≤60/dk + temizle olaylarıdır; yalnız görünür sekme gönderir. Ziyaretçi kimliği ucuza üretilebildiği (`POST /customer/token`) için sohbet başına kova amplifikasyonu keser. Alıcı 417.2'de present atanmış ajan(lar)la sınırlı, bu yüzden istek başına fan-out ≈1.\n\nKODDA BUGÜN:\n- apps/api/src/plugins/rate-limit.ts:314-436 `bucketFor`: rotaya özel kovalar `publicKbRateLimit` :321, `healthRateLimit` :335, `publicConfigRateLimit` :349, `tokenRateLimit` :363, `impersonationRateLimit` :376; müşteri kovası :395-409 (`ceiling` ile). Stage-one `visitorOf` :581-589, hook :617-658; stage-two :662-671 (`rateLimitChargedKey` :668); `FastifyContextConfig` bayrakları :720-751.\n- apps/api/src/config/env.ts:491 `RATE_LIMIT_CUSTOMER_PER_MIN` (60), :504 civarı IP tavanı.\n- apps/api/src/routes/customer.ts:1693-1696 rota config `{ principals: ['customer'] }`.\n\nAMAÇ: yeni bayrak `customerTypingRateLimit`. `bucketFor` içinde YALNIZ `principal?.kind === 'customer'` iken (stage-one'da `visitorOf` sonucu, stage-two'da çözülmüş principal; iki aşama AYNI anahtarı seçmeli) şu kovalar kullanılır:\n- `rl:customertyping:<organizationId>:<customerId>` limit `RATE_LIMIT_CUSTOMER_TYPING_PER_MIN` (varsayılan 150);\n- `ceiling` `rl:customertypingip:<ip>` limit `RATE_LIMIT_CUSTOMER_TYPING_IP_PER_MIN` (varsayılan 3000).\nSohbet başına kova `rl:customertypingchat:<chatId>` (`RATE_LIMIT_CUSTOMER_TYPING_CHAT_PER_MIN`, varsayılan 90) rota içinde, aktif sohbet bulunduktan sonra mevcut kova yardımcısıyla uygulanır. Hook aşamasında chatId bilinmez; yardımcının bunu destekleyip desteklemediği okunur, en küçük yol seçilir ve HANDOFF'a yazılır. Principal yoksa anonim kovaya düşülür; bayrak anonim akışı GENİŞLETMEZ. Dosya başı yorumuna kısa bölüm eklenir (tm 417). Env şemasına üç anahtar + .env.example satırları eklenir.\n\nKARARLAR: ziyaretçi anahtarlı, çünkü NAT arkasındaki ziyaretçiler birbirini kesmemeli. 150/dk = iki görünür sekme × 60 + temizlemeler (yalnız görünür sekme gönderdiği için pay bol). IP tavanı 3000/dk = Türk mobil CGNAT'ında ~50 eşzamanlı yazan ziyaretçi. Önizleme kozmetik ve kendi kovasında olduğundan mesaj/poll etkilenmez. Sohbet kovası 90/dk: aynı sohbete çoklu kimlik basılmasını keser. Değerler ölçümle değiştirilebilir; ölçüm HANDOFF'a yazılır. Mesaj/poll kovası değişmez.\nKAPSAM DIŞI: widget'ın 429 tepkisi (417.5), diğer müşteri rotaları.\nTUZAKLAR: stage-one ve stage-two farklı anahtar seçerse istek iki kez faturalanır (:668). `git grep -n RATE_LIMIT_CUSTOMER_IP_PER_MIN` ile tüm yerler (compose, .env.example, docs, testler) bulunur ve aynısı yapılır. 00:00-01:00 UTC entegrasyon kırmızıları (integration-reds-between-00-and-01-utc). Fastify gate'i rota desenine uymalı (fastify-gates-must-match-route-pattern).\nKABUL: typing 429'u aynı ziyaretçinin `POST /customer/chat/events` ve `GET /customer/chat` isteklerini etkilemez; sohbet kovası çoklu kimlikte devreye girer.",
             "testStrategy": "api entegrasyon (rate-limit), env limitleri 3'e indirilmiş sunucuda:\n- aynı ziyaretçinin 4. typing isteği → 429 + `Retry-After` + `X-RateLimit-*`; ardından `POST /customer/chat/events` ve `GET /customer/chat` 2xx döner.\n- tek istek tek kez faturalanır (Redis ZCARD = 1).\n- geçersiz token ile typing anonim kovadan yer.\n- IP tavanı ayrı ziyaretçilerle aşılınca 429; ziyaretçi slotu geri verilir.\n- aynı IP'den 10 ziyaretçi kimliği aynı sohbet anahtarına yazınca sohbet kovası 429 verir; ajan başına zarf sayısı sohbet limitiyle sınırlı kalır.\nMutasyon: bayrağı rotadan kaldır → \"mesaj etkilenmez\" testi kırmızı. DoD: CONVENTIONS §1.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "417.1"
             ],
             "parentId": "417",
             "priority": "high",
-            "updatedAt": "2026-11-07T03:09:55.138Z"
+            "updatedAt": "2026-11-07T05:23:06.982Z"
           },
           {
             "id": 4,
@@ -17837,7 +17837,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-07T03:09:55.139Z",
+      "lastModified": "2026-11-07T05:23:06.982Z",
       "taskCount": 478,
       "completedCount": 413,
       "tags": [

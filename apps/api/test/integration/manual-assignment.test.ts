@@ -14,7 +14,10 @@
  *      gets 409 `claimed`, also when the two race (the second waits on the
  *      first's row and loses); at the limit 409 `limit` with nothing written,
  *      also when one agent races two conversations for their last slot; not a
- *      member → 404; an automatic team's queue → 409 `not_waiting`.
+ *      member → 404. An automatic team's queue is taken from by the same rules
+ *      since tm 475.3 (only the assignee answers the visitor since tm 475):
+ *      a member has it, at the limit 409 `limit`, not a member or untrained →
+ *      404. Taking from the AI is `claim-from-ai.test.ts`'s.
  *   4. The sweep: a conversation nobody has taken for the unanswered window is
  *      reported to the team's leads once per stay, and stays where it is; a
  *      taken but unanswered one is not passed on.
@@ -587,18 +590,94 @@ describe('manual assignment mode (WG-07)', () => {
       expect(await owner.thread.count({ where: { assigneeId: agent.id, active: true } })).toBe(1);
     });
 
-    it('answers someone outside the team as for an unseen chat, and an automatic queue as not waiting', async () => {
+    it('answers someone outside the team as for an unseen chat', async () => {
       await addAgent(bonusId);
       const outsider = await addAgent(supportId, { limit: 1 });
       const { chatId } = await openChat('https://casino.test/bonus/x');
       expect((await claim(chatId, outsider.token)).statusCode).toBe(404);
+    });
 
-      // Destek is automatic: its only member is full, so the chat waits there.
-      await holdChat(outsider.id, supportId);
-      const waiting = await openChat('https://casino.test/home');
-      const automatic = await claim(waiting.chatId, adminToken);
-      expect(automatic.statusCode).toBe(409);
-      expect(automatic.json()).toMatchObject({ error: { details: { reason: 'not_waiting' } } });
+    it("takes from an automatic team's queue by the same rules — member, limit, team (FR-MOD-08.6.1)", async () => {
+      // Destek is automatic. Its one routed member is full and the other is
+      // not taking chats, so conversations wait in its queue.
+      const full = await addAgent(supportId, { limit: 1 });
+      await holdChat(full.id, supportId);
+      const member = await addAgent(supportId, { status: 'not_accepting_chats' });
+      const outsider = await addAgent(bonusId);
+      const { chatId, threadId } = await openChat('https://casino.test/home');
+      const behind = await openChat('https://casino.test/home/2');
+      expect(await threadOf(threadId)).toMatchObject({
+        assigneeId: null,
+        queueGroupId: supportId,
+        queuePosition: 1,
+      });
+
+      // Not a member — the owner, who sees every chat, included: not theirs to take.
+      expect((await claim(chatId, outsider.token)).statusCode).toBe(404);
+      expect((await claim(chatId, adminToken)).statusCode).toBe(404);
+      // A member at their limit: refused, and nothing written.
+      const atLimit = await claim(chatId, full.token);
+      expect(atLimit.statusCode).toBe(409);
+      expect(atLimit.json()).toMatchObject({
+        error: { type: 'chat_claim_refused', details: { reason: 'limit' } },
+      });
+      expect(await threadOf(threadId)).toMatchObject({ assigneeId: null, queuePosition: 1 });
+
+      // A member below it has it, routing status or not, as from a manual team.
+      const taken = await claim(chatId, member.token);
+      expect(taken.statusCode, taken.body).toBe(200);
+      expect(await threadOf(threadId)).toMatchObject({
+        assigneeId: member.id,
+        groupId: supportId,
+        queuePosition: null,
+        queueGroupId: null,
+      });
+      expect((await threadOf(behind.threadId)).queuePosition).toBe(1);
+      const stay = await owner.queueEntry.findFirstOrThrow({ where: { threadId } });
+      expect(stay).toMatchObject({ outcome: 'assigned', groupId: supportId });
+      const moved = (await pushed('chat_transferred')).find((p) => p.payload['chat_id'] === chatId);
+      expect(moved?.payload).toMatchObject({
+        reason: 'manual',
+        outcome: 'assigned',
+        assignee_id: member.id,
+        transferred_to: { group_ids: [Number(supportId)], agent_ids: [member.id] },
+      });
+
+      // The one who had it first answers a second teammate.
+      const second = await claim(chatId, full.token);
+      expect(second.statusCode).toBe(409);
+      expect(second.json()).toMatchObject({ error: { details: { reason: 'claimed' } } });
+    });
+
+    it("asks for the automatic team's training as for a manual one's (FR-MOD-08.6.3)", async () => {
+      // Sorumlu Oyun is automatic and requires its training: one member has
+      // it and is not taking chats, the other lacks it — its chats wait in its
+      // queue (it never overflows, ADR-08a §2.6).
+      const training = await owner.groupExpertise.findFirstOrThrow({
+        where: { groupId: rgId },
+        select: { expertiseId: true },
+      });
+      const untrained = await addAgent(rgId);
+      const trained = await addAgent(rgId, { status: 'not_accepting_chats' });
+      await owner.agentExpertise.create({
+        data: { licenseId: fx.a.licenseId, agentId: trained.id, expertiseId: training.expertiseId },
+      });
+      await owner.routingRule.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          kind: 'chat',
+          conditions: { url_contains: ['/rg'] },
+          targetGroupId: rgId,
+          priority: 2,
+        },
+      });
+      const { chatId, threadId } = await openChat('https://casino.test/rg');
+      expect(await threadOf(threadId)).toMatchObject({ assigneeId: null, queueGroupId: rgId });
+
+      expect((await claim(chatId, untrained.token)).statusCode).toBe(404);
+      const taken = await claim(chatId, trained.token);
+      expect(taken.statusCode, taken.body).toBe(200);
+      expect((await threadOf(threadId)).assigneeId).toBe(trained.id);
     });
   });
 

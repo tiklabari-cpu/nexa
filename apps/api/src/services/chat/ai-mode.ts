@@ -18,13 +18,14 @@
  *
  *   null   → ai      the AI's first turn commits ({@link claimAiTurn})
  *   null   → human   a person takes part before the AI ever did
- *   ai     → human   an agent writes to the player, a takeover, a transfer
- *                    (the AI's own hand-over included), a rule bot that took
- *                    the conversation
+ *   ai     → human   an agent takes it ("Take", tm 475.3) or, assigned beside
+ *                    the AI, writes to the player; a takeover, a transfer (the
+ *                    AI's own hand-over included), a rule bot that took the
+ *                    conversation
  *   ai     → paused  a supervisor holds the AI back (tm 293.3)
  *   human  → ai      an authorised person gives it back (tm 293.3)
  *   paused → ai      the same
- *   paused → human   a person takes it
+ *   paused → human   a person takes it ("Take", a takeover, a transfer)
  *
  * The three properties this file exists to hold:
  *
@@ -262,6 +263,14 @@ export async function endAiProcedure(tx: TenantClient, ref: AiModeRef): Promise<
            step_id = NULL, step_status = NULL
      WHERE thread_id = ${ref.threadId} AND chat_id = ${ref.chatId}`;
 }
+
+/**
+ * The line a "Take" leaves (tm 475.3 · `ChatService.claim`): an agent took the
+ * connection from the AI before writing anything. The reason is
+ * `agent_message` all the same — a person took it (AI-11-S2), the code every
+ * report and push already reads — but "replied" would not be true yet.
+ */
+export const AI_TAKEN_NOTE_TEXT = 'AI stopped: an agent took the chat';
 
 /**
  * The agents-only line a change leaves in the transcript (05 AI-11 §9), in

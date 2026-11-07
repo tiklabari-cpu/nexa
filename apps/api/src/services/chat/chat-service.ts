@@ -126,6 +126,7 @@ import { reachesRating, resolveRatingReach } from '../ratings/rating-reach.js';
 import { hasRatingComment } from '../ratings/rating-service.js';
 import {
   AI_MODE_SYSTEM_ACTOR,
+  AI_TAKEN_NOTE_TEXT,
   aiModeNoteText,
   aiModeStep,
   aiReturnBlockers,
@@ -440,6 +441,40 @@ interface AnnouncedEvent {
  */
 interface AiModeNote extends AnnouncedEvent {
   change: AiModeChange;
+}
+
+/** `claim`'s transaction answer (WG-07 · tm 475.3), before anything is announced. */
+type ClaimTaken =
+  | { alreadyMine: true; detail: ChatDetail }
+  | {
+      alreadyMine: false;
+      detail: ChatDetail;
+      threadId: string;
+      /** The team it was taken in: the queue's, or the connection's own from the AI. */
+      groupIds: number[];
+      /** Before and after the take: who watched it, and the caller who has it now. */
+      audience: AnnouncedEvent['audience'];
+      /** Taken from the AI: the agents-only line and the change, told first. */
+      modeNote: AiModeNote | null;
+    };
+
+/** Why a "Take" was refused (`chat_claim_refused`, `details.reason`), in the log's words. */
+const CLAIM_REFUSALS = {
+  claimed: 'Another agent has this conversation.',
+  limit: 'You are at your concurrent chat limit. Close a chat first.',
+  not_waiting: 'This conversation is not waiting to be taken.',
+} as const;
+
+function claimRefused(reason: keyof typeof CLAIM_REFUSALS): ApiError {
+  return new ApiError('chat_claim_refused', CLAIM_REFUSALS[reason], { details: { reason } });
+}
+
+/**
+ * The AI has the connection (tm 475.3 · D5): it answers it, or is held back on
+ * it — nobody else's to answer until a person takes it.
+ */
+function inAiPhase(aiMode: string | null): boolean {
+  return aiMode === 'ai' || aiMode === 'paused';
 }
 
 /** `resume`'s transaction answer: the chat the conversation continues in, and the connection. */
@@ -1909,6 +1944,9 @@ export class ChatService {
    *
    * `line` is what a person asked for besides the change (tm 293.3): their note,
    * written into the line after its words, and properties the line carries.
+   * `text` replaces the change's own words where its reason alone would say
+   * something untrue — a "Take" is `agent_message` before any message
+   * (`AI_TAKEN_NOTE_TEXT`, tm 475.3).
    *
    * `targetGroupId` is the team the hand-over routes into in place of the
    * connection's own (`HandOverOptions.groupId`).
@@ -1923,7 +1961,7 @@ export class ChatService {
     threadId: string,
     by: string,
     request: AiModeRequest,
-    line: { note?: string | null; properties?: Record<string, unknown> } = {},
+    line: { note?: string | null; properties?: Record<string, unknown>; text?: string } = {},
     targetGroupId?: bigint,
   ): Promise<{
     change: AiModeChange;
@@ -1948,7 +1986,7 @@ export class ChatService {
         WHERE id = ${threadId}
       `;
     }
-    const words = aiModeNoteText(change);
+    const words = line.text ?? aiModeNoteText(change);
     const event = await this.#appendEvent(tx, {
       licenseId: tenant.licenseId,
       chatId: chat.id,
@@ -3993,93 +4031,93 @@ export class ChatService {
   }
 
   /**
-   * "Take" a conversation waiting in a manual team's queue (WG-07 · tm 346) —
-   * `POST /chats/{chatId}/claim`. The first teammate to ask has it; the
-   * compare-and-set, the concurrent limit and who may take from the team are
-   * `RoutingService.claim`'s, inside this transaction. Every refusal is a 409
-   * `chat_claim_refused` naming why (`details.reason`): `claimed` — another
-   * agent took it first; `limit` — the caller is at their concurrent limit,
-   * and the write that took it is rolled back with the error; `not_waiting` —
-   * it is not waiting in a manual team's queue (assigned, closed, an
-   * automatic team's, no team). Someone who is not a member of the team, or
-   * lacks its training, gets the 404 an unseen chat gets: it is not theirs to
-   * take (NFR-S5).
+   * "Take" a conversation nobody has — `POST /chats/{chatId}/claim` (WG-07 ·
+   * tm 346; tm 475). Since tm 475 only the agent an open connection is
+   * assigned to writes to the player (`sendEvent`), so taking it is how a
+   * teammate comes to answer one. The first to ask has it. Two kinds can be
+   * taken:
    *
-   * No audit entry and no transcript line: taking a conversation offered to
-   * the team is routing done by hand, recorded as the drain records its own —
-   * the assignment, `assigned_at` and the queue stay. After the commit,
-   * `incoming_chat` to the caller and `chat_transferred` (reason `manual`,
-   * `outcome: assigned`) to the team, whose Queued view drops the row, and
-   * the board.
+   *   - **Waiting in a team's queue** — a manual team's or, since tm 475.3
+   *     (D6), an automatic one's: the compare-and-set, the concurrent limit
+   *     and who may take from the team are `RoutingService.claim`'s, inside
+   *     this transaction. Someone who is not a member of the team, or lacks
+   *     its training, gets the 404 an unseen chat gets: it is not theirs to
+   *     take (NFR-S5). The AI mode is left as it is: beside an AI that answers
+   *     a queued connection too (`parallel`), the new assignee silences it by
+   *     writing to the player, as one the drain seated would.
+   *   - **In the AI phase** (tm 475.3 · D5) — nobody's, not queued, the AI
+   *     answering it or held back (`#takeFromAi`). Whoever may write to the
+   *     chat may take it, as writing to the player took it before tm 475
+   *     (AI-11-S2): no team asked, no limit.
+   *
+   * Every refusal is a 409 `chat_claim_refused` naming why (`details.reason`):
+   * `claimed` — somebody has it (another agent took it first, or it is a
+   * colleague's: that is a takeover's to move); `limit` — the caller is at
+   * their concurrent limit, and the write that took it is rolled back with
+   * the error; `not_waiting` — closed, or nobody's and neither queued nor the
+   * AI's (never routed, say).
+   *
+   * No audit entry: taking a conversation is routing done by hand, recorded
+   * as the drain records its own — the assignment, `assigned_at` and, from a
+   * queue, the stay; from the AI, the agents-only line as well, as the AI's
+   * own hand-over leaves. After the commit — from the AI, the line and
+   * `chat_ai_mode_changed` first — `incoming_chat` to the caller and
+   * `chat_transferred` (reason `manual`, `outcome: assigned`) to the chat's
+   * teams and agents, whose Queued and AI views drop the row, and to the
+   * visitor's widget; and the board.
    */
   async claim(tenant: TenantContext, principal: Principal, chatId: string): Promise<ChatDetail> {
     if (principal.kind !== 'agent') {
       throw ApiError.authorization('Only a signed-in teammate can take a chat.');
     }
     const agentId = actorOf(principal);
-    const refused = (reason: 'claimed' | 'limit' | 'not_waiting', message: string) =>
-      new ApiError('chat_claim_refused', message, { details: { reason } });
 
-    const result = await withTenant(this.db, tenant, async (tx) => {
+    const result = await withTenant(this.db, tenant, async (tx): Promise<ClaimTaken> => {
       const visibility = await resolveVisibility(tx, principal, 'write');
       const chat = await this.#loadVisibleChat(tx, visibility, chatId);
       const thread = chat.threads.find((t) => t.active);
-      if (!chat.active || !thread) {
-        throw refused('not_waiting', 'This conversation is no longer waiting to be taken.');
-      }
+      if (!chat.active || !thread) throw claimRefused('not_waiting');
 
       // Already the caller's — a second press, a stale list: not a conflict.
       // The answer is the conversation as it is, with nothing announced twice.
-      if (thread.assigneeId === agentId)
-        return { alreadyMine: true as const, detail: serialiseChat(chat) };
+      if (thread.assigneeId === agentId) return { alreadyMine: true, detail: serialiseChat(chat) };
+
+      // Read without a lock here, and again under the locks in `#takeFromAi`.
+      if (thread.assigneeId === null && thread.queuePosition === null && inAiPhase(thread.aiMode)) {
+        const fromAi = await this.#takeFromAi(tx, tenant, chat, thread.id, agentId);
+        // Null: handed into a team's queue meanwhile — taken from there, below.
+        if (fromAi) return fromAi;
+      }
 
       const outcome = await this.routing.claim(tx, tenant.licenseId, thread.id, agentId);
       switch (outcome.outcome) {
         case 'claimed':
-          break;
+          return this.#claimed(tx, chat, thread.id, null);
         case 'claimed_by_other': {
-          // The same, when it was the caller's own other request that won.
           const now = await tx.thread.findUnique({
             where: { id: thread.id },
             select: { assigneeId: true },
           });
-          if (now?.assigneeId === agentId) {
-            const mine = await tx.chat.findUniqueOrThrow({
-              where: { id: chat.id },
-              include: chatInclude,
-            });
-            return { alreadyMine: true as const, detail: serialiseChat(mine) };
-          }
-          throw refused('claimed', 'Another agent took this conversation first.');
+          // The same, when it was the caller's own other request that won.
+          if (now?.assigneeId === agentId) return this.#alreadyClaimed(tx, chat.id);
+          // Nobody has it: it is waiting nowhere it could be taken from.
+          if (!now?.assigneeId) throw claimRefused('not_waiting');
+          throw claimRefused('claimed');
         }
         case 'limit':
-          throw refused('limit', 'You are at your concurrent chat limit. Close a chat first.');
+          throw claimRefused('limit');
         case 'not_waiting':
-          throw refused('not_waiting', 'This conversation is no longer waiting to be taken.');
+          throw claimRefused('not_waiting');
         case 'not_member':
           throw ApiError.notFound('Chat not found.');
       }
-
-      const reloaded = await tx.chat.findUniqueOrThrow({
-        where: { id: chat.id },
-        include: chatInclude,
-      });
-      const before = this.#audienceFor(chat);
-      const after = this.#audienceFor(reloaded);
-      return {
-        alreadyMine: false as const,
-        detail: serialiseChat(reloaded),
-        threadId: thread.id,
-        groupId: outcome.groupId,
-        audience: {
-          groupIds: [...new Set([...before.groupIds, ...after.groupIds])],
-          agentIds: [...new Set([...before.agentIds, ...after.agentIds])],
-          customerId: chat.customerId,
-        },
-      };
     });
 
     if (result.alreadyMine) return result.detail;
+    // To the caller who just arrived as well as everyone who watched the AI.
+    if (result.modeNote) {
+      await this.#announceAiMode(tenant, { ...result.modeNote, audience: result.audience });
+    }
     await this.#announceHandover(tenant, {
       chatId,
       threadId: result.threadId,
@@ -4091,11 +4129,117 @@ export class ChatService {
       thread_id: result.threadId,
       requester_id: agentId,
       reason: 'manual',
-      transferred_to: { group_ids: [Number(result.groupId)], agent_ids: [agentId] },
+      transferred_to: { group_ids: result.groupIds, agent_ids: [agentId] },
       outcome: 'assigned',
       assignee_id: agentId,
     } satisfies ChatTransferredPush);
     return result.detail;
+  }
+
+  /**
+   * Take a connection from the AI (tm 475.3 · D5): `claim`'s path for one
+   * nobody has, outside every queue, that the AI answers or is held back on.
+   * Before tm 475 an agent writing to the player took it so (AI-11-S2); only
+   * the assignee writes now, and this is the explicit act in its place, with
+   * the same reach — whoever may write to the chat, whatever their team or
+   * load: `#routeHandover`'s `agent_message` branch seats the caller, as it
+   * seated the writer. A paused connection is how this matters most: pausing
+   * neither routes nor queues it, so without this nobody but a supervisor
+   * could ever reach it.
+   *
+   * The chat row first (`FOR NO KEY UPDATE`), then the thread (`FOR UPDATE`):
+   * the order every append takes them in — the reply's guard, a takeover, the
+   * player's own message — and the change below appends its line. The
+   * compare-and-set is the read under the thread's lock, held to commit:
+   * nobody assigned, not queued, `ai` or `paused`. Of two agents taking it at
+   * once the second waits on the chat row, then reads the first one's commit
+   * and is told `claimed`. An AI turn still being drafted loses as it does to
+   * any person: its commit finds the connection `human` and rolls back unsent
+   * (`ai-mode.ts`).
+   *
+   * The change is `human` with reason `agent_message` — no new reason; the AI
+   * mode vocabulary is closed and read by reports, the panel and the AI's own
+   * state — in words of its own, since nobody has replied yet
+   * (`AI_TAKEN_NOTE_TEXT`). `paused → human` is an edge of the state machine.
+   *
+   * Null when the connection was handed into a team's queue meanwhile: the
+   * caller takes it from there, as a queued one.
+   */
+  async #takeFromAi(
+    tx: TenantClient,
+    tenant: TenantContext,
+    chat: ChatRow,
+    threadId: string,
+    agentId: string,
+  ): Promise<ClaimTaken | null> {
+    await tx.$queryRaw`SELECT 1 FROM chats WHERE id = ${chat.id} FOR NO KEY UPDATE`;
+    const [locked] = await tx.$queryRaw<
+      Array<{
+        active: boolean;
+        assignee_id: string | null;
+        queue_position: number | null;
+        ai_mode: string | null;
+      }>
+    >`SELECT active, assignee_id, queue_position, ai_mode FROM threads WHERE id = ${threadId} FOR UPDATE`;
+    if (!locked?.active) throw claimRefused('not_waiting');
+    if (locked.assignee_id === agentId) return this.#alreadyClaimed(tx, chat.id);
+    if (locked.assignee_id !== null) throw claimRefused('claimed');
+    if (locked.queue_position !== null) return null;
+    if (!inAiPhase(locked.ai_mode)) throw claimRefused('not_waiting');
+
+    const mode = await this.#changeAiMode(
+      tx,
+      tenant,
+      chat,
+      threadId,
+      agentId,
+      { to: 'human', reason: 'agent_message' },
+      { text: AI_TAKEN_NOTE_TEXT },
+    );
+    // Nobody's and in no queue under the lock above, so the hand-over seats
+    // the caller; anything else is a broken invariant, rolled back whole.
+    if (mode?.assigned?.assigneeId !== agentId) {
+      throw new Error(`claim: taking ${threadId} from the AI did not assign it to the caller`);
+    }
+    return this.#claimed(tx, chat, threadId, mode.note);
+  }
+
+  /** `claim`'s answer for a conversation that is the caller's already. */
+  async #alreadyClaimed(tx: TenantClient, chatId: string): Promise<ClaimTaken> {
+    const mine = await tx.chat.findUniqueOrThrow({ where: { id: chatId }, include: chatInclude });
+    return { alreadyMine: true, detail: serialiseChat(mine) };
+  }
+
+  /**
+   * `claim`'s answer for a take just written: the chat as it is now, the team
+   * it was taken in (the queue's, or the connection's own from the AI — none
+   * when it has no team), and everyone told of it, before and after.
+   */
+  async #claimed(
+    tx: TenantClient,
+    chat: ChatRow,
+    threadId: string,
+    modeNote: AiModeNote | null,
+  ): Promise<ClaimTaken> {
+    const reloaded = await tx.chat.findUniqueOrThrow({
+      where: { id: chat.id },
+      include: chatInclude,
+    });
+    const groupId = reloaded.threads.find((t) => t.id === threadId)?.groupId ?? null;
+    const before = this.#audienceFor(chat);
+    const after = this.#audienceFor(reloaded);
+    return {
+      alreadyMine: false,
+      detail: serialiseChat(reloaded),
+      threadId,
+      groupIds: groupId !== null ? [Number(groupId)] : [],
+      audience: {
+        groupIds: [...new Set([...before.groupIds, ...after.groupIds])],
+        agentIds: [...new Set([...before.agentIds, ...after.agentIds])],
+        customerId: chat.customerId,
+      },
+      modeNote,
+    };
   }
 
   /**

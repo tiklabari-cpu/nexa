@@ -869,10 +869,12 @@ export default async function chatRoutes(
     },
   );
 
-  // "Take" from a manual team's queue (WG-07 · tm 346). The scope says the
-  // token may write to chats; whether this person may take *this* one — a
-  // member of the team it waits in, within their limit, first — is decided by
-  // `claim` inside the transaction that takes it. A bot token is refused.
+  // "Take" (WG-07 · tm 346; tm 475.3): from a team's queue, manual or
+  // automatic, or from the AI. The scope says the token may write to chats;
+  // whether this person may take *this* one — from a queue a member of its
+  // team within their limit, from the AI anyone who may write to it; first
+  // either way — is decided by `claim` inside the transaction that takes it.
+  // A bot token is refused.
   app.post<{ Params: { chatId: string } }>(
     '/chats/:chatId/claim',
     { config: { scopes: ['chats--all:rw', 'chats--access:rw'], principals: ['agent'] } },

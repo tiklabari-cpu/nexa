@@ -1,26 +1,28 @@
 /**
  * The queue position the visitor is shown (tm 411).
  *
- * A teammate can write to a connection that still waits in a team's queue,
- * and writing does not take it — only where the AI took part does an agent's
- * message make the connection theirs (AI-11-S2, `#routeHandover`). The
- * connection stays queued and unassigned, so the panel goes on showing it in
- * the Queued view; that is the routing record and stays as it is.
- *
- * The visitor is told something else. Once a person has answered them, "you
- * are number 3 in the queue" is no longer true in the sense they read it —
- * somebody is already talking to them. So from the first agent message to
- * the visitor (`recipients: 'all'`, the rule `first_response_at` counts by)
- * written since the connection entered the queue, the widget gets no position
- * and no wait estimate.
+ * Once a person has answered the visitor, "you are number 3 in the queue" is
+ * no longer true in the sense they read it — somebody is already talking to
+ * them. So from the first agent message to the visitor (`recipients: 'all'`,
+ * the rule `first_response_at` counts by) written since the connection
+ * entered the queue, the widget gets no position and no wait estimate.
  *
  * "Since it entered the queue", not "ever": a connection an agent answered and
  * then transferred to a team with nobody free is waiting again, and the
  * visitor should hear so. A connection queued before `queued_at` was recorded
  * falls back to any agent reply in it.
  *
- * Assumption (PRD §6/§8 say nothing about replying to a queued chat): replying
- * is not taking. Recorded in HANDOFF (tm 411).
+ * tm 411 was written for a teammate answering a connection that still waited
+ * in a queue — then allowed, and not taking it ("replying is not taking", that
+ * window's assumption). Since tm 475 that reply is refused: only the agent
+ * the connection is assigned to writes to the visitor
+ * (`reply_requires_assignment`), and a teammate first takes it ("Take",
+ * `POST /chats/{id}/claim`, from a manual team's queue or an automatic one's),
+ * which takes it out of the queue — the widget then reads no position because
+ * the connection is assigned. A connection still waiting has, as a rule, had
+ * no reply during its stay; the check stays all the same, as the visitor's
+ * side of the promise, and still decides a stay recorded before `queued_at`
+ * was.
  */
 import type { TenantClient } from '../../lib/tenant.js';
 

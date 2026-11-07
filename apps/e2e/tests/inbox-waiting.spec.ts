@@ -14,6 +14,7 @@ import {
   freeARoutingSlot,
   openWidget,
   ownerAccessToken,
+  takeOpenChatForReply,
   test,
   visitorSends,
 } from './fixtures.js';
@@ -69,6 +70,8 @@ test.describe('inbox waiting counter', () => {
       // The row is asserted present first: an absence on a row that has not
       // rendered yet would pass for the wrong reason.
       const answer = 'Looking into it now.';
+      // Taken first: only the assignee answers the player (tm 475).
+      await takeOpenChatForReply(agentPage, request, auth);
       await agentPage.getByRole('radio', { name: 'Reply' }).click();
       await agentPage.getByPlaceholder('Type your reply').fill(answer);
       await agentPage.getByRole('button', { name: 'Send' }).click();

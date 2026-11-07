@@ -42,6 +42,7 @@ import {
   seedFixtures,
   type Fixtures,
 } from '../helpers/fixtures.js';
+import { assignForReply } from '../helpers/reply-assignment.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const APP_URL = process.env['DATABASE_APP_URL'];
@@ -162,7 +163,9 @@ describe('a thread handed off automatically is not an AI resolution (ADR-09a · 
     });
   }
 
+  /** The owner writes to the player — theirs first: only the assignee answers (tm 475). */
   async function agentSays(chatId: string): Promise<void> {
+    await assignForReply(owner, chatId, fx.a.ownerAccountId);
     const sent = await server.post(
       `/chats/${chatId}/events`,
       { type: 'message', text: 'A person here.' },

@@ -193,8 +193,17 @@ describe('SLA targets (FR-MOD-11.5 · 11.5-d)', () => {
       },
     });
     const threadId = generateShortId();
+    // The owner's: the replies below are theirs, and only the assignee
+    // answers the player (tm 475). The clocks read no assignee.
     await owner.thread.create({
-      data: { id: threadId, chatId, licenseId: t.licenseId, active: true, createdAt },
+      data: {
+        id: threadId,
+        chatId,
+        licenseId: t.licenseId,
+        active: true,
+        createdAt,
+        assigneeId: t.ownerAccountId,
+      },
     });
     // The agent has to be able to see the chat to reply to it; unrestricted
     // scopes make the access row unnecessary, but the customer row is what

@@ -138,14 +138,14 @@ test.describe('manual assignment (WG-07)', () => {
   });
 
   /**
-   * tm 411: a member answers a visitor who waits in the team's queue without
-   * pressing Take. Writing is not taking — the chat stays queued and nobody's
-   * (the routing record the Queued view shows) — but the visitor is no longer
-   * told "you are number 1 in the queue": a person is talking to them. Before
-   * the change the widget dropped the line on the reply's push (tm 399) and
-   * the next poll wrote it back, because the server still counted them.
+   * tm 411 · tm 475: a member answers a visitor who waits in the team's queue.
+   * Only the agent a conversation is assigned to answers the visitor (tm 475),
+   * so a reply without Take is refused; the member takes it, then answers, and
+   * the visitor is no longer told "you are number 1 in the queue" — not on the
+   * reply's push, and not on the next poll either (before tm 411 the widget
+   * dropped the line on the push, tm 399, and the next poll wrote it back).
    */
-  test('a queued visitor a member answers is no longer told their place in the queue (tm 411)', async ({
+  test('a queued visitor a member takes and answers is no longer told their place in the queue (tm 411 · tm 475)', async ({
     page,
     organizationId,
     request,
@@ -210,10 +210,22 @@ test.describe('manual assignment (WG-07)', () => {
       await expect(status).toContainText('in the queue');
 
       const answer = `Kontrol ediyorum, bir dakika ${stamp}`;
-      const sent = await request.post(`${API_BASE}/chats/${chatId!}/events`, {
-        headers: auth,
-        data: { type: 'message', text: answer },
-      });
+      const reply = () =>
+        request.post(`${API_BASE}/chats/${chatId!}/events`, {
+          headers: auth,
+          data: { type: 'message', text: answer },
+        });
+      // Writing is not taking, and is not allowed before taking (tm 475).
+      const refused = await reply();
+      expect(refused.status()).toBe(409);
+      expect(((await refused.json()) as { error: { type: string } }).error.type).toBe(
+        'reply_requires_assignment',
+      );
+      await expect(status).toContainText('in the queue');
+
+      const taken = await request.post(`${API_BASE}/chats/${chatId!}/claim`, { headers: auth });
+      expect(taken.status(), await taken.text()).toBe(200);
+      const sent = await reply();
       expect(sent.ok(), `agent reply failed: ${sent.status()} ${await sent.text()}`).toBe(true);
       await expect(transcript).toContainText(answer);
       await expect(status).not.toContainText('in the queue');
@@ -226,12 +238,12 @@ test.describe('manual assignment (WG-07)', () => {
       await expect(transcript).toContainText(answer);
       await expect(status).not.toContainText('in the queue');
 
-      // Replying did not take it: still the team's, still waiting.
+      // Taken: the member's, out of the queue.
       const chat = (await (
         await request.get(`${API_BASE}/chats/${chatId!}`, { headers: auth })
       ).json()) as { thread: { assignee_id: string | null; queue_position: number | null } };
-      expect(chat.thread.assignee_id).toBeNull();
-      expect(chat.thread.queue_position).not.toBeNull();
+      expect(chat.thread.assignee_id).toBe(me.account_id);
+      expect(chat.thread.queue_position).toBeNull();
     } finally {
       if (chatId) {
         await request.post(`${API_BASE}/chats/${chatId}/deactivate`, { headers: auth });

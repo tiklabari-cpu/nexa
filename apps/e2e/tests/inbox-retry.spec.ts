@@ -12,7 +12,15 @@
  * everything after it is the product's own behaviour against a live API.
  */
 import type { Locator } from '@playwright/test';
-import { expect, openWidget, signIn, test, visitorSends, widgetFrame } from './fixtures.js';
+import {
+  expect,
+  openWidget,
+  signIn,
+  takeOpenChatForReply,
+  test,
+  visitorSends,
+  widgetFrame,
+} from './fixtures.js';
 
 /** How many times `needle` appears in what a region actually renders. */
 async function occurrencesIn(region: Locator, needle: string): Promise<number> {
@@ -22,6 +30,7 @@ async function occurrencesIn(region: Locator, needle: string): Promise<number> {
 test('a dropped reply keeps its Retry, and the retry reaches the visitor once', async ({
   browser,
   organizationId,
+  request,
 }) => {
   const visitorContext = await browser.newContext();
   const agentContext = await browser.newContext();
@@ -42,6 +51,8 @@ test('a dropped reply keeps its Retry, and the retry reaches the visitor once', 
     await expect(list).toContainText(question, { timeout: 20_000 });
     await list.getByRole('button').first().click();
     await expect(agent.locator('main')).toContainText(question);
+    // Taken first: only the assignee answers the visitor (tm 475).
+    await takeOpenChatForReply(agent, request);
 
     // Drop exactly one send at the transport layer — the browser sees a failed
     // request, which is what an agent on a flaky connection actually gets. The

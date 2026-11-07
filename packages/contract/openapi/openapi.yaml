@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: SiyahTuş Platform API
-  version: 1.0.0
+  version: 1.1.0
   description: |
     SiyahTuş live support + AI customer service platform.
 
@@ -17326,6 +17326,26 @@ components:
             `mock-captcha-pass`.
         site_key: { type: string }
 
+    ReplyRequiresAssignmentDetails:
+      type: object
+      description: |
+        `details` of a `409 reply_requires_assignment` (tm 475): why a message
+        to the customer was refused. Only the teammate the conversation's open
+        connection is assigned to writes to the customer; an internal note
+        (`recipients: agents`) is never refused. `assigned_to_other` — a
+        colleague has it (take it over, or ask for it); `ai` — nobody has it
+        and the AI is answering it or is held back (take it from the AI);
+        `unassigned` — nobody has it (it waits in a queue, or was never
+        routed). The message was not written and nothing about the
+        conversation changed: take it (`POST /chats/{chatId}/claim`), take it
+        over (`POST /chats/{chatId}/takeover`) or have it assigned, then send
+        the same message again.
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          enum: [unassigned, assigned_to_other, ai]
+
     OwnershipTransferParty:
       type: object
       additionalProperties: false
@@ -17408,6 +17428,7 @@ components:
         - ownership_transfer_state
         - pending_requests_limit_reached
         - recipient_not_allowed
+        - reply_requires_assignment
         - request_timeout
         - service_unavailable
         - takeover_conflict

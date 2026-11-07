@@ -11,6 +11,9 @@
  *                                           transaction that writes the event
  *   event sequence is gapless and unique  → `UPDATE ... RETURNING` on the thread
  *   internal notes never reach a customer → `recipients` filtered on read
+ *   only the assignee replies to a player → checked here under the thread's
+ *                                           row lock, in the event's own
+ *                                           transaction (tm 475, `sendEvent`)
  *
  * The database-level ones are deliberate: a rule checked only here is one
  * concurrent request away from being violated.
@@ -38,6 +41,7 @@ import {
   readSensitiveTypes,
   RATING_VALUES,
   REPLY_HERE_SYSTEM_EVENT,
+  replyAssignmentRefusal,
   RESPONSIBLE_GAMBLING_ROLE,
   SENSITIVE_TYPES,
   SENSITIVE_TYPES_PROPERTY,
@@ -76,6 +80,8 @@ import {
   type SneakPeekPush,
   type TypingIndicatorPush,
   type RatingValue,
+  type ReplyAssignmentReason,
+  type ReplyRequiresAssignmentDetails,
   type ThreadRating,
 } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
@@ -945,6 +951,16 @@ export class ChatService {
     now: Date,
   ): Promise<StartOutcome> {
     const actorId = actorOf(principal);
+    // An agent who opens a conversation by writing to the player has it,
+    // whatever `assign_to_me` said (tm 475 · D11): only the assignee writes to
+    // the player, so leaving the connection to routing would hand the next
+    // reply to someone else — or to a queue — and refuse the opener's own.
+    // A note (`agents`), a bot's line and no opening line route as asked.
+    const assignToMe =
+      input.assignToMe ||
+      (principal.kind === 'agent' &&
+        input.initialEvent !== undefined &&
+        recipientsFor(principal, input.initialEvent.recipients ?? 'all') === 'all');
 
     return withTenant(this.db, tenant, async (tx) => {
       const customer = await tx.customer.findUnique({
@@ -981,7 +997,7 @@ export class ChatService {
         rolledOver = await this.#rollOver(tx, tenant, open, openThread, input.audit);
       }
 
-      const route = () => this.#routeNewChat(tx, tenant, { ...input, actorId });
+      const route = () => this.#routeNewChat(tx, tenant, { ...input, assignToMe, actorId });
       const dayChat = await tx.chat.findFirst({
         where: { customerId: input.customerId, localDay: day.date },
         include: chatInclude,
@@ -1658,12 +1674,25 @@ export class ChatService {
   /**
    * Append an event to the chat's open connection.
    *
-   * An agent writing to the player (`recipients = 'all'`) takes the connection
-   * over from the AI, in the event's own transaction (AI-11 · K9, AI-11-S2):
-   * the connection turns `human` and the AI stays silent on it from then on.
-   * An internal note does not — the player never saw it. `aiMode` asks for a
-   * change of its own in the same transaction (a rule bot that answered). The
-   * change is returned as `aiMode` when one was made.
+   * Only the agent the open connection is assigned to writes to the player
+   * (`recipients = 'all'`, tm 475 · owner decision 2026-11-06): anyone else is
+   * refused with `409 reply_requires_assignment` before anything is written —
+   * no event, no AI mode change, no channel delivery, no idempotency key —
+   * and takes the conversation first ("Take", "Take over") or has it
+   * assigned. The assignment is read under the thread's row lock
+   * ({@link #assertAssignedForReply}), the lock a takeover's, a claim's and a
+   * transfer's re-assignment also takes, so a reply racing one of them was
+   * either written while the connection was still the sender's or is
+   * refused: two people's replies never both reach the player. An internal
+   * note is free (any agent who can see the chat with write access), and a
+   * bot or the customer is not subject to the rule.
+   *
+   * The assigned agent writing to the player takes the connection over from
+   * an AI answering beside them, in the event's own transaction (AI-11 · K9,
+   * AI-11-S2): the connection turns `human` and the AI stays silent on it from
+   * then on. An internal note does not — the player never saw it. `aiMode`
+   * asks for a change of its own in the same transaction (a rule bot that
+   * answered). The change is returned as `aiMode` when one was made.
    */
   async sendEvent(
     tenant: TenantContext,
@@ -1701,6 +1730,16 @@ export class ChatService {
       const authorType = authorTypeOf(principal);
       const recipients = recipientsFor(principal, input.recipients);
 
+      // Who may answer the player (tm 475): the connection's assignee, read
+      // under its row lock before anything else is checked or written.
+      if (principal.kind === 'agent' && recipients === 'all') {
+        await this.#assertAssignedForReply(
+          tx,
+          { chatId: chat.id, threadId: thread.id },
+          principal.accountId,
+        );
+      }
+
       // A reply the channel cannot carry is refused before it exists (tm 380):
       // only what reaches the customer — an internal note is never dispatched.
       if (authorType === 'agent' && recipients === 'all') {
@@ -1730,9 +1769,14 @@ export class ChatService {
         event,
       });
 
-      // The implicit takeover (AI-11 §4): the thread's row is locked by the
-      // append above, so an AI reply racing this one either committed before it
-      // or finds the connection `human` in its own transaction and is not sent.
+      // The implicit takeover (AI-11 §4), now only ever the assignee's — the
+      // check above turned everyone else away (tm 475): an agent assigned
+      // beside an AI that answers too silences it by writing to the player.
+      // Taking a connection nobody has from the AI is an explicit "Take"
+      // (`claim`), no longer a side effect of writing. The thread's row is
+      // locked above, so an AI reply racing this one either committed before
+      // it or finds the connection `human` in its own transaction and is not
+      // sent.
       const modeRequest: AiModeRequest | null =
         options.aiMode ??
         (authorType === 'agent' && recipients === 'all'
@@ -1803,6 +1847,54 @@ export class ChatService {
       replayed: false,
       ...(result.mode ? { aiMode: result.mode.change } : {}),
     };
+  }
+
+  /**
+   * Refuse a message to the player from an agent the open connection is not
+   * assigned to (tm 475 · `replyAssignmentRefusal` is the rule): `409
+   * reply_requires_assignment`, `details.reason` `assigned_to_other` ·
+   * `ai` · `unassigned`.
+   *
+   * Reads the thread `FOR UPDATE` and keeps the lock to the end of the send's
+   * transaction. Everything that re-assigns a connection updates this row —
+   * a takeover's conditional update, a claim's compare-and-set, a transfer, a
+   * queue drain — so it either commits before this read, which then sees the
+   * new assignee and refuses, or waits for the send to commit, the reply
+   * having been written while the connection was still the sender's. The
+   * same lock (not a weaker one) the AI-mode write later in the send takes
+   * (`ai-mode.ts`), so the transaction never has to upgrade it.
+   *
+   * The chat row first, `FOR NO KEY UPDATE` — the lock `#appendEvent`'s
+   * `UPDATE chats` takes anyway: the order every append takes the pair in
+   * (`passOnUnanswered` and `takeover` too). Taking the thread first would
+   * deadlock against the player's own message arriving at the same moment,
+   * which locks the chat row and then waits for the thread. Two queries per
+   * reply, both on a primary key.
+   *
+   * A connection closed since the caller's read is `chat_inactive`, as one
+   * closed before it would have been.
+   */
+  async #assertAssignedForReply(
+    tx: TenantClient,
+    ref: { chatId: string; threadId: string },
+    accountId: string,
+  ): Promise<void> {
+    await tx.$queryRaw`SELECT 1 FROM chats WHERE id = ${ref.chatId} FOR NO KEY UPDATE`;
+    const [locked] = await tx.$queryRaw<
+      Array<{ assignee_id: string | null; ai_mode: string | null; active: boolean }>
+    >`SELECT assignee_id, ai_mode, active FROM threads WHERE id = ${ref.threadId} FOR UPDATE`;
+    if (!locked?.active) {
+      throw ApiError.chatInactive('Chat is not active. Resume it before sending events.');
+    }
+    const reason = replyAssignmentRefusal(
+      { assigneeId: locked.assignee_id, aiMode: locked.ai_mode },
+      accountId,
+    );
+    if (reason === null) return;
+    const details: ReplyRequiresAssignmentDetails = { reason };
+    throw new ApiError('reply_requires_assignment', REPLY_REFUSAL_MESSAGES[reason], {
+      details: { ...details },
+    });
   }
 
   /**
@@ -1893,9 +1985,11 @@ export class ChatService {
    * assignee only has its `assigned_at` moved to now: the hand-over is when
    * that agent's wait for a first reply starts (WG-03).
    *
-   *   - **An agent wrote to the player** (`agent_message`, AI-11-S2): they
-   *     took it, so it is theirs — whatever their load, as a chat they start
-   *     for themselves is.
+   *   - **An agent took it** (`agent_message`, AI-11-S2): it is theirs —
+   *     whatever their load, as a chat they start for themselves is. Since
+   *     tm 475 only the assignee writes to the player, so a reply arrives
+   *     here already assigned (the line above); a connection nobody has gets
+   *     here when an agent takes it from the AI ("Take", tm 475.3).
    *   - **Handed to a team** (a transfer, the AI's or a rule bot's hand-off):
    *     someone in that team, by today's routing — its fallback team and the
    *     queue included (`route()` with the team requested).
@@ -3732,8 +3826,10 @@ export class ChatService {
    *    (`updateMany where assigneeId = <the one they saw>`). Under READ COMMITTED
    *    the second update blocks on the first's row lock, re-checks its WHERE
    *    against the now-committed row, matches nothing and reports zero rows —
-   *    which becomes `takeover_conflict` (409). No `SELECT … FOR UPDATE`, no lock
-   *    ordering to get wrong.
+   *    which becomes `takeover_conflict` (409). No `SELECT … FOR UPDATE` on the
+   *    thread; the chat row is locked first only so the pair is taken in the
+   *    order every append takes it — a reply racing the seizure (tm 475) waits
+   *    behind it, or it behind the reply, rather than deadlocking.
    *  - **Authority and the write are one unit.** Who may seize which chat is
    *    the caller's `chats.takeover` capability (RL-02 matrix · RL-03 · tm
    *    326), decided here rather than at the route: `all` reaches any chat the
@@ -3786,6 +3882,12 @@ export class ChatService {
       if (!chat.active || !thread) throw ApiError.chatInactive('Cannot take over a closed chat.');
 
       const previousAssigneeId = thread.assigneeId;
+
+      // The chat row before the thread's, the order every append takes them
+      // in (`#appendEvent`), which this takeover ends in too. A reply racing
+      // it (`sendEvent` locks the same pair, tm 475) then waits for it, or it
+      // for the reply, instead of the two deadlocking with one aborted.
+      await tx.$queryRaw`SELECT 1 FROM chats WHERE id = ${chat.id} FOR NO KEY UPDATE`;
 
       // Conditional re-assign: only if the assignee is still the one we just read.
       // A concurrent takeover that already moved it leaves zero rows here — the
@@ -5874,6 +5976,19 @@ function authorTypeOf(principal: Principal): 'agent' | 'bot' | 'customer' {
       throw ApiError.authorization('Enrollment credentials cannot author events.');
   }
 }
+
+/**
+ * `reply_requires_assignment`'s message, per reason (tm 475). The sentence a
+ * screen shows is its own (`common.errors.reply_requires_assignment`); this is
+ * for an integrator reading the response.
+ */
+const REPLY_REFUSAL_MESSAGES: Record<ReplyAssignmentReason, string> = {
+  assigned_to_other:
+    'This conversation is assigned to another agent. Take it over, or have it assigned to you, to reply to the customer.',
+  ai: 'Nobody is assigned to this conversation and the AI agent has it. Take it to reply to the customer.',
+  unassigned:
+    'Nobody is assigned to this conversation. Take it, or have it assigned to you, to reply to the customer.',
+};
 
 /** A customer can never author an internal note, on any write path. */
 function recipientsFor(principal: Principal, requested: EventRecipients): EventRecipients {

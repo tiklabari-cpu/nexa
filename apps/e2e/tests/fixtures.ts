@@ -774,3 +774,52 @@ export async function chatOfAReachableCustomer(request: APIRequestContext): Prom
     `none of the ${people.length} customers with an e-mail address has a conversation`,
   );
 }
+
+/**
+ * Make a conversation's open connection the caller's before they answer the
+ * visitor (tm 475): only the agent it is assigned to writes to the customer. A
+ * visitor's chat is routed to whoever routing picks — Sam Rivera, in the
+ * seeded Acme — so a spec that answers as the owner takes it over first, as
+ * the console's "Take over" does (the owner may take over any chat). Nothing
+ * happens when it is already the caller's.
+ */
+export async function takeForReply(
+  context: APIRequestContext,
+  chatId: string,
+  headers: Record<string, string>,
+): Promise<void> {
+  const me = await context.get(`${API_BASE}/auth/me`, { headers });
+  expect(me.ok(), `who am I failed: ${me.status()}`).toBe(true);
+  const { account_id: accountId } = (await me.json()) as { account_id: string };
+  const read = await context.get(`${API_BASE}/chats/${chatId}`, { headers });
+  expect(read.ok(), `reading chat ${chatId} failed: ${read.status()}`).toBe(true);
+  const chat = (await read.json()) as { thread?: { assignee_id?: string | null } | null };
+  if (chat.thread?.assignee_id === accountId) return;
+  const taken = await context.post(`${API_BASE}/chats/${chatId}/takeover`, { headers });
+  expect(
+    taken.ok(),
+    `taking chat ${chatId} over failed: ${taken.status()} ${await taken.text()}`,
+  ).toBe(true);
+}
+
+/**
+ * {@link takeForReply} for the conversation open in a panel's composer — the
+ * textarea carries its chat id — before the spec answers the visitor from it.
+ * The console's own "Take" strip above the composer arrives with tm 475.4;
+ * until then a spec that replies as the signed-in owner to a chat routing gave
+ * someone else takes it over through the API first. `headers` is the signed-in
+ * person's credential; the owner's by default.
+ */
+export async function takeOpenChatForReply(
+  page: Page,
+  context: APIRequestContext,
+  headers?: Record<string, string>,
+): Promise<void> {
+  const chatId = await page.locator('#composer-input').getAttribute('data-chat-id');
+  expect(chatId, 'no conversation is open in the composer').toBeTruthy();
+  await takeForReply(
+    context,
+    chatId!,
+    headers ?? { authorization: `Bearer ${await ownerAccessToken(context)}` },
+  );
+}

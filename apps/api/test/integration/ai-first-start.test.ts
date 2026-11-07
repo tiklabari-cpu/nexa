@@ -14,7 +14,8 @@
  *   - the open: no assignee, no queue position or queue stay, no agent's
  *     concurrent-chat slot spent, the team kept, the AI view rather than the
  *     unassigned or queued ones;
- *   - the hand-over: the agent who writes to the player gets it; the AI's own
+ *   - the hand-over: writing to the player no longer takes it (tm 475 — only
+ *     the assignee answers, and an agent takes it first); the AI's own
  *     hand-off and a rule bot's answer route it by today's `route()`, into the
  *     queue when nobody is free — and the wait starts then;
  *   - what does not change: a `parallel` agent's conversations, and a channel
@@ -36,6 +37,7 @@ import {
   seedFixtures,
   type Fixtures,
 } from '../helpers/fixtures.js';
+import { assignForReply } from '../helpers/reply-assignment.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const AI_ANSWER = 'The AI answered.';
@@ -469,7 +471,7 @@ describe('the AI answers first, and a person is routed at the hand-over (AI-11 �
   // --- The hand-over ----------------------------------------------------------
 
   describe('routing at the hand-over', () => {
-    it('gives the connection to the agent who writes to the player, and the AI falls silent (AI-11-S2)', async () => {
+    it('refuses the agent who writes without taking it; once theirs, their reply quietens the AI (AI-11-S2 · tm 475)', async () => {
       await skill();
       await aiFirst();
       const headers = await visitor();
@@ -484,20 +486,30 @@ describe('the AI answers first, and a person is routed at the hand-over (AI-11 �
       expect(note.statusCode).toBe(201);
       expect(await thread(threadId)).toMatchObject({ assigneeId: null, aiMode: 'ai' });
 
-      const reply = await server.post(
-        `/chats/${chatId}/events`,
-        { type: 'message', text: 'Hi, Dana here.', recipients: 'all' },
-        auth(adminToken),
-      );
-      expect(reply.statusCode).toBe(201);
+      const write = () =>
+        server.post(
+          `/chats/${chatId}/events`,
+          { type: 'message', text: 'Hi, Dana here.', recipients: 'all' },
+          auth(adminToken),
+        );
+      // Writing no longer takes it from the AI: the AI keeps it, nothing is written.
+      const refused = await write();
+      expect(refused.statusCode, refused.body).toBe(409);
+      expect(refused.json()).toMatchObject({
+        error: { type: 'reply_requires_assignment', details: { reason: 'ai' } },
+      });
+      expect(await thread(threadId)).toMatchObject({ assigneeId: null, aiMode: 'ai' });
+      expect(await viewIds('ai')).toContain(chatId);
 
-      // The writer has it — not whoever routing would have picked (the agent).
+      // Taken — "Take" (tm 475.3) leaves it so — the reply goes out and the AI falls silent.
+      await assignForReply(owner, chatId, fx.a.ownerAccountId);
+      const reply = await write();
+      expect(reply.statusCode, reply.body).toBe(201);
       expect(await thread(threadId)).toMatchObject({
         assigneeId: fx.a.ownerAccountId,
         queuePosition: null,
         aiMode: 'human',
       });
-      expect(await lastAssignedAt(fx.a.ownerAccountId)).not.toBeNull();
       expect(await modeNotes(threadId)).toEqual(['AI stopped: an agent replied']);
       expect(await viewIds('ai')).not.toContain(chatId);
       expect(await viewIds('my')).toEqual([chatId]);

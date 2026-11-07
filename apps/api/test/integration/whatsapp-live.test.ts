@@ -37,6 +37,7 @@ import {
 import { buildSchedulerJobs } from '../../src/services/scheduler/jobs.js';
 import { MemoryMailer } from '../helpers/invite-join.js';
 import { silentLogger } from '../helpers/scheduler.js';
+import { assignForReply } from '../helpers/reply-assignment.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const CREDENTIAL_KEY = 'a7'.repeat(32);
@@ -426,6 +427,8 @@ describe('live WhatsApp channel (tm 380 · FR-MOD-08.5.6)', () => {
     expect(received.json()).toEqual({ status: 'received', queued: 1 });
 
     const chat = await inboundChat(fx.a.licenseId);
+    // Only the assignee answers the customer (tm 475).
+    await assignForReply(owner, chat!.id, fx.a.ownerAccountId);
     expect(chat).not.toBeNull();
     expect(await owner.chat.count({ where: { licenseId: fx.b.licenseId } })).toBe(chatsInB);
     const customer = await owner.customer.findUniqueOrThrow({ where: { id: chat!.customerId } });
@@ -525,6 +528,8 @@ describe('live WhatsApp channel (tm 380 · FR-MOD-08.5.6)', () => {
     expect((await connect()).statusCode).toBe(200);
     await deliver(delivery(NUMBER_A, { messages: [textMessage('wamid.old', 'merhaba')] }));
     const chat = await inboundChat(fx.a.licenseId);
+    // Only the assignee answers the customer (tm 475).
+    await assignForReply(owner, chat!.id, fx.a.ownerAccountId);
     await owner.channelIdentity.updateMany({
       where: { licenseId: fx.a.licenseId, channelType: 'whatsapp' },
       data: { lastCustomerMessageAt: new Date(Date.now() - 25 * 60 * 60 * 1000) },
@@ -621,6 +626,8 @@ describe('live WhatsApp channel (tm 380 · FR-MOD-08.5.6)', () => {
     expect((await connect()).statusCode).toBe(200);
     await deliver(delivery(NUMBER_A, { messages: [textMessage('wamid.q', 'soru')] }));
     const chat = await inboundChat(fx.a.licenseId);
+    // Only the assignee answers the customer (tm 475).
+    await assignForReply(owner, chat!.id, fx.a.ownerAccountId);
     expect(
       (
         await server.post(
@@ -653,6 +660,8 @@ describe('live WhatsApp channel (tm 380 · FR-MOD-08.5.6)', () => {
     expect((await connect()).statusCode).toBe(200);
     await deliver(delivery(NUMBER_A, { messages: [textMessage('wamid.r', 'merhaba')] }));
     const chat = await inboundChat(fx.a.licenseId);
+    // Only the assignee answers the customer (tm 475).
+    await assignForReply(owner, chat!.id, fx.a.ownerAccountId);
     state.revoked = true;
 
     for (const text of ['ilk', 'ikinci']) {

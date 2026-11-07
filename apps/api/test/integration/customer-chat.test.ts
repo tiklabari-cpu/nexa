@@ -15,6 +15,7 @@ import {
   seedFixtures,
   type Fixtures,
 } from '../helpers/fixtures.js';
+import { assignForReply } from '../helpers/reply-assignment.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 describe('customer chat api', () => {
@@ -440,7 +441,7 @@ describe('customer chat api', () => {
       expect(state.json().chat.queue_position).toBe(1);
     });
 
-    describe('once a person has answered a queued visitor (tm 411)', () => {
+    describe('a queued visitor and the person who answers them (tm 411 · tm 475)', () => {
       /** The second visitor waits as number 1; the first holds the only free slot. */
       async function queuedVisitor() {
         await owner.agentMembership.updateMany({
@@ -472,14 +473,21 @@ describe('customer chat api', () => {
           auth(agentToken),
         );
 
-      it('tells the visitor no queue position or wait, and leaves the routing as it was', async () => {
+      it('refuses a reply from someone who has not taken them, and they keep their place', async () => {
         const { token, chatId } = await queuedVisitor();
-        expect((await reply(chatId)).statusCode).toBe(201);
+        // Replying is not taking, and since tm 475 it is not allowed either:
+        // only the assignee answers the visitor.
+        const refused = await reply(chatId);
+        expect(refused.statusCode, refused.body).toBe(409);
+        expect(refused.json()).toMatchObject({
+          error: { type: 'reply_requires_assignment', details: { reason: 'unassigned' } },
+        });
 
         const state = await server.get('/customer/chat', auth(token));
-        expect(state.json().chat.queue_position).toBeNull();
-        expect(state.json().chat.estimated_wait).toBeNull();
-        // Replying is not taking: the panel still has it queued for the team.
+        expect(state.json().chat.queue_position).toBe(1);
+        expect(
+          state.json().events.some((e: { author_type: string }) => e.author_type === 'agent'),
+        ).toBe(false);
         const thread = await owner.thread.findFirstOrThrow({
           where: { chatId, active: true },
           select: { queuePosition: true, assigneeId: true },
@@ -497,11 +505,13 @@ describe('customer chat api', () => {
 
       it('shows the position again when the connection is queued anew after the reply', async () => {
         const { token, chatId } = await queuedVisitor();
+        // Taken, then answered (tm 475) — `agentToken` is the owner's.
+        await assignForReply(owner, chatId, fx.a.ownerAccountId);
         expect((await reply(chatId)).statusCode).toBe(201);
-        // As a transfer to a team with nobody free would: queued again, later.
+        // As a transfer to a team with nobody free would: nobody's, queued again, later.
         await owner.thread.updateMany({
           where: { chatId, active: true },
-          data: { queuedAt: new Date(Date.now() + 60_000) },
+          data: { assigneeId: null, queuePosition: 1, queuedAt: new Date(Date.now() + 60_000) },
         });
 
         const state = await server.get('/customer/chat', auth(token));

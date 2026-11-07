@@ -42,6 +42,7 @@ import {
   channelWebhook,
   expect,
   ownerAccessTokenFor,
+  takeOpenChatForReply,
   test,
 } from './fixtures.js';
 
@@ -384,6 +385,8 @@ test.describe('Messenger + WhatsApp + SMS (FR-MOD-08.5.4 · FR-MOD-08.5.5 · FR-
       // the writer resolved back from the chat — is asserted against the real
       // console reply in `channels-adapters.test.ts`, which can read
       // `channel_messages`; e2e keeps the half only it can see.
+      // Taken first: only the assignee answers the customer (tm 475).
+      await takeOpenChatForReply(agentPage, request);
       const reply = answer(subject);
       const composer = agentPage.getByPlaceholder('Type your reply');
       await composer.fill(reply);

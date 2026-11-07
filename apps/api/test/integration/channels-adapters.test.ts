@@ -17,6 +17,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import { assignForReply } from '../helpers/reply-assignment.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 interface ConnectedChannel {
@@ -530,6 +531,8 @@ describe('omnichannel adapters (FR-MOD-08.5.4 · FR-MOD-08.5.5 · FR-MOD-08.5.6)
       const inbound = (
         await webhook(c.type, c.inbound(c.addressA, c.sender, 'my order is late'))
       ).json() as { chat_id: string };
+      // Only the assignee answers the customer (tm 475).
+      await assignForReply(owner, inbound.chat_id, fx.a.ownerAccountId);
 
       const posted = await server.post(
         `/chats/${inbound.chat_id}/events`,

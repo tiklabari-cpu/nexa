@@ -28,6 +28,7 @@ import {
   type Fixtures,
   type TenantFixture,
 } from '../helpers/fixtures.js';
+import { assignForReply } from '../helpers/reply-assignment.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const PAN = '4111111111111111';
@@ -146,6 +147,8 @@ describe('card masking at write time (FR-MOD-08.9.5)', () => {
     const { token: customer } = await widgetToken(fx.a);
     const opened = await server.post('/customer/chat/events', { text: 'hello' }, auth(customer));
     const chatId = opened.json().chat_id as string;
+    // Only the assignee answers the player (tm 475); routing gave it to the agent.
+    await assignForReply(owner, chatId, fx.a.ownerAccountId);
 
     const response = await server.post(
       `/chats/${chatId}/events`,
@@ -519,6 +522,7 @@ describe('sensitive data masked on every write path (FR-MOD-08.9.5)', () => {
   it("shows the player an agent's IBAN whole and masks the agent's code (AI-26-S2)", async () => {
     const token = await visitor();
     const opened = await say(token, { text: 'Yatırım yapacağım, IBAN alabilir miyim?' });
+    await assignForReply(owner, opened.chat_id, fx.a.ownerAccountId);
     const sent = await server.post(
       `/chats/${opened.chat_id}/events`,
       { text: `IBAN: ${IBAN} · doğrulama kodu ${OTP}` },
@@ -539,6 +543,7 @@ describe('sensitive data masked on every write path (FR-MOD-08.9.5)', () => {
   it('masks a correction under the agent policy and keeps the badge honest', async () => {
     const token = await visitor();
     const opened = await say(token, { text: 'merhaba' });
+    await assignForReply(owner, opened.chat_id, fx.a.ownerAccountId);
     const sent = await server.post(
       `/chats/${opened.chat_id}/events`,
       { text: 'Hoş geldiniz' },
@@ -557,6 +562,7 @@ describe('sensitive data masked on every write path (FR-MOD-08.9.5)', () => {
   it('refuses a badge a client stamps on its own message', async () => {
     const token = await visitor();
     const opened = await say(token, { text: 'merhaba' });
+    await assignForReply(owner, opened.chat_id, fx.a.ownerAccountId);
     const sent = await server.post(
       `/chats/${opened.chat_id}/events`,
       {

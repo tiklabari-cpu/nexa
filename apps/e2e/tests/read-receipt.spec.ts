@@ -9,13 +9,21 @@
  * that reply and under nothing else — and a reply that lands while the panel is
  * shut is *not* marked read.
  */
-import { expect, openWidget, test, visitorSends, widgetFrame } from './fixtures.js';
+import {
+  expect,
+  openWidget,
+  takeOpenChatForReply,
+  test,
+  visitorSends,
+  widgetFrame,
+} from './fixtures.js';
 
 test.describe('read receipt', () => {
   test('the open panel marks the reply read; a note gets nothing; a reply into a shut panel stays unread', async ({
     agentPage,
     browser,
     organizationId,
+    request,
   }) => {
     test.slow();
     await agentPage.goto('/app/inbox');
@@ -37,6 +45,8 @@ test.describe('read receipt', () => {
       await expect(agentPage.getByTestId('read-receipt')).toHaveCount(0);
 
       // --- A reply into an open panel ----------------------------------------
+      // Taken first: only the assignee answers the visitor (tm 475).
+      await takeOpenChatForReply(agentPage, request);
       const reply = `Yes, it went through this morning. ${stamp}`;
       await agentPage.getByRole('radio', { name: 'Reply' }).click();
       await agentPage.getByPlaceholder('Type your reply').fill(reply);

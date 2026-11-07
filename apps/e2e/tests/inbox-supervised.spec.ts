@@ -195,8 +195,9 @@ test.describe('the inbox Supervised view', () => {
       // Each hand-off leaves a "Chat transferred" line as the row's last word,
       // and every widget visitor shares one name: a stamped line names the row.
       const marker = `Routed to Sales ${stamp}`;
+      // Written by Priya, who holds it now — only the assignee answers the visitor (tm 475).
       const said = await request.post(`${API_BASE}/chats/${ourChat.id}/events`, {
-        headers: owner,
+        headers: member,
         data: { type: 'message', text: marker },
       });
       expect(said.ok(), await said.text()).toBe(true);

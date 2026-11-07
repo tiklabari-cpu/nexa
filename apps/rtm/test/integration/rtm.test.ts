@@ -15,6 +15,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   composerStateKey,
   licenseChannel,
+  typingStateKey,
   type BusEnvelope,
   type PushAudience,
 } from '@siyahtus/types';
@@ -1196,6 +1197,62 @@ describe('rtm gateway', () => {
       // Neither of B's sockets ever heard a conflict warning.
       expect(bAgent.pushes('agent_conflict_warning')).toHaveLength(0);
       expect(bOwner.pushes('agent_conflict_warning')).toHaveLength(0);
+    });
+  });
+
+  // =========================================================================
+  // Agent typing reaches the visitor only from the assignee (tm 475)
+  // =========================================================================
+
+  describe('agent typing for the visitor', () => {
+    it('is written for the assignee only — anyone else is answered but not shown', async () => {
+      const conversation = await createConversation(db, { tenant: fx.a });
+      await db.thread.update({
+        where: { id: conversation.threadId },
+        data: { assigneeId: fx.a.agentAccountId },
+      });
+      const key = typingStateKey(fx.a.licenseId, conversation.chatId);
+      await redis.del(key);
+      const assignee = await loginAgent(fx.a, fx.a.agentAccountId);
+      // Sees every chat (`chats--all:rw`), holds none of them.
+      const colleague = await loginAgent(fx.a, fx.a.ownerAccountId, ['chats--all:rw']);
+
+      const fromColleague = await colleague.request('send_typing_indicator', {
+        chat_id: conversation.chatId,
+        is_typing: true,
+      });
+      expect(fromColleague.success).toBe(true);
+      expect(await redis.get(key)).toBeNull();
+
+      const fromAssignee = await assignee.request('send_typing_indicator', {
+        chat_id: conversation.chatId,
+        is_typing: true,
+      });
+      expect(fromAssignee.success).toBe(true);
+      expect(await redis.get(key)).toBe('1');
+
+      // A colleague's stop leaves the assignee's flag alone.
+      const stop = await colleague.request('send_typing_indicator', {
+        chat_id: conversation.chatId,
+        is_typing: false,
+      });
+      expect(stop.success).toBe(true);
+      expect(await redis.get(key)).toBe('1');
+      await redis.del(key);
+    });
+
+    it('shows nobody typing on a conversation nobody holds', async () => {
+      const conversation = await createConversation(db, { tenant: fx.a });
+      const key = typingStateKey(fx.a.licenseId, conversation.chatId);
+      await redis.del(key);
+      const agent = await loginAgent(fx.a, fx.a.agentAccountId);
+
+      const response = await agent.request('send_typing_indicator', {
+        chat_id: conversation.chatId,
+        is_typing: true,
+      });
+      expect(response.success).toBe(true);
+      expect(await redis.get(key)).toBeNull();
     });
   });
 });

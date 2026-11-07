@@ -1,7 +1,8 @@
 /**
  * Who answers the conversation, in the inbox (AI-11 · tm 293.5): the
- * transcript header's badge, the agent taking the chat off the AI by writing
- * to the visitor, giving it back, and the badge following a change made
+ * transcript header's badge, the agent taking the chat off the AI and writing
+ * to the visitor (since tm 475 writing alone no longer takes it — only the
+ * assignee answers), giving it back, and the badge following a change made
  * somewhere else — over the realtime push, without a reload.
  *
  * What the unit and integration suites cannot prove on their own: that the
@@ -15,6 +16,7 @@ import {
   expect,
   openWidget,
   ownerAccessToken,
+  takeOpenChatForReply,
   tenantSubdomain,
   test,
   visitorSends,
@@ -22,7 +24,7 @@ import {
 } from './fixtures.js';
 
 test.describe('AI mode in the inbox (AI-11)', () => {
-  test('the agent takes the chat off the AI by writing, gives it back, and the badge follows each change live', async ({
+  test('the agent takes the chat off the AI and writes, gives it back, and the badge follows each change live', async ({
     agentPage,
     browser,
     organizationId,
@@ -76,7 +78,8 @@ test.describe('AI mode in the inbox (AI-11)', () => {
       await expect(badge).toHaveAttribute('data-ai-mode', 'ai', { timeout: 20_000 });
       await expect(badge).toContainText('AI answering');
 
-      // --- Writing to the visitor takes it over (AI-11-S2) ------------------------
+      // --- Taken over, then written to the visitor (AI-11-S2 · tm 475) -----------
+      await takeOpenChatForReply(agentPage, request);
       const reply = `A person here, checking your ${marker} order ${run}`;
       await agentPage.locator('#composer-input').fill(reply);
       await agentPage.getByRole('button', { name: 'Send' }).click();

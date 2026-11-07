@@ -29,6 +29,8 @@ import {
   tenantSubdomain,
   visitorSends,
   widgetFrame,
+  takeForReply,
+  takeOpenChatForReply,
 } from './fixtures.js';
 import { assertNoBlockingViolations, scanScreen } from './a11y.js';
 
@@ -650,6 +652,7 @@ test.describe('realtime connection', () => {
         )
         .toBeTruthy();
 
+      await takeForReply(request, chatId!, auth);
       const sent = await request.post(`${API_BASE}/chats/${chatId!}/events`, {
         headers: auth,
         data: { type: 'message', text: answer },
@@ -726,6 +729,7 @@ test.describe('realtime connection', () => {
       await frame.locator('.nx-connection').evaluate((el) => el.scrollWidth <= el.clientWidth),
     ).toBe(true);
 
+    await takeForReply(request, chatId!, auth);
     const sent = await request.post(`${API_BASE}/chats/${chatId!}/events`, {
       headers: auth,
       data: { type: 'message', text: reply },
@@ -804,6 +808,7 @@ test.describe('rich text', () => {
       )
       .toBeTruthy();
 
+    await takeForReply(request, chatId!, auth);
     const sent = await request.post(`${API_BASE}/chats/${chatId!}/events`, {
       headers: auth,
       data: { type: 'message', text: answer },
@@ -875,6 +880,7 @@ test.describe('edit after send', () => {
       )
       .toBeTruthy();
 
+    await takeForReply(request, chatId!, auth);
     const sent = await request.post(`${API_BASE}/chats/${chatId!}/events`, {
       headers: auth,
       data: { type: 'message', text: wrong },
@@ -966,6 +972,7 @@ test.describe('edit after send', () => {
       )
       .toBeTruthy();
 
+    await takeForReply(request, chatId!, auth);
     const sent = await request.post(`${API_BASE}/chats/${chatId!}/events`, {
       headers: auth,
       data: { type: 'message', text: wrong },
@@ -1017,6 +1024,7 @@ test.describe('unread badge', () => {
   test('an agent reply with the panel closed lights the launcher (FR-MOD-11.1)', async ({
     browser,
     organizationId,
+    request,
   }, testInfo) => {
     // The closed panel polls every 30 s by design — the badge is worth a slow
     // test, not 900 requests an hour from every idle tab.
@@ -1060,6 +1068,8 @@ test.describe('unread badge', () => {
       const list = agent.getByRole('region', { name: 'Conversations' });
       await expect(list).toContainText(question, { timeout: 20_000 });
       await list.getByRole('button').first().click();
+      // Taken first: only the assignee answers the visitor (tm 475).
+      await takeOpenChatForReply(agent, request);
       await agent.getByRole('radio', { name: 'Reply' }).click();
       await agent.getByPlaceholder('Type your reply').fill(answer);
       await agent.getByRole('button', { name: 'Send' }).click();
@@ -1148,7 +1158,11 @@ test.describe('attachments', () => {
   // boundary rather than against the API. Screenshots land in `kanit/` because
   // the config only keeps artefacts on failure, and a passing autonomous run
   // must still leave a human something to look at.
-  test('a file crosses from visitor to agent and back', async ({ browser, organizationId }) => {
+  test('a file crosses from visitor to agent and back', async ({
+    browser,
+    organizationId,
+    request,
+  }) => {
     // Two uploads, each a grant + a PUT, plus two image paints: 45 s is tight
     // when the e2e shards share the machine with each other.
     test.setTimeout(90_000);
@@ -1185,6 +1199,8 @@ test.describe('attachments', () => {
       await expect(list).toContainText(caption, { timeout: 20_000 });
       await list.getByRole('button').first().click();
       await expect(agent.locator('main')).toContainText(caption);
+      // Taken first: only the assignee answers the visitor (tm 475).
+      await takeOpenChatForReply(agent, request);
 
       // The attachment renders in the agent's transcript, bytes and all.
       await imageRendered(agent.getByTestId('attachment-image').first());

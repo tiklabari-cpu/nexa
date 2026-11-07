@@ -34,6 +34,7 @@ import {
   openWidget,
   ownerAccessTokenFor,
   signIn,
+  takeOpenChatForReply,
   visitorSends,
   widgetFrame,
 } from './fixtures.js';
@@ -173,6 +174,8 @@ test('an archived conversation asks the visitor the workspace questions, takes a
     await expect(agent.locator('main')).toContainText(question);
 
     const reply = `Bring it in and we will fit a new chain — ${stamp}`;
+    // Taken first: only the assignee answers the visitor (tm 475).
+    await takeOpenChatForReply(agent, apiCtx, authorized());
     await agent.getByRole('radio', { name: 'Reply' }).click();
     await agent.getByPlaceholder('Type your reply').fill(reply);
     await agent.getByRole('button', { name: 'Send' }).click();

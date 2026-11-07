@@ -297,11 +297,20 @@ export class Dispatcher {
     const principal = this.#principalOf(connection);
     // An inaccessible chat answers exactly as a missing one: a typing indicator
     // must not confirm which chat ids exist.
-    if (!(await this.deps.typing.canType(principal, chatId))) {
+    const access = await this.deps.typing.canType(principal, chatId);
+    if (!access) {
       return this.#fail(message, 'not_found', 'Chat not found.');
     }
 
-    await this.deps.typing.setAgentTyping(connection.licenseId ?? '', chatId, isTyping);
+    // Only the agent the open connection is assigned to answers the visitor
+    // (tm 475), so only their typing reaches the visitor: anyone else is
+    // writing a note, or cannot reply at all. Not an error — the request was
+    // fine, it simply has no audience on the visitor's side — and their stop
+    // does not clear the assignee's flag either. A bot is not subject to the
+    // rule, as it is not when it writes.
+    if (access.assignee || connection.actorType === 'bot') {
+      await this.deps.typing.setAgentTyping(connection.licenseId ?? '', chatId, isTyping);
+    }
 
     // Multi-agent conflict detection (08.6.3), layered on top of the typing
     // flag above. Register this agent as composing and, when a second agent is

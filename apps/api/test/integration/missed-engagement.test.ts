@@ -42,6 +42,7 @@ import {
   seedFixtures,
   type Fixtures,
 } from '../helpers/fixtures.js';
+import { assignForReply } from '../helpers/reply-assignment.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const AI_ANSWER = 'The AI answered.';
@@ -264,6 +265,8 @@ describe('missed conversations and who started them (RP-02 · tm 369.1)', () => 
       expect((await row(unanswered.threadId)).missedReason).toBe('unanswered_assigned');
 
       const answered = await send((await visitor()).headers, 'Hello');
+      // The admin takes it and answers: only the assignee writes to the player (tm 475).
+      await assignForReply(owner, answered.chatId, fx.a.ownerAccountId);
       const reply = await server.post(
         `/chats/${answered.chatId}/events`,
         { type: 'message', text: 'Hi, how can I help?', recipients: 'all' },

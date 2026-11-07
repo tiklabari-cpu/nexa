@@ -43,6 +43,7 @@ import {
   type Fixtures,
   type TenantFixture,
 } from '../helpers/fixtures.js';
+import { assignForReply } from '../helpers/reply-assignment.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const APP_URL = process.env['DATABASE_APP_URL'];
@@ -341,6 +342,8 @@ describe('the AI outcome of a connection (AI-25 · tm 320.1)', () => {
       const headers = await visitor(fx.a);
       const asked = await say(headers, 'bonus nedir');
       await answer(headers, 'no');
+      // The person who answers has it: only the assignee writes to the player (tm 475).
+      await assignForReply(owner, asked.chatId, fx.a.agentAccountId);
       const reply = await server.post(
         `/chats/${asked.chatId}/events`,
         { type: 'message', text: 'Merhaba, inceliyorum.' },

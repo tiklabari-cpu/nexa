@@ -18,6 +18,7 @@ import { z } from 'zod';
 import { isLicenseClosed } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
+import { boundedArray } from '../lib/input-bounds.js';
 import { maskForWrite } from '../lib/sensitive-mask.js';
 import { TicketMessageService } from '../services/tickets/ticket-message-service.js';
 import { TicketReplyAddresses, isReplyLabel } from '../services/tickets/ticket-reply-address.js';
@@ -137,18 +138,22 @@ interface InboundRecipientMatch {
  * `INBOUND_EMAIL_TEXT_MAX` after masking, the HTML dropped past
  * `INBOUND_EMAIL_HTML_MAX`, the files held to their own ceilings — a mail that
  * is merely long is taken in, because a refused webhook is a lost mail.
+ *
+ * Every list is length-checked before its elements are parsed (tm 419 ·
+ * `input-bounds.ts`): the route is public, its secret optional, and its body
+ * limit 36 MiB — 18 million one-byte elements were one issue each.
  */
 const inboundBody = z.object({
   to: z.string().min(1).max(320),
-  cc: z.array(z.string().max(320)).max(50).default([]),
-  delivered_to: z.array(z.string().max(320)).max(10).default([]),
+  cc: boundedArray(z.string().max(320), 50).default([]),
+  delivered_to: boundedArray(z.string().max(320), 10).default([]),
   from: z.string().min(1).max(320),
   subject: z.string().max(998).default(''),
   text: z.string().max(2_000_000).nullish(),
   html: z.string().max(5_000_000).nullish(),
   message_id: z.string().max(998).nullish(),
   in_reply_to: z.string().max(998).nullish(),
-  references: z.array(z.string().max(998)).max(100).default([]),
+  references: boundedArray(z.string().max(998), 100).default([]),
   // The loop guard's evidence (tm 358 · `isAutomatedMail`).
   headers: z
     .object({
@@ -168,17 +173,15 @@ const inboundBody = z.object({
       dmarc: z.string().max(40).nullish(),
     })
     .default({}),
-  attachments: z
-    .array(
-      z.object({
-        filename: z.string().max(255).default('attachment'),
-        content_type: z.string().max(255).default('application/octet-stream'),
-        size: z.number().int().min(0).optional(),
-        content_base64: z.string().max(36_000_000),
-      }),
-    )
-    .max(50)
-    .default([]),
+  attachments: boundedArray(
+    z.object({
+      filename: z.string().max(255).default('attachment'),
+      content_type: z.string().max(255).default('application/octet-stream'),
+      size: z.number().int().min(0).optional(),
+      content_base64: z.string().max(36_000_000),
+    }),
+    50,
+  ).default([]),
   spam: z.boolean().default(false),
 });
 

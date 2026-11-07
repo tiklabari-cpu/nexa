@@ -103,3 +103,52 @@ export class ApiError extends Error {
 export function isApiError(value: unknown): value is ApiError {
   return value instanceof ApiError;
 }
+
+/**
+ * How many validation issues a 400 lists in `details.fields` (tm 419). A form
+ * has a handful of fields; twenty says everything a person can act on. What
+ * is past it is counted, not listed — `fields_truncated: true` and
+ * `fields_total` — so one oversized body cannot make the answer as large as
+ * the parse was expensive (zod 3 makes one issue per bad element; a 500k
+ * element array answered with 72 MB, GHSA-mrhx-c7xc-m3w5).
+ */
+export const VALIDATION_FIELDS_MAX = 20;
+
+/**
+ * The longest issue message a 400 repeats. zod's own messages are short except
+ * one: `.strict()` names every unknown key in a single message, so a body of
+ * 100k invented keys would be echoed back whole.
+ */
+export const VALIDATION_MESSAGE_MAX = 300;
+
+/** An issue's message cut to {@link VALIDATION_MESSAGE_MAX}, never inside a surrogate pair. */
+export function clipIssueMessage(message: string): string {
+  if (message.length <= VALIDATION_MESSAGE_MAX) return message;
+  let end = VALIDATION_MESSAGE_MAX - 1;
+  const code = message.charCodeAt(end - 1);
+  if (code >= 0xd800 && code <= 0xdbff) end -= 1;
+  return `${message.slice(0, end)}…`;
+}
+
+interface IssueLike {
+  readonly path: ReadonlyArray<string | number>;
+  readonly message: string;
+}
+
+/**
+ * `details` for a validation 400 built from schema issues: the first
+ * {@link VALIDATION_FIELDS_MAX} as `fields` (`field` is the dotted path, or
+ * `rootField` for the value itself), and, when there were more, how many.
+ */
+export function validationFields(
+  issues: ReadonlyArray<IssueLike>,
+  rootField = '',
+): Record<string, unknown> {
+  const fields = issues.slice(0, VALIDATION_FIELDS_MAX).map((issue) => ({
+    field: issue.path.join('.') || rootField,
+    message: clipIssueMessage(issue.message),
+  }));
+  return issues.length > VALIDATION_FIELDS_MAX
+    ? { fields, fields_truncated: true, fields_total: issues.length }
+    : { fields };
+}

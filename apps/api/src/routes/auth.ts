@@ -26,11 +26,12 @@ import {
   type WidgetUiLocale,
 } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
-import { ApiError } from '../lib/api-error.js';
+import { ApiError, clipIssueMessage, validationFields } from '../lib/api-error.js';
 import { licenseClosedError } from '../lib/license-closed.js';
 import { cookieNames, readCookie, serializeCookie } from '../lib/cookie.js';
 import { verifyPassword } from '../lib/crypto.js';
 import { poweredByFor } from '../lib/entitlements.js';
+import { boundedArray, keptReferrer } from '../lib/input-bounds.js';
 import { originHost } from '../lib/origin.js';
 import { withTenant, type TenantContext } from '../lib/tenant.js';
 import type { Mailer } from '../services/mail/mailer.js';
@@ -276,7 +277,8 @@ const customerTokenBody = z.object({
    * widget language falls through.
    */
   language: z.string().max(35).optional(),
-  browser_languages: z.array(z.string().max(35)).max(10).optional(),
+  // Length first, then elements (tm 419 · `input-bounds.ts`).
+  browser_languages: boundedArray(z.string().max(35), 10).optional(),
   /**
    * The page the visitor is on and where they came from (EN-04), as the loader
    * read them. Cut rather than refused when over-long: they are a hint for the
@@ -286,11 +288,24 @@ const customerTokenBody = z.object({
     .string()
     .transform((value) => value.slice(0, 2048))
     .optional(),
+  // A `javascript:` referrer is dropped the way an over-long one is cut (tm 451).
   host_referrer: z
     .string()
-    .transform((value) => value.slice(0, 2048))
+    .transform((value) => keptReferrer(value.slice(0, 2048)))
     .optional(),
 });
+
+/**
+ * `POST /customer/token`'s route options (tm 419): its own request ceiling
+ * instead of the 1 MiB every route inherits — the route is public, so whatever
+ * it reads it reads for anyone. Measured 2026-11-07: a widget's real mint body
+ * is ~0.6 KB; every field above at its own maximum at once (member token 4096,
+ * challenge token 2048, origin + page + referrer 2048 each, identity, ten
+ * languages) is 13.7 KB. Over the ceiling answers 400 `validation`, like the
+ * global limit.
+ */
+export const CUSTOMER_TOKEN_BODY_LIMIT = 16 * 1024;
+const customerTokenRoute = { config: { public: true }, bodyLimit: CUSTOMER_TOKEN_BODY_LIMIT };
 
 /**
  * The embedding page's address, when it can be believed: an http(s) URL on the
@@ -314,8 +329,10 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   if (!result.success) {
     const issue = result.error.issues[0];
     throw ApiError.validation(
-      issue ? `${issue.path.join('.') || 'body'}: ${issue.message}` : 'Invalid request body.',
-      { fields: result.error.issues.map((i) => ({ field: i.path.join('.'), message: i.message })) },
+      issue
+        ? `${issue.path.join('.') || 'body'}: ${clipIssueMessage(issue.message)}`
+        : 'Invalid request body.',
+      validationFields(result.error.issues),
     );
   }
   return result.data;
@@ -1756,7 +1773,7 @@ export default async function authRoutes(
 
   // --- POST /customer/token --------------------------------------------------
 
-  app.post('/customer/token', { config: { public: true } }, async (request, reply) => {
+  app.post('/customer/token', customerTokenRoute, async (request, reply) => {
     const body = parse(customerTokenBody, request.body);
 
     // Prefer the embedding page's origin; fall back to the request's own for

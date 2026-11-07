@@ -18,6 +18,7 @@ import { principalLogContext, type SocketAuthenticator, type SocketPrincipal } f
 import type { ConflictDetectionService } from './conflict.js';
 import type { ConflictPublisher } from './conflict-publisher.js';
 import type { Connection, ConnectionRegistry } from './connection.js';
+import { hasMoreKeysThan, MAX_LOGIN_PUSHES, pushesWithinBounds } from './input-bounds.js';
 import { encodeError, encodeResponse, type DecodedRequest } from './protocol.js';
 import { MAX_SYNC_CHATS, type SyncCursor, type SyncService } from './sync.js';
 import type { TypingService } from './typing.js';
@@ -115,6 +116,15 @@ export class Dispatcher {
     const token = message.payload['token'];
     if (typeof token !== 'string') {
       return this.#fail(message, 'validation', 'login requires a `token`.');
+    }
+    // Before the token is looked at (tm 419 · `input-bounds.ts`): a visitor
+    // token is anyone's, and an oversized list is refused unread.
+    if (connection.side === 'customer' && !pushesWithinBounds(message.payload['pushes'])) {
+      return this.#fail(
+        message,
+        'validation',
+        `login accepts at most ${MAX_LOGIN_PUSHES} push actions.`,
+      );
     }
 
     const result = await this.deps.authenticator.authenticate(token, connection.organizationId);
@@ -225,14 +235,15 @@ export class Dispatcher {
       return this.#fail(message, 'validation', 'sync requires a `cursors` object.');
     }
 
-    const entries = Object.entries(raw as Record<string, unknown>);
-    if (entries.length > MAX_SYNC_CHATS) {
+    // Counted before the entries are built (tm 419 · `input-bounds.ts`).
+    if (hasMoreKeysThan(raw, MAX_SYNC_CHATS)) {
       return this.#fail(
         message,
         'limit_reached',
         `sync accepts at most ${MAX_SYNC_CHATS} chats per request.`,
       );
     }
+    const entries = Object.entries(raw as Record<string, unknown>);
 
     const cursors: SyncCursor[] = entries.map(([chatId, lastEventId]) => ({
       chatId,

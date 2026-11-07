@@ -18,7 +18,7 @@ import {
   waitingThresholds as waitingThresholdsOf,
 } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
-import { ApiError } from '../lib/api-error.js';
+import { ApiError, clipIssueMessage, validationFields } from '../lib/api-error.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
 import { maskForWrite, sensitiveAuthorOf } from '../lib/sensitive-mask.js';
 import { ChatService, type ChatAiModeResult } from '../services/chat/chat-service.js';
@@ -201,8 +201,10 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   if (!result.success) {
     const issue = result.error.issues[0];
     throw ApiError.validation(
-      issue ? `${issue.path.join('.') || 'body'}: ${issue.message}` : 'Invalid request.',
-      { fields: result.error.issues.map((i) => ({ field: i.path.join('.'), message: i.message })) },
+      issue
+        ? `${issue.path.join('.') || 'body'}: ${clipIssueMessage(issue.message)}`
+        : 'Invalid request.',
+      validationFields(result.error.issues),
     );
   }
   return result.data;

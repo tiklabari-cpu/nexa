@@ -9,17 +9,19 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
 import { ZodError } from 'zod';
-import { ApiError, isApiError } from '../lib/api-error.js';
+import { ApiError, isApiError, validationFields } from '../lib/api-error.js';
 
+/**
+ * At most `VALIDATION_FIELDS_MAX` issues are listed, the rest counted (tm 419):
+ * a schema that makes one issue per bad element must not make the answer as
+ * large as the body.
+ */
 function zodToApiError(error: ZodError): ApiError {
-  const fields = error.issues.map((issue) => ({
-    field: issue.path.join('.') || '(root)',
-    message: issue.message,
-  }));
-  const first = fields[0];
+  const details = validationFields(error.issues, '(root)');
+  const first = (details['fields'] as Array<{ field: string; message: string }>)[0];
   return ApiError.validation(
     first ? `${first.field}: ${first.message}` : 'Request failed validation.',
-    { fields },
+    details,
   );
 }
 

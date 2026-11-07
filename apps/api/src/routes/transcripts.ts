@@ -9,7 +9,7 @@ import { Readable } from 'node:stream';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { TRANSCRIPT_AUDIENCES, TRANSCRIPT_EXPORT_FORMATS, isShortId } from '@siyahtus/types';
-import { ApiError } from '../lib/api-error.js';
+import { ApiError, clipIssueMessage, validationFields } from '../lib/api-error.js';
 import { requestLocale } from '../lib/request-locale.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import {
@@ -50,8 +50,10 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   if (!result.success) {
     const issue = result.error.issues[0];
     throw ApiError.validation(
-      issue ? `${issue.path.join('.') || 'body'}: ${issue.message}` : 'Invalid request.',
-      { fields: result.error.issues.map((i) => ({ field: i.path.join('.'), message: i.message })) },
+      issue
+        ? `${issue.path.join('.') || 'body'}: ${clipIssueMessage(issue.message)}`
+        : 'Invalid request.',
+      validationFields(result.error.issues),
     );
   }
   return result.data;

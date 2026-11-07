@@ -123,6 +123,37 @@ describe('DetailsPanel visitor context', () => {
     expect(within(rowValue('Location')).getByText('Istanbul, TR')).toBeInTheDocument();
   });
 
+  it('shows a visited page that is not http(s) as text, never as a link (tm 451)', () => {
+    // Rows stored before the API began dropping such addresses still hold them.
+    const { container } = renderPanel(
+      chatWithVisitor({
+        visited_pages: [
+          { url: 'javascript:alert(document.domain)' },
+          { url: 'https://shop.example/bikes' },
+        ],
+        visit_info: {
+          device: null,
+          referrer: null,
+          duration_seconds: null,
+          ip: null,
+          country_code: null,
+          city: null,
+          ongoing: false,
+        },
+      }),
+    );
+
+    expect(screen.getByText('javascript:alert(document.domain)').tagName).toBe('SPAN');
+    expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).not.toContain(
+      'javascript:alert(document.domain)',
+    );
+    expect(container.querySelector('a[href^="javascript"]')).toBeNull();
+    expect(screen.getByRole('link', { name: '/bikes' })).toHaveAttribute(
+      'href',
+      'https://shop.example/bikes',
+    );
+  });
+
   it('shows the day thread id as a quiet "Thread ID" row that selects whole on one click (D14)', () => {
     renderPanel(baseChat());
     expect(within(rowValue('Thread ID')).getByText('TJ1H8CFKRV')).toHaveClass('select-all');

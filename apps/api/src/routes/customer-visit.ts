@@ -31,6 +31,7 @@ import {
   SESSION_VARIABLES_MAX,
 } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
+import { boundedRecord, isHttpUrl, visitorReferrer } from '../lib/input-bounds.js';
 import { maskCardNumbers } from '../lib/cc-mask.js';
 import { markCampaignClicked, markCampaignShown } from '../services/campaigns/campaign-delivery.js';
 import { fireCampaignsAtVisitor } from '../services/campaigns/campaign-trigger.js';
@@ -47,13 +48,15 @@ const variableValue = z.union([
 const visitBody = z
   .object({
     url: z.string().min(1).max(2048),
-    referrer: z.string().max(REFERRER_MAX_LENGTH).optional(),
-    variables: z
-      .record(z.string().trim().min(1).max(SESSION_VARIABLE_MAX_LENGTH), variableValue)
-      .refine((value) => Object.keys(value).length <= SESSION_VARIABLES_MAX, {
-        message: `at most ${SESSION_VARIABLES_MAX} variables`,
-      })
-      .optional(),
+    // A script scheme is dropped, not refused (`keptReferrer`, tm 451).
+    referrer: visitorReferrer(REFERRER_MAX_LENGTH).optional(),
+    // Counted before any key or value is parsed (tm 419 · `input-bounds.ts`):
+    // a refine runs after the record's every entry has been.
+    variables: boundedRecord(
+      z.record(z.string().trim().min(1).max(SESSION_VARIABLE_MAX_LENGTH), variableValue),
+      SESSION_VARIABLES_MAX,
+      `at most ${SESSION_VARIABLES_MAX} variables`,
+    ).optional(),
   })
   .strict();
 
@@ -72,12 +75,7 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 
 /** An http(s) page address, or null — a page view is about a web page. */
 function webPage(value: string): string | null {
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' || url.protocol === 'http:' ? value : null;
-  } catch {
-    return null;
-  }
+  return isHttpUrl(value) ? value : null;
 }
 
 /**

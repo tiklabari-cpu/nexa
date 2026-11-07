@@ -17578,7 +17578,7 @@
           "417"
         ],
         "priority": "high",
-        "updatedAt": "2026-11-07T19:07:59.079Z",
+        "updatedAt": "2026-11-07T20:51:14.539Z",
         "subtasks": [
           {
             "id": 1,
@@ -17610,13 +17610,13 @@
             "description": "Yazma kapandığı için ajanın meşru üstlenme yolu genişler: AI evresi, duraklatılmış AI ve otomatik takım kuyruğu da \"Üstüne al\"a açılır. İki ajan aynı anda üstlenirse yalnız biri kazanır.",
             "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1. Bağımlılık: 475.2. Üst görev #475 KARARLAR D5, D6, D9 tek kaynaktır.\nAMAÇ: (1) `ChatService.claim` (chat-service.ts:3883-3971) AI evresi/duraklatılmış dalı: kilit + CAS (`assignee_id IS NULL AND ai_mode IN ('ai','paused')`) + `#changeAiMode(..., {to:'human', reason:'agent_message'})`. (2) `RoutingService.claim` (routing-service.ts:586-641) otomatik takımı kabul eder (:604 `not_waiting` kalkar; üyelik/uzmanlık/limit aynen). (3) Duyurular mevcut `#announceHandover` + `chat_transferred` (reason manual) yolundan. (4) tm 411 başlık yorumu (`visitor-queue.ts:1-23`) güncellenir (D9).\nTUZAK: closed-vocabularies-ripple-into-web (yeni reason EKLENMEZ), team-drain-runs-in-group-id-order, race-tests-need-separate-connections.\nKABUL: aşağıdaki testler yeşil; mevcut manuel takım claim testleri yeşil.",
             "testStrategy": "api entegrasyon: AI evresi sohbeti claim → assignee=çağıran, ai_mode human, sonraki ziyaretçi mesajına AI cevap vermez; pause-ai sonrası atanmamış sohbet → claim 200, assignee=çağıran, ai_mode human; iki eşzamanlı claim (ayrı bağlantılar) → 200 + 409 claimed; otomatik takım kuyruğu claim → 200, limitte 409 limit, üye değil → 404; claim sonrası yanıt 201; mevcut manuel takım claim testleri yeşil. DoD: CONVENTIONS §1.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "475.1"
             ],
             "parentId": "475",
             "priority": "high",
-            "updatedAt": "2026-11-07T19:07:59.079Z"
+            "updatedAt": "2026-11-07T20:51:14.539Z"
           },
           {
             "id": 4,
@@ -17777,7 +17777,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-07T19:07:59.079Z",
+      "lastModified": "2026-11-07T20:51:14.539Z",
       "taskCount": 478,
       "completedCount": 416,
       "tags": [

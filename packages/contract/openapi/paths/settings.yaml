@@ -1994,6 +1994,13 @@ widgetSettings:
               help_enabled:
                 type: boolean
                 description: Show the widget's "Help" tab, a search of published KB articles (WG-12).
+              sneak_peek_enabled:
+                type: boolean
+                description: |
+                  Let the assigned human agent see the visitor's unsent draft
+                  (tm 417). Sending `true` in a HIPAA-scoped workspace is
+                  refused with 403 `not_allowed` (`details.reason`
+                  `hipaa_locked`).
     responses:
       "200":
         description: Updated

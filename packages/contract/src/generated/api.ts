@@ -2292,6 +2292,15 @@ export interface paths {
      *     never the visitor's own side, and is capped in length. A call with no open
      *     conversation succeeds and does nothing — a visitor typing into an empty
      *     panel is not an error.
+     *
+     *     Send it only while `CustomerChatState.typing_preview` is true, only when
+     *     the text changed, at most once a second, with an increasing `seq`; clear
+     *     the draft with `is_typing: false`. Only the human agent the chat is
+     *     assigned to (and a supervisor watching it) sees the draft; bots and API
+     *     tokens do not receive it, and it is not recorded. The route has its own
+     *     rate-limit bucket (429). When the preview is off the server publishes
+     *     nothing and answers 200 `{ typing_preview: false }`: the widget stays
+     *     quiet until the next poll says otherwise.
      */
     post: operations['sendCustomerTyping'];
     delete?: never;
@@ -20663,6 +20672,10 @@ export interface components {
       show_logo: boolean;
       /** @description The widget's "Help" tab (WG-12): visitors search the workspace's published knowledge base articles inside the widget. Off by default; delivered with the token mint. */
       help_enabled: boolean;
+      /** @description Whether the assigned human agent sees the visitor's unsent draft while they type (tm 417). On by default. A HIPAA-scoped workspace has the preview off whatever this says (`sneak_peek_locked`). */
+      sneak_peek_enabled: boolean;
+      /** @description True while the workspace is in HIPAA scope: the preview is off and `sneak_peek_enabled: true` is refused. Computed by the server. */
+      sneak_peek_locked: boolean;
       /** Format: date-time */
       updated_at: string | null;
     };
@@ -20795,6 +20808,8 @@ export interface components {
       show_logo: boolean;
       /** @description Whether the widget shows its "Help" tab (WG-12); see `WidgetSettings`. */
       help_enabled: boolean;
+      /** @description Whether the visitor's draft preview is switched on (tm 417); see `WidgetSettings`. */
+      sneak_peek_enabled: boolean;
       /**
        * Format: uri
        * @description The brand's logo for the panel header (WG-10), or null — none is set, `show_logo` is off, or the stored address is not an `https` URL the widget may load.
@@ -25901,6 +25916,14 @@ export interface components {
        *     refreshes on each keystroke; false once it lapses.
        */
       agent_typing?: boolean;
+      /**
+       * @description When true the widget sends the visitor's unsent draft with
+       *     `POST /customer/chat/typing`. False while the AI answers, while the
+       *     chat is not assigned to a human, in a HIPAA-scoped workspace, or when
+       *     the workspace switched the preview off. Absent on an older server
+       *     (read as false).
+       */
+      typing_preview?: boolean;
       chat: {
         id: string;
         thread_id?: string | null;
@@ -30015,10 +30038,32 @@ export interface operations {
            *     meaningful when `is_typing` is true; capped and never stored.
            */
           text?: string;
+          /**
+           * @description The widget's own counter, increasing with every request it
+           *     sends (a clear included), so the panel can drop a frame that
+           *     arrives late. Optional: an older widget sends none.
+           */
+          seq?: number;
         };
       };
     };
     responses: {
+      /**
+       * @description Not published — the preview is off for this chat (an AI answering, no
+       *     human assigned, HIPAA scope or the workspace switch). The widget stops
+       *     sending until the poll says `typing_preview: true`.
+       */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @enum {boolean} */
+            typing_preview: false;
+          };
+        };
+      };
       /** @description Accepted — typing state fanned out to the agents on the chat */
       204: {
         headers: {
@@ -40680,6 +40725,13 @@ export interface operations {
           show_logo?: boolean;
           /** @description Show the widget's "Help" tab, a search of published KB articles (WG-12). */
           help_enabled?: boolean;
+          /**
+           * @description Let the assigned human agent see the visitor's unsent draft
+           *     (tm 417). Sending `true` in a HIPAA-scoped workspace is
+           *     refused with 403 `not_allowed` (`details.reason`
+           *     `hipaa_locked`).
+           */
+          sneak_peek_enabled?: boolean;
         };
       };
     };

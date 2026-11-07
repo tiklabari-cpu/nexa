@@ -33,6 +33,7 @@ const APPEARANCE_KEYS = [
   'primary_color',
   'privacy_policy_url',
   'show_logo',
+  'sneak_peek_enabled',
   'theme',
   'welcome_text',
   'welcome_title',

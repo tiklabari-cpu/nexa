@@ -147,6 +147,7 @@ export class WebsiteService {
       // language from the mint, never from the snippet.
       language: row.language as WidgetAppearance['language'],
       fallback_language: row.fallbackLanguage as WidgetAppearance['fallback_language'],
+      sneak_peek_enabled: row.sneakPeekEnabled,
     });
   }
 

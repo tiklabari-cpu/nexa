@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CUSTOMER_CHAT_OWNERS,
   aiDisclosureSentence,
   aiOpening,
   customerChatOwner,
   hasAiDisclosure,
   humanButtonText,
   turkishGenitive,
+  typingPreviewAllowed,
   withAiOpening,
 } from './ai-disclosure.js';
 
@@ -101,5 +103,22 @@ describe('who has the connection (AI-29 §2)', () => {
   it('a connection handed over or held back waits for a person', () => {
     expect(customerChatOwner({ ...thread, aiMode: 'human' })).toBe('queue');
     expect(customerChatOwner({ ...thread, aiMode: 'paused' })).toBe('queue');
+  });
+});
+
+describe("who may see the visitor's draft (tm 417 · FR-MOD-02.9)", () => {
+  it('is true only for a human owner, with the switch on and outside HIPAA', () => {
+    let allowed = 0;
+    for (const owner of CUSTOMER_CHAT_OWNERS) {
+      for (const enabled of [true, false]) {
+        for (const hipaa of [true, false]) {
+          const result = typingPreviewAllowed({ owner, enabled, hipaa });
+          const expected = owner === 'human' && enabled && !hipaa;
+          expect(result, `${String(owner)} enabled=${enabled} hipaa=${hipaa}`).toBe(expected);
+          if (result) allowed += 1;
+        }
+      }
+    }
+    expect(allowed).toBe(1);
   });
 });

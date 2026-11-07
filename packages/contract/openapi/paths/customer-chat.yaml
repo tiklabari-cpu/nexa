@@ -215,6 +215,15 @@ typing:
       never the visitor's own side, and is capped in length. A call with no open
       conversation succeeds and does nothing — a visitor typing into an empty
       panel is not an error.
+
+      Send it only while `CustomerChatState.typing_preview` is true, only when
+      the text changed, at most once a second, with an increasing `seq`; clear
+      the draft with `is_typing: false`. Only the human agent the chat is
+      assigned to (and a supervisor watching it) sees the draft; bots and API
+      tokens do not receive it, and it is not recorded. The route has its own
+      rate-limit bucket (429). When the preview is off the server publishes
+      nothing and answers 200 `{ typing_preview: false }`: the widget stays
+      quiet until the next poll says otherwise.
     requestBody:
       required: true
       content:
@@ -230,7 +239,26 @@ typing:
                 description: |
                   The in-progress text, shown to the agent as a sneak-peek. Only
                   meaningful when `is_typing` is true; capped and never stored.
+              seq:
+                type: integer
+                minimum: 0
+                description: |
+                  The widget's own counter, increasing with every request it
+                  sends (a clear included), so the panel can drop a frame that
+                  arrives late. Optional: an older widget sends none.
     responses:
+      "200":
+        description: |
+          Not published — the preview is off for this chat (an AI answering, no
+          human assigned, HIPAA scope or the workspace switch). The widget stops
+          sending until the poll says `typing_preview: true`.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [typing_preview]
+              properties:
+                typing_preview: { type: boolean, enum: [false] }
       "204":
         description: Accepted — typing state fanned out to the agents on the chat
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }

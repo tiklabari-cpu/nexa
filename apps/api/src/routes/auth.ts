@@ -2309,6 +2309,7 @@ async function widgetAppearance(
         launcher_visibility: row.launcherVisibility as WidgetAppearance['launcher_visibility'],
         show_logo: row.showLogo,
         help_enabled: row.helpEnabled,
+        sneak_peek_enabled: row.sneakPeekEnabled,
       };
     });
     return {

@@ -285,6 +285,9 @@ const typingSchema = z.object({
   // The in-progress text shown to the agent as a sneak-peek. Capped here as well
   // as at the fan-out, so an oversized body is rejected before any work.
   text: z.string().max(SNEAK_PEEK_MAX_LENGTH).optional(),
+  // The widget's increasing counter (tm 417); carried through once the route
+  // publishes it (417.2). Optional so an older widget keeps working.
+  seq: z.number().int().min(0).optional(),
 });
 
 /**

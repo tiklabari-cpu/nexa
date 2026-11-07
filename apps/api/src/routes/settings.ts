@@ -86,7 +86,7 @@ import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { constantTimeEqual, generateToken, hashToken } from '../lib/crypto.js';
 import { normaliseIp } from '../lib/banned-ip.js';
-import { inHipaaScope } from '../lib/hipaa.js';
+import { inHipaaScope, readHipaaScope } from '../lib/hipaa.js';
 import { highRiskReason, reasonMetadata } from '../lib/high-risk-reason.js';
 import { resolveBrandId } from '../lib/brand.js';
 import { prechatFromRow, type BrandPrechat } from '../services/websites/prechat.js';
@@ -830,6 +830,8 @@ const updateWidgetBody = z
     show_logo: z.boolean().optional(),
     // The widget's Help tab: search of published KB articles (WG-12).
     help_enabled: z.boolean().optional(),
+    // The visitor's live draft shown to the assigned agent (tm 417 · K8).
+    sneak_peek_enabled: z.boolean().optional(),
     // When a visitor may start a chat (WG-09).
     availability_mode: z
       .enum(WIDGET_AVAILABILITY_MODES as unknown as [string, ...string[]])
@@ -3335,7 +3337,7 @@ export default async function settingsRoutes(
       // Brand-scoped: the row for the active brand, or the license default when
       // none is named. No row means the workspace has never customised this
       // brand's widget, which reads as the defaults.
-      const { row, brandId, poweredBy } = await request.withTenant(async (tx) => {
+      const { row, brandId, poweredBy, hipaa } = await request.withTenant(async (tx) => {
         const brandId = await resolveBrandId(tx, request.brandId);
         const row = await tx.widgetSettings.findFirst({ where: { brandId } });
         return {
@@ -3346,9 +3348,10 @@ export default async function settingsRoutes(
             request.tenant(),
             row?.poweredBy ?? DEFAULT_WIDGET_APPEARANCE.powered_by,
           ),
+          hipaa: await readHipaaScope(tx, request.tenant().licenseId),
         };
       });
-      return reply.send(serialiseWidget(row, brandId, poweredBy));
+      return reply.send(serialiseWidget(row, brandId, poweredBy, hipaa));
     },
   );
 
@@ -3381,6 +3384,9 @@ export default async function settingsRoutes(
           : {}),
         ...(body.show_logo !== undefined ? { showLogo: body.show_logo } : {}),
         ...(body.help_enabled !== undefined ? { helpEnabled: body.help_enabled } : {}),
+        ...(body.sneak_peek_enabled !== undefined
+          ? { sneakPeekEnabled: body.sneak_peek_enabled }
+          : {}),
       };
 
       // Upsert because signup leaves no row: a workspace customising the widget
@@ -3388,13 +3394,26 @@ export default async function settingsRoutes(
       // The create fills unset fields from the defaults, so a partial first save
       // lands a complete, valid row. Keyed by `(license, brand)`, so a save under
       // one brand leaves another brand's appearance untouched.
-      const { updated, brandId, poweredBy } = await request.withTenant(async (tx) => {
+      const { updated, brandId, poweredBy, hipaa } = await request.withTenant(async (tx) => {
         // Before the upsert, inside the same transaction, so a refused save
         // leaves nothing behind — not even the other fields of the same body.
         // Only `false` is checked: branding *on* is every plan's right, and a
         // workspace that never had the entitlement is not asking for anything
         // when it sends `true`.
         if (body.powered_by === false) await requireEntitlement(tx, tenant, 'white_label');
+
+        // A HIPAA-scoped workspace cannot switch the draft preview on (tm 417
+        // · K8): refused rather than stored and ignored, so the screen never
+        // shows a switch that does nothing. Switching it off is always fine.
+        if (body.sneak_peek_enabled === true) {
+          if (await readHipaaScope(tx, tenant.licenseId)) {
+            throw new ApiError(
+              'not_allowed',
+              'This workspace has a signed HIPAA Business Associate Agreement, so visitor drafts cannot be shown to agents.',
+              { details: { reason: 'hipaa_locked', field: 'sneak_peek_enabled' } },
+            );
+          }
+        }
 
         const brandId = await resolveBrandId(tx, request.brandId);
         const row = await tx.widgetSettings.upsert({
@@ -3424,10 +3443,11 @@ export default async function settingsRoutes(
           updated: row,
           brandId,
           poweredBy: await poweredByFor(tx, tenant, row.poweredBy),
+          hipaa: await readHipaaScope(tx, tenant.licenseId),
         };
       });
 
-      return reply.send(serialiseWidget(updated, brandId, poweredBy));
+      return reply.send(serialiseWidget(updated, brandId, poweredBy, hipaa));
     },
   );
 
@@ -4269,10 +4289,12 @@ function serialiseWidget(
     launcherVisibility: string;
     showLogo: boolean;
     helpEnabled: boolean;
+    sneakPeekEnabled: boolean;
     updatedAt: Date;
   } | null,
   brandId: string,
   poweredBy: boolean,
+  hipaa: boolean,
 ) {
   return {
     brand_id: brandId,
@@ -4289,6 +4311,10 @@ function serialiseWidget(
     launcher_visibility: row?.launcherVisibility ?? DEFAULT_WIDGET_APPEARANCE.launcher_visibility,
     show_logo: row?.showLogo ?? DEFAULT_WIDGET_APPEARANCE.show_logo,
     help_enabled: row?.helpEnabled ?? DEFAULT_WIDGET_APPEARANCE.help_enabled,
+    sneak_peek_enabled: row?.sneakPeekEnabled ?? DEFAULT_WIDGET_APPEARANCE.sneak_peek_enabled,
+    // Computed from the licence, never stored: HIPAA scope turns the preview off
+    // whatever `sneak_peek_enabled` says (tm 417 · K8).
+    sneak_peek_locked: hipaa,
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
 }

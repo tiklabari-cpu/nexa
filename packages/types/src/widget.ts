@@ -115,6 +115,13 @@ export interface WidgetAppearance {
    * Server-delivered only, off until the workspace turns it on.
    */
   help_enabled: boolean;
+  /**
+   * The visitor's live draft (the "sneak-peek", tm 417): whether the workspace
+   * lets an assigned human agent see the unsent text. On by default (owner,
+   * 2026-11-06); a HIPAA-scoped workspace has it off whatever this says
+   * (`typingPreviewAllowed`). Server-delivered only, never baked into the snippet.
+   */
+  sneak_peek_enabled: boolean;
 }
 
 /** Upper bounds for the welcome message, shared by the API, the DB and the form. */
@@ -175,6 +182,9 @@ export const DEFAULT_WIDGET_APPEARANCE: WidgetAppearance = {
   // Opt-in too: a published article is reader-facing, but a workspace decides
   // when its players start reading them inside the widget (WG-12).
   help_enabled: false,
+  // On by default (owner, 2026-11-06 S2): the team sees what an assigned visitor
+  // is typing; the workspace states it in its own disclosure and may switch it off.
+  sneak_peek_enabled: true,
 };
 
 /**
@@ -232,6 +242,10 @@ export function normalizeWidgetAppearance(
       typeof raw.help_enabled === 'boolean'
         ? raw.help_enabled
         : DEFAULT_WIDGET_APPEARANCE.help_enabled,
+    sneak_peek_enabled:
+      typeof raw.sneak_peek_enabled === 'boolean'
+        ? raw.sneak_peek_enabled
+        : DEFAULT_WIDGET_APPEARANCE.sneak_peek_enabled,
   };
 }
 

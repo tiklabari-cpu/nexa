@@ -4206,6 +4206,9 @@ model WidgetSettings {
   showLogo         Boolean  @default(false) @map("show_logo")
   /// The widget's "Help" tab: search of published KB articles (WG-12).
   helpEnabled      Boolean  @default(false) @map("help_enabled")
+  /// Whether the assigned human agent sees the visitor's unsent draft (tm 417).
+  /// On by default; a HIPAA-scoped workspace has it off whatever this says.
+  sneakPeekEnabled Boolean  @default(true) @map("sneak_peek_enabled")
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)

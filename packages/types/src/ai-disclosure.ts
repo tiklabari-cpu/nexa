@@ -53,6 +53,20 @@ export function customerChatOwner(thread: {
   return 'queue';
 }
 
+/**
+ * Whether the visitor's unsent draft may be sent to the team (tm 417 · K3): the
+ * workspace switched it on, it is not under HIPAA, and a person is assigned.
+ * `queue` is not enough — a waiting chat shows no draft to the whole team. The
+ * poll answer (`typing_preview`) and the typing route use this one rule.
+ */
+export function typingPreviewAllowed(input: {
+  owner: CustomerChatOwner;
+  enabled: boolean;
+  hipaa: boolean;
+}): boolean {
+  return input.enabled && !input.hipaa && input.owner === 'human';
+}
+
 const TURKISH_VOWELS = 'aeıioöuü';
 
 /** Turkish lower case: `I` is `ı` and `İ` is `i`, whatever the runtime's locale. */

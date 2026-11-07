@@ -18,6 +18,7 @@ import {
   ownerClient,
   seedDefaultBrand,
   seedFixtures,
+  seedSubscription,
   type Fixtures,
 } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
@@ -1942,6 +1943,8 @@ describe('settings', () => {
         powered_by: true,
         welcome_title: null,
         welcome_text: null,
+        sneak_peek_enabled: true,
+        sneak_peek_locked: false,
         updated_at: null,
       });
 
@@ -2070,6 +2073,124 @@ describe('settings', () => {
     it('requires write scope to change the appearance', async () => {
       const response = await server.put('/settings/widget', { theme: 'dark' }, auth(readToken));
       expect(response.statusCode).toBe(403);
+    });
+
+    // FR-MOD-02.9 · tm 417: the workspace switch for the visitor's live draft.
+    it('FR-MOD-02.9 the draft preview is on until an admin switches it off, and unrelated saves leave it', async () => {
+      await server.put('/settings/widget', { theme: 'dark' }, auth(adminToken));
+      const unset = await server.get('/settings/widget', auth(readToken));
+      expect(unset.json()).toMatchObject({ sneak_peek_enabled: true, sneak_peek_locked: false });
+
+      const off = await server.put(
+        '/settings/widget',
+        { sneak_peek_enabled: false },
+        auth(adminToken),
+      );
+      expect(off.statusCode).toBe(200);
+      expect(off.json()).toMatchObject({ sneak_peek_enabled: false, sneak_peek_locked: false });
+      const readBack = await server.get('/settings/widget', auth(readToken));
+      expect(readBack.json()).toMatchObject({ sneak_peek_enabled: false, theme: 'dark' });
+      const row = await owner.widgetSettings.findUnique({ where: key(fx.a.licenseId, brandA) });
+      expect(row?.sneakPeekEnabled).toBe(false);
+
+      // A later save of something else does not switch it back on.
+      await server.put('/settings/widget', { theme: 'light' }, auth(adminToken));
+      const still = await server.get('/settings/widget', auth(readToken));
+      expect(still.json()).toMatchObject({ sneak_peek_enabled: false, theme: 'light' });
+
+      const on = await server.put(
+        '/settings/widget',
+        { sneak_peek_enabled: true },
+        auth(adminToken),
+      );
+      expect(on.json()).toMatchObject({ sneak_peek_enabled: true });
+    });
+
+    it('FR-MOD-02.9 refuses to change the draft preview without write scope, and a non-boolean', async () => {
+      const denied = await server.put(
+        '/settings/widget',
+        { sneak_peek_enabled: false },
+        auth(readToken),
+      );
+      expect(denied.statusCode).toBe(403);
+      const bad = await server.put(
+        '/settings/widget',
+        { sneak_peek_enabled: 'no' },
+        auth(adminToken),
+      );
+      expect(bad.statusCode).toBe(400);
+      expect(
+        await owner.widgetSettings.findUnique({ where: key(fx.a.licenseId, brandA) }),
+      ).toBeNull();
+    });
+
+    it('FR-MOD-02.9 locks the draft preview in a HIPAA-scoped workspace', async () => {
+      // HIPAA cover needs a US-hosted workspace (a database check), which the
+      // shared fixtures are not: build a small one with the agreement signed.
+      const organization = await owner.organization.create({
+        data: { name: 'Org US sneak peek', region: 'us' },
+        select: { id: true },
+      });
+      const license = await owner.license.create({
+        data: {
+          organizationId: organization.id,
+          plan: 'enterprise',
+          status: 'active',
+          hipaaBaaSignedAt: new Date(),
+        },
+        select: { id: true },
+      });
+      await seedSubscription(owner, license.id, 'enterprise');
+      const account = await owner.account.create({
+        data: { email: 'owner-us-sneak-peek@example.test', name: 'Owner US' },
+        select: { id: true },
+      });
+      await owner.agentMembership.create({
+        data: { licenseId: license.id, agentId: account.id, role: 'owner' },
+      });
+      const usBrand = await seedDefaultBrand(owner, license.id);
+      const token = await grantToken(owner, {
+        licenseId: license.id,
+        organizationId: organization.id,
+        ownerId: account.id,
+        scopes: ['access_rules:ro', 'access_rules:rw'],
+      });
+
+      // The same build as the US deployment: a US workspace is refused (421)
+      // by the European one.
+      const usServer = await startTestServer({ SIYAHTUS_REGION: 'us' });
+      try {
+        const read = await usServer.get('/settings/widget', auth(token));
+        expect(read.json()).toMatchObject({ sneak_peek_locked: true });
+
+        // Switching it on is refused whole: nothing else in the body lands either.
+        const refused = await usServer.put(
+          '/settings/widget',
+          { sneak_peek_enabled: true, theme: 'dark' },
+          auth(token),
+        );
+        expect(refused.statusCode).toBe(403);
+        expect(refused.json()).toMatchObject({
+          error: {
+            type: 'not_allowed',
+            details: { reason: 'hipaa_locked', field: 'sneak_peek_enabled' },
+          },
+        });
+        expect(
+          await owner.widgetSettings.findUnique({ where: key(license.id, usBrand) }),
+        ).toBeNull();
+
+        // Switching it off, and saving anything else, still works.
+        const off = await usServer.put(
+          '/settings/widget',
+          { sneak_peek_enabled: false },
+          auth(token),
+        );
+        expect(off.statusCode).toBe(200);
+        expect(off.json()).toMatchObject({ sneak_peek_enabled: false, sneak_peek_locked: true });
+      } finally {
+        await usServer.close();
+      }
     });
 
     it('serves the appearance in the customer token response', async () => {

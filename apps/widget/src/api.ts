@@ -109,6 +109,8 @@ export interface WidgetState {
   read_only?: boolean;
   /** Whether an agent is mid-reply, for the "…is typing" line (FR-MOD-02.9). */
   agent_typing?: boolean;
+  /** Send the unsent draft with `typing` while true; absent from an older server (tm 417). */
+  typing_preview?: boolean;
   customer: { id: string; name: string | null; email: string | null };
   /** Who the visitor is talking to — a person or the AI persona. */
   agent: { name: string; avatar_url: string | null } | null;

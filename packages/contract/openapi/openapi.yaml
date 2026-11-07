@@ -9980,6 +9980,8 @@ components:
           launcher_visibility,
           show_logo,
           help_enabled,
+          sneak_peek_enabled,
+          sneak_peek_locked,
           updated_at,
         ]
       properties:
@@ -10061,6 +10063,17 @@ components:
             The widget's "Help" tab (WG-12): visitors search the workspace's
             published knowledge base articles inside the widget. Off by
             default; delivered with the token mint.
+        sneak_peek_enabled:
+          type: boolean
+          description: >-
+            Whether the assigned human agent sees the visitor's unsent draft
+            while they type (tm 417). On by default. A HIPAA-scoped workspace
+            has the preview off whatever this says (`sneak_peek_locked`).
+        sneak_peek_locked:
+          type: boolean
+          description: >-
+            True while the workspace is in HIPAA scope: the preview is off and
+            `sneak_peek_enabled: true` is refused. Computed by the server.
         updated_at: { type: string, format: date-time, nullable: true }
 
     PrechatFieldRule:
@@ -10195,6 +10208,7 @@ components:
           launcher_visibility,
           show_logo,
           help_enabled,
+          sneak_peek_enabled,
           privacy_policy_url,
           powered_by_url,
           logo_url,
@@ -10250,6 +10264,9 @@ components:
         help_enabled:
           type: boolean
           description: Whether the widget shows its "Help" tab (WG-12); see `WidgetSettings`.
+        sneak_peek_enabled:
+          type: boolean
+          description: Whether the visitor's draft preview is switched on (tm 417); see `WidgetSettings`.
         logo_url:
           type: string
           format: uri
@@ -17028,6 +17045,14 @@ components:
             polls rather than holding a socket, so this is how the agent's live
             typing reaches the visitor. Reflects a short-lived flag the RTM gateway
             refreshes on each keystroke; false once it lapses.
+        typing_preview:
+          type: boolean
+          description: |
+            When true the widget sends the visitor's unsent draft with
+            `POST /customer/chat/typing`. False while the AI answers, while the
+            chat is not assigned to a human, in a HIPAA-scoped workspace, or when
+            the workspace switched the preview off. Absent on an older server
+            (read as false).
         chat:
           type: object
           nullable: true

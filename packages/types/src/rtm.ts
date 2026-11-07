@@ -373,6 +373,11 @@ export interface TypingIndicatorPush {
     recipients: EventRecipients;
     timestamp: number;
     is_typing: boolean;
+    /**
+     * The visitor's own counter (`POST /customer/chat/typing` `seq`, tm 417),
+     * so the panel can drop a late frame. Absent from a sender without one.
+     */
+    seq?: number;
   };
 }
 
@@ -392,6 +397,8 @@ export interface SneakPeekPush {
     recipients: EventRecipients;
     timestamp: number;
     text: string;
+    /** As on `typing_indicator`: the visitor's counter, for ordering (tm 417). */
+    seq?: number;
   };
 }
 

@@ -6503,6 +6503,8 @@ _Önceki maddeler: `docs/archive/plan-kanit/PLAN-kanit-arsiv-2026-11.md`, `docs/
 
 ✅ ziyaretçi→ajan sneak-peek (11.8 KK) — widget `notifyTyping` → `POST /customer/chat/typing` (`SNEAK_PEEK_MAX_LENGTH`) → `chat-service.ts` `publishCustomerTyping` → `incoming_sneak_peek` **yalnız ajanlara** → `useInbox.ts` → `TypingIndicator.tsx` önizleme metni · aynı tm 41 bundle'ı (`+11.8`, 02.9 satırı ile ortak kod) · test integration `customer-chat.test.ts` (sneak-peek yalnız-ajana fan-out, metin doğrulanır) + web `typing.test.ts`(5)/`TypingIndicator.test.tsx`(4) + rtm `typing.test.ts`(6) · OpenAPI `/customer/chat/typing` · tm 41 · §D31
 
+- ✅ tm 417.1 · ziyaretçi taslağı önizlemesi 1/7 (kontrat + ayar deposu; damga `✅` kaldı, davranış 417.2–417.7): `CustomerChatState.typing_preview`, typing gövdesine `seq` + 200 `{typing_preview:false}`, RTM `seq?`, `typingPreviewAllowed`, `widget_settings.sneak_peek_enabled` (varsayılan true) + `sneak_peek_locked` (HIPAA) · `packages/types/src/ai-disclosure.ts`, `settings.ts` · `settings.test.ts` (3, FR-MOD-02.9), `ai-disclosure.test.ts` (1) · bu satırı ekleyen commit
+
 #### K12.1-12.3 — 12.1–12.3 · Copilot (buton, ayrı KB, özet + yanıt yardımı)
 
 - ✅ tm 309.3 · AI-14 3/3 (tek depo, web; damga `✅` kaldı): Copilot sayfası tek deponun süzgeçli görünümü — `GET /knowledge-sources?audience=copilot` (Copilot'un okuduğu her şey), "Yalnız ajanlar" süzgeci, satırda kitle çipi; yalnız ajanlara ait ve KB makalesi olmayan kaynak buradan eklenir/silinir (`/copilot/knowledge` ekleme + silme), AI ajanının da kullandığı kaynak "Senaryolar › Bilgi'de yönetilir" · `CopilotKnowledge.tsx`, `KnowledgeRowMeta.tsx` · `CopilotKnowledge.test.tsx` (+4) · `knowledge-store.spec.ts` (e2e) · §D307

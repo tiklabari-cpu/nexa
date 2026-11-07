@@ -147,7 +147,14 @@ describe('widget RTM socket (FR-MOD-11.6)', () => {
     // addresses this socket by the customer id inside the signed token and by
     // nothing the client asks for, so there is nothing here to ask wrongly.
     expect(login.payload['pushes']).toEqual({
-      '3.6': ['incoming_event', 'chat_deactivated', 'event_updated', 'sync_required'],
+      '3.6': [
+        'incoming_event',
+        'chat_deactivated',
+        'event_updated',
+        'sync_required',
+        'chat_taken_over',
+        'chat_transferred',
+      ],
     });
     expect(Object.keys(login.payload).sort()).toEqual(['pushes', 'token']);
   });
@@ -168,6 +175,24 @@ describe('widget RTM socket (FR-MOD-11.6)', () => {
     expect(h.events).toEqual([
       { chatId: 'chat-1', event: expect.objectContaining({ id: 'thr-1_2', text: 'text thr-1_2' }) },
     ]);
+  });
+
+  it('asks for a refetch when the chat is taken over or handed on (FR-MOD-11.8 · tm 417.5)', async () => {
+    const h = harness();
+    h.socket.connect();
+    const fake = h.sockets[0]!;
+    fake.onopen!();
+    await settle();
+    fake.reply('login', {});
+    await settle();
+
+    // The takeover's system line is for agents only: this push is all the
+    // visitor hears, and the poll says what it changed.
+    fake.push('chat_taken_over', { chat_id: 'chat-1', new_assignee_id: 'agent-2' });
+    expect(h.resyncs).toBe(1);
+    fake.push('chat_transferred', { chat_id: 'chat-1', assignee_id: 'agent-3' });
+    expect(h.resyncs).toBe(2);
+    expect(h.events).toEqual([]);
   });
 
   it("catches up on `sync_required` — the gateway's bus dropped under an open socket (tm 408)", async () => {

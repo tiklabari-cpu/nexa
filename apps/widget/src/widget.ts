@@ -869,6 +869,8 @@ export function mount(doc: Document = document, win: Window = window): () => voi
   function noteOwner(snapshot: WidgetState): void {
     state.owner = snapshot.owner ?? null;
     state.humanButtonLabel = snapshot.human_button_label ?? null;
+    // An older server says nothing of the gate: a person answering opens it.
+    setPreview(snapshot.typing_preview ?? snapshot.answered_by === 'human');
   }
 
   /**
@@ -1258,6 +1260,8 @@ export function mount(doc: Document = document, win: Window = window): () => voi
    */
   function noteChatClosed(previousChatId: string, previousThreadId: string | null): void {
     state.closed = true;
+    // Nobody is reading a draft any more; the next poll says when one is again.
+    setPreview(false);
     const ended = { chatId: previousChatId, threadId: previousThreadId };
     if (!state.rating || !sameConversation(state.rating, ended)) {
       state.rating = { ...ended, value: null };
@@ -1336,46 +1340,78 @@ export function mount(doc: Document = document, win: Window = window): () => voi
 
   // --- Outbound typing (sneak-peek) ----------------------------------------
 
-  // The visitor's own typing, sent to the agent (FR-MOD-11.8). Throttled on the
-  // leading edge so a burst of keystrokes is one request, with a trailing "stop"
-  // so the agent's preview clears if the visitor walks away mid-sentence.
-  let typingThrottle: ReturnType<typeof setTimeout> | null = null;
-  let typingStop: ReturnType<typeof setTimeout> | null = null;
-  let typingSent = false;
+  // The visitor's unsent draft, shown to the person answering (FR-MOD-11.8 ·
+  // tm 417). Only while the server's gate is open (`previewAllowed`); only when
+  // the text changed, so a draft that sits in the box costs nothing — no
+  // heartbeat, the panel lets it go stale on its own (417.6); at most once a
+  // second, leading edge and trailing edge, so the last keystrokes always
+  // arrive. Blur and silence leave it be; emptying the box, sending it, the
+  // gate shutting, the chat ending and the page going away retract it.
+  let previewAllowed = false;
+  /** The draft the agent was last sent; `''` when nothing is showing. */
+  let lastSent = '';
+  let typingSeq = 0;
+  /** The one-second window, or a 429's silence; its end sends what changed. */
+  let typingTimer: ReturnType<typeof setTimeout> | null = null;
+  let suspendedUntil = 0;
 
-  function notifyTyping(): void {
-    if (!state.connected || !state.chatId) return;
-    const text = ui.input.value.trim();
-    if (!text) {
-      stopTyping();
-      return;
-    }
-    if (!typingThrottle) {
-      typingSent = true;
-      void api.typing(true, text).catch(() => undefined);
-      typingThrottle = setTimeout(() => {
-        typingThrottle = null;
-      }, 800);
-    }
-    if (typingStop) clearTimeout(typingStop);
-    typingStop = setTimeout(stopTyping, 4_000);
+  /** The gate opened or shut: send the box's text now, or take the draft back. */
+  function setPreview(allowed: boolean): void {
+    if (allowed === previewAllowed) return;
+    previewAllowed = allowed;
+    if (allowed) notifyTyping();
+    else clearPreview();
   }
 
-  function stopTyping(): void {
-    if (typingThrottle) {
-      clearTimeout(typingThrottle);
-      typingThrottle = null;
-    }
-    if (typingStop) {
-      clearTimeout(typingStop);
-      typingStop = null;
-    }
-    // Only retract if we actually announced typing — no spurious "stop" on send
-    // when the visitor never triggered one.
-    if (typingSent) {
-      typingSent = false;
-      void api.typing(false).catch(() => undefined);
-    }
+  function notifyTyping(): void {
+    if (
+      !previewAllowed ||
+      !state.connected ||
+      !state.chatId ||
+      doc.visibilityState !== 'visible' ||
+      Date.now() < suspendedUntil
+    )
+      return;
+    // Trimmed and capped as the server counts (UTF-16 units), never ending on
+    // half of a surrogate pair.
+    let text = ui.input.value.trim().slice(0, 500);
+    if (text.charCodeAt(text.length - 1) >> 10 === 0x36) text = text.slice(0, -1);
+    if (text === lastSent) return;
+    if (!text) return clearPreview();
+    if (typingTimer) return;
+    lastSent = text;
+    typingTimer = setTimeout(endTypingWindow, 1_000);
+    api.typing(true, text, ++typingSeq).then((answer) => {
+      // The gate is shut on the server's side: quiet until a poll opens it.
+      if (answer?.typing_preview === false) setPreview(false);
+    }, typingFailed);
+  }
+
+  /** The window closed: the trailing edge, if the text moved on meanwhile. */
+  function endTypingWindow(): void {
+    typingTimer = null;
+    notifyTyping();
+  }
+
+  function clearPreview(keepalive?: boolean): void {
+    if (!lastSent) return;
+    lastSent = '';
+    api.typing(false, '', ++typingSeq, keepalive).catch(typingFailed);
+  }
+
+  /**
+   * A 429 is the typing buckets' own (tm 417.3): silent for `Retry-After`,
+   * then the latest state once. Send is never held for it, unlike a message's
+   * (`pauseSending`). Anything else is cosmetic and swallowed.
+   */
+  function typingFailed(error: unknown): void {
+    if (!(error instanceof WidgetApiError) || error.status !== 429) return;
+    // A lone space is no trimmed draft, so the silence's end sends what is there.
+    lastSent = ' ';
+    const wait = Math.min(error.retryAfter ?? DEFAULT_PAUSE_SECONDS, MAX_PAUSE_SECONDS) * 1000;
+    suspendedUntil = Date.now() + wait;
+    if (typingTimer) clearTimeout(typingTimer);
+    typingTimer = setTimeout(endTypingWindow, wait);
   }
 
   /**
@@ -2339,7 +2375,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     ui.input.value = '';
     // The draft is on its way — retract the sneak-peek so the agent's preview
     // does not linger behind the real message.
-    stopTyping();
+    clearPreview();
 
     // Sending needs a token. Opening the panel already started `connect`, but
     // the composer is on screen from the first frame — nothing makes the visitor
@@ -2678,19 +2714,24 @@ export function mount(doc: Document = document, win: Window = window): () => voi
     // A person answering means the queue is over for this visitor; with a socket
     // the next poll is half a minute off, so "you are number 1" would otherwise
     // outlive the reply. Ask now for who has the chat, too.
-    if (event.author_type === 'agent') agentReplies++;
-    if (event.author_type === 'agent' && state.queuePosition !== null) {
+    const agent = event.author_type === 'agent';
+    if (agent) agentReplies++;
+    // A person or the system speaking while the draft preview is shut is how a
+    // hand-over shows (tm 417.5): ask now, so the gate opens with it.
+    let ask = !previewAllowed && (agent || event.author_type === 'system');
+    if (agent && state.queuePosition !== null) {
       state.queuePosition = null;
       state.estimatedWait = null;
       renderStatus();
-      void refresh();
+      ask = true;
     }
 
     // The AI spoke while the last poll named someone else (tm 308 · AI-29): with
     // a socket the next poll is half a minute off, so ask now who has the
     // connection — the server's word, not a guess from the author — and
     // "Talk to an agent" appears with the reply rather than after it.
-    if (isAiMessage(event) && state.owner !== 'ai' && !state.humanRequesting) void refresh();
+    if (isAiMessage(event) && state.owner !== 'ai' && !state.humanRequesting) ask = true;
+    if (ask) void refresh();
   }
 
   /**
@@ -2973,9 +3014,8 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       }
     });
     // Live typing preview: tell the agent as the visitor types (FR-MOD-11.8).
-    ui.input.addEventListener('input', () => notifyTyping());
-    // Leaving the field ends the draft-in-progress the agent was previewing.
-    ui.input.addEventListener('blur', () => stopTyping());
+    // Leaving the field does not retract it — the draft is still there.
+    ui.input.addEventListener('input', notifyTyping);
 
     // Header "⋮" menu → "Rate this chat" (FR-MOD-07.8-b): an optional early vote
     // on a conversation that is still open, alongside the automatic prompt
@@ -3069,6 +3109,10 @@ export function mount(doc: Document = document, win: Window = window): () => voi
   wireUi();
 
   doc.addEventListener('visibilitychange', scheduleSeen, { signal });
+  // A hidden tab sends no draft; back in view, what changed meanwhile goes once.
+  doc.addEventListener('visibilitychange', notifyTyping, { signal });
+  // The tab is going away: the agent must not be left reading a draft (tm 417).
+  win.addEventListener('pagehide', () => clearPreview(true), { signal });
 
   doc.addEventListener(
     'click',
@@ -3191,14 +3235,14 @@ export function mount(doc: Document = document, win: Window = window): () => voi
   }
 
   return () => {
+    clearPreview();
     stopped = true;
     listening.abort();
     for (const timer of [
       pollTimer,
       previewTimer,
       sendPauseTimer,
-      typingThrottle,
-      typingStop,
+      typingTimer,
       seenTimer,
       supportCopiedTimer,
     ]) {

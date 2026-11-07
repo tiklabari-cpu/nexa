@@ -166,6 +166,9 @@ function stubFetch(): void {
         const body = {
           online: true,
           agent_typing: false,
+          // A person holds the chat, so an agent's reply is no hand-over that
+          // needs a refresh to open the draft preview (tm 417.5).
+          typing_preview: true,
           customer: { id: 'cust-1', name: null, email: null },
           agent: null,
           chat: chatId ? { id: chatId, thread_id: 'thr-1', queue_position: queuePosition() } : null,

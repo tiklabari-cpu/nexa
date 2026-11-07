@@ -541,6 +541,72 @@ describe('visitor typing preview — the server gate', () => {
 
   // ===========================================================================
 
+  /**
+   * The widget opens its gate the moment a person takes the chat, without the
+   * socket's 30-second poll (tm 417.5): on a team or system `incoming_event`,
+   * or — since neither hand-over below pushes one to the visitor — on
+   * `chat_taken_over` / `chat_transferred`. These pin what reaches the visitor.
+   * A queue drain's assignment pushes the visitor nothing at all; there the
+   * next poll (or the agent's first reply) opens the gate.
+   */
+  describe('how the visitor hears the gate open', () => {
+    const toVisitor = (envelopes: Envelope[], customerId: string) =>
+      envelopes.filter((e) => e.audience.customerId === customerId);
+
+    it('a takeover from the AI reaches the visitor as `chat_taken_over`, not as an event (FR-MOD-11.8)', async () => {
+      const chat = await humanChat();
+      await owner.thread.update({ where: { id: chat.threadId }, data: { aiMode: 'ai' } });
+      expect((await server.get('/customer/chat', auth(chat.token))).json().typing_preview).toBe(
+        false,
+      );
+
+      const envelopes = await captureBus(async () => {
+        const seized = await server.post(`/chats/${chat.chatId}/takeover`, {}, auth(adminToken));
+        expect(seized.statusCode, seized.body).toBeLessThan(300);
+      });
+      const heard = toVisitor(envelopes, chat.customerId);
+      expect(heard.filter((e) => e.action === 'incoming_event')).toEqual([]);
+      expect(heard.filter((e) => e.action === 'chat_taken_over')).toEqual([
+        expect.objectContaining({ payload: expect.objectContaining({ chat_id: chat.chatId }) }),
+      ]);
+      expect((await server.get('/customer/chat', auth(chat.token))).json().typing_preview).toBe(
+        true,
+      );
+    });
+
+    it('an assignment by transfer reaches the visitor as `chat_transferred`, not as an event (FR-MOD-11.8)', async () => {
+      const chat = await humanChat();
+      await owner.thread.update({ where: { id: chat.threadId }, data: { aiMode: 'ai' } });
+      await owner.agentMembership.updateMany({
+        where: { licenseId: fx.a.licenseId, agentId: teammateId },
+        data: { routingStatus: 'accepting_chats' },
+      });
+
+      const envelopes = await captureBus(async () => {
+        const moved = await server.post(
+          `/chats/${chat.chatId}/transfer`,
+          { agent_id: teammateId },
+          auth(adminToken),
+        );
+        expect(moved.statusCode, moved.body).toBeLessThan(300);
+      });
+      const heard = toVisitor(envelopes, chat.customerId);
+      // The transcript's "Chat transferred" line is for everyone, but no push
+      // carries it: the visitor's socket hears the transfer itself.
+      expect(heard.filter((e) => e.action === 'incoming_event')).toEqual([]);
+      expect(heard.filter((e) => e.action === 'chat_transferred')).toEqual([
+        expect.objectContaining({
+          payload: expect.objectContaining({ chat_id: chat.chatId, assignee_id: teammateId }),
+        }),
+      ]);
+      expect((await server.get('/customer/chat', auth(chat.token))).json().typing_preview).toBe(
+        true,
+      );
+    });
+  });
+
+  // ===========================================================================
+
   describe('isolation', () => {
     it("never reaches another workspace's chat (FR-MOD-11.8)", async () => {
       // Tenant B has a live conversation a person holds.

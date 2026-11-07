@@ -614,15 +614,20 @@ export class WidgetApi {
 
   /**
    * Live typing preview (FR-MOD-02.9 / 11.8): tell the agent the visitor is
-   * typing, and — while `isTyping` — a preview of the in-progress message. Sent
-   * fire-and-forget by the caller; a dropped indicator is cosmetic. Capped so a
-   * pasted wall of text does not travel keystroke by keystroke.
+   * typing, and — while `isTyping` — a preview of the in-progress message. The
+   * caller trims, caps and paces it (tm 417 · `notifyTyping`); `seq` lets the
+   * panel drop a late one. `keepalive` outlives the page (`pagehide`). The
+   * server answers `{ typing_preview: false }` when its gate is shut.
    */
-  async typing(isTyping: boolean, text?: string): Promise<void> {
-    await this.#request('POST', '/customer/chat/typing', {
-      is_typing: isTyping,
-      ...(isTyping && text ? { text: text.slice(0, 500) } : {}),
-    });
+  typing(
+    isTyping: boolean,
+    text: string,
+    seq: number,
+    keepalive?: boolean,
+  ): Promise<{ typing_preview?: boolean } | undefined> {
+    const body = { is_typing: isTyping, ...(isTyping ? { text } : {}), seq };
+    // One line: `endpoint-ui-audit` finds the call by method and path together.
+    return this.#request('POST', '/customer/chat/typing', body, keepalive);
   }
 
   /**
@@ -730,7 +735,7 @@ export class WidgetApi {
     await this.#request('POST', '/customer/events', input);
   }
 
-  async #request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  async #request<T>(method: string, path: string, body?: unknown, keepalive?: boolean): Promise<T> {
     if (!this.#token) throw new WidgetApiError('not connected');
 
     const response = await fetch(`${this.baseUrl}${path}`, {
@@ -740,6 +745,8 @@ export class WidgetApi {
         ...(body === undefined ? {} : { 'content-type': 'application/json' }),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      // Not `sendBeacon`: that cannot carry the bearer header (tm 417).
+      ...(keepalive ? { keepalive } : {}),
     });
 
     if (response.status === 401) {
@@ -747,7 +754,7 @@ export class WidgetApi {
       // left the tab open overnight is not silently unable to reply.
       this.#token = null;
       await this.connect();
-      return this.#request<T>(method, path, body);
+      return this.#request<T>(method, path, body, keepalive);
     }
     if (!response.ok) throw await failure(response);
     if (response.status === 204) return undefined as T;

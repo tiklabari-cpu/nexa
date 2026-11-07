@@ -57,8 +57,22 @@ const RTM_VERSION = '3.6';
  * `sync_required` (tm 408): the gateway's Redis subscription dropped under an
  * open socket and is back — run the reconnect `sync` now rather than wait for
  * the slow poll.
+ *
+ * `chat_taken_over` and `chat_transferred` (tm 417.5): a supervisor seized the
+ * conversation, or it was handed to someone. Neither system line reaches the
+ * visitor as an `incoming_event` (a takeover's is for agents only, a
+ * transfer's is never pushed) — yet a person may hold it now, and the draft
+ * preview's gate may have opened. Answered with `onResync`: the poll, not
+ * the push, says what changed.
  */
-const PUSHES = ['incoming_event', 'chat_deactivated', 'event_updated', 'sync_required'] as const;
+const PUSHES = [
+  'incoming_event',
+  'chat_deactivated',
+  'event_updated',
+  'sync_required',
+  'chat_taken_over',
+  'chat_transferred',
+] as const;
 
 interface Frame {
   request_id?: string;
@@ -94,7 +108,10 @@ export interface WidgetSocketOptions {
   onEventUpdated: (chatId: string, event: WidgetEvent) => void;
   /** That conversation has ended (agent archive, idle sweep, or their own close). */
   onChatClosed: (chatId: string) => void;
-  /** The gap was wider than the gateway will replay — refetch the transcript. */
+  /**
+   * The gap was wider than the gateway will replay, or the conversation
+   * changed hands (`chat_taken_over`, `chat_transferred`) — refetch the transcript.
+   */
   onResync: () => void;
   /** Live or not, so the caller can move its poll off the fast cadence. */
   onStatusChange: (live: boolean) => void;
@@ -312,6 +329,10 @@ export class WidgetSocket {
     if (frame.type !== 'push') return;
     if (frame.action === 'sync_required') {
       void this.#catchUp();
+      return;
+    }
+    if (frame.action === 'chat_taken_over' || frame.action === 'chat_transferred') {
+      this.options.onResync();
       return;
     }
 

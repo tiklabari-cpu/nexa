@@ -20,6 +20,7 @@ import {
   type TenantFixture,
 } from '../helpers/fixtures.js';
 import { mintForExistingCustomer } from '../helpers/member-token.js';
+import { assignForReply } from '../helpers/reply-assignment.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const DEPOSIT = 'https://casino.example/deposit';
@@ -337,7 +338,10 @@ describe('rich campaign card (EN-02)', () => {
         auth(player.token),
       );
       expect(started.statusCode).toBe(201);
-      return { ...player, chatId: started.json().chat_id as string };
+      const chatId = started.json().chat_id as string;
+      // The owner's: only the assignee writes to the player (tm 475).
+      await assignForReply(owner, chatId, fx.a.ownerAccountId);
+      return { ...player, chatId };
     }
     const send = (chatId: string, card: unknown, extra: Record<string, unknown> = {}) =>
       server.post(

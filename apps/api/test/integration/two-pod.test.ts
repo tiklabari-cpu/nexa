@@ -116,7 +116,13 @@ interface Conversation {
 async function createConversation(
   db: PrismaClient,
   tenant: TenantFixture,
-  input: { groupId: bigint; agentIds: string[]; messages?: string[] },
+  input: {
+    groupId: bigint;
+    agentIds: string[];
+    messages?: string[];
+    /** Who holds the open connection — the one teammate who answers the customer (tm 475). */
+    assigneeId?: string;
+  },
 ): Promise<Conversation> {
   const chatId = generateShortId();
   const threadId = generateShortId();
@@ -134,7 +140,13 @@ async function createConversation(
     });
   }
   await db.thread.create({
-    data: { id: threadId, chatId, licenseId: tenant.licenseId, active: true },
+    data: {
+      id: threadId,
+      chatId,
+      licenseId: tenant.licenseId,
+      active: true,
+      assigneeId: input.assigneeId ?? null,
+    },
   });
 
   const messages = input.messages ?? [];
@@ -222,6 +234,8 @@ describe('a four-process fleet sharing one Postgres and one Redis', () => {
       groupId,
       agentIds: [fx.a.ownerAccountId, fx.a.agentAccountId],
       messages: ['hello from the customer'],
+      // The owner writes to the customer below.
+      assigneeId: fx.a.ownerAccountId,
     });
 
     ownerToken = await grantToken(db, {
@@ -753,6 +767,7 @@ describe('an attachment uploaded through one API pod and read from another', () 
     conversation = await createConversation(db, fx.a, {
       groupId,
       agentIds: [fx.a.ownerAccountId],
+      assigneeId: fx.a.ownerAccountId,
     });
     token = await grantToken(db, {
       licenseId: fx.a.licenseId,

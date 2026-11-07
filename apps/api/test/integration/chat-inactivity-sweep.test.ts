@@ -94,6 +94,15 @@ describe('the inactivity sweep (WG-03)', () => {
   }
 
   /** A Support member with the given capacity, status and expertise. */
+  /** An agent's own credential: a reply to the player comes from the assignee (tm 475). */
+  const tokenFor = (agentId: string): Promise<string> =>
+    grantToken(owner, {
+      licenseId: fx.a.licenseId,
+      organizationId: fx.a.organizationId,
+      ownerId: agentId,
+      scopes: ['chats--access:rw'],
+    });
+
   async function addAgent(
     options: { limit?: number; status?: string; lead?: boolean; expertiseId?: bigint } = {},
   ): Promise<string> {
@@ -416,7 +425,7 @@ describe('the inactivity sweep (WG-03)', () => {
     const response = await server.post(
       `/chats/${answered.chatId}/events`,
       { type: 'message', text: 'Looking into it now.' },
-      auth(adminToken),
+      auth(await tokenFor(silent)),
     );
     expect(response.statusCode).toBe(201);
     const ai = await connection({ assignee: silent, assignedAt: stale, aiMode: 'ai' });
@@ -699,7 +708,7 @@ describe('the inactivity sweep (WG-03)', () => {
     const message = await server.post(
       `/chats/${quiet.chatId}/events`,
       { type: 'message', text: 'Still there?' },
-      auth(adminToken),
+      auth(await tokenFor(agent)),
     );
     expect(message.statusCode).toBe(201);
     expect((await threadOf(quiet.threadId)).inactiveSince).toBeNull();

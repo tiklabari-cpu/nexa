@@ -19,6 +19,17 @@ import type { Redis } from 'ioredis';
 import { AGENT_TYPING_TTL_SECONDS, typingStateKey } from '@siyahtus/types';
 import type { SocketPrincipal } from './auth.js';
 
+/** What a socket that may signal typing on a chat reaches with it. */
+export interface TypingAccess {
+  /**
+   * The socket's agent is the one the chat's open connection is assigned to —
+   * the only teammate the visitor is shown typing (tm 475): only they can
+   * answer the visitor, so anyone else's "is typing" would promise a reply
+   * that cannot come.
+   */
+  readonly assignee: boolean;
+}
+
 export class TypingService {
   constructor(
     private readonly db: PrismaClient,
@@ -29,21 +40,28 @@ export class TypingService {
    * Whether this socket may signal typing on the chat. Mirrors `sync`'s
    * visibility rule narrowed to a single active chat: an unrestricted token sees
    * any chat in the licence, everyone else only chats their team is routed to or
-   * they are personally in. Returns false rather than throwing so the dispatcher
-   * can answer an inaccessible chat exactly as it answers a missing one.
+   * they are personally in. Returns null rather than throwing so the dispatcher
+   * can answer an inaccessible chat exactly as it answers a missing one; else
+   * whether the socket's agent holds the open connection ({@link TypingAccess}),
+   * read in the same query.
    */
-  async canType(principal: SocketPrincipal, chatId: string): Promise<boolean> {
+  async canType(principal: SocketPrincipal, chatId: string): Promise<TypingAccess | null> {
     return this.#scoped(principal, async (tx) => {
       if (principal.unrestricted) {
-        const rows = await tx.$queryRaw<Array<{ ok: boolean }>>`
-          SELECT true AS ok FROM chats WHERE id = ${chatId} AND active LIMIT 1
+        const rows = await tx.$queryRaw<Array<{ assignee: boolean }>>`
+          SELECT EXISTS (SELECT 1 FROM threads t
+                        WHERE t.chat_id = c.id AND t.active
+                          AND t.assignee_id::text = ${principal.actorId}) AS assignee
+          FROM chats c WHERE c.id = ${chatId} AND c.active LIMIT 1
         `;
-        return rows.length > 0;
+        return rows[0] ? { assignee: rows[0].assignee } : null;
       }
 
       const groupIds = principal.groupIds.map((g) => BigInt(g));
-      const rows = await tx.$queryRaw<Array<{ ok: boolean }>>`
-        SELECT true AS ok
+      const rows = await tx.$queryRaw<Array<{ assignee: boolean }>>`
+        SELECT EXISTS (SELECT 1 FROM threads t
+                        WHERE t.chat_id = c.id AND t.active
+                          AND t.assignee_id::text = ${principal.actorId}) AS assignee
         FROM chats c
         WHERE c.id = ${chatId} AND c.active
           AND (
@@ -55,7 +73,7 @@ export class TypingService {
           )
         LIMIT 1
       `;
-      return rows.length > 0;
+      return rows[0] ? { assignee: rows[0].assignee } : null;
     });
   }
 

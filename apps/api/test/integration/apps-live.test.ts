@@ -33,6 +33,7 @@ import {
   seedFixtures,
   type Fixtures,
 } from '../helpers/fixtures.js';
+import { assignForReply } from '../helpers/reply-assignment.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const CREDENTIAL_KEY = 'e5'.repeat(32);
@@ -691,7 +692,9 @@ describe('live Apps connections (tm 263 · FR-MOD-09.2 · FR-MOD-09.1)', () => {
       expect(sticker.statusCode).toBe(200);
       expect(sticker.json()).toMatchObject({ status: 'ignored' });
 
-      // The agent's reply leaves through the real Bot API, to that private chat.
+      // The agent's reply leaves through the real Bot API, to that private chat
+      // — theirs first: only the assignee answers the customer (tm 475).
+      await assignForReply(owner, chatId, fx.a.ownerAccountId);
       const posted = await tg.post(
         `/chats/${chatId}/events`,
         { type: 'message', text: 'on its way', recipients: 'all' },

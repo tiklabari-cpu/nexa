@@ -34,6 +34,7 @@ import {
   ownerAccessToken,
   ownerAccessTokenFor,
   signIn,
+  takeOpenChatForReply,
   visitorSends,
   widgetFrame,
   type TenantOwner,
@@ -426,6 +427,8 @@ test.describe('SLA targets (11.5-d · 11.5-e)', () => {
       const list = agent.getByRole('region', { name: 'Conversations' });
       await expect(list).toContainText(question, { timeout: 20_000 });
       await list.getByRole('button').filter({ hasText: question }).first().click();
+      // Taken first: only the assignee answers the visitor (tm 475).
+      await takeOpenChatForReply(agent, request, { authorization: `Bearer ${token}` });
       await agent.getByRole('radio', { name: 'Reply' }).click();
       await agent.getByPlaceholder('Type your reply').fill('Sorry for the wait — checking now.');
       await agent.getByRole('button', { name: 'Send' }).click();

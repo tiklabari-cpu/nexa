@@ -5,6 +5,14 @@
 # first entry with the contract: adding or removing a published operation changes
 # the fingerprint, and the test fails until an entry names the change. The first
 # entry's `version` must equal `info.version` of openapi.yaml.
+- version: 1.1.0
+  date: "2026-11-07"
+  surface: "9fd61d62020fa1c6"
+  summary: A reply to the customer comes only from the agent the conversation is assigned to.
+  changes:
+    - "`POST /chats/{chatId}/events`: a teammate's message to the customer (`recipients: all`) is written only when the conversation's open connection is assigned to them; otherwise `409 reply_requires_assignment`, with `details.reason` `unassigned`, `ai` or `assigned_to_other`, and nothing is written. Internal notes and bot tokens are not affected."
+    - "`POST /chats`: a teammate's `initial_event` addressed to the customer assigns the opened connection to them, whatever `assign_to_me` says."
+    - New error type `reply_requires_assignment` (409).
 - version: 1.0.0
   date: "2026-11-01"
   surface: "9fd61d62020fa1c6"

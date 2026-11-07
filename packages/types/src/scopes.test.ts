@@ -140,6 +140,9 @@ describe('error taxonomy', () => {
     // Manual assignment (WG-07 · tm 346): "Take" refused — taken first, at
     // the caller's limit, or no longer waiting.
     'chat_claim_refused',
+    // Who may answer the customer (tm 475): a reply from a teammate the open
+    // connection is not assigned to — nobody's, the AI's, or a colleague's.
+    'reply_requires_assignment',
     // The sandbox workspace (FR-MOD-11.5 · 11.5-f): the 409 for asking a
     // licence that already has one for a second.
     'sandbox_exists',

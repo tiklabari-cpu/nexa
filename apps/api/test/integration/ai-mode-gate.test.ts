@@ -27,6 +27,7 @@ import { AI_BOT_ID, AI_CONVERSATION_MODES } from '@siyahtus/types';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { FakeLlmProvider } from '../helpers/fake-llm-provider.js';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import { assignForReply } from '../helpers/reply-assignment.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const PASSAGE = 'Standard delivery takes 3 to 5 working days across the EU.';
@@ -79,12 +80,21 @@ describe('the AI answers only a connection that is its own (AI-11)', () => {
     return { chatId: sent.chat_id, threadId: sent.event.thread_id };
   }
 
-  /** An agent's line in the chat, as the Inbox sends it. Not awaited on the AI jobs. */
+  /**
+   * An agent's line in the chat, as the Inbox sends it. Not awaited on the AI jobs.
+   * A line to the player is written by the agent the connection is assigned to
+   * (tm 475): they take it first, as "Take" leaves it, and their reply is then
+   * what quietens the AI — the take-over these tests are about.
+   */
   async function agentWrites(
     chatId: string,
     body: { text: string; recipients?: 'all' | 'agents' },
     token = agentToken,
   ): Promise<void> {
+    if ((body.recipients ?? 'all') === 'all') {
+      const writer = token === adminToken ? fx.a.ownerAccountId : fx.a.agentAccountId;
+      await assignForReply(owner, chatId, writer);
+    }
     const response = await server.app.inject({
       method: 'POST',
       url: server.url(`/chats/${chatId}/events`),

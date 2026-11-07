@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "SiyahTuş API",
-    "version": "1.0.0",
-    "description": "The SiyahTuş HTTP API: chats, customers, tickets, webhooks and uploads. Generated from the contract the server itself is built against. Last changed 2026-11-01."
+    "version": "1.1.0",
+    "description": "The SiyahTuş HTTP API: chats, customers, tickets, webhooks and uploads. Generated from the contract the server itself is built against. Last changed 2026-11-07."
   },
   "servers": [
     {
@@ -685,10 +685,12 @@
                   },
                   "assign_to_me": {
                     "type": "boolean",
-                    "default": true
+                    "default": true,
+                    "description": "Give the opened connection to the caller rather than to\nrouting. A teammate whose `initial_event` is addressed to the\ncustomer (`recipients: all`, the default) is given it whatever\nthis says: only the assigned agent writes to the customer\n(`sendEvent`), so the agent who opens a conversation by\nwriting to the customer has it.\n"
                   },
                   "initial_event": {
-                    "$ref": "#/components/schemas/NewEvent"
+                    "$ref": "#/components/schemas/NewEvent",
+                    "description": "The connection's opening line, written as the caller. Addressed\nto the customer, from a teammate, it assigns the connection to\nthem (see `assign_to_me`); an internal note\n(`recipients: agents`) leaves the assignment to `assign_to_me`.\n"
                   }
                 }
               }
@@ -853,7 +855,7 @@
         ],
         "operationId": "sendEvent",
         "summary": "Send a message, internal note or system event",
-        "description": "Idempotent when `idempotency_key` is supplied: retrying after a timeout\nreturns the original event rather than posting a duplicate. Without it, a\nflaky connection turns one message into several.\n\nRefuses to write to a closed conversation (`chat_inactive`) — resume it\nfirst, which starts a new thread.\n",
+        "description": "Idempotent when `idempotency_key` is supplied: retrying after a timeout\nreturns the original event rather than posting a duplicate. Without it, a\nflaky connection turns one message into several.\n\nRefuses to write to a closed conversation (`chat_inactive`) — resume it\nfirst, which starts a new thread.\n\n**A reply to the customer comes only from the assigned agent**.\nA teammate's event the customer sees (`recipients: all`) is written only\nwhen the conversation's open connection is assigned to them; anyone else\nreceives `409 reply_requires_assignment` with\n`ReplyRequiresAssignmentDetails` as `details` — `assigned_to_other`\n(another teammate has it), `ai` (nobody has it and the AI is answering\nit or is held back) or `unassigned` (nobody has it). Nothing is written\nthen: no event, no change to who answers the conversation, no delivery\nto the customer's channel, and an `idempotency_key` sent with it is not\nused up. Take the conversation first (`POST /chats/{chatId}/claim`, or\n`POST /chats/{chatId}/takeover` for a colleague's), or have it assigned.\nAn internal note (`recipients: agents`) is never refused: any teammate\nwho can see the conversation writes one. A bot token is not subject to\nthe rule.\n\nThe check reads the connection under its row lock — the lock a takeover,\na \"Take\" and every other re-assignment also take — so a reply is never\nwritten after the conversation moved on: it went out while the\nconversation was still the sender's, or it is refused. Two teammates'\nreplies never both reach the customer.\n",
         "parameters": [
           {
             "$ref": "#/components/parameters/ChatId"
@@ -897,7 +899,7 @@
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "description": "The conversation is not active",
+            "description": "The conversation is not active (`chat_inactive`), or a message to the\ncustomer from a teammate it is not assigned to\n(`reply_requires_assignment`)\n",
             "content": {
               "application/json": {
                 "schema": {
@@ -6868,6 +6870,7 @@
           "ownership_transfer_state",
           "pending_requests_limit_reached",
           "recipient_not_allowed",
+          "reply_requires_assignment",
           "request_timeout",
           "service_unavailable",
           "takeover_conflict",
@@ -7063,10 +7066,21 @@
     {
       "id": "errors",
       "title": "Errors",
-      "markdown": "Every error has the same envelope. Switch on `error.type`; the HTTP status follows from it and the two never disagree.\n\n```json\n{\n  \"error\": {\n    \"type\": \"validation\",\n    \"message\": \"limit must be between 1 and 100\",\n    \"request_id\": \"01JAB2…\",\n    \"details\": { \"field\": \"limit\" }\n  }\n}\n```\n\nQuote `request_id` when you contact support. `details` is optional and depends on the type.\n\n| Type | HTTP status |\n| --- | --- |\n| `unsupported_version` | 400 |\n| `validation` | 400 |\n| `authentication` | 401 |\n| `two_factor_required` | 401 |\n| `license_expired` | 402 |\n| `authorization` | 403 |\n| `challenge_required` | 403 |\n| `customer_banned` | 403 |\n| `message_rejected` | 403 |\n| `not_allowed` | 403 |\n| `recipient_not_allowed` | 403 |\n| `brand_not_found` | 404 |\n| `greeting_not_found` | 404 |\n| `group_not_found` | 404 |\n| `not_found` | 404 |\n| `request_timeout` | 408 |\n| `account_exists` | 409 |\n| `ai_agent_exists` | 409 |\n| `ai_config_revision_conflict` | 409 |\n| `ai_config_version_state` | 409 |\n| `ai_guardrail_setup_incomplete` | 409 |\n| `ai_mode_transition_refused` | 409 |\n| `ai_return_blocked` | 409 |\n| `ai_suggestion_state` | 409 |\n| `ai_test_run_in_progress` | 409 |\n| `brand_exists` | 409 |\n| `chat_claim_refused` | 409 |\n| `chat_inactive` | 409 |\n| `fallback_rule_exists` | 409 |\n| `group_expertise_missing` | 409 |\n| `group_in_use` | 409 |\n| `group_offline` | 409 |\n| `group_protected` | 409 |\n| `group_topic_role_taken` | 409 |\n| `group_unavailable` | 409 |\n| `groups_offline` | 409 |\n| `knowledge_job_in_progress` | 409 |\n| `knowledge_source_exists` | 409 |\n| `ownership_transfer_state` | 409 |\n| `qa_review_state` | 409 |\n| `takeover_conflict` | 409 |\n| `template_locked` | 409 |\n| `ticket_exists` | 409 |\n| `ticket_merged` | 409 |\n| `ticket_no_recipient` | 409 |\n| `two_factor_already_enabled` | 409 |\n| `website_exists` | 409 |\n| `wrong_product_version` | 409 |\n| `chat_anonymized` | 410 |\n| `misdirected_request` | 421 |\n| `limit_reached` | 429 |\n| `pending_requests_limit_reached` | 429 |\n| `too_many_requests` | 429 |\n| `users_limit_reached` | 429 |\n| `internal` | 500 |\n| `service_unavailable` | 503 |"
+      "markdown": "Every error has the same envelope. Switch on `error.type`; the HTTP status follows from it and the two never disagree.\n\n```json\n{\n  \"error\": {\n    \"type\": \"validation\",\n    \"message\": \"limit must be between 1 and 100\",\n    \"request_id\": \"01JAB2…\",\n    \"details\": { \"field\": \"limit\" }\n  }\n}\n```\n\nQuote `request_id` when you contact support. `details` is optional and depends on the type.\n\n| Type | HTTP status |\n| --- | --- |\n| `unsupported_version` | 400 |\n| `validation` | 400 |\n| `authentication` | 401 |\n| `two_factor_required` | 401 |\n| `license_expired` | 402 |\n| `authorization` | 403 |\n| `challenge_required` | 403 |\n| `customer_banned` | 403 |\n| `message_rejected` | 403 |\n| `not_allowed` | 403 |\n| `recipient_not_allowed` | 403 |\n| `brand_not_found` | 404 |\n| `greeting_not_found` | 404 |\n| `group_not_found` | 404 |\n| `not_found` | 404 |\n| `request_timeout` | 408 |\n| `account_exists` | 409 |\n| `ai_agent_exists` | 409 |\n| `ai_config_revision_conflict` | 409 |\n| `ai_config_version_state` | 409 |\n| `ai_guardrail_setup_incomplete` | 409 |\n| `ai_mode_transition_refused` | 409 |\n| `ai_return_blocked` | 409 |\n| `ai_suggestion_state` | 409 |\n| `ai_test_run_in_progress` | 409 |\n| `brand_exists` | 409 |\n| `chat_claim_refused` | 409 |\n| `chat_inactive` | 409 |\n| `fallback_rule_exists` | 409 |\n| `group_expertise_missing` | 409 |\n| `group_in_use` | 409 |\n| `group_offline` | 409 |\n| `group_protected` | 409 |\n| `group_topic_role_taken` | 409 |\n| `group_unavailable` | 409 |\n| `groups_offline` | 409 |\n| `knowledge_job_in_progress` | 409 |\n| `knowledge_source_exists` | 409 |\n| `ownership_transfer_state` | 409 |\n| `qa_review_state` | 409 |\n| `reply_requires_assignment` | 409 |\n| `takeover_conflict` | 409 |\n| `template_locked` | 409 |\n| `ticket_exists` | 409 |\n| `ticket_merged` | 409 |\n| `ticket_no_recipient` | 409 |\n| `two_factor_already_enabled` | 409 |\n| `website_exists` | 409 |\n| `wrong_product_version` | 409 |\n| `chat_anonymized` | 410 |\n| `misdirected_request` | 421 |\n| `limit_reached` | 429 |\n| `pending_requests_limit_reached` | 429 |\n| `too_many_requests` | 429 |\n| `users_limit_reached` | 429 |\n| `internal` | 500 |\n| `service_unavailable` | 503 |"
     }
   ],
   "x-changelog": [
+    {
+      "version": "1.1.0",
+      "date": "2026-11-07",
+      "surface": "9fd61d62020fa1c6",
+      "summary": "A reply to the customer comes only from the agent the conversation is assigned to.",
+      "changes": [
+        "`POST /chats/{chatId}/events`: a teammate's message to the customer (`recipients: all`) is written only when the conversation's open connection is assigned to them; otherwise `409 reply_requires_assignment`, with `details.reason` `unassigned`, `ai` or `assigned_to_other`, and nothing is written. Internal notes and bot tokens are not affected.",
+        "`POST /chats`: a teammate's `initial_event` addressed to the customer assigns the opened connection to them, whatever `assign_to_me` says.",
+        "New error type `reply_requires_assignment` (409)."
+      ]
+    },
     {
       "version": "1.0.0",
       "date": "2026-11-01",

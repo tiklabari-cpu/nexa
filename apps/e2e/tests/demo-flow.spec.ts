@@ -9,11 +9,21 @@
  * would leave the two halves — widget and agent app — proven only against the
  * API, never against each other.
  */
-import { expect, test, DEMO, openWidget, signIn, visitorSends, widgetFrame } from './fixtures.js';
+import {
+  expect,
+  test,
+  DEMO,
+  openWidget,
+  signIn,
+  takeOpenChatForReply,
+  visitorSends,
+  widgetFrame,
+} from './fixtures.js';
 
 test('a visitor conversation reaches the agent, is answered, and is archived', async ({
   browser,
   organizationId,
+  request,
 }) => {
   // Two separate contexts: the visitor and the agent are different people on
   // different sites, and sharing storage between them would let a bug in one
@@ -61,6 +71,8 @@ test('a visitor conversation reaches the agent, is answered, and is archived', a
     // Short token, same reason as the question above: keep it clear of the
     // 13-digit card-mask window so the reply reads back verbatim in the widget.
     const answer = `Bring it in and we will true the rotor — ${Date.now().toString().slice(-6)}`;
+    // Routing gave it to a teammate; only the assignee answers the visitor (tm 475).
+    await takeOpenChatForReply(agent, request);
     await agent.getByRole('radio', { name: 'Reply' }).click();
     await agent.getByPlaceholder('Type your reply').fill(answer);
     await agent.getByRole('button', { name: 'Send' }).click();

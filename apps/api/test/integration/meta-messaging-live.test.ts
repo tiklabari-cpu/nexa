@@ -36,6 +36,7 @@ import {
   type Fixtures,
 } from '../helpers/fixtures.js';
 import { MemoryMailer } from '../helpers/invite-join.js';
+import { assignForReply } from '../helpers/reply-assignment.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const CREDENTIAL_KEY = 'b8'.repeat(32);
@@ -469,6 +470,8 @@ describe('live Messenger / Instagram channels (tm 381 · FR-MOD-08.5.4 · FR-MOD
     expect(received).toEqual({ status: 'received', accepted: 1, duplicates: 0, ignored: 0 });
 
     const chat = await inboundChat(fx.a.licenseId);
+    // Only the assignee answers the customer (tm 475).
+    await assignForReply(owner, chat!.id, fx.a.ownerAccountId);
     expect(chat).not.toBeNull();
     expect(await owner.chat.count({ where: { licenseId: fx.b.licenseId } })).toBe(chatsInB);
     const inbound = await owner.channelMessage.findFirstOrThrow({
@@ -519,6 +522,8 @@ describe('live Messenger / Instagram channels (tm 381 · FR-MOD-08.5.4 · FR-MOD
     );
     expect(received.accepted).toBe(1);
     const chat = await inboundChat(fx.a.licenseId);
+    // Only the assignee answers the customer (tm 475).
+    await assignForReply(owner, chat!.id, fx.a.ownerAccountId);
     const identity = await owner.channelIdentity.findFirstOrThrow({
       where: { licenseId: fx.a.licenseId, channelType: 'instagram' },
     });
@@ -626,6 +631,8 @@ describe('live Messenger / Instagram channels (tm 381 · FR-MOD-08.5.4 · FR-MOD
     expect((await connect('messenger')).statusCode).toBe(200);
     await deliver(pageDelivery(PAGE_A, [dm(PSID, PAGE_A, 'm_old', 'merhaba')]));
     const chat = await inboundChat(fx.a.licenseId);
+    // Only the assignee answers the customer (tm 475).
+    await assignForReply(owner, chat!.id, fx.a.ownerAccountId);
     await owner.channelIdentity.updateMany({
       where: { licenseId: fx.a.licenseId, channelType: 'messenger' },
       data: { lastCustomerMessageAt: new Date(Date.now() - 25 * 60 * 60 * 1000) },
@@ -656,6 +663,8 @@ describe('live Messenger / Instagram channels (tm 381 · FR-MOD-08.5.4 · FR-MOD
     expect((await connect('messenger')).statusCode).toBe(200);
     await deliver(pageDelivery(PAGE_A, [dm(PSID, PAGE_A, 'm_r', 'merhaba')]));
     const chat = await inboundChat(fx.a.licenseId);
+    // Only the assignee answers the customer (tm 475).
+    await assignForReply(owner, chat!.id, fx.a.ownerAccountId);
     state.revoked = true;
 
     for (const text of ['ilk', 'ikinci']) {

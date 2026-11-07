@@ -18,6 +18,7 @@ import {
   type Fixtures,
   type TenantFixture,
 } from '../helpers/fixtures.js';
+import { assignForReply } from '../helpers/reply-assignment.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const AGENT_SCOPES = ['chats--access:rw', 'tags--all:rw', 'customers:ro'];
@@ -2289,6 +2290,10 @@ describe('agent chat api', () => {
 
     it('drops a conversation out of the AI group once a human agent replies', async () => {
       const chatId = await aiChat('Escalated');
+      // Taken first — only the assignee answers the player (tm 475); taking it
+      // alone leaves it in the AI group, the reply is what moves it.
+      await assignForReply(owner, chatId, fx.a.ownerAccountId);
+      expect(ids(await server.get('/chats?view=ai', auth(acmeAdminToken)))).toContain(chatId);
       // One agent-authored event is the line ADR-09 draws: it stops being an AI
       // conversation, in the inbox and on the invoice alike.
       await server.post(

@@ -121,8 +121,9 @@ test.describe('the inbox on a narrow window (GV-04)', () => {
       }
       // Every widget visitor shares one name: a stamped line names the row.
       const marker = `Routed to Sales ${tag} ${stamp}`;
+      // Written by Priya, who holds it now — only the assignee answers the visitor (tm 475).
       const said = await request.post(`${API_BASE}/chats/${chatId}/events`, {
-        headers: owner,
+        headers: member,
         data: { type: 'message', text: marker },
       });
       expect(said.ok(), await said.text()).toBe(true);

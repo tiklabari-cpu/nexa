@@ -25,6 +25,7 @@ import { embed, toVectorLiteral } from '@siyahtus/ai-mock';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { FakeLlmProvider } from '../helpers/fake-llm-provider.js';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import { assignForReply } from '../helpers/reply-assignment.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const PASSAGE = 'Standard delivery takes 3 to 5 working days across the EU.';
@@ -68,12 +69,20 @@ describe('giving a connection back to the AI, and holding the AI back (AI-11 §1
     return { chatId: sent.chat_id, threadId: sent.event.thread_id };
   }
 
+  /**
+   * An agent's line. To the player, by the agent it is assigned to (tm 475):
+   * they take it first — as "Take" leaves it — then write.
+   */
   async function writes(
     chatId: string,
     text: string,
     token = agentToken,
     recipients: 'all' | 'agents' = 'all',
   ): Promise<void> {
+    if (recipients === 'all') {
+      const writer = token === adminToken ? fx.a.ownerAccountId : fx.a.agentAccountId;
+      await assignForReply(owner, chatId, writer);
+    }
     const response = await server.post(
       `/chats/${chatId}/events`,
       { type: 'message', text, recipients },
@@ -648,7 +657,7 @@ describe('giving a connection back to the AI, and holding the AI back (AI-11 §1
       await send(headers, QUESTION);
       expect(model.calls).toHaveLength(2);
 
-      // The next hand-over routes it as any AI-first connection's (tm 293.2).
+      // Nobody holds it now: whoever takes it next has it (tm 293.2 · tm 475).
       await writes(chatId, 'Back again.', adminToken);
       expect(await thread(threadId)).toMatchObject({
         assigneeId: fx.a.ownerAccountId,

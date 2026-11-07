@@ -46,6 +46,7 @@ import {
   type Fixtures,
   type TenantFixture,
 } from '../helpers/fixtures.js';
+import { assignForReply } from '../helpers/reply-assignment.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const PUSH = 'traffic_visitor_updated';
@@ -380,6 +381,8 @@ describe('real-time traffic — the board is pushed, not only polled (FR-MOD-03.
 
     const before = (await board()).find((row) => row.customer_id === customerId);
     expect(before?.activity).toBe('waiting');
+    // The owner takes it first: only the assignee answers the visitor (tm 475).
+    await assignForReply(owner, chatId, fx.a.ownerAccountId);
 
     const envelopes = await captureBus(fx.a.licenseId, async () => {
       const replied = await server.post(

@@ -1367,6 +1367,27 @@ export interface paths {
      *
      *     Refuses to write to a closed conversation (`chat_inactive`) — resume it
      *     first, which starts a new thread.
+     *
+     *     **A reply to the customer comes only from the assigned agent** (tm 475).
+     *     A teammate's event the customer sees (`recipients: all`) is written only
+     *     when the conversation's open connection is assigned to them; anyone else
+     *     receives `409 reply_requires_assignment` with
+     *     `ReplyRequiresAssignmentDetails` as `details` — `assigned_to_other`
+     *     (another teammate has it), `ai` (nobody has it and the AI is answering
+     *     it or is held back) or `unassigned` (nobody has it). Nothing is written
+     *     then: no event, no change to who answers the conversation, no delivery
+     *     to the customer's channel, and an `idempotency_key` sent with it is not
+     *     used up. Take the conversation first (`POST /chats/{chatId}/claim`, or
+     *     `POST /chats/{chatId}/takeover` for a colleague's), or have it assigned.
+     *     An internal note (`recipients: agents`) is never refused: any teammate
+     *     who can see the conversation writes one. A bot token is not subject to
+     *     the rule.
+     *
+     *     The check reads the connection under its row lock — the lock a takeover,
+     *     a "Take" and every other re-assignment also take — so a reply is never
+     *     written after the conversation moved on: it went out while the
+     *     conversation was still the sender's, or it is refused. Two teammates'
+     *     replies never both reach the customer.
      */
     post: operations['sendEvent'];
     delete?: never;
@@ -1539,8 +1560,11 @@ export interface paths {
     get?: never;
     put?: never;
     /**
-     * Take a conversation waiting in a manual team's queue
-     * @description "Take" in the Queued view (WG-07). The conversation's open connection must be waiting in the queue of a team whose `assignment_mode` is `manual`, and the caller must be a member of that team holding every area of expertise it (and the connection) requires. The first caller has it — a compare-and-set on the unassigned connection — and every later one receives `409 chat_claim_refused` with `details.reason: claimed`. The caller asking again for a conversation that is already theirs is not a later one: it is `200` with the conversation as it is, and nothing is announced a second time. A caller at their concurrent chat limit is refused with `details.reason: limit`; a conversation no longer waiting in such a queue (assigned, closed, moved to an automatic team) with `not_waiting`. The caller's routing status is not asked: choosing a conversation is the caller's own act. The taken connection leaves the queue (`queue_entries` outcome `assigned`), its assignment moment is written; `incoming_chat` tells the caller and `chat_transferred` (reason `manual`, `outcome: assigned`) the team, whose Queued view drops the row. A bot token is 403.
+     * Take a conversation nobody has — from a team's queue or from the AI
+     * @description "Take" (WG-07 · tm 475): how a teammate makes a conversation theirs, and so may answer the customer — a message to the customer comes only from the agent the open connection is assigned to (`sendEvent`, `409 reply_requires_assignment`). Two kinds of unassigned connection can be taken.
+     *     **Waiting in a team's queue** — a manual team's or an automatic one's. The caller must be a member of that team holding every area of expertise it (and the connection) requires, and below their concurrent chat limit (`details.reason: limit` otherwise). The taken connection leaves the queue (`queue_entries` outcome `assigned`).
+     *     **In the AI phase** — nobody assigned and the AI answering it, or held back (`ai_mode` `ai` or `paused`; a paused connection is neither queued nor anyone's, so this is how it reaches a person). Anyone who can see the conversation with write access may take it, as writing to the customer used to take it. The AI stops answering: the connection turns `human`, with the agents-only line and `chat_ai_mode_changed` a person taking it from the AI always leaves.
+     *     Either way the first caller has it — a compare-and-set on the unassigned connection under its row lock — and every later one receives `409 chat_claim_refused` with `details.reason: claimed`. The caller asking again for a conversation that is already theirs is not a later one: it is `200` with the conversation as it is, and nothing is announced a second time. A conversation that is neither waiting in a queue nor in the AI phase — assigned, closed, never routed — is refused with `not_waiting`; one assigned to a colleague is taken over instead (`POST /chats/{chatId}/takeover`). The caller's routing status is not asked: choosing a conversation is the caller's own act. Its assignment moment is written; `incoming_chat` tells the caller and `chat_transferred` (reason `manual`, `outcome: assigned`) the team, whose Queued view drops the row. A bot token is 403.
      */
     post: operations['claimChat'];
     delete?: never;
@@ -26129,6 +26153,23 @@ export interface components {
       provider: 'turnstile' | 'mock';
       site_key: string;
     };
+    /**
+     * @description `details` of a `409 reply_requires_assignment` (tm 475): why a message
+     *     to the customer was refused. Only the teammate the conversation's open
+     *     connection is assigned to writes to the customer; an internal note
+     *     (`recipients: agents`) is never refused. `assigned_to_other` — a
+     *     colleague has it (take it over, or ask for it); `ai` — nobody has it
+     *     and the AI is answering it or is held back (take it from the AI);
+     *     `unassigned` — nobody has it (it waits in a queue, or was never
+     *     routed). The message was not written and nothing about the
+     *     conversation changed: take it (`POST /chats/{chatId}/claim`), take it
+     *     over (`POST /chats/{chatId}/takeover`) or have it assigned, then send
+     *     the same message again.
+     */
+    ReplyRequiresAssignmentDetails: {
+      /** @enum {string} */
+      reason: 'unassigned' | 'assigned_to_other' | 'ai';
+    };
     OwnershipTransferParty: {
       /** Format: uuid */
       id: string;
@@ -26205,6 +26246,7 @@ export interface components {
       | 'ownership_transfer_state'
       | 'pending_requests_limit_reached'
       | 'recipient_not_allowed'
+      | 'reply_requires_assignment'
       | 'request_timeout'
       | 'service_unavailable'
       | 'takeover_conflict'
@@ -28705,8 +28747,22 @@ export interface operations {
           customer_id: string;
           /** @description Teams granted access. Defaults to the routing fallback. */
           group_ids?: number[];
-          /** @default true */
+          /**
+           * @description Give the opened connection to the caller rather than to
+           *     routing. A teammate whose `initial_event` is addressed to the
+           *     customer (`recipients: all`, the default) is given it whatever
+           *     this says: only the assigned agent writes to the customer
+           *     (`sendEvent`), so the agent who opens a conversation by
+           *     writing to the customer has it (tm 475).
+           * @default true
+           */
           assign_to_me?: boolean;
+          /**
+           * @description The connection's opening line, written as the caller. Addressed
+           *     to the customer, from a teammate, it assigns the connection to
+           *     them (see `assign_to_me`); an internal note
+           *     (`recipients: agents`) leaves the assignment to `assign_to_me`.
+           */
           initial_event?: components['schemas']['NewEvent'];
         };
       };
@@ -28845,7 +28901,11 @@ export interface operations {
       };
       400: components['responses']['BadRequest'];
       404: components['responses']['NotFound'];
-      /** @description The conversation is not active */
+      /**
+       * @description The conversation is not active (`chat_inactive`), or a message to the
+       *     customer from a teammate it is not assigned to
+       *     (`reply_requires_assignment`)
+       */
       409: {
         headers: {
           [name: string]: unknown;
@@ -29099,7 +29159,10 @@ export interface operations {
       };
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
-      /** @description Another agent took it first, the caller is at their limit, or it no longer waits */
+      /**
+       * @description Another agent took it first, the caller is at their limit, or it is
+       *     neither waiting in a queue nor in the AI phase (`chat_claim_refused`)
+       */
       409: {
         headers: {
           [name: string]: unknown;

@@ -39,6 +39,7 @@ import {
   type Fixtures,
   type TenantFixture,
 } from '../helpers/fixtures.js';
+import { assignForReply } from '../helpers/reply-assignment.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const APP_URL = process.env['DATABASE_APP_URL'];
@@ -786,6 +787,9 @@ describe("the member's day — agent paths (ID-02)", () => {
       // Morning: nobody answers, and the first-response target passes before
       // the archive — an AI resolution and an SLA breach.
       const morning = await say(visitor.token, 'Morning: my deposit is missing');
+      // The day is the owner's — they answer its later chats, and only the
+      // assignee answers the player (tm 475) — so one agent holds all three.
+      await assignForReply(owner, morning, t.ownerAccountId);
       await owner.$executeRaw`
         UPDATE threads SET created_at = created_at - interval '10 minutes'
         WHERE chat_id = ${morning} AND active`;
@@ -795,6 +799,8 @@ describe("the member's day — agent paths (ID-02)", () => {
       }
       // Afternoon: answered in time, archived, rated.
       const afternoon = await say(visitor.token, 'Afternoon: still missing');
+      // The owner's: only the assignee answers the player (tm 475).
+      await assignForReply(owner, afternoon, t.ownerAccountId);
       const reply = await server.post(
         `/chats/${afternoon}/events`,
         { type: 'message', text: 'Found it — credited now', recipients: 'all' },
@@ -811,6 +817,7 @@ describe("the member's day — agent paths (ID-02)", () => {
       // Another member, answered, still open.
       const other = await widgetToken(t);
       const otherChat = await say(other.token, 'Hello');
+      await assignForReply(owner, otherChat, t.ownerAccountId);
       expect(
         (
           await server.post(

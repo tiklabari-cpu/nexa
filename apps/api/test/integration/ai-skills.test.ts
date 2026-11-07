@@ -13,6 +13,7 @@ import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { embed, toVectorLiteral } from '@siyahtus/ai-mock';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import { assignForReply } from '../helpers/reply-assignment.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 describe('ai skills', () => {
@@ -490,11 +491,14 @@ describe('ai skills', () => {
       ownerId: fx.a.ownerAccountId,
       scopes: ['chats--all:rw'],
     });
-    await server.post(
+    // Taken first: only the assignee writes to the player (tm 475).
+    await assignForReply(owner, chatId, fx.a.ownerAccountId);
+    const replied = await server.post(
       `/chats/${chatId}/events`,
       { type: 'message', text: 'A human here.' },
       { authorization: `Bearer ${agentToken}` },
     );
+    expect(replied.statusCode, replied.body).toBe(201);
 
     await server.post('/customer/chat/close', undefined, headers);
 

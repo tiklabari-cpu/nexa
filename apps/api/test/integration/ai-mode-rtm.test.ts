@@ -16,6 +16,7 @@ import { AI_BOT_ID, licenseChannel } from '@siyahtus/types';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { FakeLlmProvider } from '../helpers/fake-llm-provider.js';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import { assignForReply } from '../helpers/reply-assignment.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const PASSAGE = 'Standard delivery takes 3 to 5 working days across the EU.';
@@ -59,7 +60,10 @@ describe('the inbox hears who answers a connection (AI-11)', () => {
     return { chatId: sent.chat_id, threadId: sent.event.thread_id };
   }
 
+  /** A line to the player, by the agent it is assigned to — they take it first (tm 475). */
   async function agentWrites(chatId: string, token = agentToken): Promise<void> {
+    const writer = token === adminToken ? fx.a.ownerAccountId : fx.a.agentAccountId;
+    await assignForReply(owner, chatId, writer);
     const response = await server.post(
       `/chats/${chatId}/events`,
       { type: 'message', recipients: 'all', text: 'Let me check that for you.' },

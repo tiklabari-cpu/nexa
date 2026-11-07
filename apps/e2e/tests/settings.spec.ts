@@ -14,6 +14,7 @@ import {
   introduceVisitor,
   ownerAccessToken,
   openWidget,
+  takeOpenChatForReply,
   test,
   visitorSends,
   widgetFrame,
@@ -1633,6 +1634,7 @@ test.describe('composer shortcuts', () => {
     browser,
     agentPage,
     organizationId,
+    request,
   }) => {
     const shortcut = `promo${Date.now().toString().slice(-6)}`;
     const replyText = `Free shipping this week — ${Date.now().toString().slice(-6)}`;
@@ -1659,6 +1661,8 @@ test.describe('composer shortcuts', () => {
       const list = agentPage.getByRole('region', { name: 'Conversations' });
       await expect(list).toContainText(question, { timeout: 20_000 });
       await list.getByRole('button').first().click();
+      // Taken first: only the assignee answers the visitor (tm 475).
+      await takeOpenChatForReply(agentPage, request);
 
       // 3. The agent types the shortcut. No reload anywhere — the composer's
       //    cache was invalidated when Settings saved.

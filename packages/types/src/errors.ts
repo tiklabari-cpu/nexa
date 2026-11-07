@@ -202,6 +202,15 @@ export const ERROR_TYPES = [
   // mail transcripts, the workspace's rule refused this recipient, and the
   // modal answers "pick an allowed address" rather than "you lack permission".
   'recipient_not_allowed',
+  // SiyahTuş addition — who may answer the customer (tm 475 · owner decision
+  // 2026-11-06). A message the customer would see, from a teammate the open
+  // connection is not assigned to: nobody has it (`details.reason`
+  // `unassigned`), the AI is answering it or is held back (`ai`), or a
+  // colleague has it (`assigned_to_other`) — see `reply-assignment.ts`. 409
+  // like `chat_claim_refused`: the caller may write here, the connection's
+  // state refused this message, and the composer answers "take it first"
+  // rather than "you lack permission". An internal note is never refused.
+  'reply_requires_assignment',
   'request_timeout',
   // SiyahTuş addition — the sandbox workspace (FR-MOD-11.5 · 11.5-f). A licence may
   // hold at most one sandbox, and asking for a second is a conflict rather than
@@ -329,6 +338,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   platform_totp_required: 403,
   platform_workspace_state: 409,
   recipient_not_allowed: 403,
+  reply_requires_assignment: 409,
   request_timeout: 408,
   sandbox_exists: 409,
   service_unavailable: 503,

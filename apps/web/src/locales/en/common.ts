@@ -92,6 +92,8 @@ export const common: Messages = {
     "Transcripts can only be mailed to the player's own address or to one of the workspace's allowed domains.",
   'common.errors.ownership_transfer_state':
     'This ownership transfer cannot go ahead in its current state — reload to see where it stands.',
+  'common.errors.reply_requires_assignment':
+    'Only the agent this conversation is assigned to can reply to the customer. Take it first — an internal note is always allowed.',
   'common.errors.request_timeout': 'That took too long — try again.',
   'common.errors.sandbox_exists': 'This workspace already has a sandbox.',
   'common.errors.service_unavailable':

@@ -27,7 +27,7 @@
  * wired to each other in this build — the composer does not call the adapter —
  * so asserting only the first would quietly over-claim.
  */
-import { channelWebhook, expect, test } from './fixtures.js';
+import { channelWebhook, expect, takeOpenChatForReply, test } from './fixtures.js';
 
 /**
  * A run-unique bot `@username`, so a run cannot collide with its own leftovers.
@@ -174,6 +174,8 @@ test.describe('Telegram (FR-MOD-08.5.8)', () => {
     // What it used to assert — a `tg.`-shaped provider id and the writer
     // resolved back from the chat — is asserted against the real console reply
     // in `channels-adapters.test.ts`, which can read `channel_messages`.
+    // Taken first: only the assignee answers the customer (tm 475).
+    await takeOpenChatForReply(agentPage, request);
     const composer = agentPage.getByPlaceholder('Type your reply');
     await composer.fill(answer);
     await composer.press('Enter');

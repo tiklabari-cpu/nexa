@@ -26,6 +26,7 @@ import {
   seedFixtures,
   type Fixtures,
 } from '../helpers/fixtures.js';
+import { assignForReply } from '../helpers/reply-assignment.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const APP_URL = process.env['DATABASE_APP_URL'];
@@ -214,6 +215,8 @@ describe('the waiting timer on the inbox row (IN-03)', () => {
     const player = await visitor();
     const { chatId, threadId } = await say(player);
     const first = (await column(threadId))!;
+    // Taken first: only the assignee answers the player (tm 475).
+    await assignForReply(owner, chatId, fx.a.ownerAccountId);
 
     expect((await agentSends(chatId, 'all', 'Merhaba, bakıyorum')).statusCode).toBe(201);
     expect(await column(threadId)).toBeNull();

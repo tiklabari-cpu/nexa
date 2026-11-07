@@ -35,13 +35,18 @@ function build(typing: Partial<TypingService>) {
   return { registry, dispatcher };
 }
 
-function authed(registry: ConnectionRegistry, side: 'agent' | 'customer'): Connection {
+function authed(
+  registry: ConnectionRegistry,
+  side: 'agent' | 'customer',
+  actorType?: 'bot',
+): Connection {
   const conn = registry.add({ ws: fakeSocket(), side, organizationId: ORG });
   registry.authenticate(conn.id, {
     licenseId: '7',
     actorId: side === 'agent' ? 'agent-1' : 'cust-1',
     groupIds: side === 'agent' ? [1] : [],
     unrestricted: false,
+    ...(actorType ? { actorType } : {}),
   });
   return registry.get(conn.id)!;
 }
@@ -55,10 +60,10 @@ function req(action: string, payload: Record<string, unknown>): DecodedRequest {
 }
 
 describe('dispatcher · send_typing_indicator', () => {
-  it('sets the agent-typing flag when the agent can see the chat', async () => {
+  it('sets the agent-typing flag when the agent holds the chat (FR-MOD-02.9)', async () => {
     const setAgentTyping = vi.fn().mockResolvedValue(undefined);
     const { registry, dispatcher } = build({
-      canType: vi.fn().mockResolvedValue(true),
+      canType: vi.fn().mockResolvedValue({ assignee: true }),
       setAgentTyping,
     });
     const conn = authed(registry, 'agent');
@@ -78,7 +83,7 @@ describe('dispatcher · send_typing_indicator', () => {
   it('answers not_found — and sets nothing — for a chat the agent cannot see', async () => {
     const setAgentTyping = vi.fn().mockResolvedValue(undefined);
     const { registry, dispatcher } = build({
-      canType: vi.fn().mockResolvedValue(false),
+      canType: vi.fn().mockResolvedValue(null),
       setAgentTyping,
     });
     const conn = authed(registry, 'agent');
@@ -95,8 +100,49 @@ describe('dispatcher · send_typing_indicator', () => {
     expect(setAgentTyping).not.toHaveBeenCalled();
   });
 
+  it('shows the visitor nothing from an agent who does not hold the chat (tm 475)', async () => {
+    const setAgentTyping = vi.fn().mockResolvedValue(undefined);
+    const { registry, dispatcher } = build({
+      canType: vi.fn().mockResolvedValue({ assignee: false }),
+      setAgentTyping,
+    });
+    const conn = authed(registry, 'agent');
+
+    for (const isTyping of [true, false]) {
+      const message = JSON.parse(
+        await dispatcher.dispatch(
+          conn,
+          req('send_typing_indicator', { chat_id: 'CHAT1', is_typing: isTyping }),
+        ),
+      );
+      // Not an error: a teammate writing a note may type; nobody is told.
+      expect(message.success).toBe(true);
+      expect(message.payload).toEqual({ chat_id: 'CHAT1', is_typing: isTyping });
+    }
+    // Neither set nor cleared — their stop must not wipe the assignee's flag.
+    expect(setAgentTyping).not.toHaveBeenCalled();
+  });
+
+  it("keeps a bot's typing for the visitor — bots are not subject to the rule (tm 475)", async () => {
+    const setAgentTyping = vi.fn().mockResolvedValue(undefined);
+    const { registry, dispatcher } = build({
+      canType: vi.fn().mockResolvedValue({ assignee: false }),
+      setAgentTyping,
+    });
+    const conn = authed(registry, 'agent', 'bot');
+
+    const message = JSON.parse(
+      await dispatcher.dispatch(
+        conn,
+        req('send_typing_indicator', { chat_id: 'CHAT1', is_typing: true }),
+      ),
+    );
+    expect(message.success).toBe(true);
+    expect(setAgentTyping).toHaveBeenCalledWith('7', 'CHAT1', true);
+  });
+
   it('refuses a customer socket — the visitor uses the Customer API', async () => {
-    const canType = vi.fn().mockResolvedValue(true);
+    const canType = vi.fn().mockResolvedValue({ assignee: true });
     const { registry, dispatcher } = build({ canType, setAgentTyping: vi.fn() });
     const conn = authed(registry, 'customer');
 
@@ -114,7 +160,7 @@ describe('dispatcher · send_typing_indicator', () => {
 
   it('validates the payload', async () => {
     const { registry, dispatcher } = build({
-      canType: vi.fn().mockResolvedValue(true),
+      canType: vi.fn().mockResolvedValue({ assignee: true }),
       setAgentTyping: vi.fn(),
     });
     const conn = authed(registry, 'agent');

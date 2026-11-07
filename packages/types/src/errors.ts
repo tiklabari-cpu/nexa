@@ -227,11 +227,12 @@ export const ERROR_TYPES = [
   // (the chat is open); kept narrow like `ticket_exists`, not a generic conflict.
   'takeover_conflict',
   // SiyahTuş addition — manual assignment (WG-07 · tm 346): "Take" on a
-  // conversation waiting in a team's queue that refused — another agent took it
-  // first (`details.reason` `claimed`), the caller is at their concurrent
-  // limit (`limit`), or it no longer waits in a queue the caller may take from
-  // (`not_waiting`). 409 and narrow like `takeover_conflict`: the Queued view
-  // drops the row or says "you are full" instead of showing an error.
+  // conversation waiting in a team's queue, or since tm 475.3 one in the AI
+  // phase, that refused — somebody has it (`details.reason` `claimed`), the
+  // caller is at their concurrent limit (`limit`), or it waits neither in a
+  // queue nor on the AI (`not_waiting`). 409 and narrow like
+  // `takeover_conflict`: the Queued view drops the row or says "you are full"
+  // instead of showing an error.
   'chat_claim_refused',
   // SiyahTuş addition — ready-made templates (AI-15 · tm 311.3): switching off
   // or deleting an installed copy of a locked template (`self_exclusion`,

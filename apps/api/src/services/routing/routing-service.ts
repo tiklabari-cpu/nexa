@@ -161,8 +161,9 @@ interface TeamRules {
 
 /**
  * What a "Take" came to (`claim`, WG-07): the connection is the caller's now,
- * or why not — another agent took it first, the caller is at their limit, it
- * does not wait in a manual team's queue, or the caller cannot take from it.
+ * or why not — it is not (or no longer) waiting unassigned in a queue, the
+ * caller is at their limit, it waits without a team to take it from, or the
+ * caller cannot take from that team.
  */
 export type ClaimOutcome =
   | { outcome: 'claimed'; groupId: bigint; chatId: string }
@@ -561,7 +562,13 @@ export class RoutingService {
   }
 
   /**
-   * "Take" a connection waiting in a manual team's queue (WG-07 · tm 346).
+   * "Take" a connection waiting in a team's queue (WG-07 · tm 346): a manual
+   * team's, whose conversations wait for a member to choose them, or since
+   * tm 475.3 (D6) an automatic one's, whose conversations the drain would
+   * otherwise hand out — only the assignee answers the player since tm 475,
+   * and a member needs a way to take one they mean to answer. The same rules
+   * for both: the concurrent limit keeps the drain's fairness (nobody takes
+   * past their share), and the team decides who may.
    *
    * Compare-and-set, so two agents taking the same conversation at once get
    * one winner: the conditional `UPDATE … WHERE assignee_id IS NULL` takes the
@@ -600,8 +607,8 @@ export class RoutingService {
     if (!waiting) return { outcome: 'claimed_by_other' };
     if (waiting.queue_group_id === null) return { outcome: 'not_waiting' };
     const groupId = waiting.queue_group_id;
+    // A manual team's or an automatic one's alike (tm 475.3): its expertise.
     const team = await this.#team(tx, licenseId, groupId);
-    if (!team.manual) return { outcome: 'not_waiting' };
 
     const required = allOf(
       team.expertiseIds,

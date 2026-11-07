@@ -5,7 +5,7 @@
  */
 import { AI_CONVERSATION_MODES, AI_MODE_REASONS } from '@siyahtus/types';
 import { describe, expect, it } from 'vitest';
-import { aiMayAnswer, aiModeNoteText, aiModeStep } from './ai-mode.js';
+import { AI_TAKEN_NOTE_TEXT, aiMayAnswer, aiModeNoteText, aiModeStep } from './ai-mode.js';
 
 describe('the AI mode state machine (AI-11)', () => {
   it('lets anybody hand a connection to a person, from every mode', () => {
@@ -57,5 +57,10 @@ describe('the AI mode state machine (AI-11)', () => {
       expect(text).toMatch(/^AI /);
       expect(text).not.toMatch(/_/);
     }
+  });
+
+  it('words a "Take" as a take, not a reply — nobody has written yet (tm 475.3)', () => {
+    expect(AI_TAKEN_NOTE_TEXT).toBe('AI stopped: an agent took the chat');
+    expect(AI_TAKEN_NOTE_TEXT).not.toBe(aiModeNoteText({ to: 'human', reason: 'agent_message' }));
   });
 });

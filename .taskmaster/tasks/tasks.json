@@ -17225,82 +17225,76 @@
         "id": "463",
         "title": "E2E-FLAKE-TRIAGE [OPUS-HIGH] (Opus 5.5) Bilinen flaky e2e'lerin kök nedeni — spec başına alt görev: two-factor:314, ai-multilingual:28, customers:53, ai-guardrails:130, offline-form",
         "description": "NY-41 (kesintisiz/hatasız çalışma) kısmen karşılanıyor: HANDOFF tm 411–414'te tekrar eden flaky e2e'ler kök nedeni bilinmeden rerun ile geçiyor.",
-        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-04 / NY-41 (partial). Kanıt: HANDOFF tm 411–414 blokları (eski kayıt gerekirse `docs/archive/` altında grep).\n\nKODDA BUGÜN: `apps/e2e/.../two-factor.spec.ts:314`, `ai-multilingual.spec.ts:28`, `customers.spec.ts:53`, `ai-guardrails.spec.ts:130`, `offline-form.spec.ts` (satırları HEAD'de doğrula).\n\nORTAK YÖNTEM (her alt görev): spec'i tek başına `--repeat-each=20` (ilgili shard stack'iyle, run_in_background) koş; başarısızlık oranını ve trace'i topla; kök nedeni (zamanlama, sıra bağımlılığı, 30/dk auth kovası, TOTP pencere sınırı, mock embedding) belirle ve düzelt. Düzeltilemeyen için kanıtlı not — `test.fixme` DEĞİL; HANDOFF'a önce/sonra oran ve hipotez.\n\nTUZAK: memory hub-e2e-traps, browser-ux-probe-traps (30/dk), ai-question-text-is-load-bearing, guardrails-check-every-ai-reply, dod-gate-wall-clock-and-e2e-png-churn. Uzun koşular run_in_background (10 dk komut tavanı).\n\nKAPSAM DIŞI: yeni e2e.\nDENETİM BULGULARI: G-04",
+        "details": "ALT GÖREV BİRLEŞTİRMESİ (2026-11-07, sahip onayı; her alt görev ayrı pencere ve tam kapı demek): 463.1 + 463.2 + 463.3 → 463.1; 463.4 + 463.5 → 463.4. Cancelled alt görevlere metinde yapılan atıflar birleşik alt görevi kasteder.\n\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-04 / NY-41 (partial). Kanıt: HANDOFF tm 411–414 blokları (eski kayıt gerekirse `docs/archive/` altında grep).\n\nKODDA BUGÜN: `apps/e2e/.../two-factor.spec.ts:314`, `ai-multilingual.spec.ts:28`, `customers.spec.ts:53`, `ai-guardrails.spec.ts:130`, `offline-form.spec.ts` (satırları HEAD'de doğrula).\n\nORTAK YÖNTEM (her alt görev): spec'i tek başına `--repeat-each=20` (ilgili shard stack'iyle, run_in_background) koş; başarısızlık oranını ve trace'i topla; kök nedeni (zamanlama, sıra bağımlılığı, 30/dk auth kovası, TOTP pencere sınırı, mock embedding) belirle ve düzelt. Düzeltilemeyen için kanıtlı not — `test.fixme` DEĞİL; HANDOFF'a önce/sonra oran ve hipotez.\n\nTUZAK: memory hub-e2e-traps, browser-ux-probe-traps (30/dk), ai-question-text-is-load-bearing, guardrails-check-every-ai-reply, dod-gate-wall-clock-and-e2e-png-churn. Uzun koşular run_in_background (10 dk komut tavanı).\n\nKAPSAM DIŞI: yeni e2e.\nDENETİM BULGULARI: G-04",
         "testStrategy": "Alt görevlerde. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` son alt görevin kapanışında bir kez.",
         "status": "pending",
         "dependencies": [
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "updatedAt": "2026-11-07T11:50:37.837Z",
         "subtasks": [
           {
             "id": 1,
-            "title": "FLAKE-TWO-FACTOR [OPUS-HIGH] (Opus 5.5) two-factor.spec.ts:314 kök nedeni",
-            "description": "TOTP pencere sınırı / auth kovası hipotezleri; --repeat-each=20.",
-            "details": "Üst görev ORTAK YÖNTEM. Önce/sonra oran HANDOFF'a.",
-            "testStrategy": "two-factor.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez.",
+            "title": "FLAKE-TWO-FACTOR-MULTILINGUAL-CUSTOMERS [OPUS-HIGH] (Opus 5.5) two-factor.spec.ts:314 kök nedeni + ai-multilingual.spec.ts:28 kök nedeni + customers.spec.ts:53 kök nedeni",
+            "description": "(463.1) TOTP pencere sınırı / auth kovası hipotezleri; --repeat-each=20. (463.2) Mock embedding / dil algılama zamanlaması hipotezleri. (463.3) Sıra bağımlılığı / paged query hipotezleri.",
+            "details": "BİRLEŞİK ALT GÖREV (sahip onayı 2026-11-07): 463.1, 463.2, 463.3 tek pencerede yapılır; DoD kapısı bir kez koşar.\nBölümler sırayla yapılır, her biri kendi kabul ölçütüyle kapanır; biri yeşil değilse alt görev done değildir.\n463.2, 463.3 cancelled durumda ve buraya işaret ediyor; metinlerde onlara yapılan atıflar bu alt görevi kasteder.\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\n━━ BÖLÜM 1 — 463.1 FLAKE-TWO-FACTOR · two-factor.spec.ts:314 kök nedeni ━━\nSORUN: TOTP pencere sınırı / auth kovası hipotezleri; --repeat-each=20.\n\nÜst görev ORTAK YÖNTEM. Önce/sonra oran HANDOFF'a.\n\n━━ BÖLÜM 2 — 463.2 FLAKE-AI-MULTILINGUAL · ai-multilingual.spec.ts:28 kök nedeni ━━\nSORUN: Mock embedding / dil algılama zamanlaması hipotezleri.\n\nÜst görev ORTAK YÖNTEM. memory ai-question-text-is-load-bearing.\n\n━━ BÖLÜM 3 — 463.3 FLAKE-CUSTOMERS · customers.spec.ts:53 kök nedeni ━━\nSORUN: Sıra bağımlılığı / paged query hipotezleri.\n\nÜst görev ORTAK YÖNTEM. memory paged-query-drops-fetchnext-during-refresh.",
+            "testStrategy": "BÖLÜM 1 (463.1): two-factor.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez.\nBÖLÜM 2 (463.2): ai-multilingual.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez.\nBÖLÜM 3 (463.3): customers.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez.",
             "status": "pending",
             "dependencies": [],
             "parentId": "463",
             "priority": "low",
-            "updatedAt": "2026-11-06T16:24:47.953Z"
+            "updatedAt": "2026-11-07T11:50:37.837Z"
           },
           {
             "id": 2,
             "title": "FLAKE-AI-MULTILINGUAL [OPUS-HIGH] (Opus 5.5) ai-multilingual.spec.ts:28 kök nedeni",
             "description": "Mock embedding / dil algılama zamanlaması hipotezleri.",
-            "details": "Üst görev ORTAK YÖNTEM. memory ai-question-text-is-load-bearing.",
+            "details": "BİRLEŞTİ (2026-11-07, sahip onayı): bu alt görevin tamamı 463.1 FLAKE-TWO-FACTOR-MULTILINGUAL-CUSTOMERS içinde BÖLÜM 2 olarak yapılır. Burada iş yapma.\n\nÜst görev ORTAK YÖNTEM. memory ai-question-text-is-load-bearing.",
             "testStrategy": "ai-multilingual.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez.",
+            "status": "cancelled",
+            "dependencies": [],
+            "parentId": "463",
+            "priority": "low",
+            "updatedAt": "2026-11-07T11:50:37.837Z"
+          },
+          {
+            "id": 3,
+            "title": "FLAKE-CUSTOMERS [OPUS-HIGH] (Opus 5.5) customers.spec.ts:53 kök nedeni",
+            "description": "Sıra bağımlılığı / paged query hipotezleri.",
+            "details": "BİRLEŞTİ (2026-11-07, sahip onayı): bu alt görevin tamamı 463.1 FLAKE-TWO-FACTOR-MULTILINGUAL-CUSTOMERS içinde BÖLÜM 3 olarak yapılır. Burada iş yapma.\n\nÜst görev ORTAK YÖNTEM. memory paged-query-drops-fetchnext-during-refresh.",
+            "testStrategy": "customers.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez.",
+            "status": "cancelled",
+            "dependencies": [],
+            "parentId": "463",
+            "priority": "low",
+            "updatedAt": "2026-11-07T11:50:37.837Z"
+          },
+          {
+            "id": 4,
+            "title": "FLAKE-GUARDRAILS-OFFLINE-FORM [OPUS-HIGH] (Opus 5.5) ai-guardrails.spec.ts:130 kök nedeni + offline-form.spec.ts kök nedeni + spec tablosu",
+            "description": "(463.4) Guardrail fixture'ları / AI turu birleştirme hipotezleri. (463.5) Çevrimdışı form zamanlaması; son alt görev tüm spec'lerin sonuç tablosunu HANDOFF'a yazar.",
+            "details": "BİRLEŞİK ALT GÖREV (sahip onayı 2026-11-07): 463.4, 463.5 tek pencerede yapılır; DoD kapısı bir kez koşar.\nBölümler sırayla yapılır, her biri kendi kabul ölçütüyle kapanır; biri yeşil değilse alt görev done değildir.\n463.5 cancelled durumda ve buraya işaret ediyor; metinlerde onlara yapılan atıflar bu alt görevi kasteder.\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\n━━ BÖLÜM 1 — 463.4 FLAKE-AI-GUARDRAILS · ai-guardrails.spec.ts:130 kök nedeni ━━\nSORUN: Guardrail fixture'ları / AI turu birleştirme hipotezleri.\n\nÜst görev ORTAK YÖNTEM. memory guardrails-check-every-ai-reply, ai-turns-merge-unanswered-visitor-messages.\n\n━━ BÖLÜM 2 — 463.5 FLAKE-OFFLINE-FORM · offline-form.spec.ts kök nedeni + spec tablosu ━━\nSORUN: Çevrimdışı form zamanlaması; son alt görev tüm spec'lerin sonuç tablosunu HANDOFF'a yazar.\n\nÜst görev ORTAK YÖNTEM. Kapanışta `pnpm test:gate --e2e` bir kez.",
+            "testStrategy": "BÖLÜM 1 (463.4): ai-guardrails.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez.\nBÖLÜM 2 (463.5): offline-form.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez; HANDOFF'ta 5 satırlık tablo.",
             "status": "pending",
             "dependencies": [
               "463.1"
             ],
             "parentId": "463",
             "priority": "low",
-            "updatedAt": "2026-11-06T16:24:47.953Z"
-          },
-          {
-            "id": 3,
-            "title": "FLAKE-CUSTOMERS [OPUS-HIGH] (Opus 5.5) customers.spec.ts:53 kök nedeni",
-            "description": "Sıra bağımlılığı / paged query hipotezleri.",
-            "details": "Üst görev ORTAK YÖNTEM. memory paged-query-drops-fetchnext-during-refresh.",
-            "testStrategy": "customers.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez.",
-            "status": "pending",
-            "dependencies": [
-              "463.2"
-            ],
-            "parentId": "463",
-            "priority": "low",
-            "updatedAt": "2026-11-06T16:24:47.953Z"
-          },
-          {
-            "id": 4,
-            "title": "FLAKE-AI-GUARDRAILS [OPUS-HIGH] (Opus 5.5) ai-guardrails.spec.ts:130 kök nedeni",
-            "description": "Guardrail fixture'ları / AI turu birleştirme hipotezleri.",
-            "details": "Üst görev ORTAK YÖNTEM. memory guardrails-check-every-ai-reply, ai-turns-merge-unanswered-visitor-messages.",
-            "testStrategy": "ai-guardrails.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez.",
-            "status": "pending",
-            "dependencies": [
-              "463.3"
-            ],
-            "parentId": "463",
-            "priority": "low",
-            "updatedAt": "2026-11-06T16:24:47.953Z"
+            "updatedAt": "2026-11-07T11:50:37.837Z"
           },
           {
             "id": 5,
             "title": "FLAKE-OFFLINE-FORM [OPUS-HIGH] (Opus 5.5) offline-form.spec.ts kök nedeni + spec tablosu",
             "description": "Çevrimdışı form zamanlaması; son alt görev tüm spec'lerin sonuç tablosunu HANDOFF'a yazar.",
-            "details": "Üst görev ORTAK YÖNTEM. Kapanışta `pnpm test:gate --e2e` bir kez.",
+            "details": "BİRLEŞTİ (2026-11-07, sahip onayı): bu alt görevin tamamı 463.4 FLAKE-GUARDRAILS-OFFLINE-FORM içinde BÖLÜM 2 olarak yapılır. Burada iş yapma.\n\nÜst görev ORTAK YÖNTEM. Kapanışta `pnpm test:gate --e2e` bir kez.",
             "testStrategy": "offline-form.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez; HANDOFF'ta 5 satırlık tablo.",
-            "status": "pending",
-            "dependencies": [
-              "463.4"
-            ],
+            "status": "cancelled",
+            "dependencies": [],
             "parentId": "463",
             "priority": "low",
-            "updatedAt": "2026-11-06T16:24:47.953Z"
+            "updatedAt": "2026-11-07T11:50:37.837Z"
           }
         ]
       },
@@ -17428,40 +17422,38 @@
         "id": "470",
         "title": "PILOT-CRAWLER-HTTP-TEMPLATE [SONNET-HIGH] (Sonnet 5.5) http crawler SSRF doğrulaması + 470.1 yeşil olduktan sonra pilot şablonunda CRAWLER_PROVIDER=http (sahip S11)",
         "description": "AI-17 kısmen: gerçek crawler sağlayıcısı var ama pilot şablonu `.env.production.example` CRAWLER_PROVIDER=mock; pilotta site taraması uydurma içerik üretiyor. Sahip kararı 2026-11-06 S11: pilotta gerçek tarama 470.1 (SSRF doğrulaması) yeşil olduktan sonra açılır.",
-        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-13 / AI-17 (partial). Kanıt yeterlidir.\n\nKODDA BUGÜN: `.env.production.example:~426` `CRAWLER_PROVIDER=mock`; `apps/api/src/services/ai/crawler/*`; `apps/api/src/config/env.ts:1219` `CRAWLER_PROVIDER: z.enum(CRAWLER_PROVIDERS).default('mock')`; `job-runner.ts:~590-591`, `jobs.ts:~104`; mock uyarısı `server.ts:~318-319`.\n\nYAPILACAK: alt görevler sırayla. 470.1 karardan bağımsız güvenlik kapısıdır; 470.2 yalnız 470.1 done olduktan sonra yapılır (sahip onayı verildi, S11).\n\nTUZAK: memory network-tests-without-egress (dns.lookup stub), pilot-rehearsal-with-fake-env, deployment-config-field-ripples (değer değişimi testleri ripple edebilir).\n\nKAPSAM DIŞI: crawler kalitesi.\nDENETİM BULGULARI: G-13",
+        "details": "ALT GÖREV BİRLEŞTİRMESİ (2026-11-07, sahip onayı; her alt görev ayrı pencere ve tam kapı demek): 470.1 + 470.2 → 470.1. Cancelled alt görevlere metinde yapılan atıflar birleşik alt görevi kasteder.\n\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-13 / AI-17 (partial). Kanıt yeterlidir.\n\nKODDA BUGÜN: `.env.production.example:~426` `CRAWLER_PROVIDER=mock`; `apps/api/src/services/ai/crawler/*`; `apps/api/src/config/env.ts:1219` `CRAWLER_PROVIDER: z.enum(CRAWLER_PROVIDERS).default('mock')`; `job-runner.ts:~590-591`, `jobs.ts:~104`; mock uyarısı `server.ts:~318-319`.\n\nYAPILACAK: alt görevler sırayla. 470.1 karardan bağımsız güvenlik kapısıdır; 470.2 yalnız 470.1 done olduktan sonra yapılır (sahip onayı verildi, S11).\n\nTUZAK: memory network-tests-without-egress (dns.lookup stub), pilot-rehearsal-with-fake-env, deployment-config-field-ripples (değer değişimi testleri ripple edebilir).\n\nKAPSAM DIŞI: crawler kalitesi.\nDENETİM BULGULARI: G-13",
         "testStrategy": "Alt görevlerde. DoD: CONVENTIONS §1.",
         "status": "pending",
         "dependencies": [
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-06T17:34:51.966Z",
+        "updatedAt": "2026-11-07T11:50:37.837Z",
         "subtasks": [
           {
             "id": 1,
-            "title": "CRAWLER-SSRF-VERIFY [SONNET-HIGH] (Sonnet 5.5) http crawler özel/loopback/link-local IP'lere ve yönlendirme sonrası özel IP'lere istek yapmasın",
-            "description": "Mevcut http sağlayıcısının SSRF korumasını testle sabitle; eksikse ekle.",
-            "details": "DNS çözümü sonrası IP kontrolü (10/8, 172.16/12, 192.168/16, 127/8, 169.254/16, ::1, fc00::/7, fe80::/10), yönlendirme her adımda yeniden kontrol; DNS rebinding için bağlantı çözülen IP'ye yapılır. Mevcutsa yalnız test.",
-            "testStrategy": "api birim (dns.lookup stub): özel IP'ye çözülen host → istek yapılmaz; public → yapılır; public'ten özel IP'ye 302 → durur. Mutasyon: IP kontrolünü kaldır → kırmızı.",
+            "title": "CRAWLER-SSRF-AND-PILOT-TEMPLATE [SONNET-HIGH] (Sonnet 5.5) http crawler özel/loopback/link-local IP'lere ve yönlendirme sonrası özel IP'lere istek yapmasın + 470.1 yeşil olduktan sonra: pilot şablonunda CRAWLER_PROVIDER=http + SSRF/egress notu + checklist satırı",
+            "description": "(470.1) Mevcut http sağlayıcısının SSRF korumasını testle sabitle; eksikse ekle. (470.2) Sahip pilotta gerçek taramayı onayladı (2026-11-06 S11); yalnız 470.1 kapanınca: şablon değeri, egress notu ve checklist.",
+            "details": "BİRLEŞİK ALT GÖREV (sahip onayı 2026-11-07): 470.1, 470.2 tek pencerede yapılır; DoD kapısı bir kez koşar.\nBölümler sırayla yapılır, her biri kendi kabul ölçütüyle kapanır; biri yeşil değilse alt görev done değildir.\n470.2 cancelled durumda ve buraya işaret ediyor; metinlerde onlara yapılan atıflar bu alt görevi kasteder.\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\n━━ BÖLÜM 1 — 470.1 CRAWLER-SSRF-VERIFY · http crawler özel/loopback/link-local IP'lere ve yönlendirme sonrası özel IP'lere istek yapmasın ━━\nSORUN: Mevcut http sağlayıcısının SSRF korumasını testle sabitle; eksikse ekle.\n\nDNS çözümü sonrası IP kontrolü (10/8, 172.16/12, 192.168/16, 127/8, 169.254/16, ::1, fc00::/7, fe80::/10), yönlendirme her adımda yeniden kontrol; DNS rebinding için bağlantı çözülen IP'ye yapılır. Mevcutsa yalnız test.\n\n━━ BÖLÜM 2 — 470.2 CRAWLER-PILOT-TEMPLATE · 470.1 yeşil olduktan sonra: pilot şablonunda CRAWLER_PROVIDER=http + SSRF/egress notu + checklist satırı ━━\nSORUN: Sahip pilotta gerçek taramayı onayladı (2026-11-06 S11); yalnız 470.1 kapanınca: şablon değeri, egress notu ve checklist.\n\n`.env.production.example:~426` http + SSRF/egress açıklaması; pilot config/şablon testleri; checklist crawler satırı.",
+            "testStrategy": "BÖLÜM 1 (470.1): api birim (dns.lookup stub): özel IP'ye çözülen host → istek yapılmaz; public → yapılır; public'ten özel IP'ye 302 → durur. Mutasyon: IP kontrolünü kaldır → kırmızı.\nBÖLÜM 2 (470.2): Şablon testi: CRAWLER_PROVIDER=http; pilot-config testleri yeşil.",
             "status": "pending",
             "dependencies": [],
             "parentId": "470",
             "priority": "low",
-            "updatedAt": "2026-11-06T16:24:47.953Z"
+            "updatedAt": "2026-11-07T11:50:37.837Z"
           },
           {
             "id": 2,
             "title": "CRAWLER-PILOT-TEMPLATE [SONNET-HIGH] (Sonnet 5.5) 470.1 yeşil olduktan sonra: pilot şablonunda CRAWLER_PROVIDER=http + SSRF/egress notu + checklist satırı",
             "description": "Sahip pilotta gerçek taramayı onayladı (2026-11-06 S11); yalnız 470.1 kapanınca: şablon değeri, egress notu ve checklist.",
-            "details": "`.env.production.example:~426` http + SSRF/egress açıklaması; pilot config/şablon testleri; checklist crawler satırı.",
+            "details": "BİRLEŞTİ (2026-11-07, sahip onayı): bu alt görevin tamamı 470.1 CRAWLER-SSRF-AND-PILOT-TEMPLATE içinde BÖLÜM 2 olarak yapılır. Burada iş yapma.\n\n`.env.production.example:~426` http + SSRF/egress açıklaması; pilot config/şablon testleri; checklist crawler satırı.",
             "testStrategy": "Şablon testi: CRAWLER_PROVIDER=http; pilot-config testleri yeşil.",
-            "status": "pending",
-            "dependencies": [
-              "470.1"
-            ],
+            "status": "cancelled",
+            "dependencies": [],
             "parentId": "470",
             "priority": "low",
-            "updatedAt": "2026-11-06T17:34:51.966Z"
+            "updatedAt": "2026-11-07T11:50:37.837Z"
           }
         ]
       },
@@ -17484,68 +17476,64 @@
         "id": "472",
         "title": "NARROW-SCREEN-PAGES [OPUS-HIGH] (Opus 5.5) Dar ekran: Ayarlar, Müşteriler, Arşiv ve Raporlar \"masaüstü için tasarlandı\" bandı olmadan kullanılabilir olsun",
         "description": "GV-04 kısmen: yalnız Inbox responsive; diğer sayfalar dar ekranda uyarı bandıyla açılıyor. Büyük iş — sayfa başına alt görev.",
-        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-15 / GV-04 (partial). Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/web/src/.../navigation.ts:~106` responsive sayfa listesi (yalnız inbox); `NarrowScreenNotice.tsx:2`; `apps/e2e/.../narrow-screen.spec.ts:5-9`.\n\nYAPILACAK: her alt görev bir sayfayı 375 px'te yatay kaydırmasız (tablolar kart/yığın görünümüne), dokunma hedefleri ≥ 44 px yapar ve sayfayı responsive listesine ekler; narrow-screen.spec beklentisi güncellenir. Inbox desenini kopyala.\n\nTUZAK: memory hub-e2e-traps, dod-gate-wall-clock-and-e2e-png-churn (ekran görüntüsü churn'ü), dark-theme-needs-content-brand-text.\n\nKAPSAM DIŞI: mobil uygulama.\nDENETİM BULGULARI: G-15",
+        "details": "ALT GÖREV BİRLEŞTİRMESİ (2026-11-07, sahip onayı; her alt görev ayrı pencere ve tam kapı demek): 472.1 + 472.2 → 472.1; 472.3 + 472.4 → 472.3. Cancelled alt görevlere metinde yapılan atıflar birleşik alt görevi kasteder.\n\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-15 / GV-04 (partial). Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/web/src/.../navigation.ts:~106` responsive sayfa listesi (yalnız inbox); `NarrowScreenNotice.tsx:2`; `apps/e2e/.../narrow-screen.spec.ts:5-9`.\n\nYAPILACAK: her alt görev bir sayfayı 375 px'te yatay kaydırmasız (tablolar kart/yığın görünümüne), dokunma hedefleri ≥ 44 px yapar ve sayfayı responsive listesine ekler; narrow-screen.spec beklentisi güncellenir. Inbox desenini kopyala.\n\nTUZAK: memory hub-e2e-traps, dod-gate-wall-clock-and-e2e-png-churn (ekran görüntüsü churn'ü), dark-theme-needs-content-brand-text.\n\nKAPSAM DIŞI: mobil uygulama.\nDENETİM BULGULARI: G-15",
         "testStrategy": "Alt görevlerde. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
         "status": "pending",
         "dependencies": [
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "updatedAt": "2026-11-07T11:50:37.837Z",
         "subtasks": [
           {
             "id": 1,
-            "title": "NARROW-SETTINGS [OPUS-HIGH] (Opus 5.5) Ayarlar sayfası dar ekran düzeni",
-            "description": "Ayarlar gezinmesi dar ekranda liste→detay; formlar tek sütun.",
-            "details": "Üst görev details (tek kaynak). navigation.ts responsive listesine settings.",
-            "testStrategy": "e2e narrow-screen: 375 px'te ayarlar bandsız, scrollWidth <= clientWidth. `pnpm test:gate --e2e`.",
+            "title": "NARROW-SETTINGS-CUSTOMERS [OPUS-HIGH] (Opus 5.5) Ayarlar sayfası dar ekran düzeni + Müşteriler sayfası dar ekran düzeni",
+            "description": "(472.1) Ayarlar gezinmesi dar ekranda liste→detay; formlar tek sütun. (472.2) Müşteri tablosu dar ekranda kart listesi; detay paneli tam ekran.",
+            "details": "BİRLEŞİK ALT GÖREV (sahip onayı 2026-11-07): 472.1, 472.2 tek pencerede yapılır; DoD kapısı bir kez koşar.\nBölümler sırayla yapılır, her biri kendi kabul ölçütüyle kapanır; biri yeşil değilse alt görev done değildir.\n472.2 cancelled durumda ve buraya işaret ediyor; metinlerde onlara yapılan atıflar bu alt görevi kasteder.\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\n━━ BÖLÜM 1 — 472.1 NARROW-SETTINGS · Ayarlar sayfası dar ekran düzeni ━━\nSORUN: Ayarlar gezinmesi dar ekranda liste→detay; formlar tek sütun.\n\nÜst görev details (tek kaynak). navigation.ts responsive listesine settings.\n\n━━ BÖLÜM 2 — 472.2 NARROW-CUSTOMERS · Müşteriler sayfası dar ekran düzeni ━━\nSORUN: Müşteri tablosu dar ekranda kart listesi; detay paneli tam ekran.\n\nÜst görev details (tek kaynak).",
+            "testStrategy": "BÖLÜM 1 (472.1): e2e narrow-screen: 375 px'te ayarlar bandsız, scrollWidth <= clientWidth. `pnpm test:gate --e2e`.\nBÖLÜM 2 (472.2): e2e narrow-screen: 375 px'te müşteriler bandsız, yatay kaydırma yok. `pnpm test:gate --e2e`.",
             "status": "pending",
             "dependencies": [],
             "parentId": "472",
             "priority": "low",
-            "updatedAt": "2026-11-06T16:24:47.953Z"
+            "updatedAt": "2026-11-07T11:50:37.837Z"
           },
           {
             "id": 2,
             "title": "NARROW-CUSTOMERS [OPUS-HIGH] (Opus 5.5) Müşteriler sayfası dar ekran düzeni",
             "description": "Müşteri tablosu dar ekranda kart listesi; detay paneli tam ekran.",
-            "details": "Üst görev details (tek kaynak).",
+            "details": "BİRLEŞTİ (2026-11-07, sahip onayı): bu alt görevin tamamı 472.1 NARROW-SETTINGS-CUSTOMERS içinde BÖLÜM 2 olarak yapılır. Burada iş yapma.\n\nÜst görev details (tek kaynak).",
             "testStrategy": "e2e narrow-screen: 375 px'te müşteriler bandsız, yatay kaydırma yok. `pnpm test:gate --e2e`.",
+            "status": "cancelled",
+            "dependencies": [],
+            "parentId": "472",
+            "priority": "low",
+            "updatedAt": "2026-11-07T11:50:37.837Z"
+          },
+          {
+            "id": 3,
+            "title": "NARROW-ARCHIVE-REPORTS [OPUS-HIGH] (Opus 5.5) Arşiv sayfası dar ekran düzeni + Raporlar sayfası dar ekran düzeni",
+            "description": "(472.3) Arşiv listesi ve detayı dar ekranda liste→detay. (472.4) Rapor grafikleri ve tablolar dar ekranda tek sütun, tablolar yatay kaydırma kabında değil kart görünümünde.",
+            "details": "BİRLEŞİK ALT GÖREV (sahip onayı 2026-11-07): 472.3, 472.4 tek pencerede yapılır; DoD kapısı bir kez koşar.\nBölümler sırayla yapılır, her biri kendi kabul ölçütüyle kapanır; biri yeşil değilse alt görev done değildir.\n472.4 cancelled durumda ve buraya işaret ediyor; metinlerde onlara yapılan atıflar bu alt görevi kasteder.\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\n━━ BÖLÜM 1 — 472.3 NARROW-ARCHIVE · Arşiv sayfası dar ekran düzeni ━━\nSORUN: Arşiv listesi ve detayı dar ekranda liste→detay.\n\nÜst görev details (tek kaynak).\n\n━━ BÖLÜM 2 — 472.4 NARROW-REPORTS · Raporlar sayfası dar ekran düzeni ━━\nSORUN: Rapor grafikleri ve tablolar dar ekranda tek sütun, tablolar yatay kaydırma kabında değil kart görünümünde.\n\nÜst görev details (tek kaynak). Son alt görev NarrowScreenNotice'ın artık hangi sayfada kaldığını HANDOFF'a yazar.",
+            "testStrategy": "BÖLÜM 1 (472.3): e2e narrow-screen: 375 px'te arşiv bandsız. `pnpm test:gate --e2e`.\nBÖLÜM 2 (472.4): e2e narrow-screen: 375 px'te raporlar bandsız. `pnpm test:gate --e2e`.",
             "status": "pending",
             "dependencies": [
               "472.1"
             ],
             "parentId": "472",
             "priority": "low",
-            "updatedAt": "2026-11-06T16:24:47.953Z"
-          },
-          {
-            "id": 3,
-            "title": "NARROW-ARCHIVE [OPUS-HIGH] (Opus 5.5) Arşiv sayfası dar ekran düzeni",
-            "description": "Arşiv listesi ve detayı dar ekranda liste→detay.",
-            "details": "Üst görev details (tek kaynak).",
-            "testStrategy": "e2e narrow-screen: 375 px'te arşiv bandsız. `pnpm test:gate --e2e`.",
-            "status": "pending",
-            "dependencies": [
-              "472.2"
-            ],
-            "parentId": "472",
-            "priority": "low",
-            "updatedAt": "2026-11-06T16:24:47.953Z"
+            "updatedAt": "2026-11-07T11:50:37.837Z"
           },
           {
             "id": 4,
             "title": "NARROW-REPORTS [OPUS-HIGH] (Opus 5.5) Raporlar sayfası dar ekran düzeni",
             "description": "Rapor grafikleri ve tablolar dar ekranda tek sütun, tablolar yatay kaydırma kabında değil kart görünümünde.",
-            "details": "Üst görev details (tek kaynak). Son alt görev NarrowScreenNotice'ın artık hangi sayfada kaldığını HANDOFF'a yazar.",
+            "details": "BİRLEŞTİ (2026-11-07, sahip onayı): bu alt görevin tamamı 472.3 NARROW-ARCHIVE-REPORTS içinde BÖLÜM 2 olarak yapılır. Burada iş yapma.\n\nÜst görev details (tek kaynak). Son alt görev NarrowScreenNotice'ın artık hangi sayfada kaldığını HANDOFF'a yazar.",
             "testStrategy": "e2e narrow-screen: 375 px'te raporlar bandsız. `pnpm test:gate --e2e`.",
-            "status": "pending",
-            "dependencies": [
-              "472.3"
-            ],
+            "status": "cancelled",
+            "dependencies": [],
             "parentId": "472",
             "priority": "low",
-            "updatedAt": "2026-11-06T16:24:47.953Z"
+            "updatedAt": "2026-11-07T11:50:37.837Z"
           }
         ]
       },
@@ -17583,40 +17571,38 @@
         "id": "475",
         "title": "REPLY-REQUIRES-ASSIGNMENT [OPUS-MAX] (Opus 5.5) Müşteriye yanıt yalnız sohbete atanmış ajandan: API reddi (thread kilidi altında), \"Üstüne al\" kuyrukta, AI evresinde ve duraklatılmış AI'da (tek kazanan), panelde yanıt yerine üstlenme şeridi, mobil aynı kural; dahili not serbest",
         "description": "Sahip 2026-11-06 (S16, 04 K45): yanıt verebilmek için ajan sohbeti üstüne almalı ya da yetkili biri ona atamalı; üstlenmeden yanıt verilirse farklı ajanlar aynı anda yanıtlayıp karışıklık yaratabilir. Bugün sohbeti görebilen her ajan müşteriye yazabiliyor: kuyruktaki atanmamış sohbete yazmak üstlenme sayılmıyor (tm 411 varsayımı), AI evresinde yazmak sohbeti örtük olarak devralıyor, başkasına atanmış sohbete de yazılabiliyor. Yeni kural: müşteriye görünür yanıt (recipients 'all') yalnız sohbetin aktif bağlantısına atanmış ajandan kabul edilir; diğerleri önce \"Üstüne al\" (yetkisi varsa) ya da \"Devral\" yapar, ya da yetkili biri atar. Dahili not kuraldan muaftır.",
-        "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → close). DoD CONVENTIONS.md §1: `pnpm test:gate` arka planda; log yolu ilk satırdan, bitince `Tasks:`/`Failed:`/`exit`; Turbo `--force`, \"0 cached\". e2e ve db işleri için kök .env source. git §2, handoff §3, kapsam §5. Gereksinim etiketi §7: yalnız prd-uyum-denetimi.md Ek A kimlikleri. Bu üst görev 475.1→475.6 bitince done olur (CONVENTIONS §4).\nKAYNAK: sahip kararı 2026-11-06 S16 (sohbette verildi; aynen alıntı PLAN'a yazılmaz). Teknik harita 2026-11-06 salt okuma turunda main e4b9a773 üzerinde çıkarıldı; satır numaraları HEAD'de yeniden okunur.\nMAX GEREKÇESİ: yetkilendirme kuralı değişikliği + eşzamanlılık (iki ajan aynı anda üstlenir/yanıtlar; takeover ile yanıt yarışı).\n\nKODDA BUGÜN:\n- Rota `apps/api/src/routes/chats.ts:692-726` `POST /chats/:chatId/events` (principals agent/bot/customer; ek kontrolü `assertAttachment` :703) → `ChatService.sendEvent` `apps/api/src/services/chat/chat-service.ts:1658`.\n- `sendEvent`: `resolveVisibility(tx, principal, 'write')` + `#loadVisibleChat` (:1681-1682) — atama KONTROLÜ YOK; aktif thread :1684; kanal kapısı `assertReplyAllowed` :1695-1698; `#appendEvent` :1700; örtük AI devralması `modeRequest` :1722-1732 (agent + 'all' → `{to:'human', reason:'agent_message'}`); `#routeHandover` `agent_message` dalı \"they took it, so it is theirs\" :1886-1888 (fonksiyon :1910).\n- Ajanın açtığı sohbet: `start` :815; `initial_event` `#appendEvent`'i doğrudan çağırıyor, sendEvent'ten GEÇMİYOR (:1007-1036); `writeAiMode` (:1029-1034) atama yapmıyor; atama `input.assignToMe ? actorId : decision.assigneeId` (:1128) — `assign_to_me` false ise sohbet başkasına ya da kuyruğa düşebilir.\n- Duraklatılmış AI: `pauseAi` (chat-service.ts:3992-3996) \"nobody is routed and the assignment stays as it was\" — AI-first sohbet duraklatılınca `ai_mode='paused'`, atanmamış ve kuyrukta değil kalabilir.\n- Takeover `chat-service.ts:3721-3863` (`chats.takeover` yetkisi :3734-3739; `team` için lider olunan takım :3747-3752; koşullu updateMany ile tek kazanan :3762-3768 → 409 `takeover_conflict`). Rota `chats.ts:846-865`.\n- Claim `chat-service.ts:3883-3971` (409 `chat_claim_refused` reason claimed/limit/not_waiting; üye değilse 404); rota `chats.ts:874-882` (principals agent). `RoutingService.claim` `apps/api/src/services/routing/routing-service.ts:586-641`: WHERE `assignee_id IS NULL AND queue_position IS NOT NULL` (:598), otomatik takım → `not_waiting` (:604), üyelik+uzmanlık :606-629, CAS UPDATE :632-640.\n- tm 411 varsayımı \"replying is not taking\": `apps/api/src/services/routing/visitor-queue.ts:1-23`; poll `apps/api/src/routes/customer.ts:848`; e2e `apps/e2e/tests/manual-assignment.spec.ts:140-148` (Take'e basmadan yanıt); entegrasyon `apps/api/test/integration/customer-chat.test.ts:443`.\n- Ajan typing RTM `apps/rtm/src/dispatcher.ts:246-270` `#typing` (atama kontrolü yok).\n- Hata sözlüğü `packages/types/src/errors.ts:226` + `:293` (status), kontrat enum `packages/contract/openapi/openapi.yaml:~17360`, claim açıklaması `packages/contract/openapi/paths/chats.yaml:~615`.\n- Yetki: `packages/types/src/capabilities.ts:179-185` `chats.takeover` (team_lead 'team', agent 'none').\n- Web: `apps/web/src/features/inbox/InboxPage.tsx:1331-1338` `<Composer disabled={!chat.data.active || transcript.isError}>`; `Composer.tsx:98-111` props, `:740-743` disabled notice; `ClaimRowAction.tsx:46` claim; `transfer.ts:33` `claimableTeamIds` (yalnız manuel takımlar); `takeover.ts:33-44` `canTakeOver`; `AiModeControls.tsx:60` `isAssignee`; `useInbox.ts:1067` takeover.\n- Mobil: `apps/mobile/src/features/inbox/store.ts:95` liste varsayılanı `view: 'my'`; `ChatScreen.tsx:87-93` `<Composer disabled={closed}>`; `Composer.tsx:32`, `:50` `canSend`; `api.ts:56` POST events. apps/mobile/src içinde `assignee_id`/`assigneeId` okuyan kod YOK (2026-11-06 grep).\n\nKARARLAR (tüm alt görevler için tek kaynak; pencere ölçülmüş gerekçeyle değiştirebilir, HANDOFF'a yazar):\nD1 Kural: `principal.kind === 'agent'` ve `recipients === 'all'` olan her event yalnız aktif thread'in `assigneeId === principal.accountId` iken yazılır. Değilse 409 `reply_requires_assignment`, `details.reason`: atanan başka biri → `assigned_to_other`; atanan yok ve `ai_mode` 'ai' ya da 'paused' → `ai`; atanan yok, ikisi de değil → `unassigned`. Event yazılmaz, AI modu değişmez, idempotency anahtarı kaydedilmez, kanal dispatch'i olmaz. Kural servis katmanında (sendEvent) uygulanır; HTTP, kanal ve ileride gelecek her yol aynı kapıdan geçer.\nD2 Kilit ve yarış: atama, append'den ÖNCE aktif thread satırı `SELECT assignee_id, ai_mode FROM threads WHERE id = $1 FOR UPDATE` ile okunur. Takeover'ın koşullu updateMany'si ve claim'in CAS'ı bu kilidi bekler: eşzamanlı yanıt ya eski atanan adına (devralmadan önce) yazılır ya da reddedilir; iki ajanın yanıtı aynı anda müşteriye gitmez. Ek sorgu sayısı HANDOFF'a.\nD3 Dahili not (`recipients 'agents'`) muaftır: sohbeti write görünürlüğüyle gören her ajan not yazar. Gerekçe: müşteriye görünmez, sahibin kaygısı (müşteride karışıklık) doğmaz; süpervizör/takım bağlamı not ile verilir (FR-MOD-02.3.4 not modu).\nD4 Bot ve customer principal'ı muaftır (bot workspace otomasyonudur; AI ve kural botu kendi akışında). Platform impersonation'ı (`kind 'agent'`) kurala tabidir. Ticket yanıtları kapsam dışı (sohbet değil).\nD5 AI evresi ve duraklatılmış AI (`ai_mode` 'ai' ya da 'paused', atanan yok): bugünkü örtük devralma (yazınca sohbetin onun olması) KALKAR; yerine açık \"Üstüne al\" gelir: `POST /chats/{id}/claim` bu durumdaki atanmamış sohbeti de kabul eder. Yetki bugünkü örtük devralmanınkiyle aynıdır (sohbeti write görünürlüğüyle gören ajan; yetki daralmaz, genişlemez). Kilit altında CAS (`assignee_id IS NULL AND ai_mode IN ('ai','paused')`), ardından mevcut `#changeAiMode(..., {to:'human', reason:'agent_message'})` (YENİ reason YOK → closed-vocabularies ripple'ı yok; atama `#routeHandover` agent_message dalıyla olur; paused→human geçişinin izinli olduğu doğrulanır, HANDOFF'a). Gerekçe (paused): `pauseAi` atamayı değiştirmediği ve sohbet kuyrukta olmadığı için, aksi hâlde takeover yetkisi olmayan hiçbir ajan sohbeti alamaz ve sohbet çıkmaza girer. İki ajan aynı anda → biri 200, diğeri 409 `chat_claim_refused` reason `claimed`. Paralel atamada (AI yanında zaten atanmış ajan) atananın yazınca AI'ı susturması (örtük to:'human') AYNEN kalır — o ajan zaten atanmıştır.\nD6 Kuyruk: claim bugün yalnız manuel takımları kabul ediyor (routing-service.ts:604). Otomatik takım kuyruğu da açılır (aynı üyelik, uzmanlık ve eşzamanlı sohbet limiti kontrolleri). Gerekçe: S16 öncesi üye kuyruktaki sohbete doğrudan yazabiliyordu (tm 411); yazma kapandığına göre üye için meşru üstlenme yolu kalmalı; limit kontrolü dağıtım adaletini korur. Web `claimableTeamIds` buna göre genişler.\nD7 Başkasına atanmış sohbet: yalnız takeover (mevcut `chats.takeover` kuralı) ya da yetkili birinin transfer/ataması. İzleyen süpervizör de yanıt için devralır.\nD8 Ajan typing: RTM `send_typing_indicator` atanan olmayan ajandan geldiğinde ziyaretçiye yansıtılmaz (başarı döner, yayın yok; hata değil). Panel not modunda typing göndermiyorsa doğrulanır; gönderiyorsa susturulur.\nD9 tm 411: `visitor-queue.ts` varsayımı (\"replying is not taking\") bu kuralla geçersizleşir; kod kalabilir (yanıtlanıp başka takıma aktarılınca tekrar kuyruğa düşen sohbet için hâlâ doğru) ama başlık yorumu güncellenir; `manual-assignment.spec.ts:140-148` testi \"Üstüne al → yanıt → kuyruk bildirimi yok\" olarak yeniden yazılır (silinmez).\nD10 Mobil: liste yalnız 'my' görünümü (store.ts:95). Composer atanan değilse devre dışı + \"Bu sohbet artık sizde değil; yanıtlamak için konsoldan üstüne alın.\" Atanan bilgisi mevcut chat detayı/liste öğesindeki `thread.assignee_id` (ya da eşdeğer mevcut alan) + oturumdaki account id ile okunur; YENİ uç çağrısı YOK (parity); kullanılan kaynak alan HANDOFF'a. Mobilde \"Üstüne al\" düğmesi YOK (S5 ruhu: mobil kapsamı dar; yeni uç çağrısı parity matrisini değiştirir). 409 `reply_requires_assignment` kalıcı hata: \"tekrar dene\" sunulmaz, metin kaybolmaz.\nD11 Ajanın açtığı sohbet (`POST /chats` + `initial_event`): ajan principal'ının `initial_event`'i recipients 'all' ise `assign_to_me` örtük true sayılır; sohbet o ajana atanır (`assign_to_me`'nin bugünkü kontrolleri aynen). Gerekçe: ajan kendi açtığı sohbete müşteriye yazıp sohbet başkasına ya da kuyruğa düşerse S16'nın önlemek istediği karışıklık doğar ve sonraki yanıtları 409 alır; 409 seçeneği ajanın sohbet açma akışını kırar. `initial_event` 'agents' (not) ya da yoksa bugünkü davranış aynen. Kod `#appendEvent`'i doğrudan çağırdığı için (:1007-1036) kural burada ayrıca uygulanır; `dayChat`/`#openFurtherConnection` dalı aynı `route()` ile geldiği için o da kapsanır. Pencere ölçerek 409 yolunu seçerse gerekçesini HANDOFF'a yazar.\n\nALT GÖREV SIRASI (contract-first): 475.1 kontrat + hata türü → 475.2 API kapısı → 475.3 claim genişlemesi (AI evresi/duraklatılmış + otomatik kuyruk) → 475.4 panel → 475.5 mobil → 475.6 e2e + doküman + kapanış.\nKAPSAM DIŞI: event düzenleme (PUT events, zaten yazar-yalnız), ticket yanıtları, bot token'larının yanıtı, mobilde üstlenme düğmesi, routing algoritması, tm 417 önizleme alıcısı (değişmez).\nTUZAKLAR: büyük test ripple'ı — agent olarak atanmamış sohbete 'all' yazan entegrasyon ve e2e testleri kırmızı olur (`rg -l \"recipients: 'all'\" apps/api/test` ≈47 dosya, `/events` POST eden e2e spec'leri); fixture'lar silinmez, ortak yardımcıyla sohbet önce ajana atanır ya da claim edilir; listeyi HANDOFF'a yaz. Yeni hata türü web'de en+tr cümle ister (gate-rerun-hint-fails-for-web). Race testleri ayrı bağlantı ister (race-tests-need-separate-connections). Background DB işi resetDatabase ile yarışır (background-db-work-races-reset-database). ChatService services/ai'yi import edemez (chat-service-must-not-import-ai). AI turları cevaplanmamış ziyaretçi mesajlarını birleştirir (ai-turns-merge-unanswered-visitor-messages). Takım drain sırası (team-drain-runs-in-group-id-order). Uzun koşular run_in_background.",
+        "details": "ALT GÖREV BİRLEŞTİRMESİ (2026-11-07, sahip onayı; her alt görev ayrı pencere ve tam kapı demek): 475.1 + 475.2 → 475.1. Cancelled alt görevlere metinde yapılan atıflar birleşik alt görevi kasteder.\n\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md (bootstrap → build → verify → fix → close). DoD CONVENTIONS.md §1: `pnpm test:gate` arka planda; log yolu ilk satırdan, bitince `Tasks:`/`Failed:`/`exit`; Turbo `--force`, \"0 cached\". e2e ve db işleri için kök .env source. git §2, handoff §3, kapsam §5. Gereksinim etiketi §7: yalnız prd-uyum-denetimi.md Ek A kimlikleri. Bu üst görev 475.1→475.6 bitince done olur (CONVENTIONS §4).\nKAYNAK: sahip kararı 2026-11-06 S16 (sohbette verildi; aynen alıntı PLAN'a yazılmaz). Teknik harita 2026-11-06 salt okuma turunda main e4b9a773 üzerinde çıkarıldı; satır numaraları HEAD'de yeniden okunur.\nMAX GEREKÇESİ: yetkilendirme kuralı değişikliği + eşzamanlılık (iki ajan aynı anda üstlenir/yanıtlar; takeover ile yanıt yarışı).\n\nKODDA BUGÜN:\n- Rota `apps/api/src/routes/chats.ts:692-726` `POST /chats/:chatId/events` (principals agent/bot/customer; ek kontrolü `assertAttachment` :703) → `ChatService.sendEvent` `apps/api/src/services/chat/chat-service.ts:1658`.\n- `sendEvent`: `resolveVisibility(tx, principal, 'write')` + `#loadVisibleChat` (:1681-1682) — atama KONTROLÜ YOK; aktif thread :1684; kanal kapısı `assertReplyAllowed` :1695-1698; `#appendEvent` :1700; örtük AI devralması `modeRequest` :1722-1732 (agent + 'all' → `{to:'human', reason:'agent_message'}`); `#routeHandover` `agent_message` dalı \"they took it, so it is theirs\" :1886-1888 (fonksiyon :1910).\n- Ajanın açtığı sohbet: `start` :815; `initial_event` `#appendEvent`'i doğrudan çağırıyor, sendEvent'ten GEÇMİYOR (:1007-1036); `writeAiMode` (:1029-1034) atama yapmıyor; atama `input.assignToMe ? actorId : decision.assigneeId` (:1128) — `assign_to_me` false ise sohbet başkasına ya da kuyruğa düşebilir.\n- Duraklatılmış AI: `pauseAi` (chat-service.ts:3992-3996) \"nobody is routed and the assignment stays as it was\" — AI-first sohbet duraklatılınca `ai_mode='paused'`, atanmamış ve kuyrukta değil kalabilir.\n- Takeover `chat-service.ts:3721-3863` (`chats.takeover` yetkisi :3734-3739; `team` için lider olunan takım :3747-3752; koşullu updateMany ile tek kazanan :3762-3768 → 409 `takeover_conflict`). Rota `chats.ts:846-865`.\n- Claim `chat-service.ts:3883-3971` (409 `chat_claim_refused` reason claimed/limit/not_waiting; üye değilse 404); rota `chats.ts:874-882` (principals agent). `RoutingService.claim` `apps/api/src/services/routing/routing-service.ts:586-641`: WHERE `assignee_id IS NULL AND queue_position IS NOT NULL` (:598), otomatik takım → `not_waiting` (:604), üyelik+uzmanlık :606-629, CAS UPDATE :632-640.\n- tm 411 varsayımı \"replying is not taking\": `apps/api/src/services/routing/visitor-queue.ts:1-23`; poll `apps/api/src/routes/customer.ts:848`; e2e `apps/e2e/tests/manual-assignment.spec.ts:140-148` (Take'e basmadan yanıt); entegrasyon `apps/api/test/integration/customer-chat.test.ts:443`.\n- Ajan typing RTM `apps/rtm/src/dispatcher.ts:246-270` `#typing` (atama kontrolü yok).\n- Hata sözlüğü `packages/types/src/errors.ts:226` + `:293` (status), kontrat enum `packages/contract/openapi/openapi.yaml:~17360`, claim açıklaması `packages/contract/openapi/paths/chats.yaml:~615`.\n- Yetki: `packages/types/src/capabilities.ts:179-185` `chats.takeover` (team_lead 'team', agent 'none').\n- Web: `apps/web/src/features/inbox/InboxPage.tsx:1331-1338` `<Composer disabled={!chat.data.active || transcript.isError}>`; `Composer.tsx:98-111` props, `:740-743` disabled notice; `ClaimRowAction.tsx:46` claim; `transfer.ts:33` `claimableTeamIds` (yalnız manuel takımlar); `takeover.ts:33-44` `canTakeOver`; `AiModeControls.tsx:60` `isAssignee`; `useInbox.ts:1067` takeover.\n- Mobil: `apps/mobile/src/features/inbox/store.ts:95` liste varsayılanı `view: 'my'`; `ChatScreen.tsx:87-93` `<Composer disabled={closed}>`; `Composer.tsx:32`, `:50` `canSend`; `api.ts:56` POST events. apps/mobile/src içinde `assignee_id`/`assigneeId` okuyan kod YOK (2026-11-06 grep).\n\nKARARLAR (tüm alt görevler için tek kaynak; pencere ölçülmüş gerekçeyle değiştirebilir, HANDOFF'a yazar):\nD1 Kural: `principal.kind === 'agent'` ve `recipients === 'all'` olan her event yalnız aktif thread'in `assigneeId === principal.accountId` iken yazılır. Değilse 409 `reply_requires_assignment`, `details.reason`: atanan başka biri → `assigned_to_other`; atanan yok ve `ai_mode` 'ai' ya da 'paused' → `ai`; atanan yok, ikisi de değil → `unassigned`. Event yazılmaz, AI modu değişmez, idempotency anahtarı kaydedilmez, kanal dispatch'i olmaz. Kural servis katmanında (sendEvent) uygulanır; HTTP, kanal ve ileride gelecek her yol aynı kapıdan geçer.\nD2 Kilit ve yarış: atama, append'den ÖNCE aktif thread satırı `SELECT assignee_id, ai_mode FROM threads WHERE id = $1 FOR UPDATE` ile okunur. Takeover'ın koşullu updateMany'si ve claim'in CAS'ı bu kilidi bekler: eşzamanlı yanıt ya eski atanan adına (devralmadan önce) yazılır ya da reddedilir; iki ajanın yanıtı aynı anda müşteriye gitmez. Ek sorgu sayısı HANDOFF'a.\nD3 Dahili not (`recipients 'agents'`) muaftır: sohbeti write görünürlüğüyle gören her ajan not yazar. Gerekçe: müşteriye görünmez, sahibin kaygısı (müşteride karışıklık) doğmaz; süpervizör/takım bağlamı not ile verilir (FR-MOD-02.3.4 not modu).\nD4 Bot ve customer principal'ı muaftır (bot workspace otomasyonudur; AI ve kural botu kendi akışında). Platform impersonation'ı (`kind 'agent'`) kurala tabidir. Ticket yanıtları kapsam dışı (sohbet değil).\nD5 AI evresi ve duraklatılmış AI (`ai_mode` 'ai' ya da 'paused', atanan yok): bugünkü örtük devralma (yazınca sohbetin onun olması) KALKAR; yerine açık \"Üstüne al\" gelir: `POST /chats/{id}/claim` bu durumdaki atanmamış sohbeti de kabul eder. Yetki bugünkü örtük devralmanınkiyle aynıdır (sohbeti write görünürlüğüyle gören ajan; yetki daralmaz, genişlemez). Kilit altında CAS (`assignee_id IS NULL AND ai_mode IN ('ai','paused')`), ardından mevcut `#changeAiMode(..., {to:'human', reason:'agent_message'})` (YENİ reason YOK → closed-vocabularies ripple'ı yok; atama `#routeHandover` agent_message dalıyla olur; paused→human geçişinin izinli olduğu doğrulanır, HANDOFF'a). Gerekçe (paused): `pauseAi` atamayı değiştirmediği ve sohbet kuyrukta olmadığı için, aksi hâlde takeover yetkisi olmayan hiçbir ajan sohbeti alamaz ve sohbet çıkmaza girer. İki ajan aynı anda → biri 200, diğeri 409 `chat_claim_refused` reason `claimed`. Paralel atamada (AI yanında zaten atanmış ajan) atananın yazınca AI'ı susturması (örtük to:'human') AYNEN kalır — o ajan zaten atanmıştır.\nD6 Kuyruk: claim bugün yalnız manuel takımları kabul ediyor (routing-service.ts:604). Otomatik takım kuyruğu da açılır (aynı üyelik, uzmanlık ve eşzamanlı sohbet limiti kontrolleri). Gerekçe: S16 öncesi üye kuyruktaki sohbete doğrudan yazabiliyordu (tm 411); yazma kapandığına göre üye için meşru üstlenme yolu kalmalı; limit kontrolü dağıtım adaletini korur. Web `claimableTeamIds` buna göre genişler.\nD7 Başkasına atanmış sohbet: yalnız takeover (mevcut `chats.takeover` kuralı) ya da yetkili birinin transfer/ataması. İzleyen süpervizör de yanıt için devralır.\nD8 Ajan typing: RTM `send_typing_indicator` atanan olmayan ajandan geldiğinde ziyaretçiye yansıtılmaz (başarı döner, yayın yok; hata değil). Panel not modunda typing göndermiyorsa doğrulanır; gönderiyorsa susturulur.\nD9 tm 411: `visitor-queue.ts` varsayımı (\"replying is not taking\") bu kuralla geçersizleşir; kod kalabilir (yanıtlanıp başka takıma aktarılınca tekrar kuyruğa düşen sohbet için hâlâ doğru) ama başlık yorumu güncellenir; `manual-assignment.spec.ts:140-148` testi \"Üstüne al → yanıt → kuyruk bildirimi yok\" olarak yeniden yazılır (silinmez).\nD10 Mobil: liste yalnız 'my' görünümü (store.ts:95). Composer atanan değilse devre dışı + \"Bu sohbet artık sizde değil; yanıtlamak için konsoldan üstüne alın.\" Atanan bilgisi mevcut chat detayı/liste öğesindeki `thread.assignee_id` (ya da eşdeğer mevcut alan) + oturumdaki account id ile okunur; YENİ uç çağrısı YOK (parity); kullanılan kaynak alan HANDOFF'a. Mobilde \"Üstüne al\" düğmesi YOK (S5 ruhu: mobil kapsamı dar; yeni uç çağrısı parity matrisini değiştirir). 409 `reply_requires_assignment` kalıcı hata: \"tekrar dene\" sunulmaz, metin kaybolmaz.\nD11 Ajanın açtığı sohbet (`POST /chats` + `initial_event`): ajan principal'ının `initial_event`'i recipients 'all' ise `assign_to_me` örtük true sayılır; sohbet o ajana atanır (`assign_to_me`'nin bugünkü kontrolleri aynen). Gerekçe: ajan kendi açtığı sohbete müşteriye yazıp sohbet başkasına ya da kuyruğa düşerse S16'nın önlemek istediği karışıklık doğar ve sonraki yanıtları 409 alır; 409 seçeneği ajanın sohbet açma akışını kırar. `initial_event` 'agents' (not) ya da yoksa bugünkü davranış aynen. Kod `#appendEvent`'i doğrudan çağırdığı için (:1007-1036) kural burada ayrıca uygulanır; `dayChat`/`#openFurtherConnection` dalı aynı `route()` ile geldiği için o da kapsanır. Pencere ölçerek 409 yolunu seçerse gerekçesini HANDOFF'a yazar.\n\nALT GÖREV SIRASI (contract-first): 475.1 kontrat + hata türü → 475.2 API kapısı → 475.3 claim genişlemesi (AI evresi/duraklatılmış + otomatik kuyruk) → 475.4 panel → 475.5 mobil → 475.6 e2e + doküman + kapanış.\nKAPSAM DIŞI: event düzenleme (PUT events, zaten yazar-yalnız), ticket yanıtları, bot token'larının yanıtı, mobilde üstlenme düğmesi, routing algoritması, tm 417 önizleme alıcısı (değişmez).\nTUZAKLAR: büyük test ripple'ı — agent olarak atanmamış sohbete 'all' yazan entegrasyon ve e2e testleri kırmızı olur (`rg -l \"recipients: 'all'\" apps/api/test` ≈47 dosya, `/events` POST eden e2e spec'leri); fixture'lar silinmez, ortak yardımcıyla sohbet önce ajana atanır ya da claim edilir; listeyi HANDOFF'a yaz. Yeni hata türü web'de en+tr cümle ister (gate-rerun-hint-fails-for-web). Race testleri ayrı bağlantı ister (race-tests-need-separate-connections). Background DB işi resetDatabase ile yarışır (background-db-work-races-reset-database). ChatService services/ai'yi import edemez (chat-service-must-not-import-ai). AI turları cevaplanmamış ziyaretçi mesajlarını birleştirir (ai-turns-merge-unanswered-visitor-messages). Takım drain sırası (team-drain-runs-in-group-id-order). Uzun koşular run_in_background.",
         "testStrategy": "Alt görevlerin kabul testlerinin toplamı. Uçtan uca: iki ajan aynı kuyruk sohbetini görür; ikisi aynı anda \"Üstüne al\" → biri kazanır, diğerinin yanıt kutusu \"başkasında\" şeridine döner; kazanan yanıtlar, ziyaretçi tek ajan görür. Atanmamış ajanın API'den doğrudan yanıtı 409 `reply_requires_assignment`, müşteri transkriptinde iz yok; dahili not 201. Duraklatılmış AI sohbeti claim edilebilir. Ajanın açtığı sohbette initial_event 'all' → ajan atanmış. Mutasyon: atama kontrolünü kaldır → entegrasyon testi kırmızı. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
         "status": "pending",
         "dependencies": [
           "417"
         ],
         "priority": "high",
-        "updatedAt": "2026-11-06T17:34:51.966Z",
+        "updatedAt": "2026-11-07T11:50:37.837Z",
         "subtasks": [
           {
             "id": 1,
-            "title": "REPLY-ASSIGNMENT-CONTRACT [SONNET-HIGH] (Sonnet 5.5) Kontrat: hata türü reply_requires_assignment (409, reason unassigned|assigned_to_other|ai), POST events ve claim açıklamaları, web en+tr hata cümleleri",
-            "description": "Contract-first ilk halka. Yeni hata türü ve yol açıklamaları; davranış 475.2/475.3'te. Yeni YOL yok, mobil parity sayısı değişmez.",
-            "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1. Üst görev #475 KARARLAR D1, D5, D6 tek kaynaktır.\nAMAÇ: (1) Hata türü `reply_requires_assignment` (409, `details.reason` ∈ unassigned|assigned_to_other|ai): `packages/types/src/errors.ts:226` ve `:293` (status), kontrat enum (`packages/contract/openapi/openapi.yaml:~17360`). (2) `packages/contract/openapi/paths/chats.yaml` POST events açıklaması: \"müşteriye görünür yanıt yalnız atanmış ajandan; dahili not serbest\". (3) Claim açıklaması (`paths/chats.yaml:~615`): AI evresindeki ya da duraklatılmış AI'daki atanmamış sohbet + otomatik takım kuyruğu da kabul edilir; reason `not_waiting`'in yeni anlamı (yalnız kuyrukta/AI evresinde olmayan sohbet). (4) POST /chats `initial_event` açıklaması: ajan 'all' initial_event'te sohbet o ajana atanır (D11). (5) `pnpm contract:generate`, generated temiz. (6) Web hata cümleleri en+tr (i18n kaydı; gate-rerun-hint-fails-for-web).\nKAPSAM DIŞI: davranış (475.2–475.5).\nKABUL: kontrat/generated/types testleri yeşil; mobil parity sayısı değişmedi.",
-            "testStrategy": "packages/types birim: yeni hata türü status 409; kontrat testleri ve contract:generate sonrası generated temiz (`git status`); web hata cümlesi en+tr var (locale testi). DoD: CONVENTIONS §1.",
+            "title": "REPLY-ASSIGNMENT-CONTRACT-AND-API-GUARD [OPUS-MAX] (Opus 5.5) Kontrat: hata türü reply_requires_assignment (409, reason unassigned|assigned_to_other|ai), POST events ve claim açıklamaları, web en+tr hata cümleleri + sendEvent'te thread kilidi altında atama kapısı (409 reply_requires_assignment), örtük AI devralmasının kaldırılması, ajanın açtığı sohbette örtük assign_to_me, RTM ajan typing'i atanan değilse yayınsız; fixture ripple'ı",
+            "description": "(475.1) Contract-first ilk halka. Yeni hata türü ve yol açıklamaları; davranış 475.2/475.3'te. Yeni YOL yok, mobil parity sayısı değişmez. (475.2) Kuralın sunucu otoritesi. Atanmamış ya da başkasına atanmış ajanın müşteriye görünür yanıtı reddedilir; dahili not ve bot muaf. Eşzamanlı takeover/claim ile yanıt yarışında iki yanıt birden müşteriye gitmez.",
+            "details": "BİRLEŞİK ALT GÖREV (sahip onayı 2026-11-07): 475.1, 475.2 tek pencerede yapılır; DoD kapısı bir kez koşar.\nBölümler sırayla yapılır, her biri kendi kabul ölçütüyle kapanır; biri yeşil değilse alt görev done değildir.\n475.2 cancelled durumda ve buraya işaret ediyor; metinlerde onlara yapılan atıflar bu alt görevi kasteder.\nContract-first sırası pencere içinde korunur: önce Bölüm 1 (kontrat + üretilen tipler yeşil), sonra Bölüm 2 (api kapısı).\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\n━━ BÖLÜM 1 — 475.1 REPLY-ASSIGNMENT-CONTRACT · Kontrat: hata türü reply_requires_assignment (409, reason unassigned|assigned_to_other|ai), POST events ve claim açıklamaları, web en+tr hata cümleleri ━━\nSORUN: Contract-first ilk halka. Yeni hata türü ve yol açıklamaları; davranış 475.2/475.3'te. Yeni YOL yok, mobil parity sayısı değişmez.\n\nÜst görev #475 KARARLAR D1, D5, D6 tek kaynaktır.\nAMAÇ: (1) Hata türü `reply_requires_assignment` (409, `details.reason` ∈ unassigned|assigned_to_other|ai): `packages/types/src/errors.ts:226` ve `:293` (status), kontrat enum (`packages/contract/openapi/openapi.yaml:~17360`). (2) `packages/contract/openapi/paths/chats.yaml` POST events açıklaması: \"müşteriye görünür yanıt yalnız atanmış ajandan; dahili not serbest\". (3) Claim açıklaması (`paths/chats.yaml:~615`): AI evresindeki ya da duraklatılmış AI'daki atanmamış sohbet + otomatik takım kuyruğu da kabul edilir; reason `not_waiting`'in yeni anlamı (yalnız kuyrukta/AI evresinde olmayan sohbet). (4) POST /chats `initial_event` açıklaması: ajan 'all' initial_event'te sohbet o ajana atanır (D11). (5) `pnpm contract:generate`, generated temiz. (6) Web hata cümleleri en+tr (i18n kaydı; gate-rerun-hint-fails-for-web).\nKAPSAM DIŞI: davranış (475.2–475.5).\nKABUL: kontrat/generated/types testleri yeşil; mobil parity sayısı değişmedi.\n\n━━ BÖLÜM 2 — 475.2 REPLY-ASSIGNMENT-API-GUARD · sendEvent'te thread kilidi altında atama kapısı (409 reply_requires_assignment), örtük AI devralmasının kaldırılması, ajanın açtığı sohbette örtük assign_to_me, RTM ajan typing'i atanan değilse yayınsız; fixture ripple'ı ━━\nSORUN: Kuralın sunucu otoritesi. Atanmamış ya da başkasına atanmış ajanın müşteriye görünür yanıtı reddedilir; dahili not ve bot muaf. Eşzamanlı takeover/claim ile yanıt yarışında iki yanıt birden müşteriye gitmez.\n\nBağımlılık: 475.1. Üst görev #475 KARARLAR D1–D4, D8, D11 tek kaynaktır.\nAMAÇ: (1) sendEvent'te append ve kanal kapısından ÖNCE aktif thread `FOR UPDATE` ile okunur ve D1 kuralı uygulanır (chat-service.ts:1681-1700). (2) Örtük AI devralması (:1722-1732) yalnız zaten atanmış ajan için kalır (paralel atama); atanmamış ajan bu yola hiç ulaşmaz. (3) D11: `start` (:815) `initial_event` 'all' olan ajan isteğinde `assign_to_me` örtük true (:1128); 'agents' notu ve initial_event'siz istek değişmez. (4) RTM `#typing` (apps/rtm/src/dispatcher.ts:246-270): atanan olmayan ajanın typing'i ziyaretçiye yayınlanmaz (başarı döner). (5) Fixture ripple'ı ortak yardımcıyla kapatılır (sohbet önce ajana atanır ya da claim edilir); değişen dosya listesi HANDOFF'a.\nTUZAK: üst görevin TUZAKLAR listesi (race-tests-need-separate-connections, background-db-work-races-reset-database, chat-service-must-not-import-ai).\nKABUL: aşağıdaki testler yeşil; mutasyon: kontrolü kaldır → kırmızı.",
+            "testStrategy": "BÖLÜM 1 (475.1): packages/types birim: yeni hata türü status 409; kontrat testleri ve contract:generate sonrası generated temiz (`git status`); web hata cümlesi en+tr var (locale testi). DoD: CONVENTIONS §1.\nBÖLÜM 2 (475.2): api entegrasyon: atanmamış ajan 'all' → 409 unassigned, event yok, idempotency kaydı yok; başkasına atanmış → assigned_to_other; AI evresi atanmamış → ai; pause-ai sonrası atanmamış → ai; atanan → 201; aynı ajanın dahili notu atanmamışken 201; bot 'all' → 201; atanan yanıtı ile takeover eşzamanlı (ayrı bağlantılar) → yanıt ya devralmadan önce yazılmış ya 409, ikisi birden değil; POST /chats assign_to_me=false + initial_event 'all' → sohbet ajana atanmış, atanmamış ajanın yazdığı müşteri olayı yok; initial_event 'agents' → bugünkü atama davranışı. rtm birim: atanmamış ajan typing → ziyaretçiye push yok. Mutasyon: atama kontrolünü kaldır → kırmızı. DoD: CONVENTIONS §1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "475",
             "priority": "high",
-            "updatedAt": "2026-11-06T17:34:51.966Z"
+            "updatedAt": "2026-11-07T11:50:37.837Z"
           },
           {
             "id": 2,
             "title": "REPLY-ASSIGNMENT-API-GUARD [OPUS-MAX] (Opus 5.5) sendEvent'te thread kilidi altında atama kapısı (409 reply_requires_assignment), örtük AI devralmasının kaldırılması, ajanın açtığı sohbette örtük assign_to_me, RTM ajan typing'i atanan değilse yayınsız; fixture ripple'ı",
             "description": "Kuralın sunucu otoritesi. Atanmamış ya da başkasına atanmış ajanın müşteriye görünür yanıtı reddedilir; dahili not ve bot muaf. Eşzamanlı takeover/claim ile yanıt yarışında iki yanıt birden müşteriye gitmez.",
-            "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1. Bağımlılık: 475.1. Üst görev #475 KARARLAR D1–D4, D8, D11 tek kaynaktır.\nAMAÇ: (1) sendEvent'te append ve kanal kapısından ÖNCE aktif thread `FOR UPDATE` ile okunur ve D1 kuralı uygulanır (chat-service.ts:1681-1700). (2) Örtük AI devralması (:1722-1732) yalnız zaten atanmış ajan için kalır (paralel atama); atanmamış ajan bu yola hiç ulaşmaz. (3) D11: `start` (:815) `initial_event` 'all' olan ajan isteğinde `assign_to_me` örtük true (:1128); 'agents' notu ve initial_event'siz istek değişmez. (4) RTM `#typing` (apps/rtm/src/dispatcher.ts:246-270): atanan olmayan ajanın typing'i ziyaretçiye yayınlanmaz (başarı döner). (5) Fixture ripple'ı ortak yardımcıyla kapatılır (sohbet önce ajana atanır ya da claim edilir); değişen dosya listesi HANDOFF'a.\nTUZAK: üst görevin TUZAKLAR listesi (race-tests-need-separate-connections, background-db-work-races-reset-database, chat-service-must-not-import-ai).\nKABUL: aşağıdaki testler yeşil; mutasyon: kontrolü kaldır → kırmızı.",
+            "details": "BİRLEŞTİ (2026-11-07, sahip onayı): bu alt görevin tamamı 475.1 REPLY-ASSIGNMENT-CONTRACT-AND-API-GUARD içinde BÖLÜM 2 olarak yapılır. Burada iş yapma.\n\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1. Bağımlılık: 475.1. Üst görev #475 KARARLAR D1–D4, D8, D11 tek kaynaktır.\nAMAÇ: (1) sendEvent'te append ve kanal kapısından ÖNCE aktif thread `FOR UPDATE` ile okunur ve D1 kuralı uygulanır (chat-service.ts:1681-1700). (2) Örtük AI devralması (:1722-1732) yalnız zaten atanmış ajan için kalır (paralel atama); atanmamış ajan bu yola hiç ulaşmaz. (3) D11: `start` (:815) `initial_event` 'all' olan ajan isteğinde `assign_to_me` örtük true (:1128); 'agents' notu ve initial_event'siz istek değişmez. (4) RTM `#typing` (apps/rtm/src/dispatcher.ts:246-270): atanan olmayan ajanın typing'i ziyaretçiye yayınlanmaz (başarı döner). (5) Fixture ripple'ı ortak yardımcıyla kapatılır (sohbet önce ajana atanır ya da claim edilir); değişen dosya listesi HANDOFF'a.\nTUZAK: üst görevin TUZAKLAR listesi (race-tests-need-separate-connections, background-db-work-races-reset-database, chat-service-must-not-import-ai).\nKABUL: aşağıdaki testler yeşil; mutasyon: kontrolü kaldır → kırmızı.",
             "testStrategy": "api entegrasyon: atanmamış ajan 'all' → 409 unassigned, event yok, idempotency kaydı yok; başkasına atanmış → assigned_to_other; AI evresi atanmamış → ai; pause-ai sonrası atanmamış → ai; atanan → 201; aynı ajanın dahili notu atanmamışken 201; bot 'all' → 201; atanan yanıtı ile takeover eşzamanlı (ayrı bağlantılar) → yanıt ya devralmadan önce yazılmış ya 409, ikisi birden değil; POST /chats assign_to_me=false + initial_event 'all' → sohbet ajana atanmış, atanmamış ajanın yazdığı müşteri olayı yok; initial_event 'agents' → bugünkü atama davranışı. rtm birim: atanmamış ajan typing → ziyaretçiye push yok. Mutasyon: atama kontrolünü kaldır → kırmızı. DoD: CONVENTIONS §1.",
-            "status": "pending",
-            "dependencies": [
-              "475.1"
-            ],
+            "status": "cancelled",
+            "dependencies": [],
             "parentId": "475",
             "priority": "high",
-            "updatedAt": "2026-11-06T17:34:51.966Z"
+            "updatedAt": "2026-11-07T11:50:37.837Z"
           },
           {
             "id": 3,
@@ -17626,11 +17612,11 @@
             "testStrategy": "api entegrasyon: AI evresi sohbeti claim → assignee=çağıran, ai_mode human, sonraki ziyaretçi mesajına AI cevap vermez; pause-ai sonrası atanmamış sohbet → claim 200, assignee=çağıran, ai_mode human; iki eşzamanlı claim (ayrı bağlantılar) → 200 + 409 claimed; otomatik takım kuyruğu claim → 200, limitte 409 limit, üye değil → 404; claim sonrası yanıt 201; mevcut manuel takım claim testleri yeşil. DoD: CONVENTIONS §1.",
             "status": "pending",
             "dependencies": [
-              "475.2"
+              "475.1"
             ],
             "parentId": "475",
             "priority": "high",
-            "updatedAt": "2026-11-06T17:34:51.966Z"
+            "updatedAt": "2026-11-07T11:50:37.837Z"
           },
           {
             "id": 4,
@@ -17655,12 +17641,11 @@
             "testStrategy": "mobil jest: atanan → composer açık; atanan başkası → devre dışı + metin; 409 → hata balonu, metin kaybolmaz, tekrar dene yok; parity testi yeşil ve sayı değişmez. DoD: CONVENTIONS §1.",
             "status": "pending",
             "dependencies": [
-              "475.1",
-              "475.2"
+              "475.1"
             ],
             "parentId": "475",
             "priority": "high",
-            "updatedAt": "2026-11-06T17:34:51.966Z"
+            "updatedAt": "2026-11-07T11:50:37.837Z"
           },
           {
             "id": 6,
@@ -17792,7 +17777,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-07T11:03:10.748Z",
+      "lastModified": "2026-11-07T11:50:37.837Z",
       "taskCount": 478,
       "completedCount": 414,
       "tags": [

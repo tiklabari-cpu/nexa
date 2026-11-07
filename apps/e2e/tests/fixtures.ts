@@ -805,10 +805,11 @@ export async function takeForReply(
 /**
  * {@link takeForReply} for the conversation open in a panel's composer — the
  * textarea carries its chat id — before the spec answers the visitor from it.
- * The console's own "Take" strip above the composer arrives with tm 475.4;
- * until then a spec that replies as the signed-in owner to a chat routing gave
- * someone else takes it over through the API first. `headers` is the signed-in
- * person's credential; the owner's by default.
+ * A spec that replies as the signed-in owner to a chat routing gave someone
+ * else takes it over through the API first, then waits for the panel to learn
+ * it (the takeover's push re-reads the chat): until then the reply strip above
+ * the composer (tm 475.4) holds Send, and an Enter would send nothing.
+ * `headers` is the signed-in person's credential; the owner's by default.
  */
 export async function takeOpenChatForReply(
   page: Page,
@@ -822,4 +823,5 @@ export async function takeOpenChatForReply(
     chatId!,
     headers ?? { authorization: `Bearer ${await ownerAccessToken(context)}` },
   );
+  await expect(page.getByTestId('reply-claim-bar')).toHaveCount(0, { timeout: 10_000 });
 }

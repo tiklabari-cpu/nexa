@@ -99,6 +99,7 @@ export function Composer({
   chatId,
   disabled,
   disabledNotice,
+  replyLocked = false,
   tags = [],
 }: {
   chatId: string;
@@ -109,6 +110,16 @@ export function Composer({
    * simply failed to load (tm 259.5).
    */
   disabledNotice?: string;
+  /**
+   * The open connection is not this agent's (tm 475): only its assignee may
+   * answer the customer, so Reply cannot send while an internal note still
+   * can. A reply being drafted still says "typing": the gateway keeps it from
+   * the visitor (`dispatcher.ts` `#typing`, tm 475.1) but counts it as a second
+   * composer, which is what warns the assignee (`ConflictBanner`, 08.6.3). The words stay in the box (and in the
+   * saved draft) for when the agent takes the chat; `ReplyClaimBar` above the
+   * composer says why and offers the way to take it.
+   */
+  replyLocked?: boolean;
   /**
    * The chat's current tags (FR-MOD-02.3.5's fifth composer tool) — the same
    * array `DetailsPanel` reads off `chat.thread.tags`, so a tag added here
@@ -218,8 +229,9 @@ export function Composer({
     !disabled &&
     !send.isPending &&
     !uploading &&
-    // A note never leaves the workspace, so the window never holds it back.
-    (isNote || !replyWindowClosed(replyWindow));
+    // A note never leaves the workspace, so neither the assignment nor the
+    // window holds it back.
+    (isNote || (!replyLocked && !replyWindowClosed(replyWindow)));
 
   // Event-bound suggested replies (IN-07 · tm 364): saved replies the workspace
   // bound to something that just happened — the chat started, was handed to this

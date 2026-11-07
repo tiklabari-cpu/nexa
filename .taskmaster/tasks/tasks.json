@@ -16474,7 +16474,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-11-07T05:24:10.653Z",
+        "updatedAt": "2026-11-07T06:22:46.173Z",
         "subtasks": [
           {
             "id": 1,
@@ -16522,13 +16522,13 @@
             "description": "RTM bugün grup adresli olayları unrestricted bot/PAT bağlantılarına da veriyor ve `ws.send` bufferedAmount'a bakmıyor. Önizleme olayları yalnız `actorType==='agent'` bağlantılara gider. Dolu bir sokette sohbet başına yalnız son sneak-peek karesi bekletilir ve soket boşalınca gönderilir. Böylece son kare asla kaybolmaz (K2'de heartbeat yok) ve eski kareler birikmez.",
             "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1. Bağımlılık: 417.1 (`seq` yük tipi, sıra için). Üst görev #417 K7.\n\nBAĞLAM: (1) Sahip \"insan agent'ın görmesi yeterli\" dedi; ama `#isAddressed` (apps/rtm/src/fanout.ts:191-207) `connection.unrestricted && groupIds.length>0` iken (:205) her grup adresli olayı veriyor; bot token'ları unrestricted olabiliyor (apps/rtm/src/auth.ts:255-271), kapsamı sınırlı bot sahibinin gruplarını alıyor (:258-260). 417.2 önizlemede grupları boş gönderse de agentIds adreslemesi ve gelecekte 'queue' grupları için RTM'de de kapı gerekiyor (derinlemesine savunma). (2) Backpressure yok (:174). Kare düşürmek yanlış olur: ziyaretçi durunca son kare düşerse bir daha kare gelmez (K2'de heartbeat yok) ve ajan, şerit 30 sn bayatlamayla kalkana kadar eksik taslak görür.\n\nKODDA BUGÜN:\n- apps/rtm/src/fanout.ts:150-189 `#handle` (`encodePush` :164, filtreler :166-172, `connection.ws.send(frame)` :174-187, telemetri `fanoutDelay` :182); resync dağıtımı :130-147 (dokunma).\n- apps/rtm/src/connection.ts: `actorType` (`agent`/`bot`/`customer`), `unrestricted`, `groupIds`, `side`.\n- apps/rtm/src/server.ts:401 `maxPayload: 256 KB`; :971-977 `send()`; bağlantı kapanış yolu.\n- packages/types/src/rtm.ts:172 `incoming_sneak_peek`, :389 civarı yükler (`chat_id`).\n- Test dosyası: apps/rtm/src/fanout.test.ts (apps/rtm/test altında DEĞİL); sahte registry deseni oradan alınır.\n\nAMAÇ:\n1) `HUMAN_ONLY_ACTIONS = new Set(['incoming_sneak_peek','incoming_typing_indicator'])`: bu action'lar yalnız `connection.actorType === 'agent'` olan bağlantıya teslim edilir; `bot`, `customer` ve kimliği doğrulanmamış bağlantılara teslim edilmez (unrestricted ve grup üyesi olsalar da).\n2) `COALESCIBLE_ACTIONS = new Set(['incoming_sneak_peek'])` ve `SNEAK_PEEK_COALESCE_BUFFERED_BYTES = 64 * 1024`. Action bu kümedeyse ve `bufferedAmount > eşik` ise kare bağlantı başına `Map<chat_id, frame>` içine yazılır (eskinin üstüne) ve gönderilmez. Bağlantı başına tek bir `setTimeout(250 ms)` kurulur (her karede yeniden kurulmaz). Zamanlayıcı tetiklenince eşiğin altındaysa map boşaltılıp son kareler gönderilir; değilse yeniden kurulur.\n3) Aynı bağlantıya aynı `chat_id` için `incoming_typing_indicator` geldiğinde önce bekleyen kare silinir, sonra temizle hemen gönderilir (temizle asla bekletilmez ya da düşürülmez). Eşik altındayken gelen yeni sneak-peek de, varsa aynı sohbetin bekleyenini siler.\n4) Bağlantı kapanınca map ve zamanlayıcı silinir.\n5) Telemetri: mevcut instruments'a sayaç eklenebiliyorsa `fanout_coalesced_total{action}` eklenir; yoksa yalnız `this.log.debug({ connection_id, action }, 'coalesced a push on a congested socket')`. Payload ya da metin ASLA loglanmaz.\n\nKARARLAR: eşik 64 KiB (en büyük sneak-peek karesi ≈2,5 KB). Diğer tüm action'lar bugünkü gibi.\nKAPSAM DIŞI: genel backpressure (tüm olaylar için kuyruk ya da soket kapatma) ayrı iş; HANDOFF'a not.\nTUZAKLAR: telemetri sayacı RTM health/metrics pin'li testlerini dalgalandırabilir, önce `git grep -n fanout_ apps/rtm`. Sahte zamanlayıcıyla test edilir; gerçek ws yerine `bufferedAmount` alanı ayarlanabilen sahte bağlantı kullanılır.\nKABUL: bot bağlantısı önizleme almaz; dolu sokette yalnız son kare gecikmeli gider; temizle hemen gider ve bekleyeni iptal eder; log'da metin yok.",
             "testStrategy": "rtm birim (apps/rtm/src/fanout.test.ts, başlıkta `FR-MOD-11.8`):\n(a) unrestricted + grup üyesi bot bağlantısı `incoming_sneak_peek` ve `incoming_typing_indicator` almaz; aynı adreslemedeki insan ajan alır; bot `incoming_event` almaya devam eder.\n(b) `bufferedAmount = 70_000` iken aynı sohbet için A ve B kareleri gelir → send çağrılmaz; ardından 0'a iner ve zamanlayıcı 250 ms ilerletilir → YALNIZ B gönderilir.\n(c) bekleyen kare varken temizle gelir → temizle hemen gönderilir; bekleyen kare hiç gönderilmez.\n(d) `incoming_event` dolu sokette bugünkü gibi gönderilir.\n(e) bağlantı kapanınca zamanlayıcı temizlenir (sahte zamanlayıcıda bekleyen yok).\n(f) yakalanan log'da gözcü metin yok.\nMutasyonlar: `actorType` kontrolünü kaldır → (a) kırmızı; birleştirme yerine düşür → (b) kırmızı. DoD: CONVENTIONS §1.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "417.1"
             ],
             "parentId": "417",
             "priority": "high",
-            "updatedAt": "2026-11-07T05:24:10.653Z"
+            "updatedAt": "2026-11-07T06:22:46.173Z"
           },
           {
             "id": 5,
@@ -17837,7 +17837,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-07T05:24:10.654Z",
+      "lastModified": "2026-11-07T06:22:46.173Z",
       "taskCount": 478,
       "completedCount": 413,
       "tags": [

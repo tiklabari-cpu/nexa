@@ -37,6 +37,7 @@ import {
 } from '../../lib/presence-notice.js';
 import { noteAiConfigPublished, readAiConfigPublished } from '../../lib/ai-config-notice.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
+import { ApiClientError } from '../../lib/api-client.js';
 import { optimisticCacheUpdate } from '../../lib/optimistic.js';
 import { usePagedQuery, type PagedQueryResult, type PagedResponse } from '../../lib/paged-query.js';
 import { useTypingStore } from './typing.js';
@@ -936,6 +937,12 @@ export function useSendMessage(chatId: string | null) {
       // lose it: the attempt reappears as a failed row that carries the text,
       // the reason, and the retry (FR-MOD-02.3.3 · FR-MOD-02.3.6).
       if (chatId) useFailedSendStore.getState().record(chatId, input, error);
+      // Refused because the connection is not this agent's (tm 475): someone
+      // took it, or it never was — the read the reply strip and the composer
+      // draw from is stale, so it is re-read now rather than at the next push.
+      if (chatId && error instanceof ApiClientError && error.type === 'reply_requires_assignment') {
+        void queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
+      }
     },
     onSettled: optimistic.onSettled,
   });
@@ -1620,6 +1627,11 @@ export function applyPush(
       if (typeof chatId === 'string' && payload['new_assignee_id'] !== me) {
         useTypingStore.getState().clear(chatId);
       }
+      // Who may answer just changed (tm 475.4): the open chat's reply strip
+      // and composer read the assignee off the chat.
+      if (typeof chatId === 'string') {
+        void queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
+      }
       void queryClient.invalidateQueries({ queryKey: ['chats'] });
       return;
     }
@@ -1860,9 +1872,12 @@ export function applyPush(
         // Nor is the visitor's draft this agent's to see any more (tm 417.6).
         useTypingStore.getState().clear(chatId);
       }
-      // The card's rows name the teams and the assignee, and a hand-off moves both (IN-02).
+      // The card's rows name the teams and the assignee, and a hand-off moves
+      // both (IN-02) — and with the assignee, who may answer (tm 475.4): the
+      // open chat's reply strip and composer read it off the chat.
       if (typeof chatId === 'string') {
         void queryClient.invalidateQueries({ queryKey: customerContextKey(chatId) });
+        void queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
       }
       void queryClient.invalidateQueries({ queryKey: ['chats'] });
       return;

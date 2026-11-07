@@ -166,7 +166,7 @@ export const inbox: Messages = {
   'inbox.thread.aiMode.human': 'İnsanda',
   'inbox.thread.aiMode.paused': 'AI duraklatıldı',
   'inbox.thread.aiMode.aiHint':
-    'Ziyaretçiyle AI ajanı görüşüyor. Ziyaretçiye yazmak sohbeti devralır.',
+    'Ziyaretçiyle AI ajanı görüşüyor. Kendiniz yanıtlamak için sohbeti üstünüze alın.',
   'inbox.thread.aiMode.humanHint': 'Sohbet bir kişide; AI sessiz kalır.',
   'inbox.thread.aiMode.pausedHint': 'Bu sohbette AI duraklatıldı.',
   'inbox.thread.aiMode.pause': "AI'ı duraklat",
@@ -198,6 +198,14 @@ export const inbox: Messages = {
   'inbox.thread.empty.description': 'Burada görmek için listeden bir sohbet seçin.',
 
   // Composer
+  'inbox.composer.claim.unassigned': 'Müşteriye yanıt vermek için sohbeti üstüne alın.',
+  'inbox.composer.claim.waiting':
+    'Müşteriye yalnız sohbetin atandığı temsilci yanıt verebilir. Atama otomatik yapılacak ya da yetkili biri atayacak.',
+  'inbox.composer.claim.other': 'Bu sohbet {name} adlı temsilcide.',
+  'inbox.composer.claim.otherUnnamed': 'Bu sohbet başka bir temsilcide.',
+  'inbox.composer.claim.noteOpen': 'Dahili not yazmaya devam edebilirsiniz.',
+  'inbox.composer.claim.cta': 'Üstüne al',
+  'inbox.composer.claim.pending': 'Alınıyor…',
   'inbox.composer.disabledNotice': 'Bu sohbet arşivlendi. Yanıtlamak için yeniden açın.',
   'inbox.composer.unavailableNotice':
     'Mesajlar yüklenemediği için yanıtlama durduruldu. Mesajları yeniden yüklemeyi deneyin.',

@@ -3,7 +3,7 @@
  * answers the open conversation — "AI answering", "With a person", "AI
  * paused" — and, for whoever may, "Pause AI" and "Return to AI". A supervisor
  * takes the chat off the AI with the takeover they already have, in the
- * Details panel; an agent by writing to the visitor. Which badge and which
+ * Details panel; an agent with "Take chat" above the composer (tm 475.4). Which badge and which
  * actions is `aiMode.ts`; the badge follows the
  * `chat_ai_mode_changed` push (`useInbox.ts`), so it moves the moment the mode
  * does, whoever moved it.

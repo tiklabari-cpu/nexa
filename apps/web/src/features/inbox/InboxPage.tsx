@@ -23,7 +23,6 @@ import { EmptyState } from '../../components/EmptyState.js';
 import { Banner, Modal } from '../../components/ui/index.js';
 import { useViewportLayout } from '../../lib/viewport.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
-import { Composer } from './Composer.js';
 import { DetailsPanel } from './DetailsPanel.js';
 import { CopilotPanel } from './CopilotPanel.js';
 import { Transcript } from './Transcript.js';
@@ -81,6 +80,7 @@ import { TEAMS_KEY, claimableTeamIds, type TransferNotice, type TransferTeam } f
 import { canTakeOver, ledTeamIds } from './takeover.js';
 import { TeamRowActions } from './TeamRowActions.js';
 import { ClaimRowAction } from './ClaimRowAction.js';
+import { ReplyArea } from './ReplyArea.js';
 import { WaitingTimer } from './WaitingTimer.js';
 import { TRAFFIC_TABS, filterByTrafficTab, trafficTabCounts } from './traffic.js';
 import { QueueTeamTabs } from './QueueTeamTabs.js';
@@ -386,7 +386,8 @@ export function InboxPage(): ReactElement {
     ledTeams,
     teamsQuery.data?.items ?? [],
   );
-  // Manual teams the agent belongs to: their waiting rows offer Take (WG-07).
+  // Teams the agent belongs to: their waiting rows offer Take (WG-07; automatic
+  // ones too since a reply needs the assignment, tm 475.4).
   const claimableTeams = claimableTeamIds(teamsQuery.data?.items ?? [], myAccountId);
   const chatViews = leadsTeam ? VIEWS : VIEWS.filter((item) => item.id !== 'team');
   const counts = useViewCounts(activeChannel, leadsTeam);
@@ -1325,18 +1326,10 @@ export function InboxPage(): ReactElement {
                     />
                     <ConflictBanner chatId={selectedId} />
 
-                    {/* Keyed on the open chat (tm 277.1): the text, attachment,
-                    mode and chips are this component's state, and without the
-                    key a switch to a chat already in the cache kept them — what
-                    was written to A sat in B's box, one Enter from B. */}
-                    <Composer
-                      key={selectedId}
+                    <ReplyArea
                       chatId={selectedId}
-                      disabled={!chat.data.active || transcript.isError}
-                      {...(chat.data.active && transcript.isError
-                        ? { disabledNotice: t('inbox.composer.unavailableNotice') }
-                        : {})}
-                      tags={chat.data.thread?.tags ?? []}
+                      chat={chat.data}
+                      transcriptFailed={transcript.isError}
                     />
                   </>
                 ) : selectedId && chat.isError ? (

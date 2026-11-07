@@ -2,7 +2,8 @@
  * A Queued-view row's "Take" (WG-07 · tm 346): it takes the conversation and
  * opens it; a refusal says why — someone else took it, or the agent is at
  * their limit — and the list re-reads either way. Which rows offer it is
- * `claimableTeamIds`: a manual team the agent is a member of.
+ * `claimableTeamIds`: a team the agent is a member of — manual or, since a
+ * reply needs the assignment (tm 475.3 · tm 475.4), automatic.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -77,14 +78,14 @@ describe('ClaimRowAction', () => {
 });
 
 describe('claimableTeamIds', () => {
-  it('offers a manual team the agent is a member of, and no other', () => {
+  it('offers every team the agent is a member of — manual or automatic — and no other', () => {
     const teams = [
       { id: 1, name: 'Bonus', assignment_mode: 'manual', agents: [{ agent_id: 'me' }] },
       { id: 2, name: 'VIP', assignment_mode: 'manual', agents: [{ agent_id: 'other' }] },
       { id: 3, name: 'Support', assignment_mode: 'auto', agents: [{ agent_id: 'me' }] },
       { id: 4, name: 'Old server', agents: [{ agent_id: 'me' }] },
     ];
-    expect([...claimableTeamIds(teams, 'me')]).toEqual([1]);
+    expect([...claimableTeamIds(teams, 'me')]).toEqual([1, 3, 4]);
     expect(claimableTeamIds(teams, null).size).toBe(0);
   });
 });

@@ -27,8 +27,12 @@ export interface TransferTeam {
 }
 
 /**
- * The manual teams (WG-07 · tm 346) the agent is a member of — whose waiting
- * conversations a Queued-view row offers to take (`ClaimRowAction`).
+ * The teams the agent is a member of — whose waiting conversations a
+ * Queued-view row (`ClaimRowAction`) and the reply strip (`ReplyClaimBar`)
+ * offer to take. Manual teams since WG-07 (tm 346); automatic ones too since a
+ * reply needs the assignment (tm 475.3, D6): a member who may no longer write
+ * into a waiting chat may take it, under the same membership, skill and
+ * concurrent-limit checks the server makes (`RoutingService.claim`).
  */
 export function claimableTeamIds(
   teams: readonly TransferTeam[],
@@ -37,11 +41,7 @@ export function claimableTeamIds(
   if (accountId === null) return new Set();
   return new Set(
     teams
-      .filter(
-        (team) =>
-          team.assignment_mode === 'manual' &&
-          (team.agents ?? []).some((member) => member.agent_id === accountId),
-      )
+      .filter((team) => (team.agents ?? []).some((member) => member.agent_id === accountId))
       .map((team) => team.id),
   );
 }

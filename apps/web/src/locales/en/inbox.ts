@@ -184,7 +184,7 @@ export const inbox: Messages = {
   'inbox.thread.aiMode.human': 'With a person',
   'inbox.thread.aiMode.paused': 'AI paused',
   'inbox.thread.aiMode.aiHint':
-    'The AI agent is answering the visitor. Writing to the visitor takes the chat over.',
+    'The AI agent is answering the visitor. Take the chat to answer them yourself.',
   'inbox.thread.aiMode.humanHint': 'A person has this chat; the AI stays silent.',
   'inbox.thread.aiMode.pausedHint': 'The AI is held back on this chat.',
   'inbox.thread.aiMode.pause': 'Pause AI',
@@ -216,6 +216,14 @@ export const inbox: Messages = {
   'inbox.thread.empty.description': 'Pick a conversation from the list to see it here.',
 
   // Composer
+  'inbox.composer.claim.unassigned': 'Take this chat to reply to the customer.',
+  'inbox.composer.claim.waiting':
+    'Only the assigned agent can reply to the customer. It will be assigned automatically, or by someone allowed to assign it.',
+  'inbox.composer.claim.other': 'This chat is with {name}.',
+  'inbox.composer.claim.otherUnnamed': 'This chat is with another agent.',
+  'inbox.composer.claim.noteOpen': 'You can still write an internal note.',
+  'inbox.composer.claim.cta': 'Take chat',
+  'inbox.composer.claim.pending': 'Taking…',
   'inbox.composer.disabledNotice': 'This conversation is archived. Reopen it to reply.',
   'inbox.composer.unavailableNotice':
     "The messages couldn't be loaded, so replying is paused. Try loading them again.",

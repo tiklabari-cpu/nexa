@@ -91,6 +91,7 @@ import {
   test,
   widgetFrame,
 } from './fixtures.js';
+import { fromNode } from './stack-ports.js';
 
 /** Where the public KB is served — `${API_BASE_URL}${API_PREFIX}` (server.ts). */
 const PUBLIC_BASE = 'http://localhost:4000/api/v1';
@@ -616,6 +617,48 @@ test.describe('WCAG 2.1 AA (axe)', () => {
           // clean pass for a pair that was never rendered.
           await expect(noteTab).toHaveAttribute('aria-checked', 'true');
           await expect(agentPage.getByText('Only your team will see this.')).toBeVisible();
+        });
+      });
+
+      /**
+       * The reply strip above the composer (tm 475.4): the open connection is
+       * nobody's and the AI answers it, so Reply waits and "Take chat" is
+       * offered — the brand button and the secondary sentence on the inset
+       * surface. The scan's own chat is the owner's (`ensureActiveChat`), so
+       * the chat read is answered as the AI's: the strip is drawn from that
+       * read alone, and nothing here presses the button.
+       */
+      test('the reply strip has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.route(
+          (url) => url.pathname.endsWith(`/chats/${activeChatId}`),
+          async (route) => {
+            if (route.request().method() !== 'GET') return route.fallback();
+            const response = await route.fetch({ url: fromNode(route.request().url()) });
+            const chat = (await response.json()) as {
+              thread: {
+                assignee_id: string | null;
+                ai_mode?: string | null;
+                queue_position: number | null;
+              };
+            };
+            chat.thread = {
+              ...chat.thread,
+              assignee_id: null,
+              ai_mode: 'ai',
+              queue_position: null,
+            };
+            await route.fulfill({ response, json: chat });
+          },
+        );
+        await agentPage.goto(`/app/inbox?chat=${activeChatId}`);
+        await scanPanel(agentPage, 'Inbox reply strip', theme, testInfo, async () => {
+          const strip = agentPage.getByTestId('reply-claim-bar');
+          await expect(strip).toBeVisible();
+          await expect(strip.getByRole('button', { name: 'Take chat' })).toBeVisible();
+          await expect(strip).toContainText('You can still write an internal note.');
         });
       });
 

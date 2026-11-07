@@ -312,6 +312,9 @@ export const inbox: Messages = {
   // "Visitor is typing…"
   'inbox.typing.visitorFallback': 'Ziyaretçi',
   'inbox.typing.suffix': 'yazıyor…',
+  'inbox.typing.statusTyping': '{name} yazıyor…',
+  'inbox.typing.typingLabel': '{name}:',
+  'inbox.typing.visitorDraftLabel': '{name} henüz göndermedi',
 
   // Multi-agent conflict banner
   'inbox.conflict.warning.one': 'Bu sohbette {count} temsilci aynı anda yazıyor:',

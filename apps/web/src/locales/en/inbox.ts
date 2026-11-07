@@ -331,6 +331,11 @@ export const inbox: Messages = {
   // "Visitor is typing…"
   'inbox.typing.visitorFallback': 'Visitor',
   'inbox.typing.suffix': 'is typing…',
+  // The visitor's unsent draft strip (tm 417.6): the live region's one line,
+  // the label while keys arrive, and the label once they stop.
+  'inbox.typing.statusTyping': '{name} is typing…',
+  'inbox.typing.typingLabel': '{name}:',
+  'inbox.typing.visitorDraftLabel': '{name} has not sent this yet',
 
   // Multi-agent conflict banner — `count` is always 2+ (the store never notes a
   // single composer), but both plural forms are still written out per the

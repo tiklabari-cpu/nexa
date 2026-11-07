@@ -1321,6 +1321,7 @@ export function InboxPage(): ReactElement {
                     <TypingIndicator
                       chatId={selectedId}
                       customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
+                      compact={phone}
                     />
                     <ConflictBanner chatId={selectedId} />
 

@@ -48,6 +48,11 @@ type WidgetForm = WidgetAppearance & { availability_mode: WidgetAvailabilityMode
 
 interface WidgetSettings extends WidgetForm {
   updated_at: string | null;
+  /**
+   * The workspace is in HIPAA scope, where the visitor's draft preview is off
+   * whatever the switch says (tm 417.1). Worked out from the licence, never stored.
+   */
+  sneak_peek_locked?: boolean;
 }
 
 /** The editable subset — everything but the read-only `updated_at`. */
@@ -109,6 +114,9 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
     setEdits((prev) => ({ ...prev, [key]: next }));
 
   const colorValid = WIDGET_COLOR_PATTERN.test(value.primary_color);
+  // Locked off in HIPAA scope: drawn off and disabled, so the draft never
+  // carries a `true` the server would refuse (403 `hipaa_locked`).
+  const sneakPeekLocked = current?.sneak_peek_locked === true;
   // The plan gate answers `not_allowed` with `details.entitlement` (api
   // `entitlementDenied`), and ADR-06's generic sentence for that type — "That
   // is not allowed here." — turns an upsell into an unexplained refusal. Named
@@ -210,6 +218,17 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
                   hint={t('settings.widgetCustomization.poweredByHint')}
                   checked={value.powered_by}
                   onChange={(next) => set('powered_by', next)}
+                />
+
+                <ToggleControl
+                  label={t('settings.widgetCustomization.sneakPeekLabel')}
+                  hint={t('settings.widgetCustomization.sneakPeekHint')}
+                  checked={sneakPeekLocked ? false : value.sneak_peek_enabled}
+                  disabled={sneakPeekLocked}
+                  {...(sneakPeekLocked
+                    ? { note: t('settings.widgetCustomization.sneakPeekLocked') }
+                    : {})}
+                  onChange={(next) => set('sneak_peek_enabled', next)}
                 />
 
                 <WelcomeControl
@@ -408,11 +427,16 @@ function ToggleControl({
   label,
   hint,
   checked,
+  disabled = false,
+  note,
   onChange,
 }: {
   label: string;
   hint: string;
   checked: boolean;
+  disabled?: boolean;
+  /** Why the switch cannot move, when it is disabled. */
+  note?: string;
   onChange: (next: boolean) => void;
 }): ReactElement {
   return (
@@ -420,12 +444,14 @@ function ToggleControl({
       <input
         type="checkbox"
         checked={checked}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
         className="mt-0.5"
       />
       <span className="text-sm">
         {label}
         <span className="block text-2xs text-content-tertiary">{hint}</span>
+        {note && <span className="block text-2xs text-content-secondary">{note}</span>}
       </span>
     </label>
   );

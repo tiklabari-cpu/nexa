@@ -909,6 +909,11 @@ export const settings: Messages = {
   'settings.widgetCustomization.helpEnabledLabel': 'Yardım sekmesini göster',
   'settings.widgetCustomization.helpEnabledHint':
     'Sohbet penceresinin başlığına bir “?” ekler: ziyaretçiler yayımlanmış bilgi bankası makalelerinizde arar ve her ekrandan sohbet başlatabilir. Taslaklar asla gösterilmez.',
+  'settings.widgetCustomization.sneakPeekLabel': 'Ziyaretçinin yazdığını gönderilmeden göster',
+  'settings.widgetCustomization.sneakPeekHint':
+    'Yalnız sohbete atanmış insan temsilci görür; botlar ve API erişimi görmez; kaydedilmez. Varsayılan olarak açıktır; ziyaretçilerinizi bu özellik hakkında kendi aydınlatma metninizde bilgilendirin.',
+  'settings.widgetCustomization.sneakPeekLocked':
+    'Sağlık verisi (HIPAA) kapsamındaki çalışma alanlarında kapalıdır.',
   'settings.widgetCustomization.entitlementError':
     'SiyahTuş rozetini kaldırmak bir Enterprise özelliğidir. Gizlemek için planı yükseltin.',
   'settings.widgetCustomization.previewLabel': 'Önizleme',

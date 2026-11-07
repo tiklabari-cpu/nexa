@@ -915,6 +915,11 @@ export const settings: Messages = {
   'settings.widgetCustomization.helpEnabledLabel': 'Show the Help tab',
   'settings.widgetCustomization.helpEnabledHint':
     'Adds a “?” to the chat window header: visitors search your published knowledge base articles and can start a chat from every screen. Drafts are never shown.',
+  'settings.widgetCustomization.sneakPeekLabel': 'Show what visitors type before they send it',
+  'settings.widgetCustomization.sneakPeekHint':
+    'Only the human agent assigned to the chat sees it; bots and API access do not; it is not stored. On by default — tell your visitors about it in your own privacy notice.',
+  'settings.widgetCustomization.sneakPeekLocked':
+    'Off in workspaces covered for health data (HIPAA).',
   'settings.widgetCustomization.entitlementError':
     'Removing the SiyahTuş badge is an Enterprise feature. Upgrade the plan to hide it.',
   'settings.widgetCustomization.previewLabel': 'Preview',

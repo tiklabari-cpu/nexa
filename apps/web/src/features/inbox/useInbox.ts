@@ -1231,7 +1231,12 @@ export function useRealtime(onPush?: PushHandler): void {
         // reached nobody here, the gateway's disconnect-offline above all,
         // which by definition fires while no socket of this agent is open
         // (tm 340.3). One profile read says what the server holds now.
-        if (status === 'live' && wasReconnecting) void reconcileOwnStatus();
+        if (status === 'live' && wasReconnecting) {
+          void reconcileOwnStatus();
+          // A visitor's clear may have gone out meanwhile and reached nobody
+          // here: a draft on screen is no longer known to be current (tm 417.6).
+          useTypingStore.getState().clearAll();
+        }
         wasReconnecting = status === 'reconnecting';
       },
       onPush: (action, payload) => {
@@ -1299,6 +1304,11 @@ async function reconcileOwnStatus(): Promise<void> {
   }
 }
 
+/** The widget's frame counter on a typing push, when it carried a usable one. */
+function seqOf(raw: unknown): number | undefined {
+  return typeof raw === 'number' && Number.isSafeInteger(raw) && raw >= 0 ? raw : undefined;
+}
+
 /** Exported for `useInbox.test.ts` — a push handler has no other way in. */
 export function applyPush(
   queryClient: QueryClient,
@@ -1313,7 +1323,9 @@ export function applyPush(
 
       // A message from the visitor is the end of the draft it was previewing —
       // drop the sneak-peek so the real message is not shadowed by a stale one.
-      if (event.author_type === 'customer') useTypingStore.getState().clear(chatId);
+      // The ordering guard stays: a preview frame that left before the message
+      // and lands after it must not bring the draft back (tm 417.6).
+      if (event.author_type === 'customer') useTypingStore.getState().endDraft(chatId);
 
       queryClient.setQueryData<TranscriptCache>(eventsKey(chatId), (cache) => {
         if (!cache || cache.pages.length === 0) return cache;
@@ -1417,22 +1429,30 @@ export function applyPush(
       // the agent's own reflection; only a visitor's is worth showing here.
       const chatId = payload['chat_id'];
       const indicator = payload['typing_indicator'] as
-        { is_typing?: unknown; author_type?: unknown } | undefined;
+        { is_typing?: unknown; author_type?: unknown; seq?: unknown } | undefined;
       if (typeof chatId !== 'string' || !indicator) return;
       if (indicator.author_type !== 'customer') return;
-      useTypingStore.getState().noteCustomer(chatId, indicator.is_typing === true, null);
+      useTypingStore
+        .getState()
+        .noteCustomer(chatId, indicator.is_typing === true, null, seqOf(indicator.seq));
       return;
     }
 
     case 'incoming_sneak_peek': {
       // A preview of the visitor's in-progress message (FR-MOD-11.8).
       const chatId = payload['chat_id'];
-      const peek = payload['sneak_peek'] as { text?: unknown; author_type?: unknown } | undefined;
+      const peek = payload['sneak_peek'] as
+        { text?: unknown; author_type?: unknown; seq?: unknown } | undefined;
       if (typeof chatId !== 'string' || !peek) return;
       if (peek.author_type !== 'customer') return;
       useTypingStore
         .getState()
-        .noteCustomer(chatId, true, typeof peek.text === 'string' ? peek.text : null);
+        .noteCustomer(
+          chatId,
+          true,
+          typeof peek.text === 'string' ? peek.text : null,
+          seqOf(peek.seq),
+        );
       return;
     }
 
@@ -1591,11 +1611,14 @@ export function applyPush(
       // A supervisor took the chat: whoever held it loses the right to answer,
       // and with it the draft they were writing (IN-01-S2).
       const chatId = payload['chat_id'];
-      if (
-        typeof chatId === 'string' &&
-        payload['previous_assignee_id'] === useAuth.getState().agent?.account_id
-      ) {
+      const me = useAuth.getState().agent?.account_id;
+      if (typeof chatId === 'string' && payload['previous_assignee_id'] === me) {
         retireDraft(currentDraftScope(), chatId);
+      }
+      // The visitor's draft is the assignee's to see (tm 417.6): whoever is not
+      // the new one stops seeing it now, not when it goes stale.
+      if (typeof chatId === 'string' && payload['new_assignee_id'] !== me) {
+        useTypingStore.getState().clear(chatId);
       }
       void queryClient.invalidateQueries({ queryKey: ['chats'] });
       return;
@@ -1832,7 +1855,11 @@ export function applyPush(
       const to = payload['transferred_to'] as { agent_ids?: unknown } | undefined;
       const me = useAuth.getState().agent?.account_id;
       const toMe = Array.isArray(to?.agent_ids) && me !== undefined && to.agent_ids.includes(me);
-      if (typeof chatId === 'string' && !toMe) retireDraft(currentDraftScope(), chatId);
+      if (typeof chatId === 'string' && !toMe) {
+        retireDraft(currentDraftScope(), chatId);
+        // Nor is the visitor's draft this agent's to see any more (tm 417.6).
+        useTypingStore.getState().clear(chatId);
+      }
       // The card's rows name the teams and the assignee, and a hand-off moves both (IN-02).
       if (typeof chatId === 'string') {
         void queryClient.invalidateQueries({ queryKey: customerContextKey(chatId) });
@@ -1846,6 +1873,12 @@ export function applyPush(
     case 'chat_unfollowed':
     case 'chat_appeared':
     case 'sync_required':
+      // A chat that left this agent's sight takes its visitor draft with it;
+      // after lost pushes, no draft on screen is known to be current (tm 417.6).
+      if (action === 'sync_required') useTypingStore.getState().clearAll();
+      else if (action === 'chat_unfollowed' && typeof payload['chat_id'] === 'string') {
+        useTypingStore.getState().clear(payload['chat_id']);
+      }
       // These can move a chat into or out of a view at any depth, and the push
       // does not say where — the loaded chain is re-read in full. Correct
       // rather than cheap, and rare enough to afford it: the keyset cursors

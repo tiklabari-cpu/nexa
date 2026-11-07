@@ -220,6 +220,60 @@ describe('WidgetCustomization', () => {
     expect(putBodies[0]).toEqual({ help_enabled: true });
   });
 
+  it('FR-MOD-02.9 draws the visitor-draft switch on by default, with the privacy-notice note', async () => {
+    renderWidget();
+    const toggle = await screen.findByRole('checkbox', {
+      name: /Show what visitors type before they send it/,
+    });
+    expect(toggle).toBeChecked();
+    expect(toggle).toBeEnabled();
+    expect(
+      screen.getByText(/tell your visitors about it in your own privacy notice/),
+    ).toBeVisible();
+    expect(screen.queryByText(/health data \(HIPAA\)/)).toBeNull();
+  });
+
+  it('FR-MOD-02.9 switching the visitor draft off saves sneak_peek_enabled:false', async () => {
+    renderWidget();
+    const toggle = await screen.findByRole('checkbox', {
+      name: /Show what visitors type before they send it/,
+    });
+    await userEvent.click(toggle);
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(putBodies).toHaveLength(1));
+    expect(putBodies[0]).toEqual({ sneak_peek_enabled: false });
+  });
+
+  it('FR-MOD-02.9 locks the visitor-draft switch off in HIPAA scope and says why', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => okJson({ ...DEFAULTS, sneak_peek_enabled: true, sneak_peek_locked: true })),
+    );
+    renderWidget();
+    const toggle = await screen.findByRole('checkbox', {
+      name: /Show what visitors type before they send it/,
+    });
+    expect(toggle).toBeDisabled();
+    expect(toggle).not.toBeChecked();
+    expect(screen.getByText('Off in workspaces covered for health data (HIPAA).')).toBeVisible();
+  });
+
+  it('FR-MOD-02.9 words the visitor-draft switch in Turkish', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <WidgetCustomization canEdit />
+      </QueryClientProvider>,
+      'tr',
+    );
+    const toggle = await screen.findByRole('checkbox', {
+      name: /Ziyaretçinin yazdığını gönderilmeden göster/,
+    });
+    expect(toggle).toBeChecked();
+    expect(screen.getByText(/kendi aydınlatma metninizde bilgilendirin/)).toBeVisible();
+    resetLocale();
+  });
+
   it('says a language in the install snippet beats the panel setting (WG-02)', async () => {
     renderWidget();
     expect(await screen.findByText(/install snippet \(data-language\) overrides/)).toBeVisible();

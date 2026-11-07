@@ -25,6 +25,7 @@ import {
   useViewCounts,
 } from './useInbox.js';
 import { useConflictStore } from './conflict.js';
+import { hasVisibleDraft, useTypingStore } from './typing.js';
 import { ConflictBanner } from './ConflictBanner.js';
 import type { PagedResponse } from '../../lib/paged-query.js';
 import type { ChatSort } from './chat-sort.js';
@@ -106,6 +107,98 @@ describe('applyPush — agent_conflict_warning', () => {
   it('does not throw on a push with no payload fields at all', () => {
     expect(() => applyPush(queryClient, 'agent_conflict_warning', {})).not.toThrow();
     expect(useConflictStore.getState().byChat[CHAT]).toBeUndefined();
+  });
+});
+
+describe('applyPush — the visitor draft strip (FR-MOD-02.9 · tm 417.6)', () => {
+  let queryClient: QueryClient;
+  const draft = () => useTypingStore.getState().byChat[CHAT];
+  const peek = (text: string, seq: number) =>
+    applyPush(queryClient, 'incoming_sneak_peek', {
+      chat_id: CHAT,
+      sneak_peek: { author_type: 'customer', text, seq },
+    });
+
+  beforeEach(() => {
+    queryClient = new QueryClient();
+    useTypingStore.getState().clearAll();
+  });
+
+  afterEach(() => {
+    useTypingStore.getState().clearAll();
+    queryClient.clear();
+  });
+
+  it('FR-MOD-02.9 a sneak-peek push puts the draft up, with its seq', () => {
+    peek('my order', 3);
+    expect(draft()).toMatchObject({ isTyping: true, text: 'my order', maxSeq: 3 });
+  });
+
+  it('FR-MOD-02.9 a clear behind a later draft is the end; an older draft after it is dropped', () => {
+    peek('my order', 4);
+    applyPush(queryClient, 'incoming_typing_indicator', {
+      chat_id: CHAT,
+      typing_indicator: { author_type: 'customer', is_typing: false, seq: 5 },
+    });
+    expect(hasVisibleDraft(draft())).toBe(false);
+    peek('my orde', 4);
+    expect(hasVisibleDraft(draft())).toBe(false);
+  });
+
+  it("FR-MOD-02.9 the visitor's message takes the draft down", () => {
+    peek('my order is late', 2);
+    applyPush(queryClient, 'incoming_event', {
+      chat_id: CHAT,
+      event: { id: 'e1', type: 'message', author_type: 'customer', text: 'my order is late' },
+    });
+    expect(hasVisibleDraft(draft())).toBe(false);
+  });
+
+  it('FR-MOD-02.9 a closed chat takes the draft down', () => {
+    peek('my order', 2);
+    applyPush(queryClient, 'chat_deactivated', { chat_id: CHAT });
+    expect(draft()).toBeUndefined();
+  });
+
+  it('FR-MOD-02.9 a transfer to someone else takes the draft down at once', () => {
+    peek('my order', 2);
+    applyPush(queryClient, 'chat_transferred', {
+      chat_id: CHAT,
+      transferred_to: { group_ids: [0], agent_ids: ['someone-else'] },
+    });
+    expect(draft()).toBeUndefined();
+  });
+
+  it('FR-MOD-02.9 a takeover by someone else takes the draft down at once', () => {
+    peek('my order', 2);
+    applyPush(queryClient, 'chat_taken_over', {
+      chat_id: CHAT,
+      previous_assignee_id: 'agent-1',
+      new_assignee_id: 'supervisor-1',
+    });
+    expect(draft()).toBeUndefined();
+  });
+
+  it('FR-MOD-02.9 sync_required takes every draft down, and a chat that left sight takes its own', () => {
+    peek('my order', 2);
+    applyPush(queryClient, 'incoming_sneak_peek', {
+      chat_id: 'OTHER',
+      sneak_peek: { author_type: 'customer', text: 'other', seq: 1 },
+    });
+    applyPush(queryClient, 'chat_unfollowed', { chat_id: 'OTHER' });
+    expect(useTypingStore.getState().byChat['OTHER']).toBeUndefined();
+    expect(draft()?.text).toBe('my order');
+
+    applyPush(queryClient, 'sync_required', { reason: 'bus_reconnected' });
+    expect(useTypingStore.getState().byChat).toEqual({});
+  });
+
+  it("ignores an agent's own reflected indicator", () => {
+    applyPush(queryClient, 'incoming_sneak_peek', {
+      chat_id: CHAT,
+      sneak_peek: { author_type: 'agent', text: 'mine', seq: 1 },
+    });
+    expect(draft()).toBeUndefined();
   });
 });
 

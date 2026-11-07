@@ -63,6 +63,7 @@ import {
   type Locator,
   type Page,
   type TestInfo,
+  type WebSocketRoute,
 } from '@playwright/test';
 import type { Result as AxeViolation } from 'axe-core';
 import {
@@ -615,6 +616,50 @@ test.describe('WCAG 2.1 AA (axe)', () => {
           // clean pass for a pair that was never rendered.
           await expect(noteTab).toHaveAttribute('aria-checked', 'true');
           await expect(agentPage.getByText('Only your team will see this.')).toBeVisible();
+        });
+      });
+
+      /**
+       * The visitor's unsent draft above the composer (FR-MOD-02.9 · tm 417.6),
+       * in its faded "has not sent this yet" state — the tertiary tone on both
+       * the label and the draft, the strip's lowest-contrast pair. Only in the
+       * DOM while a visitor drafts, so the draft is pushed down the panel's own
+       * socket rather than typed in a second context.
+       */
+      test('the visitor draft strip has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        let socket: WebSocketRoute | undefined;
+        await agentPage.routeWebSocket(/:4001\//, (ws) => {
+          ws.connectToServer();
+          socket = ws;
+        });
+        await agentPage.goto(`/app/inbox?chat=${activeChatId}`);
+        await expect(
+          agentPage.getByRole('navigation', { name: 'Inbox views' }).getByText('Live'),
+        ).toBeVisible({ timeout: 15_000 });
+        await scanPanel(agentPage, 'Inbox visitor draft', theme, testInfo, async () => {
+          if (!socket) throw new Error('the panel never opened its socket');
+          socket.send(
+            JSON.stringify({
+              action: 'incoming_sneak_peek',
+              type: 'push',
+              payload: {
+                chat_id: activeChatId,
+                sneak_peek: {
+                  author_type: 'customer',
+                  text: 'Where is my order? It was due on Monday',
+                  seq: 1,
+                },
+              },
+            }),
+          );
+          await expect(agentPage.getByTestId('typing-preview-text')).toBeVisible();
+          // Past the 6 s idle: the dots go out and the draft stays, faded.
+          await expect(agentPage.getByTestId('typing-preview-draft')).toBeVisible({
+            timeout: 10_000,
+          });
         });
       });
 

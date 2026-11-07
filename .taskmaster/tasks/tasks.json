@@ -17578,7 +17578,7 @@
           "417"
         ],
         "priority": "high",
-        "updatedAt": "2026-11-07T20:57:11.550Z",
+        "updatedAt": "2026-11-07T23:28:23.501Z",
         "subtasks": [
           {
             "id": 1,
@@ -17624,14 +17624,14 @@
             "description": "Ajan ekranında kural görünür olur: atanmadığı sohbette müşteriye yanıt yerine üstlenme şeridi; not yazmak serbest.",
             "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1. Bağımlılık: 475.1, 475.3. Üst görev #475 KARARLAR D3, D5–D7.\nAMAÇ: (1) Composer: aktif thread'in assignee'si ben değilsem \"Yanıt\" modunda Gönder devre dışı, \"Dahili not\" çalışır; taslak korunur. (2) Composer'ın üstünde (TypingIndicator/ConflictBanner'ın altında) şerit: atanmamış (kuyruk, AI evresi ya da duraklatılmış AI) → \"Müşteriye yanıt vermek için sohbeti üstüne alın.\" + [Üstüne al] (`POST /claim`; claimable değilse düğme yok, \"Atama otomatik yapılacak ya da yetkili biri atayacak.\"); başkasına atanmış → \"Bu sohbet {ad} adlı temsilcide.\" + [Devral] yalnız `canTakeOver` true iken. (3) 409 claim refusal mevcut `claimRefusalKey` cümleleri; 409 `reply_requires_assignment` gelirse (yarış) gönderim balonu başarısız işaretlenir, metin kaybolmaz ve sohbet yeniden okunur. (4) `claimableTeamIds` (transfer.ts:33) otomatik takımları da kapsar. (5) en+tr, i18n kaydı, glossary; dark tema `text-content-*`; axe.\nTUZAK: new-web-component-must-be-registered-for-i18n, label-text-leaks-into-the-fields-name, settings-savebar-test-traps (role=status çakışması), react-query-push-asserts-need-the-cache, web-vitest-flakes-under-cpu-load, dark-theme-needs-content-brand-text.\nKABUL: aşağıdaki web birim testleri yeşil, axe temiz.",
             "testStrategy": "web birim: atanan iken composer normal; atanmamış → şerit + Üstüne al, tıklayınca claim çağrısı ve composer açılır; başkasında + takeover yetkisi yok → Devral yok, not modu çalışır; push ile atama bana gelince şerit kalkar; 409 yarışında metin korunur; axe (light + dark) temiz. DoD: CONVENTIONS §1.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "475.1",
               "475.3"
             ],
             "parentId": "475",
             "priority": "high",
-            "updatedAt": "2026-11-07T20:57:11.550Z"
+            "updatedAt": "2026-11-07T23:28:23.501Z"
           },
           {
             "id": 5,
@@ -17777,7 +17777,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-07T20:57:11.550Z",
+      "lastModified": "2026-11-07T23:28:23.502Z",
       "taskCount": 478,
       "completedCount": 416,
       "tags": [

@@ -508,6 +508,7 @@ export function buildRtmServer(
         log,
         telemetry: telemetryInstance,
         presence,
+        fanout,
         preLogin: preLogin && key !== null ? { limiter: preLogin, key } : null,
         isDraining: () => draining,
       });
@@ -835,6 +836,8 @@ function attach(params: {
   log: Logger;
   telemetry: Telemetry | null;
   presence: AgentPresence | null;
+  /** Holds draft frames for a congested socket (tm 417.4); told when it closes. */
+  fanout: Pick<Fanout, 'release'>;
   /**
    * Where this socket is counted until it logs in (tm 405); null when the cap
    * is off. Released at login (`onAuthenticated`) and here at close, whichever
@@ -853,6 +856,7 @@ function attach(params: {
     log,
     telemetry,
     presence,
+    fanout,
     preLogin,
     isDraining,
   } = params;
@@ -949,6 +953,7 @@ function attach(params: {
     registry.remove(connection.id);
     preLogin?.limiter.release(connection.id);
     presence?.closed(connection.id);
+    fanout.release(connection.id);
     telemetry?.instruments.disconnects.add(1, {
       reason: protocolViolation
         ? 'protocol_violation'

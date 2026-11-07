@@ -227,9 +227,12 @@ failing.
       is out of this repository's scope (CLAUDE.md: no real external providers; the mock→real
       switch is your deployment's job, not a code change here). Confirm reachability yourself,
       e.g. `curl -f "$OTEL_EXPORTER_OTLP_ENDPOINT/v1/traces"` from a pod's network.
-- [ ] After cutover, confirm the collector actually receives RTM's three instruments:
+- [ ] After cutover, confirm the collector actually receives RTM's five instruments:
       `rtm.connections.active` (gauge), `rtm.fanout.delay` (histogram, seconds),
-      `rtm.connections.closed` (counter, labelled by reason).
+      `rtm.connections.closed` (counter, labelled by reason), `rtm.upgrades.refused` (counter,
+      labelled by reason) and `rtm.fanout.coalesced` (counter, labelled by action — visitor draft
+      previews held on a congested agent socket, tm 417.4; a steady rise means agent sockets are
+      not draining).
 
 ## 8. Compliance
 

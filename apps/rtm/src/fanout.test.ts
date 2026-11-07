@@ -3,6 +3,10 @@
  * the integration suite (`test/integration/bus-reconnect.test.ts`, a real
  * `CLIENT KILL`) cannot pin down: a real reconnect is over too fast to observe
  * what happens *between* `ready` and the resubscribe answering.
+ *
+ * And tm 417.4: the visitor's draft preview reaches agent sockets only, and a
+ * congested socket holds the newest draft per chat instead of queueing or
+ * dropping it — against a fake socket whose `bufferedAmount` the test sets.
  */
 import { EventEmitter } from 'node:events';
 import { pino } from 'pino';
@@ -11,7 +15,13 @@ import type { Redis } from 'ioredis';
 import { licenseChannel } from '@siyahtus/types';
 import type { WebSocket } from 'ws';
 import { ConnectionRegistry } from './connection.js';
-import { Fanout, RESYNC_SPREAD_MAX_MS } from './fanout.js';
+import { Writable } from 'node:stream';
+import {
+  Fanout,
+  RESYNC_SPREAD_MAX_MS,
+  SNEAK_PEEK_COALESCE_BUFFERED_BYTES,
+  SNEAK_PEEK_COALESCE_RETRY_MS,
+} from './fanout.js';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 
@@ -139,5 +149,303 @@ describe('Fanout — sync_required after the subscription comes back (tm 408)', 
     expect(sent.every((frames) => frames.length === 0)).toBe(true);
     await vi.advanceTimersByTimeAsync(1_000);
     expect(sent.every((frames) => frames.length === 1)).toBe(true);
+  });
+});
+
+const CHAT = 'CHAT00001';
+const OTHER_CHAT = 'CHAT00002';
+const PREVIEW_PUSHES = ['incoming_sneak_peek', 'incoming_typing_indicator', 'incoming_event'];
+/** More than the threshold: a socket this full is congested. */
+const CONGESTED = 70_000;
+
+interface FakeSocket {
+  frames: string[];
+  bufferedAmount: number;
+  send(frame: string): void;
+}
+
+function previewSetup() {
+  const subscriber = new FakeSubscriber();
+  const registry = new ConnectionRegistry();
+  const lines: string[] = [];
+  const stream = new Writable({
+    write(chunk: Buffer, _encoding, done) {
+      lines.push(chunk.toString());
+      done();
+    },
+  });
+  // Debug, so the coalescing line is written and can be searched.
+  const fanout = new Fanout(
+    subscriber as unknown as Redis,
+    registry,
+    pino({ level: 'debug' }, stream),
+  );
+
+  function socket(
+    actorId: string,
+    actor: { actorType: string; groupIds?: number[]; unrestricted?: boolean },
+  ) {
+    const fake: FakeSocket = {
+      frames: [],
+      bufferedAmount: 0,
+      send(frame: string) {
+        this.frames.push(frame);
+      },
+    };
+    const connection = registry.add({
+      ws: fake as unknown as WebSocket,
+      side: 'agent',
+      organizationId: ORG,
+    });
+    registry.authenticate(connection.id, { licenseId: '7', actorId, ...actor });
+    for (const action of PREVIEW_PUSHES) connection.subscriptions.add(action);
+    return { fake, connection };
+  }
+
+  function publish(
+    action: string,
+    payload: unknown,
+    audience: { agentIds?: string[]; groupIds?: number[] } = { agentIds: ['agent-1'] },
+  ): void {
+    subscriber.emit(
+      'message',
+      licenseChannel('7'),
+      JSON.stringify({
+        v: 1,
+        licenseId: '7',
+        organizationId: ORG,
+        action,
+        audience,
+        payload,
+        at: Date.now(),
+      }),
+    );
+  }
+
+  return { registry, fanout, lines, socket, publish };
+}
+
+function draft(text: string, seq: number, chatId = CHAT) {
+  return {
+    chat_id: chatId,
+    thread_id: null,
+    sneak_peek: {
+      author_id: 'visitor-1',
+      author_type: 'customer',
+      recipients: 'agents',
+      timestamp: 1,
+      text,
+      seq,
+    },
+  };
+}
+
+function clear(seq: number, chatId = CHAT) {
+  return {
+    chat_id: chatId,
+    thread_id: null,
+    typing_indicator: {
+      author_id: 'visitor-1',
+      author_type: 'customer',
+      recipients: 'agents',
+      timestamp: 1,
+      is_typing: false,
+      seq,
+    },
+  };
+}
+
+/** What a socket was sent, as `action` plus the draft's text (or `seq` of a clear). */
+function received(fake: FakeSocket): string[] {
+  return fake.frames.map((frame) => {
+    const push = JSON.parse(frame) as {
+      action: string;
+      payload: {
+        chat_id?: string;
+        sneak_peek?: { text: string };
+        typing_indicator?: { seq: number };
+      };
+    };
+    if (push.payload.sneak_peek) {
+      return `${push.action}:${push.payload.chat_id}:${push.payload.sneak_peek.text}`;
+    }
+    if (push.payload.typing_indicator) {
+      return `${push.action}:${push.payload.chat_id}:seq=${push.payload.typing_indicator.seq}`;
+    }
+    return push.action;
+  });
+}
+
+describe('Fanout — the visitor draft preview (tm 417.4, FR-MOD-11.8)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('pins the threshold the congested socket is measured against', () => {
+    expect(CONGESTED).toBeGreaterThan(SNEAK_PEEK_COALESCE_BUFFERED_BYTES);
+    expect(SNEAK_PEEK_COALESCE_BUFFERED_BYTES).toBe(64 * 1024);
+    expect(SNEAK_PEEK_COALESCE_RETRY_MS).toBe(250);
+  });
+
+  it('(a) gives the draft and its clear to the human agent only — never to a bot, however it is addressed (FR-MOD-11.8)', () => {
+    const { socket, publish } = previewSetup();
+    const human = socket('agent-1', { actorType: 'agent' });
+    // Unrestricted, a member of the addressed team, and named in agentIds:
+    // every route the audience filter has — and still not a person.
+    const bot = socket('bot-1', { actorType: 'bot', groupIds: [3], unrestricted: true });
+    const scopedBot = socket('bot-2', { actorType: 'bot', groupIds: [3] });
+    const audience = { agentIds: ['agent-1', 'bot-1', 'bot-2'], groupIds: [3] };
+
+    publish('incoming_sneak_peek', draft('hello', 1), audience);
+    publish('incoming_typing_indicator', clear(2), audience);
+    publish('incoming_event', { chat_id: CHAT }, audience);
+
+    expect(received(human.fake)).toEqual([
+      `incoming_sneak_peek:${CHAT}:hello`,
+      `incoming_typing_indicator:${CHAT}:seq=2`,
+      'incoming_event',
+    ]);
+    // A bot keeps every other push it is addressed by.
+    expect(received(bot.fake)).toEqual(['incoming_event']);
+    expect(received(scopedBot.fake)).toEqual(['incoming_event']);
+  });
+
+  it('(b) holds the drafts on a congested socket and sends only the newest once it drains (FR-MOD-11.8)', async () => {
+    const { socket, publish } = previewSetup();
+    const human = socket('agent-1', { actorType: 'agent' });
+    human.fake.bufferedAmount = CONGESTED;
+
+    publish('incoming_sneak_peek', draft('A', 1));
+    publish('incoming_sneak_peek', draft('B', 2));
+    expect(human.fake.frames).toEqual([]);
+
+    human.fake.bufferedAmount = 0;
+    await vi.advanceTimersByTimeAsync(SNEAK_PEEK_COALESCE_RETRY_MS);
+    expect(received(human.fake)).toEqual([`incoming_sneak_peek:${CHAT}:B`]);
+
+    // Nothing else is waiting: the timer is gone with the held frames.
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.runAllTimersAsync();
+    expect(human.fake.frames).toHaveLength(1);
+  });
+
+  it('keeps waiting while the socket stays full, then sends the newest of each chat', async () => {
+    const { socket, publish } = previewSetup();
+    const human = socket('agent-1', { actorType: 'agent' });
+    human.fake.bufferedAmount = CONGESTED;
+
+    publish('incoming_sneak_peek', draft('one-A', 1));
+    publish('incoming_sneak_peek', draft('two-A', 1, OTHER_CHAT));
+    publish('incoming_sneak_peek', draft('one-B', 2));
+    await vi.advanceTimersByTimeAsync(SNEAK_PEEK_COALESCE_RETRY_MS * 3);
+    expect(human.fake.frames).toEqual([]);
+    // One timer for the socket, not one per frame.
+    expect(vi.getTimerCount()).toBe(1);
+
+    human.fake.bufferedAmount = SNEAK_PEEK_COALESCE_BUFFERED_BYTES; // at, not above
+    await vi.advanceTimersByTimeAsync(SNEAK_PEEK_COALESCE_RETRY_MS);
+    expect(received(human.fake)).toEqual([
+      `incoming_sneak_peek:${OTHER_CHAT}:two-A`,
+      `incoming_sneak_peek:${CHAT}:one-B`,
+    ]);
+  });
+
+  it('(c) sends the clear at once and drops the draft waiting for that chat (FR-MOD-11.8)', async () => {
+    const { socket, publish } = previewSetup();
+    const human = socket('agent-1', { actorType: 'agent' });
+    human.fake.bufferedAmount = CONGESTED;
+
+    publish('incoming_sneak_peek', draft('A', 1));
+    publish('incoming_sneak_peek', draft('other', 1, OTHER_CHAT));
+    publish('incoming_typing_indicator', clear(2));
+    expect(received(human.fake)).toEqual([`incoming_typing_indicator:${CHAT}:seq=2`]);
+
+    human.fake.bufferedAmount = 0;
+    await vi.runAllTimersAsync();
+    // The other chat's draft was not this clear's to cancel.
+    expect(received(human.fake)).toEqual([
+      `incoming_typing_indicator:${CHAT}:seq=2`,
+      `incoming_sneak_peek:${OTHER_CHAT}:other`,
+    ]);
+  });
+
+  it('lets a draft sent once the socket drains supersede the one still waiting', async () => {
+    const { socket, publish } = previewSetup();
+    const human = socket('agent-1', { actorType: 'agent' });
+    human.fake.bufferedAmount = CONGESTED;
+    publish('incoming_sneak_peek', draft('old', 1));
+
+    human.fake.bufferedAmount = 0;
+    publish('incoming_sneak_peek', draft('new', 2));
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.runAllTimersAsync();
+    expect(received(human.fake)).toEqual([`incoming_sneak_peek:${CHAT}:new`]);
+  });
+
+  it('(d) sends every other push on a congested socket as before (FR-MOD-11.8)', () => {
+    const { socket, publish } = previewSetup();
+    const human = socket('agent-1', { actorType: 'agent' });
+    human.fake.bufferedAmount = CONGESTED;
+
+    publish('incoming_event', { chat_id: CHAT });
+    expect(received(human.fake)).toEqual(['incoming_event']);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('(e) forgets a closed socket: no timer is left and nothing is sent (FR-MOD-11.8)', async () => {
+    const { registry, fanout, socket, publish } = previewSetup();
+    const human = socket('agent-1', { actorType: 'agent' });
+    human.fake.bufferedAmount = CONGESTED;
+    publish('incoming_sneak_peek', draft('A', 1));
+    expect(vi.getTimerCount()).toBe(1);
+
+    // What the socket's close handler does.
+    registry.remove(human.connection.id);
+    fanout.release(human.connection.id);
+    expect(vi.getTimerCount()).toBe(0);
+
+    human.fake.bufferedAmount = 0;
+    await vi.runAllTimersAsync();
+    expect(human.fake.frames).toEqual([]);
+  });
+
+  it('drops the held frames of a socket that closed without being released', async () => {
+    const { registry, socket, publish } = previewSetup();
+    const human = socket('agent-1', { actorType: 'agent' });
+    human.fake.bufferedAmount = CONGESTED;
+    publish('incoming_sneak_peek', draft('A', 1));
+
+    registry.remove(human.connection.id);
+    human.fake.bufferedAmount = 0;
+    await vi.runAllTimersAsync();
+    expect(human.fake.frames).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('(f) logs the coalescing with ids and the action, never the draft (FR-MOD-11.8)', async () => {
+    const { lines, socket, publish } = previewSetup();
+    const human = socket('agent-1', { actorType: 'agent' });
+    human.fake.bufferedAmount = CONGESTED;
+    const sentinel = 'SENTINEL-draft-4111 1111 1111';
+
+    publish('incoming_sneak_peek', draft(sentinel, 1));
+    publish('incoming_sneak_peek', draft(`${sentinel} more`, 2));
+    human.fake.bufferedAmount = 0;
+    await vi.runAllTimersAsync();
+
+    const coalesced = lines
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .filter((line) => line['msg'] === 'coalesced a push on a congested socket');
+    expect(coalesced).toHaveLength(2);
+    expect(coalesced[0]).toMatchObject({
+      connection_id: human.connection.id,
+      action: 'incoming_sneak_peek',
+    });
+    expect(lines.join('\n')).not.toContain('SENTINEL');
+    // The frame itself did reach the agent.
+    expect(received(human.fake)).toEqual([`incoming_sneak_peek:${CHAT}:${sentinel} more`]);
   });
 });

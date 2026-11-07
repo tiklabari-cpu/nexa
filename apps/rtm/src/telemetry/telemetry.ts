@@ -5,7 +5,7 @@
  * process, and a global meter would let one leak into another.
  *
  * The API instruments HTTP requests; this instruments the socket layer instead
- * — four metrics (NFR-M5 · NFR-P1):
+ * — five metrics (NFR-M5 · NFR-P1):
  *
  *   - {@link RtmInstruments.activeConnections} — concurrently open sockets.
  *   - {@link RtmInstruments.fanoutDelay} — time from event production
@@ -16,6 +16,8 @@
  *     {@link DisconnectReason}.
  *   - {@link RtmInstruments.upgradesRefused} — upgrades turned away before the
  *     handshake, tagged by {@link UpgradeRefusalReason} (tm 405).
+ *   - {@link RtmInstruments.fanoutCoalesced} — pushes held back on a congested
+ *     socket because a newer one for the same chat supersedes them (tm 417.4).
  *
  * No tracer: the API's spans exist to join a request to its log line, and
  * every RTM log call already carries `request_id` directly (M-OPS-c ·
@@ -176,6 +178,12 @@ export interface RtmInstruments {
    * hard (tm 405).
    */
   readonly upgradesRefused: Counter;
+  /**
+   * Count of pushes held on a congested socket instead of sent, tagged by
+   * action — today only the visitor's draft preview (tm 417.4). Each held
+   * frame counts, whether it later goes out or a newer one replaces it.
+   */
+  readonly fanoutCoalesced: Counter;
 }
 
 export interface Telemetry {
@@ -226,6 +234,11 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     upgradesRefused: meter.createCounter('rtm.upgrades.refused', {
       description: 'RTM WebSocket upgrades refused before the handshake, tagged by reason.',
       unit: '{upgrade}',
+    }),
+    fanoutCoalesced: meter.createCounter('rtm.fanout.coalesced', {
+      description:
+        'Pushes held on a congested socket for a newer one to supersede, tagged by action.',
+      unit: '{push}',
     }),
   };
 

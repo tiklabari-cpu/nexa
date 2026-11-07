@@ -48,6 +48,7 @@ import {
   type WidgetAvailability,
 } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
+import { boundedRecord, httpUrl, visitorReferrer } from '../lib/input-bounds.js';
 import type { SafeHttp } from '../lib/safe-fetch.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
 import { maskForWrite } from '../lib/sensitive-mask.js';
@@ -136,6 +137,21 @@ import {
 } from '../services/notifications/chat-transcript.js';
 import { visitedPageUrl } from '../lib/log-redact.js';
 
+/**
+ * How many answers one visitor form may carry (tm 419). Counted before any
+ * value is parsed (`boundedRecord`): zod 3 makes one issue per bad value, and
+ * a 1 MiB map of them was a public way to spend the api's memory. No workspace
+ * asks a visitor two hundred questions; past that is a 400.
+ */
+const VISITOR_FORM_FIELDS_MAX = 200;
+
+/** A visitor form's answers: custom-field id → value, `null` clears. */
+const visitorFields = boundedRecord(
+  z.record(z.string().max(5000).nullable()),
+  VISITOR_FORM_FIELDS_MAX,
+  `at most ${VISITOR_FORM_FIELDS_MAX} fields`,
+);
+
 const startSchema = z
   .object({
     // Optional now that an attachment can stand alone (FR-MOD-11.4): a visitor
@@ -144,14 +160,19 @@ const startSchema = z
     text: z.string().trim().max(10_000).optional(),
     /** A file the visitor uploaded through `/uploads`, validated before use. */
     attachment_url: z.string().max(2048).optional(),
-    /** Page the visitor is on — feeds the routing rules. */
-    url: z.string().max(2048).optional(),
+    /**
+     * Page the visitor is on — feeds the routing rules and the visited pages.
+     * Not an http(s) URL — `javascript:`, `data:` — is dropped, not refused
+     * (tm 451): the message still arrives, without a page.
+     */
+    url: httpUrl(2048).optional(),
     /**
      * Where the visitor came from, recorded once as the visit's `came_from`
      * (FR-MOD-13.2). Trimmed to origin + path before it is stored — see
-     * `sanitizeReferrer`; the cap here only bounds the body.
+     * `sanitizeReferrer`; the cap here only bounds the body. A script scheme
+     * is dropped (`keptReferrer`, tm 451).
      */
-    referrer: z.string().max(REFERRER_MAX_LENGTH).optional(),
+    referrer: visitorReferrer(REFERRER_MAX_LENGTH).optional(),
     /** Optional pre-chat form values. */
     name: z.string().trim().max(120).optional(),
     /** The visitor's username on the embedding site — unverified, kept as typed. */
@@ -167,7 +188,7 @@ const startSchema = z
      * value, validated against each field's definition (type + required) and
      * written to the contact. A `null` clears a field.
      */
-    custom_fields: z.record(z.string().max(5000).nullable()).optional(),
+    custom_fields: visitorFields.optional(),
     idempotency_key: z.string().min(1).max(128).optional(),
     /**
      * The human check's answer (tm 339.2 · GV-01), sent only after an opening
@@ -214,7 +235,7 @@ const rateSchema = z.object({
  */
 const formResponseSchema = z
   .object({
-    custom_fields: z.record(z.string().max(5000).nullable()),
+    custom_fields: visitorFields,
   })
   .strict();
 
@@ -247,9 +268,9 @@ const leaveTicketSchema = z
     name: z.string().trim().max(120).optional(),
     email: z.string().email().max(320),
     /** Answers to the `ticket` form — stored on the ticket this opens. */
-    ticket_fields: z.record(z.string().max(5000).nullable()).optional(),
+    ticket_fields: visitorFields.optional(),
     /** Answers to the `prospect` form — stored on the contact. */
-    prospect_fields: z.record(z.string().max(5000).nullable()).optional(),
+    prospect_fields: visitorFields.optional(),
   })
   .strict();
 

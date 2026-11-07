@@ -11,6 +11,7 @@ import { useDeployment } from '../../lib/deployment.js';
 import { liveDataApps } from '../../lib/live-apps.js';
 import { getLocale, useTranslate, type TFunction } from '../../lib/i18n.js';
 import { formatDateTime, formatDay, formatTime } from '../../lib/format.js';
+import { safeHref } from '../../lib/safe-href.js';
 import {
   matchedOnLabel,
   possibleMatchesKey,
@@ -495,24 +496,38 @@ export function DetailsPanel({
             <p className="text-xs text-content-tertiary">{t('inbox.details.visitedPages.empty')}</p>
           ) : (
             <ol className="flex flex-col gap-1.5">
-              {visitedPages.map((page, index) => (
-                <li key={`${page.url}-${index}`} className="min-w-0">
-                  <a
-                    href={page.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    title={page.url}
-                    className="block truncate text-xs text-content-brand hover:underline"
-                  >
-                    {prettyPath(page.url)}
-                  </a>
-                  {page.at && (
-                    <span className="text-2xs text-content-tertiary">
-                      {new Date(page.at).toLocaleTimeString(getLocale())}
-                    </span>
-                  )}
-                </li>
-              ))}
+              {visitedPages.map((page, index) => {
+                // Visitor-supplied: a link only when it is an http(s) page
+                // (`safeHref`, tm 451); anything else is shown whole, as text.
+                const href = safeHref(page.url);
+                return (
+                  <li key={`${page.url}-${index}`} className="min-w-0">
+                    {href ? (
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={page.url}
+                        className="block truncate text-xs text-content-brand hover:underline"
+                      >
+                        {prettyPath(page.url)}
+                      </a>
+                    ) : (
+                      <span
+                        title={page.url}
+                        className="block truncate text-xs text-content-secondary"
+                      >
+                        {page.url}
+                      </span>
+                    )}
+                    {page.at && (
+                      <span className="text-2xs text-content-tertiary">
+                        {new Date(page.at).toLocaleTimeString(getLocale())}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
             </ol>
           )}
         </PanelSection>

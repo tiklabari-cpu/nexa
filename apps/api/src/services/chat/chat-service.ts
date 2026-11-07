@@ -44,7 +44,6 @@ import {
   SENSITIVE_WARNING_SYSTEM_EVENT,
   sensitiveWarningText,
   sensitiveWarningTypes,
-  SNEAK_PEEK_MAX_LENGTH,
   stripEditMarkers,
   THREAD_PRIORITY_RANK,
   threadPriorityFromRank,
@@ -74,11 +73,14 @@ import {
   type MessageSearchMatch,
   type ChatRatedPush,
   type CustomerSeenPush,
+  type SneakPeekPush,
+  type TypingIndicatorPush,
   type RatingValue,
   type ThreadRating,
 } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import { maskForWrite, sensitiveAuthorOf, type MaskedForWrite } from '../../lib/sensitive-mask.js';
+import { sanitizeTypingPreview } from '../../lib/typing-preview.js';
 import { visitedPagesOf } from '../campaigns/campaign-matching.js';
 import {
   createGoalConversionRecorder,
@@ -409,6 +411,14 @@ interface AudienceSource {
   customerId: string;
   access: Array<{ groupId: bigint }>;
   users: Array<{ userId: string; userType: string }>;
+}
+
+/** Where a visitor's unsent draft goes (`typingPreviewAudience`, tm 417 · K3). */
+export interface TypingPreviewTarget {
+  chatId: string;
+  threadId: string;
+  /** The assignee and any live supervisor; empty means the draft reaches nobody. */
+  agentIds: string[];
 }
 
 /** A committed event and who it is announced to (`#announceEvent`). */
@@ -2505,69 +2515,89 @@ export class ChatService {
   }
 
   /**
-   * Fan a visitor's live typing out to the agents on the chat (FR-MOD-02.9 /
-   * 11.8). Ephemeral and unpersisted: a sneak-peek is what the visitor is
-   * *about* to send, shown so an agent can begin composing before enter is
-   * pressed.
+   * Who sees a visitor's unsent draft (tm 417 · K3), read in the typing route's
+   * own transaction (the `appendAgentsNote` shape): one statement, so the gate
+   * and the audience cost a single round of reads.
    *
-   * Addressed to agents only — never back to the visitor's own side — and the
-   * preview is capped so a pasted wall of text does not travel keystroke by
-   * keystroke. Best-effort: like every other push, delivery failing must not
-   * fail anything the visitor is doing, so a missing publisher or an empty
-   * audience is simply a no-op.
+   * The caller found `connection` by the visitor's token — never by an id the
+   * request names — so it is the visitor's own open connection.
+   */
+  async typingPreviewAudience(
+    tx: TenantClient,
+    licenseId: bigint,
+    connection: { chatId: string; threadId: string; assigneeId: string | null },
+  ): Promise<TypingPreviewTarget> {
+    const watching = await this.#supervisions.liveByChat(tx, licenseId, [connection.chatId]);
+    return {
+      chatId: connection.chatId,
+      threadId: connection.threadId,
+      agentIds: this.#previewAudienceFor({
+        assigneeId: connection.assigneeId,
+        watching: watching.get(connection.chatId) ?? [],
+      }),
+    };
+  }
+
+  /**
+   * The draft's audience (tm 417 · K3): the person the connection is assigned
+   * to, and a supervisor watching it right now (`chat_supervisions` inside its
+   * live window). Nobody else — on purpose narrower than `#audienceFor`, which
+   * every other event keeps.
+   *
+   * Not `chat_users.present`, although that was the first plan: `#advanceSeen`
+   * writes a present row for every agent who merely opens the chat (a teammate
+   * glancing at the queue, a bot calling `/seen`), and a transfer leaves the
+   * agent it moved away from present. Not the chat's teams either: a waiting
+   * chat shows its draft to nobody. Never the visitor.
+   */
+  #previewAudienceFor(input: { assigneeId: string | null; watching: string[] }): string[] {
+    const ids = input.assigneeId ? [input.assigneeId, ...input.watching] : input.watching;
+    return [...new Set(ids)];
+  }
+
+  /**
+   * Fan a visitor's unsent draft out to `target` (FR-MOD-02.9 / 11.8 · tm 417
+   * K6): a draft travels as one `incoming_sneak_peek`, a clear as one
+   * `incoming_typing_indicator` with `is_typing: false`. A draft the cleaning
+   * leaves empty (only control characters, say) is a clear — the agent must
+   * not keep the previous one on screen.
+   *
+   * Ephemeral and unpersisted: nothing is written, logged or kept in Redis
+   * besides the PUBLISH itself. The text is cleaned here, the one way out
+   * (`lib/typing-preview.ts`). Best-effort like every push: a missing publisher
+   * or an empty audience is a no-op.
    */
   async publishCustomerTyping(
     tenant: TenantContext,
     principal: Principal,
-    chatId: string,
-    input: { isTyping: boolean; text?: string },
+    target: TypingPreviewTarget,
+    input: { isTyping: boolean; text?: string; seq?: number },
   ): Promise<void> {
-    if (!this.publisher) return;
+    if (!this.publisher || target.agentIds.length === 0) return;
 
-    const target = await withTenant(this.db, tenant, async (tx) => {
-      const visibility = await resolveVisibility(tx, principal, 'read');
-      const chat = await this.#loadVisibleChat(tx, visibility, chatId);
-      const audience = this.#audienceFor(chat);
-      const thread = chat.threads.find((t) => t.active) ?? chat.threads[0];
-      return {
-        agents: { groupIds: audience.groupIds, agentIds: audience.agentIds },
-        threadId: thread?.id ?? null,
-      };
-    });
+    const audience = { groupIds: [], agentIds: target.agentIds };
+    const author = {
+      author_id: actorOf(principal),
+      author_type: 'customer' as const,
+      recipients: 'agents' as const,
+      timestamp: Date.now(),
+      ...(input.seq !== undefined ? { seq: input.seq } : {}),
+    };
 
-    // Nobody is on the chat yet — an unrouted first draft has no audience. Skip
-    // rather than emit an empty one the publisher would refuse anyway.
-    if (target.agents.groupIds.length === 0 && target.agents.agentIds.length === 0) return;
-
-    const authorId = actorOf(principal);
-    const timestamp = Date.now();
-
-    await this.publisher.publish(tenant, 'incoming_typing_indicator', target.agents, {
-      chat_id: chatId,
-      thread_id: target.threadId,
-      typing_indicator: {
-        author_id: authorId,
-        author_type: 'customer',
-        recipients: 'agents',
-        timestamp,
-        is_typing: input.isTyping,
-      },
-    });
-
-    const preview = input.text?.trim();
-    if (input.isTyping && preview) {
-      await this.publisher.publish(tenant, 'incoming_sneak_peek', target.agents, {
-        chat_id: chatId,
+    const preview = input.isTyping ? sanitizeTypingPreview(input.text ?? '') : '';
+    if (preview) {
+      await this.publisher.publish(tenant, 'incoming_sneak_peek', audience, {
+        chat_id: target.chatId,
         thread_id: target.threadId,
-        sneak_peek: {
-          author_id: authorId,
-          author_type: 'customer',
-          recipients: 'agents',
-          timestamp,
-          text: preview.slice(0, SNEAK_PEEK_MAX_LENGTH),
-        },
-      });
+        sneak_peek: { ...author, text: preview },
+      } satisfies SneakPeekPush);
+      return;
     }
+    await this.publisher.publish(tenant, 'incoming_typing_indicator', audience, {
+      chat_id: target.chatId,
+      thread_id: target.threadId,
+      typing_indicator: { ...author, is_typing: false },
+    } satisfies TypingIndicatorPush);
   }
 
   /**

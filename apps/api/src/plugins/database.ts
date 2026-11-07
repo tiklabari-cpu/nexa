@@ -6,7 +6,7 @@
  * from row level security, so connecting as the migration role would quietly
  * turn off every tenant isolation policy while all the tests still pass.
  */
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, type Prisma } from '@prisma/client';
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
 import type { Env } from '../config/env.js';
@@ -33,11 +33,22 @@ declare module 'fastify' {
   }
 }
 
-export function createPrismaClient(env: Env): PrismaClient {
-  return new PrismaClient({
-    datasourceUrl: env.runtimeDatabaseUrl,
-    log: env.NODE_ENV === 'development' ? [{ emit: 'event', level: 'warn' }] : [],
-  });
+/** Called with every statement the primary client runs — a test's counter (`BuildServerOptions.onQuery`). */
+export type QueryObserver = (event: Prisma.QueryEvent) => void;
+
+export function createPrismaClient(env: Env, onQuery?: QueryObserver): PrismaClient {
+  const log: Prisma.LogDefinition[] = [
+    ...(env.NODE_ENV === 'development' ? [{ emit: 'event' as const, level: 'warn' as const }] : []),
+    // Only when asked for: query events cost an allocation per statement.
+    ...(onQuery ? [{ emit: 'event' as const, level: 'query' as const }] : []),
+  ];
+  const client = new PrismaClient({ datasourceUrl: env.runtimeDatabaseUrl, log });
+  // The client's type only knows the events its literal options name; these are
+  // computed, so the subscription is typed by hand.
+  if (onQuery) {
+    (client as unknown as PrismaClient<Prisma.PrismaClientOptions, 'query'>).$on('query', onQuery);
+  }
+  return client;
 }
 
 /**
@@ -56,8 +67,11 @@ export function createReplicaClient(env: Env): PrismaClient | null {
   });
 }
 
-async function databasePlugin(app: FastifyInstance, options: { env: Env }): Promise<void> {
-  const db = createPrismaClient(options.env);
+async function databasePlugin(
+  app: FastifyInstance,
+  options: { env: Env; onQuery?: QueryObserver | undefined },
+): Promise<void> {
+  const db = createPrismaClient(options.env, options.onQuery);
 
   await db.$connect();
   app.decorate('db', db);

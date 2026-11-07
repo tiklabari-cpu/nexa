@@ -71,6 +71,11 @@ export function baseFastifyOptions({
           // ever stores its hash, which would be worth little if the clear key
           // were sitting in the request log beside it.
           'req.body.api_key',
+          // A visitor's unsent draft (`POST /customer/chat/typing`, tm 417 ·
+          // K4) — and, by the same path, the text of any message body. Not a
+          // secret, but words the visitor has not chosen to send yet; the
+          // request log has no business holding them.
+          'req.body.text',
           'res.headers["set-cookie"]',
           // The provider credentials — the SMTP login (tm 255.3), the model's
           // key (tm 255.6), the embedding provider's key (tm 255.7) — and an

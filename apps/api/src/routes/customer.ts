@@ -30,6 +30,7 @@ import {
   ASK_EMAIL_ADDRESS_MAX_LENGTH,
   CUSTOM_EVENT_NAME_RE,
   CUSTOM_EVENT_VALUE_MAX_LENGTH,
+  customerChatOwner,
   humanButtonText,
   RATING_COMMENT_MAX,
   REFERRER_MAX_LENGTH,
@@ -38,9 +39,11 @@ import {
   SALES_TRACKER_MAX_AMOUNT_CENTS,
   SNEAK_PEEK_MAX_LENGTH,
   TRANSCRIPT_REQUESTS_PER_HOUR,
+  typingPreviewAllowed,
   typingStateKey,
   WIDGET_UI_LOCALES,
   widgetAvailability,
+  type CustomerChatOwner,
   type Region,
   type WidgetAvailability,
 } from '@siyahtus/types';
@@ -91,7 +94,7 @@ import {
   type EnqueuedAiJob,
 } from '../services/ai/ai-jobs.js';
 import type { VisitorTurn } from '../services/chat/visitor-turn.js';
-import { withTenant } from '../lib/tenant.js';
+import { withTenant, type TenantClient } from '../lib/tenant.js';
 import type { KnowledgeService } from '../services/ai/knowledge-service.js';
 import type { MeteredLlm } from '../services/ai/metered-llm.js';
 import { ConversationEngine } from '../services/ai/conversation/conversation-engine.js';
@@ -115,7 +118,10 @@ import { pushToAgentDevices } from '../services/notifications/push.js';
 import { resolveAttribution } from '../services/sales/attribution.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { missingPrechatFields, readCustomerPrechat } from '../services/websites/prechat.js';
-import { readCustomerAvailabilityMode } from '../services/websites/availability.js';
+import {
+  readCustomerAvailabilityMode,
+  readTypingPreviewInputs,
+} from '../services/websites/availability.js';
 import { trialState } from '../services/billing/metering.js';
 import { transcriptLines } from '../services/chat/transcript-export.js';
 import {
@@ -285,10 +291,31 @@ const typingSchema = z.object({
   // The in-progress text shown to the agent as a sneak-peek. Capped here as well
   // as at the fan-out, so an oversized body is rejected before any work.
   text: z.string().max(SNEAK_PEEK_MAX_LENGTH).optional(),
-  // The widget's increasing counter (tm 417); carried through once the route
-  // publishes it (417.2). Optional so an older widget keeps working.
+  // The widget's increasing counter (tm 417), carried on the published frame so
+  // the panel drops a late one. Optional so an older widget keeps working.
   seq: z.number().int().min(0).optional(),
 });
+
+/**
+ * Whether this visitor's unsent draft may reach the team now (tm 417 · K3):
+ * `typingPreviewAllowed`, with its two stored inputs — HIPAA scope and the
+ * workspace switch for the token's brand — read in one statement. The poll
+ * (`typing_preview`) and `POST /customer/chat/typing` both ask this, so they
+ * cannot disagree.
+ *
+ * The read happens only for an owner the rule could open for: an AI-phase poll
+ * or keystroke pays no statement for it.
+ */
+async function typingPreviewOpen(
+  tx: TenantClient,
+  licenseId: bigint,
+  brandId: string | undefined,
+  owner: CustomerChatOwner,
+): Promise<boolean> {
+  if (!typingPreviewAllowed({ owner, enabled: true, hipaa: false })) return false;
+  const { enabled, hipaa } = await readTypingPreviewInputs(tx, licenseId, brandId);
+  return typingPreviewAllowed({ owner, enabled, hipaa });
+}
 
 /**
  * One completed order, as the shop's confirmation page reports it (FR-MOD-13.5).
@@ -907,6 +934,11 @@ export default async function customerRoutes(
         select: { persona: true },
       });
       const humanButtonLabel = readHumanButtonLabel(aiAgent?.persona ?? null);
+      // Whether the widget sends the visitor's unsent draft (tm 417 · K3): the
+      // typing route's own gate, asked only of an open connection.
+      const typingPreview = owned
+        ? await typingPreviewOpen(tx, request.tenant().licenseId, principal.brandId, owned.owner)
+        : false;
 
       // Whether a chat opened now would be the AI's (WG-09) — asked only with
       // no open connection, where it decides between a chat and the offline
@@ -939,6 +971,7 @@ export default async function customerRoutes(
         humanButtonLabel,
         aiReady,
         availabilityMode,
+        typingPreview,
       };
     });
     if (state.chat) {
@@ -1002,6 +1035,7 @@ export default async function customerRoutes(
       answered_by: availability.answered_by,
       read_only: state.readOnly,
       agent_typing: agentTyping,
+      typing_preview: state.typingPreview && availability.answered_by === 'human',
       customer: {
         id: principal.customerId,
         name: state.customer?.name ?? null,
@@ -1685,13 +1719,23 @@ export default async function customerRoutes(
   );
 
   /**
-   * Live typing preview from the visitor's side (FR-MOD-02.9 / 11.8).
+   * The visitor's unsent draft, live to the agent the chat is assigned to
+   * (FR-MOD-02.9 / 11.8 · tm 417).
    *
-   * The widget calls this — debounced — while the visitor types, so the agent
-   * sees "the visitor is typing" and a preview of the in-progress message. It is
-   * ephemeral: nothing is written to the conversation, and the preview reaches
-   * agents only, never echoed back to the visitor. Typing into a panel with no
-   * open conversation is a no-op, not an error.
+   * The gate is here, on the server (K3): `typingPreviewAllowed` — a person
+   * assigned, the workspace switch on, not HIPAA scope. Closed, a draft is
+   * published nowhere and the answer is 200 `{ typing_preview: false }`, so the
+   * widget stops sending until its poll says otherwise. A clear
+   * (`is_typing: false`) is published whatever the gate says: it removes a
+   * draft left on an agent's screen when the chat went back to the AI.
+   *
+   * At most four statements a request (K1), the licence gate's own read
+   * included: the connection, then — for a draft only — HIPAA scope and the
+   * switch together, then the audience. `HumanRequestService.ownerOf`
+   * is not called: it re-reads this thread and the AI agent, and the AI agent
+   * only tells `ai` from `queue` — both closed. Nothing is stored; the text is
+   * cleaned in `ChatService.publishCustomerTyping` and redacted from the
+   * request log (`req.body.text`).
    */
   app.post(
     '/customer/chat/typing',
@@ -1701,24 +1745,48 @@ export default async function customerRoutes(
       if (principal.kind !== 'customer') throw ApiError.notFound('Resource not found.');
 
       const body = parse(typingSchema, request.body);
+      const tenant = request.tenant();
 
-      const chat = await request.withTenant((tx) =>
-        tx.chat.findFirst({
-          where: { customerId: principal.customerId, active: true },
-          select: { id: true },
-        }),
-      );
-
-      if (chat) {
-        bindChatLogContext(request, { chatId: chat.id });
-        await chats.publishCustomerTyping(request.tenant(), principal, chat.id, {
-          isTyping: body.is_typing,
-          // The sneak-peek is pushed to the agent as the visitor types; mask it
-          // there too (FR-MOD-08.9.5 · AI-26) so a secret is not exposed mid-type.
-          ...(body.text !== undefined ? { text: maskForWrite(body.text, 'customer').text } : {}),
+      const outcome = await request.withTenant(async (tx) => {
+        // The visitor's own open connection, found by the token's customer and
+        // never by an id the request names. The chat condition rides on the
+        // thread read, so it is one statement.
+        const thread = await tx.thread.findFirst({
+          where: { active: true, chat: { customerId: principal.customerId, active: true } },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, chatId: true, assigneeId: true, queuePosition: true, aiMode: true },
         });
+        if (!thread) return null;
+        if (body.is_typing) {
+          // `aiAgentActive: true` is the closing side: an unassigned
+          // connection reads as the AI's, never as the queue's.
+          const owner = customerChatOwner({ ...thread, aiAgentActive: true });
+          if (!(await typingPreviewOpen(tx, tenant.licenseId, principal.brandId, owner))) {
+            return { chatId: thread.chatId, target: null };
+          }
+        }
+        const target = await chats.typingPreviewAudience(tx, tenant.licenseId, {
+          chatId: thread.chatId,
+          threadId: thread.id,
+          assigneeId: thread.assigneeId,
+        });
+        return { chatId: thread.chatId, target };
+      });
+
+      if (outcome) bindChatLogContext(request, { chatId: outcome.chatId });
+      if (!outcome?.target) {
+        // No open conversation, or the gate is closed: nothing was published.
+        // A draft is told so; a clear with nothing to clear is simply done.
+        return body.is_typing
+          ? reply.status(200).send({ typing_preview: false })
+          : reply.status(204).send();
       }
 
+      await chats.publishCustomerTyping(tenant, principal, outcome.target, {
+        isTyping: body.is_typing,
+        ...(body.text !== undefined ? { text: body.text } : {}),
+        ...(body.seq !== undefined ? { seq: body.seq } : {}),
+      });
       return reply.status(204).send();
     },
   );

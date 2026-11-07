@@ -572,26 +572,19 @@ describe('customer chat api', () => {
         expect(response.statusCode).toBe(204);
       });
 
-      const typing = envelopes.find((e) => e['action'] === 'incoming_typing_indicator');
+      // One frame for a draft (tm 417 · K6): the sneak-peek carries "typing"
+      // itself, so no typing indicator travels beside it.
+      expect(envelopes.some((e) => e['action'] === 'incoming_typing_indicator')).toBe(false);
       const peek = envelopes.find((e) => e['action'] === 'incoming_sneak_peek');
-      expect(typing).toBeDefined();
       expect(peek).toBeDefined();
 
-      // Addressed to agents — a visitor must never be shown their own draft.
-      for (const envelope of [typing!, peek!]) {
-        const audience = envelope['audience'] as Record<string, unknown>;
-        expect(audience['customerId']).toBeUndefined();
-        expect(audience['groupIds']).not.toEqual([]);
-      }
-
-      const indicator = (typing!['payload'] as { typing_indicator: Record<string, unknown> })
-        .typing_indicator;
-      expect(indicator['is_typing']).toBe(true);
-      expect(indicator['author_type']).toBe('customer');
-      expect(indicator['recipients']).toBe('agents');
+      // Addressed to the assigned agent — not the team, never the visitor.
+      expect(peek!['audience']).toEqual({ groupIds: [], agentIds: [fx.a.agentAccountId] });
 
       const sneak = (peek!['payload'] as { sneak_peek: Record<string, unknown> }).sneak_peek;
       expect(sneak['text']).toBe('my order is la');
+      expect(sneak['author_type']).toBe('customer');
+      expect(sneak['recipients']).toBe('agents');
     });
 
     it('sends no preview when the visitor stops typing', async () => {
@@ -634,7 +627,10 @@ describe('customer chat api', () => {
         { is_typing: true, text: 'hello?' },
         auth(token),
       );
-      expect(response.statusCode).toBe(204);
+      // Nobody holds a conversation that is not there: nothing is published,
+      // and the widget is told to stop sending (tm 417).
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ typing_preview: false });
     });
 
     it('rejects a malformed typing body', async () => {

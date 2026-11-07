@@ -3,6 +3,13 @@
 > Kaynak: `HANDOFF.md` canlı dosyasından CONVENTIONS §3 gereği taşınan fazla görev blokları, newest-first.
 > Arama: `grep -n "tm <id>" docs/archive/handoff/*.md` — baştan okuma.
 
+## tm 412 — WIDGET-VALIDATION-BUBBLE-LANGUAGE: widget form doğrulama balonu Chromium'da widget dilinde çıkar — done — 2026-11-06 UTC
+
+- **Yapıldı (doğrudan `main`; kontrat/migration/api YOK):** `complain()` (`apps/widget/src/widget.ts`) özel geçerliliği artık hemen silmiyor; alanın bir sonraki `input`/`change` olayında temizliyor (tek kapanış işlevi iki dinleyiciyi de söker). Chromium balonu canlı `validationMessage`'ı çiziyordu; hemen temizlenince tarayıcının yerel metnine dönüyordu (tm 402 varsayımı yanlıştı). Formlar `noValidate`, kimse `checkValidity()` bakmıyor → bayat mesaj gönderimi tutmaz.
+- **Doğrulama:** widget `widget.prechat.test.ts` (mesaj kalır, `input` ile temizlenir), widget 57 dosya/550 yeşil, bundle testi yeşil; e2e `offline-form.spec.ts` +1 (Chromium en-US, widget `language=tr`, boş gönderim → `validationMessage` "Lütfen bu alanı doldurun.", yazınca boş). Aynı dosyadaki ilk test bir koşuda `builder.getByText(label)` 10 sn zaman aşımı verdi, tek başına yeniden koşuda 3/3 yeşil (flake).
+- **Varsayımlar:** küçük olan seçildi (satır içi hata metni yerine bayat-geçerlilik temizliği); bundle payı ihmal edilir düzeyde.
+- **Sonraki pencere:** balonun görsel metnini ekran görüntüsüyle doğrulayan bir test yok (Playwright native balonu yakalamaz) — `validationMessage` okunuyor.
+
 ## tm 411 — QUEUE-NOTICE-CLEARS-AFTER-AGENT-REPLY: ajan yanıtladıktan sonra widget'ta "sıradasınız" bildirimi geri gelmez — done — 2026-11-06 UTC
 
 - **Yapıldı (doğrudan `main`; kontrat/migration YOK):** kök sunucudaydı: AI'nin hiç katılmadığı kuyruktaki sohbete ajan yazınca `#changeAiMode` (null → human) yönlendirme yapmıyor, sohbet kuyrukta + atanmamış kalıyor, `GET /customer/chat` konumu döndürüyor, tm 399'un `refresh()`'i satırı geri yazıyordu. Seçenek (b): yeni `apps/api/src/services/routing/visitor-queue.ts` `visitorQueuePosition` — kuyruğa girişten (`queued_at`; yoksa herhangi) sonra ziyaretçiye giden (`recipients: 'all'`) bir `agent` olayı varsa ziyaretçiye `queue_position` ve `estimated_wait` null (`routes/customer.ts`). Atama/kuyruk kaydı, panelin Queued görünümü değişmez. Widget `refresh()`: istek çıktıktan sonra ajan olayı geldiyse (`agentReplies` sayacı) o yanıtın kuyruk bilgisi yazılmaz (yanıttan önce çıkmış yavaş yoklama).

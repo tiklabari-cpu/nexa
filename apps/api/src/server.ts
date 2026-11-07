@@ -17,7 +17,7 @@ import type { CrawlFetcher } from './services/ai/crawler/fetcher.js';
 import { crawlerProviderWarning } from './services/ai/crawler/provider.js';
 import aiTesting from './plugins/ai-testing.js';
 import backgroundMail from './plugins/background-mail.js';
-import database from './plugins/database.js';
+import database, { type QueryObserver } from './plugins/database.js';
 import entitlementGate from './plugins/entitlement-gate.js';
 import { baseFastifyOptions } from './lib/fastify-options.js';
 import { VERSION } from './version.js';
@@ -166,6 +166,13 @@ export interface BuildServerOptions {
    */
   logStream?: NodeJS.WritableStream;
   /**
+   * Told of every statement the primary database client runs. Omitted — every
+   * deployment — the client logs no queries at all. A test counts with it what
+   * a route costs (`/customer/chat/typing` promises at most four statements,
+   * tm 417) and checks what never reaches the database.
+   */
+  onQuery?: QueryObserver;
+  /**
    * How an outbound webhook leaves the process (FR-MOD-09.4 / 08.8.4). Omitted,
    * the real HTTP sender — no request is ever made unless a workspace has
    * registered a subscription. A test passes a recorder, on exactly the terms
@@ -269,6 +276,7 @@ export async function buildServer({
   push = createPushProvider(env.PUSH_PROVIDER, { dir: env.PUSH_DIR }),
   telemetry,
   logStream,
+  onQuery,
   webhookSender,
   llm: injectedLlm,
   copilotLlm: injectedCopilotLlm,
@@ -364,7 +372,7 @@ export async function buildServer({
     ],
   });
 
-  await app.register(database, { env });
+  await app.register(database, { env, onQuery });
   await app.register(redis, { env });
   // The root panel's deployment settings (tm 389.13): sign-up, the trial
   // length, the announcement and maintenance mode, cached for 30 seconds and

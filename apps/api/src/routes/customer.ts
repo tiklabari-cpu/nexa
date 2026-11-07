@@ -114,6 +114,7 @@ import {
   shouldEmailAssignee,
 } from '../services/notifications/assignee-email.js';
 import { bindChatLogContext } from '../plugins/log-context.js';
+import { customerTypingChatBucket } from '../plugins/rate-limit.js';
 import { pushToAgentDevices } from '../services/notifications/push.js';
 import { resolveAttribution } from '../services/sales/attribution.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
@@ -1739,7 +1740,9 @@ export default async function customerRoutes(
    */
   app.post(
     '/customer/chat/typing',
-    { config: { principals: ['customer'] } },
+    // Its own buckets (tm 417 · `plugins/rate-limit.ts`): typing never spends
+    // the budget the visitor's messages and poll live on.
+    { config: { principals: ['customer'], customerTypingRateLimit: true } },
     async (request, reply) => {
       const principal = request.requirePrincipal();
       if (principal.kind !== 'customer') throw ApiError.notFound('Resource not found.');
@@ -1782,6 +1785,9 @@ export default async function customerRoutes(
           : reply.status(204).send();
       }
 
+      // The conversation's own ceiling, however many visitor identities speak
+      // for it: charged only for what would reach an agent, before it does.
+      await app.chargeRouteBucket(request, reply, customerTypingChatBucket(outcome.chatId, env));
       await chats.publishCustomerTyping(tenant, principal, outcome.target, {
         isTyping: body.is_typing,
         ...(body.text !== undefined ? { text: body.text } : {}),

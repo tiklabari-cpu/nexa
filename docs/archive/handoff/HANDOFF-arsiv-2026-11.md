@@ -3,6 +3,13 @@
 > Kaynak: `HANDOFF.md` canlı dosyasından CONVENTIONS §3 gereği taşınan fazla görev blokları, newest-first.
 > Arama: `grep -n "tm <id>" docs/archive/handoff/*.md` — baştan okuma.
 
+## tm 413 — PANEL-DARK-CONTRAST-AND-TR-LEFTOVERS: koyu playbook geçmişi kontrastı + tr arayüzde kalan İngilizce metinler — done — 2026-11-06 UTC
+
+- **Yapıldı (doğrudan `main`; api/kontrat/migration YOK):** `History.tsx` "Değişikliği göster" bağlantısı `text-brand-600` → `text-content-brand` (koyu 2.81:1). Katalog metni web i18n'e taşındı: yeni `locales/{en,tr}/apps-catalog.ts` (103 uygulama, `apps.catalog.<id>`), `settings.mcpConnection.tool.<ad>` (4 araç), `playbook.profile.previewPassage1-3`. Yeni `translateOr(t, key, fallback)` (`lib/i18n.ts`): anahtar varsa çeviri, yoksa API metni (katalogda olmayan yeni uygulama ham anahtar göstermez).
+- **Karar (küçük olan):** sunucu dil başına metin göndermiyor; istemci tarafı anahtar eşlemesi seçildi (API/kontrat değişmez, MCP araç açıklaması LLM istemcisine İngilizce gitmeye devam eder). `AI ajanı önizlemesi` örnek yanıtı: parçalar panel diline uyar; tr arayüzde dil `tr` verilir (seed ajanı `languages: ['en']` olduğu için eskiden tr arayüzde İngilizce çıkıyordu), en arayüzde davranış aynı. `PERSONA_PREVIEW_PASSAGES` export'u yerine `PERSONA_PREVIEW_PASSAGE_KEYS`.
+- **Doğrulama:** web `apps-catalog.test.ts` 3 (her katalog kimliği en+tr; en satırı API metniyle birebir; tr ≠ en), `AppsMarketplace.test` +2, `McpConnection.test` +1, `ProfileForm.test` +1; e2e `a11y.spec.ts` +1 çift tema (ağ kenarında sahte `/ai/changes`; mutant `text-brand-600` ile kırmızı). `ai-guardrails.spec.ts:130` tam koşuda bir kez kırmızı, tek başına yeşil (yük).
+- **Sonraki pencere:** `packages/types/src/apps.ts`'e yeni uygulama eklenirse `apps-catalog.test.ts` kırmızı olur — en ve tr satırını birlikte ekle. MCP araç kataloğu (`apps/api/src/services/mcp/tool-catalog.ts`) değişirse `settings.mcpConnection.tool.*` elle güncellenir (web api'yi import etmez, eşlik testi yok).
+
 ## tm 412 — WIDGET-VALIDATION-BUBBLE-LANGUAGE: widget form doğrulama balonu Chromium'da widget dilinde çıkar — done — 2026-11-06 UTC
 
 - **Yapıldı (doğrudan `main`; kontrat/migration/api YOK):** `complain()` (`apps/widget/src/widget.ts`) özel geçerliliği artık hemen silmiyor; alanın bir sonraki `input`/`change` olayında temizliyor (tek kapanış işlevi iki dinleyiciyi de söker). Chromium balonu canlı `validationMessage`'ı çiziyordu; hemen temizlenince tarayıcının yerel metnine dönüyordu (tm 402 varsayımı yanlıştı). Formlar `noValidate`, kimse `checkValidity()` bakmıyor → bayat mesaj gönderimi tutmaz.

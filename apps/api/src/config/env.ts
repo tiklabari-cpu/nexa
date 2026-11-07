@@ -502,6 +502,24 @@ export const envSchema = z.object({
    * visitor after visitor to multiply its budget.
    */
   RATE_LIMIT_CUSTOMER_IP_PER_MIN: z.coerce.number().int().positive().default(600),
+  /**
+   * `POST /customer/chat/typing`, per visitor (tm 417): the draft preview's own
+   * bucket, so typing never spends the 60 a minute the visitor's messages and
+   * poll live on. The widget sends at most one a second from its visible tab
+   * while the text changes, plus the clears: 150 is two visible tabs at that
+   * pace with room for the clears.
+   */
+  RATE_LIMIT_CUSTOMER_TYPING_PER_MIN: z.coerce.number().int().positive().default(150),
+  /**
+   * The same, per IP, summed over every visitor behind that address (tm 417):
+   * ~50 visitors typing at once behind one mobile carrier's NAT.
+   */
+  RATE_LIMIT_CUSTOMER_TYPING_IP_PER_MIN: z.coerce.number().int().positive().default(3000),
+  /**
+   * The same, per conversation, whichever visitor identities send it (tm 417):
+   * what bounds the previews one agent's screen receives for one chat.
+   */
+  RATE_LIMIT_CUSTOMER_TYPING_CHAT_PER_MIN: z.coerce.number().int().positive().default(90),
   /** Unauthenticated callers, per IP: sign-in, widget tokens, anything else without a credential. */
   RATE_LIMIT_ANON_PER_MIN: z.coerce.number().int().positive().default(30),
   /**

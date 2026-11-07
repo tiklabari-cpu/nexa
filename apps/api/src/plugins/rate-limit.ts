@@ -4,6 +4,8 @@
  *   agent token (PAT or OAuth) : 180 req/min, burst 30
  *   customer token             : 60 req/min per visitor, and 600 req/min per IP
  *                                across every visitor behind it (tm 407, below)
+ *   widget draft preview       : 150/min per visitor, 3000/min per IP and
+ *                                90/min per conversation (tm 417, below)
  *   unauthenticated            : 30 req/min per IP
  *   token exchange             : 300 req/min per IP (`POST /auth/token`, below)
  *
@@ -115,6 +117,26 @@
  * token — no credential, a forged or expired one — and every route that does
  * not admit customers, the token mint (`POST /customer/token`) among them, so
  * presenting a token cannot move minting onto a budget of its own.
+ *
+ * ## The visitor's draft (tm 417)
+ *
+ * `POST /customer/chat/typing` carries the visitor's unsent draft to the agent
+ * (≤ 1 a second while the text changes). On the visitor's 60 a minute it took
+ * the budget the message send and the poll live on, so typing steadily could
+ * get the visitor's next message refused. The route (`customerTypingRateLimit`)
+ * has buckets of its own, chosen by the same `bucketFor` at both stages:
+ * `rl:customertyping:<org>:<customer>` (`RATE_LIMIT_CUSTOMER_TYPING_PER_MIN`)
+ * under an address-wide `rl:customertypingip:<ip>` ceiling
+ * (`RATE_LIMIT_CUSTOMER_TYPING_IP_PER_MIN`), the same shape as the visitor's
+ * own pair. A 429 there silences the preview and nothing else.
+ *
+ * A third, per conversation — `rl:customertypingchat:<chat>`
+ * (`RATE_LIMIT_CUSTOMER_TYPING_CHAT_PER_MIN`) — bounds what reaches the agent
+ * however many visitor identities speak for one chat. The chat is only known
+ * once the route has found the visitor's open conversation, so the route
+ * charges it itself (`chargeRouteBucket`), after its read and before anything
+ * is published. Only a good customer token reaches these buckets: without one
+ * the request stays anonymous, exactly as on every other customer route.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
@@ -260,7 +282,7 @@ export class RateLimiter {
   }
 }
 
-interface Bucket {
+export interface Bucket {
   key: string;
   limit: number;
   windowMs: number;
@@ -303,6 +325,20 @@ export function authFailureBucket(ip: string, env: Env): Bucket {
  * most, and nothing about a deployment changes how many that is.
  */
 export const IMPERSONATION_EXCHANGES_PER_MIN = 30;
+
+/**
+ * The draft preview's per-conversation bucket (tm 417, file header): charged
+ * by `POST /customer/chat/typing` once it has found the visitor's open chat,
+ * because the chat is not known before that. Keyed by chat alone — what it
+ * bounds is how much reaches the agent of one conversation, whoever sends it.
+ */
+export function customerTypingChatBucket(chatId: string, env: Env): Bucket {
+  return {
+    key: `rl:customertypingchat:${chatId}`,
+    limit: env.RATE_LIMIT_CUSTOMER_TYPING_CHAT_PER_MIN,
+    windowMs: 60_000,
+  };
+}
 
 /**
  * The bucket `request` is metered by, given who it is known to come from:
@@ -393,6 +429,21 @@ function bucketFor(request: FastifyRequest, env: Env, principal: Principal | und
   }
 
   if (principal?.kind === 'customer') {
+    // The draft preview (tm 417): its own pair, so typing never spends the
+    // budget the visitor's messages and poll live on. Inside the customer
+    // branch on purpose — a request without a good token stays anonymous.
+    if (request.routeOptions.config.customerTypingRateLimit) {
+      return {
+        key: `rl:customertyping:${principal.organizationId}:${principal.customerId}`,
+        limit: env.RATE_LIMIT_CUSTOMER_TYPING_PER_MIN,
+        windowMs: 60_000,
+        ceiling: {
+          key: `rl:customertypingip:${request.ip}`,
+          limit: env.RATE_LIMIT_CUSTOMER_TYPING_IP_PER_MIN,
+          windowMs: 60_000,
+        },
+      };
+    }
     return {
       key: `rl:customer:${principal.organizationId}:${principal.customerId}`,
       limit: env.RATE_LIMIT_CUSTOMER_PER_MIN,
@@ -447,6 +498,22 @@ async function rateLimitPlugin(app: FastifyInstance, options: { env: Env }): Pro
   );
 
   app.decorate('rateLimiter', limiter);
+  app.decorate(
+    'chargeRouteBucket',
+    async (request: FastifyRequest, reply: FastifyReply, bucket: Bucket): Promise<void> => {
+      let decision: RateLimitDecision;
+      try {
+        decision = await limiter.consume(bucket.key, bucket.limit, bucket.windowMs);
+      } catch (error) {
+        // Fails open, like `meter` and for the same reason.
+        request.log.error({ err: error }, 'rate limiter unavailable — allowing request');
+        return;
+      }
+      // Quiet unless it refuses: the numbers the client spends from are its
+      // principal bucket's, announced already.
+      enforce(reply, decision, false);
+    },
+  );
   app.decorateRequest('rateLimitChargedKey', undefined);
   app.decorateRequest('credentialAttempt', undefined);
 
@@ -701,6 +768,13 @@ async function rateLimitPlugin(app: FastifyInstance, options: { env: Env }): Pro
 declare module 'fastify' {
   interface FastifyInstance {
     rateLimiter: RateLimiter;
+    /**
+     * Spend one slot of a bucket only a route can name — one keyed by
+     * something the route reads first (the draft preview's chat, tm 417).
+     * Answers 429 with `Retry-After` and `X-RateLimit-*` when it is out, and
+     * otherwise leaves the headers to the principal bucket. Fails open.
+     */
+    chargeRouteBucket(request: FastifyRequest, reply: FastifyReply, bucket: Bucket): Promise<void>;
   }
   interface FastifyRequest {
     /**
@@ -748,6 +822,13 @@ declare module 'fastify' {
     tokenRateLimit?: boolean;
     /** `POST /auth/impersonation/exchange`'s own per-address bucket (tm 389.15). */
     impersonationRateLimit?: boolean;
+    /**
+     * `POST /customer/chat/typing` (tm 417): a good customer token is charged
+     * to `rl:customertyping:<org>:<customer>` under `rl:customertypingip:<ip>`
+     * instead of the visitor's message/poll bucket. Without a good token the
+     * request is anonymous, as everywhere.
+     */
+    customerTypingRateLimit?: boolean;
   }
 }
 

@@ -6507,6 +6507,8 @@ _Önceki maddeler: `docs/archive/plan-kanit/PLAN-kanit-arsiv-2026-11.md`, `docs/
 
 - ✅ tm 417.2 · ziyaretçi taslağı önizlemesi 2/7 (sunucu kapısı; damga `✅` kaldı): `typingPreviewAllowed` rotada + poll'da (`typing_preview`), kapalıyken 200 `{typing_preview:false}` ve yayın yok, alıcı yalnız atanan + canlı süpervizör, temizleyici (kontrol/bidi, NFKC, yarım kart `•`), tek olay + `seq`, istek başına ≤4 sorgu · `customer.ts:1741`, `chat-service.ts:2525`, `lib/typing-preview.ts:37` · `typing-preview.test.ts` (20, FR-MOD-02.9/11.8), `typing-preview.test.ts` birim (19), `customer-chat.test.ts` · bu satırı ekleyen commit
 
+- ✅ tm 417.3 · ziyaretçi taslağı önizlemesi 3/7 (hız kovaları; damga `✅` kaldı): typing ucu kendi kovalarında — ziyaretçi `rl:customertyping` 150/dk + adres tavanı 3000/dk (iki aşama aynı anahtar), sohbet `rl:customertypingchat` 90/dk rotada yayından önce; 429 mesaj/poll'u etkilemez, token'sız istek anonim kalır · `plugins/rate-limit.ts:435`, `:335`, `customer.ts:1790`, `env.ts` · int `typing-rate-limit.test.ts` (5, FR-MOD-11.8), `env.test.ts` (+15) · bu satırı ekleyen commit
+
 #### K12.1-12.3 — 12.1–12.3 · Copilot (buton, ayrı KB, özet + yanıt yardımı)
 
 - ✅ tm 309.3 · AI-14 3/3 (tek depo, web; damga `✅` kaldı): Copilot sayfası tek deponun süzgeçli görünümü — `GET /knowledge-sources?audience=copilot` (Copilot'un okuduğu her şey), "Yalnız ajanlar" süzgeci, satırda kitle çipi; yalnız ajanlara ait ve KB makalesi olmayan kaynak buradan eklenir/silinir (`/copilot/knowledge` ekleme + silme), AI ajanının da kullandığı kaynak "Senaryolar › Bilgi'de yönetilir" · `CopilotKnowledge.tsx`, `KnowledgeRowMeta.tsx` · `CopilotKnowledge.test.tsx` (+4) · `knowledge-store.spec.ts` (e2e) · §D307

@@ -285,6 +285,21 @@ describe('RATE_LIMIT_CUSTOMER_IP_PER_MIN', () => {
   });
 });
 
+/** The draft preview's own buckets (tm 417). */
+describe.each([
+  ['RATE_LIMIT_CUSTOMER_TYPING_PER_MIN', 150],
+  ['RATE_LIMIT_CUSTOMER_TYPING_IP_PER_MIN', 3000],
+  ['RATE_LIMIT_CUSTOMER_TYPING_CHAT_PER_MIN', 90],
+] as const)('%s', (key, fallback) => {
+  it(`is ${fallback} per minute when unset`, () => {
+    expect(parseEnv(BASE)[key]).toBe(fallback);
+  });
+
+  it.each(['0', '-1', '1.5', 'many'])('refuses %j', (value) => {
+    expect(() => parseEnv({ ...BASE, [key]: value })).toThrow(new RegExp(key));
+  });
+});
+
 /** The `GET /deployment` bucket (tm 257.13). */
 describe('RATE_LIMIT_PUBLIC_CONFIG_PER_MIN', () => {
   it('is 600 per minute when unset', () => {

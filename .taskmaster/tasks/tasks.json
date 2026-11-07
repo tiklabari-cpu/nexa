@@ -17578,7 +17578,7 @@
           "417"
         ],
         "priority": "high",
-        "updatedAt": "2026-11-07T15:33:47.476Z",
+        "updatedAt": "2026-11-07T19:06:22.879Z",
         "subtasks": [
           {
             "id": 1,
@@ -17586,11 +17586,11 @@
             "description": "(475.1) Contract-first ilk halka. Yeni hata türü ve yol açıklamaları; davranış 475.2/475.3'te. Yeni YOL yok, mobil parity sayısı değişmez. (475.2) Kuralın sunucu otoritesi. Atanmamış ya da başkasına atanmış ajanın müşteriye görünür yanıtı reddedilir; dahili not ve bot muaf. Eşzamanlı takeover/claim ile yanıt yarışında iki yanıt birden müşteriye gitmez.",
             "details": "BİRLEŞİK ALT GÖREV (sahip onayı 2026-11-07): 475.1, 475.2 tek pencerede yapılır; DoD kapısı bir kez koşar.\nBölümler sırayla yapılır, her biri kendi kabul ölçütüyle kapanır; biri yeşil değilse alt görev done değildir.\n475.2 cancelled durumda ve buraya işaret ediyor; metinlerde onlara yapılan atıflar bu alt görevi kasteder.\nContract-first sırası pencere içinde korunur: önce Bölüm 1 (kontrat + üretilen tipler yeşil), sonra Bölüm 2 (api kapısı).\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\n━━ BÖLÜM 1 — 475.1 REPLY-ASSIGNMENT-CONTRACT · Kontrat: hata türü reply_requires_assignment (409, reason unassigned|assigned_to_other|ai), POST events ve claim açıklamaları, web en+tr hata cümleleri ━━\nSORUN: Contract-first ilk halka. Yeni hata türü ve yol açıklamaları; davranış 475.2/475.3'te. Yeni YOL yok, mobil parity sayısı değişmez.\n\nÜst görev #475 KARARLAR D1, D5, D6 tek kaynaktır.\nAMAÇ: (1) Hata türü `reply_requires_assignment` (409, `details.reason` ∈ unassigned|assigned_to_other|ai): `packages/types/src/errors.ts:226` ve `:293` (status), kontrat enum (`packages/contract/openapi/openapi.yaml:~17360`). (2) `packages/contract/openapi/paths/chats.yaml` POST events açıklaması: \"müşteriye görünür yanıt yalnız atanmış ajandan; dahili not serbest\". (3) Claim açıklaması (`paths/chats.yaml:~615`): AI evresindeki ya da duraklatılmış AI'daki atanmamış sohbet + otomatik takım kuyruğu da kabul edilir; reason `not_waiting`'in yeni anlamı (yalnız kuyrukta/AI evresinde olmayan sohbet). (4) POST /chats `initial_event` açıklaması: ajan 'all' initial_event'te sohbet o ajana atanır (D11). (5) `pnpm contract:generate`, generated temiz. (6) Web hata cümleleri en+tr (i18n kaydı; gate-rerun-hint-fails-for-web).\nKAPSAM DIŞI: davranış (475.2–475.5).\nKABUL: kontrat/generated/types testleri yeşil; mobil parity sayısı değişmedi.\n\n━━ BÖLÜM 2 — 475.2 REPLY-ASSIGNMENT-API-GUARD · sendEvent'te thread kilidi altında atama kapısı (409 reply_requires_assignment), örtük AI devralmasının kaldırılması, ajanın açtığı sohbette örtük assign_to_me, RTM ajan typing'i atanan değilse yayınsız; fixture ripple'ı ━━\nSORUN: Kuralın sunucu otoritesi. Atanmamış ya da başkasına atanmış ajanın müşteriye görünür yanıtı reddedilir; dahili not ve bot muaf. Eşzamanlı takeover/claim ile yanıt yarışında iki yanıt birden müşteriye gitmez.\n\nBağımlılık: 475.1. Üst görev #475 KARARLAR D1–D4, D8, D11 tek kaynaktır.\nAMAÇ: (1) sendEvent'te append ve kanal kapısından ÖNCE aktif thread `FOR UPDATE` ile okunur ve D1 kuralı uygulanır (chat-service.ts:1681-1700). (2) Örtük AI devralması (:1722-1732) yalnız zaten atanmış ajan için kalır (paralel atama); atanmamış ajan bu yola hiç ulaşmaz. (3) D11: `start` (:815) `initial_event` 'all' olan ajan isteğinde `assign_to_me` örtük true (:1128); 'agents' notu ve initial_event'siz istek değişmez. (4) RTM `#typing` (apps/rtm/src/dispatcher.ts:246-270): atanan olmayan ajanın typing'i ziyaretçiye yayınlanmaz (başarı döner). (5) Fixture ripple'ı ortak yardımcıyla kapatılır (sohbet önce ajana atanır ya da claim edilir); değişen dosya listesi HANDOFF'a.\nTUZAK: üst görevin TUZAKLAR listesi (race-tests-need-separate-connections, background-db-work-races-reset-database, chat-service-must-not-import-ai).\nKABUL: aşağıdaki testler yeşil; mutasyon: kontrolü kaldır → kırmızı.",
             "testStrategy": "BÖLÜM 1 (475.1): packages/types birim: yeni hata türü status 409; kontrat testleri ve contract:generate sonrası generated temiz (`git status`); web hata cümlesi en+tr var (locale testi). DoD: CONVENTIONS §1.\nBÖLÜM 2 (475.2): api entegrasyon: atanmamış ajan 'all' → 409 unassigned, event yok, idempotency kaydı yok; başkasına atanmış → assigned_to_other; AI evresi atanmamış → ai; pause-ai sonrası atanmamış → ai; atanan → 201; aynı ajanın dahili notu atanmamışken 201; bot 'all' → 201; atanan yanıtı ile takeover eşzamanlı (ayrı bağlantılar) → yanıt ya devralmadan önce yazılmış ya 409, ikisi birden değil; POST /chats assign_to_me=false + initial_event 'all' → sohbet ajana atanmış, atanmamış ajanın yazdığı müşteri olayı yok; initial_event 'agents' → bugünkü atama davranışı. rtm birim: atanmamış ajan typing → ziyaretçiye push yok. Mutasyon: atama kontrolünü kaldır → kırmızı. DoD: CONVENTIONS §1.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "475",
             "priority": "high",
-            "updatedAt": "2026-11-07T15:33:47.476Z"
+            "updatedAt": "2026-11-07T19:06:22.879Z"
           },
           {
             "id": 2,
@@ -17777,7 +17777,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-07T15:33:47.477Z",
+      "lastModified": "2026-11-07T19:06:22.880Z",
       "taskCount": 478,
       "completedCount": 416,
       "tags": [

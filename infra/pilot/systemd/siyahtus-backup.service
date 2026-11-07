@@ -1,0 +1,51 @@
+# SiyahTuş pilot — the daily backup (tm 465 · NFR-R5 · NFR-C8).
+#
+# Runs scripts/backup.sh against docker-compose.pilot.yml: a pg_dump of the
+# database and a tar of the uploads volume (siyahtus_pilot_uploads, tm 418),
+# both under one UTC timestamp, into /opt/siyahtus/backups. The same run deletes
+# the archives older than BACKUP_RETENTION_DAYS. siyahtus-backup.timer starts it
+# once a day; it can also be started by hand at any time.
+#
+# Install, with the repository at /opt/siyahtus (change WorkingDirectory and
+# ExecStart below if it is elsewhere):
+#
+#   sudo cp infra/pilot/systemd/siyahtus-backup.service infra/pilot/systemd/siyahtus-backup.timer /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now siyahtus-backup.timer
+#   sudo systemctl start siyahtus-backup.service     # the first backup, now
+#   journalctl -u siyahtus-backup.service -n 5       # ends in "Done." and a size
+#   systemctl list-timers siyahtus-backup.timer      # the next run
+#
+# Root runs it, as the cron line it replaces did: root can reach the Docker
+# daemon, and the archives are root's alone (UMask below).
+[Unit]
+Description=SiyahTuş pilot backup (database dump + uploads archive)
+Documentation=https://github.com/tiklabari-cpu/nexa/blob/main/docs/production-checklist.md
+Requires=docker.service
+After=docker.service
+# A failed run is retried (Restart= below) three times in two hours, then the
+# unit stays failed: `systemctl --failed` shows it, and no heartbeat is sent.
+StartLimitIntervalSec=2h
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/siyahtus
+# Compose reads COMPOSE_FILE itself: the dump and the uploads archive both come
+# from the pilot's compose project. backup.sh reads the uploads from the api
+# container because of it.
+Environment=COMPOSE_FILE=docker-compose.pilot.yml
+Environment=BACKUP_DIR=/opt/siyahtus/backups
+Environment=BACKUP_RETENTION_DAYS=30
+# The archives hold every workspace's personal data: readable by root alone.
+UMask=0077
+ExecStart=/opt/siyahtus/scripts/backup.sh
+# After a boot the timer catches up at once (Persistent=true), possibly before
+# the containers are up; the retry covers that.
+Restart=on-failure
+RestartSec=15min
+Nice=10
+IOSchedulingClass=idle
+# A heartbeat for the external uptime check, sent only after a backup that
+# succeeded (production-checklist §9, "Something outside the host watches it"):
+# ExecStartPost=/usr/bin/curl -fsS --max-time 10 <heartbeat URL>

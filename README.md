@@ -997,6 +997,11 @@ the host — plus a tar of `.data/uploads` (`STORAGE_LOCAL_DIR`, what
 committed, and kept outside the Docker build context by `.dockerignore`) as
 `db-<timestamp>.dump` + `uploads-<timestamp>.tar.gz`.
 
+The pilot uses the same script (`make pilot-backup`, `COMPOSE_FILE=docker-compose.pilot.yml`):
+there the uploads are the named volume `siyahtus_pilot_uploads`, archived from inside the
+api container, and a systemd timer in `infra/pilot/systemd/` runs it every day (tm 418 ·
+tm 465; `docs/production-checklist.md` §9, **Data and backups**).
+
 **Retention policy (NFR-C8 — backups are subject to the retention policy too, not
 exempt from it):** backups older than `BACKUP_RETENTION_DAYS` (default 30,
 overridable) are deleted whole-file on the next run — a `pg_dump` archive has no
@@ -1059,7 +1064,9 @@ extensions and the `SECURITY DEFINER` functions including their `SET search_path
 every `events` partition came back with RLS on and exactly one policy (the hole tm 150
 found lives per-partition, not on the parent) · and, connecting as the non-owner
 `siyahtus_app` role, the restore hands out **no** rows without a tenant context and the
-right rows once `app.current_license` is set.
+right rows once `app.current_license` is set · the uploads archive beside the dump extracts,
+and every file in it has the same sha256 as in the store it came from, with nothing stored
+before the backup missing (tm 418).
 
 That last check needs both halves. Measured while building it: an archive restored with
 every policy deliberately filtered out does **not** leak — `relrowsecurity` rides on the

@@ -182,9 +182,9 @@ platform-bootstrap-admin: ## Create the root panel's first superadmin: EMAIL=ops
 		node dist/src/services/platform/bootstrap-admin-run.js --email "$(EMAIL)"
 
 .PHONY: pilot-backup
-pilot-backup: ## pg_dump the pilot database into ./backups (scripts/backup.sh)
+pilot-backup: ## pg_dump the pilot database + tar its uploads volume into ./backups (scripts/backup.sh)
 	COMPOSE_FILE=docker-compose.pilot.yml ./scripts/backup.sh
 
 .PHONY: pilot-restore-drill
-pilot-restore-drill: ## Prove a pilot backup restores (scratch DB, verified, dropped)
+pilot-restore-drill: ## Prove a pilot backup restores (scratch DB + uploads compared by sha256)
 	COMPOSE_FILE=docker-compose.pilot.yml APP_DB_PASSWORD="$(SIYAHTUS_APP_DB_PASSWORD)" ./scripts/restore-drill.sh

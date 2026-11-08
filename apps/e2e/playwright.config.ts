@@ -326,6 +326,12 @@ export default defineConfig({
         // for its own per-address one; the suite's visitors all share 127.0.0.1.
         RATE_LIMIT_CUSTOMER_IP_PER_MIN: '2000',
         RATE_LIMIT_TOKEN_PER_MIN: '2000',
+        // The widget's token mint left the anonymous bucket for its own (tm 429),
+        // and the password doors gained a budget per sign-in address (tm 422):
+        // specs sign the seeded accounts in, and mistype on purpose, from one
+        // address all day. Both are proven in `apps/api/test/integration`.
+        RATE_LIMIT_CUSTOMER_TOKEN_PER_MIN: '2000',
+        RATE_LIMIT_LOGIN_ACCOUNT_FAILURES: '10000',
         RATE_LIMIT_AGENT_PER_MIN: '5000',
         RATE_LIMIT_SIGNUP_PER_HOUR: '10000',
         // The widget's human check (tm 339.2): the suite opens hundreds of

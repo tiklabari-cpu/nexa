@@ -85,6 +85,7 @@ import { MeteredLlm } from './services/ai/metered-llm.js';
 import type { EmbeddingProvider } from './services/ai/provider/embedding-provider.js';
 import { createWorkspaceEventDispatcher } from './services/webhooks/workspace-events.js';
 import { RiskFlagAnnouncer } from './services/risk/risk-announce.js';
+import { LoginFailureTrail } from './services/auth/login-failure-trail.js';
 import type { WebhookSender } from './services/webhooks/webhook-dispatcher.js';
 import { createPushProvider, type PushProvider } from './services/push/push-provider.js';
 import reportRoutes from './routes/reports.js';
@@ -540,6 +541,14 @@ export async function buildServer({
   app.decorate('riskFlags', riskFlags);
   app.addHook('onClose', async () => {
     await riskFlags.idle();
+  });
+  // A refused `/auth/login`'s audit entries (tm 422), written after its answer
+  // so that answer takes the same time for a registered address as for an
+  // unknown one; drained on close so an entry that was started is written.
+  const loginFailures = new LoginFailureTrail(app.db);
+  app.decorate('loginFailures', loginFailures);
+  app.addHook('onClose', async () => {
+    await loginFailures.idle();
   });
   // After both stores it reads through, before anything request-facing: the
   // five sweeps are background work, not part of answering a request.

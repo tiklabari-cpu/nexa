@@ -90,6 +90,8 @@ export const common: Messages = {
     'Enter a fresh authenticator code to confirm this action.',
   'common.errors.platform_totp_required': 'Finish signing in with your authenticator code first.',
   'common.errors.platform_workspace_state': 'The workspace is not in a state that allows this.',
+  'common.errors.rate_limit_unavailable':
+    'Sign-in is paused for a moment because attempts cannot be counted — try again in half a minute.',
   'common.errors.recipient_not_allowed':
     "Transcripts can only be mailed to the player's own address or to one of the workspace's allowed domains.",
   'common.errors.ownership_transfer_state':

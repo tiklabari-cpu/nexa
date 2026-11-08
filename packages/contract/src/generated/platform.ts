@@ -113,7 +113,10 @@ export interface paths {
      *     One 401 for an unknown address, a wrong password and a disabled
      *     operator. Ten failed attempts from one address within fifteen minutes
      *     close this route for that address for the rest of the window, a correct
-     *     password included (429).
+     *     password included (429). That count lives in Redis; when it cannot be
+     *     read the attempt is refused with 503 `rate_limit_unavailable` before the
+     *     password is compared (tm 452) — so are the second-factor routes and the
+     *     invitation acceptance.
      */
     post: operations['platformLogin'];
     delete?: never;
@@ -1498,8 +1501,10 @@ export interface paths {
     /**
      * Failed sign-ins, tenants and operators
      * @description Three views. `tenant.live` is the pre-authentication failure budget
-     *     (`rl:authfail:<ip>`, a 60-second window in Redis) read without spending
-     *     it: which addresses are failing now, and which are locked out.
+     *     (`rl:authfail:<network>`, a 60-second window in Redis) read without
+     *     spending it: which addresses are failing now, and which are locked out.
+     *     Since tm 422 the budget is kept per client network, so `ip` is an IPv4
+     *     address or an IPv6 /64 (`2001:db8:1:2::/64`).
      *     `tenant.history` is the workspaces' own trail (`auth.login_failed`) over
      *     the last `hours`, by address and by workspace. `operator` is this
      *     panel's own `admin.sign_in_failed` / `admin.totp_failed` entries over
@@ -5307,6 +5312,21 @@ export interface components {
         'application/json': components['schemas']['Error'];
       };
     };
+    /**
+     * @description `rate_limit_unavailable` (tm 452) — the sign-in or second-factor
+     *     attempt budget lives in Redis and could not be read, so the attempt is
+     *     refused before the password or the code is compared. Nothing about the
+     *     request was wrong; `Retry-After` (30 seconds) says when to try again.
+     */
+    RateLimitUnavailable: {
+      headers: {
+        'Retry-After'?: number;
+        [name: string]: unknown;
+      };
+      content: {
+        'application/json': components['schemas']['Error'];
+      };
+    };
   };
   parameters: {
     AdminId: string;
@@ -5451,6 +5471,7 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
+      503: components['responses']['RateLimitUnavailable'];
     };
   };
   platformTotpEnroll: {
@@ -5503,6 +5524,7 @@ export interface operations {
       403: components['responses']['Forbidden'];
       409: components['responses']['Conflict'];
       429: components['responses']['TooManyRequests'];
+      503: components['responses']['RateLimitUnavailable'];
     };
   };
   platformTotpVerify: {
@@ -5531,6 +5553,7 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
+      503: components['responses']['RateLimitUnavailable'];
     };
   };
   platformTotpReverify: {
@@ -5559,6 +5582,7 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
+      503: components['responses']['RateLimitUnavailable'];
     };
   };
   platformRegenerateRecoveryCodes: {
@@ -5744,6 +5768,7 @@ export interface operations {
       403: components['responses']['Forbidden'];
       409: components['responses']['Conflict'];
       429: components['responses']['TooManyRequests'];
+      503: components['responses']['RateLimitUnavailable'];
     };
   };
   listPlatformAdmins: {

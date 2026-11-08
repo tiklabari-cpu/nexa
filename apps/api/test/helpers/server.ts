@@ -69,6 +69,9 @@ export async function startTestServer(
     // A raised or cleared risk flag is announced beside the response too (tm
     // 302.2): the push, the webhook, the urgent mail.
     await app.riskFlags.idle();
+    // A refused `/auth/login` is recorded in the account's workspaces after
+    // its answer (tm 422), so that answer's timing names no account.
+    await app.loginFailures.idle();
     return response;
   };
 

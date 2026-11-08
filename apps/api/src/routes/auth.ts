@@ -62,6 +62,7 @@ import {
 } from '../services/security/abuse-guard.js';
 import { CAPTCHA_TOKEN_MAX_LENGTH } from '../services/security/captcha.js';
 import { OauthService, type Membership } from '../services/auth/oauth-service.js';
+import { LoginAttemptBudget, type LoginAdmission } from '../services/auth/login-attempts.js';
 import type { IssuedToken } from '../services/auth/token-service.js';
 import { badCode, TOTP_ISSUER, TwoFactorService } from '../services/auth/two-factor-service.js';
 import { readDigestRoles } from '../services/notifications/digest-settings.js';
@@ -305,7 +306,12 @@ const customerTokenBody = z.object({
  * global limit.
  */
 export const CUSTOMER_TOKEN_BODY_LIMIT = 16 * 1024;
-const customerTokenRoute = { config: { public: true }, bodyLimit: CUSTOMER_TOKEN_BODY_LIMIT };
+// Its own bucket per client network (tm 429), not the anonymous one sign-in
+// lives on — `plugins/rate-limit.ts`.
+const customerTokenRoute = {
+  config: { public: true, customerTokenRateLimit: true },
+  bodyLimit: CUSTOMER_TOKEN_BODY_LIMIT,
+};
 
 /**
  * The embedding page's address, when it can be believed: an http(s) URL on the
@@ -356,6 +362,12 @@ export default async function authRoutes(
   });
   const twoFactor = new TwoFactorService(app.db);
   const customerDirectory = new CustomerService();
+  // The password doors' budget per sign-in address (tm 422): the module has
+  // the rule, the two doors below share it.
+  const loginBudget = new LoginAttemptBudget(app.redis, {
+    limit: env.RATE_LIMIT_LOGIN_ACCOUNT_FAILURES,
+    windowMs: env.RATE_LIMIT_LOGIN_ACCOUNT_WINDOW_SECONDS * 1000,
+  });
 
   // Before any route is served: a workspace opened before this deployment's
   // address was known gains its console callback here, or `/auth/authorize`
@@ -656,16 +668,81 @@ export default async function authRoutes(
     }
   }
 
+  /**
+   * Take a slot of the sign-in address's password budget (tm 422 ·
+   * `services/auth/login-attempts.ts`), or refuse with 429 before the password
+   * is looked at. Both password doors call it once the request could be
+   * verified at all, so a malformed body or an unknown client spends nothing.
+   *
+   * Fails open when Redis is unreachable, like every tenant bucket: the
+   * anonymous bucket and the password itself do not depend on it.
+   */
+  async function admitPasswordAttempt(
+    request: FastifyRequest,
+    email: string,
+  ): Promise<Extract<LoginAdmission, { allowed: true }>> {
+    let admission: LoginAdmission;
+    try {
+      admission = await loginBudget.admit(email, request.ip);
+    } catch (error) {
+      request.log.error({ err: error }, 'sign-in attempt budget unavailable — allowing attempt');
+      return { allowed: true, rule: 'ordinary', resetMs: 0, attempt: null };
+    }
+    if (!admission.allowed) throw loginBudget.refusal(admission.resetMs);
+    return admission;
+  }
+
+  /** The password was right: its slot goes back and its network is remembered. */
+  async function passwordAccepted(
+    request: FastifyRequest,
+    admission: Extract<LoginAdmission, { allowed: true }>,
+  ): Promise<void> {
+    if (!admission.attempt) return;
+    try {
+      await loginBudget.succeeded(admission.attempt);
+    } catch (error) {
+      // The slot stays counted until the window passes — the direction a
+      // budget that bounds guessing should fail in.
+      request.log.error(
+        { err: error },
+        'sign-in attempt not handed back — counted until it expires',
+      );
+    }
+  }
+
+  /**
+   * The answer to a wrong password: 401, one message for an unknown address
+   * and a wrong password alike — or 429 when only the fresh-network rule let
+   * the attempt through, whose next attempt would be refused anyway.
+   */
+  function passwordRefused(admission: Extract<LoginAdmission, { allowed: true }>): ApiError {
+    if (admission.rule === 'fresh_network') return loginBudget.refusal(admission.resetMs);
+    return ApiError.authentication('Invalid email or password.');
+  }
+
   // --- POST /auth/login ------------------------------------------------------
 
   app.post('/auth/login', { config: { public: true } }, async (request, reply) => {
     const body = parse(loginBody, request.body);
 
-    const account = await oauth.authenticateAccount(body.email, body.password);
-    if (!account) {
-      // One message for "no such account" and "wrong password" alike.
-      throw ApiError.authentication('Invalid email or password.');
+    const admission = await admitPasswordAttempt(request, body.email);
+    const checked = await oauth.checkAccountPassword(body.email, body.password);
+    if (!checked.ok) {
+      // A registered address's workspaces record it (tm 422) — after this
+      // answer, not before it, so an unknown address and a wrong password
+      // still take the same time (`login-failure-trail.ts`).
+      if (checked.accountId !== null) {
+        app.loginFailures.record({
+          accountId: checked.accountId,
+          context: (licenseId) =>
+            request.auditContext({ licenseId, actorId: null, actorType: 'system' }),
+          log: request.log,
+        });
+      }
+      throw passwordRefused(admission);
     }
+    await passwordAccepted(request, admission);
+    const account = checked.account;
 
     const memberships = await oauth.listMemberships(account.id);
     // Whether a code will be demanded at `/auth/authorize` (NFR-S11 ·
@@ -748,11 +825,15 @@ export default async function authRoutes(
       throw ApiError.validation('redirect_uri is not registered for this client.');
     }
 
+    // The same budget as `/auth/login` (tm 422): the two doors take the same
+    // email and password, so one spent budget closes both.
+    const admission = await admitPasswordAttempt(request, body.email);
     const account = await oauth.authenticateAccount(body.email, body.password);
     if (!account) {
       await recordLoginFailure(request, client.organization_id);
-      throw ApiError.authentication('Invalid email or password.');
+      throw passwordRefused(admission);
     }
+    await passwordAccepted(request, admission);
 
     const licenseId = BigInt(body.license_id);
     const memberships = await oauth.listMemberships(account.id);

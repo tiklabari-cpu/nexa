@@ -24,7 +24,10 @@ login:
       One 401 for an unknown address, a wrong password and a disabled
       operator. Ten failed attempts from one address within fifteen minutes
       close this route for that address for the rest of the window, a correct
-      password included (429).
+      password included (429). That count lives in Redis; when it cannot be
+      read the attempt is refused with 503 `rate_limit_unavailable` before the
+      password is compared (tm 452) — so are the second-factor routes and the
+      invitation acceptance.
     security: []
     requestBody:
       required: true
@@ -41,6 +44,7 @@ login:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503": { $ref: "../openapi.yaml#/components/responses/RateLimitUnavailable" }
 
 totpEnroll:
   post:
@@ -95,6 +99,7 @@ totpActivate:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503": { $ref: "../openapi.yaml#/components/responses/RateLimitUnavailable" }
 
 totpVerify:
   post:
@@ -124,6 +129,7 @@ totpVerify:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503": { $ref: "../openapi.yaml#/components/responses/RateLimitUnavailable" }
 
 totpReverify:
   post:
@@ -151,6 +157,7 @@ totpReverify:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503": { $ref: "../openapi.yaml#/components/responses/RateLimitUnavailable" }
 
 recoveryRegenerate:
   post:
@@ -308,3 +315,4 @@ inviteAccept:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503": { $ref: "../openapi.yaml#/components/responses/RateLimitUnavailable" }

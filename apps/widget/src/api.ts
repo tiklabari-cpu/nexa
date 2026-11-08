@@ -374,20 +374,57 @@ export class WidgetApi {
   }
 
   async connect(): Promise<WidgetState> {
+    await this.#mintOnce(false);
+    return this.state();
+  }
+
+  /** `#mint`, tracked so `forget` can let it land; `fresh` skips the tab's kept mint. */
+  async #mintOnce(fresh: boolean): Promise<void> {
     // Signed out (`forget`): the next visitor gets a fresh instance in a
     // fresh document — this one must not mint for them, not even on a 401.
     if (this.#forgotten) throw new WidgetApiError('signed out');
-    const minting = this.#mint();
+    const minting = this.#mint(fresh);
     this.#minting = minting;
     try {
       await minting;
     } finally {
       if (this.#minting === minting) this.#minting = null;
     }
-    return this.state();
   }
 
-  async #mint(): Promise<void> {
+  /**
+   * Where this tab keeps its last mint (tm 429): per workspace, per embedding
+   * site — the brand being the site's — and per snippet language, which picks
+   * the brand's texts the mint hands over.
+   */
+  #sessionKey(): string {
+    return `${SESSION_PREFIX}${this.organizationId.toLowerCase()}|${this.hostOrigin ?? ''}|${this.localeHints.language ?? ''}`;
+  }
+
+  async #mint(fresh: boolean): Promise<void> {
+    // A page change in the same tab (tm 429): the token minted on the last
+    // page, and everything that came with it, answers this one too — each
+    // page load minting again spent a budget per address, and behind one
+    // office NAT ten visitors browsing locked the widget out. Not when the
+    // page has just signed a member in (`identify`): that is for the server
+    // to check, so it mints. Nor after a 401 (`fresh`).
+    if (!fresh && this.pageHints.identity === undefined) {
+      const kept = keptSession(this.#sessionKey());
+      if (kept) {
+        this.#adopt(kept);
+        // The page view the mint would have recorded (EN-04), so a "current
+        // page" campaign still sees the visitor move. Best-effort.
+        const { host_url: url, host_referrer: referrer } = this.pageHints;
+        if (url) {
+          this.#request('POST', '/customer/visit', {
+            url,
+            ...(referrer ? { referrer } : {}),
+          }).catch(() => undefined);
+        }
+        return;
+      }
+    }
+
     const keys = storageKeys(this.organizationId);
     // Read only by a workspace this browser has not met under its own keys
     // yet: whatever a widget from before tm 287.3 left in the shared slot.
@@ -427,50 +464,9 @@ export class WidgetApi {
       return attempt;
     });
 
-    const {
-      token,
-      customer_id,
-      member_token,
-      rtm_url,
-      widget,
-      file_sharing_enabled,
-      campaign_tracking,
-      prechat,
-      pre_chat_form,
-      post_chat_form,
-      ticket_form,
-      prospect_form,
-      widget_phrases,
-    } = (await response.json()) as {
-      token: string;
-      customer_id: string;
-      member_token?: string;
-      rtm_url?: string;
-      widget?: MintedAppearance;
-      file_sharing_enabled?: boolean;
-      campaign_tracking?: boolean;
-      prechat?: unknown;
-      pre_chat_form?: WidgetFormField[];
-      post_chat_form?: WidgetFormField[];
-      ticket_form?: WidgetFormField[];
-      prospect_form?: WidgetFormField[];
-      widget_phrases?: MintedPhrases;
-    };
-    this.#token = token;
-    this.#rtmUrl = typeof rtm_url === 'string' && rtm_url !== '' ? rtm_url : null;
-    if (widget) {
-      this.#appearance = widget;
-      rememberLauncher(this.organizationId, widget.launcher_visibility);
-    }
-    if (typeof file_sharing_enabled === 'boolean') this.#fileSharingEnabled = file_sharing_enabled;
-    this.#campaignTracking = campaign_tracking === true;
-    this.#prechat = normalizePrechatConfig(prechat);
-    this.#preChatForm = Array.isArray(pre_chat_form) ? pre_chat_form : [];
-    this.#postChatForm = Array.isArray(post_chat_form) ? post_chat_form : [];
-    this.#ticketForm = Array.isArray(ticket_form) ? ticket_form : [];
-    this.#prospectForm = Array.isArray(prospect_form) ? prospect_form : [];
-    this.#phrases =
-      widget_phrases && typeof widget_phrases.phrases === 'object' ? widget_phrases : null;
+    const minted = (await response.json()) as MintBody;
+    const { customer_id, member_token } = minted;
+    this.#adopt(minted);
     // Absent exactly when the cookie carried the token: it then lives only
     // where no script can read it, and the copy here goes. Present otherwise —
     // the fallback for a browser that would not keep that cookie.
@@ -487,6 +483,45 @@ export class WidgetApi {
       safeRemoveItem(LEGACY_MEMBER_TOKEN_KEY);
       safeRemoveItem(LEGACY_CUSTOMER_ID_KEY);
     }
+    // Kept for the tab's next pages (tm 429) — unless this browser presented
+    // no member token and was just handed one in the body: whether the cookie
+    // took it is learned only from the next mint, which deletes the copy above
+    // when it did. So a first visit's second page mints once more; after that
+    // the question is settled either way and the mint is kept.
+    if (memberToken !== null || typeof member_token !== 'string' || member_token === '') {
+      keepSession(this.#sessionKey(), minted);
+    }
+  }
+
+  /** Take on what a mint answered — fresh, or the one this tab kept (tm 429). */
+  #adopt({
+    token,
+    rtm_url,
+    widget,
+    file_sharing_enabled,
+    campaign_tracking,
+    prechat,
+    pre_chat_form,
+    post_chat_form,
+    ticket_form,
+    prospect_form,
+    widget_phrases,
+  }: MintBody): void {
+    this.#token = token;
+    this.#rtmUrl = typeof rtm_url === 'string' && rtm_url !== '' ? rtm_url : null;
+    if (widget) {
+      this.#appearance = widget;
+      rememberLauncher(this.organizationId, widget.launcher_visibility);
+    }
+    if (typeof file_sharing_enabled === 'boolean') this.#fileSharingEnabled = file_sharing_enabled;
+    this.#campaignTracking = campaign_tracking === true;
+    this.#prechat = normalizePrechatConfig(prechat);
+    this.#preChatForm = Array.isArray(pre_chat_form) ? pre_chat_form : [];
+    this.#postChatForm = Array.isArray(post_chat_form) ? post_chat_form : [];
+    this.#ticketForm = Array.isArray(ticket_form) ? ticket_form : [];
+    this.#prospectForm = Array.isArray(prospect_form) ? prospect_form : [];
+    this.#phrases =
+      widget_phrases && typeof widget_phrases.phrases === 'object' ? widget_phrases : null;
   }
 
   /**
@@ -735,13 +770,23 @@ export class WidgetApi {
     await this.#request('POST', '/customer/events', input);
   }
 
-  async #request<T>(method: string, path: string, body?: unknown, keepalive?: boolean): Promise<T> {
-    if (!this.#token) throw new WidgetApiError('not connected');
+  async #request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    keepalive?: boolean,
+    retried?: boolean,
+  ): Promise<T> {
+    // A 401 elsewhere may be re-minting right now (tm 429): wait for it
+    // rather than call this tab not connected.
+    if (!this.#token) await this.#minting?.catch(() => undefined);
+    const sent = this.#token;
+    if (!sent) throw new WidgetApiError('not connected');
 
     const response = await fetch(`${this.baseUrl}${path}`, {
       method,
       headers: {
-        authorization: `Bearer ${this.#token}`,
+        authorization: `Bearer ${sent}`,
         ...(body === undefined ? {} : { 'content-type': 'application/json' }),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -749,12 +794,20 @@ export class WidgetApi {
       ...(keepalive ? { keepalive } : {}),
     });
 
-    if (response.status === 401) {
-      // The token expired mid-session. Re-mint and retry once, so a visitor who
-      // left the tab open overnight is not silently unable to reply.
-      this.#token = null;
-      await this.connect();
-      return this.#request<T>(method, path, body, keepalive);
+    if (response.status === 401 && !retried) {
+      // The token expired mid-session, or the one this tab kept is no longer
+      // good (tm 429). Re-mint — past the kept one — and retry once, so a
+      // visitor who left the tab open overnight is not silently unable to
+      // reply. Once: a second 401 is the answer. A request whose token was
+      // already replaced (another 401 got here first) waits for that mint.
+      if (this.#token === sent) {
+        this.#token = null;
+        dropSession(this.#sessionKey());
+        await this.#mintOnce(true);
+      } else {
+        await this.#minting;
+      }
+      return this.#request<T>(method, path, body, keepalive, true);
     }
     if (!response.ok) throw await failure(response);
     if (response.status === 204) return undefined as T;
@@ -903,6 +956,82 @@ function forgetStoredIdentities(): void {
     }
   } catch {
     // Storage that cannot be read holds nothing to forget.
+  }
+  // …and the mints this tab kept (tm 429), whose tokens speak for them too.
+  try {
+    for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
+      const key = sessionStorage.key(index);
+      if (key?.startsWith(SESSION_PREFIX)) sessionStorage.removeItem(key);
+    }
+  } catch {
+    // As above.
+  }
+}
+
+/** What `POST /customer/token` answers, as far as the widget reads it. */
+interface MintBody {
+  token: string;
+  expires_in?: number;
+  customer_id: string;
+  member_token?: string;
+  rtm_url?: string;
+  widget?: MintedAppearance;
+  file_sharing_enabled?: boolean;
+  campaign_tracking?: boolean;
+  prechat?: unknown;
+  pre_chat_form?: WidgetFormField[];
+  post_chat_form?: WidgetFormField[];
+  ticket_form?: WidgetFormField[];
+  prospect_form?: WidgetFormField[];
+  widget_phrases?: MintedPhrases;
+}
+
+/**
+ * The tab's kept mint (tm 429): sessionStorage, so it dies with the tab and
+ * no other tab or site reads it. Reused for half an hour at most, and never
+ * within a minute of the token's expiry: the mint also carries the
+ * workspace's appearance, forms and campaigns, and half an hour is how stale
+ * an open tab may see them. A storage that refuses (private modes) keeps
+ * nothing, and every page mints as before.
+ */
+const SESSION_PREFIX = 'siyahtus.session.';
+const SESSION_REUSE_MS = 30 * 60_000;
+const SESSION_EXPIRY_MARGIN_MS = 60_000;
+
+function keptSession(key: string): MintBody | null {
+  try {
+    const kept = JSON.parse(sessionStorage.getItem(key) ?? 'null') as {
+      until?: unknown;
+      body?: MintBody;
+    } | null;
+    return kept && Number(kept.until) > Date.now() && typeof kept.body?.token === 'string'
+      ? kept.body
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function keepSession(key: string, minted: MintBody): void {
+  // Without its lifetime the token cannot be kept safely; the next page mints.
+  if (typeof minted.expires_in !== 'number') return;
+  // The member token is a credential the cookie keeps where no script reads
+  // it; a copy here would undo that, and a kept mint has no use for it.
+  const body = { ...minted, member_token: undefined };
+  const until =
+    Date.now() + Math.min(minted.expires_in * 1000 - SESSION_EXPIRY_MARGIN_MS, SESSION_REUSE_MS);
+  try {
+    sessionStorage.setItem(key, JSON.stringify({ until, body }));
+  } catch {
+    // Not kept: the next page mints, as before.
+  }
+}
+
+function dropSession(key: string): void {
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    // Nothing kept, nothing to drop.
   }
 }
 

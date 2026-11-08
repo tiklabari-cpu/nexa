@@ -211,6 +211,15 @@ export const ERROR_TYPES = [
   // mail transcripts, the workspace's rule refused this recipient, and the
   // modal answers "pick an allowed address" rather than "you lack permission".
   'recipient_not_allowed',
+  // SiyahTuş addition — the root panel's sign-in (tm 452 · audit F31). The
+  // operator sign-in and the second-factor code count every attempt in Redis;
+  // when that count cannot be read the attempt is refused rather than let
+  // through uncounted, because a password holder could otherwise try codes
+  // without end. 503: nothing was wrong with the request, the budget it must
+  // pass is unreachable for a moment. Not `service_unavailable` — the screen
+  // says "sign-in is paused", not "the service is down". The tenant API's
+  // buckets still fail open.
+  'rate_limit_unavailable',
   // SiyahTuş addition — who may answer the customer (tm 475 · owner decision
   // 2026-11-06). A message the customer would see, from a teammate the open
   // connection is not assigned to: nobody has it (`details.reason`
@@ -348,6 +357,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   platform_recent_totp_required: 403,
   platform_totp_required: 403,
   platform_workspace_state: 409,
+  rate_limit_unavailable: 503,
   recipient_not_allowed: 403,
   reply_requires_assignment: 409,
   request_timeout: 408,

@@ -17,7 +17,19 @@ login:
 
       Responds identically whether the email is unknown or the password is
       wrong, and always spends the same time, so registered addresses cannot be
-      enumerated.
+      enumerated. A wrong password for a registered address is recorded as
+      `auth.login_failed` in each of the account's workspaces (target
+      `account:<id>`, no address or password in the entry) after the answer, so
+      the recording takes none of that time (tm 422).
+
+      Wrong passwords are counted per sign-in address — the email, registered
+      or not — on top of the anonymous per-network bucket, and together with
+      `/auth/authorize`: `RATE_LIMIT_LOGIN_ACCOUNT_FAILURES` (10) within
+      `RATE_LIMIT_LOGIN_ACCOUNT_WINDOW_SECONDS` (15 minutes). Spent, it
+      answers 429 to the networks that spent it, before the password is looked
+      at; a network the account last signed in from keeps its own allowance, and
+      a network that has not tried this address gets one attempt (a wrong one is
+      a 429 too) while the failures stay under twice the limit (tm 422).
 
       A workspace that requires single sign-on (NFR-S11) still appears in the
       list, annotated rather than hidden: `password_login_available` is false and
@@ -152,6 +164,10 @@ authorize:
       simply wrong is `authentication`, so a client can tell "ask again" from
       "ask for something else". Attempts are budgeted per account
       (`RATE_LIMIT_TWO_FACTOR_PER_HOUR`), and running out is a 429.
+
+      The password itself answers to the same per-address budget as
+      `/auth/login` (tm 422): one count for both doors, a 429 before the
+      password is looked at for a network that spent it.
 
       The `enrollment_required` refusal also carries `details.enrollment_ticket`
       (S11-2FA-k): a short-lived bearer credential that reaches
@@ -966,7 +982,12 @@ customerToken:
     summary: Mint a widget (customer) token
     description: |
       Called by the widget on load. The token is scoped to one organization and
-      grants nothing outside the Customer Chat API.
+      grants nothing outside the Customer Chat API. The widget keeps it for the
+      tab and does not mint again on the next page (tm 429).
+
+      Metered on its own bucket per client network (an IPv4 address, an IPv6
+      /64): `RATE_LIMIT_CUSTOMER_TOKEN_PER_MIN` (120), not the anonymous one
+      sign-in lives on, whatever credential the request carries (tm 429).
 
       The embedding page's origin must be a trusted domain for the organization
       (NFR-S6). It arrives as `host_origin`, because the request is made from

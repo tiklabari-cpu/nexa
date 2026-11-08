@@ -101,8 +101,10 @@ failedLogins:
     summary: Failed sign-ins, tenants and operators
     description: |
       Three views. `tenant.live` is the pre-authentication failure budget
-      (`rl:authfail:<ip>`, a 60-second window in Redis) read without spending
-      it: which addresses are failing now, and which are locked out.
+      (`rl:authfail:<network>`, a 60-second window in Redis) read without
+      spending it: which addresses are failing now, and which are locked out.
+      Since tm 422 the budget is kept per client network, so `ip` is an IPv4
+      address or an IPv6 /64 (`2001:db8:1:2::/64`).
       `tenant.history` is the workspaces' own trail (`auth.login_failed`) over
       the last `hours`, by address and by workspace. `operator` is this
       panel's own `admin.sign_in_failed` / `admin.totp_failed` entries over

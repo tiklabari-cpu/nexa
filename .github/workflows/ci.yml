@@ -335,6 +335,11 @@ jobs:
       # And the hourly per-network sign-up limit (tm 257.14, default 10): the
       # suites sign up from this one address many times an hour.
       RATE_LIMIT_SIGNUP_PER_HOUR: '10000'
+      # The widget's token mint has its own bucket since tm 429, and the password
+      # doors a budget per sign-in address since tm 422 — the suites mint and
+      # mistype from this one address too.
+      RATE_LIMIT_CUSTOMER_TOKEN_PER_MIN: '500'
+      RATE_LIMIT_LOGIN_ACCOUNT_FAILURES: '10000'
 
     steps:
       - uses: actions/checkout@v4

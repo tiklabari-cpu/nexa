@@ -190,19 +190,37 @@ export class OauthService {
     email: string,
     password: string,
   ): Promise<{ id: string; email: string; name: string } | null> {
+    const checked = await this.checkAccountPassword(email, password);
+    return checked.ok ? checked.account : null;
+  }
+
+  /**
+   * `authenticateAccount`, telling a refusal's caller which account the
+   * address belongs to (null when none does) — for the audit trail of a
+   * refused `/auth/login` (tm 422), which records it in that account's
+   * workspaces. Never for the answer: an unknown address and a wrong password
+   * are one refusal to the caller.
+   */
+  async checkAccountPassword(
+    email: string,
+    password: string,
+  ): Promise<
+    | { ok: true; account: { id: string; email: string; name: string } }
+    | { ok: false; accountId: string | null }
+  > {
     const rows = await this.db.$queryRaw<
       Array<{ id: string; email: string; name: string; password_hash: string | null }>
     >`SELECT * FROM auth_find_account_for_login(${email}::citext)`;
 
     const account = rows[0];
     const matches = await verifyPassword(password, account?.password_hash ?? null);
-    if (!account || !matches) return null;
+    if (!account || !matches) return { ok: false, accountId: account?.id ?? null };
     // After the password, so the refusal tells nothing to anybody who has not
     // proved it; here rather than at each route, because every password
     // sign-in — the workspace list and the authorization alike — comes through.
     if (await this.isAccountSuspended(account.id)) throw accountSuspendedError();
 
-    return { id: account.id, email: account.email, name: account.name };
+    return { ok: true, account: { id: account.id, email: account.email, name: account.name } };
   }
 
   /**

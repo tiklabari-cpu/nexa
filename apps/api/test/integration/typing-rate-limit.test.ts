@@ -179,18 +179,22 @@ describe('visitor typing preview — its own rate limit buckets (tm 417.3)', () 
       expect(await windowSize(server, 'rl:customertypingip:*')).toEqual([1]);
       expect(await server.app.redis.zcard(`rl:customertypingchat:${chat.chatId}`)).toBe(1);
       expect(await windowSize(server, 'rl:customer:*')).toEqual(before);
-      expect(await server.app.redis.keys('rl:anon:*')).toHaveLength(1); // the mint
+      // The mint is on its own bucket (tm 429), and nothing on the anonymous one.
+      expect(await server.app.redis.keys('rl:custtoken:*')).toHaveLength(1);
+      expect(await server.app.redis.keys('rl:anon:*')).toEqual([]);
     });
   });
 
   it('keeps a draft without a good token on the anonymous bucket', async () => {
     await withServer({ RATE_LIMIT_ANON_PER_MIN: '3' }, async (server) => {
-      const good = await visitor(server); // 1 of the address's anonymous 3
+      // The mint has its own bucket (tm 429): none of the address's anonymous 3.
+      const good = await visitor(server);
       const [body, signature] = good.token.split('.').slice(1);
       const forged = { authorization: `Bearer nxc1.${body}.${signature!.slice(1)}x` };
 
       expect((await typing(server, forged)).statusCode).toBe(401);
       expect((await typing(server, {})).statusCode).toBe(401);
+      expect((await typing(server, forged)).statusCode).toBe(401);
       expectRefusal(await typing(server, forged), '3');
 
       // A forged token names nobody, so it bought no typing budget of its own.

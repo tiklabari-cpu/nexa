@@ -12,9 +12,12 @@ import type { SocketAuthenticator } from './auth.js';
 import type { Connection, ConnectionRegistry } from './connection.js';
 import { Dispatcher } from './dispatcher.js';
 import {
+  cursorsWithinBounds,
   hasMoreKeysThan,
   MAX_LOGIN_PUSHES,
   MAX_PUSH_VERSIONS,
+  MAX_SYNC_CHAT_ID_LENGTH,
+  MAX_SYNC_EVENT_ID_LENGTH,
   pushesWithinBounds,
 } from './input-bounds.js';
 import type { DecodedRequest } from './protocol.js';
@@ -154,5 +157,68 @@ describe('Dispatcher — customer socket bounds (tm 419)', () => {
     await instance.dispatch(connection('customer', true), request('sync', { cursors }));
 
     expect(sync).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a sync whose cursor key no chat id could be — not echoed back, no chat read (tm 428 · NFR-S8)', async () => {
+    const { instance, sync } = dispatcher();
+    // What the echo was for: a kilobyte per key came back in `removed_chat_ids`.
+    const longKey = `ECHO${'K'.repeat(1020)}`;
+    const frame = await instance.dispatch(
+      connection('customer', true),
+      request('sync', { cursors: { TJ1H8CFKRV: null, [longKey]: null } }),
+    );
+
+    expect(errorOf(frame)).toMatchObject({
+      type: 'validation',
+      message: `sync cursors name a chat in at most ${MAX_SYNC_CHAT_ID_LENGTH} characters and an event in at most ${MAX_SYNC_EVENT_ID_LENGTH}.`,
+    });
+    expect(frame).not.toContain('ECHO');
+    expect(sync).not.toHaveBeenCalled();
+  });
+
+  it('refuses a sync whose cursor value no event id could be', async () => {
+    const { instance, sync } = dispatcher();
+    const frame = await instance.dispatch(
+      connection('agent', true),
+      request('sync', { cursors: { TJ1H8CFKRV: `TJ1H8CFKRV_${'9'.repeat(40)}` } }),
+    );
+
+    expect(errorOf(frame)?.type).toBe('validation');
+    expect(sync).not.toHaveBeenCalled();
+  });
+
+  it('syncs cursors at the bounds', async () => {
+    const { instance, sync } = dispatcher();
+    await instance.dispatch(
+      connection('customer', true),
+      request('sync', {
+        cursors: { ['C'.repeat(MAX_SYNC_CHAT_ID_LENGTH)]: 'E'.repeat(MAX_SYNC_EVENT_ID_LENGTH) },
+      }),
+    );
+
+    expect(sync).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('cursorsWithinBounds (tm 428)', () => {
+  it('holds the bounds to the id columns: chats.id varchar(12), events.id varchar(40)', () => {
+    expect(MAX_SYNC_CHAT_ID_LENGTH).toBe(12);
+    expect(MAX_SYNC_EVENT_ID_LENGTH).toBe(40);
+  });
+
+  it('takes keys up to a chat id and string values up to an event id; any other value is "no cursor"', () => {
+    expect(cursorsWithinBounds({})).toBe(true);
+    expect(cursorsWithinBounds({ TJ1H8CFKRV: 'TJ1H8CFKRV_7', ABCDEFGHJKMN: null })).toBe(true);
+    expect(cursorsWithinBounds({ TJ1H8CFKRV: 7, X: { nested: 'x'.repeat(100) } })).toBe(true);
+  });
+
+  it('refuses one character past either bound', () => {
+    expect(cursorsWithinBounds({ ['C'.repeat(MAX_SYNC_CHAT_ID_LENGTH + 1)]: null })).toBe(false);
+    expect(cursorsWithinBounds({ C: 'E'.repeat(MAX_SYNC_EVENT_ID_LENGTH + 1) })).toBe(false);
+  });
+
+  it('reads own keys only', () => {
+    const inherited = Object.create({ ['C'.repeat(100)]: null }) as object;
+    expect(cursorsWithinBounds(inherited)).toBe(true);
   });
 });

@@ -827,7 +827,8 @@ core, with the NFR-P1 fan-out budget holding to **~6000 recipients per broadcast
 which acceptance and fan-out start competing for the one JS thread and the cost shows up as
 latency for everyone already connected rather than as a refusal. Those are that machine's
 numbers under one tenant. Measure yours and set it from that; capacity past a single pod is
-a horizontal-scale question, not a ceiling question.
+a horizontal-scale question, not a ceiling question. The pilot template sets `1000` until its
+host is measured (tm 427 — the reasoning is beside the key in `.env.production.example`).
 
 A client refused this way reconnects on the usual jittered exponential backoff (500ms
 doubling to 15s, `apps/web/src/lib/realtime.ts`) rather than immediately — a shedding
@@ -870,6 +871,43 @@ Both pilot edges send it straight to rtm, one hop like the api's. If it is too l
 visitor collapses onto the proxy's address and this becomes a global pre-login cap. Then
 fix the count rather than turning the cap off. A load generator on one machine is one
 address: see `apps/load/README.md`.
+
+### `RTM_MAX_SOCKETS_PER_CUSTOMER` and `RTM_MAX_CUSTOMER_SOCKETS_PER_IP` — visitor sockets once logged in
+
+The pre-login cap above lets go of a socket the moment it logs in. A member's socket is
+then bounded by the credential somebody in the workspace issued, but a visitor token is
+minted for anyone who loads a page with the widget and costs the gateway nothing to check,
+so one token could open socket after socket and keep them all (tm 427). Two caps hold a
+visitor's sockets from the login on:
+
+- **per visitor** (`RTM_MAX_SOCKETS_PER_CUSTOMER`, unset `5`): the widget holds one socket per
+  tab, so this is how many tabs of one visitor are live at once;
+- **per client network** (`RTM_MAX_CUSTOMER_SOCKETS_PER_IP`, unset `50`): visitor sockets from
+  one IPv4 address or IPv6 /64 — the network the pre-login cap counts — however many
+  visitors it mints. An office, a school or a carrier's shared address with more visitors
+  than this at the same moment, across every site this gateway serves, is the cost.
+
+Past either, the login is answered `too_many_requests` with
+`{"details":{"reason":"socket_limit_reached"}}` (the reason, never the number) and the socket
+is closed with 1013, "try again later". The widget treats that like any refused login: that
+tab stays on its poll and retries on its backoff, so the visitor sees nothing. Member and bot
+sockets are never counted. The first refusal of an episode logs one `warn` line
+(`customer_id`, `client_network`, `limit`: `customer` or `network`); every refusal is counted
+on `rtm.connections.closed{reason=socket_limit}`. `0` turns a cap off.
+
+### `RTM_MAX_BUFFERED_BYTES` — a socket that stops reading
+
+`ws.send` never refuses: what the peer has not read waits in this process's memory, and a
+client that keeps asking (`sync`) or keeps being pushed to while never reading its end of
+the connection grew that without limit (tm 428). Before every write the gateway reads the
+socket's unsent bytes; past this many (unset 1 MiB) it stops writing to that socket and
+closes it with 1013, one `warn` line (`buffered_bytes`, `max_buffered_bytes`) and
+`rtm.connections.closed{reason=slow_consumer}`. Nothing already written is dropped — the
+close frame queues behind it — and every client reconnects on a close it did not ask for,
+whereupon its `sync` reads from the database what the socket did not carry. `0` turns it
+off; a value below 65536 is refused, because the draft preview starts holding frames for a
+congested socket at 64 KiB and the socket must not be closed before that can begin. Every
+write in `apps/rtm/src` goes through `socket-writer.ts`; a test holds that line.
 
 ### `APPS_LIVE_PROVIDERS` — Apps cards that talk to the real provider
 

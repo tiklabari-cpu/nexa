@@ -373,7 +373,19 @@ export default defineConfig({
       // set an agent offline two minutes after their spec closed its page would
       // hand the next spec a workspace with nobody accepting chats. Proven in
       // `apps/rtm/test/integration/presence.test.ts` at a 600 ms tolerance.
-      env: { ...process.env, RTM_PORT: String(PORTS.rtm), RTM_DISCONNECT_OFFLINE_MS: '0' },
+      //
+      // And no post-login visitor caps (tm 427), for the reason the API's
+      // per-address budgets are raised above: every visitor this suite opens
+      // shares 127.0.0.1, and a spec that opens one visitor in several pages
+      // must not find the next one on the poll. Proven in
+      // `apps/rtm/test/integration/customer-socket-limit.test.ts`.
+      env: {
+        ...process.env,
+        RTM_PORT: String(PORTS.rtm),
+        RTM_DISCONNECT_OFFLINE_MS: '0',
+        RTM_MAX_SOCKETS_PER_CUSTOMER: '0',
+        RTM_MAX_CUSTOMER_SOCKETS_PER_IP: '0',
+      },
     },
     {
       // On a private stack the panel's relative `/api/v1` goes through Vite's

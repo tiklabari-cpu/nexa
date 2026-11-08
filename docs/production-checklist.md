@@ -664,6 +664,9 @@ value left at its default is a decision too, and the defaults are deliberately c
 | `TRIAL_DAYS`                              | Trial length of workspaces that sign up from now on                                | 14        | Default                                              |
 | `RTM_MAX_CONNECTIONS`                     | WebSocket connections one rtm process holds before it refuses upgrades with a 503  | unlimited | See below                                            |
 | `RTM_MAX_PRELOGIN_PER_IP`                 | Sockets one IPv4 address or IPv6 /64 may hold before login; past it a 429 (tm 409) | 50        | Default; `0` turns it off                            |
+| `RTM_MAX_SOCKETS_PER_CUSTOMER`            | Logged-in sockets one visitor may hold (one per widget tab); past it a 1013 close  | 5         | Default; `0` turns it off                            |
+| `RTM_MAX_CUSTOMER_SOCKETS_PER_IP`         | Logged-in visitor sockets one IPv4 address or IPv6 /64 may hold (tm 427)           | 50        | Default; `0` turns it off                            |
+| `RTM_MAX_BUFFERED_BYTES`                  | Unsent bytes a socket may hold before it is closed as a slow consumer (tm 428)     | 1048576   | Default                                              |
 
 - [ ] `MAIL_DAILY_GLOBAL` is set under the mail account's own daily sending limit, which is in the
       provider's terms and is the owner's to read. A provider that suspends the mailbox stops every
@@ -694,8 +697,10 @@ value left at its default is a decision too, and the defaults are deliberately c
       unlimited, which is the gateway's old behaviour and not a decision. The repository measured at
       least 8000 sockets on one laptop core, with the fan-out budget holding to about 6000
       recipients per broadcast (PLAN §D127) — that machine's numbers, not a constant. Above the
-      ceiling an upgrade is refused with 503 `connection_limit_reached`. The template carries a
-      commented suggestion line.
+      ceiling an upgrade is refused with 503 `connection_limit_reached`. The template sets `1000`
+      until the host is measured (tm 427: a few workspaces need a few hundred sockets, and at the
+      1 MiB slow-consumer limit a full gateway holds at most about 1 GiB of unsent frames); measure
+      this host and raise it.
 - [ ] `docker compose -f docker-compose.pilot.yml exec db psql -U siyahtus -d siyahtus -c "SELECT count(*) FROM accounts WHERE email_verified_at IS NULL"`
       is a number to look at once a day in the first week: a count that only grows means the
       verification mail is not arriving (**Mail authentication**), or a script is signing up.
@@ -989,8 +994,8 @@ Open, not fixed by this checklist (tm 255.16, re-checked at the tm 256 closing g
   limit for everybody.
 - RTM's `/health` has no rate ceiling (PLAN §D137), and the tunnel makes it reachable from the
   internet.
-- `RTM_MAX_CONNECTIONS` unset means no connection ceiling. Set it (**Sign-up, caps and abuse
-  limits**).
+- `RTM_MAX_CONNECTIONS` is the template's `1000`, not a measurement of this host (**Sign-up, caps
+  and abuse limits**).
 - Manual activation (`POST /workspaces/{licenseId}/activate`, platform) writes the `workspace.activated`
   audit entry and lifts `past_due`/`read_only` to `active`; it refuses a suspended or
   cancelled workspace.

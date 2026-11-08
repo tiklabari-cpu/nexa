@@ -77,6 +77,25 @@ export interface SocketImpersonation {
   endsAt: Date;
 }
 
+/** The two doors a socket can be opened at (`RTM_PATHS`), fixed by the upgrade URL. */
+export type SocketSide = 'agent' | 'customer';
+
+/**
+ * Whether a principal may hold a socket opened at `side` (tm 425).
+ *
+ * The door is chosen by the URL and the principal by the credential, and until
+ * tm 425 nothing held the two together: a visitor's token logged in at the agent
+ * door and was addressed as an agent — `allAgents` pushes (routing status,
+ * traffic, AI configuration) reached it. The agent door takes the principals
+ * that work in the workspace: a member — whether the member's own session or an
+ * operator signed in as them (tm 389.15), both of which log in as `agent` — and
+ * a bot. The mobile app dials the agent door too. The customer door takes a
+ * visitor and nobody else.
+ */
+export function principalFitsSide(kind: SocketPrincipal['kind'], side: SocketSide): boolean {
+  return side === 'customer' ? kind === 'customer' : kind === 'agent' || kind === 'bot';
+}
+
 /** The identity half of a log line written for this principal (ID-08 · `LOG_KEYS`). */
 export function principalLogContext(principal: SocketPrincipal): LogContext {
   return {
@@ -98,7 +117,10 @@ export type AuthFailure =
   // A genuine credential of a workspace the platform suspended (tm 389.2) —
   // answered like the REST edge answers it, `not_allowed` +
   // `workspace_suspended`, so the panel shows the same screen on both.
-  | 'workspace_suspended';
+  | 'workspace_suspended'
+  // A credential presented at the other side's door (tm 425): a visitor token
+  // at the agent socket, or anything else at the customer socket.
+  | 'side_mismatch';
 
 /**
  * A refusal, and — for the one refusal that is not about the credential —
@@ -178,14 +200,26 @@ export class SocketAuthenticator {
    * token. Without that check a valid token could be used on a socket opened
    * for a different tenant, and every subsequent audience filter — which keys
    * on the connection's organization — would be evaluated against the wrong one.
+   *
+   * `side` is the door the socket was opened at (tm 425). Which family a token
+   * belongs to decides which door it fits, and that is settled before the token
+   * is checked at all: a visitor token is refused at the agent door, anything
+   * else at the customer door. The customer door is anyone's for a minted
+   * token, so an opaque string sent there no longer costs a database round trip
+   * either. The dispatcher checks the resolved principal against the door again
+   * (`principalFitsSide`).
    */
-  async authenticate(rawToken: string, organizationId: string): Promise<AuthResult> {
+  async authenticate(
+    rawToken: string,
+    organizationId: string,
+    side: SocketSide,
+  ): Promise<AuthResult> {
     const token = rawToken.replace(/^Bearer\s+/i, '').trim();
     if (!token) return { ok: false, reason: 'malformed' };
 
-    if (token.startsWith(`${CUSTOMER_PREFIX}.`)) {
-      return this.#authenticateCustomer(token, organizationId);
-    }
+    const customerShaped = token.startsWith(`${CUSTOMER_PREFIX}.`);
+    if (customerShaped !== (side === 'customer')) return { ok: false, reason: 'side_mismatch' };
+    if (customerShaped) return this.#authenticateCustomer(token, organizationId);
     return this.#authenticateAgent(token, organizationId);
   }
 

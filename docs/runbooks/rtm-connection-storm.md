@@ -45,6 +45,18 @@
    - `server_shutdown` on every closed socket means this is a deploy/rolling
      restart, not an incident — check for one in progress before treating it
      as a storm.
+   - `socket_limit` means visitor sockets are being turned away at login by
+     `RTM_MAX_SOCKETS_PER_CUSTOMER` / `RTM_MAX_CUSTOMER_SOCKETS_PER_IP`
+     (tm 427): one token or one network opening socket after socket. The
+     `warn` line "rtm visitor socket limit reached" names the `client_network`
+     and which `limit` it hit, once per episode.
+   - `slow_consumer` means sockets whose peers stopped reading were closed at
+     `RTM_MAX_BUFFERED_BYTES` (tm 428) — a client that requests or receives
+     without reading, or a network so congested it cannot keep up. Each one
+     logs "rtm slow consumer"; the clients reconnect and `sync`.
+   - `login_refused` means credentials presented at the other side's socket
+     (a visitor token at the agent door, or the reverse, tm 425) — a
+     misconfigured client or somebody probing, not load.
    - Mostly `normal` closes with a high open count is the real-traffic case.
    - There is deliberately **no** `rate_limit` reason: the WS rate limit
      (ADR-07, 10 msg/sec/connection) throttles by design rather than

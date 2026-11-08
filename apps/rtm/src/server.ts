@@ -23,6 +23,7 @@ import type { RtmEnv } from './config/env.js';
 import { ConflictDetectionService } from './conflict.js';
 import { ConflictPublisher } from './conflict-publisher.js';
 import { ConnectionRegistry, connectionLogContext, type Connection } from './connection.js';
+import { CustomerSocketLimiter } from './customer-socket-limit.js';
 import { Dispatcher } from './dispatcher.js';
 import { Fanout } from './fanout.js';
 import {
@@ -39,6 +40,7 @@ import {
 import { AgentPresence } from './presence.js';
 import { PreLoginLimiter } from './prelogin-limit.js';
 import { decodeRequest, encodeError } from './protocol.js';
+import { SocketWriter } from './socket-writer.js';
 import { SyncService } from './sync.js';
 import {
   classifyDisconnectReason,
@@ -112,6 +114,11 @@ export interface RtmServer {
    * network since tm 409); null when `RTM_MAX_PRELOGIN_PER_IP=0` turned the cap off.
    */
   preLogin: PreLoginLimiter | null;
+  /**
+   * Logged-in visitor sockets per visitor and per client network (tm 427); null
+   * when both `RTM_MAX_SOCKETS_PER_CUSTOMER` and `RTM_MAX_CUSTOMER_SOCKETS_PER_IP` are 0.
+   */
+  customerSockets: CustomerSocketLimiter | null;
   listen: () => Promise<void>;
   close: () => Promise<void>;
   address: () => { port: number } | null;
@@ -261,7 +268,10 @@ export function buildRtmServer(
   // which emits the warning on the dedicated publish connection.
   const conflict = new ConflictDetectionService(db, commands);
   const conflictPublisher = new ConflictPublisher(db, publisher, log);
-  const fanout = new Fanout(subscriber, registry, log, telemetryInstance);
+  // Every frame this process writes goes through this (tm 428): a socket whose
+  // peer stopped reading is closed rather than buffered for without limit.
+  const writer = new SocketWriter(env.maxBufferedBytes, log);
+  const fanout = new Fanout(subscriber, registry, log, writer, telemetryInstance);
   // Socket presence (WG-03 · tm 340.3): scripts on the command connection,
   // the push on the publish one, like conflict detection above.
   const presence =
@@ -272,6 +282,15 @@ export function buildRtmServer(
   // The per-address cap on sockets that have not logged in (tm 405). Off, the
   // upgrade path below derives no address at all.
   const preLogin = env.maxPreLoginPerIp === null ? null : new PreLoginLimiter(env.maxPreLoginPerIp);
+  // And on visitor sockets once they have (tm 427): per visitor, and per client
+  // network. The pre-login cap lets go of a socket at its login; this is what
+  // holds it from there on.
+  const customerSockets =
+    env.maxSocketsPerCustomer === null && env.maxCustomerSocketsPerIp === null
+      ? null
+      : new CustomerSocketLimiter(env.maxSocketsPerCustomer, env.maxCustomerSocketsPerIp);
+  // Whether the upgrade path has to derive the caller's network at all.
+  const countsByNetwork = preLogin !== null || customerSockets?.perNetwork != null;
 
   const dispatcher = new Dispatcher({
     registry,
@@ -283,6 +302,40 @@ export function buildRtmServer(
     log,
     messagesPerSecond: env.RATE_LIMIT_RTM_PER_SEC,
     inMaintenance: () => maintenance.full,
+    admitLogin: (connection: Connection, principal: SocketPrincipal) => {
+      // A visitor's socket only: a member's or a bot's carries a credential
+      // somebody in the workspace issued, and is not counted (tm 427).
+      if (!customerSockets || principal.kind !== 'customer') return true;
+      // The login was awaited. A socket that closed meanwhile has run its close
+      // handler already — counting it now would hold its slot for as long as
+      // this process lives — and there is nobody left to refuse.
+      if (registry.get(connection.id) !== connection) return true;
+      const customerKey = `${principal.organizationId}:${principal.actorId}`;
+      const full = customerSockets.admit(connection.id, customerKey, connection.clientNetwork);
+      if (full === null) return true;
+      // One line per episode, not per refusal (`CustomerSocketLimiter.refuse`);
+      // `rtm.connections.closed{reason=socket_limit}` sees every one.
+      const key = full === 'customer' ? customerKey : connection.clientNetwork!;
+      if (customerSockets.refuse(full, key)) {
+        log.warn(
+          {
+            ...connectionLogContext(connection),
+            customer_id: principal.actorId,
+            client_network: connection.clientNetwork,
+            limit: full,
+            customer_sockets: customerSockets.heldByCustomer(customerKey),
+            network_customer_sockets:
+              connection.clientNetwork === null
+                ? null
+                : customerSockets.heldByNetwork(connection.clientNetwork),
+            max_sockets_per_customer: customerSockets.perCustomer,
+            max_customer_sockets_per_ip: customerSockets.perNetwork,
+          },
+          'rtm visitor socket limit reached: refusing its new logins',
+        );
+      }
+      return false;
+    },
     onAuthenticated: async (connection: Connection, principal: SocketPrincipal) => {
       // First, before anything awaits: a socket that has logged in is no longer
       // one its address is waiting on (tm 405). The close handler releases it
@@ -466,7 +519,12 @@ export function buildRtmServer(
     // accepted is counted against its network — and before the ceiling's
     // "accepting again" line below, which would otherwise announce an accept
     // that this refuses.
-    const key = preLogin ? clientNetworkKey(clientAddress(request, env.TRUST_PROXY_HOPS)) : null;
+    //
+    // The same network is what the post-login visitor cap counts by (tm 427),
+    // so it is derived once here and kept on the connection for the login.
+    const key = countsByNetwork
+      ? clientNetworkKey(clientAddress(request, env.TRUST_PROXY_HOPS))
+      : null;
     if (preLogin && key !== null && !preLogin.admits(key)) {
       // One line per episode, not per refusal — see `PreLoginLimiter.refuse`.
       // The counter below sees every refusal. It names the network, not the
@@ -503,13 +561,16 @@ export function buildRtmServer(
         ws,
         side,
         organizationId,
+        clientNetwork: key,
         registry,
         dispatcher,
         log,
         telemetry: telemetryInstance,
         presence,
         fanout,
+        writer,
         preLogin: preLogin && key !== null ? { limiter: preLogin, key } : null,
+        customerSockets,
         isDraining: () => draining,
       });
     });
@@ -522,6 +583,7 @@ export function buildRtmServer(
     authority,
     presence,
     preLogin,
+    customerSockets,
     address: () => {
       const address = http.address();
       return address && typeof address === 'object' ? { port: address.port } : null;
@@ -543,6 +605,9 @@ export function buildRtmServer(
               max_connections: env.maxConnections,
               // `null` is off, said out loud for the same reason (tm 405).
               max_prelogin_per_ip: env.maxPreLoginPerIp,
+              max_sockets_per_customer: env.maxSocketsPerCustomer,
+              max_customer_sockets_per_ip: env.maxCustomerSocketsPerIp,
+              max_buffered_bytes: env.maxBufferedBytes,
               trust_proxy_hops: env.TRUST_PROXY_HOPS,
             },
             'rtm listening',
@@ -831,6 +896,8 @@ function attach(params: {
   ws: WebSocket;
   side: 'agent' | 'customer';
   organizationId: string;
+  /** The caller's network (tm 409), when a cap counts by it; kept for the login (tm 427). */
+  clientNetwork: string | null;
   registry: ConnectionRegistry;
   dispatcher: Dispatcher;
   log: Logger;
@@ -838,12 +905,20 @@ function attach(params: {
   presence: AgentPresence | null;
   /** Holds draft frames for a congested socket (tm 417.4); told when it closes. */
   fanout: Pick<Fanout, 'release'>;
+  /** The gateway's one writer (tm 428): answers go out through it too. */
+  writer: SocketWriter;
   /**
    * Where this socket is counted until it logs in (tm 405); null when the cap
    * is off. Released at login (`onAuthenticated`) and here at close, whichever
    * comes first — the second release is a no-op.
    */
   preLogin: { limiter: PreLoginLimiter; key: string } | null;
+  /**
+   * Where a visitor's socket is counted once it has logged in (tm 427); null
+   * when both caps are off. Released here at close — a no-op for a socket that
+   * was never admitted.
+   */
+  customerSockets: CustomerSocketLimiter | null;
   /** Read at close time, not captured once — the drain can start mid-connection. */
   isDraining: () => boolean;
 }): void {
@@ -851,16 +926,19 @@ function attach(params: {
     ws,
     side,
     organizationId,
+    clientNetwork,
     registry,
     dispatcher,
     log,
     telemetry,
     presence,
     fanout,
+    writer,
     preLogin,
+    customerSockets,
     isDraining,
   } = params;
-  const connection = registry.add({ ws, side, organizationId });
+  const connection = registry.add({ ws, side, organizationId, clientNetwork });
   preLogin?.limiter.hold(connection.id, preLogin.key);
 
   // Set when `ws` itself detects a framing problem (oversized payload, bad
@@ -897,15 +975,15 @@ function attach(params: {
 
     const decoded = decodeRequest(raw.toString());
     if (!decoded.ok) {
-      send(ws, encodeError(decoded.requestId, decoded.action, decoded.error));
+      writer.write(connection, encodeError(decoded.requestId, decoded.action, decoded.error));
       return;
     }
 
     // Back-pressure: a client that fires faster than the server can answer is
     // told to slow down rather than being allowed to queue without limit.
     if (connection.pendingRequests >= RTM_LIMITS.maxPendingRequests) {
-      send(
-        ws,
+      writer.write(
+        connection,
         encodeError(decoded.value.request_id, decoded.value.action, {
           type: 'pending_requests_limit_reached',
           message: `At most ${RTM_LIMITS.maxPendingRequests} requests may be in flight per socket.`,
@@ -918,7 +996,16 @@ function attach(params: {
     void dispatcher
       .dispatch(connection, decoded.value)
       .then(
-        (frame) => send(ws, frame),
+        (frame) => {
+          writer.write(connection, frame);
+          // A refusal that also ends the socket (tm 425 · tm 427): the answer
+          // first — `ws` queues the close frame behind it — then the close.
+          const close = connection.closeAfterReply;
+          if (close) {
+            connection.closeAfterReply = null;
+            ws.close(close.code, close.reason);
+          }
+        },
         (error: unknown) => {
           // Internals never reach the client; the log keeps the detail. The
           // failing request's own `request_id` rides along (NFR-M5) — without
@@ -933,8 +1020,8 @@ function attach(params: {
             },
             'rtm dispatch failed',
           );
-          send(
-            ws,
+          writer.write(
+            connection,
             encodeError(decoded.value.request_id, decoded.value.action, {
               type: 'internal',
               message: 'Internal server error.',
@@ -952,12 +1039,15 @@ function attach(params: {
     clearInterval(idleTimer);
     registry.remove(connection.id);
     preLogin?.limiter.release(connection.id);
+    customerSockets?.release(connection.id);
     presence?.closed(connection.id);
     fanout.release(connection.id);
     telemetry?.instruments.disconnects.add(1, {
+      // A close the gateway decided is named by what it decided (tm 425 · 427 ·
+      // 428), not by the code — a slow consumer never answers the close frame.
       reason: protocolViolation
         ? 'protocol_violation'
-        : classifyDisconnectReason(code, isDraining()),
+        : (connection.closedBy ?? classifyDisconnectReason(code, isDraining())),
     });
   });
 
@@ -971,14 +1061,6 @@ function attach(params: {
       'socket error',
     );
   });
-}
-
-function send(ws: WebSocket, frame: string): void {
-  try {
-    ws.send(frame);
-  } catch {
-    // Socket closed between the decision to reply and the reply itself.
-  }
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

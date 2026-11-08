@@ -14,17 +14,43 @@ import {
   type ErrorType,
   type RtmAction,
 } from '@siyahtus/types';
-import { principalLogContext, type SocketAuthenticator, type SocketPrincipal } from './auth.js';
+import {
+  principalFitsSide,
+  principalLogContext,
+  type SocketAuthenticator,
+  type SocketPrincipal,
+} from './auth.js';
 import type { ConflictDetectionService } from './conflict.js';
 import type { ConflictPublisher } from './conflict-publisher.js';
 import type { Connection, ConnectionRegistry } from './connection.js';
-import { hasMoreKeysThan, MAX_LOGIN_PUSHES, pushesWithinBounds } from './input-bounds.js';
+import {
+  cursorsWithinBounds,
+  hasMoreKeysThan,
+  MAX_LOGIN_PUSHES,
+  MAX_SYNC_CHAT_ID_LENGTH,
+  MAX_SYNC_EVENT_ID_LENGTH,
+  pushesWithinBounds,
+} from './input-bounds.js';
 import { encodeError, encodeResponse, type DecodedRequest } from './protocol.js';
 import { MAX_SYNC_CHATS, type SyncCursor, type SyncService } from './sync.js';
 import type { TypingService } from './typing.js';
 
 /** Actions a socket may send before it has logged in. */
 const PRE_AUTH_ACTIONS = new Set<RtmAction>(['login', 'ping']);
+
+/**
+ * RFC 6455 "Policy Violation": the close sent after refusing a credential
+ * presented at the other side's door (tm 425). The same credential at the same
+ * door is refused again, so this is not an invitation to retry.
+ */
+export const WRONG_SIDE_CLOSE_CODE = 1008;
+
+/**
+ * RFC 6455 "Try Again Later": the close sent after refusing a visitor's login
+ * at the post-login socket caps (tm 427). A slot frees when one of the
+ * visitor's other sockets closes; meanwhile the widget stays on its poll.
+ */
+export const SOCKET_LIMIT_CLOSE_CODE = 1013;
 
 export interface DispatcherDeps {
   registry: ConnectionRegistry;
@@ -47,6 +73,13 @@ export interface DispatcherDeps {
    * 389.13 · `maintenance.ts`): `login` is then refused. Omitted, never.
    */
   inMaintenance?: () => boolean;
+  /**
+   * Counts an accepted login against the post-login socket caps (tm 427 ·
+   * `customer-socket-limit.ts`), synchronously and before the socket is marked
+   * logged in. True admits it; false refuses it — the login is answered
+   * `too_many_requests` and the socket closed. Omitted, every login is admitted.
+   */
+  admitLogin?: (connection: Connection, principal: SocketPrincipal) => boolean;
 }
 
 export class Dispatcher {
@@ -102,7 +135,27 @@ export class Dispatcher {
         message: 'This socket is already authenticated.',
       });
     }
+    // One login at a time (tm 425). Taken before anything awaits, so a second
+    // `login` arriving while the first one's token is being checked finds it
+    // held — without it both passed the check above, both awaited, and both
+    // succeeded: the second identity replaced the first on the socket, and the
+    // actor index kept the first one's entry for good.
+    if (connection.loggingIn) {
+      return encodeError(message.request_id, 'login', {
+        type: 'not_allowed',
+        message: 'A login is already in progress on this socket.',
+      });
+    }
+    connection.loggingIn = true;
+    try {
+      return await this.#attemptLogin(connection, message);
+    } finally {
+      // On every path: a refused login leaves the socket free to log in again.
+      connection.loggingIn = false;
+    }
+  }
 
+  async #attemptLogin(connection: Connection, message: DecodedRequest): Promise<string> {
     // Maintenance (tm 389.13): the REST edge's 503 `maintenance`, before the
     // credential is even looked at — there is nothing to sign in to.
     if (this.deps.inMaintenance?.()) {
@@ -127,7 +180,36 @@ export class Dispatcher {
       );
     }
 
-    const result = await this.deps.authenticator.authenticate(token, connection.organizationId);
+    const result = await this.deps.authenticator.authenticate(
+      token,
+      connection.organizationId,
+      connection.side,
+    );
+
+    // The door decides who may log in through it (tm 425): a visitor at the
+    // customer socket, a member or a bot at the agent socket. A visitor token
+    // at the agent door used to log in and be addressed as an agent —
+    // `allAgents` pushes reached it. The authenticator refuses a token of the
+    // wrong family before checking it; the principal it resolved is checked
+    // here as well, whatever the authenticator's routing becomes. Answered like
+    // any refused credential, and the socket is closed: the same token at the
+    // same door is refused again.
+    const wrongSide = result.ok
+      ? !principalFitsSide(result.principal.kind, connection.side)
+      : result.reason === 'side_mismatch';
+    if (wrongSide) {
+      this.deps.log.debug(
+        { reason: 'side_mismatch', side: connection.side, request_id: message.request_id },
+        'rtm login rejected',
+      );
+      connection.closedBy = 'login_refused';
+      connection.closeAfterReply = {
+        code: WRONG_SIDE_CLOSE_CODE,
+        reason: 'credential not valid for this socket',
+      };
+      return this.#fail(message, 'authentication', 'Invalid or expired credentials.');
+    }
+
     if (!result.ok) {
       // Data residency (NFR-C4 · C4-b) is the one refusal that is *not*
       // undifferentiated. The credential is genuine and the caller is not short
@@ -173,6 +255,23 @@ export class Dispatcher {
     }
 
     const { principal } = result;
+
+    // The post-login socket caps (tm 427), counted before the socket is marked
+    // logged in so a refused one never is. Answered like the pre-login cap's
+    // refusal — the reason, never the number — and the socket is closed.
+    if (this.deps.admitLogin && !this.deps.admitLogin(connection, principal)) {
+      connection.closedBy = 'socket_limit';
+      connection.closeAfterReply = {
+        code: SOCKET_LIMIT_CLOSE_CODE,
+        reason: 'socket limit reached',
+      };
+      return encodeError(message.request_id, 'login', {
+        type: 'too_many_requests',
+        message: 'Too many connections are open for this visitor or from this network.',
+        details: { reason: 'socket_limit_reached' },
+      });
+    }
+
     this.deps.registry.authenticate(connection.id, {
       licenseId: principal.licenseId,
       actorId: principal.actorId,
@@ -241,6 +340,16 @@ export class Dispatcher {
         message,
         'limit_reached',
         `sync accepts at most ${MAX_SYNC_CHATS} chats per request.`,
+      );
+    }
+    // A chat the caller names but cannot see is echoed in `removed_chat_ids`,
+    // so a key no chat id could be is refused rather than echoed (tm 428). The
+    // message names the bounds, never the key.
+    if (!cursorsWithinBounds(raw)) {
+      return this.#fail(
+        message,
+        'validation',
+        `sync cursors name a chat in at most ${MAX_SYNC_CHAT_ID_LENGTH} characters and an event in at most ${MAX_SYNC_EVENT_ID_LENGTH}.`,
       );
     }
     const entries = Object.entries(raw as Record<string, unknown>);

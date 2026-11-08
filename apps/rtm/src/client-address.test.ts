@@ -1,13 +1,15 @@
 /**
- * The gateway reads one client address, in one file, for one decision
- * (tm 405 · was tm 257.10's "reads no address at all").
+ * The gateway reads one client address, in one file, for one kind of decision
+ * — how many sockets a source may hold (tm 405 · tm 427 · was tm 257.10's
+ * "reads no address at all").
  *
  * Until tm 405 the gateway read no address: it rate limited per socket and
  * authorised by token, and this file guarded that. Then a single source turned
  * out to be able to fill the global connection ceiling with sockets that never
  * log in, and the only key that bounds "a single source" is its address — so
- * the pre-login cap (`prelogin-limit.ts`) reads one. What this file guards now
- * is that it stayed one:
+ * the pre-login cap (`prelogin-limit.ts`) reads one, and since tm 427 the
+ * post-login visitor cap (`customer-socket-limit.ts`) counts by the same
+ * network. What this file guards now is that it stayed one:
  *
  *   - only `client-address.ts` touches anything address-shaped — a header, the
  *     socket peer, a proxy library — so the day something else in the gateway
@@ -84,7 +86,7 @@ describe('the gateway reads one client address, in client-address.ts (tm 405)', 
     expect([...read]).toEqual(['authorization']);
   });
 
-  it('derives it once, on the upgrade path, under TRUST_PROXY_HOPS — for the pre-login cap only', () => {
+  it('derives it once, on the upgrade path, under TRUST_PROXY_HOPS — for the two caps that count by network only', () => {
     const calls = FILES.flatMap((file) =>
       [...file.text.matchAll(/\bclientAddress\(/g)].map(() => file.name),
     );
@@ -92,16 +94,29 @@ describe('the gateway reads one client address, in client-address.ts (tm 405)', 
     expect(calls.sort()).toEqual(['client-address.ts', 'server.ts']);
     // Reduced to its network before anything counts it (tm 409): an IPv6
     // subscriber rotating through its /64 is one source, not one per address.
+    // Derived only when a cap counts by it — the pre-login cap (tm 405) or the
+    // post-login visitor cap (tm 427).
     expect(text('server.ts')).toMatch(
-      /const key = preLogin \? clientNetworkKey\(clientAddress\(request, env\.TRUST_PROXY_HOPS\)\) : null;/,
+      /const key = countsByNetwork\s*\?\s*clientNetworkKey\(clientAddress\(request, env\.TRUST_PROXY_HOPS\)\)\s*:\s*null;/,
+    );
+    expect(text('server.ts')).toMatch(
+      /const countsByNetwork = preLogin !== null \|\| customerSockets\?\.perNetwork != null;/,
     );
     const keyed = FILES.flatMap((file) =>
       [...file.text.matchAll(/\bclientNetworkKey\(/g)].map(() => file.name),
     );
     expect(keyed.sort()).toEqual(['client-network.ts', 'server.ts']);
-    // And what the result is handed to: the limiter, and nothing that logs in,
-    // routes or authorises.
+    // And what the result is handed to: the two limiters — the pre-login cap
+    // here, the visitor cap at login through the connection it is kept on —
+    // and nothing that logs in, routes or authorises.
     expect(text('server.ts')).toMatch(/preLogin\.admits\(key\)/);
+    expect(text('server.ts')).toMatch(
+      /customerSockets\.admit\(connection\.id, customerKey, connection\.clientNetwork\)/,
+    );
+    const carried = FILES.filter((file) => /\bclientNetwork\b/.test(file.text)).map(
+      (file) => file.name,
+    );
+    expect(carried.sort()).toEqual(['connection.ts', 'server.ts']);
   });
 });
 

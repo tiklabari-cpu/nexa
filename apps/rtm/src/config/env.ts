@@ -15,6 +15,14 @@ import { DEFAULT_REGION, DISCONNECT_OFFLINE_DEFAULT_MS, REGIONS } from '@siyahtu
 import { OTEL_EXPORTERS } from '../telemetry/telemetry.js';
 
 /**
+ * `RTM_MAX_BUFFERED_BYTES`' floor (tm 428): the draft preview's congestion
+ * threshold (`fanout.ts` `SNEAK_PEEK_COALESCE_BUFFERED_BYTES`), so a socket
+ * is held before it is closed. Here rather than imported, because `fanout.ts`
+ * pulls the gateway's runtime in and this file is read at boot before it.
+ */
+export const RTM_MAX_BUFFERED_BYTES_MIN = 64 * 1024;
+
+/**
  * Same shape as the API's `secret()`: a minimum length and a refusal of the
  * obvious placeholders. Both processes must accept exactly the same key, so a
  * value one of them rejects must be a value the other rejects too.
@@ -103,6 +111,50 @@ const envSchema = z.object({
   RTM_MAX_PRELOGIN_PER_IP: z.preprocess(
     (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
     z.coerce.number().int().min(0).max(100_000).optional(),
+  ),
+  /**
+   * How many logged-in sockets one visitor may hold (tm 427,
+   * `customer-socket-limit.ts`) — one per widget tab. Past it the visitor's
+   * next login is answered 429-style `socket_limit_reached` and the socket is
+   * closed with 1013; the tab stays on the widget's poll. Member and bot
+   * sockets are not counted. Unset is {@link RTM_MAX_SOCKETS_PER_CUSTOMER_DEFAULT};
+   * `0` turns it off; blank is unset, as on the keys above.
+   */
+  RTM_MAX_SOCKETS_PER_CUSTOMER: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.coerce.number().int().min(0).max(1_000).optional(),
+  ),
+  /**
+   * How many logged-in visitor sockets one client network may hold (tm 427) —
+   * an IPv4 address or an IPv6 /64, counted as `RTM_MAX_PRELOGIN_PER_IP`
+   * counts it, so minting a visitor per socket does not get past the cap
+   * above. Unset is {@link RTM_MAX_CUSTOMER_SOCKETS_PER_IP_DEFAULT}; `0` turns
+   * it off; blank is unset.
+   */
+  RTM_MAX_CUSTOMER_SOCKETS_PER_IP: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.coerce.number().int().min(0).max(100_000).optional(),
+  ),
+  /**
+   * How many unsent bytes a socket may hold before the gateway stops writing to
+   * it and closes it with 1013 (tm 428, `socket-writer.ts`). Unset is
+   * {@link RTM_MAX_BUFFERED_BYTES_DEFAULT}; `0` turns it off; blank is unset.
+   * Otherwise at least {@link RTM_MAX_BUFFERED_BYTES_MIN}: below the level at
+   * which the draft preview starts holding frames on a congested socket
+   * (`fanout.ts`, 64 KiB) that holding could never begin — the socket would be
+   * closed first.
+   */
+  RTM_MAX_BUFFERED_BYTES: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.coerce
+      .number()
+      .int()
+      .min(0)
+      .max(256 * 1024 * 1024)
+      .refine((v) => v === 0 || v >= RTM_MAX_BUFFERED_BYTES_MIN, {
+        message: 'must be 0 (off) or at least 65536',
+      })
+      .optional(),
   ),
   /**
    * How many reverse proxies in front of this process appended to the
@@ -230,6 +282,12 @@ export type RtmEnv = z.infer<typeof envSchema> & {
    * (`RTM_MAX_PRELOGIN_PER_IP=0`); unset is {@link RTM_MAX_PRELOGIN_PER_IP_DEFAULT}.
    */
   maxPreLoginPerIp: number | null;
+  /** Resolved logged-in sockets per visitor (tm 427); `null` is off. */
+  maxSocketsPerCustomer: number | null;
+  /** Resolved logged-in visitor sockets per client network (tm 427); `null` is off. */
+  maxCustomerSocketsPerIp: number | null;
+  /** Resolved unsent-bytes limit per socket (tm 428); `null` is off. */
+  maxBufferedBytes: number | null;
   /**
    * Resolved disconnect tolerance (tm 340.3): milliseconds an agent may have
    * no open socket before going offline, or `null` when this gateway does not
@@ -273,6 +331,40 @@ function resolvePreLoginPerIp(env: z.infer<typeof envSchema>): number | null {
   return limit === 0 ? null : limit;
 }
 
+/**
+ * `RTM_MAX_SOCKETS_PER_CUSTOMER` when unset (tm 427): one visitor's tabs. The
+ * widget holds one socket per tab, and five tabs of one site open at once is a
+ * lot of tabs; a sixth stays on the widget's poll, which is how every visitor
+ * was served before the socket existed. What one minted token is then worth:
+ * five sockets, not as many as it can open.
+ */
+export const RTM_MAX_SOCKETS_PER_CUSTOMER_DEFAULT = 5;
+
+/**
+ * `RTM_MAX_CUSTOMER_SOCKETS_PER_IP` when unset (tm 427): visitors behind one
+ * address — an office, a school, a carrier's shared address — with the widget
+ * open at the same moment, on any site this gateway serves. Fifty, the
+ * pre-login cap's number: past it a visitor stays on the poll rather than
+ * being turned away. Without it a fresh token per socket gets past the cap
+ * above, five sockets at a time.
+ */
+export const RTM_MAX_CUSTOMER_SOCKETS_PER_IP_DEFAULT = 50;
+
+/**
+ * `RTM_MAX_BUFFERED_BYTES` when unset (tm 428): one mebibyte of frames the peer
+ * has not read. A connected client reads as fast as its network carries, so
+ * what waits is the kernel's backlog plus at most a frame or two; a socket a
+ * megabyte behind is not keeping up. Closing it costs the client a reconnect
+ * and a `sync`; not closing it costs this process memory without limit.
+ */
+export const RTM_MAX_BUFFERED_BYTES_DEFAULT = 1024 * 1024;
+
+/** A count with a default, where `0` is the off switch (tm 427 · tm 428). */
+function resolveLimit(value: number | undefined, fallback: number): number | null {
+  const limit = value ?? fallback;
+  return limit === 0 ? null : limit;
+}
+
 /** `RTM_DISCONNECT_OFFLINE_MS`, with its default and its off switch (tm 340.3). */
 function resolveDisconnectOffline(env: z.infer<typeof envSchema>): number | null {
   const ms =
@@ -309,6 +401,15 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): RtmEnv {
     shutdownDrainMs: env.SHUTDOWN_DRAIN_MS ?? (env.NODE_ENV === 'production' ? 5_000 : 0),
     maxConnections: env.RTM_MAX_CONNECTIONS ?? null,
     maxPreLoginPerIp: resolvePreLoginPerIp(env),
+    maxSocketsPerCustomer: resolveLimit(
+      env.RTM_MAX_SOCKETS_PER_CUSTOMER,
+      RTM_MAX_SOCKETS_PER_CUSTOMER_DEFAULT,
+    ),
+    maxCustomerSocketsPerIp: resolveLimit(
+      env.RTM_MAX_CUSTOMER_SOCKETS_PER_IP,
+      RTM_MAX_CUSTOMER_SOCKETS_PER_IP_DEFAULT,
+    ),
+    maxBufferedBytes: resolveLimit(env.RTM_MAX_BUFFERED_BYTES, RTM_MAX_BUFFERED_BYTES_DEFAULT),
     disconnectOfflineMs: resolveDisconnectOffline(env),
     otelEnabled: env.OTEL_ENABLED ?? env.NODE_ENV !== 'test',
   };

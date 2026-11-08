@@ -22,8 +22,11 @@ import {
   SNEAK_PEEK_COALESCE_BUFFERED_BYTES,
   SNEAK_PEEK_COALESCE_RETRY_MS,
 } from './fanout.js';
+import { SocketWriter } from './socket-writer.js';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
+/** `WebSocket.OPEN` — the writer writes only to an open socket (tm 428). */
+const WS_OPEN = 1;
 
 class FakeSubscriber extends EventEmitter {
   readonly subscribed: string[][] = [];
@@ -45,15 +48,28 @@ class FakeSubscriber extends EventEmitter {
   }
 }
 
+/** Every write goes through the gateway's writer (tm 428); off here — `socket-writer.test.ts` holds it. */
+function unlimitedWriter(): SocketWriter {
+  return new SocketWriter(null, pino({ level: 'silent' }));
+}
+
 function setup(sockets = 1, pushes = ['sync_required']) {
   const subscriber = new FakeSubscriber();
   const registry = new ConnectionRegistry();
-  const fanout = new Fanout(subscriber as unknown as Redis, registry, pino({ level: 'silent' }));
+  const fanout = new Fanout(
+    subscriber as unknown as Redis,
+    registry,
+    pino({ level: 'silent' }),
+    unlimitedWriter(),
+  );
   const sent: string[][] = [];
   for (let i = 0; i < sockets; i += 1) {
     const frames: string[] = [];
     sent.push(frames);
-    const ws = { send: (frame: string) => frames.push(frame) } as unknown as WebSocket;
+    const ws = {
+      readyState: WS_OPEN,
+      send: (frame: string) => frames.push(frame),
+    } as unknown as WebSocket;
     const connection = registry.add({ ws, side: 'agent', organizationId: ORG });
     registry.authenticate(connection.id, { licenseId: '7', actorId: `agent-${i}` });
     for (const action of pushes) connection.subscriptions.add(action);
@@ -160,6 +176,7 @@ const CONGESTED = 70_000;
 
 interface FakeSocket {
   frames: string[];
+  readyState: number;
   bufferedAmount: number;
   send(frame: string): void;
 }
@@ -179,14 +196,17 @@ function previewSetup() {
     subscriber as unknown as Redis,
     registry,
     pino({ level: 'debug' }, stream),
+    unlimitedWriter(),
   );
 
   function socket(
     actorId: string,
     actor: { actorType: string; groupIds?: number[]; unrestricted?: boolean },
+    side: 'agent' | 'customer' = 'agent',
   ) {
     const fake: FakeSocket = {
       frames: [],
+      readyState: WS_OPEN,
       bufferedAmount: 0,
       send(frame: string) {
         this.frames.push(frame);
@@ -194,7 +214,7 @@ function previewSetup() {
     };
     const connection = registry.add({
       ws: fake as unknown as WebSocket,
-      side: 'agent',
+      side,
       organizationId: ORG,
     });
     registry.authenticate(connection.id, { licenseId: '7', actorId, ...actor });
@@ -205,7 +225,12 @@ function previewSetup() {
   function publish(
     action: string,
     payload: unknown,
-    audience: { agentIds?: string[]; groupIds?: number[] } = { agentIds: ['agent-1'] },
+    audience: {
+      agentIds?: string[];
+      groupIds?: number[];
+      allAgents?: boolean;
+      customerId?: string;
+    } = { agentIds: ['agent-1'] },
   ): void {
     subscriber.emit(
       'message',
@@ -447,5 +472,87 @@ describe('Fanout — the visitor draft preview (tm 417.4, FR-MOD-11.8)', () => {
     expect(lines.join('\n')).not.toContain('SENTINEL');
     // The frame itself did reach the agent.
     expect(received(human.fake)).toEqual([`incoming_sneak_peek:${CHAT}:${sentinel} more`]);
+  });
+});
+
+describe('Fanout — who logged in decides the audience, not which door they used (tm 425)', () => {
+  const event = (id: string) => ({ chat_id: CHAT, event: { id, text: id, recipients: 'all' } });
+
+  it('gives a visitor credential at the agent door no workspace-wide, team or agent push (NFR-S3)', () => {
+    const { socket, publish } = previewSetup();
+    // What a visitor token on the agent socket used to become: an agent-side
+    // connection whose principal is a visitor — and reach given to it besides.
+    const visitor = socket('cust-1', { actorType: 'customer', groupIds: [3], unrestricted: true });
+    const member = socket('agent-1', { actorType: 'agent', groupIds: [3] });
+
+    publish('incoming_event', event('E1'), { allAgents: true });
+    publish('incoming_event', event('E2'), { groupIds: [3] });
+    publish('incoming_event', event('E3'), { agentIds: ['cust-1', 'agent-1'] });
+
+    // The member hears all three — otherwise this would pass on a fan-out that
+    // delivers nothing at all.
+    expect(member.fake.frames).toHaveLength(3);
+    expect(visitor.fake.frames).toEqual([]);
+  });
+
+  it('reaches a visitor credential only by its own id, wherever it was presented', () => {
+    const { socket, publish } = previewSetup();
+    const atAgentDoor = socket('cust-1', { actorType: 'customer' });
+    const atCustomerDoor = socket('cust-2', { actorType: 'customer' }, 'customer');
+
+    publish('incoming_event', event('E1'), { customerId: 'cust-1' });
+    publish('incoming_event', event('E2'), { customerId: 'cust-2', allAgents: true });
+
+    expect(
+      atAgentDoor.fake.frames.map(
+        (f) => (JSON.parse(f) as { payload: { event: { id: string } } }).payload.event.id,
+      ),
+    ).toEqual(['E1']);
+    expect(
+      atCustomerDoor.fake.frames.map(
+        (f) => (JSON.parse(f) as { payload: { event: { id: string } } }).payload.event.id,
+      ),
+    ).toEqual(['E2']);
+  });
+
+  it('gives a member credential at the customer door nothing at all', () => {
+    const { socket, publish } = previewSetup();
+    const member = socket(
+      'agent-2',
+      { actorType: 'agent', groupIds: [3], unrestricted: true },
+      'customer',
+    );
+
+    publish('incoming_event', event('E1'), { allAgents: true });
+    publish('incoming_event', event('E2'), { groupIds: [3], agentIds: ['agent-2'] });
+    publish('incoming_event', event('E3'), { customerId: 'agent-2' });
+
+    expect(member.fake.frames).toEqual([]);
+  });
+
+  it('leaves a bot at the agent door the audiences it had', () => {
+    const { socket, publish } = previewSetup();
+    const bot = socket('bot-1', { actorType: 'bot', groupIds: [3] });
+
+    publish('incoming_event', event('E1'), { groupIds: [3] });
+    publish('incoming_event', event('E2'), { allAgents: true });
+
+    expect(bot.fake.frames).toHaveLength(2);
+  });
+
+  it('gives agent audiences to a member and a bot only — a principal kind it does not know hears nothing', () => {
+    // An allow-list, like the authenticator's credential kinds: the next kind
+    // somebody adds is closed here until it is deliberately opened.
+    const { socket, publish } = previewSetup();
+    const unknown = socket('operator-1', {
+      actorType: 'platform',
+      groupIds: [3],
+      unrestricted: true,
+    });
+
+    publish('incoming_event', event('E1'), { allAgents: true });
+    publish('incoming_event', event('E2'), { groupIds: [3], agentIds: ['operator-1'] });
+
+    expect(unknown.fake.frames).toEqual([]);
   });
 });

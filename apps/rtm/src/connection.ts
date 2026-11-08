@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import type { WebSocket } from 'ws';
 import type { LogContext } from '@siyahtus/types';
 import type { SocketAuthority, SocketImpersonation } from './auth.js';
+import type { GatewayCloseReason } from './telemetry/telemetry.js';
 
 export interface Connection {
   id: string;
@@ -18,6 +19,28 @@ export interface Connection {
   organizationId: string;
   /** Set at login; until then the socket may only ping. */
   authenticated: boolean;
+  /**
+   * A `login` on this socket is being checked (tm 425). A second one sent
+   * meanwhile is refused rather than raced: two logins awaiting their tokens
+   * at once both used to succeed, the second identity replacing the first.
+   */
+  loggingIn: boolean;
+  /**
+   * The client network the upgrade came from — an IPv4 address or an IPv6 /64
+   * (`client-network.ts`) — when a cap counts by it (tm 405 · tm 427); null
+   * otherwise, or when no address could be derived.
+   */
+  clientNetwork: string | null;
+  /**
+   * Why the gateway itself closed this socket, once it has decided to — read by
+   * the close handler for `rtm.connections.closed` (`GatewayCloseReason`).
+   */
+  closedBy: GatewayCloseReason | null;
+  /**
+   * A close decided while answering a request (tm 425 · tm 427): the answer
+   * goes out first, then the socket is closed with this code. Cleared once sent.
+   */
+  closeAfterReply: { code: number; reason: string } | null;
   licenseId: string | null;
   actorId: string | null;
   /** The principal kind that logged in (`agent`, `bot`, `customer`) — for the log. */
@@ -56,13 +79,22 @@ export class ConnectionRegistry {
   readonly #byOrganization = new Map<string, Set<string>>();
   readonly #byActor = new Map<string, Set<string>>();
 
-  add(input: { ws: WebSocket; side: 'agent' | 'customer'; organizationId: string }): Connection {
+  add(input: {
+    ws: WebSocket;
+    side: 'agent' | 'customer';
+    organizationId: string;
+    clientNetwork?: string | null;
+  }): Connection {
     const connection: Connection = {
       id: randomUUID(),
       ws: input.ws,
       side: input.side,
       organizationId: input.organizationId,
       authenticated: false,
+      loggingIn: false,
+      clientNetwork: input.clientNetwork ?? null,
+      closedBy: null,
+      closeAfterReply: null,
       licenseId: null,
       actorId: null,
       actorType: null,
@@ -98,6 +130,17 @@ export class ConnectionRegistry {
   ): Connection | undefined {
     const connection = this.#byId.get(id);
     if (!connection) return undefined;
+    // A socket is indexed under one actor at most (tm 425). The dispatcher
+    // lets a socket log in once; should this run twice all the same, the first
+    // actor's entry goes rather than outliving the socket — `remove` drops
+    // only the actor the socket holds at the end.
+    if (connection.actorId !== null && connection.actorId !== actor.actorId) {
+      this.#deindex(
+        this.#byActor,
+        this.#actorKey(connection.organizationId, connection.actorId),
+        id,
+      );
+    }
     connection.authenticated = true;
     connection.licenseId = actor.licenseId;
     connection.actorId = actor.actorId;
@@ -181,6 +224,11 @@ export class ConnectionRegistry {
 
   get size(): number {
     return this.#byId.size;
+  }
+
+  /** Actors with at least one socket indexed — what the actor index actually holds. */
+  get actors(): number {
+    return this.#byActor.size;
   }
 
   #actorKey(organizationId: string, actorId: string): string {

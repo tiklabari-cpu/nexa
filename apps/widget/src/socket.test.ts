@@ -36,6 +36,14 @@ class FakeSocket implements WidgetWebSocket {
     this.onclose?.();
   }
 
+  /** The gateway closes the socket with `code` — a close this client did not ask for. */
+  closeFromServer(code: number): void {
+    if (this.closed) return;
+    this.closed = true;
+    // A browser hands `onclose` a CloseEvent; the widget reads none of it.
+    (this.onclose as ((event: { code: number }) => void) | null)?.({ code });
+  }
+
   /** Answer the request with the given action, as the gateway would. */
   reply(action: string, payload: Record<string, unknown> = {}, success = true): void {
     const request = this.sent.find((frame) => frame.action === action);
@@ -541,6 +549,41 @@ describe('widget RTM socket (FR-MOD-11.6)', () => {
     await settle();
     h.sockets[1]!.reply('login', {});
     await settle();
+    expect(h.socket.live).toBe(true);
+  });
+
+  it('reconnects after the gateway closes it as a slow consumer (1013), and syncs from where it was (tm 428 · NFR-R2)', async () => {
+    // The gateway stops writing to a socket that stopped reading and closes it
+    // with 1013, "try again later": whatever it did not write is in the
+    // database, and the reconnect `sync` is how the visitor gets it.
+    const h = harness();
+    h.socket.connect();
+    h.sockets[0]!.onopen!();
+    await settle();
+    h.sockets[0]!.reply('login', {});
+    await settle();
+    h.sockets[0]!.push('incoming_event', { chat_id: 'chat-1', event: event('thr-1_4') });
+    expect(h.socket.live).toBe(true);
+
+    h.sockets[0]!.closeFromServer(1013);
+    expect(h.socket.live).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(h.sockets).toHaveLength(2);
+    h.sockets[1]!.onopen!();
+    await settle();
+    h.sockets[1]!.reply('login', {});
+    await settle();
+    const sync = h.sockets[1]!.sent.find((frame) => frame.action === 'sync')!;
+    expect(sync.payload['cursors']).toEqual({ 'chat-1': 'thr-1_4' });
+
+    h.sockets[1]!.reply('sync', {
+      chats: [{ chat_id: 'chat-1', events: [event('thr-1_5')], truncated: false }],
+      removed_chat_ids: [],
+      new_chat_ids: [],
+    });
+    await settle();
+    expect(h.events.map((e) => e.event.id)).toEqual(['thr-1_4', 'thr-1_5']);
     expect(h.socket.live).toBe(true);
   });
 

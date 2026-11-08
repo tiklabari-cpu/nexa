@@ -125,3 +125,52 @@ describe('connectionLogContext (ID-08)', () => {
     });
   });
 });
+
+describe('ConnectionRegistry — the actor index (tm 425)', () => {
+  it('indexes a socket under one actor at most — a second authenticate moves it rather than leaving the first behind', () => {
+    const registry = new ConnectionRegistry();
+    const connection = registry.add({ ws: fakeSocket(), side: 'agent', organizationId: ORG_A });
+
+    registry.authenticate(connection.id, { licenseId: '7', actorId: 'owner-1' });
+    registry.authenticate(connection.id, { licenseId: '7', actorId: 'agent-1' });
+
+    expect(registry.actors).toBe(1);
+    expect(registry.forActor(ORG_A, 'owner-1')).toEqual([]);
+    expect(registry.forActor(ORG_A, 'agent-1')).toEqual([connection]);
+
+    registry.remove(connection.id);
+    expect(registry.actors).toBe(0);
+  });
+
+  it('keeps an actor with several sockets indexed until the last one goes', () => {
+    const registry = new ConnectionRegistry();
+    const tabs = [1, 2].map(() =>
+      registry.add({ ws: fakeSocket(), side: 'agent', organizationId: ORG_A }),
+    );
+    for (const tab of tabs) registry.authenticate(tab.id, { licenseId: '7', actorId: 'agent-1' });
+    expect(registry.actors).toBe(1);
+
+    registry.remove(tabs[0]!.id);
+    expect(registry.forActor(ORG_A, 'agent-1')).toEqual([tabs[1]]);
+    registry.remove(tabs[1]!.id);
+    expect(registry.actors).toBe(0);
+  });
+
+  it('starts a socket with no login under way, no network, and no close decided', () => {
+    const registry = new ConnectionRegistry();
+    const bare = registry.add({ ws: fakeSocket(), side: 'customer', organizationId: ORG_A });
+    expect(bare).toMatchObject({
+      loggingIn: false,
+      clientNetwork: null,
+      closedBy: null,
+      closeAfterReply: null,
+    });
+    const counted = registry.add({
+      ws: fakeSocket(),
+      side: 'customer',
+      organizationId: ORG_A,
+      clientNetwork: '2001:db8:1:2::/64',
+    });
+    expect(counted.clientNetwork).toBe('2001:db8:1:2::/64');
+  });
+});

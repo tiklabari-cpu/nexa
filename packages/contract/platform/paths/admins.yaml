@@ -113,6 +113,10 @@ role:
     description: |
       Takes effect on the operator's next request: their sessions end. 409
       `platform_last_superadmin` when this would leave no active superadmin.
+      An open impersonation session of theirs whose mode the new role may not
+      hold ends with it (`end_reason: operator_role_changed`, tm 430) — a
+      `full` one below superadmin, any below support — and so do the
+      workspace tokens it was traded for.
     x-platform-permission: admins.manage
     x-platform-recent-totp: true
     parameters:
@@ -142,7 +146,10 @@ disable:
     summary: Disable an operator
     description: |
       Their sessions end and sign-in is refused. 409
-      `platform_last_superadmin` for the last active superadmin.
+      `platform_last_superadmin` for the last active superadmin. Every open
+      impersonation session of theirs ends with them
+      (`end_reason: operator_disabled`, tm 430), and so do the workspace
+      tokens it was traded for.
     x-platform-permission: admins.manage
     x-platform-recent-totp: true
     parameters:
@@ -225,6 +232,10 @@ revokeSessions:
     operationId: revokePlatformAdminSessions
     x-platform-audit: admin.sessions_revoked
     summary: End every session of an operator
+    description: |
+      Their root panel sessions, and every open impersonation session of theirs
+      (`end_reason: operator_sessions_revoked`, tm 430) with the workspace
+      tokens it was traded for. `ended` counts the root panel sessions.
     x-platform-permission: admins.manage
     parameters:
       - $ref: "../openapi.yaml#/components/parameters/AdminId"

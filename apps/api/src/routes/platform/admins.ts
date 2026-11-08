@@ -19,10 +19,18 @@
  * platform audit chain by `plugins/platform-audit.ts` (tm 389.5) — the
  * handlers here only add what the entry cannot read off the path.
  *
+ * Disabling an operator, changing their role and revoking their sessions end
+ * their open impersonation sessions too (tm 430, `admin-directory.ts`): each
+ * ended session is recorded as `impersonation.ended` on the platform chain
+ * with the action's reason and in its workspace's trail without it, inside the
+ * change's transaction — so these three routes write their own entry there
+ * too, first — and the sockets its tokens opened close after the commit
+ * (`principal_revoked`, tm 426).
+ *
  * The list is not paged: operators are a handful of people, and a page
  * boundary in a list of eight is only a way to miss one.
  */
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { PLATFORM_ROLES } from '@siyahtus/types';
 import type { PlatformEnv } from '../../config/platform-env.js';
@@ -34,9 +42,14 @@ import type { Mailer } from '../../services/mail/mailer.js';
 import { platformInvitationMail } from '../../services/mail/templates/messages.js';
 import { PLATFORM_INVITE_TTL_HOURS } from '../../services/platform/admin-auth.js';
 import type {
+  OperatorChange,
+  OperatorChangeRecorder,
+} from '../../services/platform/admin-directory.js';
+import type {
   PlatformAuditAction,
   PlatformAuditRouteConfig,
 } from '../../services/platform/platform-audit.js';
+import { RealtimePublisher } from '../../services/realtime/publisher.js';
 import { parse } from './auth.js';
 
 // `reason` is the audit plugin's: present and 3–500 characters before a
@@ -74,6 +87,49 @@ export default async function platformAdminsRoutes(
   const manageFresh = (audit: PlatformAuditRouteConfig) => ({
     platform: { permission: 'admins.manage' as const, recentTotp: true, audit },
   });
+  const publisher = new RealtimePublisher(app.redis, app.log);
+
+  /**
+   * A change's entries, inside its transaction: the route's own (`payload`
+   * adds what the path cannot say), then one `impersonation.ended` for each
+   * session the change ended — the action's reason on the platform chain, and
+   * the session's workspace trail written with it.
+   */
+  function recorder(
+    request: FastifyRequest,
+    adminId: string,
+    payload: (change: OperatorChange) => Record<string, unknown> = () => ({}),
+  ): OperatorChangeRecorder {
+    return async (tx, change) => {
+      await app.platformAuditLog.record(
+        request.platformAuditEntry({
+          payload: { ...payload(change), impersonations_ended: change.impersonations.length },
+        }),
+        tx,
+      );
+      for (const ended of change.impersonations) {
+        await app.platformAuditLog.record(
+          request.platformAuditEntry({
+            action: 'impersonation.ended',
+            targetType: 'impersonation',
+            targetId: ended.id,
+            licenseId: ended.licenseId,
+            payload: {
+              mode: ended.mode,
+              account_id: ended.accountId,
+              end_reason: ended.endReason,
+              opened_by: adminId,
+            },
+          }),
+          tx,
+        );
+      }
+    };
+  }
+
+  /** After the commit: the sockets the ended sessions' tokens opened close. Never throws. */
+  const closeSockets = (change: OperatorChange) =>
+    publisher.revokeTokens(change.impersonations.flatMap((ended) => ended.tokens));
 
   app.get('/admins', { config: read }, async () => ({ data: await admins.list() }));
 
@@ -148,17 +204,25 @@ export default async function platformAdminsRoutes(
     async (request) => {
       const body = parse(roleBody, request.body);
       const adminId = idParam(request.params, 'adminId');
-      const before = await admins.get(adminId);
-      const after = await admins.setRole(adminId, body.role);
-      request.platformAudit!.payload = { from: before.role, to: after.role };
-      return after;
+      const changed = await admins.setRole(
+        adminId,
+        body.role,
+        recorder(request, adminId, (change) => ({ from: change.previousRole, to: body.role })),
+      );
+      await closeSockets(changed);
+      return changed.admin;
     },
   );
 
   app.post(
     '/admins/:adminId/disable',
     { config: manageFresh(onAdmin('admin.disabled')) },
-    async (request) => admins.disable(idParam(request.params, 'adminId')),
+    async (request) => {
+      const adminId = idParam(request.params, 'adminId');
+      const changed = await admins.disable(adminId, recorder(request, adminId));
+      await closeSockets(changed);
+      return changed.admin;
+    },
   );
 
   app.post(
@@ -177,9 +241,13 @@ export default async function platformAdminsRoutes(
     '/admins/:adminId/revoke-sessions',
     { config: manage(onAdmin('admin.sessions_revoked')) },
     async (request) => {
-      const ended = await admins.revokeSessions(idParam(request.params, 'adminId'));
-      request.platformAudit!.payload = { ended };
-      return { ended };
+      const adminId = idParam(request.params, 'adminId');
+      const changed = await admins.revokeSessions(
+        adminId,
+        recorder(request, adminId, (change) => ({ ended: change.sessionsEnded })),
+      );
+      await closeSockets(changed);
+      return { ended: changed.sessionsEnded };
     },
   );
 }

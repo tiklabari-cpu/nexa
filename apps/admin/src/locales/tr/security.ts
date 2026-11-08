@@ -121,4 +121,8 @@ export const security: Messages = {
   'security.impersonations.state.expired': 'Süresi doldu',
   'security.impersonations.state.ended_by_operator': 'Operatör bitirdi',
   'security.impersonations.state.ended_in_workspace': 'Çalışma alanında bitirildi',
+  'security.impersonations.state.operator_disabled': 'Operatör devre dışı bırakılınca bitti',
+  'security.impersonations.state.operator_role_changed': 'Operatörün rolü değişince bitti',
+  'security.impersonations.state.operator_sessions_revoked':
+    'Operatörün oturumları kapatılınca bitti',
 };

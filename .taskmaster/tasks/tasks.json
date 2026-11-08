@@ -16789,12 +16789,12 @@
         "description": "Ele geçirilmiş superadmin mode: full impersonation başlatıyor; başka admin onu disable ediyor ama kiracı token'ı çalışmaya devam ediyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F12 (admin-platform). Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/api/src/services/platform/admin-directory.ts:~163/168/176/202/213` yalnız `platformSession.deleteMany`; dosyada \"impersonation\" geçmiyor; `apps/api/prisma/migrations/20261101150000_impersonation_tokens/migration.sql:70-83` `auth_resolve_token` operatör durumuna bakmıyor.\n\nYAPILACAK: (1) disable / rol düşürme / oturum iptali transaction'ında operatörün açık `platform_impersonation_sessions` kayıtlarını sonlandır (ended_at + reason) ve bağlı kiracı token'larını iptal et; platform_audit_log + kiracı audit_log (actor_type='platform') çift audit. (2) `auth_resolve_token` (yeni migration, CREATE OR REPLACE) impersonation token'ında operatörün `disabled_at IS NULL` ve aktif oturum kontrolü. (3) rtm: RTM-REVOKE-CLOSES-SOCKETS zarfı varsa yayınla; yoksa HANDOFF'a not.\n\nTUZAK: Platform rotaları yalnız platform-api sürecinde (memory new-platform-route-ripples; platform-integration-test-traps: reset ownerClient ile). SECURITY DEFINER fonksiyon değişince plan cache (hub-prisma-postgres-traps). Rol düşürmenin impersonation yetkisini gerçekten kaldırıp kaldırmadığını kontrol et (yalnız impersonation yetkisi düşüyorsa sonlandır).\n\nKAPSAM DIŞI: impersonation UI.\nDENETİM BULGULARI: F12",
         "testStrategy": "platform entegrasyon: operatör impersonation başlatır → başka admin disable eder → kiracı token'ı 401, oturum ended, iki audit satırı; rol düşürme ve oturum iptali için aynı; başka operatörün oturumu etkilenmez. Mutasyon: auth_resolve_token kontrolünü kaldır → kırmızı. DoD: CONVENTIONS §1.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "417"
         ],
         "priority": "medium",
-        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "updatedAt": "2026-11-08T18:31:11.408Z",
         "subtasks": []
       },
       {
@@ -17778,7 +17778,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-08T18:28:26.633Z",
+      "lastModified": "2026-11-08T18:31:11.408Z",
       "taskCount": 478,
       "completedCount": 422,
       "tags": [

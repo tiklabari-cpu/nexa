@@ -23835,10 +23835,14 @@ export interface components {
        */
       origin: 'issued' | 'reconstructed' | 'estimate';
       /**
-       * @description `paid` for a settled past period, `open` for the current one still
-       *     accruing, `trial` when the workspace owed nothing for that period.
-       *     Frozen alongside the rest: a workspace leaving its trial does not
-       *     turn its trial months into paid ones. Every period composed in the
+       * @description `paid` when a payment covers the period, `open` when none does
+       *     (the current period still accruing, or a closed one owed and not
+       *     paid for), `trial` when the workspace owed nothing for that period.
+       *     A closed period is judged from its own dates, not from the day it
+       *     was frozen: it is `trial` only if the trial covered all of it, and
+       *     a frozen `open` stays `open`. Frozen alongside the rest: a workspace
+       *     leaving its trial does not turn its trial months into paid ones.
+       *     Every period composed in the
        *     public pilot (`pilot_mode`) is `trial` — one $0 line, "<plan> plan —
        *     free during the pilot" — even on a licence activated by hand.
        * @enum {string}

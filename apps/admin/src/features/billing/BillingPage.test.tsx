@@ -87,6 +87,15 @@ describe('the billing page', () => {
     expect(createObjectURL).toHaveBeenCalledTimes(1);
   });
 
+  it('labels a statement nobody paid for apart from a paid one', async () => {
+    await open('support');
+    const invoices = section('Issued statements');
+    const row = async (number: string) =>
+      (await within(invoices).findByRole('cell', { name: number })).closest('tr') as HTMLElement;
+    expect(within(await row('SIYAHTUS-202609')).getByText('Paid')).toBeVisible();
+    expect(within(await row('2026-000007')).getByText('Open — not paid')).toBeVisible();
+  });
+
   it('offers the writes to billing only, never to support or readonly', async () => {
     await open('support');
     await screen.findByRole('table', { name: 'Revenue by month' });

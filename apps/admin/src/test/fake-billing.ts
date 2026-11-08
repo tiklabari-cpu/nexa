@@ -204,6 +204,22 @@ export function handleBilling(
           issued_at: '2026-09-30T00:00:00.000Z',
           pdf_available: true,
         },
+        {
+          // Owed and nothing paid for it (tm 431).
+          id: '00000000-0000-4000-8000-0000000000a2',
+          license_id: '43',
+          organization_name: 'Beta Casino',
+          number: '2026-000007',
+          period: '202609',
+          origin: 'issued',
+          status: 'open',
+          currency: 'usd',
+          subtotal_cents: 19_800,
+          credit_cents: 0,
+          total_cents: 19_800,
+          issued_at: '2026-09-30T00:00:00.000Z',
+          pdf_available: true,
+        },
       ],
       next_cursor: null,
     });

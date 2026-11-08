@@ -964,6 +964,30 @@ describe('BillingPage — invoices (FR-MOD-10.3)', () => {
     expect(reconstructed).toHaveAttribute('title', expect.stringContaining('seat charge'));
   });
 
+  // A closed month owed and nothing paid for it is frozen `open` (tm 431): the
+  // row says Open, as the running month does, without the estimate's badge.
+  it('shows a frozen month nobody paid for as Open, not as an estimate', async () => {
+    mockBilling({
+      invoices: [
+        DEFAULT_INVOICE,
+        {
+          ...DEFAULT_INVOICE,
+          number: '2026-000042',
+          period: '202606',
+          origin: 'issued',
+          status: 'open',
+        },
+      ],
+    });
+    renderBilling(<BillingPage />);
+
+    const rows = await screen.findAllByTestId('invoice-row');
+    expect(rows[1]).toHaveTextContent('2026-000042');
+    expect(rows[1]).toHaveTextContent('Open');
+    expect(rows[1]).not.toHaveTextContent('Paid');
+    expect(within(rows[1]!).queryByTestId('invoice-origin')).toBeNull();
+  });
+
   /**
    * A statement that shows only a total cannot answer "why did this move".
    * The line items were previously reachable only by downloading the CSV, which

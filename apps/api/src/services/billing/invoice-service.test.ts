@@ -22,6 +22,7 @@ import {
   periodWindow,
   previousPeriod,
   toInvoice,
+  trialCoversPeriod,
   type InvoiceComposition,
 } from './invoice-service.js';
 
@@ -260,6 +261,40 @@ describe('toInvoice — what a period claims about itself (FR-MOD-10.3)', () => 
     const invoice = toInvoice('202606', composeInvoice(base({ trialing: true })), 'issued');
     expect(invoice.status).toBe('trial');
     expect(invoice.total_cents).toBe(0);
+  });
+});
+
+describe('trialCoversPeriod — a closed month is a trial month by its own dates (tm 431 · FR-MOD-10.3)', () => {
+  const trialing = (endsAt: string | null) => ({ status: 'trialing', trialEndsAt: endsAt });
+
+  it('covers a month the trial ran past, and one it ended exactly with', () => {
+    expect(trialCoversPeriod(trialing('2026-11-03T00:00:00.000Z'), '202610')).toBe(true);
+    expect(trialCoversPeriod(trialing('2026-11-01T00:00:00.000Z'), '202610')).toBe(true);
+  });
+
+  it('does not cover a month the trial left before its end', () => {
+    expect(trialCoversPeriod(trialing('2026-10-10T00:00:00.000Z'), '202610')).toBe(false);
+    expect(trialCoversPeriod(trialing('2026-10-31T23:59:59.999Z'), '202610')).toBe(false);
+    // Nor a later month, however the licence reads now.
+    expect(trialCoversPeriod(trialing('2026-10-10T00:00:00.000Z'), '202611')).toBe(false);
+  });
+
+  it('reads the end the same as a Date or as the string `trialState` returns', () => {
+    const end = new Date('2026-11-03T00:00:00.000Z');
+    expect(trialCoversPeriod({ status: 'trialing', trialEndsAt: end }, '202610')).toBe(true);
+  });
+
+  it('takes an open-ended trial as covering, and a licence with no trial on record as not', () => {
+    expect(trialCoversPeriod(trialing(null), '202610')).toBe(true);
+    for (const status of ['active', 'past_due', 'read_only', 'canceled', 'suspended']) {
+      expect(trialCoversPeriod({ status, trialEndsAt: null }, '202610'), status).toBe(false);
+    }
+  });
+
+  it('follows the end date, not the status, when there is one — a suspended trial still covers its months', () => {
+    expect(
+      trialCoversPeriod({ status: 'suspended', trialEndsAt: '2026-11-03T00:00:00.000Z' }, '202610'),
+    ).toBe(true);
   });
 });
 

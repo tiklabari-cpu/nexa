@@ -62,7 +62,7 @@ const invoicesQuery = z.object({
     .string()
     .regex(/^\d{6}$/)
     .optional(),
-  status: z.enum(['paid', 'trial']).optional(),
+  status: z.enum(['paid', 'open', 'trial']).optional(),
   ...page,
 });
 

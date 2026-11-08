@@ -4711,9 +4711,10 @@ model Invoice {
   /// stored value: an estimate is precisely a period with no row.
   origin String
 
-  /// `paid` or `trial`. Frozen with the rest, so leaving the trial does not
-  /// turn a workspace's trial months into paid ones. `open` is not storable
-  /// for the same reason `estimate` is not.
+  /// `paid`, `open` or `trial`. Frozen with the rest, so leaving the trial does
+  /// not turn a workspace's trial months into paid ones. `open` is a closed
+  /// period owed and not paid for (tm 431). It stays `open`: collecting it is
+  /// not this row's business.
   status String
 
   currency String @db.Char(3)

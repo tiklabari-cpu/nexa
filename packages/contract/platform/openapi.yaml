@@ -2390,7 +2390,13 @@ components:
         number: { type: string }
         period: { type: string, pattern: "^[0-9]{6}$" }
         origin: { type: string, enum: [issued, reconstructed] }
-        status: { type: string, enum: [paid, trial] }
+        status:
+          type: string
+          enum: [paid, open, trial]
+          description: |
+            `paid` when a payment covers the period, `open` when it was owed
+            and nothing paid for it (#431), `trial` when the trial covered the
+            whole period. Only `paid` counts as revenue.
         currency: { type: string }
         subtotal_cents: { type: integer }
         credit_cents:

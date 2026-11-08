@@ -444,7 +444,15 @@ export function InvoicesTab({ licenseId }: { licenseId: string }): ReactElement 
               <tr key={invoice.period}>
                 <Cell>{invoice.number}</Cell>
                 <Cell>{invoice.period_label}</Cell>
-                <Cell>{t(`workspaces.invoices.status.${invoice.status}`)}</Cell>
+                <Cell>
+                  {t(
+                    // `open` is the estimate still accruing, or a closed period
+                    // owed and not paid for (tm 431) — two different statements.
+                    invoice.status === 'open' && invoice.origin !== 'estimate'
+                      ? 'workspaces.invoices.status.unpaid'
+                      : `workspaces.invoices.status.${invoice.status}`,
+                  )}
+                </Cell>
                 <Cell>{formatMoney(invoice.total_cents)}</Cell>
                 <Cell>
                   <button

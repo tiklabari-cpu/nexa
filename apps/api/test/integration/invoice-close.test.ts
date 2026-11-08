@@ -237,6 +237,259 @@ describe('persistent invoice history (FR-MOD-10.3)', () => {
   });
 
   // =========================================================================
+  // F13 (tm 431). Every closed month that was not a trial month froze as
+  // `paid`, paid or not, and the trial was read as it stood when the sweep
+  // ran: a trial that ended on the 10th with nothing paid froze its month
+  // `paid` on the 1st, and the root panel's revenue counted it. Each case
+  // runs twice — on the 1st, and a month late, by when the month is a
+  // reconstruction — and must freeze the same statement both times.
+  describe('a closed month is paid, open or trial by its own dates, however late the sweep runs (FR-MOD-10.3)', () => {
+    const OCTOBER = '202610';
+    const at = (iso: string) => new Date(iso);
+    const SWEEPS = [
+      ['on the 1st', at('2026-11-01T01:00:00Z'), 'issued'],
+      ['a month late', at('2026-12-02T09:00:00Z'), 'reconstructed'],
+    ] as const;
+
+    let references = 0;
+
+    async function trialUntil(endsAt: Date | null, status = 'trialing'): Promise<void> {
+      await owner.license.update({
+        where: { id: fx.a.licenseId },
+        data: { status, trialEndsAt: endsAt },
+      });
+    }
+
+    /** Two seats at $99 a month on file — and, once paid, what `settlePayment` leaves. */
+    async function subscribe(paid?: { through: Date }): Promise<void> {
+      await owner.subscription.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          status: 'active',
+          seats: 2,
+          unitPriceCents: 9_900,
+          aiResolutionsIncluded: 200,
+          ...(paid ? { currentPeriodEnd: paid.through, paymentProvider: 'swift_manual' } : {}),
+        },
+      });
+    }
+
+    /** A payment row as `settlePayment` leaves it: started in `period`, paying `[from, to)`. */
+    async function payment(input: {
+      period: string;
+      from: Date;
+      to: Date;
+      status?: 'succeeded' | 'disputed';
+    }): Promise<void> {
+      references += 1;
+      await owner.paymentTransaction.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          provider: 'swift_manual',
+          kind: 'checkout',
+          reference: `ST-T431-${String(references).padStart(4, '0')}`,
+          amountMinor: 19_800,
+          currency: 'usd',
+          period: input.period,
+          billingCycle: 'monthly',
+          status: input.status ?? 'succeeded',
+          termStart: input.from,
+          termEnd: input.to,
+          settledAt: input.from,
+        },
+      });
+    }
+
+    const SCENARIOS: {
+      name: string;
+      status: 'paid' | 'open' | 'trial';
+      total: number;
+      given: () => Promise<void>;
+    }[] = [
+      {
+        name: 'a trial that ended on the 10th with nothing paid leaves the month `open`, owed in full',
+        status: 'open',
+        total: 2 * 9_900,
+        given: async () => {
+          await trialUntil(at('2026-10-10T00:00:00Z'));
+          await subscribe();
+        },
+      },
+      {
+        name: 'a payment started in the month makes it `paid`',
+        status: 'paid',
+        total: 2 * 9_900,
+        given: async () => {
+          // Paying activates the licence, which clears the trial's end date.
+          await trialUntil(null, 'active');
+          await subscribe({ through: at('2026-11-12T00:00:00Z') });
+          await payment({
+            period: OCTOBER,
+            from: at('2026-10-12T00:00:00Z'),
+            to: at('2026-11-12T00:00:00Z'),
+          });
+        },
+      },
+      {
+        name: 'a transfer started in the month and confirmed after it closed makes it `paid`',
+        status: 'paid',
+        total: 2 * 9_900,
+        given: async () => {
+          await trialUntil(null, 'active');
+          await subscribe({ through: at('2026-12-03T00:00:00Z') });
+          // The reference was taken in October; the money landed on 3 November,
+          // so the term it paid starts then.
+          await payment({
+            period: OCTOBER,
+            from: at('2026-11-03T00:00:00Z'),
+            to: at('2026-12-03T00:00:00Z'),
+          });
+        },
+      },
+      {
+        name: 'a term paid before the month and running to its last instant makes it `paid`',
+        status: 'paid',
+        total: 2 * 9_900,
+        given: async () => {
+          await trialUntil(null, 'active');
+          await subscribe({ through: at('2026-11-01T00:00:00Z') });
+          await payment({
+            period: '202609',
+            from: at('2026-10-01T00:00:00Z'),
+            to: at('2026-11-01T00:00:00Z'),
+          });
+        },
+      },
+      {
+        name: 'a term that ran out mid-month leaves the rest unpaid: `open`',
+        status: 'open',
+        total: 2 * 9_900,
+        given: async () => {
+          await trialUntil(null, 'active');
+          await subscribe({ through: at('2026-10-15T00:00:00Z') });
+          await payment({
+            period: '202609',
+            from: at('2026-09-15T00:00:00Z'),
+            to: at('2026-10-15T00:00:00Z'),
+          });
+        },
+      },
+      {
+        name: 'a payment for the month after, whatever the subscription now reads, does not pay for this one: `open`',
+        status: 'open',
+        total: 2 * 9_900,
+        given: async () => {
+          await trialUntil(null, 'active');
+          // Paid through December: the paid-through date alone would call
+          // October paid too.
+          await subscribe({ through: at('2026-12-03T00:00:00Z') });
+          await payment({
+            period: '202611',
+            from: at('2026-11-03T00:00:00Z'),
+            to: at('2026-12-03T00:00:00Z'),
+          });
+        },
+      },
+      {
+        name: 'a term starting the instant the month ends does not pay for it: `open`',
+        status: 'open',
+        total: 2 * 9_900,
+        given: async () => {
+          await trialUntil(null, 'active');
+          await subscribe({ through: at('2026-12-01T00:00:00Z') });
+          await payment({
+            period: '202611',
+            from: at('2026-11-01T00:00:00Z'),
+            to: at('2026-12-01T00:00:00Z'),
+          });
+        },
+      },
+      {
+        name: 'a disputed payment pays for nothing: `open`',
+        status: 'open',
+        total: 2 * 9_900,
+        given: async () => {
+          await trialUntil(at('2026-10-10T00:00:00Z'));
+          await subscribe();
+          await payment({
+            period: OCTOBER,
+            from: at('2026-10-12T00:00:00Z'),
+            to: at('2026-11-12T00:00:00Z'),
+            status: 'disputed',
+          });
+        },
+      },
+      {
+        name: 'a trial that ran past the month makes it `trial`, owing nothing',
+        status: 'trial',
+        total: 0,
+        given: async () => {
+          await trialUntil(at('2026-11-03T00:00:00Z'));
+          await subscribe();
+        },
+      },
+      {
+        name: 'a trial ending the instant the month does still covers it: `trial`',
+        status: 'trial',
+        total: 0,
+        given: async () => {
+          await trialUntil(at('2026-11-01T00:00:00Z'));
+          await subscribe();
+        },
+      },
+      {
+        name: 'a trial ending a second before the month does leaves it `open`',
+        status: 'open',
+        total: 2 * 9_900,
+        given: async () => {
+          await trialUntil(at('2026-10-31T23:59:59Z'));
+          await subscribe();
+        },
+      },
+    ];
+
+    for (const [when, now, origin] of SWEEPS) {
+      describe(`swept ${when}`, () => {
+        for (const { name, given, status, total } of SCENARIOS) {
+          it(name, async () => {
+            await given();
+            await meter('a', OCTOBER, 10n);
+
+            expect((await sweep(now)).totals).toMatchObject({
+              issued: origin === 'issued' ? 1 : 0,
+              reconstructed: origin === 'reconstructed' ? 1 : 0,
+            });
+
+            expect(await invoiceFor('a', OCTOBER)).toMatchObject({
+              origin,
+              status,
+              total_cents: total,
+            });
+          });
+        }
+      });
+    }
+
+    it('keeps an `open` month `open` when the workspace pays afterwards', async () => {
+      await trialUntil(at('2026-10-10T00:00:00Z'));
+      await subscribe();
+      await meter('a', OCTOBER, 10n);
+      await sweep(SWEEPS[0][1]);
+
+      await trialUntil(null, 'active');
+      await payment({
+        period: '202611',
+        from: at('2026-11-03T00:00:00Z'),
+        to: at('2026-12-03T00:00:00Z'),
+      });
+      await sweep(SWEEPS[1][1]);
+
+      expect(await invoiceFor('a', OCTOBER)).toMatchObject({ status: 'open', total_cents: 19_800 });
+      expect(await owner.invoice.count({ where: { licenseId: fx.a.licenseId } })).toBe(1);
+    });
+  });
+
+  // =========================================================================
   describe('the sweep closes each period exactly once', () => {
     it('writes nothing on a second pass', async () => {
       await activate('a');
@@ -684,8 +937,10 @@ describe('persistent invoice history (FR-MOD-10.3)', () => {
       );
     });
 
-    it('refuses `open` as a stored status', async () => {
-      await expect(insertInvoice({ status: `'open'` })).rejects.toThrow(/invoices_status_check/);
+    it('stores `open` for a closed month nobody paid for, and refuses a status outside the three (tm 431)', async () => {
+      await expect(insertInvoice({ status: `'unpaid'` })).rejects.toThrow(/invoices_status_check/);
+      await insertInvoice({ status: `'open'` });
+      expect(await owner.invoice.count({ where: { period: '209901', status: 'open' } })).toBe(1);
     });
 
     it('refuses an inverted or empty period window', async () => {

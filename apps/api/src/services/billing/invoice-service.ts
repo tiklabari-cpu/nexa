@@ -87,8 +87,9 @@ export interface Invoice {
   /** `issued`/`reconstructed` for a frozen period, `estimate` for the open one. */
   origin: InvoiceOrigin;
   /**
-   * `paid` for a settled past period, `open` for the current one still
-   * accruing, `trial` when the workspace owed nothing for that period.
+   * `paid` when the period was paid for ({@link periodPaid}), `open` when it
+   * was not — the current period still accruing, or a closed one nobody paid
+   * (tm 431) — and `trial` when the workspace owed nothing for that period.
    */
   status: InvoiceStatus;
   currency: 'usd';
@@ -130,6 +131,35 @@ export function periodWindow(period: string): { start: Date; end: Date } {
     start: new Date(Date.UTC(year, month - 1, 1)),
     end: new Date(Date.UTC(year, month, 1)),
   };
+}
+
+/**
+ * Whether the whole period fell inside the workspace's trial (tm 431 · F13),
+ * judged from the trial's own end rather than from the moment of asking.
+ *
+ * This is the answer a closed period is frozen with. `trialState` says whether
+ * the workspace is trialing *now*, which for a month that has ended is the
+ * wrong question: a sweep on the 1st after a trial that ended on the 10th heard
+ * "not trialing" and froze the month as owed, and a sweep running a few days
+ * late after a trial that ended on the 3rd heard the same about a month the
+ * trial had covered end to end. The period's window against `trial_ends_at`
+ * gives the same answer whenever it is asked.
+ *
+ * A trial ending exactly when the period does covers it (the window is
+ * half-open). A trialing licence with no end date is an open-ended trial, as
+ * `trialState` reads it; any other licence without one has no trial on record
+ * — activation clears the date (`license-activation.ts`, `settlePayment`).
+ *
+ * A period the trial covers only in part is not a trial month. The composer
+ * has no proration, so it is priced as a whole month, and whether it was paid
+ * decides `paid` or `open`.
+ */
+export function trialCoversPeriod(
+  trial: { status: string; trialEndsAt: Date | string | null },
+  period: string,
+): boolean {
+  if (trial.trialEndsAt === null) return trial.status === 'trialing';
+  return new Date(trial.trialEndsAt).getTime() >= periodWindow(period).end.getTime();
 }
 
 /** The `yyyymm` immediately before this one. */
@@ -291,7 +321,13 @@ export function composeInvoice(input: InvoiceComposition): ComposedInvoice {
   };
 }
 
-/** Wrap composed lines in the period's fixed identity. */
+/**
+ * Wrap composed lines in the period's fixed identity.
+ *
+ * Only the open estimate is built here. A closed period's status is decided
+ * by the sweep (`paid`, `open` or `trial`, tm 431) and read back by
+ * {@link serialiseStored}.
+ */
 export function toInvoice(
   period: string,
   composed: ComposedInvoice,
@@ -331,12 +367,22 @@ export function invoiceNumber(period: string): string {
  * Shared by the estimate and the sweep so the two cannot disagree about what
  * "the figures for this period" means — the sweep freezes exactly what a read
  * of that period would have produced.
+ *
+ * The one thing that depends on the caller is whether the period was a trial
+ * month. A `closed` period (the sweep) is judged from its own window
+ * ({@link trialCoversPeriod}), so freezing it on the 1st and freezing it a
+ * week late give the same statement. The open estimate keeps the trial state
+ * as it stands now. That is the same reading `estimated_total_cents` uses
+ * (`billing-views.ts`), so the quote and the estimate still agree, and it is
+ * what the month will freeze as once it has closed: a trial that ends before
+ * the month does reads "not trialing" from that day on.
  */
 export async function readComposition(
   tx: TenantClient,
   tenant: TenantContext,
   period: string,
   env: Env,
+  options: { closed?: boolean } = {},
 ): Promise<InvoiceComposition> {
   const [subscription, trial, records, purchases, aiPurchases, activeUsers] = await Promise.all([
     tx.subscription.findFirst({
@@ -358,7 +404,7 @@ export async function readComposition(
     seats: subscription?.seats ?? activeUsers,
     unitPriceCents: subscription?.unitPriceCents ?? env.UNIT_PRICE_CENTS,
     billingCycle: (subscription?.billingCycle ?? 'monthly') as BillingCycle,
-    trialing: trial.access === 'trialing',
+    trialing: options.closed ? trialCoversPeriod(trial, period) : trial.access === 'trialing',
     // Read from the deployment at the moment of composing, like the trial
     // state above: the sweep keeps running in the pilot, so each closed month
     // is frozen as owing nothing — and turning the switch off later bills only
@@ -456,31 +502,40 @@ export async function listInvoices(
 }
 
 /**
- * Whether the period in progress has been paid for (tm 382 · BL-01): a payment
- * started in it succeeded, or a term already paid runs past its end (an annual
- * payment, or a monthly one made late in the previous month). The open
- * statement then reads `paid` — by bank transfer, crypto or card alike — while
- * its figures keep moving until the period closes, as before.
+ * Whether a period has been paid for (tm 382 · BL-01): a payment started in it
+ * succeeded, or a term already paid runs past its end (an annual payment, or a
+ * monthly one made late in the previous month). By bank transfer, crypto or
+ * card alike.
+ *
+ * Two callers. The open estimate reads `paid` from this while its figures keep
+ * moving until the period closes. The sweep freezes a closed period `paid` or
+ * `open` by it (tm 431 · F13), so it must give the same answer for a past
+ * period however late it is asked. It therefore reads the payments' own terms
+ * and not the subscription's paid-through date. That date moves with every
+ * later payment: a workspace that paid on the 3rd for the month ahead would
+ * read as paid for the month before it to a sweep running on the 5th. Every
+ * payment's term is on its own row (`settlePayment` writes `term_start` and
+ * `term_end`, and `current_period_end` is the newest of them), so for the
+ * period in progress the two readings agree. The one difference is a root
+ * panel manual subscription, which moves `current_period_end` and records no
+ * payment. It does not count here. Before tm 431 it counted only when an
+ * earlier payment had set the subscription's `payment_provider`.
  */
-async function periodPaid(
+export async function periodPaid(
   tx: TenantClient,
   tenant: TenantContext,
   period: string,
 ): Promise<boolean> {
-  const [payment, subscription] = await Promise.all([
-    tx.paymentTransaction.findFirst({
-      where: { licenseId: tenant.licenseId, period, status: 'succeeded' },
-      select: { id: true },
-    }),
-    tx.subscription.findFirst({
-      where: { licenseId: tenant.licenseId, paymentProvider: { not: null } },
-      orderBy: { createdAt: 'desc' },
-      select: { currentPeriodEnd: true },
-    }),
-  ]);
-  if (payment) return true;
-  const paidThrough = subscription?.currentPeriodEnd;
-  return paidThrough != null && paidThrough >= periodWindow(period).end;
+  const window = periodWindow(period);
+  const payment = await tx.paymentTransaction.findFirst({
+    where: {
+      licenseId: tenant.licenseId,
+      status: 'succeeded',
+      OR: [{ period }, { termStart: { lt: window.end }, termEnd: { gte: window.end } }],
+    },
+    select: { id: true },
+  });
+  return payment !== null;
 }
 
 /**

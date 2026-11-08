@@ -50,6 +50,7 @@ export const billing: Messages = {
   'billing.invoices.number': 'Number',
   'billing.invoices.status': 'Status',
   'billing.invoices.state.paid': 'Paid',
+  'billing.invoices.state.open': 'Open — not paid',
   'billing.invoices.state.trial': 'Trial — nothing owed',
   'billing.invoices.file': 'File',
   'billing.invoices.download': 'Download {number} (CSV)',

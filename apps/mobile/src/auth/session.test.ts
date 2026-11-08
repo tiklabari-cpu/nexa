@@ -10,7 +10,12 @@
 import { MOBILE_REDIRECT_URI } from '@siyahtus/types';
 
 import { DeviceTokenLifecycle } from './device-token';
-import { MobileSession, SsoRequiredError, type AuthBrowser } from './session';
+import {
+  ACCESS_TOKEN_MIN_VALIDITY_MS,
+  MobileSession,
+  SsoRequiredError,
+  type AuthBrowser,
+} from './session';
 import { SessionStore, type SecureKeyValueStore } from './secure-store';
 
 const API = 'https://api.test/api/v1';
@@ -103,7 +108,12 @@ function build(
   // `store` is here for the tests that have to build a `DeviceTokenLifecycle`
   // first: the lifecycle needs a store, and the session has to be reading the
   // same one for a persisted session to be visible to both.
-  extra: { browser?: AuthBrowser; deviceTokens?: DeviceTokenLifecycle; store?: SessionStore } = {},
+  extra: {
+    browser?: AuthBrowser;
+    deviceTokens?: DeviceTokenLifecycle;
+    store?: SessionStore;
+    now?: () => number;
+  } = {},
 ) {
   const { store, values } = memoryStore();
   const sessionStore = extra.store ?? new SessionStore(store);
@@ -482,6 +492,144 @@ describe('refresh', () => {
     const { session, calls } = build({});
     expect(await session.refresh()).toBeNull();
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe('a token for the gateway (tm 436)', () => {
+  const PERSISTED = {
+    refreshToken: 'refresh-0',
+    clientId: 'siyahtus-agent-app-1',
+    licenseId: '42',
+    accountId: 'acct-1',
+  };
+
+  /** A restored session on a clock the test moves; every rotation mints the next token. */
+  async function restored(grant: Record<string, unknown> = {}) {
+    let clock = 1_000_000;
+    let issued = 0;
+    let refuse = false;
+    const built = build(
+      {
+        'POST /auth/token': () => {
+          if (refuse) return apiError(401, 'authentication');
+          issued += 1;
+          return json({
+            ...GRANT,
+            access_token: `access-${issued}`,
+            refresh_token: `refresh-${issued}`,
+            ...grant,
+          });
+        },
+        'GET /auth/me': () => json(ME),
+      },
+      { now: () => clock },
+    );
+    await built.sessionStore.write(PERSISTED);
+    await built.session.restore();
+    return {
+      ...built,
+      rotations: () => built.calls.filter((c) => c.url.endsWith('/auth/token')).length,
+      advance: (ms: number) => {
+        clock += ms;
+      },
+      refuseRotation: () => {
+        refuse = true;
+      },
+    };
+  }
+
+  it('hands over the current token while it has more than a minute left', async () => {
+    const s = await restored();
+    s.advance(GRANT.expires_in * 1000 - ACCESS_TOKEN_MIN_VALIDITY_MS);
+
+    expect(await s.session.getFreshAccessToken()).toBe('access-1');
+    expect(s.rotations()).toBe(1); // the restore's own, nothing more
+  });
+
+  it('renews a token that would expire within the minute before handing it over', async () => {
+    const s = await restored();
+    s.advance(GRANT.expires_in * 1000 - ACCESS_TOKEN_MIN_VALIDITY_MS + 1);
+
+    expect(await s.session.getFreshAccessToken()).toBe('access-2');
+    expect(s.session.getAccessToken()).toBe('access-2');
+    expect(s.rotations()).toBe(2);
+    // The successor's clock starts now: asked again, it is fresh.
+    expect(await s.session.getFreshAccessToken()).toBe('access-2');
+    expect(s.rotations()).toBe(2);
+  });
+
+  it('renews a token that expired while the phone sat in the background', async () => {
+    const s = await restored();
+    s.advance(2 * 60 * 60 * 1000);
+
+    expect(await s.session.getFreshAccessToken()).toBe('access-2');
+  });
+
+  it('serves two concurrent askers from a single rotation', async () => {
+    const s = await restored();
+    s.advance(GRANT.expires_in * 1000);
+
+    const results = await Promise.all([
+      s.session.getFreshAccessToken(),
+      s.session.getFreshAccessToken(),
+      s.session.renewAccessToken('access-1'),
+    ]);
+
+    // A second presentation of the same refresh token is theft to the server.
+    expect(s.rotations()).toBe(2);
+    expect(results).toEqual(['access-2', 'access-2', 'access-2']);
+  });
+
+  it('answers null and signs out when the renewal is refused', async () => {
+    const s = await restored();
+    s.advance(GRANT.expires_in * 1000);
+    s.refuseRotation();
+
+    expect(await s.session.getFreshAccessToken()).toBeNull();
+    expect(s.session.getState().status).toBe('signed-out');
+  });
+
+  it('answers null without a request when there is no session', async () => {
+    const { session, calls } = build({});
+    expect(await session.getFreshAccessToken()).toBeNull();
+    expect(calls).toHaveLength(0);
+  });
+
+  it('uses a grant that never said how long it lives as it is', async () => {
+    const s = await restored({ expires_in: undefined });
+    s.advance(10 * 60 * 60 * 1000);
+
+    expect(await s.session.getFreshAccessToken()).toBe('access-1');
+    expect(s.rotations()).toBe(1);
+  });
+
+  it('replaces a refused token with the one the session already moved on to', async () => {
+    const s = await restored();
+    // A REST 401 renewed the session while the socket still held access-1.
+    await s.session.refresh();
+    expect(s.rotations()).toBe(2);
+
+    expect(await s.session.renewAccessToken('access-1')).toBe('access-2');
+    expect(s.rotations()).toBe(2);
+  });
+
+  it('rotates when the refused token is the one the session holds', async () => {
+    const s = await restored();
+
+    expect(await s.session.renewAccessToken('access-1')).toBe('access-2');
+    expect(s.rotations()).toBe(2);
+  });
+
+  it('times a token from the sign-in grant too, not only from a rotation', async () => {
+    let clock = 0;
+    const { session, calls } = build(SIGN_IN_ROUTES, { now: () => clock });
+    await session.signIn(CREDENTIALS);
+    expect(await session.getFreshAccessToken()).toBe('access-1');
+
+    clock += GRANT.expires_in * 1000;
+    // The renewal is attempted: the sign-in routes answer it with the same grant.
+    expect(await session.getFreshAccessToken()).toBe('access-1');
+    expect(calls.filter((c) => c.body?.['grant_type'] === 'refresh_token')).toHaveLength(1);
   });
 });
 

@@ -5,7 +5,12 @@
  */
 import { RTM_LIMITS, RTM_PATHS, RTM_VERSION } from '@siyahtus/types';
 
-import { MobileRtmClient, type AppStateLike, type RtmSocket } from './client';
+import {
+  CREDENTIAL_CLOSE_CODE,
+  MobileRtmClient,
+  type AppStateLike,
+  type RtmSocket,
+} from './client';
 
 interface Sent {
   version?: string;
@@ -18,7 +23,7 @@ interface Sent {
 class FakeSocket implements RtmSocket {
   onopen: (() => void) | null = null;
   onmessage: ((event: { data: unknown }) => void) | null = null;
-  onclose: (() => void) | null = null;
+  onclose: ((event?: { code?: number }) => void) | null = null;
   onerror: ((event: unknown) => void) | null = null;
 
   readonly sent: Sent[] = [];
@@ -58,9 +63,13 @@ class FakeSocket implements RtmSocket {
     this.onmessage?.({ data: JSON.stringify({ action, type: 'push', payload }) });
   }
 
-  /** The network went away. */
-  drop(): void {
-    this.onclose?.();
+  /** The network went away — or, with a code, the gateway closed the socket. */
+  drop(code?: number): void {
+    this.onclose?.(code === undefined ? undefined : { code });
+  }
+
+  login(): Sent | undefined {
+    return [...this.sent].reverse().find((message) => message.action === 'login');
   }
 
   sentActions(): string[] {
@@ -68,7 +77,15 @@ class FakeSocket implements RtmSocket {
   }
 }
 
-function harness(overrides: { token?: string | null; isSignedOut?: () => boolean } = {}) {
+function harness(
+  overrides: {
+    token?: string | null;
+    isSignedOut?: () => boolean;
+    /** Replaces the synchronous token read — the app's own answer is async (tm 436). */
+    getToken?: () => string | null | Promise<string | null>;
+    renewToken?: (stale: string) => Promise<string | null>;
+  } = {},
+) {
   // Mutable, because the interesting case is a token that arrives *later*: a
   // renewal in flight is the ordinary reason `getAccessToken()` is null.
   let token: string | null = overrides.token === undefined ? 'access-token' : overrides.token;
@@ -87,7 +104,8 @@ function harness(overrides: { token?: string | null; isSignedOut?: () => boolean
   const client = new MobileRtmClient({
     baseUrl: 'wss://rtm.siyahtus.test',
     organizationId: 'org-1',
-    getToken: () => token,
+    getToken: overrides.getToken ?? (() => token),
+    ...(overrides.renewToken ? { renewToken: overrides.renewToken } : {}),
     ...(overrides.isSignedOut ? { isSignedOut: overrides.isSignedOut } : {}),
     pushes: ['incoming_event'],
     onPush: (action, payload) => pushes.push({ action, payload }),
@@ -123,6 +141,23 @@ async function signIn(h: ReturnType<typeof harness>): Promise<void> {
   h.latest().open();
   h.latest().reply('login', {});
   await Promise.resolve();
+}
+
+/** The first backoff window, as the pinned jitter rolls it (0.5 × 500 ms). */
+const FIRST_WINDOW_MS = 250;
+
+/** Let promise callbacks run; the timers stay frozen. */
+async function settle(): Promise<void> {
+  for (let i = 0; i < 10; i += 1) await Promise.resolve();
+}
+
+/** A promise the test resolves by hand, to hold a token or a renewal mid-flight. */
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
 }
 
 beforeEach(() => {
@@ -206,6 +241,298 @@ describe('connecting', () => {
     // layer has to break, not the socket.
     jest.advanceTimersByTime(60_000);
     expect(h.sockets).toHaveLength(1);
+  });
+});
+
+describe('an expired or revoked credential (tm 436)', () => {
+  it('pins the close code the gateway uses for a credential it stopped honouring', () => {
+    // tm 426.1 chose it (revocation) and tm 426.3 reuses it (expiry); a client
+    // waiting for any other code would sit offline after either.
+    expect(CREDENTIAL_CLOSE_CODE).toBe(4401);
+  });
+
+  it('renews once when login is refused for its token, and logs in with the successor', async () => {
+    const renewToken = jest.fn(async (_stale: string) => 'renewed-token');
+    const h = harness({ token: 'expired-token', renewToken });
+    h.client.connect();
+    h.latest().open();
+    h.latest().reply('login', { error: { type: 'authentication' } }, false);
+    await settle();
+
+    expect(renewToken).toHaveBeenCalledTimes(1);
+    expect(renewToken).toHaveBeenCalledWith('expired-token');
+    // At once, not after a backoff: nothing is wrong with the gateway.
+    expect(h.sockets).toHaveLength(2);
+    expect((h.sockets[0] as FakeSocket).closed).toBe(true);
+    h.latest().open();
+    expect(h.latest().login()?.payload['token']).toBe('Bearer renewed-token');
+    h.latest().reply('login', {});
+    await settle();
+    expect(h.client.status).toBe('live');
+
+    // Not stopped: an ordinary drop afterwards still comes back.
+    h.latest().drop();
+    jest.advanceTimersByTime(FIRST_WINDOW_MS);
+    expect(h.sockets).toHaveLength(3);
+  });
+
+  it('stops when the renewed token is refused too — the session is over, not stale', async () => {
+    const renewToken = jest.fn(async (_stale: string) => 'renewed-token');
+    const h = harness({ renewToken });
+    h.client.connect();
+    h.latest().open();
+    h.latest().reply('login', { error: { type: 'authentication' } }, false);
+    await settle();
+    h.latest().open();
+    h.latest().reply('login', { error: { type: 'authentication' } }, false);
+    await settle();
+
+    expect(h.client.status).toBe('offline');
+    expect(renewToken).toHaveBeenCalledTimes(1);
+    jest.advanceTimersByTime(60_000);
+    expect(h.sockets).toHaveLength(2);
+  });
+
+  it('stops when the renewal answers that the session is over', async () => {
+    const h = harness({ renewToken: async () => null });
+    h.client.connect();
+    h.latest().open();
+    h.latest().reply('login', { error: { type: 'authentication' } }, false);
+    await settle();
+
+    expect(h.client.status).toBe('offline');
+    jest.advanceTimersByTime(60_000);
+    expect(h.sockets).toHaveLength(1);
+  });
+
+  it('does not renew for a refusal no new token changes', async () => {
+    const renewToken = jest.fn(async (_stale: string) => 'renewed-token');
+    const h = harness({ renewToken });
+    h.client.connect();
+    h.latest().open();
+    h.latest().reply('login', { error: { type: 'not_allowed' } }, false);
+    await settle();
+
+    expect(renewToken).not.toHaveBeenCalled();
+    expect(h.client.status).toBe('offline');
+    jest.advanceTimersByTime(60_000);
+    expect(h.sockets).toHaveLength(1);
+  });
+
+  it('backs off and tries again when the renewal fails on the network', async () => {
+    const renewToken = jest
+      .fn<Promise<string | null>, [string]>()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue('renewed-token');
+    const h = harness({ renewToken });
+    h.client.connect();
+    h.latest().open();
+    h.latest().reply('login', { error: { type: 'authentication' } }, false);
+    await settle();
+
+    // A tunnel swallowed the refresh; that says nothing about the session.
+    expect(h.client.status).toBe('reconnecting');
+    expect(h.sockets).toHaveLength(1);
+    jest.advanceTimersByTime(FIRST_WINDOW_MS);
+    expect(h.sockets).toHaveLength(2);
+
+    // And the renewal is not spent: the next refusal gets one.
+    h.latest().open();
+    h.latest().reply('login', { error: { type: 'authentication' } }, false);
+    await settle();
+    expect(renewToken).toHaveBeenCalledTimes(2);
+    expect(h.sockets).toHaveLength(3);
+  });
+
+  it('renews once and redials at once when the gateway closes the socket over its credential', async () => {
+    const renewToken = jest.fn(async (_stale: string) => 'renewed-token');
+    const h = harness({ renewToken });
+    await signIn(h);
+
+    h.latest().drop(CREDENTIAL_CLOSE_CODE);
+    await settle();
+
+    expect(renewToken).toHaveBeenCalledTimes(1);
+    expect(renewToken).toHaveBeenCalledWith('access-token');
+    expect(h.sockets).toHaveLength(2);
+    h.latest().open();
+    const login = h.latest().login();
+    expect(login?.payload['token']).toBe('Bearer renewed-token');
+    // A live socket was cut: the gateway is told this is a resumption.
+    expect(login?.payload['reconnect']).toBe(true);
+    h.latest().reply('login', {});
+    await settle();
+    expect(h.client.status).toBe('live');
+  });
+
+  it('stops when the token renewed after a 4401 close is refused as well', async () => {
+    const renewToken = jest.fn(async (_stale: string) => 'renewed-token');
+    const h = harness({ renewToken });
+    await signIn(h);
+
+    h.latest().drop(CREDENTIAL_CLOSE_CODE);
+    await settle();
+    h.latest().open();
+    h.latest().reply('login', { error: { type: 'authentication' } }, false);
+    await settle();
+
+    expect(renewToken).toHaveBeenCalledTimes(1);
+    expect(h.client.status).toBe('offline');
+    jest.advanceTimersByTime(60_000);
+    expect(h.sockets).toHaveLength(2);
+  });
+
+  it('stops when the renewal after a 4401 close says the session is over', async () => {
+    const h = harness({ renewToken: async () => null });
+    await signIn(h);
+
+    h.latest().drop(CREDENTIAL_CLOSE_CODE);
+    await settle();
+
+    expect(h.client.status).toBe('offline');
+    jest.advanceTimersByTime(60_000);
+    expect(h.sockets).toHaveLength(1);
+  });
+
+  it('spends one renewal per successful login, so every expiry renews again', async () => {
+    let issued = 0;
+    const renewToken = jest.fn(async (_stale: string) => `renewed-${++issued}`);
+    const h = harness({ renewToken });
+    await signIn(h);
+
+    for (let hour = 1; hour <= 3; hour += 1) {
+      h.latest().drop(CREDENTIAL_CLOSE_CODE);
+      await settle();
+      h.latest().open();
+      expect(h.latest().login()?.payload['token']).toBe(`Bearer renewed-${hour}`);
+      h.latest().reply('login', {});
+      await settle();
+      expect(h.client.status).toBe('live');
+    }
+    expect(renewToken).toHaveBeenCalledTimes(3);
+  });
+
+  it('leaves an ordinary drop to the backoff — a network failure is not a credential', async () => {
+    const renewToken = jest.fn(async (_stale: string) => 'renewed-token');
+    const h = harness({ renewToken });
+    await signIn(h);
+
+    h.latest().drop(1006);
+    await settle();
+    expect(h.sockets).toHaveLength(1);
+    jest.advanceTimersByTime(FIRST_WINDOW_MS);
+    expect(h.sockets).toHaveLength(2);
+    expect(renewToken).not.toHaveBeenCalled();
+  });
+
+  it('opens nothing when a renewal lands after a deliberate disconnect', async () => {
+    const renewal = deferred<string | null>();
+    const h = harness({ renewToken: () => renewal.promise });
+    await signIn(h);
+
+    h.latest().drop(CREDENTIAL_CLOSE_CODE);
+    h.client.disconnect();
+    renewal.resolve('renewed-token');
+    await settle();
+    jest.advanceTimersByTime(60_000);
+
+    expect(h.sockets).toHaveLength(1);
+    expect(h.client.status).toBe('offline');
+  });
+
+  it('without a renewal on offer, a 4401 close redials and a refused login stops as before', async () => {
+    const h = harness();
+    await signIn(h);
+
+    h.latest().drop(CREDENTIAL_CLOSE_CODE);
+    jest.advanceTimersByTime(FIRST_WINDOW_MS);
+    expect(h.sockets).toHaveLength(2);
+    h.latest().open();
+    h.latest().reply('login', { error: { type: 'authentication' } }, false);
+    await settle();
+
+    expect(h.client.status).toBe('offline');
+    jest.advanceTimersByTime(60_000);
+    expect(h.sockets).toHaveLength(2);
+  });
+});
+
+describe('an asynchronous token (tm 436)', () => {
+  it('dials once the token has been worked out, and with that token', async () => {
+    const token = deferred<string | null>();
+    const h = harness({ getToken: () => token.promise });
+    h.client.connect();
+    expect(h.sockets).toHaveLength(0);
+
+    token.resolve('fresh-token');
+    await settle();
+
+    expect(h.sockets).toHaveLength(1);
+    h.latest().open();
+    expect(h.latest().login()?.payload['token']).toBe('Bearer fresh-token');
+  });
+
+  it('redials from the foreground with whatever the token has turned into', async () => {
+    let calls = 0;
+    const h = harness({ getToken: async () => `token-${++calls}` });
+    h.client.connect();
+    await settle();
+    h.latest().open();
+    h.latest().reply('login', {});
+    await settle();
+
+    h.foreground();
+    await settle();
+
+    expect(h.sockets).toHaveLength(2);
+    h.latest().open();
+    expect(h.latest().login()?.payload['token']).toBe('Bearer token-2');
+  });
+
+  it('backs off and asks again when working the token out fails on the network', async () => {
+    const getToken = jest
+      .fn<Promise<string | null>, []>()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue('fresh-token');
+    const h = harness({ getToken });
+    h.client.connect();
+    await settle();
+    expect(h.sockets).toHaveLength(0);
+
+    jest.advanceTimersByTime(FIRST_WINDOW_MS);
+    await settle();
+    expect(getToken).toHaveBeenCalledTimes(2);
+    expect(h.sockets).toHaveLength(1);
+  });
+
+  it('opens nothing for a token that arrives after a deliberate disconnect', async () => {
+    const token = deferred<string | null>();
+    const h = harness({ getToken: () => token.promise });
+    h.client.connect();
+    h.client.disconnect();
+    token.resolve('fresh-token');
+    await settle();
+
+    expect(h.sockets).toHaveLength(0);
+    expect(h.client.status).toBe('offline');
+  });
+
+  it('keeps one socket when a newer dial overtakes a token still being worked out', async () => {
+    const first = deferred<string | null>();
+    const second = deferred<string | null>();
+    const answers = [first, second];
+    const h = harness({ getToken: () => (answers.shift() as typeof first).promise });
+    h.client.connect();
+    // Unlocked while the first answer is still out: a second dial starts.
+    h.foreground();
+
+    second.resolve('second-token');
+    first.resolve('first-token');
+    await settle();
+
+    expect(h.sockets).toHaveLength(1);
+    h.latest().open();
+    expect(h.latest().login()?.payload['token']).toBe('Bearer second-token');
   });
 });
 

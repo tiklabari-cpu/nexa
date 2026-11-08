@@ -17578,7 +17578,7 @@
           "417"
         ],
         "priority": "high",
-        "updatedAt": "2026-11-08T02:12:04.648Z",
+        "updatedAt": "2026-11-08T02:12:50.416Z",
         "subtasks": [
           {
             "id": 1,
@@ -17653,14 +17653,14 @@
             "description": "Kuralın tarayıcı kanıtı ve kapanışı. Bitince üst görev 475 done olur.",
             "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1 (`pnpm test:gate --e2e` kapanışta bir kez, arka planda; e2e için kök .env source). Bağımlılık: 475.4, 475.5. Üst görev #475'in tüm KARARLARI.\nAMAÇ: (1) e2e yeni spec (iki ajan bağlamı + widget): kuyruktaki sohbette iki ajan aynı anda Üstüne al → tek kazanan; kaybeden \"başkasında\" şeridi; kazanan yanıtlar, widget'ta kuyruk bildirimi kalkar. (2) `manual-assignment.spec.ts:140-148` (tm 411) yeni kurala göre yeniden yazılır (silinmez). (3) AI evresi: ajan Üstüne al → AI susar, ajan yanıtlar. (4) Doküman: operatör/kullanım rehberinde \"Yanıt için üstüne alma\" kısa bölümü (`git grep` ile mevcut rehber; yoksa HANDOFF'a, yeni dosya açılmaz). (5) PLAN tek satır kanıt + HANDOFF bloğu (D1–D11, fixture ripple listesi, ek sorgu sayısı, otomatik kuyruk kararı, mobil assignee kaynağı). (6) `audit:req-coverage` exit 0.\nTUZAK: hub-e2e-traps, e2e-second-tab-shares-session-storage, new-e2e-spec-reshuffles-shard-packing, browser-ux-probe-traps (30/dk), dod-gate-wall-clock-and-e2e-png-churn.\nKABUL: spec yeşil; test:gate --e2e yeşil (\"0 cached\").",
             "testStrategy": "e2e yeni spec + yeniden yazılan manual-assignment.spec.ts yeşil; `pnpm test:gate --e2e` arka planda yeşil, turbo `--force` ve \"0 cached\"; `audit:req-coverage` exit 0. DoD: CONVENTIONS §1.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "475.4",
               "475.5"
             ],
             "parentId": "475",
             "priority": "high",
-            "updatedAt": "2026-11-06T17:34:51.966Z"
+            "updatedAt": "2026-11-08T02:12:50.416Z"
           }
         ]
       },
@@ -17777,7 +17777,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-08T02:12:04.649Z",
+      "lastModified": "2026-11-08T02:12:50.416Z",
       "taskCount": 478,
       "completedCount": 416,
       "tags": [

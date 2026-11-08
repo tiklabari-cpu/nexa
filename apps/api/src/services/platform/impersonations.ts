@@ -17,17 +17,31 @@
  * The tenant API can end one too (the console banner, `auth_end_impersonation`)
  * — `end_reason` says which side did.
  *
+ * **A session lasts no longer than its operator's standing (tm 430 · the
+ * 2026-11-06 audit's F12).** Disabling an operator, moving them to a role that
+ * may not hold a session's mode ({@link mayHoldImpersonation}) or revoking
+ * their sessions ends their open sessions in the same transaction
+ * ({@link endOperatorImpersonations}, called by `admin-directory.ts`) and
+ * revokes the tokens they were traded for; `auth_resolve_token` refuses every
+ * token of a disabled operator besides (20261227090000). A session being
+ * opened while one of those changes commits re-reads its operator under the
+ * operator's row lock ({@link startImpersonation}), so it either sees the
+ * change or is committed before the change sweeps — never neither.
+ *
  * Nothing here reads a workspace's content: ids, addresses, the
  * organization's name, the mode and the times.
  */
 import type { Prisma, PrismaClient } from '@prisma/client';
 import {
   IMPERSONATION_HANDOFF_TTL_SECONDS,
+  IMPERSONATION_MODES,
   isLicenseClosed,
+  platformRoleHas,
   type ImpersonationEndReason,
   type ImpersonationMode,
 } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
+import type { RevokedCredential } from '../realtime/publisher.js';
 import { accountStateError } from './accounts.js';
 import { workspaceStateError } from './workspace-actions.js';
 
@@ -102,8 +116,125 @@ export async function readImpersonation(db: Db, id: string): Promise<PlatformImp
   return row ? sessionOf(row, now) : null;
 }
 
+/**
+ * Whether an operator of `role` may hold a session of `mode`: what opening one
+ * asks of them — `support.impersonate`, and `support.impersonate_full` as well
+ * for `full` (`routes/platform/support.ts`). A role change keeps the sessions
+ * this still allows and ends the rest (tm 430).
+ */
+export function mayHoldImpersonation(role: string, mode: ImpersonationMode): boolean {
+  return (
+    platformRoleHas(role, 'support.impersonate') &&
+    (mode !== 'full' || platformRoleHas(role, 'support.impersonate_full'))
+  );
+}
+
+/** The modes a session of an operator of `role` cannot be held in. */
+export function impersonationModesBeyond(role: string): ImpersonationMode[] {
+  return IMPERSONATION_MODES.filter((mode) => !mayHoldImpersonation(role, mode));
+}
+
+/** Why a change to the operator who opened it ended a session (tm 430). */
+export type OperatorImpersonationEndReason = Extract<
+  ImpersonationEndReason,
+  'operator_disabled' | 'operator_role_changed' | 'operator_sessions_revoked'
+>;
+
+/** An open session a change to its operator ended. */
+export interface EndedImpersonation {
+  id: string;
+  licenseId: bigint;
+  organizationId: string;
+  accountId: string;
+  mode: ImpersonationMode;
+  endReason: OperatorImpersonationEndReason;
+  /** The workspace tokens it had been traded for, revoked with it — for the bus. */
+  tokens: RevokedCredential[];
+}
+
+/**
+ * End `adminId`'s open sessions of these modes inside the caller's transaction
+ * — the one that changes the operator — and revoke the tokens each was traded
+ * for (tm 430). Open is as {@link endImpersonation} reads it: not ended, window
+ * not run out; a session past its window is over already and keeps its empty
+ * `end_reason`.
+ *
+ * Stamping the session would be enough for the tenant API (`auth_resolve_token`
+ * reads `ended_at` as every token's revocation); the tokens are revoked as well
+ * so the rows say so themselves, and so the caller knows which sockets to
+ * close (`principal_revoked`, after the commit). A session still waiting for
+ * its handoff code ends with no token; its code can no longer be traded.
+ *
+ * The caller holds the operator's row lock (it has just updated the row, or
+ * locked it) — or the operator was disabled already: {@link startImpersonation}
+ * takes the same lock, so a session opened at this moment is committed before
+ * this sweep reads, or reads the change and is refused.
+ */
+export async function endOperatorImpersonations(
+  tx: Prisma.TransactionClient,
+  adminId: string,
+  modes: readonly ImpersonationMode[],
+  endReason: OperatorImpersonationEndReason,
+): Promise<EndedImpersonation[]> {
+  if (modes.length === 0) return [];
+  const sessions = await tx.$queryRaw<
+    Array<{
+      id: string;
+      license_id: bigint;
+      organization_id: string;
+      account_id: string;
+      mode: string;
+    }>
+  >`
+    WITH ended AS (
+      UPDATE platform_impersonation_sessions
+         SET ended_at = now(), end_reason = ${endReason}
+       WHERE admin_id = ${adminId}::uuid
+         AND ended_at IS NULL
+         AND ends_at > now()
+         AND mode = ANY(${[...modes]}::text[])
+      RETURNING id, license_id, account_id, mode
+    )
+    SELECT e.id::text AS id, e.license_id, l.organization_id::text AS organization_id,
+           e.account_id::text AS account_id, e.mode
+      FROM ended e
+      JOIN licenses l ON l.id = e.license_id
+     ORDER BY e.license_id, e.id`;
+  if (sessions.length === 0) return [];
+
+  const tokens = await tx.$queryRaw<
+    Array<{ id: string; session_id: string; license_id: bigint; organization_id: string }>
+  >`
+    UPDATE api_tokens SET revoked_at = now()
+     WHERE impersonation_session_id = ANY(${sessions.map((s) => s.id)}::uuid[])
+       AND revoked_at IS NULL
+    RETURNING id::text AS id, impersonation_session_id::text AS session_id, license_id,
+              organization_id::text AS organization_id`;
+
+  return sessions.map((session) => ({
+    id: session.id,
+    licenseId: session.license_id,
+    organizationId: session.organization_id,
+    accountId: session.account_id,
+    mode: session.mode as ImpersonationMode,
+    endReason,
+    tokens: tokens
+      .filter((token) => token.session_id === session.id)
+      .map((token) => ({
+        id: token.id,
+        licenseId: token.license_id,
+        organizationId: token.organization_id,
+      })),
+  }));
+}
+
 export interface StartImpersonationInput {
   adminId: string;
+  /**
+   * The root panel session the request came in on — still there under the
+   * operator's row lock, or the operator's sessions were revoked meanwhile.
+   */
+  platformSessionId: string;
   licenseId: bigint;
   accountId: string;
   mode: ImpersonationMode;
@@ -128,11 +259,21 @@ export interface StartedImpersonation {
  * person who is not a live member of it, and a person the root panel
  * suspended — each of which would only mint a token that dies on its first
  * request.
+ *
+ * First of all it reads the operator again, under their row lock (tm 430):
+ * the request's gate read them before the transaction, and a disable, a role
+ * change or a revocation of their sessions committing in between would
+ * otherwise sweep the operator's sessions before this one exists and leave it
+ * open. `FOR SHARE` waits for such a change and then reads what it wrote; a
+ * change that comes later waits for this commit, and its sweep ends this
+ * session with the others.
  */
 export async function startImpersonation(
   tx: Prisma.TransactionClient,
   input: StartImpersonationInput,
 ): Promise<StartedImpersonation> {
+  await assertOperatorStands(tx, input);
+
   const license = await tx.license.findUnique({
     where: { id: input.licenseId },
     select: { status: true, organization: { select: { name: true } } },
@@ -189,6 +330,38 @@ export async function startImpersonation(
     organizationName: license.organization?.name ?? '',
     memberEmail: membership.agent.email,
   };
+}
+
+/**
+ * The operator opening a session still holds what it needs: not disabled, a
+ * role that may hold the mode, and the session the request came in on. Two
+ * statements on purpose — the row lock first, then the sessions with a
+ * snapshot taken after it was granted: in one statement the subquery would
+ * read the snapshot from before the wait, and miss a revocation that
+ * committed during it.
+ */
+async function assertOperatorStands(
+  tx: Prisma.TransactionClient,
+  input: StartImpersonationInput,
+): Promise<void> {
+  const [operator] = await tx.$queryRaw<Array<{ role: string; disabled: boolean }>>`
+    SELECT role, disabled_at IS NOT NULL AS disabled
+      FROM platform_admins
+     WHERE id = ${input.adminId}::uuid
+       FOR SHARE`;
+  const [signedIn] = operator
+    ? await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id::text AS id FROM platform_sessions
+         WHERE id = ${input.platformSessionId}::uuid AND admin_id = ${input.adminId}::uuid`
+    : [];
+  if (!operator || operator.disabled || !signedIn) {
+    throw ApiError.authentication('Your session has ended. Sign in again.');
+  }
+  if (!mayHoldImpersonation(operator.role, input.mode)) {
+    throw ApiError.authorization('Your operator role does not allow this session.', {
+      permission: input.mode === 'full' ? 'support.impersonate_full' : 'support.impersonate',
+    });
+  }
 }
 
 /**

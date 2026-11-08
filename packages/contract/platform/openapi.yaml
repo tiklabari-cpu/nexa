@@ -1745,8 +1745,20 @@ components:
         ended_at: { type: ["string", "null"], format: date-time }
         end_reason:
           type: ["string", "null"]
-          enum: [ended_by_operator, ended_in_workspace, null]
-          description: Empty while open, and for a session whose window simply ran out.
+          enum:
+            [
+              ended_by_operator,
+              ended_in_workspace,
+              operator_disabled,
+              operator_role_changed,
+              operator_sessions_revoked,
+              null,
+            ]
+          description: |
+            Empty while open, and for a session whose window simply ran out.
+            `operator_disabled`, `operator_role_changed` and
+            `operator_sessions_revoked` end it with the standing of the operator
+            who opened it (tm 430): the session and its tokens go with them.
         active:
           type: boolean
           description: Not ended and its window not run out.

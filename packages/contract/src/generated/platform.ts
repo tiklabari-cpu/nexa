@@ -446,6 +446,10 @@ export interface paths {
      * Change an operator's role
      * @description Takes effect on the operator's next request: their sessions end. 409
      *     `platform_last_superadmin` when this would leave no active superadmin.
+     *     An open impersonation session of theirs whose mode the new role may not
+     *     hold ends with it (`end_reason: operator_role_changed`, tm 430) — a
+     *     `full` one below superadmin, any below support — and so do the
+     *     workspace tokens it was traded for.
      */
     post: operations['setPlatformAdminRole'];
     delete?: never;
@@ -466,7 +470,10 @@ export interface paths {
     /**
      * Disable an operator
      * @description Their sessions end and sign-in is refused. 409
-     *     `platform_last_superadmin` for the last active superadmin.
+     *     `platform_last_superadmin` for the last active superadmin. Every open
+     *     impersonation session of theirs ends with them
+     *     (`end_reason: operator_disabled`, tm 430), and so do the workspace
+     *     tokens it was traded for.
      */
     post: operations['disablePlatformAdmin'];
     delete?: never;
@@ -522,7 +529,12 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** End every session of an operator */
+    /**
+     * End every session of an operator
+     * @description Their root panel sessions, and every open impersonation session of theirs
+     *     (`end_reason: operator_sessions_revoked`, tm 430) with the workspace
+     *     tokens it was traded for. `ended` counts the root panel sessions.
+     */
     post: operations['revokePlatformAdminSessions'];
     delete?: never;
     options?: never;
@@ -3929,9 +3941,18 @@ export interface components {
       ended_at: string | null;
       /**
        * @description Empty while open, and for a session whose window simply ran out.
+       *     `operator_disabled`, `operator_role_changed` and
+       *     `operator_sessions_revoked` end it with the standing of the operator
+       *     who opened it (tm 430): the session and its tokens go with them.
        * @enum {string|null}
        */
-      end_reason: 'ended_by_operator' | 'ended_in_workspace' | null;
+      end_reason:
+        | 'ended_by_operator'
+        | 'ended_in_workspace'
+        | 'operator_disabled'
+        | 'operator_role_changed'
+        | 'operator_sessions_revoked'
+        | null;
       /** @description Not ended and its window not run out. */
       active: boolean;
     };

@@ -7,7 +7,8 @@
  * answer. Proved against a real gateway: a `read_only` session's socket logs
  * in and hears what the member would, but says nothing — no typing, and no
  * presence (the person is not there, so nothing may be routed to them) — a
- * `full` one may type, and an ended session's token opens nothing.
+ * `full` one may type, and an ended session's token opens nothing — nor does
+ * the token of a session whose operator is disabled (tm 430).
  *
  * FR-ADMIN codes are not Ek A catalogue IDs, so no title carries one as a
  * requirement tag (CONVENTIONS §7.3).
@@ -57,7 +58,7 @@ describe('impersonation sockets (tm 389.15)', () => {
   /** A session on the agent of A, and the token it was traded for — as 389.2's trade writes them. */
   async function impersonationToken(
     mode: 'read_only' | 'full',
-    options: { ended?: boolean } = {},
+    options: { ended?: boolean; operatorDisabled?: boolean } = {},
   ): Promise<string> {
     const admin = await db.platformAdmin.create({
       data: {
@@ -65,6 +66,8 @@ describe('impersonation sockets (tm 389.15)', () => {
         email: `operator-${randomUUID()}@ops.siyahtus.test`,
         passwordHash: 'x',
         role: mode === 'full' ? 'superadmin' : 'support',
+        // Disabled outside the root panel (tm 430): nothing ended the session.
+        ...(options.operatorDisabled ? { disabledAt: new Date() } : {}),
       },
       select: { id: true },
     });
@@ -161,6 +164,12 @@ describe('impersonation sockets (tm 389.15)', () => {
 
   it('opens nothing for a session that has ended', async () => {
     const { response } = await login(await impersonationToken('read_only', { ended: true }));
+    expect(response.success).toBe(false);
+    expect(errorOf(response)?.type).toBe('authentication');
+  });
+
+  it('opens nothing for a session whose operator is disabled, though the session never ended (tm 430)', async () => {
+    const { response } = await login(await impersonationToken('full', { operatorDisabled: true }));
     expect(response.success).toBe(false);
     expect(errorOf(response)?.type).toBe('authentication');
   });

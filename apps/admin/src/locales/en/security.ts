@@ -122,4 +122,8 @@ export const security: Messages = {
   'security.impersonations.state.expired': 'Ran out',
   'security.impersonations.state.ended_by_operator': 'Ended by the operator',
   'security.impersonations.state.ended_in_workspace': 'Ended in the workspace',
+  'security.impersonations.state.operator_disabled': 'Ended when the operator was disabled',
+  'security.impersonations.state.operator_role_changed': 'Ended when the operator’s role changed',
+  'security.impersonations.state.operator_sessions_revoked':
+    'Ended when the operator’s sessions were revoked',
 };

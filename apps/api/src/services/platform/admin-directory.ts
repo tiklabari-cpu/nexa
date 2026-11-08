@@ -17,12 +17,28 @@
  * Every mutation here ends the target's sessions when it changes what those
  * sessions may do (disable, role, second-factor reset): the next request signs
  * in again under the new facts rather than finishing its shift under the old.
+ *
+ * **And what they opened as a member (tm 430 · the 2026-11-06 audit's F12).**
+ * Disabling an operator, revoking their sessions, or moving them to a role
+ * that may not hold a session's mode ends their open impersonation sessions
+ * and revokes the workspace tokens those were traded for, in the same
+ * transaction (`impersonations.ts endOperatorImpersonations`) — a disabled
+ * superadmin's `full` session no longer outlives them by its window. A role
+ * change ends only what the new role may not hold: superadmin → support keeps
+ * a read-only session and ends a full one. The route records each ended
+ * session in both trails inside that transaction ({@link OperatorChangeRecorder})
+ * and closes its sockets after the commit.
  */
 import type { Prisma, PrismaClient } from '@prisma/client';
-import type { PlatformRole } from '@siyahtus/types';
+import { IMPERSONATION_MODES, type PlatformRole } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import { generateToken, hashToken } from '../../lib/crypto.js';
 import { PLATFORM_INVITE_TTL_HOURS } from './admin-auth.js';
+import {
+  endOperatorImpersonations,
+  impersonationModesBeyond,
+  type EndedImpersonation,
+} from './impersonations.js';
 
 /** `pg_advisory_xact_lock` key for every change that can reduce the superadmin count. */
 const SUPERADMIN_LOCK = 'siyahtus:platform:superadmins';
@@ -68,6 +84,30 @@ function lastSuperadmin(): ApiError {
 export interface DirectoryOptions {
   now: () => number;
   idleTtlS: number;
+}
+
+/** What a disable, a role change or a revocation of sessions did (tm 430). */
+export interface OperatorChange {
+  /** The operator's role before the change — the role after, unless it changed it. */
+  previousRole: string;
+  /** Root panel sessions it deleted. */
+  sessionsEnded: number;
+  /** The operator's open impersonation sessions it ended, with the tokens it revoked. */
+  impersonations: EndedImpersonation[];
+}
+
+/**
+ * The route's audit entries for a change, written inside the change's
+ * transaction: an ended impersonation session's workspace trail must commit
+ * with the session's end, or neither (`platform-audit.ts`).
+ */
+export type OperatorChangeRecorder = (
+  tx: Prisma.TransactionClient,
+  change: OperatorChange,
+) => Promise<void>;
+
+export interface OperatorChangeResult extends OperatorChange {
+  admin: PlatformAdminView;
 }
 
 export class PlatformAdminDirectory {
@@ -153,29 +193,79 @@ export class PlatformAdminDirectory {
 
   // --- Changes to an operator ------------------------------------------------
 
-  async setRole(adminId: string, role: PlatformRole): Promise<PlatformAdminView> {
-    await this.#guarded(adminId, async (tx, admin, activeSuperadmins) => {
-      if (admin.role === role) return;
-      if (admin.role === 'superadmin' && admin.disabledAt === null && activeSuperadmins <= 1) {
-        throw lastSuperadmin();
-      }
-      await tx.platformAdmin.update({ where: { id: adminId }, data: { role } });
-      await tx.platformSession.deleteMany({ where: { adminId } });
-    });
-    return this.get(adminId);
+  /**
+   * A role the operator already holds changes nothing. Any other ends their
+   * root panel sessions, and those of their impersonation sessions whose mode
+   * the new role may not hold (`mayHoldImpersonation`).
+   */
+  async setRole(
+    adminId: string,
+    role: PlatformRole,
+    record?: OperatorChangeRecorder,
+  ): Promise<OperatorChangeResult> {
+    const change = await this.#guarded(
+      adminId,
+      async (tx, admin, activeSuperadmins) => {
+        const unchanged: OperatorChange = {
+          previousRole: admin.role,
+          sessionsEnded: 0,
+          impersonations: [],
+        };
+        if (admin.role === role) return unchanged;
+        if (admin.role === 'superadmin' && admin.disabledAt === null && activeSuperadmins <= 1) {
+          throw lastSuperadmin();
+        }
+        await tx.platformAdmin.update({ where: { id: adminId }, data: { role } });
+        const sessions = await tx.platformSession.deleteMany({ where: { adminId } });
+        return {
+          ...unchanged,
+          sessionsEnded: sessions.count,
+          impersonations: await endOperatorImpersonations(
+            tx,
+            adminId,
+            impersonationModesBeyond(role),
+            'operator_role_changed',
+          ),
+        };
+      },
+      record,
+    );
+    return { ...change, admin: await this.get(adminId) };
   }
 
-  async disable(adminId: string): Promise<PlatformAdminView> {
-    await this.#guarded(adminId, async (tx, admin, activeSuperadmins) => {
-      if (admin.disabledAt !== null) return;
-      if (admin.role === 'superadmin' && activeSuperadmins <= 1) throw lastSuperadmin();
-      await tx.platformAdmin.update({
-        where: { id: adminId },
-        data: { disabledAt: new Date(this.#options.now()) },
-      });
-      await tx.platformSession.deleteMany({ where: { adminId } });
-    });
-    return this.get(adminId);
+  /**
+   * Disabling a disabled operator changes nothing about them, and still ends
+   * whatever they have open: an operator disabled some other way (psql) keeps
+   * no session that only `auth_resolve_token` stands in front of. That sweep
+   * needs no row lock — a session being opened for a disabled operator reads
+   * `disabled_at` under its own and is refused.
+   */
+  async disable(adminId: string, record?: OperatorChangeRecorder): Promise<OperatorChangeResult> {
+    const change = await this.#guarded(
+      adminId,
+      async (tx, admin, activeSuperadmins) => {
+        if (admin.disabledAt === null) {
+          if (admin.role === 'superadmin' && activeSuperadmins <= 1) throw lastSuperadmin();
+          await tx.platformAdmin.update({
+            where: { id: adminId },
+            data: { disabledAt: new Date(this.#options.now()) },
+          });
+        }
+        const sessions = await tx.platformSession.deleteMany({ where: { adminId } });
+        return {
+          previousRole: admin.role,
+          sessionsEnded: sessions.count,
+          impersonations: await endOperatorImpersonations(
+            tx,
+            adminId,
+            IMPERSONATION_MODES,
+            'operator_disabled',
+          ),
+        };
+      },
+      record,
+    );
+    return { ...change, admin: await this.get(adminId) };
   }
 
   async enable(adminId: string): Promise<PlatformAdminView> {
@@ -204,21 +294,39 @@ export class PlatformAdminDirectory {
     return this.get(adminId);
   }
 
-  async revokeSessions(adminId: string): Promise<number> {
-    const admin = await this.#db.platformAdmin.findUnique({
-      where: { id: adminId },
-      select: { id: true },
-    });
-    if (!admin) throw ApiError.notFound('Operator not found.');
-    const { count } = await this.#db.platformSession.deleteMany({ where: { adminId } });
-    return count;
+  /**
+   * Sign the operator out everywhere: their root panel sessions and their open
+   * impersonation sessions. The operator's row is locked first — it is the
+   * lock a session being opened at this moment takes too.
+   */
+  async revokeSessions(adminId: string, record?: OperatorChangeRecorder): Promise<OperatorChange> {
+    return this.#db.$transaction(
+      async (tx) => {
+        const admin = await this.#lockOperator(tx, adminId);
+        const sessions = await tx.platformSession.deleteMany({ where: { adminId } });
+        const change: OperatorChange = {
+          previousRole: admin.role,
+          sessionsEnded: sessions.count,
+          impersonations: await endOperatorImpersonations(
+            tx,
+            adminId,
+            IMPERSONATION_MODES,
+            'operator_sessions_revoked',
+          ),
+        };
+        await record?.(tx, change);
+        return change;
+      },
+      { timeout: 30_000 },
+    );
   }
 
   // --- Internals -------------------------------------------------------------
 
   /**
    * Run a change that can lower the active-superadmin count, with the count
-   * read under the same lock the change commits under.
+   * read under the same lock the change commits under — and then `record`, in
+   * the same transaction.
    */
   async #guarded(
     adminId: string,
@@ -226,20 +334,37 @@ export class PlatformAdminDirectory {
       tx: Prisma.TransactionClient,
       admin: { role: string; disabledAt: Date | null },
       activeSuperadmins: number,
-    ) => Promise<void>,
-  ): Promise<void> {
-    await this.#db.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${SUPERADMIN_LOCK}))`;
-      const admin = await tx.platformAdmin.findUnique({
-        where: { id: adminId },
-        select: { role: true, disabledAt: true },
-      });
-      if (!admin) throw ApiError.notFound('Operator not found.');
-      const activeSuperadmins = await tx.platformAdmin.count({
-        where: { role: 'superadmin', disabledAt: null },
-      });
-      await change(tx, admin, activeSuperadmins);
-    });
+    ) => Promise<OperatorChange>,
+    record?: OperatorChangeRecorder,
+  ): Promise<OperatorChange> {
+    return this.#db.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${SUPERADMIN_LOCK}))`;
+        const admin = await tx.platformAdmin.findUnique({
+          where: { id: adminId },
+          select: { role: true, disabledAt: true },
+        });
+        if (!admin) throw ApiError.notFound('Operator not found.');
+        const activeSuperadmins = await tx.platformAdmin.count({
+          where: { role: 'superadmin', disabledAt: null },
+        });
+        const changed = await change(tx, admin, activeSuperadmins);
+        await record?.(tx, changed);
+        return changed;
+      },
+      { timeout: 30_000 },
+    );
+  }
+
+  /**
+   * The operator's row, locked against a session being opened in their name
+   * (`impersonations.ts startImpersonation` reads it `FOR SHARE`) — or 404.
+   */
+  async #lockOperator(tx: Prisma.TransactionClient, adminId: string): Promise<{ role: string }> {
+    const [admin] = await tx.$queryRaw<Array<{ role: string }>>`
+      SELECT role FROM platform_admins WHERE id = ${adminId}::uuid FOR NO KEY UPDATE`;
+    if (!admin) throw ApiError.notFound('Operator not found.');
+    return admin;
   }
 
   async #liveSessions(

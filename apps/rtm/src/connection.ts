@@ -59,6 +59,12 @@ export interface Connection {
    * for a socket not yet logged in.
    */
   tokenId: string | null;
+  /**
+   * The timer that closes the socket when its credential expires (tm 426.3 ·
+   * `credential-expiry.ts`), armed at login and cleared at close. Null before
+   * login, for a credential with no expiry, and for a visitor.
+   */
+  credentialExpiry: ReturnType<typeof setTimeout> | null;
   /** Teams the agent belongs to — the audience filter keys on these. */
   groupIds: number[];
   /** True when the token may see every chat in the licence. */
@@ -114,6 +120,7 @@ export class ConnectionRegistry {
       actorId: null,
       actorType: null,
       tokenId: null,
+      credentialExpiry: null,
       groupIds: [],
       unrestricted: false,
       authority: null,

@@ -100,10 +100,14 @@ function buildMetricExporter(
  *   - `credential_revoked` — the API announced that the credential the socket
  *     logged in with is no longer honoured: a session signed out, a token
  *     revoked, a membership or a workspace suspended (tm 426 · close code 4401).
+ *   - `credential_expired` — the credential the socket logged in with reached
+ *     its expiry (tm 426.3 · close code 4401) — an operator's session as a
+ *     member reaching the end of its window included. The client renews and
+ *     dials again (`credential-expiry.ts`).
  *   - `normal` — anything else, chiefly a client-initiated close (1000) or a
  *     network drop the socket layer cannot further distinguish.
  *
- * The four before `normal` are not read from the close code: the gateway
+ * The five before `normal` are not read from the close code: the gateway
  * records them on the connection when it decides to close
  * (`Connection.closedBy`). A peer that has stopped reading never answers the
  * close frame either, so the code the socket finally reports for a slow
@@ -126,13 +130,14 @@ export const DISCONNECT_REASONS = [
   'socket_limit',
   'slow_consumer',
   'credential_revoked',
+  'credential_expired',
 ] as const;
 export type DisconnectReason = (typeof DISCONNECT_REASONS)[number];
 
 /** The closes the gateway decides itself and records on the connection (`Connection.closedBy`). */
 export type GatewayCloseReason = Extract<
   DisconnectReason,
-  'login_refused' | 'socket_limit' | 'slow_consumer' | 'credential_revoked'
+  'login_refused' | 'socket_limit' | 'slow_consumer' | 'credential_revoked' | 'credential_expired'
 >;
 
 /**

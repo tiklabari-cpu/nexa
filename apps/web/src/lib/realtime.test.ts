@@ -324,6 +324,55 @@ describe('a login refused because the token went stale (tm 259.1)', () => {
     expect(client.status).toBe('offline');
   });
 
+  it('a live socket the gateway closes when its token expires (4401, tm 426.3) renews and comes back live — every time, not once per page', async () => {
+    install();
+    const token = { current: 'first' };
+    let minted = 0;
+    const renewToken = vi.fn(async () => {
+      minted += 1;
+      token.current = `fresh-${minted}`;
+      return token.current;
+    });
+    const seen: RtmStatus[] = [];
+    const client = clientWith(renewToken, token, seen);
+    client.connect();
+    const opening = FakeWebSocket.instances[0]!;
+    opening.emit('open');
+    answer(opening, true);
+    await settle();
+    expect(client.status).toBe('live');
+
+    // Two expiries in a row: the one-renewal limit is per refusal, reset by
+    // the login that succeeds, so the second hour renews like the first.
+    for (let round = 1; round <= 2; round += 1) {
+      const live = FakeWebSocket.instances.at(-1)!;
+      const stale = token.current;
+      live.emit('close', { code: 4401, reason: 'credential expired' });
+      expect(client.status).toBe('reconnecting');
+      const retry = scheduled.pop();
+      expect(retry, `round ${round}: a reconnect is scheduled`).toBeDefined();
+      retry!.run();
+
+      // The reconnect logs in with the token it holds — expired — and is refused.
+      const reconnect = FakeWebSocket.instances.at(-1)!;
+      reconnect.emit('open');
+      expect(JSON.parse(reconnect.sent[0]!).payload.token).toBe(`Bearer ${stale}`);
+      answer(reconnect, false, REFUSED);
+      await settle();
+      expect(renewToken).toHaveBeenCalledTimes(round);
+      expect(renewToken).toHaveBeenLastCalledWith(stale);
+
+      const renewed = FakeWebSocket.instances.at(-1)!;
+      expect(renewed).not.toBe(reconnect);
+      renewed.emit('open');
+      expect(JSON.parse(renewed.sent[0]!).payload.token).toBe(`Bearer fresh-${round}`);
+      answer(renewed, true);
+      await settle();
+      expect(client.status, `round ${round}`).toBe('live');
+    }
+    expect(seen).not.toContain('offline');
+  });
+
   it('does not renew for a refusal that is not about the token', async () => {
     install();
     const renewToken = vi.fn(async () => 'fresh');

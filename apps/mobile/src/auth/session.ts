@@ -85,7 +85,17 @@ export interface MobileSessionOptions {
   pkce?: () => Promise<PkcePair>;
   createState?: () => Promise<string>;
   fetchImpl?: typeof fetch;
+  /** Injectable so a test can move the clock without waiting an hour. */
+  now?: () => number;
 }
+
+/**
+ * How long a token must still have before it is shown to the gateway (tm 436).
+ * The gateway checks it at `login` and, since tm 426.3, closes the socket at
+ * the token's expiry — so one with less than this left would buy a connection
+ * that is cut a moment later, and the redial after that would carry it refused.
+ */
+export const ACCESS_TOKEN_MIN_VALIDITY_MS = 60_000;
 
 /**
  * The password was right and the workspace still said no, because it federates
@@ -110,11 +120,18 @@ export class MobileSession {
   readonly #newState: () => Promise<string>;
   readonly #apiBaseUrl: string;
   readonly #fetchImpl: typeof fetch | undefined;
+  readonly #now: () => number;
   /** Token-free client for the anonymous endpoints (`/auth/login`, `/auth/token`). */
   readonly #anonymous: ApiClient;
 
   #current: SessionState = { status: 'unknown', accessToken: null, principal: null };
   #persisted: PersistedSession | null = null;
+  /**
+   * When the access token in `#current` stops working, from the grant's
+   * `expires_in` — in memory beside the token and never anywhere else. `null`
+   * while there is no token, and for a grant that did not say.
+   */
+  #accessExpiresAt: number | null = null;
   readonly #listeners = new Set<(state: SessionState) => void>();
   /**
    * The one in-flight renewal, shared by every caller that arrives while it
@@ -128,6 +145,7 @@ export class MobileSession {
   constructor(options: MobileSessionOptions) {
     this.#apiBaseUrl = options.apiBaseUrl.replace(/\/+$/, '');
     this.#fetchImpl = options.fetchImpl;
+    this.#now = options.now ?? Date.now;
     this.#store = options.store ?? new SessionStore();
     this.#browser = options.browser ?? null;
     this.#deviceTokens = options.deviceTokens ?? new DeviceTokenLifecycle({ store: this.#store });
@@ -144,6 +162,41 @@ export class MobileSession {
 
   getAccessToken(): string | null {
     return this.#current.accessToken;
+  }
+
+  /**
+   * An access token worth dialling the gateway with (tm 436): the current one
+   * while it has at least a minute left, otherwise a renewed one.
+   *
+   * `getAccessToken()` is the wrong question for a socket. A phone left in the
+   * background for longer than the token lives comes back holding a token the
+   * gateway refuses at `login`; REST calls recover from that on their first
+   * 401, a socket has no such second request. A grant that never said how long
+   * it lives is used as it is — the refusal path still renews it.
+   *
+   * Same contract as `refresh()`: `null` means the session is over (already
+   * dropped, subscribers told), a throw means the network is.
+   */
+  async getFreshAccessToken(): Promise<string | null> {
+    const token = this.#current.accessToken;
+    const expiresAt = this.#accessExpiresAt;
+    // No token at all is a session that has not settled (a launch's rotation is
+    // still out) or is over; either way the caller waits, as before.
+    if (token === null) return null;
+    if (expiresAt === null || expiresAt - this.#now() >= ACCESS_TOKEN_MIN_VALIDITY_MS) return token;
+    return this.#guardedRotate();
+  }
+
+  /**
+   * A replacement for `stale`, a token the gateway has just refused or cut off
+   * (tm 436). When the session already moved past it — a REST 401 renewed it
+   * while the socket held the old one — the newer token is the answer and no
+   * second rotation is spent; otherwise this is `refresh()`.
+   */
+  async renewAccessToken(stale: string): Promise<string | null> {
+    const current = this.#current.accessToken;
+    if (current !== null && current !== stale && this.#refreshing === null) return current;
+    return this.#guardedRotate();
   }
 
   subscribe(listener: (state: SessionState) => void): () => void {
@@ -369,6 +422,7 @@ export class MobileSession {
     // Written before the screen is told, so a crash between the two costs a
     // refresh rather than a session.
     await this.#store.write(this.#persisted);
+    this.#accessExpiresAt = this.#expiryOf(grant.expires_in);
     this.#set({ status: 'signed-in', accessToken: grant.access_token, principal });
 
     await this.#deviceTokens.onSignedIn(grant.access_token);
@@ -392,13 +446,14 @@ export class MobileSession {
     if (persisted === null) return null;
 
     this.#refreshing = (async () => {
-      const accessToken = await this.#rotate(persisted);
-      if (accessToken === null) {
+      const grant = await this.#rotate(persisted);
+      if (grant === null) {
         await this.#drop();
         return null;
       }
-      this.#set({ ...this.#current, status: 'signed-in', accessToken });
-      return accessToken;
+      this.#accessExpiresAt = this.#expiryOf(grant.expiresIn);
+      this.#set({ ...this.#current, status: 'signed-in', accessToken: grant.accessToken });
+      return grant.accessToken;
     })().finally(() => {
       this.#refreshing = null;
     });
@@ -414,7 +469,9 @@ export class MobileSession {
    * people out whenever a tunnel swallowed a request would sign them out daily,
    * so only the server's own refusal ends a session.
    */
-  async #rotate(persisted: PersistedSession): Promise<string | null> {
+  async #rotate(
+    persisted: PersistedSession,
+  ): Promise<{ accessToken: string; expiresIn: number | undefined } | null> {
     try {
       const grant = await this.#anonymous.request('post', '/auth/token', {
         body: {
@@ -430,7 +487,7 @@ export class MobileSession {
       // guaranteed to be refused.
       this.#persisted = { ...persisted, refreshToken: grant.refresh_token };
       await this.#store.write(this.#persisted);
-      return grant.access_token;
+      return { accessToken: grant.access_token, expiresIn: grant.expires_in };
     } catch (error) {
       if (error instanceof ApiClientError && error.isRetryable) throw error;
       return null;
@@ -465,7 +522,18 @@ export class MobileSession {
     await this.#deviceTokens.onSignedOut(null);
     await this.#store.clearAll();
     this.#persisted = null;
+    this.#accessExpiresAt = null;
     this.#set({ status: 'signed-out', accessToken: null, principal: null });
+  }
+
+  /**
+   * Counted from when the grant arrived, so a little later than the server's
+   * own clock says — by one round trip, which the minute of margin covers.
+   */
+  #expiryOf(expiresIn: number | undefined): number | null {
+    return typeof expiresIn === 'number' && Number.isFinite(expiresIn)
+      ? this.#now() + expiresIn * 1000
+      : null;
   }
 
   #set(state: SessionState): void {

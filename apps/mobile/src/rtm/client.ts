@@ -34,6 +34,14 @@ import { RTM_LIMITS, RTM_PATHS, RTM_VERSION, type RtmPushAction } from '@siyahtu
 const BASE_BACKOFF_MS = 500;
 const MAX_BACKOFF_MS = 15_000;
 
+/**
+ * The close code the gateway uses for "this credential no longer opens this
+ * socket" — revoked (tm 426.1), past its expiry (tm 426.3), or an operator's
+ * session window ended. One code for all of them, because the client's answer
+ * is the same: renew once and dial again (tm 436).
+ */
+export const CREDENTIAL_CLOSE_CODE = 4401;
+
 export type RtmStatus = 'offline' | 'connecting' | 'live' | 'reconnecting';
 
 export interface RtmMessage {
@@ -64,7 +72,8 @@ export interface RtmSocket {
   close(): void;
   onopen: (() => void) | null;
   onmessage: ((event: { data: unknown }) => void) | null;
-  onclose: (() => void) | null;
+  /** React Native passes the close frame's `code`; a test may pass nothing. */
+  onclose: ((event?: { code?: number }) => void) | null;
   onerror: ((event: unknown) => void) | null;
 }
 
@@ -77,7 +86,21 @@ export interface RtmClientOptions {
   /** Host only, e.g. `wss://rtm.example.com` — the path is protocol, not config. */
   baseUrl: string;
   organizationId: string;
-  getToken: () => string | null;
+  /**
+   * The token to log in with, read at every dial. May answer asynchronously
+   * (tm 436): the app's answer renews a token that is about to expire before
+   * handing it over, so a phone back from an hour in the background does not
+   * show the gateway a token it is bound to refuse.
+   */
+  getToken: () => string | null | Promise<string | null>;
+  /**
+   * A replacement for `stale`, a token the gateway refused at `login` or closed
+   * the socket over (`CREDENTIAL_CLOSE_CODE`) — or `null` when the session is
+   * over. Asked once until a login succeeds: a token renewed a moment ago and
+   * refused anyway means the session is gone, and asking again would loop.
+   * Without it, both cases stop the client as before.
+   */
+  renewToken?: (stale: string) => Promise<string | null>;
   /**
    * Whether the session is over, as opposed to momentarily without a token.
    * Optional: a caller that cannot tell the two apart gets the safe half of the
@@ -101,6 +124,14 @@ export class MobileRtmClient {
   #appStateSubscription: { remove(): void } | null = null;
   #attempt = 0;
   #stopped = true;
+  /** A renewal has been spent since the last successful login (tm 436). */
+  #renewed = false;
+  /**
+   * Bumped by every dial and every disconnect. A token that arrives
+   * asynchronously is only used if nothing has dialled or disconnected since
+   * it was asked for — otherwise two sockets would race for one client.
+   */
+  #generation = 0;
   #requestCounter = 0;
   #status: RtmStatus = 'offline';
 
@@ -157,6 +188,7 @@ export class MobileRtmClient {
 
   disconnect(): void {
     this.#stopped = true;
+    this.#generation += 1;
     this.#clearTimers();
     this.#appStateSubscription?.remove();
     this.#appStateSubscription = null;
@@ -182,7 +214,35 @@ export class MobileRtmClient {
   // --- Connection ------------------------------------------------------------
 
   #open(): void {
-    const token = this.#options.getToken();
+    const generation = ++this.#generation;
+    let token: string | null | Promise<string | null>;
+    try {
+      token = this.#options.getToken();
+    } catch {
+      this.#scheduleRetry();
+      return;
+    }
+    if (typeof token === 'string' || token === null) {
+      this.#dial(token);
+      return;
+    }
+    token.then(
+      (value) => {
+        if (this.#isCurrent(generation)) this.#dial(value);
+      },
+      // The renewal behind the token failed — the network, not the session.
+      // Back off and ask again, as for any dropped connection.
+      () => {
+        if (this.#isCurrent(generation)) this.#scheduleRetry();
+      },
+    );
+  }
+
+  #isCurrent(generation: number): boolean {
+    return !this.#stopped && generation === this.#generation;
+  }
+
+  #dial(token: string | null): void {
     if (token === null || token === '') {
       this.#waitForCredential();
       return;
@@ -204,11 +264,16 @@ export class MobileRtmClient {
       this.#receive(event.data);
     };
 
-    socket.onclose = () => {
+    socket.onclose = (event) => {
       this.#clearTimers();
       this.#pending.clear();
       if (this.#stopped) return;
       this.#setStatus('reconnecting');
+      // The gateway closed this socket over its credential. Dialling back with
+      // the same token is a login it will refuse, so renew first — and at once,
+      // nothing is wrong with the gateway. A live socket was cut, so the next
+      // login is a resumption.
+      if (event?.code === CREDENTIAL_CLOSE_CODE && this.#renewAndRedial(token, true)) return;
       this.#scheduleRetry();
     };
 
@@ -283,16 +348,17 @@ export class MobileRtmClient {
     });
 
     if (response.success !== true) {
+      // Refused for its token: most often one that expired while the phone was
+      // asleep. One renewal, then a fresh socket (tm 436).
+      if (refusedForCredential(response) && this.#renewAndRedial(token)) return;
       // The credential is wrong, revoked, or for another tenant. Retrying is a
       // loop; the session layer fixes this, not the socket.
-      this.#stopped = true;
-      this.#clearTimers();
-      this.#closeSocket();
-      this.#setStatus('offline');
+      this.#giveUp();
       return;
     }
 
     this.#attempt = 0;
+    this.#renewed = false;
     this.#setStatus('live');
     this.#startPing();
     await this.#sync();
@@ -338,6 +404,61 @@ export class MobileRtmClient {
     for (const chatId of asArray<unknown>(response.payload['new_chat_ids'])) {
       if (typeof chatId === 'string') this.#options.onPush('chat_appeared', { chat_id: chatId });
     }
+  }
+
+  /**
+   * Replace `stale` once and dial again with its successor (tm 436). False when
+   * the renewal is not this call's to make — none was offered, or one has been
+   * spent since the last successful login — and the caller decides as before.
+   *
+   * A renewal that comes back `null` is a session that is over: stop, exactly
+   * as a refused login always has. One that throws is the network: back off
+   * and try it all again, the renewal included.
+   */
+  #renewAndRedial(stale: string, wasLive = false): boolean {
+    const renew = this.#options.renewToken;
+    if (renew === undefined || this.#renewed) return false;
+    this.#renewed = true;
+    // A cut live socket makes the next login a resumption; a refused first
+    // login does not — the gateway never had a session to resume.
+    if (wasLive) this.#attempt = Math.max(this.#attempt, 1);
+
+    const generation = ++this.#generation;
+    this.#clearTimers();
+    this.#pending.clear();
+    this.#closeSocket();
+    this.#setStatus('reconnecting');
+
+    let renewal: Promise<string | null>;
+    try {
+      renewal = renew(stale);
+    } catch (error) {
+      renewal = Promise.reject(error);
+    }
+    renewal.then(
+      (fresh) => {
+        if (!this.#isCurrent(generation)) return;
+        if (fresh === null || fresh === '') {
+          this.#giveUp();
+          return;
+        }
+        this.#dial(fresh);
+      },
+      () => {
+        if (!this.#isCurrent(generation)) return;
+        this.#renewed = false;
+        this.#scheduleRetry();
+      },
+    );
+    return true;
+  }
+
+  /** The session layer has to fix this, not the socket: stop and say so. */
+  #giveUp(): void {
+    this.#stopped = true;
+    this.#clearTimers();
+    this.#closeSocket();
+    this.#setStatus('offline');
   }
 
   #trackCursor(message: RtmMessage): void {
@@ -463,6 +584,15 @@ function splitEventId(eventId: string): { threadId: string; sequence: number } |
   const sequence = Number(eventId.slice(separator + 1));
   if (!Number.isInteger(sequence)) return null;
   return { threadId: eventId.slice(0, separator), sequence };
+}
+
+/**
+ * A login refused for its token, as opposed to a wrong region or a suspended
+ * workspace — which no new token changes.
+ */
+function refusedForCredential(response: RtmMessage): boolean {
+  const error = response.payload?.['error'] as { type?: unknown } | undefined;
+  return error?.type === 'authentication';
 }
 
 function asArray<T>(value: unknown): T[] {

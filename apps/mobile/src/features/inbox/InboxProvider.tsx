@@ -69,7 +69,13 @@ export function InboxProvider({ store, children }: InboxProviderProps) {
       rtm = new MobileRtmClient({
         baseUrl: config.rtmBaseUrl,
         organizationId,
-        getToken: () => session.getAccessToken(),
+        // Renewed first when it has under a minute left: a phone back from an
+        // hour in the background would otherwise show the gateway a token it
+        // refuses, and the socket — unlike REST — gets no 401 to recover on.
+        getToken: () => session.getFreshAccessToken(),
+        // The gateway refused the token at login or closed the socket over it
+        // (4401): one renewal, then a fresh socket (tm 436).
+        renewToken: (stale) => session.renewAccessToken(stale),
         // Tells "the renewal has not landed yet" (wait, then dial again) from
         // "this session is over" (stop) — the socket cannot see the difference
         // from a null token alone (13.7-v).

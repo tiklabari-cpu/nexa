@@ -16702,7 +16702,7 @@
           "436"
         ],
         "priority": "medium",
-        "updatedAt": "2026-11-08T14:30:37.892Z",
+        "updatedAt": "2026-11-08T16:13:15.198Z",
         "subtasks": [
           {
             "id": 1,
@@ -16710,11 +16710,11 @@
             "description": "Mevcut Redis bus'a `principal_revoked` zarfı (token id / agent+license / license) tanımla; rtm zarfta eşleşen soketleri 4001/1008 benzeri mevcut kodla kapatsın.",
             "details": "Zarf türünü types/kontratta tanımla (kapalı sözlükse ripple). rtm abonesi #byActor/lisans indeksiyle eşleşen bağlantıları bulur ve kapatır; istemci yeniden bağlanınca login'de reddedilir. Bu alt görevde zarfı yayınlayan bir test yardımcısı yeterli; api olay noktaları alt görev 2.",
             "testStrategy": "rtm entegrasyon: test yayıncısı token-id zarfı → yalnız o soket kapanır; license zarfı → lisansın tüm soketleri; başka lisans etkilenmez. Mutasyon: abone dinleyicisini kaldır → kırmızı.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "426",
             "priority": "medium",
-            "updatedAt": "2026-11-08T14:30:37.892Z"
+            "updatedAt": "2026-11-08T16:13:15.198Z"
           },
           {
             "id": 2,
@@ -17777,7 +17777,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-08T14:30:37.892Z",
+      "lastModified": "2026-11-08T16:13:15.198Z",
       "taskCount": 478,
       "completedCount": 422,
       "tags": [

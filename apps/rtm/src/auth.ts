@@ -70,6 +70,13 @@ export interface SocketPrincipal {
    */
   tokenId?: string;
   /**
+   * When the stored credential stops working — its `expires_at`, which for an
+   * operator's session is the end of its window (tm 426.3). The socket closes
+   * then (`credential-expiry.ts`). Null for a token issued without one; absent
+   * for a visitor.
+   */
+  expiresAt?: Date | null;
+  /**
    * A SiyahTuş operator signed in as this member from the root panel (tm
    * 389.15): the session's mode and window. A `read_only` socket hears
    * everything the member would and says nothing — no typing, no presence —
@@ -310,6 +317,7 @@ export class SocketAuthenticator {
           unrestricted,
           authority: null,
           tokenId: row.id,
+          expiresAt: row.expires_at,
         },
       };
     }
@@ -353,6 +361,7 @@ export class SocketAuthenticator {
         unrestricted: reach.unrestricted,
         authority: { ...authority, version: reach.version },
         tokenId: row.id,
+        expiresAt: row.expires_at,
         ...(impersonation ? { impersonation } : {}),
       },
     };

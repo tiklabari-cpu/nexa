@@ -72,7 +72,7 @@ describe('OTEL_EXPORTER (M-OTEL-b reuses M-OTEL-a)', () => {
  * 4402) fails here rather than only showing up as a mislabelled dashboard.
  */
 describe('classifyDisconnectReason', () => {
-  it('names exactly the nine reasons the taxonomy allows', () => {
+  it('names exactly the ten reasons the taxonomy allows', () => {
     expect(DISCONNECT_REASONS).toEqual([
       'normal',
       'protocol_violation',
@@ -83,6 +83,7 @@ describe('classifyDisconnectReason', () => {
       'socket_limit',
       'slow_consumer',
       'credential_revoked',
+      'credential_expired',
     ]);
   });
 

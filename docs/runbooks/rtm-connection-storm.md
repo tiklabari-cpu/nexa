@@ -68,7 +68,13 @@
      at once. The API points that announce it are listed in PLAN §D461
      (tm 426.2); an API that could not reach Redis logs an `error` "principal
      revocation publish failed" instead, and those sockets stay open until
-     they close for another reason.
+     their credential expires (`credential_expired`, below).
+   - `credential_expired` means a socket's credential reached its expiry —
+     an access token's hour, an operator's support session its window — and
+     the gateway closed it with 4401 (tm 426.3). The client renews its token
+     and dials again, so a steady trickle is normal; a burst lines up with a
+     batch of sign-ins an hour earlier. A rise in refused logins right after
+     it is a client that does not renew.
    - Mostly `normal` closes with a high open count is the real-traffic case.
    - There is deliberately **no** `rate_limit` reason: the WS rate limit
      (ADR-07, 10 msg/sec/connection) throttles by design rather than

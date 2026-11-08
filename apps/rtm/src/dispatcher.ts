@@ -23,6 +23,7 @@ import {
 } from './auth.js';
 import type { ConflictDetectionService } from './conflict.js';
 import type { ConflictPublisher } from './conflict-publisher.js';
+import { armCredentialExpiry } from './credential-expiry.js';
 import type { Connection, ConnectionRegistry } from './connection.js';
 import {
   cursorsWithinBounds,
@@ -325,7 +326,7 @@ export class Dispatcher {
       });
     }
 
-    this.deps.registry.authenticate(connection.id, {
+    const registered = this.deps.registry.authenticate(connection.id, {
       licenseId: principal.licenseId,
       actorId: principal.actorId,
       actorType: principal.kind,
@@ -335,6 +336,11 @@ export class Dispatcher {
       authority: principal.authority,
       impersonation: principal.impersonation ?? null,
     });
+    // Closed when the credential expires (tm 426.3); a visitor's token carries
+    // no stored expiry here and arms nothing. A socket that closed while its
+    // credential was being read is out of the registry already, and its close
+    // handler has run: a timer armed now would outlive it.
+    if (registered) armCredentialExpiry(connection, principal.expiresAt ?? null);
 
     // Requested subscriptions are applied at login so a client is live from its
     // first frame, with no window where events are missed.

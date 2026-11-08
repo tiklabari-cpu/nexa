@@ -23,6 +23,7 @@ import type { RtmEnv } from './config/env.js';
 import { ConflictDetectionService } from './conflict.js';
 import { ConflictPublisher } from './conflict-publisher.js';
 import { ConnectionRegistry, connectionLogContext, type Connection } from './connection.js';
+import { disarmCredentialExpiry } from './credential-expiry.js';
 import { CustomerSocketLimiter } from './customer-socket-limit.js';
 import { Dispatcher } from './dispatcher.js';
 import { Fanout } from './fanout.js';
@@ -972,11 +973,6 @@ function attach(params: {
     if (Date.now() - connection.lastSeenAt > RTM_LIMITS.idleTimeoutMs) {
       ws.close(4408, 'idle timeout');
     }
-    // An operator's session as a member (tm 389.15) closes with its window:
-    // the token stopped working at `endsAt`, and so does what it opened.
-    if (connection.impersonation && Date.now() >= connection.impersonation.endsAt.getTime()) {
-      ws.close(4401, 'session ended');
-    }
   }, RTM_LIMITS.pingIntervalMs);
 
   ws.on('message', (raw) => {
@@ -1052,6 +1048,9 @@ function attach(params: {
   ws.on('close', (code) => {
     clearTimeout(loginTimer);
     clearInterval(idleTimer);
+    // An operator's session as a member (tm 389.15) and every other credential
+    // with an expiry close on this timer (tm 426.3), armed at login.
+    disarmCredentialExpiry(connection);
     registry.remove(connection.id);
     preLogin?.limiter.release(connection.id);
     customerSockets?.release(connection.id);

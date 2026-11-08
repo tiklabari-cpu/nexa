@@ -34,9 +34,15 @@ export class PodSocket {
   /** Which pod this socket is attached to — the whole point of the suite. */
   readonly pod: string;
 
+  /** Settles when the socket closes, with the code and reason the gateway sent. */
+  readonly closed: Promise<{ code: number; reason: string }>;
+
   private constructor(ws: WebSocket, pod: string) {
     this.#ws = ws;
     this.pod = pod;
+    this.closed = new Promise((resolve) => {
+      ws.on('close', (code, reason) => resolve({ code, reason: reason.toString() }));
+    });
     ws.on('message', (raw) => {
       let frame: Frame;
       try {
@@ -114,6 +120,11 @@ export class PodSocket {
     return this.#frames.filter(
       (frame) => frame.type === 'push' && (action === undefined || frame.action === action),
     );
+  }
+
+  /** Whether the socket is still open — false once either side has started closing it. */
+  isOpen(): boolean {
+    return this.#ws.readyState === WebSocket.OPEN;
   }
 
   close(): void {

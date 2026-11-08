@@ -2,8 +2,9 @@
  * What the API puts on the bus, published the way it does — for the suites
  * that drive a real gateway without an API in front of it.
  *
- * `publishRevocation` stands in for the API's revocation points until they
- * publish themselves (tm 426.2): the same envelope builder, the same channel.
+ * `publishRevocation` stands in for the API's revocation points, which publish
+ * the same envelope on the same channel since tm 426.2 (the API side is
+ * proven against a real gateway in `apps/api/test/integration/revocation-points.test.ts`).
  * Like the API, a caller commits the change first (the token revoked, the
  * membership suspended) and publishes after — a gateway that closes a socket
  * lets its client straight back to `login`.

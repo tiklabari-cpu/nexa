@@ -503,6 +503,7 @@ export function buildSchedulerJobs({
           appUrl: env.WEB_APP_URL,
           log: context.logger,
           mailer,
+          publisher: publisher ?? null,
         }).run();
         return {
           counts: {

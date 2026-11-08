@@ -41,7 +41,9 @@
  * an error, and records nothing; a state the action cannot start from is 409
  * `platform_workspace_state` (`services/platform/workspace-actions.ts`).
  * Mail goes after the commit and never undoes the action: the response says
- * `mail: sent | failed`.
+ * `mail: sent | failed`. A suspension — the action's own, or a scheduled
+ * deletion's — closes the workspace's open member sockets after the commit
+ * (`principal_revoked`, tm 426.2).
  *
  * The workspace's own audit trail is `GET /audit/workspaces/{licenseId}`
  * (`routes/platform/audit.ts`, tm 389.5) — one route, not a second copy here.
@@ -104,6 +106,7 @@ import {
   WorkspaceCursorError,
 } from '../../services/platform/workspaces.js';
 import { PlatformAiCatalogs } from '../../services/platform/ai-catalogs.js';
+import { RealtimePublisher } from '../../services/realtime/publisher.js';
 import { toCsv } from '../reports-export.js';
 import { parse } from './auth.js';
 
@@ -186,6 +189,7 @@ export default async function platformWorkspacesRoutes(
     options.now ? { now: options.now } : {},
   );
   const clock = options.now ?? Date.now;
+  const publisher = new RealtimePublisher(app.redis, app.log);
   const read = { platform: { permission: 'workspaces.read' as const } };
   const onWorkspace = (action: PlatformAuditAction): PlatformAuditRouteConfig => ({
     action,
@@ -507,11 +511,14 @@ export default async function platformWorkspacesRoutes(
     '/workspaces/:licenseId/suspend',
     { config: gate('workspaces.lifecycle', 'workspace.suspended', true) },
     async (request, reply) => {
-      const { licenseId } = await tenantOf(request);
+      const tenant = await tenantOf(request);
+      const { licenseId } = tenant;
       const reason = request.platformAudit!.reason!;
       const outcome = await perform(request, licenseId, (tx, now) =>
         suspend(tx, licenseId, reason, now),
       );
+      // Committed: every member socket of the workspace closes (tm 426.2).
+      if (!outcome.unchanged) await publisher.revoke(tenant, [{ kind: 'license' }]);
       return answer(reply, licenseId, outcome);
     },
   );
@@ -653,13 +660,19 @@ export default async function platformWorkspacesRoutes(
     '/workspaces/:licenseId/delete',
     { config: gate('workspaces.lifecycle', 'workspace.deletion_scheduled', true) },
     async (request, reply) => {
-      const { licenseId } = await tenantOf(request);
+      const tenant = await tenantOf(request);
+      const { licenseId } = tenant;
       const { confirm_name: confirmName } = parse(deleteBody, request.body);
       const reason = request.platformAudit!.reason!;
       const outcome = await perform(request, licenseId, (tx, now) =>
         scheduleDeletion(tx, licenseId, { confirmName, reason }, now),
       );
       if (outcome.unchanged) return answer(reply, licenseId, outcome);
+      // The deletion suspends the workspace for its last fourteen days, unless
+      // it was suspended already (and its sockets closed then) — tm 426.2.
+      if (outcome.payload['suspended'] === true) {
+        await publisher.revoke(tenant, [{ kind: 'license' }]);
+      }
 
       const owner = await app.platformDb.agentMembership.findFirst({
         where: { licenseId, role: 'owner' },

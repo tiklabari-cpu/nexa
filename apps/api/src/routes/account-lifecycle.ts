@@ -14,7 +14,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
-import { withTenant } from '../lib/tenant.js';
+import { withTenant, type TenantContext } from '../lib/tenant.js';
 import { verifyPassword } from '../lib/crypto.js';
 import { writeAuditEntry, type AuditEntry } from '../services/audit/audit-log.js';
 import {
@@ -36,6 +36,7 @@ import {
   type AgentRole,
 } from '@siyahtus/types';
 import { roleAtLeast } from '../services/auth/principal.js';
+import { RealtimePublisher } from '../services/realtime/publisher.js';
 import type { Mailer } from '../services/mail/mailer.js';
 import { deliver, isCapRefusal, mailFailureFields } from '../services/mail/delivery.js';
 import { clientNetworkKey } from '../lib/ip-allowlist.js';
@@ -189,6 +190,7 @@ export default async function accountLifecycleRoutes(
     async () => (await app.publicSettings.get()).trialDays,
     env.SIGNUP_VERIFICATION_TTL_HOURS,
   );
+  const publisher = new RealtimePublisher(app.redis, app.log);
 
   /**
    * An account-level event, written once into each workspace the account can
@@ -668,8 +670,9 @@ export default async function accountLifecycleRoutes(
     // change is recorded once in each workspace the account can reach. The actor
     // is the account itself (a self-service reset). Best-effort: a completed
     // reset must not be undone because the trail could not be written.
+    let tenants: TenantContext[] = [];
     try {
-      const tenants = await lifecycle.membershipTenants(accountId);
+      tenants = await lifecycle.membershipTenants(accountId);
       for (const tenant of tenants) {
         await withTenant(app.db, tenant, (tx) =>
           writeAuditEntry(
@@ -686,6 +689,9 @@ export default async function accountLifecycleRoutes(
     } catch (err) {
       request.log.warn({ err }, 'failed to record password reset in audit log');
     }
+    // The reset ended every credential the account held — sessions and personal
+    // tokens, in every workspace — so every socket it holds closes too (tm 426.2).
+    await publisher.revokeMember(accountId, tenants);
 
     return reply.code(204).send();
   });

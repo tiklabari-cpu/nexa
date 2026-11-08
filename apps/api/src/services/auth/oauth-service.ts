@@ -25,6 +25,7 @@ import {
 } from '../../lib/crypto.js';
 import { withTenant } from '../../lib/tenant.js';
 import { writeAuditEntry } from '../audit/audit-log.js';
+import type { RealtimePublisher } from '../realtime/publisher.js';
 import { scopesWithinRole } from './principal.js';
 import { TokenService } from './token-service.js';
 
@@ -173,6 +174,11 @@ export class OauthService {
   constructor(
     private readonly db: PrismaClient,
     private readonly config: OauthConfig,
+    /**
+     * Where the sessions this service ends are announced, so the sockets they
+     * opened close (tm 426.2). Null publishes nothing.
+     */
+    private readonly publisher: RealtimePublisher | null = null,
   ) {
     this.#tokens = new TokenService(db);
   }
@@ -471,7 +477,7 @@ export class OauthService {
       // A token that was already rotated is being presented again — the
       // signature of a stolen refresh token. Refusing this one request is not
       // enough, because the thief may hold newer ones: kill the whole family.
-      await this.db.$queryRaw`SELECT auth_revoke_refresh_family(${record.family_id}::uuid)`;
+      await this.#revokeFamily(record);
       await this.#auditTokenFailure(
         record.license_id,
         record.organization_id,
@@ -519,8 +525,39 @@ export class OauthService {
     `;
     const record = rows[0];
     if (!record) return null;
-    await this.db.$queryRaw`SELECT auth_revoke_refresh_family(${record.family_id}::uuid)`;
+    await this.#revokeFamily(record);
     return { id: record.id, licenseId: record.license_id, organizationId: record.organization_id };
+  }
+
+  /**
+   * End a refresh family — its refresh tokens and every access token it
+   * minted (`auth_revoke_refresh_family`) — and close the sockets those access
+   * tokens opened (tm 426.2).
+   *
+   * Every access token the family revoked is announced, not only the newest: a
+   * panel's socket logged in with the access token it held when it connected,
+   * and the REST client has refreshed past that one since. The rows are read
+   * back in the same transaction by `revoked_at = now()` — `now()` is the
+   * transaction's own timestamp, the one the function wrote — so the list is
+   * exactly what this call revoked, a token minted by a refresh racing it
+   * included. Published after the commit.
+   */
+  async #revokeFamily(record: {
+    family_id: string;
+    license_id: bigint;
+    organization_id: string;
+  }): Promise<void> {
+    const tenant = { licenseId: record.license_id, organizationId: record.organization_id };
+    const revoked = await withTenant(this.db, tenant, async (tx) => {
+      await tx.$queryRaw`SELECT auth_revoke_refresh_family(${record.family_id}::uuid)`;
+      return tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id::text AS id FROM api_tokens
+         WHERE family_id = ${record.family_id}::uuid AND revoked_at = now()`;
+    });
+    await this.publisher?.revoke(
+      tenant,
+      revoked.map((row) => ({ kind: 'token', tokenId: row.id })),
+    );
   }
 
   // --- Internals -----------------------------------------------------------
@@ -694,20 +731,30 @@ export class OauthService {
     }
   }
 
+  /**
+   * Every session the account holds in this workspace, ended — and the sockets
+   * they opened closed after the commit (tm 426.2).
+   */
   async #revokeTokensForAccount(
     licenseId: bigint,
     organizationId: string,
     accountId: string,
   ): Promise<void> {
-    await withTenant(this.db, { licenseId, organizationId }, async (tx) => {
-      await tx.apiToken.updateMany({
-        where: { ownerId: accountId, kind: 'oauth', revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
+    const tenant = { licenseId, organizationId };
+    const revoked = await withTenant(this.db, tenant, async (tx) => {
+      const rows = await tx.$queryRaw<Array<{ id: string }>>`
+        UPDATE api_tokens SET revoked_at = now()
+         WHERE owner_id = ${accountId} AND kind = 'oauth' AND revoked_at IS NULL
+        RETURNING id::text AS id`;
       await tx.oauthRefreshToken.updateMany({
         where: { accountId, revokedAt: null },
         data: { revokedAt: new Date() },
       });
+      return rows;
     });
+    await this.publisher?.revoke(
+      tenant,
+      revoked.map((row) => ({ kind: 'token', tokenId: row.id })),
+    );
   }
 }

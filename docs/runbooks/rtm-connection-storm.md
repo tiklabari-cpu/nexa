@@ -65,7 +65,10 @@
      `sockets_closed`). Their clients reconnect once and are refused at
      `login`, so a burst here is followed by refused logins, not by a
      reconnect loop; a workspace suspension closes every member socket of it
-     at once.
+     at once. The API points that announce it are listed in PLAN §D461
+     (tm 426.2); an API that could not reach Redis logs an `error` "principal
+     revocation publish failed" instead, and those sockets stay open until
+     they close for another reason.
    - Mostly `normal` closes with a high open count is the real-traffic case.
    - There is deliberately **no** `rate_limit` reason: the WS rate limit
      (ADR-07, 10 msg/sec/connection) throttles by design rather than

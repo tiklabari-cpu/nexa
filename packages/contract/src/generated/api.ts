@@ -3404,6 +3404,15 @@ export interface paths {
      *     their tickets, their external channel identities and their custom field
      *     values. Irreversible, and not a soft flag — the rows are gone.
      *
+     *     **The files go too** (tm 423): every file their conversations and tickets
+     *     carried is deleted from storage after the rows, and counted in
+     *     `files_deleted`. A file the storage cannot delete at that moment is
+     *     queued, reported in `files_pending`, and deleted by the next retention
+     *     pass. A file another conversation or ticket still shows stays, and
+     *     knowledge-base documents are never touched. The text of AI procedure and
+     *     Copilot runs on their conversations is cleared (`skill_run_logs`); the
+     *     runs stay as counts.
+     *
      *     **Not a ban.** Banning denies someone service and keeps the history the
      *     decision rests on (`POST /customers/{customerId}/ban`); this removes the
      *     history. The two are separate actions with separate scopes so neither can
@@ -20498,6 +20507,12 @@ export interface components {
       tickets: number;
       /** @description External identities (phone number, Messenger id, …) the subject was reachable at. */
       channel_identities: number;
+      /** @description Files removed from storage (tm 423): what the subject's conversations and tickets carried — their uploads, the files an agent sent them, the attachments of their e-mails. A file another conversation or ticket still shows is not theirs alone and stays. Knowledge-base documents are never touched. */
+      files_deleted: number;
+      /** @description Files the storage could not delete during this request. Their rows are already gone and nothing shows them any more; the files are queued and deleted by the next retention pass, which records how many it removed in its own audit entry (`erased_files`). Zero when the storage answered. */
+      files_pending: number;
+      /** @description AI procedure and Copilot run logs on the subject's conversations whose text was cleared (tm 424). The run rows stay — they are the workspace's usage counts — with their outcome and nothing the subject said. */
+      skill_run_logs: number;
     };
     /**
      * @description What NFR-C4 makes HIPAA cover conditional on: US hosting and a signed

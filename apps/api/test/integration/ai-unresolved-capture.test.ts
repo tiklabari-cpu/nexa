@@ -364,7 +364,7 @@ describe('unresolved questions â€” capture, masking, erasure, retention (AI-22 Â
         select: { customerId: true },
       });
 
-      await asTenant(fx.a, (tx) => eraseCustomer(tx, chat.customerId, new Date()));
+      await asTenant(fx.a, (tx) => eraseCustomer(tx, fx.a.licenseId, chat.customerId, new Date()));
 
       expect(await items()).toEqual([]);
       expect(

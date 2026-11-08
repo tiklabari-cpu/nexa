@@ -58,6 +58,7 @@ import { type TenantClient, type TenantContext, withTenant } from '../../lib/ten
 import { writeAuditEntry } from '../audit/audit-log.js';
 import type { ObjectStore } from '../storage/object-store.js';
 import { StorageUnavailableError } from '../storage/storage-error.js';
+import { deleteQueuedFiles } from './file-deletions.js';
 import {
   applyTenantWindows,
   capRetentionForHipaa,
@@ -66,6 +67,11 @@ import {
   type RetentionPolicy,
   resolveCutoffs,
 } from './policy.js';
+import {
+  CLEARED_SKILL_RUN_LOG,
+  clearThreadlessSkillRunLogBatch,
+  countThreadlessSkillRunLogs,
+} from './skill-run-logs.js';
 
 /**
  * Rows deleted per statement. Large enough that real workloads finish in a
@@ -99,6 +105,18 @@ export interface TenantPruneResult {
    * not in the sweep.
    */
   sensitiveFiles: number;
+  /**
+   * Skill runs with no connection whose log text was cleared by age under the
+   * thread window (tm 424). A run on a connection is cleared with its thread,
+   * inside `threads`; the run rows themselves are never deleted.
+   */
+  skillRunLogs: number;
+  /**
+   * Files a customer erasure queued and the store had refused at the time
+   * (tm 423), deleted now. Not windowed: the subject asked, and the rows that
+   * named the files are already gone.
+   */
+  erasedFiles: number;
   /** Audit-log entries pruned for this tenant (NFR-S12 30-day window). */
   auditEntries: number;
   /**
@@ -140,6 +158,8 @@ export interface RetentionReport {
     aiDecisions: number;
     unresolvedItems: number;
     sensitiveFiles: number;
+    skillRunLogs: number;
+    erasedFiles: number;
     mailFiles: number;
     auditEntries: number;
     /**
@@ -233,6 +253,8 @@ export class RetentionRunner {
         aiDecisions: results.reduce((sum, r) => sum + r.aiDecisions, 0),
         unresolvedItems: results.reduce((sum, r) => sum + r.unresolvedItems, 0),
         sensitiveFiles: results.reduce((sum, r) => sum + r.sensitiveFiles, 0),
+        skillRunLogs: results.reduce((sum, r) => sum + r.skillRunLogs, 0),
+        erasedFiles: results.reduce((sum, r) => sum + r.erasedFiles, 0),
         mailFiles,
         auditEntries,
         canceledWorkspaces,
@@ -367,6 +389,26 @@ export class RetentionRunner {
         ? 0
         : await this.#purgeSensitiveFiles(context, cutoffs.threads, dryRun);
 
+    // What a procedure or Copilot run said about the player (tm 424): a run on
+    // a connection was cleared with its thread above; one with no connection
+    // goes by age, on the conversation's window, the way a decision record
+    // with no connection does. The row stays — it is a usage count.
+    const skillRunLogs =
+      cutoffs.threads === null
+        ? 0
+        : dryRun
+          ? await withTenant(this.#db, context, (tx) =>
+              countThreadlessSkillRunLogs(tx, cutoffs.threads!),
+            )
+          : await this.#deleteInBatches(context, (tx) =>
+              clearThreadlessSkillRunLogBatch(tx, cutoffs.threads!, RETENTION_BATCH),
+            );
+
+    // The files a customer erasure could not delete when it ran (tm 423).
+    // Outside every window — the subject asked — so not skipped with an
+    // unlimited one; only without a store to delete from.
+    const erasedFiles = this.#store === null ? 0 : await this.#purgeErasedFiles(context, dryRun);
+
     // The audit log is append-only to `siyahtus_app` (no DELETE grant), so its
     // window cannot be applied through `withTenant` like the tables above. A
     // real run goes through the one SECURITY DEFINER hole, `audit_prune_expired`,
@@ -399,6 +441,8 @@ export class RetentionRunner {
         aiDecisions +
         unresolvedItems +
         sensitiveFiles +
+        skillRunLogs +
+        erasedFiles +
         auditEntries +
         aiConfigChanges >
         0
@@ -420,6 +464,8 @@ export class RetentionRunner {
               ai_decisions: aiDecisions,
               ai_unresolved: unresolvedItems,
               sensitive_files: sensitiveFiles,
+              skill_run_logs: skillRunLogs,
+              erased_files: erasedFiles,
               audit_entries: auditEntries,
               ai_config_changes: aiConfigChanges,
               dry_run: false,
@@ -452,6 +498,8 @@ export class RetentionRunner {
       aiDecisions,
       unresolvedItems,
       sensitiveFiles,
+      skillRunLogs,
+      erasedFiles,
       auditEntries,
       aiConfigChanges,
       hipaaScope,
@@ -486,6 +534,11 @@ export class RetentionRunner {
     // connection: the value stays for the CSAT history, the player's comment —
     // free text, personal data like the transcript — goes with the
     // connection, in the same statement (WG-11 · tm 337).
+    //
+    // A skill run is the same shape (tm 424): `thread_id` is SET NULL, so the
+    // run outlives the connection as a usage count, and its log — which may
+    // quote the player — is cleared in the same statement
+    // (`skill-run-logs.ts`).
     return tx.$executeRaw`
       WITH doomed AS (
          SELECT id FROM threads
@@ -497,6 +550,9 @@ export class RetentionRunner {
        ), uncommented AS (
          UPDATE ratings SET comment = NULL
           WHERE thread_id IN (SELECT id FROM doomed) AND comment IS NOT NULL
+       ), unlogged AS (
+         UPDATE skill_runs SET log = ${CLEARED_SKILL_RUN_LOG}
+          WHERE thread_id IN (SELECT id FROM doomed) AND log <> ${CLEARED_SKILL_RUN_LOG}
        )
       DELETE FROM threads WHERE id IN (SELECT id FROM doomed)`;
   }
@@ -607,6 +663,46 @@ export class RetentionRunner {
       // Fewer than a batch, or a batch nothing could be marked in (which would
       // otherwise be selected again forever): done.
       if (rows.length < RETENTION_BATCH || marked === 0) return total;
+    }
+  }
+
+  /**
+   * The files customer erasures queued and could not delete at the time
+   * (tm 423 · `file-deletions.ts`), deleted and forgotten a batch at a time; a
+   * dry-run only counts them. The same outage rule as the sensitive files: a
+   * store that cannot be reached stops this step, not the sweep, and the rows
+   * wait for the next pass. Any other failure is a fault and is thrown.
+   */
+  async #purgeErasedFiles(context: TenantContext, dryRun: boolean): Promise<number> {
+    if (dryRun) {
+      return withTenant(this.#db, context, (tx) => tx.pendingFileDeletion.count());
+    }
+    let total = 0;
+    for (;;) {
+      const rows = await withTenant(this.#db, context, (tx) =>
+        tx.pendingFileDeletion.findMany({
+          select: { key: true },
+          orderBy: [{ createdAt: 'asc' }, { key: 'asc' }],
+          take: RETENTION_BATCH,
+        }),
+      );
+      const outcome = await deleteQueuedFiles(
+        this.#store!,
+        context.licenseId,
+        rows.map((row) => row.key),
+        (keys) =>
+          withTenant(this.#db, context, (tx) =>
+            tx.pendingFileDeletion.deleteMany({ where: { key: { in: keys } } }),
+          ),
+      );
+      total += outcome.deleted;
+      if (outcome.failure !== null) {
+        if (outcome.failure instanceof StorageUnavailableError) return total;
+        throw outcome.failure;
+      }
+      // Fewer than a batch, or a batch nothing could be deleted from (which
+      // would otherwise be selected again forever): done.
+      if (rows.length < RETENTION_BATCH || outcome.deleted === 0) return total;
     }
   }
 

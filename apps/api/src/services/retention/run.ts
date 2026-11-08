@@ -52,6 +52,8 @@ async function main(): Promise<void> {
         `${totals.aiDecisions} AI decision record(s) with no connection, ` +
         `${totals.unresolvedItems} unresolved question(s), ` +
         `${totals.sensitiveFiles} sensitive e-mailed file(s), ${totals.mailFiles} mail file(s), ` +
+        `${totals.skillRunLogs} AI run log(s) with no connection cleared, ` +
+        `${totals.erasedFiles} file(s) left by customer erasures, ` +
         `${totals.auditEntries} audit entr${totals.auditEntries === 1 ? 'y' : 'ies'} ` +
         `across ${totals.tenants} tenant(s)\n`,
     );

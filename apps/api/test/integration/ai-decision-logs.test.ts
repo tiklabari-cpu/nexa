@@ -342,7 +342,9 @@ describe('ai_decision_logs (ID-08)', () => {
     const onCustomerOnly = await seedDecision(fx.a, { customerId: fx.a.customerId });
     const unrelated = await seedDecision(fx.a);
 
-    await withTenant(appRole, ctx(fx.a), (tx) => eraseCustomer(tx, fx.a.customerId, new Date()));
+    await withTenant(appRole, ctx(fx.a), (tx) =>
+      eraseCustomer(tx, fx.a.licenseId, fx.a.customerId, new Date()),
+    );
 
     expect(await decisionExists(onThread)).toBe(false);
     expect(await decisionExists(onChatOnly)).toBe(false);

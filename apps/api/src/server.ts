@@ -88,6 +88,7 @@ import { RiskFlagAnnouncer } from './services/risk/risk-announce.js';
 import { LoginFailureTrail } from './services/auth/login-failure-trail.js';
 import type { WebhookSender } from './services/webhooks/webhook-dispatcher.js';
 import { createPushProvider, type PushProvider } from './services/push/push-provider.js';
+import type { ObjectStore } from './services/storage/object-store.js';
 import reportRoutes from './routes/reports.js';
 import billingPaymentRoutes from './routes/billing-payments.js';
 import billingProfileRoutes from './routes/billing-profile.js';
@@ -269,6 +270,12 @@ export interface BuildServerOptions {
    * (`createMockCrawlFetcher`) or the real fetcher with a stubbed resolver.
    */
   crawlFetcher?: CrawlFetcher;
+  /**
+   * Where a customer erasure deletes the subject's files (tm 423). Omitted,
+   * `STORAGE_PROVIDER`'s; a test passes one whose delete fails, to see the
+   * erasure still answer and the files wait for the retention sweep.
+   */
+  erasureStore?: ObjectStore;
 }
 
 export async function buildServer({
@@ -291,6 +298,7 @@ export async function buildServer({
   aiDisclosure = true,
   aiJobDiscovery,
   crawlFetcher,
+  erasureStore,
   geo: injectedGeo,
   captchaFetch,
   stripeFetch,
@@ -703,7 +711,10 @@ export async function buildServer({
         ...(accessInfoHttp ? { accessInfoHttp } : {}),
         aiDisclosure,
       });
-      await api.register(customerDirectoryRoutes);
+      await api.register(customerDirectoryRoutes, {
+        env,
+        ...(erasureStore ? { store: erasureStore } : {}),
+      });
       await api.register(memberRecognitionRoutes);
       await api.register(trafficRoutes);
       await api.register(campaignRoutes, { env });

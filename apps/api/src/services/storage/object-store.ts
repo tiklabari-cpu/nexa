@@ -19,7 +19,10 @@
  * operations that exist — `stat` joined the first three when a ticket reply
  * started recording the size and type of the files it carries (tm 356.2), and
  * `delete` when the retention sweep started removing the sensitive files a
- * player e-mailed (tm 357 · HD-02). Uploads are still never deleted.
+ * player e-mailed (tm 357 · HD-02). A customer erasure deletes every upload and
+ * e-mailed file the subject's conversations and tickets carried (tm 423 ·
+ * `services/retention/file-deletions.ts`); outside an erasure, an upload is
+ * still never deleted.
  *
  * `local-store.ts` imports the two types back out of here, type-only, so the
  * runtime edges in the module graph all run this way and there is no cycle.

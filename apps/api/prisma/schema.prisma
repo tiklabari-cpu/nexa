@@ -268,6 +268,7 @@ model License {
   auditEntries           AuditLogEntry[]
   auditChainHead         AuditChainHead?
   pendingAuditEntries    PendingAuditEntry[]
+  pendingFileDeletions   PendingFileDeletion[]
   roleCapabilityOverrides RoleCapabilityOverride[]
   siemExportCursors      SiemExportCursor[]
   ipAllowlistEntries     IpAllowlistEntry[]
@@ -2980,6 +2981,13 @@ model AiProcedureExample {
 /// reads `ai_agent` skills only and does not. Copilot's other assists record 0
 /// — a reply draft's query embedding is logged per call
 /// (`embedding.completed`), not metered.
+///
+/// `log`'s entries are free text that may quote the player (tm 424). The row
+/// outlives its chat and thread (`SET NULL`: the counts and tokens are the
+/// workspace's usage history), so the text is cleared explicitly — by the
+/// retention sweep with the thread, or by age when the run has no thread, and
+/// by a customer erasure before the chat goes. Cleared means `entries: []`
+/// with the `outcome` kept (`services/retention/skill-run-logs.ts`).
 model SkillRun {
   id              String   @id @default(uuid()) @db.Uuid
   skillId         String   @map("skill_id") @db.Uuid
@@ -3002,6 +3010,9 @@ model SkillRun {
   @@index([skillId, ranAt(sort: Desc)])
   @@index([licenseId, ranAt(sort: Desc)])
   @@index([threadId])
+  /// A conversation's runs — what a customer erasure clears the text of before
+  /// the chat goes (tm 424), and the `ON DELETE SET NULL` that delete fires.
+  @@index([chatId])
   @@map("skill_runs")
 }
 
@@ -4993,6 +5004,28 @@ model PendingAuditEntry {
 
   @@index([licenseId, id])
   @@map("pending_audit_entries")
+}
+
+/// A file a customer erasure still owes the object store (tm 423 · NFR-C8).
+///
+/// Written in the erasure's own transaction, one row per file its
+/// conversations and tickets carried, so the debt is committed with the rows
+/// that referred to the file. The route deletes the files after the commit and
+/// the row with each; a file the store would not delete then keeps its row, and
+/// the retention sweep deletes it on its next pass
+/// (`services/retention/file-deletions.ts`). The key's shape and its licence
+/// prefix are pinned by `pending_file_deletions_key_check`, which Prisma cannot
+/// model: a row can only ever name an upload or an e-mailed file of its own
+/// workspace. Migration 20261226090000_pending_file_deletions.
+model PendingFileDeletion {
+  licenseId BigInt   @map("license_id")
+  key       String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@id([licenseId, key])
+  @@map("pending_file_deletions")
 }
 
 /// A workspace's permission matrix choices (tm 325.2 · RL-02): one row per

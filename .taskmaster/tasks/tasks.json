@@ -16696,13 +16696,13 @@
         "description": "İşten çıkarılan ajan açık sekmesiyle müşteri mesaj push'larını almaya devam ediyor: rtm yalnız permissions_version değişince yeniden değerlendiriyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F08 (medium ← high). Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/rtm/src/permissions.ts:108`, `:126-140` yeniden değerlendirme yalnız `permissions_version`; sürümü artıran tek yer `apps/api/src/.../permission-matrix.ts:~281`; rtm'de login dışı revoke/logout/exp kontrolü yok (yalnız `server.ts:~887` impersonation). Mobil istemci auth reddinde `#stopped=true` (`apps/mobile/src/rtm/client.ts:285-291`) — bu yüzden MOBILE-RTM-TOKEN-REFRESH önce kapanmalı, yoksa exp zamanlayıcısı mobil uygulamayı her saat kalıcı offline'a düşürür.\n\nYAPILACAK: alt görevler sırayla (a → b → c). Hangi olay noktalarını bağladığını HANDOFF'a liste olarak yaz.\n\nTUZAK: Zamanlayıcılar soket kapanınca temizlenmeli (sızıntı). Yeni bus zarfı türü kapalı sözlükse memory closed-vocabularies-ripple-into-web. Post-commit publish → memory post-commit-publish-needs-an-in-publish-probe.\n\nKAPSAM DIŞI: impersonation sonlandırma (IMPERSONATION-ENDS-ON-OPERATOR-DISABLE).\nDENETİM BULGULARI: F08",
         "testStrategy": "Alt görevlerde. DoD: CONVENTIONS §1.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "417",
           "436"
         ],
         "priority": "medium",
-        "updatedAt": "2026-11-08T18:28:26.633Z",
+        "updatedAt": "2026-11-08T22:31:01.377Z",
         "subtasks": [
           {
             "id": 1,
@@ -16736,14 +16736,14 @@
             "description": "Token exp'i geçince soket kapanır; web ve mobil istemci refresh edip yeniden bağlanır.",
             "details": "Zamanlayıcı login'de kurulur, kapanışta temizlenir. Web istemcisinin kapanış kodunda refresh+reconnect yaptığını doğrula (yoksa ekle); mobil yol MOBILE-RTM-TOKEN-REFRESH'ten gelir — aynı kapanış kodunu tanıdığını test et.",
             "testStrategy": "rtm birim (sahte saat): exp geçince soket kapanır, zamanlayıcı sızmaz. web birim: kapanış sonrası refresh+reconnect. mobil jest: aynı kapanış kodunda bir kez refresh + yeniden bağlanma, #stopped false.",
-            "status": "blocked",
+            "status": "done",
             "dependencies": [
               "426.2",
               "436"
             ],
             "parentId": "426",
             "priority": "medium",
-            "updatedAt": "2026-11-08T18:28:26.633Z"
+            "updatedAt": "2026-11-08T22:31:01.377Z"
           }
         ]
       },
@@ -17778,9 +17778,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-08T21:26:45.197Z",
+      "lastModified": "2026-11-08T22:31:01.377Z",
       "taskCount": 478,
-      "completedCount": 424,
+      "completedCount": 425,
       "tags": [
         "master"
       ]

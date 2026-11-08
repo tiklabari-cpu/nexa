@@ -17,6 +17,7 @@
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { defaultScopesForRole, generateShortId } from '@siyahtus/types';
 import { decryptCredential, appCredentialAad } from '../../src/lib/credential-cipher.js';
 import type { ProviderEndpoints } from '../../src/services/apps/verifiers/types.js';
 import { LineSink } from '../helpers/ai-workspace.js';
@@ -469,6 +470,61 @@ describe('live Apps connections (tm 263 · FR-MOD-09.2 · FR-MOD-09.1)', () => {
       unavailable: true,
     });
     expect(provider.requests).toEqual([]);
+  });
+
+  it('asks the provider nothing about a conversation the caller may not see (tm 420 · NFR-S5)', async () => {
+    await owner.customer.update({
+      where: { id: fx.a.customerId },
+      data: { email: CUSTOMER_EMAIL },
+    });
+    expect((await connect({ api_key: BREVO_KEY }, 'brevo')).statusCode).toBe(200);
+    // Another team's conversation: the agent is in Support, the chat went to Sales.
+    const [support, sales] = await Promise.all(
+      ['Support', 'Sales'].map(
+        async (name) =>
+          (
+            await owner.group.create({
+              data: { licenseId: fx.a.licenseId, name },
+              select: { id: true },
+            })
+          ).id,
+      ),
+    );
+    await owner.groupAgent.create({
+      data: { licenseId: fx.a.licenseId, groupId: support!, agentId: fx.a.agentAccountId },
+    });
+    const chatId = generateShortId();
+    await owner.chat.create({
+      data: { id: chatId, licenseId: fx.a.licenseId, customerId: fx.a.customerId, active: true },
+    });
+    await owner.thread.create({
+      data: { id: generateShortId(), chatId, licenseId: fx.a.licenseId, active: true },
+    });
+    await owner.chatAccess.create({ data: { chatId, groupId: sales! } });
+    const agent = await grantToken(owner, {
+      licenseId: fx.a.licenseId,
+      organizationId: fx.a.organizationId,
+      ownerId: fx.a.agentAccountId,
+      scopes: defaultScopesForRole('agent'),
+    });
+
+    provider.requests.length = 0;
+    const refused = await server.get(`/chats/${chatId}/apps`, auth(agent));
+    responses.push(refused.body);
+    expect(refused.statusCode).toBe(404);
+    expect((refused.json() as { error: { type: string } }).error.type).toBe('not_found');
+    expect(provider.requests).toEqual([]);
+
+    // Someone who may see it reads the provider's data — the 404 is the rule, not a dead card.
+    expect((await chatApps(chatId)).find((i) => i.app_id === 'brevo')).toMatchObject({
+      live: true,
+      fields: [
+        { label: 'Subscribed', value: 'No' },
+        { label: 'Campaigns opened (90d)', value: '1' },
+        { label: 'Lists', value: '1' },
+      ],
+    });
+    expect(provider.requests.some((r) => r.path.startsWith('/brevo/v3/contacts/'))).toBe(true);
   });
 
   it('meters connection attempts per person, refused ones included', async () => {

@@ -8,7 +8,10 @@
  *
  * The one read that is *not* an admin act is `GET /chats/{chatId}/apps`: an
  * agent working a conversation reads the connected apps' data in the Details
- * pane, so it sits on the chat scope they already hold, not the admin one.
+ * pane, so it sits on the chat scope they already hold, not the admin one —
+ * and behind the conversation's own visibility, like its transcript (tm 420):
+ * what an app holds about a customer is no less sensitive than the chat. It is
+ * the only route here that names a conversation.
  *
  * Two connect paths, one per `provider` (09.2): the OAuth pair for `oauth`
  * cards and `POST /settings/apps/:appId/connect` for `api_key` ones. They are
@@ -285,13 +288,20 @@ export default async function appRoutes(
     '/chats/:chatId/apps',
     { config: { scopes: ['chats--all:ro', 'chats--access:ro'] } },
     async (request, reply) => {
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
+      const { chatId } = request.params;
       // The pilot shows no stub data about a real customer (tm 257.18) — only
       // what a live card read from its provider (tm 263); with none switched
-      // on, an empty list, which the Details panel tolerates.
-      if (env.PILOT_MODE && pilotCards.length === 0) return reply.send({ items: [] });
-      const tenant = request.tenant();
+      // on, an empty list, which the Details panel tolerates. Still after the
+      // conversation's visibility (tm 420): a chat the caller may not see is a
+      // 404 here as on every deployment, never an empty 200.
+      if (env.PILOT_MODE && pilotCards.length === 0) {
+        await request.withTenant((tx) => apps.visibleChatCustomer(tx, tenant, principal, chatId));
+        return reply.send({ items: [] });
+      }
       const plan = await request.withTenant((tx) =>
-        apps.chatDataPlan(tx, tenant, request.params.chatId),
+        apps.chatDataPlan(tx, tenant, principal, chatId),
       );
       const items = await apps.chatDataResolve(tenant, plan);
       return reply.send({ items: env.PILOT_MODE ? items.filter((item) => item.live) : items });

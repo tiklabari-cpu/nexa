@@ -16627,12 +16627,12 @@
         "description": "Saldırgan kendi workspace'ine kurbanın doğrulanmış e-postasını davet edip token'la kimlik bilgisi olmadan `/auth/invitations/accept` çağırıyor: 200, kurban hesabı workspace'e ekleniyor ve yanıttaki `memberships` kurbanın tüm license_id/organizasyonlarını gösteriyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F04 (medium ← high, auth-session). Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı):\n- Rota `apps/api/src/routes/account-lifecycle.ts:870` `app.post('/auth/invitations/accept', { config: { public: true } }, ...)`; ~:908 `reply.send(session)` filtresiz.\n- Migration `apps/api/prisma/migrations/20261022190000_invitation_groups_on_join/migration.sql:124,137,171`: parola yalnız doğrulanmamış hesapta; doğrulanmış hesapta doğrudan `INSERT agent_memberships`.\n\nYAPILACAK (varsayılan karar; değiştirirsen HANDOFF'a yaz): doğrulanmış (parolası olan) hesap için kabul, (a) gövdede doğru parola ya da (b) aynı hesaba ait geçerli oturum (Bearer) ister; yoksa 401 `invitation_requires_sign_in` → web kabul ekranı giriş formuna yönlendirir (mevcut ekranda giriş yolu varsa onu kullan). SSO zorunlu workspace hesabı için SSO yolu notu. Yanıtta `memberships` yalnız katılınan workspace (ya da oturum kurulumu için gereken tek kayıt). Kontrat değişirse contract-first; yeni hata türü en+tr cümle (memory gate-rerun-hint-fails-for-web).\n\nTUZAK: Fonksiyon SQL'de (SECURITY DEFINER) — değişiklik yeni migration ile `CREATE OR REPLACE`; RLS/plan cache (memory hub-prisma-postgres-traps). Login 30/dk auth kovası (browser-ux-probe-traps). Mevcut e2e davet akışları (team/invite spec) doğrulanmış davetliyle çalışıyor olabilir.\n\nKAPSAM DIŞI: davet kotası, e-posta doğrulama akışı.\nDENETİM BULGULARI: F04",
         "testStrategy": "api entegrasyon: doğrulanmış hesap + parolasız kabul → 401, üyelik eklenmez; doğru parola → 200 ve memberships yalnız yeni workspace; yanlış parola → 401 (sayaç/rate limit); doğrulanmamış hesap akışı değişmez. web birim: 401'de giriş formu. e2e: davet kabulü (mevcut spec) yeşil. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "417"
         ],
         "priority": "medium",
-        "updatedAt": "2026-11-08T06:16:09.817Z",
+        "updatedAt": "2026-11-08T07:48:22.055Z",
         "subtasks": []
       },
       {
@@ -17777,9 +17777,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-08T06:16:09.818Z",
+      "lastModified": "2026-11-08T07:48:22.055Z",
       "taskCount": 478,
-      "completedCount": 418,
+      "completedCount": 419,
       "tags": [
         "master"
       ]

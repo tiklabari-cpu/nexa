@@ -16873,12 +16873,12 @@
         "description": "Arka planda 1 saatten uzun beklendikten sonra ön plana dönülünce süresi dolmuş token'la RTM login reddediliyor, #stopped=true oluyor ve canlı mesaj gelmiyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F18 (medium ← high). Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/mobile/src/rtm/client.ts:~285-291`, `:~404` auth reddinde `#stopped=true`; `apps/mobile/src/features/inbox/InboxProvider.tsx:~72` `getToken: () => session.getAccessToken()` (senkron, süre kontrolsüz); access TTL 3600 (`apps/api/src/config/env.ts:~444`).\n\nYAPILACAK: `getToken` async: token exp'e < 60 sn kaldıysa önce `session.refresh()`. Login auth hatasında bir kez refresh + yeniden bağlan; ikinci auth hatasında mevcut stop davranışı (signed-out akışı). Sunucunun token süresi/iptal için kullanacağı kapanış kodu (RTM-REVOKE-CLOSES-SOCKETS bu görevden SONRA gelir; mevcut 4001/1008 benzeri kodu varsay ve sabitle) aynı yoldan geçer. Kodu HANDOFF'a yaz ki RTM-REVOKE aynı kodu kullansın.\n\nTUZAK: Eşzamanlı refresh çağrılarını tekille (aynı promise). memory mobile-tests-have-no-node-types.\n\nKAPSAM DIŞI: push bildirimleri, sunucu tarafı kapatma (RTM-REVOKE-CLOSES-SOCKETS).\nDENETİM BULGULARI: F18",
         "testStrategy": "mobil jest: süresi dolmuş token → login reddi → refresh → yeni token'la login success, #stopped false; sunucu kapanış kodu → aynı tek refresh + yeniden bağlanma; refresh de başarısızsa stop; eşzamanlı iki getToken tek refresh. DoD: CONVENTIONS §1.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "417"
         ],
         "priority": "medium",
-        "updatedAt": "2026-11-08T20:21:24.029Z",
+        "updatedAt": "2026-11-08T21:26:45.197Z",
         "subtasks": []
       },
       {
@@ -17778,9 +17778,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-08T20:21:24.030Z",
+      "lastModified": "2026-11-08T21:26:45.197Z",
       "taskCount": 478,
-      "completedCount": 423,
+      "completedCount": 424,
       "tags": [
         "master"
       ]

@@ -12,9 +12,11 @@
  * The same paths against real sockets: `test/integration/login-side.test.ts`
  * and `test/integration/customer-socket-limit.test.ts`.
  */
+import { performance } from 'node:perf_hooks';
 import type { Logger } from 'pino';
 import { describe, expect, it, vi } from 'vitest';
 import type { WebSocket } from 'ws';
+import { principalRevokedEnvelope, type PrincipalRevokedTarget } from '@siyahtus/types';
 import type { AuthResult, SocketAuthenticator, SocketPrincipal } from './auth.js';
 import { ConnectionRegistry, type Connection } from './connection.js';
 import { Dispatcher, SOCKET_LIMIT_CLOSE_CODE, WRONG_SIDE_CLOSE_CODE } from './dispatcher.js';
@@ -47,6 +49,7 @@ function principal(kind: SocketPrincipal['kind'], actorId = `${kind}-1`): Socket
 function build(
   authenticate: (token: string, organizationId: string, side: string) => Promise<AuthResult>,
   admitLogin?: (connection: Connection, principal: SocketPrincipal) => boolean,
+  listen?: (licenseId: string) => Promise<number>,
 ) {
   const registry = new ConnectionRegistry();
   const onAuthenticated = vi.fn(async () => undefined);
@@ -60,6 +63,7 @@ function build(
     onAuthenticated,
     messagesPerSecond: 1_000,
     ...(admitLogin ? { admitLogin } : {}),
+    ...(listen ? { listen } : {}),
   });
   const open = (side: 'agent' | 'customer') =>
     registry.add({
@@ -302,5 +306,162 @@ describe('login: the post-login socket caps (tm 427)', () => {
     await dispatcher.dispatch(open('agent'), login());
 
     expect(admitLogin).not.toHaveBeenCalled();
+  });
+});
+
+describe('login: a revocation heard while the credential was being read (tm 426)', () => {
+  function revoked(target: PrincipalRevokedTarget, organizationId = ORG) {
+    return principalRevokedEnvelope({ licenseId: '7', organizationId }, target);
+  }
+
+  /** Logs `kind` in at `side` with the token check held open while `during` runs. */
+  async function loginAcross(
+    during: (connection: Connection) => void,
+    kind: SocketPrincipal['kind'] = 'agent',
+    side: 'agent' | 'customer' = 'agent',
+  ) {
+    const check = deferred<AuthResult>();
+    const built = build(() => check.promise);
+    const connection = built.open(side);
+    const answer = built.dispatcher.dispatch(connection, login());
+    expect(connection.loggingIn).toBe(true);
+    during(connection);
+    check.resolve({ ok: true, principal: { ...principal(kind), tokenId: 'token-1' } });
+    return { ...built, connection, frame: parse(await answer) };
+  }
+
+  it('refuses the login a revocation named — as a refused credential, nobody logged in — and keeps the socket open (NFR-S2)', async () => {
+    for (const target of [
+      { kind: 'token', tokenId: 'token-1' },
+      { kind: 'agent', agentId: 'agent-1' },
+      { kind: 'license' },
+    ] as const) {
+      const { frame, connection, registry, onAuthenticated } = await loginAcross((socket) => {
+        socket.revokedDuringLogin.push(revoked(target));
+      });
+
+      expect(frame.success, target.kind).toBe(false);
+      expect(frame.payload.error).toMatchObject({
+        type: 'authentication',
+        message: 'Invalid or expired credentials.',
+      });
+      expect(connection.authenticated).toBe(false);
+      expect(registry.actors).toBe(0);
+      expect(onAuthenticated).not.toHaveBeenCalled();
+      // A refused credential, not a refused door: the client decides.
+      expect(connection.closeAfterReply).toBeNull();
+      expect(connection.loggingIn).toBe(false);
+      expect(connection.revokedDuringLogin).toEqual([]);
+    }
+  });
+
+  it('lets the login through when what it heard names somebody else', async () => {
+    for (const envelope of [
+      revoked({ kind: 'token', tokenId: 'token-2' }),
+      revoked({ kind: 'agent', agentId: 'agent-2' }),
+      principalRevokedEnvelope({ licenseId: '8', organizationId: ORG }, { kind: 'license' }),
+    ]) {
+      const { frame, connection } = await loginAcross((socket) => {
+        socket.revokedDuringLogin.push(envelope);
+      });
+
+      expect(frame.success, JSON.stringify(envelope.target)).toBe(true);
+      expect(connection.tokenId).toBe('token-1');
+      expect(connection.revokedDuringLogin).toEqual([]);
+    }
+  });
+
+  it("never refuses a visitor's login over one: a signed token is nothing a revocation names", async () => {
+    const { frame } = await loginAcross(
+      (socket) => {
+        socket.revokedDuringLogin.push(revoked({ kind: 'license' }));
+      },
+      'customer',
+      'customer',
+    );
+
+    expect(frame.success).toBe(true);
+  });
+
+  it('starts every login with nothing heard', async () => {
+    const { dispatcher, open } = build(async () => ({ ok: true, principal: principal('agent') }));
+    const connection = open('agent');
+    // Left over from a login before — the dispatcher empties it as it starts.
+    connection.revokedDuringLogin.push(revoked({ kind: 'license' }));
+
+    expect(parse(await dispatcher.dispatch(connection, login())).success).toBe(true);
+  });
+});
+
+describe('login: listening to the licence before the login finishes (tm 426)', () => {
+  it('reads the credential again when the subscription was confirmed after the first read began, and goes by the second read', async () => {
+    const reads: AuthResult[] = [
+      { ok: true, principal: { ...principal('agent'), tokenId: 'token-1' } },
+      { ok: false, reason: 'revoked' },
+    ];
+    const listen = vi.fn(async () => performance.now());
+    const { dispatcher, authenticate, open, registry } = build(
+      async () => reads.shift()!,
+      undefined,
+      listen,
+    );
+    const connection = open('agent');
+
+    const frame = parse(await dispatcher.dispatch(connection, login()));
+
+    expect(listen).toHaveBeenCalledWith('7');
+    expect(authenticate).toHaveBeenCalledTimes(2);
+    expect(frame.payload.error?.type).toBe('authentication');
+    expect(connection.authenticated).toBe(false);
+    expect(registry.actors).toBe(0);
+  });
+
+  it('reads it once when the subscription was confirmed before the read began', async () => {
+    const confirmed = performance.now();
+    const listen = vi.fn(async () => confirmed);
+    const { dispatcher, authenticate, open } = build(
+      async () => ({ ok: true, principal: principal('agent') }),
+      undefined,
+      listen,
+    );
+
+    expect(parse(await dispatcher.dispatch(open('agent'), login())).success).toBe(true);
+    expect(listen).toHaveBeenCalledTimes(1);
+    expect(authenticate).toHaveBeenCalledTimes(1);
+  });
+
+  it('listens before the socket is marked logged in', async () => {
+    const order: string[] = [];
+    const { dispatcher, open, onAuthenticated } = build(
+      async () => ({ ok: true, principal: principal('bot') }),
+      undefined,
+      async () => {
+        order.push('listen');
+        return 0;
+      },
+    );
+    onAuthenticated.mockImplementation(async () => {
+      order.push('logged in');
+    });
+
+    expect(parse(await dispatcher.dispatch(open('agent'), login())).success).toBe(true);
+    expect(order).toEqual(['listen', 'logged in']);
+  });
+
+  it('does not listen for a visitor, a refused credential, or a credential at the wrong door', async () => {
+    const cases: Array<[AuthResult, 'agent' | 'customer']> = [
+      [{ ok: true, principal: principal('customer') }, 'customer'],
+      [{ ok: false, reason: 'unknown' }, 'agent'],
+      [{ ok: true, principal: principal('customer') }, 'agent'],
+    ];
+    for (const [result, side] of cases) {
+      const listen = vi.fn(async () => performance.now());
+      const { dispatcher, authenticate, open } = build(async () => result, undefined, listen);
+
+      await dispatcher.dispatch(open(side), login());
+
+      expect(listen, JSON.stringify(result)).not.toHaveBeenCalled();
+      expect(authenticate).toHaveBeenCalledTimes(1);
+    }
   });
 });

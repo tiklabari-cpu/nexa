@@ -144,6 +144,17 @@ export async function seedRtmFixtures(db: PrismaClient): Promise<RtmFixtures> {
 
 export async function grantToken(
   db: PrismaClient,
+  input: Parameters<typeof grantTokenRow>[1],
+): Promise<string> {
+  return (await grantTokenRow(db, input)).token;
+}
+
+/**
+ * {@link grantToken}, with the `api_tokens` row id beside the token — what a
+ * `principal_revoked` envelope names (tm 426).
+ */
+export async function grantTokenRow(
+  db: PrismaClient,
   input: {
     licenseId: bigint;
     organizationId: string;
@@ -164,9 +175,9 @@ export async function grantToken(
     revokedAt?: Date;
     expiresAt?: Date;
   },
-): Promise<string> {
+): Promise<{ token: string; id: string }> {
   const token = `test_${randomUUID()}`;
-  await db.apiToken.create({
+  const row = await db.apiToken.create({
     data: {
       licenseId: input.licenseId,
       organizationId: input.organizationId,
@@ -178,8 +189,9 @@ export async function grantToken(
       ...(input.revokedAt ? { revokedAt: input.revokedAt } : {}),
       ...(input.expiresAt ? { expiresAt: input.expiresAt } : {}),
     },
+    select: { id: true },
   });
-  return token;
+  return { token, id: row.id };
 }
 
 /** Mints a customer token the same way the API does, without going through it. */

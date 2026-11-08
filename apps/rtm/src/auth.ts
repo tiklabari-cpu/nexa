@@ -64,6 +64,12 @@ export interface SocketPrincipal {
   /** A member's socket's basis for re-derivation; null for bots and customers. */
   authority: SocketAuthority | null;
   /**
+   * The `api_tokens` row the credential resolved to — what a `principal_revoked`
+   * envelope names to close the sockets it opened (tm 426). Absent for a
+   * visitor, whose token is signed rather than stored.
+   */
+  tokenId?: string;
+  /**
    * A SiyahTuş operator signed in as this member from the root panel (tm
    * 389.15): the session's mode and window. A `read_only` socket hears
    * everything the member would and says nothing — no typing, no presence —
@@ -303,6 +309,7 @@ export class SocketAuthenticator {
           groupIds,
           unrestricted,
           authority: null,
+          tokenId: row.id,
         },
       };
     }
@@ -345,6 +352,7 @@ export class SocketAuthenticator {
         groupIds: reach.groupIds,
         unrestricted: reach.unrestricted,
         authority: { ...authority, version: reach.version },
+        tokenId: row.id,
         ...(impersonation ? { impersonation } : {}),
       },
     };

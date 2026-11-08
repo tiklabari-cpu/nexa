@@ -43,13 +43,22 @@
  * The login refuses a credential at the other side's door; the audience filter
  * keys on the principal as well, so a visitor's credential — wherever it was
  * presented — is reached only by pushes addressed to it by id.
+ *
+ * **A revocation arrives here too, and is not a push (tm 426).** The API
+ * announces a credential it stopped honouring on the licence's channel, so it
+ * reaches the gateway in order with the pushes around it: anything published
+ * after it finds the socket closed. It goes to the gateway's handler
+ * (`revocation.ts`), never to a socket.
  */
+import { performance } from 'node:perf_hooks';
 import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
 import {
   isBusEnvelope,
   licenseChannel,
+  readPrincipalRevoked,
   type BusEnvelope,
+  type PrincipalRevokedEnvelope,
   type SyncRequiredPush,
 } from '@siyahtus/types';
 import type { Connection, ConnectionRegistry } from './connection.js';
@@ -103,7 +112,13 @@ interface HeldFrames {
 }
 
 export class Fanout {
-  #subscribedLicenses = new Set<string>();
+  /**
+   * The licences this node listens to, each with when its subscription was
+   * last confirmed (`performance.now()`) — a promise, so a login arriving while
+   * the first one's `SUBSCRIBE` is in flight waits for the same answer instead
+   * of taking the subscription as made (tm 426).
+   */
+  #subscribedLicenses = new Map<string, Promise<number>>();
   /** The subscriber has dropped since it was last ready — anything published meanwhile is gone. */
   #lost = false;
   /** Held draft frames by connection id (tm 417.4): one timer per connection, not per frame. */
@@ -117,6 +132,11 @@ export class Fanout {
     private readonly writer: SocketWriter,
     /** Null when telemetry is off (NODE_ENV=test default) — every call below is then a no-op. */
     private readonly telemetry: Telemetry | null = null,
+    /**
+     * Where a `principal_revoked` envelope goes (tm 426 · `revocation.ts`).
+     * Null drops it — the behaviour of a gateway that predates it.
+     */
+    private readonly onRevoked: ((envelope: PrincipalRevokedEnvelope) => void) | null = null,
   ) {
     this.subscriber.on('message', (channel, message) => {
       this.#handle(channel, message);
@@ -140,20 +160,31 @@ export class Fanout {
   }
 
   /**
-   * Subscribe to a licence's channel on first use.
+   * Subscribe to a licence's channel on first use. Resolves once the
+   * subscription is confirmed, with when it last was (`performance.now()`).
    *
    * Per-licence channels rather than one global one: a node that happens to
    * host no agents from a busy tenant should not decode that tenant's traffic.
+   *
+   * The time is for a login (tm 426): a credential read before the
+   * subscription was confirmed may have missed a revocation published in
+   * between, which this node never heard — so the dispatcher reads it again.
    */
-  async ensureSubscribed(licenseId: string): Promise<void> {
-    if (this.#subscribedLicenses.has(licenseId)) return;
-    this.#subscribedLicenses.add(licenseId);
-    try {
-      await this.subscriber.subscribe(licenseChannel(licenseId));
-    } catch (error) {
-      this.#subscribedLicenses.delete(licenseId);
-      throw error;
-    }
+  ensureSubscribed(licenseId: string): Promise<number> {
+    const existing = this.#subscribedLicenses.get(licenseId);
+    if (existing) return existing;
+    const confirmed = this.subscriber.subscribe(licenseChannel(licenseId)).then(
+      () => performance.now(),
+      (error: unknown) => {
+        // Only this attempt's entry: a later one may already have replaced it.
+        if (this.#subscribedLicenses.get(licenseId) === confirmed) {
+          this.#subscribedLicenses.delete(licenseId);
+        }
+        throw error;
+      },
+    );
+    this.#subscribedLicenses.set(licenseId, confirmed);
+    return confirmed;
   }
 
   /**
@@ -168,7 +199,8 @@ export class Fanout {
    * the `sync` reads.
    */
   async #recover(): Promise<void> {
-    const channels = [...this.#subscribedLicenses].map((licenseId) => licenseChannel(licenseId));
+    const licenses = [...this.#subscribedLicenses.keys()];
+    const channels = licenses.map((licenseId) => licenseChannel(licenseId));
     if (channels.length > 0) {
       try {
         await this.subscriber.subscribe(...channels);
@@ -177,6 +209,14 @@ export class Fanout {
         this.#lost = true;
         this.log.warn({ err: error }, 'redis resubscribe failed; waiting for the next reconnect');
         return;
+      }
+      // Confirmed again only now (tm 426): a login that read its credential
+      // during the outage reads it again, as it would on a first subscription.
+      const confirmedAt = Promise.resolve(performance.now());
+      for (const licenseId of licenses) {
+        if (this.#subscribedLicenses.has(licenseId)) {
+          this.#subscribedLicenses.set(licenseId, confirmedAt);
+        }
       }
     }
     const told = this.#announceResync();
@@ -214,6 +254,13 @@ export class Fanout {
       this.log.warn({ channel }, 'discarded a non-JSON bus message');
       return;
     }
+    // Before the push shape (tm 426): a revocation is not one, and is never
+    // delivered to a socket.
+    const revocation = readPrincipalRevoked(parsed);
+    if (revocation !== null) {
+      this.#revoke(channel, revocation);
+      return;
+    }
     if (!isBusEnvelope(parsed)) {
       this.log.warn({ channel }, 'discarded a bus message with an unrecognised shape');
       return;
@@ -248,6 +295,28 @@ export class Fanout {
 
       this.#deliver(connection, frame, envelope.action, envelope.at);
     }
+  }
+
+  /**
+   * Hand a revocation to the gateway's handler (tm 426). Loud when it cannot:
+   * a revocation dropped is a socket left open that should have closed.
+   */
+  #revoke(channel: string, revocation: PrincipalRevokedEnvelope | 'malformed'): void {
+    if (revocation === 'malformed') {
+      this.log.error({ channel }, 'discarded a principal_revoked message it could not read');
+      return;
+    }
+    // An envelope acts on the licence whose channel carried it and on no
+    // other: only the API publishes here, and a mistake in one licence's
+    // announcement must not close another's sockets.
+    if (channel !== licenseChannel(revocation.licenseId)) {
+      this.log.error(
+        { channel, license_id: revocation.licenseId },
+        'discarded a principal_revoked message from another licence channel',
+      );
+      return;
+    }
+    this.onRevoked?.(revocation);
   }
 
   /**

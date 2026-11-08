@@ -8,7 +8,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { WebSocket } from 'ws';
-import type { LogContext } from '@siyahtus/types';
+import type { LogContext, PrincipalRevokedEnvelope } from '@siyahtus/types';
 import type { SocketAuthority, SocketImpersonation } from './auth.js';
 import type { GatewayCloseReason } from './telemetry/telemetry.js';
 
@@ -25,6 +25,13 @@ export interface Connection {
    * at once both used to succeed, the second identity replacing the first.
    */
   loggingIn: boolean;
+  /**
+   * Revocations of this socket's organization heard while its `login` was in
+   * flight (tm 426). The login read the credential before they arrived, so it
+   * cannot have seen them; it is checked against these before the socket is
+   * marked logged in. Emptied when the login ends, whichever way.
+   */
+  revokedDuringLogin: PrincipalRevokedEnvelope[];
   /**
    * The client network the upgrade came from — an IPv4 address or an IPv6 /64
    * (`client-network.ts`) — when a cap counts by it (tm 405 · tm 427); null
@@ -45,6 +52,13 @@ export interface Connection {
   actorId: string | null;
   /** The principal kind that logged in (`agent`, `bot`, `customer`) — for the log. */
   actorType: string | null;
+  /**
+   * The stored credential the socket logged in with — its `api_tokens` row id —
+   * which a `principal_revoked` envelope names to close it (tm 426). The id,
+   * never the token. Null for a visitor's signed token, which has no row, and
+   * for a socket not yet logged in.
+   */
+  tokenId: string | null;
   /** Teams the agent belongs to — the audience filter keys on these. */
   groupIds: number[];
   /** True when the token may see every chat in the licence. */
@@ -92,12 +106,14 @@ export class ConnectionRegistry {
       organizationId: input.organizationId,
       authenticated: false,
       loggingIn: false,
+      revokedDuringLogin: [],
       clientNetwork: input.clientNetwork ?? null,
       closedBy: null,
       closeAfterReply: null,
       licenseId: null,
       actorId: null,
       actorType: null,
+      tokenId: null,
       groupIds: [],
       unrestricted: false,
       authority: null,
@@ -122,6 +138,8 @@ export class ConnectionRegistry {
       licenseId: string;
       actorId: string;
       actorType?: string;
+      /** The `api_tokens` row the credential is (tm 426); absent for a visitor. */
+      tokenId?: string | null;
       groupIds?: number[];
       unrestricted?: boolean;
       authority?: SocketAuthority | null;
@@ -145,6 +163,7 @@ export class ConnectionRegistry {
     connection.licenseId = actor.licenseId;
     connection.actorId = actor.actorId;
     connection.actorType = actor.actorType ?? connection.side;
+    connection.tokenId = actor.tokenId ?? null;
     connection.groupIds = actor.groupIds ?? [];
     connection.unrestricted = actor.unrestricted ?? false;
     connection.authority = actor.authority ?? null;
@@ -184,11 +203,17 @@ export class ConnectionRegistry {
 
   /** Every authenticated socket for a tenant. Never crosses organizations. */
   forOrganization(organizationId: string): Connection[] {
+    return this.inOrganization(organizationId).filter((c) => c.authenticated);
+  }
+
+  /**
+   * Every socket of a tenant, logged in or not — for the one reader that has to
+   * see a login still in flight: a revocation heard meanwhile (tm 426).
+   */
+  inOrganization(organizationId: string): Connection[] {
     const ids = this.#byOrganization.get(organizationId);
     if (!ids) return [];
-    return [...ids]
-      .map((id) => this.#byId.get(id))
-      .filter((c): c is Connection => c !== undefined && c.authenticated);
+    return [...ids].map((id) => this.#byId.get(id)).filter((c): c is Connection => c !== undefined);
   }
 
   /** Every socket belonging to one actor — an agent may have several tabs open. */

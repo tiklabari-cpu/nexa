@@ -6,6 +6,7 @@
  * forgets the check is invisible in review and reachable by anyone who can open
  * a socket.
  */
+import { performance } from 'node:perf_hooks';
 import type { Logger } from 'pino';
 import {
   RTM_LIMITS,
@@ -32,6 +33,7 @@ import {
   pushesWithinBounds,
 } from './input-bounds.js';
 import { encodeError, encodeResponse, type DecodedRequest } from './protocol.js';
+import { revocationNames } from './revocation.js';
 import { MAX_SYNC_CHATS, type SyncCursor, type SyncService } from './sync.js';
 import type { TypingService } from './typing.js';
 
@@ -80,6 +82,15 @@ export interface DispatcherDeps {
    * `too_many_requests` and the socket closed. Omitted, every login is admitted.
    */
   admitLogin?: (connection: Connection, principal: SocketPrincipal) => boolean;
+  /**
+   * Waits until this node listens to the licence's bus channel, and resolves
+   * with when that was last confirmed (`performance.now()`) — `Fanout.
+   * ensureSubscribed` (tm 426). A member's or a bot's credential read before
+   * then is read again, since a revocation published in between never reached
+   * this node. Omitted, the credential is read once and the subscription is
+   * left to `onAuthenticated`.
+   */
+  listen?: (licenseId: string) => Promise<number>;
 }
 
 export class Dispatcher {
@@ -147,11 +158,14 @@ export class Dispatcher {
       });
     }
     connection.loggingIn = true;
+    connection.revokedDuringLogin = [];
     try {
       return await this.#attemptLogin(connection, message);
     } finally {
-      // On every path: a refused login leaves the socket free to log in again.
+      // On every path: a refused login leaves the socket free to log in again,
+      // and a logged-in one is closed by a revocation directly (tm 426).
       connection.loggingIn = false;
+      connection.revokedDuringLogin = [];
     }
   }
 
@@ -180,11 +194,29 @@ export class Dispatcher {
       );
     }
 
-    const result = await this.deps.authenticator.authenticate(
-      token,
-      connection.organizationId,
-      connection.side,
-    );
+    const authenticate = () =>
+      this.deps.authenticator.authenticate(token, connection.organizationId, connection.side);
+    const readAt = performance.now();
+    let result = await authenticate();
+
+    // A credential this node could not yet hear revoked (tm 426). Revocations
+    // travel on the licence's bus channel, which a node subscribes to with the
+    // first socket of the licence it holds — so for that login the credential
+    // was read before this node listened, and one revoked in between was
+    // announced to nobody here. Once the subscription is confirmed, a read
+    // that began before it is done again: the API publishes after its commit,
+    // so whatever was announced before the subscription is in that read, and
+    // whatever is announced after it reaches this node. A visitor's token is
+    // signed, not stored, and nothing revokes it.
+    if (
+      this.deps.listen &&
+      result.ok &&
+      connection.side === 'agent' &&
+      principalFitsSide(result.principal.kind, connection.side)
+    ) {
+      const confirmedAt = await this.deps.listen(result.principal.licenseId);
+      if (confirmedAt >= readAt) result = await authenticate();
+    }
 
     // The door decides who may log in through it (tm 425): a visitor at the
     // customer socket, a member or a bot at the agent socket. A visitor token
@@ -256,6 +288,27 @@ export class Dispatcher {
 
     const { principal } = result;
 
+    // A revocation heard while the credential was being read (tm 426) — the
+    // read began before the API's commit and cannot have seen it, and a socket
+    // that is not logged in yet is not one the revocation could close. Refused
+    // as the credential will be from now on; a reconnect is told the reason.
+    // Synchronously before the socket is marked logged in, so a revocation
+    // arriving from here on finds it and closes it.
+    const subject = {
+      licenseId: principal.licenseId,
+      organizationId: connection.organizationId,
+      side: connection.side,
+      actorId: principal.actorId,
+      tokenId: principal.tokenId ?? null,
+    };
+    if (connection.revokedDuringLogin.some((envelope) => revocationNames(envelope, subject))) {
+      this.deps.log.debug(
+        { reason: 'revoked_during_login', request_id: message.request_id },
+        'rtm login rejected',
+      );
+      return this.#fail(message, 'authentication', 'Invalid or expired credentials.');
+    }
+
     // The post-login socket caps (tm 427), counted before the socket is marked
     // logged in so a refused one never is. Answered like the pre-login cap's
     // refusal — the reason, never the number — and the socket is closed.
@@ -276,6 +329,7 @@ export class Dispatcher {
       licenseId: principal.licenseId,
       actorId: principal.actorId,
       actorType: principal.kind,
+      tokenId: principal.tokenId ?? null,
       groupIds: principal.groupIds,
       unrestricted: principal.unrestricted,
       authority: principal.authority,

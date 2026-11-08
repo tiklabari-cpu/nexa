@@ -19,6 +19,7 @@
  * weigh.
  */
 import type { InboxApi } from './api';
+import { REFUSED_PROPERTY, type ReplyAccess, type ReplyLock } from './replyGuard';
 import {
   isPending,
   type ChatEvent,
@@ -27,6 +28,7 @@ import {
   type InboxView,
 } from './types';
 import type { RtmClientAction, RtmStatus } from '../../rtm/client';
+import { ApiClientError } from '../../lib/api-client';
 
 export type LoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -50,6 +52,12 @@ export interface InboxState {
   refreshing: boolean;
   transcripts: Readonly<Record<string, TranscriptState>>;
   connection: RtmStatus;
+  /**
+   * Chats the phone has learnt it may not answer (tm 475.5): the server
+   * refused a reply (409 `reply_requires_assignment`), the chat left the `my`
+   * list, or it was archived. Cleared when a fresh list shows it mine again.
+   */
+  replyLocks: Readonly<Record<string, ReplyLock>>;
 }
 
 export interface InboxStoreOptions {
@@ -99,6 +107,7 @@ export class InboxStore {
       refreshing: false,
       transcripts: {},
       connection: 'offline',
+      replyLocks: {},
     };
   }
 
@@ -122,6 +131,22 @@ export class InboxStore {
     return this.#options.accountId ?? null;
   }
 
+  /**
+   * May I answer this customer from here (tm 475.5 · D10)? Read from the list
+   * row's `assignee_id` — the newest connection's assignee — against the
+   * signed-in account, plus what the store has learnt since. No request of
+   * its own.
+   */
+  replyAccessOf(chatId: string): ReplyAccess {
+    const lock = this.#state.replyLocks[chatId];
+    if (lock !== undefined) return lock;
+    const chat = this.#state.chats.find((candidate) => candidate.id === chatId);
+    if (chat === undefined) return 'unknown';
+    if (chat.active === false) return 'closed';
+    if (this.accountId === null) return 'unknown';
+    return chat.assignee_id === this.accountId ? 'mine' : 'not_mine';
+  }
+
   // --- Chat list -------------------------------------------------------------
 
   setView(view: InboxView): void {
@@ -138,7 +163,13 @@ export class InboxStore {
     try {
       const page = await this.#options.api.listChats(this.#state.view);
       if (generation !== this.#chatsGeneration) return;
-      this.#patch({ chats: page.items, status: 'ready', error: null, refreshing: false });
+      this.#patch({
+        chats: page.items,
+        status: 'ready',
+        error: null,
+        refreshing: false,
+        replyLocks: this.#locksAfterList(page.items),
+      });
       this.#seedCursors(page.items);
     } catch (error) {
       if (generation !== this.#chatsGeneration) return;
@@ -148,6 +179,32 @@ export class InboxStore {
         refreshing: false,
       });
     }
+  }
+
+  /**
+   * What a fresh list says about who may answer.
+   *
+   * On the phone the list is the `my` view (D10): a conversation leaves it
+   * only when it stops being mine or closes, so one that was listed and is
+   * not any more is locked — that is the open screen of a chat a colleague
+   * just took over. A row that is mine and open again lifts its lock: the
+   * list is newer than whatever set it, because every load bumps the
+   * generation and an older answer is dropped above.
+   */
+  #locksAfterList(next: ChatSummary[]): Record<string, ReplyLock> {
+    const locks: Record<string, ReplyLock> = { ...this.#state.replyLocks };
+    if (this.#state.view === 'my') {
+      const listed = new Set(next.map((chat) => chat.id));
+      for (const chat of this.#state.chats) {
+        if (!listed.has(chat.id) && locks[chat.id] === undefined) locks[chat.id] = 'not_mine';
+      }
+    }
+    for (const chat of next) {
+      if (chat.active !== false && this.accountId !== null && chat.assignee_id === this.accountId) {
+        delete locks[chat.id];
+      }
+    }
+    return locks;
   }
 
   /**
@@ -300,6 +357,25 @@ export class InboxStore {
       return true;
     } catch (error) {
       const current = this.transcriptOf(chatId);
+      if (isReplyRefusal(error)) {
+        // The chat is not mine to answer (tm 475.5 · D10). Retrying cannot
+        // help — the answer will be the same until someone assigns it to me —
+        // so there is no retry; but the words are not thrown away either: the
+        // bubble stays, marked as not sent, and the composer closes.
+        this.#patchTranscript(chatId, {
+          events: current.events.map((existing) =>
+            existing.id === pendingId
+              ? { ...existing, properties: { [REFUSED_PROPERTY]: true } }
+              : existing,
+          ),
+          sending: false,
+          sendError: null,
+        });
+        this.#lock(chatId, 'not_mine');
+        // The list still says it is mine; read who has it now.
+        void this.loadChats({ refresh: true });
+        return false;
+      }
       // Roll the bubble back rather than leave a message on screen that nobody
       // received — a greyed-out "sent" is the worst of both answers.
       this.#patchTranscript(chatId, {
@@ -361,13 +437,19 @@ export class InboxStore {
         if (chatId !== null) this.#dropChat(chatId);
         return;
 
+      case 'chat_deactivated':
+        // Archived: say so, rather than "no longer yours", when the refresh
+        // below drops it from the list.
+        if (chatId !== null) this.#lock(chatId, 'closed');
+        void this.loadChats({ refresh: true });
+        return;
+
       // `sync_required`: pushes were lost on the gateway's bus (tm 408), and
       // which chats they moved is exactly what is not known.
       case 'incoming_chat':
       case 'chat_appeared':
       case 'chat_transferred':
       case 'chat_taken_over':
-      case 'chat_deactivated':
       case 'sync_required':
         void this.loadChats({ refresh: true });
         return;
@@ -442,7 +524,16 @@ export class InboxStore {
     delete transcripts[chatId];
     this.#transcriptGeneration.delete(chatId);
     this.#options.onChatForgotten?.(chatId);
-    this.#patch({ chats: this.#state.chats.filter((chat) => chat.id !== chatId), transcripts });
+    this.#patch({
+      chats: this.#state.chats.filter((chat) => chat.id !== chatId),
+      transcripts,
+      replyLocks: { ...this.#state.replyLocks, [chatId]: 'not_mine' },
+    });
+  }
+
+  #lock(chatId: string, lock: ReplyLock): void {
+    if (this.#state.replyLocks[chatId] === lock) return;
+    this.#patch({ replyLocks: { ...this.#state.replyLocks, [chatId]: lock } });
   }
 
   // --- Plumbing --------------------------------------------------------------
@@ -464,6 +555,10 @@ export class InboxStore {
   #emit(): void {
     for (const listener of this.#listeners) listener();
   }
+}
+
+function isReplyRefusal(error: unknown): boolean {
+  return error instanceof ApiClientError && error.type === 'reply_requires_assignment';
 }
 
 function messageOf(error: unknown): string {

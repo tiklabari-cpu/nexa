@@ -5,6 +5,8 @@ import { InboxContext } from './context';
 import { InboxStore } from './store';
 import type { EventPage, InboxApi } from './api';
 import type { ChatEvent, ChatSummary } from './types';
+import { replyGuardCopy } from './replyGuard';
+import { ApiClientError } from '../../lib/api-client';
 import { ThemeProvider } from '../../theme/theme';
 
 function event(overrides: Partial<ChatEvent> & { id: string }): ChatEvent {
@@ -271,5 +273,86 @@ describe('ChatScreen', () => {
 
     await waitFor(() => expect(screen.getByTestId('chat-closed')).toBeOnTheScreen());
     expect(screen.getByTestId('composer-send')).toBeDisabled();
+  });
+
+  describe('reply guard (tm 475.5)', () => {
+    const NOT_MINE = replyGuardCopy().notMine;
+
+    async function mountWithList(store: InboxStore): Promise<void> {
+      await mount(store);
+      await act(async () => {
+        await store.loadChats();
+      });
+    }
+
+    it('leaves the composer open on a chat assigned to me', async () => {
+      const api = fakeApi({ chats: [chat({ id: 'chat-1', assignee_id: 'agent-1' })] });
+      await mountWithList(new InboxStore({ api, accountId: 'agent-1' }));
+
+      expect(screen.queryByTestId('chat-not-mine')).toBeNull();
+      await fireEvent.changeText(screen.getByTestId('composer-input'), 'on my way');
+      expect(screen.getByTestId('composer-send')).toBeEnabled();
+      await fireEvent.press(screen.getByTestId('composer-send'));
+      await act(async () => {});
+
+      expect(api.sent).toEqual([{ text: 'on my way', recipients: 'all' }]);
+    });
+
+    it('closes the composer on a chat assigned to somebody else, and says why', async () => {
+      const api = fakeApi({ chats: [chat({ id: 'chat-1', assignee_id: 'agent-2' })] });
+      await mountWithList(new InboxStore({ api, accountId: 'agent-1' }));
+
+      expect(screen.getByTestId('chat-not-mine')).toHaveTextContent(NOT_MINE);
+      expect(screen.getByTestId('composer-send')).toBeDisabled();
+      expect(screen.getByTestId('composer-input').props.editable).toBe(false);
+      // There is no "Take" on the phone; that happens in the console.
+      expect(screen.queryByText(/^Take/)).toBeNull();
+    });
+
+    it('closes the composer when a colleague takes the open chat, and keeps what was typed', async () => {
+      const api = fakeApi({ chats: [chat({ id: 'chat-1', assignee_id: 'agent-1' })] });
+      const store = new InboxStore({ api, accountId: 'agent-1' });
+      await mountWithList(store);
+      await fireEvent.changeText(screen.getByTestId('composer-input'), 'half a sentence');
+
+      await act(async () => {
+        api.listChats = async () => ({ items: [] });
+        store.applyPush('chat_taken_over', { chat_id: 'chat-1' });
+      });
+
+      expect(screen.getByTestId('chat-not-mine')).toHaveTextContent(NOT_MINE);
+      expect(screen.getByTestId('composer-send')).toBeDisabled();
+      expect(screen.getByTestId('composer-input').props.value).toBe('half a sentence');
+    });
+
+    it('keeps a reply the server refused (409) on screen as not sent, with no retry', async () => {
+      const api = fakeApi({
+        chats: [chat({ id: 'chat-1', assignee_id: 'agent-1' })],
+        failSend: new ApiClientError({
+          type: 'reply_requires_assignment',
+          status: 409,
+          message: 'Only the agent this chat is assigned to can reply to the customer.',
+          requestId: 'req-1',
+          details: { reason: 'assigned_to_other' },
+        }),
+      });
+      const store = new InboxStore({ api, accountId: 'agent-1' });
+      await mountWithList(store);
+      api.listChats = async () => ({ items: [] });
+
+      await fireEvent.changeText(screen.getByTestId('composer-input'), 'on my way');
+      await fireEvent.press(screen.getByTestId('composer-send'));
+      await act(async () => {});
+
+      // The words did not vanish…
+      expect(screen.getByText('on my way')).toBeOnTheScreen();
+      expect(screen.getByTestId(/^event-not-sent-/)).toHaveTextContent(replyGuardCopy().notSent);
+      // …nothing offers to send them again…
+      expect(screen.queryByText(/try again|retry/i)).toBeNull();
+      expect(screen.queryByTestId('composer-error')).toBeNull();
+      // …and the composer says why it is closed.
+      expect(screen.getByTestId('chat-not-mine')).toHaveTextContent(NOT_MINE);
+      expect(screen.getByTestId('composer-send')).toBeDisabled();
+    });
   });
 });

@@ -285,6 +285,10 @@ chatApps:
       this conversation's customer — what the agent reads in the Details pane.
       Empty when nothing is connected, and always empty in the public pilot
       (`pilot_mode` on `GET /deployment`), which has no marketplace.
+
+      A conversation the caller may not see is `404`, like its transcript
+      (NFR-S5): the caller's teams, or the chats they are in under the `own`
+      level. The public pilot asks the same before its empty answer.
     responses:
       "200":
         description: One entry per connected app

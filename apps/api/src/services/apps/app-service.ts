@@ -89,6 +89,8 @@ import {
 } from '../../lib/credential-cipher.js';
 import { hashToken } from '../../lib/crypto.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import type { Principal } from '../auth/principal.js';
+import { chatVisibilityFilter, resolveVisibility } from '../chat/access.js';
 import { WebhookService } from '../webhooks/webhook-service.js';
 import type { LiveAppId } from './live-apps.js';
 import { liveVerifier } from './verifiers/registry.js';
@@ -668,8 +670,33 @@ export class AppService {
   }
 
   /**
+   * The customer of a conversation the caller may see (tm 420), by the
+   * inbox's own rule — `resolveVisibility` + `chatVisibilityFilter`, the
+   * transcript's — so an agent kept to their teams (`team`) or to the chats
+   * they are in (`own`) cannot read what the connected apps hold about
+   * another team's customer by naming its chat id, and `none` is refused as
+   * on every chat read. A chat the caller may not see, one that does not
+   * exist and another workspace's are the same 404 (NFR-S5).
+   */
+  async visibleChatCustomer(
+    tx: TenantClient,
+    tenant: TenantContext,
+    principal: Principal,
+    chatId: string,
+  ): Promise<{ id: string; email: string | null }> {
+    const visibility = await resolveVisibility(tx, principal, 'read');
+    const chat = await tx.chat.findFirst({
+      where: { id: chatId, licenseId: tenant.licenseId, ...chatVisibilityFilter(visibility) },
+      select: { customer: { select: { id: true, email: true } } },
+    });
+    if (!chat) throw ApiError.notFound('Chat not found.');
+    return chat.customer;
+  }
+
+  /**
    * A conversation's connected-app data (KK "bağlanınca veri sohbet içinde"):
-   * for each connected app, the data it exposes about this chat's customer.
+   * for each connected app, the data it exposes about this chat's customer —
+   * only for a conversation the caller may see ({@link visibleChatCustomer}).
    *
    * Two phases since tm 263, because a live card's data is a provider call:
    * {@link chatDataPlan} reads everything it needs inside the tenant
@@ -682,18 +709,13 @@ export class AppService {
   async chatDataPlan(
     tx: TenantClient,
     tenant: TenantContext,
+    principal: Principal,
     chatId: string,
   ): Promise<ChatDataPlan> {
-    const chat = await tx.chat.findFirst({
-      where: { id: chatId, licenseId: tenant.licenseId },
-      select: { customer: { select: { id: true, email: true } } },
-    });
-    // Absent here is indistinguishable from another tenant's chat — 404 either
-    // way, so a chat id cannot be probed across tenants (NFR-S5).
-    if (!chat) throw ApiError.notFound('Chat not found.');
+    const customer = await this.visibleChatCustomer(tx, tenant, principal, chatId);
 
     const installed = await tx.appInstallation.findMany({ where: { licenseId: tenant.licenseId } });
-    const seed = chat.customer.email ?? chat.customer.id;
+    const seed = customer.email ?? customer.id;
     const pairs = installed.flatMap((row) => {
       const entry = findApp(row.appId);
       // Only data apps surface in-chat; channel apps never reach here (they are
@@ -726,7 +748,7 @@ export class AppService {
         ? appAutomationChatData(entry, stats.get(entry.id) ?? NO_AUTOMATION_STATS)
         : appChatData(entry, seed);
     });
-    return { items, email: chat.customer.email, live };
+    return { items, email: customer.email, live };
   }
 
   async chatDataResolve(tenant: TenantContext, plan: ChatDataPlan): Promise<AppChatData[]> {

@@ -146,6 +146,9 @@ describe('error taxonomy', () => {
     // Accepting an invitation (tm 421 · audit F04): the address belongs to a
     // verified account, and the accept wants its password or its session.
     'invitation_requires_sign_in',
+    // The root panel's sign-in (tm 452 · audit F31): the attempt budget is
+    // unreachable, and the operator sign-in refuses rather than count nothing.
+    'rate_limit_unavailable',
     // The sandbox workspace (FR-MOD-11.5 · 11.5-f): the 409 for asking a
     // licence that already has one for a second.
     'sandbox_exists',

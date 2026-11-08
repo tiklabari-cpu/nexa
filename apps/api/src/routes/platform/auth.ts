@@ -25,8 +25,17 @@
  *                               handed back on success — so ten failures from
  *                               one address lock the door for the window, a
  *                               correct password included.
- *   `rl:platform:totp:<admin>`  every code presented by one operator,
- *                               `RATE_LIMIT_TWO_FACTOR_PER_HOUR` an hour.
+ *   `rl:platform:totp:<admin>`  every code presented by one operator (TOTP or
+ *                               recovery), `RATE_LIMIT_TWO_FACTOR_PER_HOUR` an
+ *                               hour.
+ *
+ * Both fail **closed** (tm 452 · audit F31): when Redis cannot be reached the
+ * attempt is refused with 503 `rate_limit_unavailable` and the password or the
+ * code is never compared. They used to let the attempt through, and someone
+ * holding an operator's password then had unlimited tries at the second
+ * factor for as long as the outage lasted. The process-wide per-address bucket
+ * (`plugins/platform-rate-limit.ts`) still fails open: it bounds load, and
+ * every route that compares a secret answers to one of these two.
  *
  * Every one of them writes the platform audit chain (tm 389.5) on success,
  * without a reason — they are the operator's own session; a refused password
@@ -42,7 +51,11 @@ import {
 } from '@siyahtus/types';
 import type { Env } from '../../config/env.js';
 import { ApiError } from '../../lib/api-error.js';
-import { RateLimiter, type RateLimitReservation } from '../../plugins/rate-limit.js';
+import {
+  RateLimiter,
+  type RateLimitDecision,
+  type RateLimitReservation,
+} from '../../plugins/rate-limit.js';
 import { alertLocale, effectiveAlertKinds } from '../../services/platform/alerts.js';
 import {
   badPlatformCode,
@@ -92,6 +105,19 @@ export function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infe
   return result.data;
 }
 
+/**
+ * The answer when an attempt budget cannot be read (tm 452): 503, with a
+ * `Retry-After` short enough that a person retrying by hand meets a Redis
+ * that has come back.
+ */
+function budgetUnavailable(): ApiError {
+  return new ApiError(
+    'rate_limit_unavailable',
+    'Sign-in is unavailable for a moment. Try again shortly.',
+    { headers: { 'Retry-After': '30' } },
+  );
+}
+
 function clientMeta(request: FastifyRequest): ClientMeta {
   const agent = request.headers['user-agent'];
   return { ip: request.ip ?? null, userAgent: typeof agent === 'string' ? agent : null };
@@ -116,19 +142,23 @@ export default async function platformAuthRoutes(
   /**
    * Take one slot of the address's sign-in budget, or refuse. The slot is the
    * attempt's; `release` hands it back when the attempt turned out honest.
-   * Fails open without Redis, like every bucket here — the password, the
-   * second factor and the edge do not depend on it.
+   *
+   * Fails **closed** without Redis (tm 452 · audit F31): 503
+   * `rate_limit_unavailable`, before the password is looked at. The tenant
+   * API's buckets fail open because a cache outage must not lock every
+   * customer out; here it is a handful of operators, and an uncounted door to
+   * the whole deployment is the worse outage.
    */
   async function reserveSignIn(
     request: FastifyRequest,
-  ): Promise<(RateLimitReservation & { key: string }) | null> {
+  ): Promise<RateLimitReservation & { key: string }> {
     const key = `rl:platform:signin:${request.ip}`;
     let reservation: RateLimitReservation;
     try {
       reservation = await limiter.reserve(key, PLATFORM_SIGNIN_FAILURES, PLATFORM_SIGNIN_WINDOW_MS);
     } catch (error) {
-      request.log.error({ err: error }, 'platform sign-in budget unavailable — allowing attempt');
-      return null;
+      request.log.error({ err: error }, 'platform sign-in budget unavailable — refusing attempt');
+      throw budgetUnavailable();
     }
     if (!reservation.allowed) {
       throw ApiError.tooManyRequests(
@@ -141,9 +171,8 @@ export default async function platformAuthRoutes(
 
   async function release(
     request: FastifyRequest,
-    reservation: (RateLimitReservation & { key: string }) | null,
+    reservation: RateLimitReservation & { key: string },
   ): Promise<void> {
-    if (!reservation) return;
     try {
       await limiter.release(reservation.key, reservation.member);
     } catch (error) {
@@ -179,27 +208,30 @@ export default async function platformAuthRoutes(
     }
   }
 
-  /** One code presented by `session`'s operator; refused past the hourly budget. */
+  /**
+   * One code presented by `session`'s operator — a TOTP code or a recovery
+   * code; refused past the hourly budget. Fails closed like the sign-in
+   * budget (tm 452): a password holder must not get uncounted guesses at the
+   * second factor while Redis is away.
+   */
   async function spendCodeAttempt(
     request: FastifyRequest,
     session: PlatformSessionContext,
   ): Promise<void> {
-    let allowed = true;
-    let resetMs = 0;
+    let decision: RateLimitDecision;
     try {
-      const decision = await limiter.consume(
+      decision = await limiter.consume(
         `rl:platform:totp:${session.adminId}`,
         options.env.RATE_LIMIT_TWO_FACTOR_PER_HOUR,
         3_600_000,
       );
-      allowed = decision.allowed;
-      resetMs = decision.resetMs;
     } catch (error) {
-      request.log.error({ err: error }, 'platform code budget unavailable — allowing attempt');
+      request.log.error({ err: error }, 'platform code budget unavailable — refusing attempt');
+      throw budgetUnavailable();
     }
-    if (!allowed) {
+    if (!decision.allowed) {
       throw ApiError.tooManyRequests(
-        resetMs / 1000,
+        decision.resetMs / 1000,
         'Too many codes entered for this operator. Retry after the interval in the Retry-After header.',
       );
     }

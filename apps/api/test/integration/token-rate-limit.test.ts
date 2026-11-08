@@ -279,13 +279,18 @@ describe('rate limiting: the token endpoint (tm 259.3)', () => {
     );
   });
 
-  it('leaves login, authorize, revoke and the widget token mint on the anonymous bucket', async () => {
+  it('leaves login, authorize and revoke on the anonymous bucket, and the widget token mint on its own', async () => {
     await withServer(
-      { RATE_LIMIT_ANON_PER_MIN: '30', RATE_LIMIT_TOKEN_PER_MIN: '300' },
+      {
+        RATE_LIMIT_ANON_PER_MIN: '30',
+        RATE_LIMIT_TOKEN_PER_MIN: '300',
+        RATE_LIMIT_CUSTOMER_TOKEN_PER_MIN: '120',
+      },
       async (server) => {
         // The new bucket is a route flag, and it is on one route. A flag that
         // spread to a password door would hand password guessing ten times the
-        // budget; on the widget mint, every strayed request creates a visitor row.
+        // budget. The widget mint has a flag of its own since tm 429 — its own
+        // bucket, not this one.
         const answers = [
           await wrongPassword(server),
           await server.post(
@@ -312,13 +317,13 @@ describe('rate limiting: the token endpoint (tm 259.3)', () => {
           '30',
           '30',
           '30',
-          '30',
+          '120',
         ]);
         expect(answers.map((a) => a.headers['x-ratelimit-remaining'])).toEqual([
           '29',
           '28',
           '27',
-          '26',
+          '119',
         ]);
       },
     );

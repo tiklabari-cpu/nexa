@@ -520,8 +520,41 @@ export const envSchema = z.object({
    * what bounds the previews one agent's screen receives for one chat.
    */
   RATE_LIMIT_CUSTOMER_TYPING_CHAT_PER_MIN: z.coerce.number().int().positive().default(90),
-  /** Unauthenticated callers, per IP: sign-in, widget tokens, anything else without a credential. */
+  /**
+   * Unauthenticated callers, per client network (an IPv4 address, an IPv6 /64 —
+   * tm 422): sign-in and anything else without a credential. One IPv6
+   * subscriber holds a whole /64, so a key on the full address limited nothing.
+   */
   RATE_LIMIT_ANON_PER_MIN: z.coerce.number().int().positive().default(30),
+  /**
+   * `POST /customer/token`, per client network (tm 429): the widget's token
+   * mint. Its own bucket rather than the anon one sign-in lives on: behind one
+   * office or school NAT, ten visitors opening three or four pages each used up
+   * the 30 a minute and the widget said it could not connect. 120 is that
+   * office several times over; the widget also keeps its token for the tab
+   * (`apps/widget/src/api.ts`), so a page change mints nothing. What bounds a
+   * host minting visitor after visitor is this ceiling and the human check
+   * (`CAPTCHA_RISK_NEW_CUSTOMERS_PER_IP`), not the sign-in budget.
+   */
+  RATE_LIMIT_CUSTOMER_TOKEN_PER_MIN: z.coerce.number().int().positive().default(120),
+  /**
+   * Failed password attempts per **sign-in address** (the e-mail, as typed and
+   * normalised — known account or not) within
+   * `RATE_LIMIT_LOGIN_ACCOUNT_WINDOW_SECONDS` (tm 422), at `/auth/login` and
+   * `/auth/authorize` together. The anon bucket is per network, so guesses
+   * spread over many addresses never met it; this one counts them wherever they
+   * come from.
+   *
+   * Spent, it refuses the networks that spent it — not the account: a network
+   * the account last signed in from (30 days) keeps its own allowance of this
+   * many, and a network that has not tried this address yet gets one attempt
+   * while the failures stay under twice this many. So filling it locks out the
+   * guessers, and the person still gets in from home or the office with the
+   * right password. `services/auth/login-attempts.ts` has the whole rule.
+   */
+  RATE_LIMIT_LOGIN_ACCOUNT_FAILURES: z.coerce.number().int().positive().default(10),
+  /** The window `RATE_LIMIT_LOGIN_ACCOUNT_FAILURES` counts in, in seconds (15 minutes). */
+  RATE_LIMIT_LOGIN_ACCOUNT_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
   /**
    * `POST /auth/token`, per IP (tm 259.3): the sign-in's code exchange and
    * every refresh. Its own bucket rather than the anon one: each panel page
@@ -571,7 +604,9 @@ export const envSchema = z.object({
    * bucket did not open a budget of its own for guessing. The flip side: while
    * an address has none left, its token exchanges wait for the window as well.
    * The password doors (`/auth/login`, `/auth/authorize`) carry no lookup of
-   * this kind and stay on the anon bucket alone.
+   * this kind: they are on the anon bucket and the per-address
+   * `RATE_LIMIT_LOGIN_ACCOUNT_FAILURES` (tm 422). Counted per client network
+   * since tm 422 — an IPv4 address, an IPv6 /64.
    */
   RATE_LIMIT_AUTH_FAILURES_PER_MIN: z.coerce.number().int().positive().default(60),
   /**

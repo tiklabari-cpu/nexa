@@ -6,8 +6,13 @@
  *                                across every visitor behind it (tm 407, below)
  *   widget draft preview       : 150/min per visitor, 3000/min per IP and
  *                                90/min per conversation (tm 417, below)
- *   unauthenticated            : 30 req/min per IP
+ *   unauthenticated            : 30 req/min per client network (an IPv4
+ *                                address, an IPv6 /64 — tm 422)
+ *   widget token mint          : 120 req/min per client network (tm 429, below)
  *   token exchange             : 300 req/min per IP (`POST /auth/token`, below)
+ *
+ * The two password doors also answer to a budget per sign-in address, kept
+ * by the routes themselves (`services/auth/login-attempts.ts`, tm 422).
  *
  * Sliding window over a Redis sorted set: each request is a member scored by
  * timestamp, older entries are trimmed, and the remaining count is the usage.
@@ -113,10 +118,22 @@
  * cannot spend its neighbours' share, and a request it refuses hands the
  * visitor's slot back.
  *
- * What stays anonymous, per IP, at 30: everything without a good customer
- * token — no credential, a forged or expired one — and every route that does
- * not admit customers, the token mint (`POST /customer/token`) among them, so
- * presenting a token cannot move minting onto a budget of its own.
+ * What stays anonymous, per network, at 30: everything without a good
+ * customer token — no credential, a forged or expired one — and every route
+ * that does not admit customers. The token mint (`POST /customer/token`) left
+ * it in tm 429 for a bucket of its own (`rl:custtoken:<network>`), which a
+ * presented token cannot move it out of either.
+ *
+ * ## The token mint (tm 429)
+ *
+ * The mint shared the anonymous bucket with sign-in, and the widget minted on
+ * every page load: behind one office NAT, ten visitors opening three or four
+ * pages each spent the 30 a minute and the widget could not connect. The
+ * widget now keeps its token for the tab, and the mint has its own, wider
+ * bucket per client network (`RATE_LIMIT_CUSTOMER_TOKEN_PER_MIN`) — it no
+ * longer spends what sign-in needs, nor sign-in what it needs. Minting
+ * visitor after visitor from one host is bounded by that ceiling and by the
+ * human check (`CAPTCHA_RISK_NEW_CUSTOMERS_PER_IP`).
  *
  * ## The visitor's draft (tm 417)
  *
@@ -143,6 +160,7 @@ import fp from 'fastify-plugin';
 import { randomUUID } from 'node:crypto';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
+import { clientNetworkKey } from '../lib/ip-allowlist.js';
 import {
   costsTokenResolution,
   isCustomerToken,
@@ -306,14 +324,17 @@ export interface Bucket {
  * credential in its body (tm 259.3): one ceiling per address, whichever door
  * the credential was tried at.
  *
- * Keyed by IP because that is the only thing known about the caller at the
+ * Keyed by the caller's network (`clientNetworkKey`: an IPv4 address, an IPv6
+ * /64 — tm 422) because that is the only thing known about the caller at the
  * point the decision has to be made: the credential is precisely what could not
  * be trusted, and keying by the token itself would hand an attacker a fresh
  * budget with every random string they send.
  */
 export function authFailureBucket(ip: string, env: Env): Bucket {
   return {
-    key: `rl:authfail:${ip}`,
+    // The client's network, not its address (tm 422): one IPv6 subscriber
+    // holds a whole /64 and could take a fresh budget from it per request.
+    key: `rl:authfail:${clientNetworkKey(ip)}`,
     limit: env.RATE_LIMIT_AUTH_FAILURES_PER_MIN,
     windowMs: 60_000,
   };
@@ -404,6 +425,14 @@ function bucketFor(request: FastifyRequest, env: Env, principal: Principal | und
     };
   }
 
+  // `POST /customer/token` (tm 429): the widget's token mint. Its own bucket
+  // per client network, ahead of the principal buckets like the ones above,
+  // so presenting a token cannot move minting anywhere else, and it neither
+  // spends the budget sign-in lives on nor is spent by it.
+  if (request.routeOptions.config.customerTokenRateLimit) {
+    return customerTokenBucket(request.ip, env);
+  }
+
   // `POST /auth/impersonation/exchange` (tm 389.15): an operator's browser
   // trading a root-panel handoff code. Its own per-address bucket, ahead of the
   // principal buckets like the ones above, so it neither spends the anonymous
@@ -474,14 +503,35 @@ function bucketFor(request: FastifyRequest, env: Env, principal: Principal | und
     };
   }
 
-  // Unauthenticated callers share one bucket per IP. This covers sign-in (both
-  // password doors) and widget token minting, so it is the limit an end-to-end
-  // suite runs into first — hence configurable like the others (ADR-07), rather
-  // than the only hard-coded one. A widget's requests that carry its token are
-  // not in here (tm 407): the visitor's own bucket above meters them.
+  // Unauthenticated callers share one bucket per client network — an IPv4
+  // address, an IPv6 /64 (tm 422): one subscriber holds a whole /64, and a key
+  // on the full address let it take a fresh budget per request. This covers
+  // sign-in (both password doors, which also answer to a per-address budget of
+  // their own, `services/auth/login-attempts.ts`), so it is the limit an
+  // end-to-end suite runs into first — hence configurable like the others
+  // (ADR-07), rather than the only hard-coded one. A widget's requests that
+  // carry its token are not in here (tm 407): the visitor's own bucket above
+  // meters them; nor is its token mint (tm 429), which has its own.
+  return anonymousBucket(request.ip, env);
+}
+
+/**
+ * The bucket every caller without a usable credential shares with its
+ * network — an IPv4 address, an IPv6 /64 (tm 422) — `RATE_LIMIT_ANON_PER_MIN`.
+ */
+export function anonymousBucket(ip: string, env: Env): Bucket {
   return {
-    key: `rl:anon:${request.ip}`,
+    key: `rl:anon:${clientNetworkKey(ip)}`,
     limit: env.RATE_LIMIT_ANON_PER_MIN,
+    windowMs: 60_000,
+  };
+}
+
+/** The widget token mint's bucket per client network (tm 429), `RATE_LIMIT_CUSTOMER_TOKEN_PER_MIN`. */
+export function customerTokenBucket(ip: string, env: Env): Bucket {
+  return {
+    key: `rl:custtoken:${clientNetworkKey(ip)}`,
+    limit: env.RATE_LIMIT_CUSTOMER_TOKEN_PER_MIN,
     windowMs: 60_000,
   };
 }
@@ -822,6 +872,12 @@ declare module 'fastify' {
     tokenRateLimit?: boolean;
     /** `POST /auth/impersonation/exchange`'s own per-address bucket (tm 389.15). */
     impersonationRateLimit?: boolean;
+    /**
+     * `POST /customer/token` (tm 429): use the `rl:custtoken:<network>` bucket
+     * (`RATE_LIMIT_CUSTOMER_TOKEN_PER_MIN`) instead of the anon one sign-in
+     * lives on — whatever credential the request carries.
+     */
+    customerTokenRateLimit?: boolean;
     /**
      * `POST /customer/chat/typing` (tm 417): a good customer token is charged
      * to `rl:customertyping:<org>:<customer>` under `rl:customertypingip:<ip>`

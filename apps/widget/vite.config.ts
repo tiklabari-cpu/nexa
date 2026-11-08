@@ -79,6 +79,8 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: 'jsdom',
       globals: true,
+      // Every test starts as a fresh tab: no mint kept from the last one (tm 429).
+      setupFiles: ['./test/setup.ts'],
       // Same ceiling as web/api/rtm: under the gate's load a userEvent test can pass 5 s.
       testTimeout: 30_000,
     },

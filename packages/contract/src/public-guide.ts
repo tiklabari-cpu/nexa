@@ -30,7 +30,7 @@ export const WEBHOOK_EXAMPLE_PATH = resolve(here, '../docs-examples/verify-webho
 export const PUBLISHED_RATE_LIMITS = {
   /** Personal access token, per account. */
   agentPerMinute: 180,
-  /** Requests without a credential, per IP address. */
+  /** Requests without a credential, per IP address — an IPv6 /64 counts as one (tm 422). */
   anonymousPerMinute: 30,
 } as const;
 
@@ -49,6 +49,9 @@ export const INTERNAL_ERROR_TYPE_PATTERNS: readonly RegExp[] = [
   /^impersonation_/,
   /^sandbox_/,
   /^maintenance$/,
+  // The root panel's sign-in when its attempt budget is unreachable (tm 452);
+  // the tenant API never answers it.
+  /^rate_limit_unavailable$/,
 ];
 
 export function isPublicErrorType(type: string): boolean {
@@ -156,7 +159,7 @@ function rateLimits(): GuideSection {
 | Caller | Default limit |
 | --- | --- |
 | Personal access token | ${limits.agentPerMinute} requests per minute per account |
-| No credential | ${limits.anonymousPerMinute} requests per minute per IP address |
+| No credential | ${limits.anonymousPerMinute} requests per minute per IP address (an IPv6 /64 is one address) |
 
 A deployment can set other values, so read the headers rather than hard-coding the numbers. A request over the limit is answered \`429 too_many_requests\`.
 

@@ -3778,3 +3778,15 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+    RateLimitUnavailable:
+      description: |
+        `rate_limit_unavailable` (tm 452) — the sign-in or second-factor
+        attempt budget lives in Redis and could not be read, so the attempt is
+        refused before the password or the code is compared. Nothing about the
+        request was wrong; `Retry-After` (30 seconds) says when to try again.
+      headers:
+        Retry-After:
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }

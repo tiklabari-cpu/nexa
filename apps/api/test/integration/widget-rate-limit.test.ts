@@ -19,8 +19,9 @@
  *     neighbours' share of the address;
  *   - the address as a whole answers to a wider ceiling, so minting visitor
  *     after visitor does not buy an open channel;
- *   - everything without a good token — none, forged, and the mint itself even
- *     when it is handed one — stays on the anonymous per-address bucket;
+ *   - everything without a good token — none, forged — stays on the anonymous
+ *     per-address bucket, and the mint, even when it is handed one, on its own
+ *     per-network bucket (tm 429);
  *   - a public peer's own `X-Forwarded-For` buys no fresh budget of either kind.
  */
 import { type PrismaClient } from '@prisma/client';
@@ -36,6 +37,7 @@ const DEFAULTS = {
   RATE_LIMIT_ANON_PER_MIN: '30',
   RATE_LIMIT_CUSTOMER_PER_MIN: '60',
   RATE_LIMIT_CUSTOMER_IP_PER_MIN: '600',
+  RATE_LIMIT_CUSTOMER_TOKEN_PER_MIN: '120',
 };
 
 /** A documentation address (RFC 5737): a public peer, so its own header is not believed. */
@@ -125,11 +127,13 @@ describe('widget visitors and the rate limiter (tm 407)', () => {
         expect(Number(polled.headers['x-ratelimit-remaining'])).toBe(60 - 9);
       }
 
-      // The anonymous budget paid for the four mints and nothing else.
+      // The mint's own budget (tm 429) paid for the four mints and nothing
+      // else, and the anonymous one for nothing at all.
       const fifth = await mint(server);
       expect(fifth.statusCode).toBe(200);
-      expect(fifth.headers['x-ratelimit-limit']).toBe('30');
-      expect(Number(fifth.headers['x-ratelimit-remaining'])).toBe(30 - 5);
+      expect(fifth.headers['x-ratelimit-limit']).toBe('120');
+      expect(Number(fifth.headers['x-ratelimit-remaining'])).toBe(120 - 5);
+      expect(await server.app.redis.keys('rl:anon:*')).toEqual([]);
     });
   });
 
@@ -219,41 +223,72 @@ describe('widget visitors and the rate limiter (tm 407)', () => {
 
       expect((await server.get('/customer/chat')).statusCode).toBe(401);
       expect((await server.get('/customer/chat', forged)).statusCode).toBe(401);
+      expect((await server.get('/customer/chat')).statusCode).toBe(401);
 
-      // 1 mint + 2 refusals = 3: the address is out, whichever way it asks next.
+      // 3 refusals = 3 (the mint has its own bucket since tm 429): the address
+      // is out, whichever way it asks next.
       const anonymous = await server.get('/customer/chat');
       expect(anonymous.statusCode).toBe(429);
       expect(anonymous.headers['x-ratelimit-limit']).toBe('3');
       expect((await server.get('/customer/chat', forged)).statusCode).toBe(429);
-      expect((await mint(server)).statusCode).toBe(429);
 
-      // The visitor whose token is good is not on that bucket at all.
+      // Neither the mint nor the visitor whose token is good is on that bucket.
+      expect((await mint(server)).statusCode).toBe(200);
       expect((await server.get('/customer/chat', good)).statusCode).toBe(200);
     });
   });
 
-  it('keeps the token mint anonymous even when it is handed a good token (NFR-S8)', async () => {
-    await withServer({ RATE_LIMIT_ANON_PER_MIN: '3' }, async (server) => {
-      const good = await visitor(server);
-
-      // The mint does not admit customers, so a token there names no visitor
-      // and buys no budget of its own: a held token is not a way to mint
-      // visitors past the per-address limit.
-      for (let i = 0; i < 2; i++) {
-        expect((await mint(server, good)).statusCode).not.toBe(429);
+  it('mints past the anonymous 30 from one address without touching sign-in, up to its own ceiling (tm 429 · NFR-S8)', async () => {
+    await withServer({ RATE_LIMIT_CUSTOMER_TOKEN_PER_MIN: '40' }, async (server) => {
+      // An office NAT's visitors opening pages: 31 mints in well under a minute.
+      for (let i = 1; i <= 31; i++) {
+        expect((await mint(server)).statusCode, `mint ${i}`).toBe(200);
       }
-      const limited = await mint(server, good);
-      expect(limited.statusCode).toBe(429);
-      expect(limited.headers['x-ratelimit-limit']).toBe('3');
+      // Sign-in still has its whole anonymous budget.
+      const signIn = await server.post('/auth/login', {
+        email: fx.a.agentEmail,
+        password: fx.a.password,
+      });
+      expect(signIn.statusCode).toBe(200);
+      expect(signIn.headers['x-ratelimit-limit']).toBe('30');
+      expect(Number(signIn.headers['x-ratelimit-remaining'])).toBe(30 - 1);
+
+      // The mint's own ceiling still holds.
+      for (let i = 32; i <= 40; i++) expect((await mint(server)).statusCode, `mint ${i}`).toBe(200);
+      const refused = await mint(server);
+      expect(refused.statusCode).toBe(429);
+      expect(refused.json().error.type).toBe('too_many_requests');
+      expect(refused.headers['x-ratelimit-limit']).toBe('40');
+      expect(Number(refused.headers['retry-after'])).toBeGreaterThan(0);
     });
+  });
+
+  it('keeps the token mint on its own per-network bucket even when it is handed a good token (NFR-S8)', async () => {
+    await withServer(
+      { RATE_LIMIT_ANON_PER_MIN: '30', RATE_LIMIT_CUSTOMER_TOKEN_PER_MIN: '3' },
+      async (server) => {
+        const good = await visitor(server);
+
+        // The mint does not admit customers, so a token there names no visitor
+        // and buys no budget of its own: a held token is not a way to mint
+        // visitors past the per-network limit (tm 429).
+        for (let i = 0; i < 2; i++) {
+          expect((await mint(server, good)).statusCode).not.toBe(429);
+        }
+        const limited = await mint(server, good);
+        expect(limited.statusCode).toBe(429);
+        expect(limited.headers['x-ratelimit-limit']).toBe('3');
+        expect(await server.app.redis.keys('rl:anon:*')).toEqual([]);
+      },
+    );
   });
 
   it("buys no fresh budget with a public peer's own X-Forwarded-For (NFR-S8)", async () => {
     await withServer(
       { RATE_LIMIT_ANON_PER_MIN: '2', RATE_LIMIT_CUSTOMER_IP_PER_MIN: '2' },
       async (server) => {
-        // Minted from loopback, so the mints spend loopback's anonymous budget,
-        // not the public peer's below.
+        // Minted from loopback, so the mints spend loopback's mint budget, not
+        // the public peer's below.
         const first = await visitor(server);
         const second = await visitor(server);
         const spoof = (n: number): Headers => ({ 'x-forwarded-for': `198.51.100.${n}` });

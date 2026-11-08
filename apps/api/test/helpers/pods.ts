@@ -238,6 +238,10 @@ export async function startApiPod(
       // And the widget's per-address ceiling (tm 407), which visitor traffic
       // spends instead of the anonymous bucket.
       RATE_LIMIT_CUSTOMER_IP_PER_MIN: '2000',
+      // And the widget's token mint, which left the anonymous bucket (tm 429),
+      // and the password budget per sign-in address (tm 422).
+      RATE_LIMIT_CUSTOMER_TOKEN_PER_MIN: '2000',
+      RATE_LIMIT_LOGIN_ACCOUNT_FAILURES: '10000',
       // The same reasoning for the hourly sign-up limit (tm 257.14).
       RATE_LIMIT_SIGNUP_PER_HOUR: '10000',
       // And for the widget's human check (tm 339.2): one address, many visitors.

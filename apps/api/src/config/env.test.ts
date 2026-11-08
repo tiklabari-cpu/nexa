@@ -300,6 +300,28 @@ describe.each([
   });
 });
 
+/**
+ * The widget token mint's own bucket (tm 429), and the password doors' budget
+ * per sign-in address with its window (tm 422).
+ */
+describe.each([
+  ['RATE_LIMIT_CUSTOMER_TOKEN_PER_MIN', 120],
+  ['RATE_LIMIT_LOGIN_ACCOUNT_FAILURES', 10],
+  ['RATE_LIMIT_LOGIN_ACCOUNT_WINDOW_SECONDS', 900],
+] as const)('%s', (key, fallback) => {
+  it(`is ${fallback} when unset`, () => {
+    expect(parseEnv(BASE)[key]).toBe(fallback);
+  });
+
+  it('reads a positive whole number', () => {
+    expect(parseEnv({ ...BASE, [key]: '250' })[key]).toBe(250);
+  });
+
+  it.each(['0', '-1', '1.5', 'many'])('refuses %j', (value) => {
+    expect(() => parseEnv({ ...BASE, [key]: value })).toThrow(new RegExp(key));
+  });
+});
+
 /** The `GET /deployment` bucket (tm 257.13). */
 describe('RATE_LIMIT_PUBLIC_CONFIG_PER_MIN', () => {
   it('is 600 per minute when unset', () => {

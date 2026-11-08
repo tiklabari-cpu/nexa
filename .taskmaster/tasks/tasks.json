@@ -16702,7 +16702,7 @@
           "436"
         ],
         "priority": "medium",
-        "updatedAt": "2026-11-08T16:15:04.583Z",
+        "updatedAt": "2026-11-08T18:19:04.453Z",
         "subtasks": [
           {
             "id": 1,
@@ -16722,13 +16722,13 @@
             "description": "api'deki her iptal noktası commit sonrası `principal_revoked` yayınlar.",
             "details": "Olay noktalarını `rg` ile bul (token revoke, logout, membership suspend/delete, account suspend, license suspend); her biri commit SONRASI yayın (post-commit-publish-needs-an-in-publish-probe). Liste HANDOFF'a.",
             "testStrategy": "api+rtm entegrasyon: login olmuş ajan soketi → üyelik askısı / logout / token revoke / lisans askısı → soket kapanır, sonraki push gelmez. Mutasyon: bir olay noktasındaki yayını kaldır → ilgili test kırmızı.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "426.1"
             ],
             "parentId": "426",
             "priority": "medium",
-            "updatedAt": "2026-11-08T16:15:04.583Z"
+            "updatedAt": "2026-11-08T18:19:04.453Z"
           },
           {
             "id": 3,
@@ -17777,7 +17777,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-08T16:15:04.584Z",
+      "lastModified": "2026-11-08T18:19:04.453Z",
       "taskCount": 478,
       "completedCount": 422,
       "tags": [

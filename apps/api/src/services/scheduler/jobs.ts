@@ -385,6 +385,8 @@ export function buildSchedulerJobs({
             aiDecisions: report.totals.aiDecisions,
             unresolvedItems: report.totals.unresolvedItems,
             sensitiveFiles: report.totals.sensitiveFiles,
+            skillRunLogs: report.totals.skillRunLogs,
+            erasedFiles: report.totals.erasedFiles,
             mailFiles: report.totals.mailFiles,
             auditEntries: report.totals.auditEntries,
             canceledWorkspaces: report.totals.canceledWorkspaces,

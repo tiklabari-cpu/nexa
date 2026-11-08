@@ -9668,7 +9668,17 @@ components:
         the counts are the only evidence left once the rows are gone — the audit
         entry records the same figures, never the data.
       required:
-        [customer_id, erased_at, chats, threads, events, visits, tickets, channel_identities]
+        - customer_id
+        - erased_at
+        - chats
+        - threads
+        - events
+        - visits
+        - tickets
+        - channel_identities
+        - files_deleted
+        - files_pending
+        - skill_run_logs
       properties:
         customer_id:
           type: string
@@ -9696,6 +9706,29 @@ components:
           description: >-
             External identities (phone number, Messenger id, …) the subject was
             reachable at.
+        files_deleted:
+          type: integer
+          description: >-
+            Files removed from storage (tm 423): what the subject's
+            conversations and tickets carried — their uploads, the files an
+            agent sent them, the attachments of their e-mails. A file another
+            conversation or ticket still shows is not theirs alone and stays.
+            Knowledge-base documents are never touched.
+        files_pending:
+          type: integer
+          description: >-
+            Files the storage could not delete during this request. Their rows
+            are already gone and nothing shows them any more; the files are
+            queued and deleted by the next retention pass, which records how
+            many it removed in its own audit entry (`erased_files`). Zero when
+            the storage answered.
+        skill_run_logs:
+          type: integer
+          description: >-
+            AI procedure and Copilot run logs on the subject's conversations
+            whose text was cleared (tm 424). The run rows stay — they are the
+            workspace's usage counts — with their outcome and nothing the
+            subject said.
 
     ComplianceSettings:
       type: object

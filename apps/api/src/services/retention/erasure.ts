@@ -46,6 +46,19 @@
  *     carve-out; the schema's `SET NULL` already implements it, so the right
  *     move is to say so rather than to change it.
  *
+ * Two more things outlive the rows unless this says otherwise, and both did
+ * until tm 423/424:
+ *
+ *   - **the files** their conversations and tickets carried. The rows naming
+ *     them cascade away and the bytes would stay in the object store with
+ *     nothing left to find them by. The keys are collected before the deletes
+ *     and queued in this transaction; the route deletes the files after the
+ *     commit, and the retention sweep retries whatever the store refused —
+ *     `file-deletions.ts` says which files, the two guards, and why.
+ *   - **the AI run logs** (`skill_runs`, `SET NULL` on both chat and thread):
+ *     the runs are usage counts and stay, the text — which may quote the
+ *     subject — is cleared before the chats go (`skill-run-logs.ts`).
+ *
  * The **audit log** is untouched and gains one entry. Two reasons, both
  * load-bearing: it is append-only to the application role by design (NFR-S12),
  * and the entry naming this erasure is the only evidence left that the request
@@ -72,6 +85,8 @@
  */
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient } from '../../lib/tenant.js';
+import { collectSubjectFiles, queueFileDeletions, withoutSharedFiles } from './file-deletions.js';
+import { clearSkillRunLogsOfChats } from './skill-run-logs.js';
 
 export interface ErasureReceipt {
   customerId: string;
@@ -82,6 +97,13 @@ export interface ErasureReceipt {
   visits: number;
   tickets: number;
   channelIdentities: number;
+  /**
+   * The files queued for deletion in this transaction (`pending_file_deletions`)
+   * — what the caller deletes from the store once it has committed.
+   */
+  fileKeys: string[];
+  /** Runs on the subject's chats whose log text was cleared. */
+  skillRunLogs: number;
 }
 
 /**
@@ -90,10 +112,13 @@ export interface ErasureReceipt {
  * Counts first, then deletes, in one transaction the caller supplies — the
  * counts are the receipt, and a receipt gathered after the rows are gone would
  * be all zeroes. `now` is a parameter so the receipt's instant and the audit
- * entry the caller writes cannot drift apart.
+ * entry the caller writes cannot drift apart. `licenseId` is the caller's own
+ * workspace — the one RLS confines `tx` to — and decides which file keys may
+ * be queued.
  */
 export async function eraseCustomer(
   tx: TenantClient,
+  licenseId: bigint,
   customerId: string,
   now: Date,
 ): Promise<ErasureReceipt> {
@@ -133,6 +158,13 @@ export async function eraseCustomer(
   const visits = await tx.visit.count({ where: { customerId } });
   const channelIdentities = await tx.channelIdentity.count({ where: { customerId } });
 
+  // The files, while the rows that name them still exist (tm 423).
+  const files = await collectSubjectFiles(tx, licenseId, customerId, chatIds);
+
+  // The AI run logs, before the chats: once a chat is deleted its runs'
+  // `chat_id` is null and nothing would find them again (tm 424).
+  const skillRunLogs = await clearSkillRunLogsOfChats(tx, chatIds);
+
   // Explicit, and before the customer — see this file's header. RLS scopes it
   // to the caller's licence, which is also the licence whose console is
   // answering the request.
@@ -143,6 +175,10 @@ export async function eraseCustomer(
   // row by construction, so there is no second WHERE clause to get wrong.
   await tx.customer.delete({ where: { id: customerId } });
 
+  // After the deletes, so whatever still names a file is someone else's.
+  const fileKeys = await withoutSharedFiles(tx, files);
+  await queueFileDeletions(tx, licenseId, fileKeys);
+
   return {
     customerId,
     erasedAt: now,
@@ -152,5 +188,7 @@ export async function eraseCustomer(
     visits,
     tickets,
     channelIdentities,
+    fileKeys,
+    skillRunLogs,
   };
 }

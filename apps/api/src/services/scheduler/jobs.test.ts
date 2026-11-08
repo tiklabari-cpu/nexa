@@ -346,6 +346,8 @@ describe('buildSchedulerJobs', () => {
         aiDecisions: 0,
         unresolvedItems: 0,
         sensitiveFiles: 0,
+        skillRunLogs: 0,
+        erasedFiles: 0,
         mailFiles: 0,
         auditEntries: 0,
         canceledWorkspaces: 0,

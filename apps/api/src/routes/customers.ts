@@ -13,6 +13,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { CUSTOMER_SORT_KEYS, DEFAULT_CUSTOMER_SORT_KEY, SORT_ORDERS } from '@siyahtus/types';
+import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { CustomerService } from '../services/customers/customer-service.js';
@@ -24,6 +25,8 @@ import {
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 import { createGoalConversionRecorder } from '../services/goals/goal-triggers.js';
 import { eraseCustomer } from '../services/retention/erasure.js';
+import { deleteQueuedFiles } from '../services/retention/file-deletions.js';
+import { createObjectStore, type ObjectStore } from '../services/storage/object-store.js';
 
 /**
  * Not `z.coerce.boolean()`: that is `Boolean(value)`, and `Boolean('false')` is
@@ -93,7 +96,21 @@ const customFieldsBody = z.object({
   values: z.record(z.string().max(5000).nullable()),
 });
 
-export default async function customerDirectoryRoutes(app: FastifyInstance): Promise<void> {
+export interface CustomerDirectoryRoutesOptions {
+  env: Env;
+  /**
+   * Where an erasure deletes the subject's files (tm 423). Defaults to the
+   * store `STORAGE_PROVIDER` names; a test passes one whose delete fails.
+   */
+  store?: ObjectStore;
+}
+
+export default async function customerDirectoryRoutes(
+  app: FastifyInstance,
+  options: CustomerDirectoryRoutesOptions,
+): Promise<void> {
+  const store =
+    options.store ?? createObjectStore(options.env.STORAGE_PROVIDER, options.env.storage);
   const customers = new CustomerService();
   const customFields = new CustomFieldService();
   // Recording an e-mail here is one of the two ways somebody becomes a lead —
@@ -273,9 +290,10 @@ export default async function customerDirectoryRoutes(app: FastifyInstance): Pro
     async (request, reply) => {
       const customerId = parse(customerIdSchema, request.params.customerId);
       const now = new Date();
+      const { licenseId } = request.tenant();
 
       const receipt = await request.withTenant(async (tx) => {
-        const result = await eraseCustomer(tx, customerId, now);
+        const result = await eraseCustomer(tx, licenseId, customerId, now);
 
         // Written inside the same transaction as the deletes, so an erasure
         // that fails halfway leaves no receipt claiming it happened — and a
@@ -284,7 +302,8 @@ export default async function customerDirectoryRoutes(app: FastifyInstance): Pro
         // Counts and the id only. The name, the e-mail, the phone number and
         // every message are exactly what was just erased; copying any of them
         // into an append-only table that outlives this request would undo the
-        // request while recording that it was honoured.
+        // request while recording that it was honoured. `files` is how many
+        // were queued for the store — the keys themselves stay out too.
         await writeAuditEntry(tx, request.auditContext(), {
           action: 'data.subject_erased',
           target: `customer:${customerId}`,
@@ -295,11 +314,29 @@ export default async function customerDirectoryRoutes(app: FastifyInstance): Pro
             visits: result.visits,
             tickets: result.tickets,
             channel_identities: result.channelIdentities,
+            files: result.fileKeys.length,
+            skill_run_logs: result.skillRunLogs,
           },
         });
 
         return result;
       });
+
+      // The files, only now the erasure has committed (tm 423): a store
+      // delete cannot be rolled back. Whatever the store refuses keeps its
+      // `pending_file_deletions` row for the retention sweep — the erasure
+      // itself is done, so this answers 200 and says how many are owed.
+      const files = await deleteQueuedFiles(store, licenseId, receipt.fileKeys, (keys) =>
+        request.withTenant((tx) =>
+          tx.pendingFileDeletion.deleteMany({ where: { key: { in: keys } } }),
+        ),
+      );
+      if (files.failure !== null) {
+        request.log.warn(
+          { err: files.failure, files_pending: files.pending },
+          'customer erasure: files left for the next retention pass',
+        );
+      }
 
       return reply.send({
         customer_id: receipt.customerId,
@@ -310,6 +347,9 @@ export default async function customerDirectoryRoutes(app: FastifyInstance): Pro
         visits: receipt.visits,
         tickets: receipt.tickets,
         channel_identities: receipt.channelIdentities,
+        files_deleted: files.deleted,
+        files_pending: files.pending,
+        skill_run_logs: receipt.skillRunLogs,
       });
     },
   );

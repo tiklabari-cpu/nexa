@@ -854,8 +854,13 @@ Without the back office, the by-hand path is a footnote.[^psql-activation]
       and a reboot, it goes into the daily backup (`COMPOSE_FILE=docker-compose.pilot.yml`, next
       item), and `docker compose down -v` deletes the files too. Virus scanning is not in the
       pilot: `VIRUS_SCANNER=mock` passes every file (a boot warning and a "not scanned" label are
-      tm 433, still open). A visitor's erasure does not delete their files yet (tm 423, open);
-      the backup retention below still ages them out of the archives.
+      tm 433, still open). A visitor's erasure deletes their files from the volume too
+      (tm 423): the receipt's `files_deleted`. A file the volume refused at that moment is
+      reported in `files_pending`, listed in the `pending_file_deletions` table and deleted by
+      the next retention pass — with `RETENTION_ENABLED=false` (the pilot default) that pass
+      only runs by hand (`pnpm --filter @siyahtus/api retention:run --apply`, which also
+      applies the retention windows). Check the table after an erasure that reported a pending
+      file. The backup retention below still ages the files out of the archives.
 - [ ] Backups use the same scripts as §6, pointed at this file: `make pilot-backup`
       (`COMPOSE_FILE=docker-compose.pilot.yml ./scripts/backup.sh`) writes
       `backups/db-<UTC>.dump` and, under the same timestamp, `backups/uploads-<UTC>.tar.gz`: the

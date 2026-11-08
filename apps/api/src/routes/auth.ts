@@ -62,6 +62,7 @@ import {
 } from '../services/security/abuse-guard.js';
 import { CAPTCHA_TOKEN_MAX_LENGTH } from '../services/security/captcha.js';
 import { OauthService, type Membership } from '../services/auth/oauth-service.js';
+import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { LoginAttemptBudget, type LoginAdmission } from '../services/auth/login-attempts.js';
 import type { IssuedToken } from '../services/auth/token-service.js';
 import { badCode, TOTP_ISSUER, TwoFactorService } from '../services/auth/two-factor-service.js';
@@ -354,12 +355,19 @@ export default async function authRoutes(
   // Our own widget origin. A token request whose host resolves to this is the
   // hosted Chat page (FR-MOD-08.5.9), exempt from the trusted-domain allowlist.
   const selfHost = originHost(env.WIDGET_BASE_URL);
-  const oauth = new OauthService(app.db, {
-    accessTokenTtl: env.ACCESS_TOKEN_TTL,
-    refreshTokenTtl: env.REFRESH_TOKEN_TTL,
-    authorizationCodeTtl: env.AUTH_CODE_TTL,
-    auditChainSecret: env.AUDIT_CHAIN_SECRET,
-  });
+  // Ending a credential closes the sockets it opened (tm 426.2): every
+  // revocation below is announced on the licence's bus channel after its commit.
+  const publisher = new RealtimePublisher(app.redis, app.log);
+  const oauth = new OauthService(
+    app.db,
+    {
+      accessTokenTtl: env.ACCESS_TOKEN_TTL,
+      refreshTokenTtl: env.REFRESH_TOKEN_TTL,
+      authorizationCodeTtl: env.AUTH_CODE_TTL,
+      auditChainSecret: env.AUDIT_CHAIN_SECRET,
+    },
+    publisher,
+  );
   const twoFactor = new TwoFactorService(app.db);
   const customerDirectory = new CustomerService();
   // The password doors' budget per sign-in address (tm 422): the module has
@@ -1028,7 +1036,10 @@ export default async function authRoutes(
 
     // Try both kinds regardless of the hint — RFC 7009 treats the hint as
     // advisory, and a wrong hint must not leave a live token behind.
+    // A refresh token ends its whole family, and `revokeRefreshToken` closes
+    // the sockets of every access token in it; an access token closes its own.
     const revokedAccess = await app.tokens.revokeByToken(body.token);
+    if (revokedAccess) await publisher.revokeTokens([revokedAccess]);
     const revokedRefresh = await oauth.revokeRefreshToken(body.token);
     const revoked = revokedAccess ?? revokedRefresh;
 
@@ -1378,6 +1389,7 @@ export default async function authRoutes(
         organizationId: principal.organizationId,
         tokenId,
       });
+      await publisher.revoke(request.tenant(), [{ kind: 'token', tokenId }]);
 
       await audit(
         request,

@@ -22,6 +22,7 @@
  */
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { ApiError } from '../../lib/api-error.js';
+import type { RevokedCredential } from '../realtime/publisher.js';
 
 type Tx = Prisma.TransactionClient;
 type Db = PrismaClient | Tx;
@@ -52,6 +53,12 @@ export interface AccountActionOutcome {
   payload: Record<string, unknown>;
   /** Every workspace the account belongs to — each gets the tenant half of the entry. */
   workspaces: bigint[];
+  /**
+   * The credentials this action revoked, for the route to announce after the
+   * commit so the sockets they opened close (tm 426.2). Absent when it revoked
+   * none, or when the route closes every socket of the member instead.
+   */
+  revokedTokens?: RevokedCredential[];
 }
 
 export class AccountCursorError extends Error {}
@@ -321,16 +328,41 @@ const outcome = (
  * workspace — what `auth_revoke_refresh_family` does to one family, for all of
  * them at once. Personal access tokens are not sessions and stay.
  */
-async function endSessions(tx: Tx, accountId: string, now: Date): Promise<number> {
-  const access = await tx.apiToken.updateMany({
-    where: { ownerId: accountId, kind: { in: ['oauth', 'enrollment'] }, revokedAt: null },
-    data: { revokedAt: now },
-  });
+async function endSessions(
+  tx: Tx,
+  accountId: string,
+  now: Date,
+): Promise<{ count: number; revoked: RevokedCredential[] }> {
+  const access = await revokeTokenRows(tx, accountId, ['oauth', 'enrollment'], now);
   const refresh = await tx.oauthRefreshToken.updateMany({
     where: { accountId, revokedAt: null },
     data: { revokedAt: now },
   });
-  return access.count + refresh.count;
+  return { count: access.length + refresh.count, revoked: access };
+}
+
+/**
+ * Revoke the account's live tokens of these kinds, in every workspace, and say
+ * which rows they were — what the route announces once the transaction has
+ * committed (tm 426.2).
+ */
+async function revokeTokenRows(
+  tx: Tx,
+  accountId: string,
+  kinds: readonly string[],
+  now: Date,
+): Promise<RevokedCredential[]> {
+  const rows = await tx.$queryRaw<
+    Array<{ id: string; license_id: bigint; organization_id: string }>
+  >`
+    UPDATE api_tokens SET revoked_at = ${now}
+     WHERE owner_id = ${accountId} AND kind = ANY(${[...kinds]}::text[]) AND revoked_at IS NULL
+    RETURNING id::text AS id, license_id, organization_id::text AS organization_id`;
+  return rows.map((row) => ({
+    id: row.id,
+    licenseId: row.license_id,
+    organizationId: row.organization_id,
+  }));
 }
 
 /** Where the mail to this person goes, and in which language. */
@@ -386,7 +418,8 @@ export async function forcePasswordReset(
   await tx.$queryRaw`
     SELECT auth_request_password_reset(${account.email}::citext, ${link.hash}, ${link.expiresAt})`;
   return {
-    ...outcome(workspaces, true, { sessions_ended: sessions }),
+    ...outcome(workspaces, true, { sessions_ended: sessions.count }),
+    revokedTokens: sessions.revoked,
     mailTo: await mailTarget(tx, account),
   };
 }
@@ -399,7 +432,10 @@ export async function revokeSessions(
 ): Promise<AccountActionOutcome> {
   const { account, workspaces } = await lockAccount(tx, accountId);
   const sessions = await endSessions(tx, account.id, now);
-  return outcome(workspaces, sessions > 0, { sessions_ended: sessions });
+  return {
+    ...outcome(workspaces, sessions.count > 0, { sessions_ended: sessions.count }),
+    revokedTokens: sessions.revoked,
+  };
 }
 
 /** Sessions and personal access tokens alike — every credential the person holds. */
@@ -410,14 +446,14 @@ export async function revokeCredentials(
 ): Promise<AccountActionOutcome> {
   const { account, workspaces } = await lockAccount(tx, accountId);
   const sessions = await endSessions(tx, account.id, now);
-  const personal = await tx.apiToken.updateMany({
-    where: { ownerId: account.id, kind: 'pat', revokedAt: null },
-    data: { revokedAt: now },
-  });
-  return outcome(workspaces, sessions + personal.count > 0, {
-    sessions_ended: sessions,
-    personal_revoked: personal.count,
-  });
+  const personal = await revokeTokenRows(tx, account.id, ['pat'], now);
+  return {
+    ...outcome(workspaces, sessions.count + personal.length > 0, {
+      sessions_ended: sessions.count,
+      personal_revoked: personal.length,
+    }),
+    revokedTokens: [...sessions.revoked, ...personal],
+  };
 }
 
 /**
@@ -450,7 +486,7 @@ export async function suspendAccount(
     data: { platformSuspendedAt: now, platformSuspendedReason: reason },
   });
   const sessions = await endSessions(tx, account.id, now);
-  return outcome(workspaces, true, { sessions_ended: sessions });
+  return outcome(workspaces, true, { sessions_ended: sessions.count });
 }
 
 export async function unsuspendAccount(tx: Tx, accountId: string): Promise<AccountActionOutcome> {

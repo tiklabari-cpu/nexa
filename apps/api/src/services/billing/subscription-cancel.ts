@@ -37,6 +37,7 @@ import { withTenant, type TenantClient, type TenantContext } from '../../lib/ten
 import { writeAuditEntry, type AuditContext } from '../audit/audit-log.js';
 import { deliver } from '../mail/delivery.js';
 import type { Mailer } from '../mail/mailer.js';
+import type { RealtimePublisher } from '../realtime/publisher.js';
 import { isMailLocale } from '../mail/templates/layout.js';
 import { subscriptionCancelMail } from '../mail/templates/messages.js';
 
@@ -378,6 +379,12 @@ export interface PeriodEndReport {
 export interface SubscriptionPeriodEndOptions extends CancellationMailOptions {
   db: PrismaClient;
   auditChainSecret: string;
+  /**
+   * Where a workspace this closes is announced, so the members' open sockets
+   * close with it (tm 426.2). Absent from a caller with no Redis: the sockets
+   * then stay open until they close for another reason.
+   */
+  publisher?: RealtimePublisher | null;
 }
 
 type PeriodEndStep =
@@ -421,6 +428,9 @@ export class SubscriptionPeriodEnd {
           );
         } else if (step.kind === 'closed') {
           report.closed += 1;
+          // Committed: a closed workspace's sockets close too (tm 426.2) — the
+          // reconnect is refused like every other request of it.
+          await this.#options.publisher?.revoke(tenant, [{ kind: 'license' }]);
         } else {
           report.skipped += 1;
         }

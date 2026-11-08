@@ -21,6 +21,11 @@
  * and records nothing. Mail goes after the commit; the answer says
  * `mail: sent | failed`.
  *
+ * A credential an action ends closes the sockets it opened (tm 426.2),
+ * announced on each workspace's bus channel after the commit: the sessions and
+ * tokens revoked by name; a suspension or an erasure closes every socket of
+ * the person in every workspace they belong to.
+ *
  * The export is a POST: a GET cannot write the audit entry a copy of a
  * person's data leaving the platform deserves (`plugins/platform-audit.ts`).
  *
@@ -37,6 +42,7 @@ import { deliver, logUnsentMail } from '../../services/mail/delivery.js';
 import type { Mailer, Message } from '../../services/mail/mailer.js';
 import { isMailLocale } from '../../services/mail/templates/layout.js';
 import { passwordResetMail, verifyEmailMail } from '../../services/mail/templates/messages.js';
+import { RealtimePublisher } from '../../services/realtime/publisher.js';
 import {
   AccountCursorError,
   accountDetail,
@@ -71,6 +77,7 @@ export default async function platformAccountsRoutes(
 ): Promise<void> {
   const { env, mailer } = options;
   const clock = options.now ?? Date.now;
+  const publisher = new RealtimePublisher(app.redis, app.log);
   const read = { platform: { permission: 'accounts.read' as const } };
   const gate = (
     permission: 'accounts.support' | 'accounts.manage',
@@ -115,6 +122,45 @@ export default async function platformAccountsRoutes(
     );
     request.platformAudit!.recorded = true;
     return outcome;
+  }
+
+  /**
+   * After the commit: close the sockets of the credentials `outcome` revoked —
+   * or, with `member`, every socket of the person in each of their workspaces
+   * (tm 426.2). Never fails the action.
+   */
+  async function closeSockets(
+    accountId: string,
+    outcome: AccountActionOutcome,
+    member = false,
+  ): Promise<void> {
+    if (outcome.unchanged) return;
+    if (!member) {
+      await publisher.revokeTokens(outcome.revokedTokens ?? []);
+      return;
+    }
+    if (outcome.workspaces.length === 0) return;
+    let licenses: Array<{ id: bigint; organizationId: string }>;
+    try {
+      licenses = await app.platformDb.license.findMany({
+        where: { id: { in: outcome.workspaces } },
+        select: { id: true, organizationId: true },
+      });
+    } catch (error) {
+      // The action has committed; its answer must not turn into a 500.
+      app.log.error(
+        { err: error, action: 'principal_revoked' },
+        'principal revocation publish failed — its sockets stay open until they close',
+      );
+      return;
+    }
+    await publisher.revokeMember(
+      accountId,
+      licenses.map((license) => ({
+        licenseId: license.id,
+        organizationId: license.organizationId,
+      })),
+    );
   }
 
   async function answer(
@@ -205,6 +251,7 @@ export default async function platformAccountsRoutes(
         token = link.token;
         return forcePasswordReset(tx, accountId, link, now);
       });
+      await closeSockets(accountId, outcome);
       const status = await mail(request, 'account_password_reset.mail', {
         to: outcome.mailTo.email,
         licenseId: null,
@@ -261,6 +308,7 @@ export default async function platformAccountsRoutes(
       async (request, reply) => {
         const accountId = accountIdOf(request);
         const outcome = await perform(request, (tx, now) => run(tx, accountId, now));
+        await closeSockets(accountId, outcome);
         return answer(reply, accountId, outcome);
       },
     );
@@ -275,6 +323,7 @@ export default async function platformAccountsRoutes(
       const outcome = await perform(request, (tx, now) =>
         suspendAccount(tx, accountId, reason, now),
       );
+      await closeSockets(accountId, outcome, true);
       return answer(reply, accountId, outcome);
     },
   );
@@ -299,6 +348,7 @@ export default async function platformAccountsRoutes(
       const accountId = accountIdOf(request);
       const { confirm_email: confirmEmail } = parse(eraseBody, request.body);
       const outcome = await perform(request, (tx) => eraseAccount(tx, accountId, confirmEmail));
+      await closeSockets(accountId, outcome, true);
       return reply
         .header('cache-control', 'no-store')
         .send({ erased: true, account_id: accountId, license_ids: outcome.payload['license_ids'] });

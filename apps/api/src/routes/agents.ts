@@ -754,15 +754,22 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
           target,
           suspended,
         );
-        if (!changed) return target;
+        if (!changed) return { membership: target, changed };
 
-        return tx.agentMembership.findFirstOrThrow({
+        const membership = await tx.agentMembership.findFirstOrThrow({
           where: { agentId },
           include: { agent: { select: agentSelect } },
         });
+        return { membership, changed };
       });
 
-      return reply.send(serialiseAgent(updated));
+      // Committed: every socket the member holds in this workspace closes
+      // (tm 426.2), and its reconnect finds the membership suspended.
+      if (updated.changed && suspended) {
+        await publisher.revoke(request.tenant(), [{ kind: 'agent', agentId }]);
+      }
+
+      return reply.send(serialiseAgent(updated.membership));
     },
   );
 

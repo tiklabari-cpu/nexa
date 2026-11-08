@@ -65,7 +65,10 @@
  * re-resolves its bearer token against the membership (`token-service.ts`), so a
  * suspended member's live sessions stop working on their next call, with no
  * sweep to get wrong and no window to get caught in. The same read is what makes
- * the sign-in path refuse them (`auth_list_memberships`).
+ * the sign-in path refuse them (`auth_list_memberships`). An open socket does
+ * not re-resolve anything, so the deactivation is announced on the licence's
+ * bus channel after its commit (`principal_revoked`, tm 426.2) and every
+ * socket of the member closes — its reconnect is refused the same way.
  *
  * **It does not reassign their open chats.** Suspension already takes them out
  * of routing, and re-homing live conversations is a supervisor's judgement about
@@ -113,6 +116,7 @@ import {
 } from '../lib/scim.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { setMembershipSuspension } from '../services/auth/membership-service.js';
+import { RealtimePublisher } from '../services/realtime/publisher.js';
 import {
   createGroup,
   deleteGroup,
@@ -252,6 +256,7 @@ export default async function scimRoutes(
   },
 ): Promise<void> {
   const { baseUrl } = options;
+  const publisher = new RealtimePublisher(app.redis, app.log);
 
   /**
    * SCIM's media type (RFC 7644 §3.1). Fastify parses `application/json` out of
@@ -732,6 +737,7 @@ export default async function scimRoutes(
       // that merely restates the truth about everybody.
       if (changes.active === false) refuseOwnerDeactivation(existing);
 
+      let deactivated = false;
       try {
         const updated = await request.withTenant(async (tx) => {
           // Only a reinstatement can grow the headcount (a suspension never
@@ -771,6 +777,7 @@ export default async function scimRoutes(
             // Only a reinstatement can grow the headcount. A suspension shrinks
             // it and deliberately leaves the purchased count alone.
             if (changed && changes.active) await applySeatEffect(tx, request, principal);
+            deactivated = changed && !changes.active;
           }
 
           return tx.agentMembership.findFirstOrThrow({
@@ -778,6 +785,10 @@ export default async function scimRoutes(
             select: MEMBERSHIP_SELECT,
           });
         });
+        // Committed: the member's sockets close (tm 426.2).
+        if (deactivated) {
+          await publisher.revoke(request.tenant(), [{ kind: 'agent', agentId: existing.agentId }]);
+        }
         return scimReply(reply, 200, serialiseScimUser(toUserSource(updated), baseUrl));
       } catch (error) {
         if (isUniqueViolation(error)) {
@@ -815,14 +826,18 @@ export default async function scimRoutes(
       // in front of it, so it runs the same code, refuses on the same owner, and
       // leaves the same `member.suspended` entry. What it deliberately does not
       // do — release the seat, reassign open chats, hunt down live tokens — is
-      // reasoned about in the file header.
+      // reasoned about in the file header. What it does do after the commit is
+      // close the member's open sockets (tm 426.2).
       refuseOwnerDeactivation(existing);
 
-      await request.withTenant((tx) =>
+      const suspended = await request.withTenant((tx) =>
         setMembershipSuspension(tx, request.auditContext(), existing, true, {
           metadata: scimActor(principal),
         }),
       );
+      if (suspended) {
+        await publisher.revoke(request.tenant(), [{ kind: 'agent', agentId: existing.agentId }]);
+      }
 
       // 204, and repeating it is not an error: a connector retrying after a
       // timeout must converge, not alarm. The second call finds the membership

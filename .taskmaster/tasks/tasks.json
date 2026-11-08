@@ -17578,7 +17578,7 @@
           "417"
         ],
         "priority": "high",
-        "updatedAt": "2026-11-07T23:28:23.501Z",
+        "updatedAt": "2026-11-07T23:29:13.096Z",
         "subtasks": [
           {
             "id": 1,
@@ -17639,13 +17639,13 @@
             "description": "Mobil ajan uygulaması aynı kurala uyar; mobilde üstlenme düğmesi yok.",
             "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1. Bağımlılık: 475.1, 475.2. Üst görev #475 KARAR D10.\nAMAÇ: (1) ChatScreen composer'ı (ChatScreen.tsx:87-93) atanan değilse `disabled` + \"Bu sohbet artık sizde değil; yanıtlamak için konsoldan üstüne alın.\" (en+tr). (2) Atanan bilgisi mevcut chat detayı/liste öğesindeki `thread.assignee_id` (ya da eşdeğer mevcut alan) + oturumdaki account id ile okunur; YENİ uç çağrısı YOK; kullanılan kaynak alan HANDOFF'a (bugün apps/mobile/src'de assignee okuyan kod yok — tip/mapper'a alan eklemek gerekebilir). (3) store.send 409 `reply_requires_assignment`'i kalıcı hata sayar (tekrar dene yok, metin kalır; tm 437 MOBILE-COMPOSER-NO-LOSS önce kapanmışsa onun balon durumunu kullan).\nTUZAK: mobile-tests-have-no-node-types, openapi-path-breaks-mobile-parity-count (sayı DEĞİŞMEMELİ).\nKABUL: aşağıdaki mobil jest testleri yeşil; parity sayısı değişmedi.",
             "testStrategy": "mobil jest: atanan → composer açık; atanan başkası → devre dışı + metin; 409 → hata balonu, metin kaybolmaz, tekrar dene yok; parity testi yeşil ve sayı değişmez. DoD: CONVENTIONS §1.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "475.1"
             ],
             "parentId": "475",
             "priority": "high",
-            "updatedAt": "2026-11-07T11:50:37.837Z"
+            "updatedAt": "2026-11-07T23:29:13.096Z"
           },
           {
             "id": 6,
@@ -17777,7 +17777,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-07T23:28:23.502Z",
+      "lastModified": "2026-11-07T23:29:13.097Z",
       "taskCount": 478,
       "completedCount": 416,
       "tags": [

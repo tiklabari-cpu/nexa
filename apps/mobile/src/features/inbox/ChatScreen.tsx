@@ -14,6 +14,7 @@ import { ConnectionBanner } from './ConnectionBanner';
 import { Transcript } from './Transcript';
 import { useInboxState, useTranscript } from './useInbox';
 import { useInboxStore } from './context';
+import { replyGuardCopy } from './replyGuard';
 import { FONT_SIZE, RADIUS, SPACING } from '../../theme/tokens';
 import { useTheme } from '../../theme/theme';
 
@@ -29,9 +30,13 @@ export function ChatScreen({ chatId }: { chatId: string }) {
   }, [store, chatId]);
 
   const chat = state.chats.find((candidate) => candidate.id === chatId);
-  // Only an archived conversation refuses writes, and `undefined` here means
-  // the list has not loaded — not that the chat is closed.
-  const closed = chat !== undefined && chat.active === false;
+  // Who may answer (tm 475.5 · D10): the list row's assignee against the
+  // signed-in account, plus what the store has heard since (a 409, the chat
+  // leaving the `my` list, an archive push). `unknown` — a chat the phone
+  // has not listed — leaves the composer open and the server decides.
+  const access = store.replyAccessOf(chatId);
+  const closed = access === 'closed';
+  const notMine = access === 'not_mine';
 
   return (
     <KeyboardAvoidingView
@@ -84,12 +89,22 @@ export function ChatScreen({ chatId }: { chatId: string }) {
         </Text>
       )}
 
+      {notMine && (
+        <Text
+          testID="chat-not-mine"
+          accessibilityLiveRegion="polite"
+          style={[styles.closed, { color: colors.textSecondary }]}
+        >
+          {replyGuardCopy().notMine}
+        </Text>
+      )}
+
       <Composer
         chatId={chatId}
         onSend={(input) => void store.send(chatId, input)}
         sending={transcript.sending}
         error={transcript.sendError}
-        disabled={closed}
+        disabled={closed || notMine}
       />
     </KeyboardAvoidingView>
   );

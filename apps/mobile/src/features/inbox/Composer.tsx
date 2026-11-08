@@ -25,7 +25,11 @@ export interface ComposerProps {
   onSend: (input: { text: string; recipients: EventRecipients }) => void;
   sending: boolean;
   error: string | null;
-  /** An archived conversation cannot be written to; say so rather than 409. */
+  /**
+   * An archived conversation, or one that is not mine to answer (tm 475.5),
+   * cannot be written to; say so rather than 409. Whatever is typed stays in
+   * the field.
+   */
   disabled?: boolean;
 }
 

@@ -15,6 +15,7 @@
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
 
 import { isPending, type ChatEvent } from './types';
+import { REFUSED_PROPERTY, replyGuardCopy } from './replyGuard';
 import { idHint, idLabel } from '../../lib/idLabels';
 import { FONT_SIZE, RADIUS, SPACING } from '../../theme/tokens';
 import { useTheme } from '../../theme/theme';
@@ -106,6 +107,11 @@ export function MessageBubble({ event, isMine }: { event: ChatEvent; isMine: boo
   const isNote = event.recipients === 'agents';
   const isSystem = event.type === 'system_message' || event.author_type === 'system';
   const pending = isPending(event);
+  // A reply the server refused because the chat is not mine (tm 475.5): the
+  // words stay on screen, selectable, and the line under them says they did
+  // not go. No retry — the answer would be the same.
+  const refused =
+    (event.properties as Record<string, unknown> | undefined)?.[REFUSED_PROPERTY] === true;
 
   if (isSystem) {
     return (
@@ -146,21 +152,29 @@ export function MessageBubble({ event, isMine }: { event: ChatEvent; isMine: boo
       <View
         style={[
           styles.bubble,
-          { backgroundColor: background, opacity: pending ? 0.6 : 1 },
+          { backgroundColor: background, opacity: pending || refused ? 0.6 : 1 },
           isNote ? { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.note } : null,
         ]}
       >
         {event.text !== null && event.text !== undefined && event.text !== '' && (
-          <Text style={[styles.text, { color: foreground }]}>{event.text}</Text>
+          <Text selectable={refused} style={[styles.text, { color: foreground }]}>
+            {event.text}
+          </Text>
         )}
         {event.attachment_url !== null && event.attachment_url !== undefined && (
           <Text style={[styles.attachment, { color: foreground }]}>Attachment</Text>
         )}
       </View>
-      <Text style={[styles.meta, { color: colors.textTertiary }]}>
-        {pending ? 'Sending…' : formatTime(event.created_at)}
-        {event.author_type === 'bot' ? ' · AI' : ''}
-      </Text>
+      {refused ? (
+        <Text testID={`event-not-sent-${event.id}`} style={[styles.meta, { color: colors.danger }]}>
+          {replyGuardCopy().notSent}
+        </Text>
+      ) : (
+        <Text style={[styles.meta, { color: colors.textTertiary }]}>
+          {pending ? 'Sending…' : formatTime(event.created_at)}
+          {event.author_type === 'bot' ? ' · AI' : ''}
+        </Text>
+      )}
     </View>
   );
 }

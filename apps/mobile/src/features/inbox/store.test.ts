@@ -6,6 +6,8 @@
  */
 import { InboxStore } from './store';
 import type { EventPage, InboxApi } from './api';
+import { REFUSED_PROPERTY } from './replyGuard';
+import { ApiClientError } from '../../lib/api-client';
 import type { ChatEvent, ChatSummary } from './types';
 
 function event(overrides: Partial<ChatEvent> & { id: string }): ChatEvent {
@@ -513,5 +515,179 @@ describe('realtime', () => {
     store.setConnection('reconnecting');
 
     expect(store.getState().connection).toBe('reconnecting');
+  });
+});
+
+/**
+ * The server answers a reply only from the chat's assignee (tm 475.1); the
+ * phone reads the same question off the list it already has (tm 475.5 · D10).
+ */
+describe('reply guard (tm 475.5)', () => {
+  function refusal(reason = 'assigned_to_other'): ApiClientError {
+    return new ApiClientError({
+      type: 'reply_requires_assignment',
+      status: 409,
+      message: 'Only the agent this chat is assigned to can reply to the customer.',
+      requestId: 'req-1',
+      details: { reason },
+    });
+  }
+
+  it('reads the list row: mine, somebody else’s, nobody’s, not listed, no account', async () => {
+    const api = fakeApi({
+      chats: [
+        chat({ id: 'chat-mine', assignee_id: 'agent-1' }),
+        chat({ id: 'chat-theirs', assignee_id: 'agent-2' }),
+        chat({ id: 'chat-nobody', assignee_id: null }),
+        chat({ id: 'chat-archived', assignee_id: 'agent-1', active: false }),
+      ],
+    });
+    const store = new InboxStore({ api, accountId: 'agent-1' });
+    await store.loadChats();
+
+    expect(store.replyAccessOf('chat-mine')).toBe('mine');
+    expect(store.replyAccessOf('chat-theirs')).toBe('not_mine');
+    expect(store.replyAccessOf('chat-nobody')).toBe('not_mine');
+    expect(store.replyAccessOf('chat-archived')).toBe('closed');
+    // Never listed: the server decides, the composer stays open.
+    expect(store.replyAccessOf('chat-elsewhere')).toBe('unknown');
+
+    const anonymous = new InboxStore({ api });
+    await anonymous.loadChats();
+    expect(anonymous.replyAccessOf('chat-mine')).toBe('unknown');
+  });
+
+  it('locks a chat that leaves my list when a colleague takes it over, and lifts it when it comes back', async () => {
+    const api = fakeApi({ chats: [chat({ id: 'chat-1', assignee_id: 'agent-1' })] });
+    const store = new InboxStore({ api, accountId: 'agent-1' });
+    await store.loadChats();
+    expect(store.replyAccessOf('chat-1')).toBe('mine');
+
+    api.chats = [];
+    store.applyPush('chat_taken_over', { chat_id: 'chat-1' });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(api.listCalls).toBe(2);
+    expect(store.replyAccessOf('chat-1')).toBe('not_mine');
+
+    api.chats = [chat({ id: 'chat-1', assignee_id: 'agent-1' })];
+    store.applyPush('chat_transferred', { chat_id: 'chat-1' });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(store.replyAccessOf('chat-1')).toBe('mine');
+  });
+
+  it('says archived, not "no longer yours", for a chat that closed', async () => {
+    const api = fakeApi({ chats: [chat({ id: 'chat-1', assignee_id: 'agent-1' })] });
+    const store = new InboxStore({ api, accountId: 'agent-1' });
+    await store.loadChats();
+
+    api.chats = [];
+    store.applyPush('chat_deactivated', { chat_id: 'chat-1' });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(store.replyAccessOf('chat-1')).toBe('closed');
+  });
+
+  it('keeps a refused reply on screen as not sent, offers no retry, and closes the composer', async () => {
+    const api = fakeApi({ chats: [chat({ id: 'chat-1', assignee_id: 'agent-1' })] });
+    let attempts = 0;
+    api.sendEvent = async () => {
+      attempts += 1;
+      throw refusal();
+    };
+    const store = new InboxStore({ api, accountId: 'agent-1' });
+    await store.loadChats();
+    await store.loadTranscript('chat-1');
+    // The server has moved on; the list the phone holds has not.
+    api.chats = [];
+
+    const ok = await store.send('chat-1', { text: 'on my way', recipients: 'all' });
+    await Promise.resolve();
+
+    expect(ok).toBe(false);
+    expect(attempts).toBe(1);
+    const transcript = store.transcriptOf('chat-1');
+    expect(transcript.events).toHaveLength(1);
+    expect(transcript.events[0]?.text).toBe('on my way');
+    expect(transcript.events[0]?.properties).toEqual({ [REFUSED_PROPERTY]: true });
+    expect(transcript.sending).toBe(false);
+    expect(transcript.sendError).toBeNull();
+    expect(store.replyAccessOf('chat-1')).toBe('not_mine');
+    // It re-read the list to learn who has it now.
+    expect(api.listCalls).toBe(2);
+
+    // A message arriving afterwards does not sweep the refused words away.
+    store.applyPush('incoming_event', {
+      chat_id: 'chat-1',
+      event: event({ id: 'THREAD1_9', text: 'on my way' }),
+    });
+    expect(store.transcriptOf('chat-1').events.map((e) => e.id)).toEqual([
+      'THREAD1_9',
+      expect.stringMatching(/^pending-/),
+    ]);
+  });
+
+  it('closes the composer on a refusal even when the list cannot say (not listed, list read failing)', async () => {
+    // Opened from a notification, never in the list; the phone is offline for the re-read.
+    const api = fakeApi({ failSendWith: refusal('unassigned') });
+    const store = new InboxStore({ api, accountId: 'agent-1' });
+    await store.loadTranscript('chat-elsewhere');
+    expect(store.replyAccessOf('chat-elsewhere')).toBe('unknown');
+    api.failListWith = new Error('Could not reach the server.');
+
+    await store.send('chat-elsewhere', { text: 'hello?', recipients: 'all' });
+    await Promise.resolve();
+
+    expect(store.replyAccessOf('chat-elsewhere')).toBe('not_mine');
+    expect(store.transcriptOf('chat-elsewhere').events[0]?.text).toBe('hello?');
+  });
+
+  it('does not let a list read that started before the refusal reopen the composer', async () => {
+    const api = fakeApi({ chats: [chat({ id: 'chat-1', assignee_id: 'agent-1' })] });
+    const store = new InboxStore({ api, accountId: 'agent-1' });
+    await store.loadChats();
+    await store.loadTranscript('chat-1');
+
+    // A slow read that still sees the chat as mine…
+    let releaseStale: (() => void) | undefined;
+    api.listChats = () =>
+      new Promise((resolve) => {
+        releaseStale = () => resolve({ items: [chat({ id: 'chat-1', assignee_id: 'agent-1' })] });
+      });
+    const stale = store.loadChats({ refresh: true });
+
+    // …then the refusal, and the read it starts sees the truth.
+    api.listChats = async () => ({ items: [] });
+    api.failSendWith = refusal('unassigned');
+    await store.send('chat-1', { text: 'hello?', recipients: 'all' });
+    await Promise.resolve();
+
+    releaseStale?.();
+    await stale;
+
+    expect(store.replyAccessOf('chat-1')).toBe('not_mine');
+  });
+
+  it('still rolls back a reply that failed for any other reason', async () => {
+    const api = fakeApi({
+      failSendWith: new ApiClientError({
+        type: 'network',
+        status: 0,
+        message: 'Could not reach the server.',
+        requestId: '',
+      }),
+    });
+    const store = new InboxStore({ api, accountId: 'agent-1' });
+    await store.loadTranscript('chat-1');
+
+    await store.send('chat-1', { text: 'on my way', recipients: 'all' });
+
+    expect(store.transcriptOf('chat-1').events).toEqual([]);
+    expect(store.transcriptOf('chat-1').sendError).toBe('Could not reach the server.');
+    expect(store.replyAccessOf('chat-1')).toBe('unknown');
   });
 });

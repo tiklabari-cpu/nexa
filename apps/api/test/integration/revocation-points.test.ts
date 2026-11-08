@@ -514,6 +514,41 @@ describe('the API announces every revocation to the gateways (tm 426.2)', () => 
       expect(repeat.statusCode, repeat.body).toBe(200);
       expect(await bus.targets(fx.a)).toEqual([]);
     });
+
+    it("disabling an operator closes the socket their session as a member opened; the member's own stays (tm 430)", async () => {
+      const impersonator = await createOperator(platformDb, { role: 'support', clock });
+      const impersonatorToken = await openActiveSession(platformDb, impersonator, clock);
+      const started = await platform.app.inject({
+        method: 'POST',
+        url: `${PLATFORM_PREFIX}/support/impersonations`,
+        headers: bearer(impersonatorToken),
+        payload: {
+          ...REASON,
+          license_id: fx.a.licenseId.toString(),
+          account_id: fx.a.agentAccountId,
+          mode: 'read_only',
+        },
+      });
+      expect(started.statusCode, started.body).toBe(201);
+      const handoff = new URL((started.json() as { handoff_url: string }).handoff_url);
+      const code = decodeURIComponent(handoff.hash.replace(/^#code=/, ''));
+      const traded = await server.post('/auth/impersonation/exchange', { code });
+      expect(traded.statusCode, traded.body).toBe(200);
+      const asMember = (traded.json() as { access_token: string }).access_token;
+      const impersonationSocket = await login(fx.a, asMember);
+      const memberSocket = await login(fx.a, await pat(fx.a, fx.a.agentAccountId));
+      const id = await tokenId(asMember);
+      const committed = probeRevocations(platform.app.redis, tokenRevoked);
+
+      const response = await platformPost(`/admins/${impersonator.id}/disable`);
+      expect(response.statusCode, response.body).toBe(200);
+
+      expect(await closedWith(impersonationSocket)).toBe(CREDENTIAL_REVOKED);
+      expect(await bus.targets(fx.a)).toEqual([{ kind: 'token', tokenId: id }]);
+      expect(committed).toEqual([true]);
+      await hearsNextPush(memberSocket, fx.a);
+      expect((await connect(fx.a, asMember)).response.success).toBe(false);
+    });
   });
 
   // --- on the bus: the other points --------------------------------------------

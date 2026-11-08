@@ -152,6 +152,7 @@ export default async function platformSupportRoutes(
         async (tx) => {
           const opened = await startImpersonation(tx, {
             adminId: session.adminId,
+            platformSessionId: session.sessionId,
             licenseId,
             accountId: body.account_id.toLowerCase(),
             mode: body.mode,

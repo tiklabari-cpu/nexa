@@ -107,6 +107,14 @@ docker compose -f docker-compose.pilot.yml --profile platform exec platform-api 
 - **TOTP:** davet, rol, devre dışı/etkin ve 2FA sıfırlama için **gerekli** (§0.3); oturum iptali için değil.
 - **Audit:** `admin.invited`, `admin.invite_revoked`, `admin.invite_accepted`, `admin.role_changed`,
   `admin.disabled`, `admin.enabled`, `admin.two_factor_reset`, `admin.sessions_revoked`.
+- **Ele geçirilmiş operatör (tm 430):** **Devre dışı bırak** operatörün açık impersonation oturumlarını da
+  aynı işlemde bitirir (`end_reason: operator_disabled`) ve takas edilen kiracı token'larını iptal eder; açık
+  soketleri 4401 ile kapanır. **Oturumları iptal et** aynısını yapar (`operator_sessions_revoked`, operatör
+  yeniden girebilir). **Rol değiştir** yalnız yeni rolün tutamayacağı oturumları bitirir (S → D: `full` biter,
+  salt-okunur kalır; D/S → B/R: hepsi; `operator_role_changed`). Her biten oturum için platform zincirine
+  gerekçeyle, kiracının audit'ine gerekçesiz `impersonation.ended` yazılır. Panel dışından (psql) devre dışı
+  bırakılan operatörün token'ları da `auth_resolve_token` tarafından reddedilir; oturum satırını kapatmak
+  için panelden yeniden **Devre dışı bırak**.
 
 | İş (panelde aynı ad)     | API karşılığı (`$BASE`, `Authorization: Bearer $TOKEN`, hepsi `reason` ile)                     |
 | ------------------------ | ----------------------------------------------------------------------------------------------- |
@@ -373,8 +381,9 @@ kaydet; kota → özel değeri kaldır (ya da bitiş günü); iptal → sürdür
   güvenlik/ödeme/abonelik/BAA/müşteri silme/sandbox (403 `impersonation_forbidden_path`). Maskeleme (#300) ve
   yetki matrisi (#325) aynen geçerlidir.
 - **Geri alma / bitirme:** kiracı panelinde **Oturumu bitir** ya da platformda aktif oturum listesinden
-  (Destek) **Oturumu bitir** (`impersonation.ended`); 30 dk dolunca kendiliğinden. Açık oturumlar Güvenlik →
-  Impersonation listesinde ve alan detayının Impersonation sekmesinde görünür.
+  (Destek) **Oturumu bitir** (`impersonation.ended`); 30 dk dolunca kendiliğinden. Operatör devre dışı
+  bırakılınca, oturumları iptal edilince ya da rolü oturumun modunu tutamaz olunca da biter (§2, tm 430). Açık
+  oturumlar Güvenlik → Impersonation listesinde ve alan detayının Impersonation sekmesinde görünür.
 
 ## 12. Güvenlik: blocklist ve kötüye kullanım — FR-ADMIN-22
 

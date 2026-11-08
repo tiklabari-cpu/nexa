@@ -217,6 +217,13 @@ adminId}`.
 audit.ts actorOf` → `platform` + `on_behalf_of`; `/auth/me.impersonation`;
    `ImpersonationBanner` (kırmızı, geri sayım, "Oturumu bitir" → platform tarafı `end`).
 4. RTM: `apps/rtm/src/auth.ts` impersonation token'ını tanır, `read_only`'de yayın yapmaz.
+5. Oturum operatörün statüsünden uzun yaşamaz (tm 430 · denetim F12): `admins/{id}/disable`,
+   `…/revoke-sessions` ve modu tutamayan rol değişikliği (`mayHoldImpersonation`) aynı işlemde açık
+   oturumları bitirir (`end_reason` `operator_disabled` / `operator_sessions_revoked` /
+   `operator_role_changed`), bağlı `api_tokens`'ı iptal eder, her biri için çift audit
+   `impersonation.ended` yazar ve commit sonrası `principal_revoked` (`token`) yayınlar.
+   `auth_resolve_token` (migration `20261227090000`) devre dışı operatörün token'ını her yoldan reddeder;
+   açılmakta olan oturum operatör satırını `FOR SHARE` ile yeniden okur (yarış yok).
 
 ## H. Test stratejisi (ortak)
 

@@ -273,8 +273,19 @@ export const IMPERSONATION_TTL_DEFAULT_SECONDS = 1800;
  * Why a session stopped before its window ran out: an operator ended it from
  * the root panel, or the one signed in ended it from the workspace console's
  * banner. A session whose window simply ran out keeps `end_reason` empty.
+ *
+ * The last three end it with the standing of the operator who opened it
+ * (tm 430): they were disabled, moved to a role that may no longer hold a
+ * session of its mode, or had their sessions revoked — the session and the
+ * tokens it was traded for go with them.
  */
-export const IMPERSONATION_END_REASONS = ['ended_by_operator', 'ended_in_workspace'] as const;
+export const IMPERSONATION_END_REASONS = [
+  'ended_by_operator',
+  'ended_in_workspace',
+  'operator_disabled',
+  'operator_role_changed',
+  'operator_sessions_revoked',
+] as const;
 export type ImpersonationEndReason = (typeof IMPERSONATION_END_REASONS)[number];
 
 /**

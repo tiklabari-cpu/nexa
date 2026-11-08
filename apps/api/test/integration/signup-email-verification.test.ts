@@ -606,11 +606,15 @@ describe('sign-up email verification (SIGNUP_EMAIL_VERIFICATION=true)', () => {
       ).toBe(401);
     });
 
-    it('asks a verified account for nothing, as before', async () => {
+    it('asks a verified account to sign in to join, and for no new password (tm 421)', async () => {
       const token = await invite(fx.b.ownerEmail);
       const preview = await server.get(`/auth/invitations/preview?token=${token}`);
       expect(preview.json()).toMatchObject({ needs_password: false });
-      expect((await server.post('/auth/invitations/accept', { token })).statusCode).toBe(200);
+      expect((await server.post('/auth/invitations/accept', { token })).statusCode).toBe(401);
+      expect(
+        (await server.post('/auth/invitations/accept', { token, current_password: fx.b.password }))
+          .statusCode,
+      ).toBe(200);
     });
   });
 

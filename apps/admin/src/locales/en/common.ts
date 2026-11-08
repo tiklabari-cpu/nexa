@@ -54,6 +54,8 @@ export const common: Messages = {
   'common.errors.impersonation_read_only':
     'This is a read-only support session — nothing can be changed from it.',
   'common.errors.internal': 'Something went wrong on our side — try again.',
+  'common.errors.invitation_requires_sign_in':
+    'This address already has an account. Sign in to it — enter its password — to accept the invitation.',
   'common.errors.knowledge_job_in_progress':
     'This source is already being crawled — wait for it to finish or cancel it.',
   'common.errors.knowledge_source_exists':

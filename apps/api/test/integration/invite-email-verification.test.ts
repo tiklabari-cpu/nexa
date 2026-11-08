@@ -13,7 +13,8 @@
  *   2. **The mailbox is the way in.** Opening that link with the password is
  *      the join — and a real invitee can accept after the admin did, replacing
  *      the admin's password, because the invitation stays live until then.
- *   3. **A verified account is unchanged.** It joins on the accept, as before.
+ *   3. **A verified account joins on the accept** — once it signs in, with its
+ *      password or its session (tm 421, `invite-accept-sign-in.test.ts`).
  *   4. **Fifty a day.** The 51st invitation of a UTC day is refused whole, and
  *      revoking gives nothing back (GV-03-S2).
  *   5. **What nobody verifies goes.** An unverified invitee past the sign-up
@@ -242,16 +243,19 @@ describe('an invitation link does not prove the address (GV-03)', () => {
   });
 
   // =========================================================================
-  // 3. A verified account is unchanged
+  // 3. A verified account joins on the accept — signed in
   // =========================================================================
 
   describe('an address somebody already verified', () => {
-    it('joins on the accept, asks for no password, and mails no link — as before (FR-MOD-04.4)', async () => {
+    it('joins on the accept with its own password, chooses none, and is mailed no link (FR-MOD-04.4)', async () => {
       const { token } = await invite(fx.b.ownerEmail);
       const preview = await server.get(`/auth/invitations/preview?token=${token}`);
       expect(preview.json()).toMatchObject({ needs_password: false });
 
-      const accepted = await server.post('/auth/invitations/accept', { token });
+      const accepted = await server.post('/auth/invitations/accept', {
+        token,
+        current_password: fx.b.password,
+      });
       expect(accepted.statusCode).toBe(200);
       const memberships = (accepted.json() as { memberships: Array<{ license_id: string }> })
         .memberships;

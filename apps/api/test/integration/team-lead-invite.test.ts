@@ -291,8 +291,10 @@ describe('Team Lead invitations and lead marks (RL-01 · RL-04-S1)', () => {
       );
       expect(res.statusCode, res.payload).toBe(201);
 
+      // Signing in to join, as a verified account must (tm 421).
       const accepted = await server.post('/auth/invitations/accept', {
         token: tokenOf(created(res)),
+        current_password: fx.b.password,
       });
       expect(accepted.statusCode, accepted.payload).toBe(200);
 
@@ -352,6 +354,7 @@ describe('Team Lead invitations and lead marks (RL-01 · RL-04-S1)', () => {
       expect(res.statusCode, res.payload).toBe(201);
       const accepted = await server.post('/auth/invitations/accept', {
         token: tokenOf(created(res)),
+        current_password: fx.a.password,
       });
       expect(accepted.statusCode, accepted.payload).toBe(200);
 
@@ -393,6 +396,7 @@ describe('Team Lead invitations and lead marks (RL-01 · RL-04-S1)', () => {
 
       const accepted = await server.post('/auth/invitations/accept', {
         token: tokenOf(created(res)),
+        current_password: fx.b.password,
       });
       expect(accepted.statusCode, accepted.payload).toBe(200);
       expect(await teamsOf(fx.b.agentAccountId)).toEqual([{ group_id: sales, lead: true }]);

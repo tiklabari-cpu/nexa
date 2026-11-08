@@ -97,6 +97,11 @@ export interface JoinedWorkspace {
  * the invitation, and a verification link is issued for the address.
  */
 export type AcceptedInvitation =
+  /**
+   * `session.memberships` holds only the workspace this invitation joined
+   * (tm 421) — never the account's others, which nobody asked about — and is
+   * empty when the invitation only re-touched a suspended membership.
+   */
   | { kind: 'joined'; session: Session; joined: JoinedWorkspace }
   | {
       kind: 'verification_required';
@@ -107,6 +112,46 @@ export type AcceptedInvitation =
       /** The verification link's token — mailed to `email`, never returned. */
       token: string;
     };
+
+/**
+ * The account a live invitation's address belongs to (tm 421), read before the
+ * accept so the route can ask a verified one to sign in. `passwordHash` is set
+ * only for a verified account, and is null for one that signs in only through
+ * an identity provider.
+ */
+export interface Invitee {
+  accountId: string;
+  verified: boolean;
+  passwordHash: string | null;
+}
+
+/**
+ * What the caller proved about the account a verified invitee's join lands on
+ * (tm 421): its signed-in session (`passwordHash: null`), or its password —
+ * `passwordHash` is then the hash the password was checked against, and
+ * `auth_accept_invitation` joins only while the account still holds it.
+ */
+export interface InviteeProof {
+  accountId: string;
+  passwordHash: string | null;
+}
+
+/**
+ * 401 `invitation_requires_sign_in` (tm 421): the address belongs to a
+ * verified account and the accept did not show it is theirs. Nothing was
+ * written and the invitation is still live.
+ */
+export function invitationRequiresSignIn(
+  reason: 'sign_in_required' | 'password_incorrect',
+): ApiError {
+  return new ApiError(
+    'invitation_requires_sign_in',
+    reason === 'password_incorrect'
+      ? 'That password is not correct.'
+      : 'This address already has an account. Sign in to it to accept the invitation.',
+    { details: { reason } },
+  );
+}
 
 export interface InvitationRecord {
   id: string;
@@ -628,6 +673,29 @@ export class LifecycleService {
   }
 
   /**
+   * Whose account a live invitation would join, if its address already holds
+   * one (tm 421) — null otherwise, and for a link that is no longer live.
+   * Through a SECURITY DEFINER function for the reason the preview uses one:
+   * nothing here has a tenant context yet.
+   */
+  async findInvitee(token: string): Promise<Invitee | null> {
+    const [row] = await this.#db.$queryRaw<
+      Array<{
+        invitee_account: string;
+        invitee_verified: boolean;
+        invitee_password_hash: string | null;
+      }>
+    >`SELECT * FROM auth_find_invitee(${hashToken(token)})`;
+    return row
+      ? {
+          accountId: row.invitee_account,
+          verified: row.invitee_verified,
+          passwordHash: row.invitee_password_hash,
+        }
+      : null;
+  }
+
+  /**
    * Consume an invitation, and let the bill follow the person in the same
    * breath (FR-MOD-04.4).
    *
@@ -662,11 +730,18 @@ export class LifecycleService {
    * — transaction-local, exactly as `withTenant` sets them — so they cannot
    * outlive the transaction on a pooled connection, and they are set *after*
    * the `auth_*` calls because those run as the definer and need no context.
+   *
+   * **A verified account joins only with `proof`** (tm 421 · audit F04): the
+   * link is the admin's as much as the invitee's, so the route proves the
+   * account first — its password, or its own session — and the function checks
+   * that proof against the account row it locks. Without one it refuses
+   * (`invitation_requires_sign_in`) before writing anything.
    */
   async acceptInvitation(input: {
     token: string;
     name?: string;
     password?: string;
+    proof?: InviteeProof;
   }): Promise<AcceptedInvitation> {
     const passwordHash = input.password ? await hashPassword(input.password) : null;
 
@@ -701,7 +776,8 @@ export class LifecycleService {
         try {
           rows = await tx.$queryRaw`SELECT * FROM auth_accept_invitation(
               ${hashToken(input.token)}, ${input.name ?? null}, ${passwordHash},
-              ${await this.#trialDaysNow()}::int, ${linkExpiresAt})`;
+              ${await this.#trialDaysNow()}::int, ${linkExpiresAt},
+              ${input.proof?.accountId ?? null}::uuid, ${input.proof?.passwordHash ?? null})`;
         } catch (error) {
           if (error instanceof Error && /siyahtus_password_required/.test(error.message)) {
             // The whole transaction rolls back with this throw, so the
@@ -709,6 +785,14 @@ export class LifecycleService {
             throw ApiError.validation('password: Required to accept this invitation.', {
               password_required: true,
             });
+          }
+          // A verified account with no proof of it, or one that no longer
+          // matches the account row — a password changed since the route
+          // checked it. Rolled back the same way; the invitation stays live.
+          if (error instanceof Error && /siyahtus_sign_in_required/.test(error.message)) {
+            throw invitationRequiresSignIn(
+              input.proof?.passwordHash ? 'password_incorrect' : 'sign_in_required',
+            );
           }
           throw error;
         }
@@ -749,7 +833,10 @@ export class LifecycleService {
           kind: 'joined',
           session: {
             account: { id: row.joined_account, email: row.joined_email, name: row.joined_name },
-            memberships,
+            // The workspace joined, and no other (tm 421): the answer goes to
+            // whoever holds the link, and the account's other workspaces are
+            // none of this invitation's business. Signing in lists them.
+            memberships: joined ? [joined] : [],
           },
           joined: {
             licenseId: row.joined_license,

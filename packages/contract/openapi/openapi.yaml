@@ -12699,7 +12699,8 @@ components:
         The account and the workspaces it may sign in to. Deliberately carries
         no tokens: the caller picks a workspace and continues through
         `/auth/authorize`, so one code path issues credentials rather than
-        three.
+        three. `POST /auth/invitations/accept` lists only the workspace the
+        invitation joined (tm 421).
       required: [account, memberships]
       properties:
         account:
@@ -17346,6 +17347,22 @@ components:
           type: string
           enum: [unassigned, assigned_to_other, ai]
 
+    InvitationSignInDetails:
+      type: object
+      description: |
+        `details` of a `401 invitation_requires_sign_in` (tm 421): the invited
+        address belongs to an account somebody already verified, and the accept
+        did not show it is theirs. `sign_in_required` — neither the account's
+        password (`current_password`) nor a signed-in session of that account
+        came with it; `password_incorrect` — the password did not match.
+        Nothing was written and the invitation is still live: send it again
+        with the password, or with the account's session as the bearer token.
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          enum: [sign_in_required, password_incorrect]
+
     OwnershipTransferParty:
       type: object
       additionalProperties: false
@@ -17416,6 +17433,7 @@ components:
         - impersonation_forbidden_path
         - impersonation_read_only
         - internal
+        - invitation_requires_sign_in
         - knowledge_job_in_progress
         - knowledge_source_exists
         - license_expired

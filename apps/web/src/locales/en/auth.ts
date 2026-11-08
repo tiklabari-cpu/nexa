@@ -152,7 +152,14 @@ export const auth: Messages = {
   'auth.join.title': 'Join {organization}',
   'auth.join.subtitle': 'Invited as {role} · {email}',
   'auth.join.existingAccountNotice':
-    'You already have a SiyahTuş account for this address. Accepting adds this workspace to it.',
+    'You already have a SiyahTuş account for this address. Enter its password to add this workspace to it.',
+  'auth.join.currentPasswordHint': 'The password you already sign in with.',
+  'auth.join.forgotPassword': 'Forgot your password, or never set one?',
+  'auth.join.signInRequired':
+    'This address already has a SiyahTuş account. Enter its password to join.',
+  'auth.join.errorPassword': 'That password is not correct.',
+  'auth.join.errorTooManyAttempts':
+    'Too many password attempts for this account. Wait an hour, then try again.',
   'auth.join.termsNotice':
     'By joining, you work under the Terms of Service this workspace accepted. The terms and the privacy policy are linked below.',
   'auth.join.passwordHint': 'At least {count} characters.',

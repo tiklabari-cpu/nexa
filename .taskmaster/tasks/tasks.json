@@ -16613,12 +16613,12 @@
         "description": "Yalnız A takımında olan ajan B takımındaki sohbetin id'siyle o müşterinin bağlı uygulama (Freshdesk vb.) verisini okuyabiliyor; rota yalnız scope kontrolü yapıyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F03 (authz-tenancy). Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı):\n- `apps/api/src/routes/apps.ts:284-297` yalnız `config.scopes`; `apps.chatDataPlan(tx, tenant, chatId)`.\n- `apps/api/src/services/apps/app-service.ts:~687-694` sohbeti yalnız `{id, licenseId}` ile buluyor.\n- Diğer sohbet rotalarının kullandığı yardımcılar: `resolveVisibility`, `chatVisibilityFilter`, `visibleChat` (`rg -n \"visibleChat|chatVisibilityFilter\" apps/api/src`).\n\nYAPILACAK: `chatDataPlan` öncesinde (ya da içinde) diğer sohbet okuma rotalarıyla AYNI görünürlük yardımcısını uygula; görünmeyen sohbette 404 (`chat_not_found` — mevcut kodu kullan, var olmayı sızdırma). Aynı dosyada sohbet id'si alan başka uç varsa aynı kontrolü ekle ve HANDOFF'a listele.\n\nTUZAK: PILOT_MODE erken dönüşü (`pilotCards.length === 0` → boş liste) görünürlük kontrolünden ÖNCE; sıralamayı değiştirip değiştirmeyeceğini testle sabitle (görünmeyen sohbette pilotta da 404 tercih). Race testleri ayrı bağlantı ister (memory race-tests-need-separate-connections). Görünürlük kuralı capability'den geliyorsa memory capability-level-change-ripples.\n\nKAPSAM DIŞI: uygulama kartlarının içeriği, görünürlük modelinin kendisi.\nDENETİM BULGULARI: F03",
         "testStrategy": "api entegrasyon: visibility=team ajan, başka takımın sohbeti → 404; kendi takımı → 200; visibility=own başkasının sohbeti → 404; admin → 200; çapraz kiracı → 404. Mutasyon: görünürlük çağrısını kaldır → 404 testi kırmızı. DoD: CONVENTIONS §1.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "417"
         ],
         "priority": "medium",
-        "updatedAt": "2026-11-08T04:54:57.317Z",
+        "updatedAt": "2026-11-08T06:11:12.712Z",
         "subtasks": []
       },
       {
@@ -17777,9 +17777,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-08T04:54:57.317Z",
+      "lastModified": "2026-11-08T06:11:12.713Z",
       "taskCount": 478,
-      "completedCount": 417,
+      "completedCount": 418,
       "tags": [
         "master"
       ]

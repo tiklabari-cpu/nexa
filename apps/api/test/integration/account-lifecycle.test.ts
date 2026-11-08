@@ -721,15 +721,23 @@ describe('account lifecycle', () => {
       const preview = await server.get(`/auth/invitations/preview?token=${invite.token}`);
       expect(preview.json()).toMatchObject({ needs_password: false });
 
-      const response = await server.post('/auth/invitations/accept', { token: invite.token });
+      // A verified account signs in to join (tm 421): its own password.
+      const response = await server.post('/auth/invitations/accept', {
+        token: invite.token,
+        current_password: fx.b.password,
+      });
       expect(response.statusCode).toBe(200);
 
       const accounts = await owner.account.count({ where: { email: fx.b.ownerEmail } });
       expect(accounts).toBe(1);
 
+      // Now a member of both workspaces — though the answer names only the
+      // one this invitation joined (tm 421).
       const body = response.json() as { memberships: Array<{ license_id: string }> };
-      // Now a member of both workspaces.
-      expect(body.memberships).toHaveLength(2);
+      expect(body.memberships.map((m) => m.license_id)).toEqual([fx.a.licenseId.toString()]);
+      expect(await owner.agentMembership.count({ where: { agentId: fx.b.ownerAccountId } })).toBe(
+        2,
+      );
     });
 
     it('requires a password when the address has no account', async () => {

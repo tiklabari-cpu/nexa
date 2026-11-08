@@ -9,7 +9,7 @@
  * `ApiClient.prototype.post` is the seam, as there: the pages hold a module-level
  * client that bound `globalThis.fetch` at import.
  */
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -297,5 +297,165 @@ describe('an invitation accepted before the address is proven (tm 282 · GV-03)'
       password: 'longenoughpass',
     });
     expect(signIn).not.toHaveBeenCalled();
+  });
+});
+
+describe('an existing account signs in to join (tm 421 · audit F04)', () => {
+  const TOKEN = 'abcdefghijklmnopqrstuvwxyz0123456789';
+
+  function preview(needsPassword: boolean): void {
+    vi.spyOn(ApiClient.prototype, 'get').mockResolvedValue({
+      organization_name: 'Acme',
+      email: 'robin@example.com',
+      role: 'agent',
+      needs_password: needsPassword,
+    });
+  }
+
+  function signInRefusal(reason: 'sign_in_required' | 'password_incorrect'): ApiClientError {
+    return new ApiClientError({
+      type: 'invitation_requires_sign_in',
+      status: 401,
+      message: 'refused',
+      requestId: 'req-1',
+      details: { reason },
+    });
+  }
+
+  /** The join page, plus a stand-in sign-in page to land on. */
+  function renderJoin(): void {
+    render(
+      <MemoryRouter initialEntries={[`/join?token=${TOKEN}`]}>
+        <Routes>
+          <Route path="/join" element={<JoinPage />} />
+          <Route path="/signin" element={<p>the sign-in page</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+  }
+
+  it('asks for the account’s own password, sends it as current_password, and signs in to the workspace joined', async () => {
+    const signIn = vi.fn(async () => undefined);
+    useAuth.setState({ signIn });
+    preview(false);
+    const post = vi.spyOn(ApiClient.prototype, 'post').mockResolvedValue({
+      account: { id: 'acc-1', email: 'robin@example.com', name: 'Robin' },
+      memberships: [{ license_id: '42' }],
+    });
+    renderJoin();
+
+    const join = await screen.findByRole('button', { name: 'Join workspace' });
+    expect(screen.getByText(/Enter its password to add this workspace/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Choose a password')).toBeNull();
+    expect(join).toBeDisabled();
+    await userEvent.type(screen.getByLabelText('Password'), 'its-own-password');
+    await userEvent.click(join);
+
+    await vi.waitFor(() =>
+      expect(signIn).toHaveBeenCalledWith('robin@example.com', 'its-own-password', '42'),
+    );
+    expect(post).toHaveBeenCalledWith('/auth/invitations/accept', {
+      token: TOKEN,
+      current_password: 'its-own-password',
+    });
+  });
+
+  it('turns into the sign-in form on a 401 invitation_requires_sign_in, and joins with the password', async () => {
+    const signIn = vi.fn(async () => undefined);
+    useAuth.setState({ signIn });
+    preview(true);
+    const post = vi
+      .spyOn(ApiClient.prototype, 'post')
+      .mockRejectedValueOnce(signInRefusal('sign_in_required'))
+      .mockResolvedValueOnce({
+        account: { id: 'acc-1', email: 'robin@example.com', name: 'Robin' },
+        memberships: [{ license_id: '42' }],
+      });
+    renderJoin();
+
+    await userEvent.type(await screen.findByLabelText('Your name'), 'Robin');
+    await userEvent.type(screen.getByLabelText('Choose a password'), 'longenoughpass');
+    await userEvent.click(screen.getByRole('button', { name: 'Join workspace' }));
+
+    // Settled: the button is back from "Joining…".
+    await screen.findByRole('button', { name: 'Join workspace' });
+    expect(
+      screen.getByText('This address already has a SiyahTuş account. Enter its password to join.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('Choose a password')).toBeNull();
+    expect(screen.queryByLabelText('Your name')).toBeNull();
+    expect(signIn).not.toHaveBeenCalled();
+
+    await userEvent.type(screen.getByLabelText('Password'), 'its-own-password');
+    await userEvent.click(screen.getByRole('button', { name: 'Join workspace' }));
+    await vi.waitFor(() =>
+      expect(signIn).toHaveBeenCalledWith('robin@example.com', 'its-own-password', '42'),
+    );
+    expect(post).toHaveBeenLastCalledWith('/auth/invitations/accept', {
+      token: TOKEN,
+      current_password: 'its-own-password',
+    });
+  });
+
+  it('says a wrong password is wrong, under the field, and keeps the form', async () => {
+    const signIn = vi.fn(async () => undefined);
+    useAuth.setState({ signIn });
+    preview(false);
+    vi.spyOn(ApiClient.prototype, 'post').mockRejectedValue(signInRefusal('password_incorrect'));
+    renderJoin();
+
+    await userEvent.type(await screen.findByLabelText('Password'), 'not-the-password');
+    await userEvent.click(screen.getByRole('button', { name: 'Join workspace' }));
+
+    await screen.findByRole('button', { name: 'Join workspace' });
+    expect(screen.getByText('That password is not correct.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Password')).toHaveAttribute('aria-invalid', 'true');
+    expect(
+      screen.getByRole('link', { name: 'Forgot your password, or never set one?' }),
+    ).toHaveAttribute('href', '/forgot-password');
+    expect(signIn).not.toHaveBeenCalled();
+  });
+
+  it('says the hour’s attempts are spent on a 429', async () => {
+    preview(false);
+    vi.spyOn(ApiClient.prototype, 'post').mockRejectedValue(
+      new ApiClientError({
+        type: 'too_many_requests',
+        status: 429,
+        message: 'slow down',
+        requestId: 'req-2',
+        retryAfterSeconds: 3600,
+      }),
+    );
+    renderJoin();
+
+    await userEvent.type(await screen.findByLabelText('Password'), 'its-own-password');
+    await userEvent.click(screen.getByRole('button', { name: 'Join workspace' }));
+    await screen.findByRole('button', { name: 'Join workspace' });
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Too many password attempts for this account. Wait an hour, then try again.',
+    );
+  });
+
+  it('hands over to the sign-in page when the join stands but signing in wants another step', async () => {
+    const signIn = vi.fn(async () => {
+      throw new ApiClientError({
+        type: 'two_factor_required',
+        status: 401,
+        message: 'code',
+        requestId: 'req-3',
+      });
+    });
+    useAuth.setState({ signIn });
+    preview(false);
+    vi.spyOn(ApiClient.prototype, 'post').mockResolvedValue({
+      account: { id: 'acc-1', email: 'robin@example.com', name: 'Robin' },
+      memberships: [{ license_id: '42' }],
+    });
+    renderJoin();
+
+    await userEvent.type(await screen.findByLabelText('Password'), 'its-own-password');
+    await userEvent.click(screen.getByRole('button', { name: 'Join workspace' }));
+    expect(await screen.findByText('the sign-in page')).toBeInTheDocument();
   });
 });

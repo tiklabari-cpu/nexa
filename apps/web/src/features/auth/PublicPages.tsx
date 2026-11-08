@@ -819,6 +819,9 @@ export function JoinPage(): ReactElement {
   const [invalid, setInvalid] = useState(false);
   // Accepted, but the address must be proven before the join (tm 282 · GV-03).
   const [verifying, setVerifying] = useState(false);
+  // The server says the address belongs to an account somebody verified after
+  // the preview was read (tm 421): ask for its password, as for any other.
+  const [signInRequired, setSignInRequired] = useState(false);
 
   const signIn = useAuth((s) => s.signIn);
   // No box here (tm 257.9 · ADR K-f): the party to the terms is the workspace,
@@ -841,11 +844,13 @@ export function JoinPage(): ReactElement {
     };
   }, [token]);
 
-  // An existing account only accepts — no fields, so nothing to validate. A new
-  // account must name itself and pick a password before Join enables.
-  const needsPassword = preview?.needs_password ?? false;
+  // A new account names itself and picks a password before Join enables. An
+  // existing one signs in to join (tm 421): the link is the admin's as much as
+  // the invitee's, so it cannot say this is the account's owner — its own
+  // password does, and the same password then signs them in.
+  const needsPassword = (preview?.needs_password ?? false) && !signInRequired;
   const form = useForm({
-    initial: { name: '', password: '' },
+    initial: { name: '', password: '', currentPassword: '' },
     validators: needsPassword
       ? {
           name: required(t('auth.validation.nameRequired')),
@@ -854,33 +859,61 @@ export function JoinPage(): ReactElement {
             t('auth.validation.passwordMinLength', { count: MIN_PASSWORD }),
           ),
         }
-      : undefined,
-    onSubmit: async (values, { setSubmitError }) => {
+      : { currentPassword: required(t('auth.validation.passwordRequired')) },
+    onSubmit: async (values, { setSubmitError, setFieldError }) => {
+      let result: { memberships: Array<{ license_id: string }> } | { verification_required: true };
       try {
-        const result = await anonymous.post<
-          { memberships: Array<{ license_id: string }> } | { verification_required: true }
-        >('/auth/invitations/accept', {
+        result = await anonymous.post('/auth/invitations/accept', {
           token,
-          ...(needsPassword ? { name: values.name.trim(), password: values.password } : {}),
+          ...(needsPassword
+            ? { name: values.name.trim(), password: values.password }
+            : { current_password: values.currentPassword }),
         });
-
-        // The link proves only that this address was invited — the admin was
-        // handed it too — so an account nobody has verified joins once the
-        // link mailed to the address is opened (tm 282).
-        if ('verification_required' in result) {
-          setVerifying(true);
+      } catch (error) {
+        if (error instanceof ApiClientError && error.type === 'invitation_requires_sign_in') {
+          if (error.details?.['reason'] === 'password_incorrect') {
+            setFieldError('currentPassword', t('auth.join.errorPassword'));
+          } else {
+            // Verified since the preview: the same page, asking for its password.
+            setSignInRequired(true);
+            setSubmitError(t('auth.join.signInRequired'));
+          }
           return;
         }
-        const session = result;
-        if (needsPassword && preview) {
-          await signIn(preview.email, values.password, session.memberships.at(-1)!.license_id);
-        } else {
-          // They already had an account, and we never asked for its password —
-          // so send them to sign in rather than pretending we can log them in.
-          navigate('/signin');
+        if (error instanceof ApiClientError && error.type === 'too_many_requests') {
+          setSubmitError(t('auth.join.errorTooManyAttempts'));
+          return;
         }
-      } catch {
         setSubmitError(t('auth.join.errorGeneric'));
+        return;
+      }
+
+      // The link proves only that this address was invited — the admin was
+      // handed it too — so an account nobody has verified joins once the
+      // link mailed to the address is opened (tm 282).
+      if ('verification_required' in result) {
+        setVerifying(true);
+        return;
+      }
+      // Joined. The answer names only the workspace joined (tm 421) — none
+      // when the invitation only found a suspended membership, which leaves
+      // nothing to sign in to here.
+      const licenseId = result.memberships[0]?.license_id;
+      if (!preview || !licenseId) {
+        navigate('/signin');
+        return;
+      }
+      try {
+        await signIn(
+          preview.email,
+          needsPassword ? values.password : values.currentPassword,
+          licenseId,
+        );
+      } catch {
+        // The join stands; the sign-in wants a step this page does not offer —
+        // a code from an authenticator, or the workspace's identity provider.
+        // The sign-in page has them all.
+        navigate('/signin');
       }
     },
   });
@@ -933,7 +966,7 @@ export function JoinPage(): ReactElement {
     >
       <form onSubmit={form.handleSubmit} noValidate>
         <ErrorNote message={form.submitError} />
-        {preview.needs_password ? (
+        {needsPassword ? (
           <>
             <Field
               id="name"
@@ -956,9 +989,29 @@ export function JoinPage(): ReactElement {
             />
           </>
         ) : (
-          <p className="mb-4 text-sm text-content-secondary">
-            {t('auth.join.existingAccountNotice')}
-          </p>
+          <>
+            <p className="mb-4 text-sm text-content-secondary">
+              {t('auth.join.existingAccountNotice')}
+            </p>
+            <Field
+              id="current-password"
+              label={t('auth.fields.password')}
+              type="password"
+              value={form.values.currentPassword}
+              onChange={(value) => form.setValue('currentPassword', value)}
+              onBlur={() => form.blur('currentPassword')}
+              error={form.errorFor('currentPassword')}
+              hint={t('auth.join.currentPasswordHint')}
+              autoFocus
+            />
+            {/* An account that signs in only through an identity provider has
+                no password: a reset gives it one (tm 421). */}
+            <p className="-mt-2 mb-4 text-xs text-content-secondary">
+              <Link to="/forgot-password" className="text-content-brand underline">
+                {t('auth.join.forgotPassword')}
+              </Link>
+            </p>
+          </>
         )}
         {termsUrl && (
           <p className="mb-4 text-xs text-content-secondary">{t('auth.join.termsNotice')}</p>

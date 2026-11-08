@@ -20,6 +20,9 @@ import { writeAuditEntry, type AuditEntry } from '../services/audit/audit-log.js
 import {
   LifecycleService,
   hashToken,
+  invitationRequiresSignIn,
+  type Invitee,
+  type InviteeProof,
   type JoinedWorkspace,
   type Session,
 } from '../services/auth/lifecycle-service.js';
@@ -75,6 +78,14 @@ const HOUR_MS = 3_600_000;
  * stolen session cannot guess the current password faster than this.
  */
 const PASSWORD_CHANGES_PER_HOUR = 10;
+/**
+ * Passwords an invitation accept may present for one verified account per
+ * hour (tm 421), right or wrong. Per account, not per link: the admin who sent
+ * the link can mint another for the same address at will, but not another
+ * account — so this is the ceiling on guessing anybody's password through this
+ * door, however many workspaces invite them.
+ */
+export const INVITE_SIGN_IN_ATTEMPTS_PER_HOUR = 5;
 
 const signupBody = z.object({
   email: z.string().trim().email().max(320),
@@ -138,7 +149,11 @@ const inviteBody = z.object({
 const acceptBody = z.object({
   token: z.string().min(20).max(200),
   name: z.string().trim().min(1).max(120).optional(),
+  // The password a new account chooses (sign-up's bounds).
   password: z.string().min(12).max(200).optional(),
+  // A verified account's own password, presented to prove the join is theirs
+  // (tm 421) — `/auth/login`'s bounds, like every password presented.
+  current_password: z.string().min(1).max(512).optional(),
 });
 
 /** One entry of `POST /invitations`' `undelivered` list. */
@@ -874,10 +889,23 @@ export default async function accountLifecycleRoutes(
     // 389.13, as #282 treats the invitee like a sign-up). The invited address
     // is the invitation's, so it is looked up before anything is spent.
     await refuseBlocked(request, (await lifecycle.previewInvitation(body.token)).email);
+
+    // --- A verified account signs in to join (tm 421 · audit F04) -------------
+    // The link is the admin's as much as the invitee's, so it does not say the
+    // caller is the person whose account it would join. Before this, an admin
+    // could invite anybody's address, accept the link themselves, and put that
+    // person in their workspace — and read every other workspace they belong
+    // to off the answer. The function checks the proof again under its lock.
+    const invitee = await lifecycle.findInvitee(body.token);
+    const proof = invitee?.verified
+      ? await proveInvitee(request, invitee, body.current_password)
+      : undefined;
+
     const accepted = await lifecycle.acceptInvitation({
       token: body.token,
       ...(body.name !== undefined ? { name: body.name } : {}),
       ...(body.password !== undefined ? { password: body.password } : {}),
+      ...(proof ? { proof } : {}),
     });
 
     // --- The address is not proven yet (tm 282 · GV-03) ----------------------
@@ -907,6 +935,55 @@ export default async function accountLifecycleRoutes(
     }
     return reply.send(session);
   });
+
+  /**
+   * What shows that the verified account an invitation would join is the
+   * caller's (tm 421): a signed-in session of that same account, or its
+   * password. 401 `invitation_requires_sign_in` when neither does; 429 once
+   * the account's hourly allowance of presented passwords is spent.
+   */
+  async function proveInvitee(
+    request: FastifyRequest,
+    invitee: Invitee,
+    currentPassword: string | undefined,
+  ): Promise<InviteeProof> {
+    // A sign-in session only, the rule `/auth/password` keeps: a personal
+    // access token is a credential minted for a program, and a support session
+    // (`impersonation`) is an operator, not the person — neither may say yes
+    // to a workspace on their behalf. The auth plugin resolved the bearer on
+    // this public route; a credential it could not use left no principal.
+    const principal = request.principal;
+    if (
+      principal?.kind === 'agent' &&
+      principal.tokenKind === 'oauth' &&
+      principal.accountId === invitee.accountId
+    ) {
+      return { accountId: invitee.accountId, passwordHash: null };
+    }
+    if (currentPassword === undefined) throw invitationRequiresSignIn('sign_in_required');
+
+    // Charged per presentation, before the comparison, like the verification
+    // link's budget: one charged only on failures would let a caller past it
+    // keep guessing until one is right.
+    if (
+      !(await spend(
+        request,
+        `rl:invitesignin:${invitee.accountId}`,
+        INVITE_SIGN_IN_ATTEMPTS_PER_HOUR,
+      ))
+    ) {
+      throw ApiError.tooManyRequests(
+        3600,
+        'Too many password attempts for this account. Wait an hour before trying again.',
+      );
+    }
+    // An account that signs in only through an identity provider has no
+    // password; `verifyPassword` pays the hashing cost for it all the same.
+    if (!(await verifyPassword(currentPassword, invitee.passwordHash))) {
+      throw invitationRequiresSignIn('password_incorrect');
+    }
+    return { accountId: invitee.accountId, passwordHash: invitee.passwordHash };
+  }
 
   /**
    * The trail of one join (FR-MOD-04.4), into the workspace joined — at the

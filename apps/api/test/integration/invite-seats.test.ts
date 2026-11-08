@@ -343,7 +343,13 @@ describe('invited seats reach the bill (FR-MOD-04.4)', () => {
       // does the bill.
       const invite = await inviteOne(fx.a.agentEmail);
       expect(
-        (await server.post('/auth/invitations/accept', { token: invite.token })).statusCode,
+        (
+          await server.post('/auth/invitations/accept', {
+            token: invite.token,
+            // A verified account signs in to join (tm 421).
+            current_password: fx.a.password,
+          })
+        ).statusCode,
       ).toBe(200);
 
       expect(await seatsOf()).toBe(SEEDED_HEADCOUNT);

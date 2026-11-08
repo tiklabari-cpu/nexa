@@ -52,6 +52,8 @@ export const common: Messages = {
   'common.errors.impersonation_read_only':
     'Bu salt okunur bir destek oturumu — buradan hiçbir şey değiştirilemez.',
   'common.errors.internal': 'Bizim tarafımızda bir şeyler ters gitti — yeniden deneyin.',
+  'common.errors.invitation_requires_sign_in':
+    'Bu adresin zaten bir hesabı var. Daveti kabul etmek için o hesapla giriş yapın — parolasını girin.',
   'common.errors.knowledge_job_in_progress':
     'Bu kaynak zaten taranıyor — bitmesini bekleyin ya da taramayı durdurun.',
   'common.errors.knowledge_source_exists':

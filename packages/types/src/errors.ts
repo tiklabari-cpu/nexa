@@ -131,6 +131,15 @@ export const ERROR_TYPES = [
   'impersonation_forbidden_path',
   'impersonation_read_only',
   'internal',
+  // SiyahTuş addition — accepting an invitation (tm 421 · audit F04). The
+  // invited address belongs to an account somebody already verified, and the
+  // link alone does not say the caller is that somebody — the admin who sent it
+  // holds the same link. The accept wants the account's password or a
+  // signed-in session of that account (`details.reason`: `sign_in_required`
+  // when neither came, `password_incorrect` when the password did not match).
+  // 401 like `two_factor_required`: a credential is missing, and the join
+  // screen answers "sign in to join" rather than "this invitation is invalid".
+  'invitation_requires_sign_in',
   // SiyahTuş addition — website crawling (AI-17 · tm 312.3): a crawl asked for
   // while the source's last one is still queued, running or waiting for the
   // day's AI allowance. `details.job_id` names it, so the panel can follow it
@@ -317,6 +326,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   impersonation_forbidden_path: 403,
   impersonation_read_only: 403,
   internal: 500,
+  invitation_requires_sign_in: 401,
   knowledge_job_in_progress: 409,
   knowledge_source_exists: 409,
   license_expired: 402,

@@ -594,6 +594,8 @@ describe('SignUpPage and the public pages with terms of service (tm 257.9)', () 
     ).toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).toBeNull();
     expect(screen.getByRole('link', { name: 'Terms of Service' })).toBeInTheDocument();
+    // What Join waits for is the account's own password (tm 421), never a box.
+    await userEvent.type(screen.getByLabelText('Password'), 'its-own-password');
     expect(screen.getByRole('button', { name: 'Join workspace' })).toBeEnabled();
   });
 

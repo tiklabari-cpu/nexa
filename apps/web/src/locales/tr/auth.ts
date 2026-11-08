@@ -147,7 +147,14 @@ export const auth: Messages = {
   'auth.join.title': "{organization}'a katıl",
   'auth.join.subtitle': '{role} olarak davet edildiniz · {email}',
   'auth.join.existingAccountNotice':
-    'Bu adres için zaten bir SiyahTuş hesabınız var. Kabul etmek bu çalışma alanını hesabınıza ekler.',
+    'Bu adres için zaten bir SiyahTuş hesabınız var. Bu çalışma alanını hesabınıza eklemek için parolanızı girin.',
+  'auth.join.currentPasswordHint': 'Şu an giriş yaparken kullandığınız parola.',
+  'auth.join.forgotPassword': 'Parolanızı mı unuttunuz, ya da hiç belirlemediniz mi?',
+  'auth.join.signInRequired':
+    'Bu adresin zaten bir SiyahTuş hesabı var. Katılmak için hesabın parolasını girin.',
+  'auth.join.errorPassword': 'Bu parola doğru değil.',
+  'auth.join.errorTooManyAttempts':
+    'Bu hesap için çok fazla parola denendi. Bir saat bekleyip yeniden deneyin.',
   'auth.join.termsNotice':
     'Katılarak bu çalışma alanının kabul ettiği Kullanım Koşulları’na tabi olursunuz. Koşullar ve gizlilik politikası aşağıda bağlantılıdır.',
   'auth.join.passwordHint': 'En az {count} karakter.',

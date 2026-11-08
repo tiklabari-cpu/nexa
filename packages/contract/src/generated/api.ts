@@ -758,6 +758,22 @@ export interface paths {
      *     then the invitation stays pending: listed, revocable, and its link still
      *     works, so the real invitee can accept after somebody else did.
      *
+     *     **A verified account joins only once it signs in** (tm 421). For the
+     *     same reason the link does not say the caller *is* that account, so the
+     *     call must carry one of two proofs: the account's password
+     *     (`current_password`), or a signed-in session of the same account as the
+     *     bearer token (a sign-in session — not a personal access token, not a
+     *     support session). Without either the answer is `401
+     *     invitation_requires_sign_in` (`details.reason` `sign_in_required`, or
+     *     `password_incorrect` for a password that did not match) and nothing is
+     *     written: no membership, the invitation still live. Every password
+     *     presented here is counted against the account — five an hour, right or
+     *     wrong; a sixth is `429`. An account that signs in only through an
+     *     identity provider has no password: it signs in there and accepts with
+     *     that session, or sets a password with `POST /auth/password-reset`
+     *     first. The answer lists only the workspace this invitation joined, never
+     *     the account's others.
+     *
      *     **This is where a seat reaches the bill** (FR-MOD-04.4). Joining raises
      *     the workspace's purchased seat count to its new headcount, in the same
      *     transaction as the membership, by the same rule and the same function SCIM
@@ -845,8 +861,9 @@ export interface paths {
      *
      *     Every item's `accept_url` is returned for "Copy invite link" (GV-03-S1).
      *     Holding it proves only that the address was invited, so accepting it
-     *     joins a verified account at once but makes any other prove the address
-     *     first — see `POST /auth/invitations/accept`.
+     *     joins a verified account only with that account's password or session,
+     *     and makes any other prove the address first — see
+     *     `POST /auth/invitations/accept`.
      */
     post: operations['createInvitations'];
     delete?: never;
@@ -22687,7 +22704,8 @@ export interface components {
      * @description The account and the workspaces it may sign in to. Deliberately carries
      *     no tokens: the caller picks a workspace and continues through
      *     `/auth/authorize`, so one code path issues credentials rather than
-     *     three.
+     *     three. `POST /auth/invitations/accept` lists only the workspace the
+     *     invitation joined (tm 421).
      */
     Session: {
       account: {
@@ -26174,6 +26192,19 @@ export interface components {
       /** @enum {string} */
       reason: 'unassigned' | 'assigned_to_other' | 'ai';
     };
+    /**
+     * @description `details` of a `401 invitation_requires_sign_in` (tm 421): the invited
+     *     address belongs to an account somebody already verified, and the accept
+     *     did not show it is theirs. `sign_in_required` — neither the account's
+     *     password (`current_password`) nor a signed-in session of that account
+     *     came with it; `password_incorrect` — the password did not match.
+     *     Nothing was written and the invitation is still live: send it again
+     *     with the password, or with the account's session as the bearer token.
+     */
+    InvitationSignInDetails: {
+      /** @enum {string} */
+      reason: 'sign_in_required' | 'password_incorrect';
+    };
     OwnershipTransferParty: {
       /** Format: uuid */
       id: string;
@@ -26238,6 +26269,7 @@ export interface components {
       | 'impersonation_forbidden_path'
       | 'impersonation_read_only'
       | 'internal'
+      | 'invitation_requires_sign_in'
       | 'knowledge_job_in_progress'
       | 'knowledge_source_exists'
       | 'license_expired'
@@ -27790,6 +27822,8 @@ export interface operations {
              *     unverified one that belongs to a workspace (a sign-up still
              *     waiting on its link, tm 257.7): its password is left alone,
              *     and the address is proven with it or with a password reset.
+             *     A verified account accepts by signing in — its password as
+             *     `current_password`, or its session (tm 421).
              */
             needs_password: boolean;
           };
@@ -27820,15 +27854,27 @@ export interface operations {
           token: string;
           name?: string;
           /**
-           * @description Required when the preview says `needs_password`; `400`
-           *     without it. Ignored otherwise.
+           * @description The password to choose. Required when the preview says
+           *     `needs_password`; `400` without it. Ignored otherwise — it
+           *     never proves an existing account (`current_password` does).
            */
           password?: string;
+          /**
+           * @description The verified account's own password, when the address belongs
+           *     to one and the call carries no session of it (tm 421). Ignored
+           *     for any other account.
+           */
+          current_password?: string;
         };
       };
     };
     responses: {
-      /** @description Joined — the address belongs to a verified account. */
+      /**
+       * @description Joined — the address belongs to a verified account, and the call
+       *     proved it is that account's. `memberships` holds only the workspace
+       *     joined (empty when the invitation found the person already a
+       *     suspended member, which it does not reinstate).
+       */
       200: {
         headers: {
           [name: string]: unknown;
@@ -27857,7 +27903,13 @@ export interface operations {
         };
       };
       400: components['responses']['BadRequest'];
-      /** @description Unknown, expired or already-used invitation. */
+      /**
+       * @description Unknown, expired or already-used invitation (`authentication`); or
+       *     `invitation_requires_sign_in` — the address belongs to a verified
+       *     account and the call did not prove it is theirs
+       *     (`InvitationSignInDetails` as `details`). Nothing was written either
+       *     way.
+       */
       401: {
         headers: {
           [name: string]: unknown;
@@ -27866,7 +27918,18 @@ export interface operations {
           'application/json': components['schemas']['Error'];
         };
       };
-      429: components['responses']['TooManyRequests'];
+      /**
+       * @description The anonymous rate limit, or this account's hourly allowance of
+       *     passwords presented here (five) is used up — `Retry-After` says when.
+       */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
     };
   };
   listInvitations: {

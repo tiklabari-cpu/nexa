@@ -775,7 +775,11 @@ describe('audit log writer (NFR-S12)', () => {
       const token = new URL(items[0]!.accept_url).searchParams.get('token')!;
 
       const before = await count('member.joined');
-      const accepted = await server.post('/auth/invitations/accept', { token });
+      // A verified account signs in to join (tm 421).
+      const accepted = await server.post('/auth/invitations/accept', {
+        token,
+        current_password: fx.b.password,
+      });
       expect(accepted.statusCode, accepted.payload).toBe(200);
       const { account } = accepted.json() as { account: { id: string } };
 

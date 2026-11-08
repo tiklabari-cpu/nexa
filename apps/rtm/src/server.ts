@@ -14,7 +14,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { PrismaClient } from '@prisma/client';
 import { Redis } from 'ioredis';
 import { pino, type Logger } from 'pino';
-import { WebSocketServer, type WebSocket } from 'ws';
+import { WebSocket, WebSocketServer } from 'ws';
 import { PermissionMatrixCache, RTM_LIMITS, RTM_PATHS, roleAtLeast } from '@siyahtus/types';
 import { SocketAuthenticator, type SocketPrincipal } from './auth.js';
 import { clientAddress } from './client-address.js';
@@ -40,6 +40,7 @@ import {
 import { AgentPresence } from './presence.js';
 import { PreLoginLimiter } from './prelogin-limit.js';
 import { decodeRequest, encodeError } from './protocol.js';
+import { PrincipalRevocations } from './revocation.js';
 import { SocketWriter } from './socket-writer.js';
 import { SyncService } from './sync.js';
 import {
@@ -271,7 +272,12 @@ export function buildRtmServer(
   // Every frame this process writes goes through this (tm 428): a socket whose
   // peer stopped reading is closed rather than buffered for without limit.
   const writer = new SocketWriter(env.maxBufferedBytes, log);
-  const fanout = new Fanout(subscriber, registry, log, writer, telemetryInstance);
+  // A credential the API stopped honouring (tm 426): announced on the
+  // licence's channel, read by the fan-out's subscriber, closed here.
+  const revocations = new PrincipalRevocations(registry, log);
+  const fanout = new Fanout(subscriber, registry, log, writer, telemetryInstance, (envelope) => {
+    revocations.apply(envelope);
+  });
   // Socket presence (WG-03 · tm 340.3): scripts on the command connection,
   // the push on the publish one, like conflict detection above.
   const presence =
@@ -302,6 +308,9 @@ export function buildRtmServer(
     log,
     messagesPerSecond: env.RATE_LIMIT_RTM_PER_SEC,
     inMaintenance: () => maintenance.full,
+    // A member's login listens to its licence's channel before it finishes, so
+    // a revocation of the credential cannot fall between the two (tm 426).
+    listen: (licenseId: string) => fanout.ensureSubscribed(licenseId),
     admitLogin: (connection: Connection, principal: SocketPrincipal) => {
       // A visitor's socket only: a member's or a bot's carries a credential
       // somebody in the workspace issued, and is not counted (tm 427).
@@ -971,6 +980,12 @@ function attach(params: {
   }, RTM_LIMITS.pingIntervalMs);
 
   ws.on('message', (raw) => {
+    // A socket being closed takes no more requests (tm 426). `ws` keeps
+    // delivering frames until the peer answers the close frame — up to its
+    // close timeout for a peer that never does — and none of them would be
+    // answered anyway: the writer writes only to an open socket. A socket
+    // closed for a revoked credential must not spend that time acting with it.
+    if (ws.readyState !== WebSocket.OPEN) return;
     connection.lastSeenAt = Date.now();
 
     const decoded = decodeRequest(raw.toString());

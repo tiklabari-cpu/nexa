@@ -174,3 +174,33 @@ describe('ConnectionRegistry — the actor index (tm 425)', () => {
     expect(counted.clientNetwork).toBe('2001:db8:1:2::/64');
   });
 });
+
+describe('ConnectionRegistry — what a revocation reads (tm 426)', () => {
+  it("keeps the credential's row id from the login, and none for a visitor", () => {
+    const registry = new ConnectionRegistry();
+    const member = registry.add({ ws: fakeSocket(), side: 'agent', organizationId: ORG_A });
+    const visitor = registry.add({ ws: fakeSocket(), side: 'customer', organizationId: ORG_A });
+    expect(member.tokenId).toBeNull();
+
+    registry.authenticate(member.id, { licenseId: '1', actorId: 'agent-a', tokenId: 'row-1' });
+    registry.authenticate(visitor.id, { licenseId: '1', actorId: 'customer-a' });
+
+    expect(member.tokenId).toBe('row-1');
+    expect(visitor.tokenId).toBeNull();
+  });
+
+  it("finds a tenant's sockets still logging in — and never another tenant's", () => {
+    const registry = new ConnectionRegistry();
+    const pending = registry.add({ ws: fakeSocket(), side: 'agent', organizationId: ORG_A });
+    const loggedIn = registry.add({ ws: fakeSocket(), side: 'agent', organizationId: ORG_A });
+    const other = registry.add({ ws: fakeSocket(), side: 'agent', organizationId: ORG_B });
+    registry.authenticate(loggedIn.id, { licenseId: '1', actorId: 'agent-a' });
+
+    expect(registry.inOrganization(ORG_A).map((c) => c.id)).toEqual([pending.id, loggedIn.id]);
+    expect(registry.forOrganization(ORG_A).map((c) => c.id)).toEqual([loggedIn.id]);
+    expect(registry.inOrganization(ORG_B).map((c) => c.id)).toEqual([other.id]);
+
+    registry.remove(pending.id);
+    expect(registry.inOrganization(ORG_A).map((c) => c.id)).toEqual([loggedIn.id]);
+  });
+});

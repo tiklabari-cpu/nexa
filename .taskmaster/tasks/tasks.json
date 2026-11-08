@@ -16696,13 +16696,13 @@
         "description": "İşten çıkarılan ajan açık sekmesiyle müşteri mesaj push'larını almaya devam ediyor: rtm yalnız permissions_version değişince yeniden değerlendiriyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F08 (medium ← high). Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/rtm/src/permissions.ts:108`, `:126-140` yeniden değerlendirme yalnız `permissions_version`; sürümü artıran tek yer `apps/api/src/.../permission-matrix.ts:~281`; rtm'de login dışı revoke/logout/exp kontrolü yok (yalnız `server.ts:~887` impersonation). Mobil istemci auth reddinde `#stopped=true` (`apps/mobile/src/rtm/client.ts:285-291`) — bu yüzden MOBILE-RTM-TOKEN-REFRESH önce kapanmalı, yoksa exp zamanlayıcısı mobil uygulamayı her saat kalıcı offline'a düşürür.\n\nYAPILACAK: alt görevler sırayla (a → b → c). Hangi olay noktalarını bağladığını HANDOFF'a liste olarak yaz.\n\nTUZAK: Zamanlayıcılar soket kapanınca temizlenmeli (sızıntı). Yeni bus zarfı türü kapalı sözlükse memory closed-vocabularies-ripple-into-web. Post-commit publish → memory post-commit-publish-needs-an-in-publish-probe.\n\nKAPSAM DIŞI: impersonation sonlandırma (IMPERSONATION-ENDS-ON-OPERATOR-DISABLE).\nDENETİM BULGULARI: F08",
         "testStrategy": "Alt görevlerde. DoD: CONVENTIONS §1.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "417",
           "436"
         ],
         "priority": "medium",
-        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "updatedAt": "2026-11-08T14:30:37.892Z",
         "subtasks": [
           {
             "id": 1,
@@ -16710,11 +16710,11 @@
             "description": "Mevcut Redis bus'a `principal_revoked` zarfı (token id / agent+license / license) tanımla; rtm zarfta eşleşen soketleri 4001/1008 benzeri mevcut kodla kapatsın.",
             "details": "Zarf türünü types/kontratta tanımla (kapalı sözlükse ripple). rtm abonesi #byActor/lisans indeksiyle eşleşen bağlantıları bulur ve kapatır; istemci yeniden bağlanınca login'de reddedilir. Bu alt görevde zarfı yayınlayan bir test yardımcısı yeterli; api olay noktaları alt görev 2.",
             "testStrategy": "rtm entegrasyon: test yayıncısı token-id zarfı → yalnız o soket kapanır; license zarfı → lisansın tüm soketleri; başka lisans etkilenmez. Mutasyon: abone dinleyicisini kaldır → kırmızı.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "426",
             "priority": "medium",
-            "updatedAt": "2026-11-06T16:24:47.953Z"
+            "updatedAt": "2026-11-08T14:30:37.892Z"
           },
           {
             "id": 2,
@@ -17777,7 +17777,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-08T14:25:03.508Z",
+      "lastModified": "2026-11-08T14:30:37.892Z",
       "taskCount": 478,
       "completedCount": 422,
       "tags": [

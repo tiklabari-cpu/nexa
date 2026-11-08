@@ -72,7 +72,7 @@ describe('OTEL_EXPORTER (M-OTEL-b reuses M-OTEL-a)', () => {
  * 4402) fails here rather than only showing up as a mislabelled dashboard.
  */
 describe('classifyDisconnectReason', () => {
-  it('names exactly the eight reasons the taxonomy allows', () => {
+  it('names exactly the nine reasons the taxonomy allows', () => {
     expect(DISCONNECT_REASONS).toEqual([
       'normal',
       'protocol_violation',
@@ -82,7 +82,14 @@ describe('classifyDisconnectReason', () => {
       'login_refused',
       'socket_limit',
       'slow_consumer',
+      'credential_revoked',
     ]);
+  });
+
+  it('never reads a revocation off its close code, which the login window shares (tm 426)', () => {
+    // A revoked credential's close is recorded on the connection (`closedBy`);
+    // the code alone still means the login window ran out.
+    expect(classifyDisconnectReason(4401, false)).toBe('identity_timeout');
   });
 
   it('never reads the three gateway-decided reasons off a close code (tm 425 · tm 427 · tm 428)', () => {

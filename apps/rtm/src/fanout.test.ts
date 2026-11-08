@@ -9,10 +9,16 @@
  * dropping it — against a fake socket whose `bufferedAmount` the test sets.
  */
 import { EventEmitter } from 'node:events';
-import { pino } from 'pino';
+import { performance } from 'node:perf_hooks';
+import { pino, type Logger } from 'pino';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Redis } from 'ioredis';
-import { licenseChannel } from '@siyahtus/types';
+import {
+  licenseChannel,
+  principalRevokedEnvelope,
+  RTM_PUSH_ACTIONS,
+  type PrincipalRevokedEnvelope,
+} from '@siyahtus/types';
 import type { WebSocket } from 'ws';
 import { ConnectionRegistry } from './connection.js';
 import { Writable } from 'node:stream';
@@ -554,5 +560,156 @@ describe('Fanout — who logged in decides the audience, not which door they use
     publish('incoming_event', event('E2'), { groupIds: [3], agentIds: ['operator-1'] });
 
     expect(unknown.fake.frames).toEqual([]);
+  });
+});
+
+describe('Fanout — principal_revoked goes to the gateway, never to a socket (tm 426)', () => {
+  function withHandler() {
+    const subscriber = new FakeSubscriber();
+    const registry = new ConnectionRegistry();
+    const error = vi.fn();
+    const log = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error,
+    } as unknown as Logger;
+    const revoked: PrincipalRevokedEnvelope[] = [];
+    const fanout = new Fanout(
+      subscriber as unknown as Redis,
+      registry,
+      log,
+      unlimitedWriter(),
+      null,
+      (envelope) => revoked.push(envelope),
+    );
+    const frames: string[] = [];
+    const ws = { readyState: WS_OPEN, send: (frame: string) => frames.push(frame) };
+    const connection = registry.add({
+      ws: ws as unknown as WebSocket,
+      side: 'agent',
+      organizationId: ORG,
+    });
+    registry.authenticate(connection.id, { licenseId: '7', actorId: 'agent-1', tokenId: 't-1' });
+    // Subscribed to every push there is — a revocation must still not arrive.
+    for (const action of RTM_PUSH_ACTIONS) connection.subscriptions.add(action);
+    connection.subscriptions.add('principal_revoked');
+    return { subscriber, fanout, revoked, frames, error };
+  }
+
+  const envelope = principalRevokedEnvelope(
+    { licenseId: '7', organizationId: ORG },
+    { kind: 'agent', agentId: 'agent-1' },
+  );
+
+  it('hands a revocation on its licence channel to the handler and writes nothing (NFR-S2)', () => {
+    const { subscriber, revoked, frames } = withHandler();
+
+    subscriber.emit('message', licenseChannel('7'), JSON.stringify(envelope));
+
+    expect(revoked).toEqual([envelope]);
+    expect(frames).toEqual([]);
+  });
+
+  it('refuses, loudly, a revocation it cannot read', () => {
+    const { subscriber, revoked, frames, error } = withHandler();
+
+    subscriber.emit(
+      'message',
+      licenseChannel('7'),
+      JSON.stringify({ ...envelope, target: { kind: 'agent' } }),
+    );
+
+    expect(revoked).toEqual([]);
+    expect(frames).toEqual([]);
+    expect(error).toHaveBeenCalledWith(
+      { channel: licenseChannel('7') },
+      'discarded a principal_revoked message it could not read',
+    );
+  });
+
+  it('refuses a revocation that names another licence than the channel it came on (NFR-S4)', () => {
+    const { subscriber, revoked, error } = withHandler();
+
+    subscriber.emit('message', licenseChannel('8'), JSON.stringify(envelope));
+
+    expect(revoked).toEqual([]);
+    expect(error).toHaveBeenCalledWith(
+      { channel: licenseChannel('8'), license_id: '7' },
+      'discarded a principal_revoked message from another licence channel',
+    );
+  });
+
+  it('still delivers the pushes around it', () => {
+    const { subscriber, frames } = withHandler();
+    const push = {
+      v: 1,
+      licenseId: '7',
+      organizationId: ORG,
+      action: 'incoming_event',
+      audience: { allAgents: true },
+      payload: { chat_id: 'C1' },
+      at: Date.now(),
+    };
+
+    subscriber.emit('message', licenseChannel('7'), JSON.stringify(push));
+    subscriber.emit('message', licenseChannel('7'), JSON.stringify(envelope));
+    subscriber.emit('message', licenseChannel('7'), JSON.stringify(push));
+
+    expect(frames.map((frame) => (JSON.parse(frame) as { action: string }).action)).toEqual([
+      'incoming_event',
+      'incoming_event',
+    ]);
+  });
+});
+
+describe('Fanout.ensureSubscribed — when the subscription was confirmed (tm 426)', () => {
+  it('sends one SUBSCRIBE for logins arriving together and answers them all with the time it was confirmed', async () => {
+    const { subscriber, fanout } = setup(0);
+
+    const first = fanout.ensureSubscribed('7');
+    const second = fanout.ensureSubscribed('7');
+    expect(subscriber.subscribed).toEqual([[licenseChannel('7')]]);
+
+    const before = performance.now();
+    subscriber.answer();
+    const [one, two] = await Promise.all([first, second]);
+
+    expect(one).toBe(two);
+    expect(one).toBeGreaterThanOrEqual(before);
+    // Already listening: the same time, no second SUBSCRIBE.
+    expect(await fanout.ensureSubscribed('7')).toBe(one);
+    expect(subscriber.subscribed).toHaveLength(1);
+  });
+
+  it('fails every waiting login when the SUBSCRIBE fails, and subscribes afresh for the next one', async () => {
+    const { subscriber, fanout } = setup(0);
+
+    const first = fanout.ensureSubscribed('7');
+    const second = fanout.ensureSubscribed('7');
+    subscriber.fail();
+    await expect(first).rejects.toThrow('Connection is closed.');
+    await expect(second).rejects.toThrow('Connection is closed.');
+
+    const third = fanout.ensureSubscribed('7');
+    expect(subscriber.subscribed).toHaveLength(2);
+    subscriber.answer();
+    await expect(third).resolves.toBeTypeOf('number');
+  });
+
+  it('counts the subscription as confirmed again only once the resubscribe after an outage is answered', async () => {
+    const { subscriber, fanout } = setup(0);
+    const pending = fanout.ensureSubscribed('7');
+    subscriber.answer();
+    const firstConfirmed = await pending;
+
+    subscriber.emit('reconnecting');
+    subscriber.emit('ready');
+    const beforeAnswer = performance.now();
+    subscriber.answer();
+    await vi.waitFor(async () => {
+      expect(await fanout.ensureSubscribed('7')).toBeGreaterThanOrEqual(beforeAnswer);
+    });
+    expect(await fanout.ensureSubscribed('7')).toBeGreaterThan(firstConfirmed);
   });
 });

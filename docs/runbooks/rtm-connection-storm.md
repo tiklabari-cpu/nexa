@@ -57,6 +57,15 @@
    - `login_refused` means credentials presented at the other side's socket
      (a visitor token at the agent door, or the reverse, tm 425) — a
      misconfigured client or somebody probing, not load.
+   - `credential_revoked` means the API announced (`principal_revoked` on the
+     licence's bus channel, tm 426) that credentials stopped being honoured —
+     a sign-out, a revoked token, a member or a workspace suspended — and the
+     gateway closed their sockets with 4401. Each envelope logs one `info`
+     line "rtm closed the sockets of a revoked credential" (`target`,
+     `sockets_closed`). Their clients reconnect once and are refused at
+     `login`, so a burst here is followed by refused logins, not by a
+     reconnect loop; a workspace suspension closes every member socket of it
+     at once.
    - Mostly `normal` closes with a high open count is the real-traffic case.
    - There is deliberately **no** `rate_limit` reason: the WS rate limit
      (ADR-07, 10 msg/sec/connection) throttles by design rather than

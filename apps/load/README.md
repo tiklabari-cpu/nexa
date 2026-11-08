@@ -249,6 +249,14 @@ a report that does not separate them feeds the next decision the wrong number:
   `LOAD_RTM_CONNECT_RATE`, or runs where logins slow down, can cross 50. Read the refusal's
   `reason`, and for a capacity ladder set `RTM_MAX_PRELOGIN_PER_IP=0` on the stack under test
   so the ladder measures the pod, not the cap.
+- **The slow-consumer limit closed it.** Also a product setting. Since tm 428 the gateway
+  closes a socket whose unsent frames pass `RTM_MAX_BUFFERED_BYTES` (default 1 MiB) with
+  close code 1013, counted as `rtm.connections.closed{reason=slow_consumer}`. A rung whose k6
+  VUs cannot read as fast as the fan-out writes — a CPU-starved generator — is closed by it
+  rather than measured; set `RTM_MAX_BUFFERED_BYTES=0` on the stack under test when the
+  ladder is meant to find the pod's limit. The scenarios here dial the agent socket, so the
+  visitor caps (`RTM_MAX_SOCKETS_PER_CUSTOMER`, `RTM_MAX_CUSTOMER_SOCKETS_PER_IP`, tm 427)
+  do not apply to them.
 - **The load generator ran out of local resources.** Not a product finding at all. On Windows
   the ceiling is the ephemeral port range — `netsh int ipv4 show dynamicport tcp`, **16384
   ports** on the machine these numbers were taken on — and every closed socket holds its port

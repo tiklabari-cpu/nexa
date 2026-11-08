@@ -33,6 +33,16 @@
  * congested socket the newest frame per chat waits, older ones are discarded,
  * and it goes out once the buffer drains. A clear is never held, and it cancels
  * the frame waiting for its chat.
+ *
+ * **Every write goes through the gateway's one writer (tm 428).** A socket whose
+ * unsent frames passed `RTM_MAX_BUFFERED_BYTES` is closed there instead of being
+ * written to (`socket-writer.ts`); the draft holding above happens well below
+ * that line ({@link SNEAK_PEEK_COALESCE_BUFFERED_BYTES}).
+ *
+ * **Who logged in decides the audience, not which door they used (tm 425).**
+ * The login refuses a credential at the other side's door; the audience filter
+ * keys on the principal as well, so a visitor's credential — wherever it was
+ * presented — is reached only by pushes addressed to it by id.
  */
 import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
@@ -44,6 +54,7 @@ import {
 } from '@siyahtus/types';
 import type { Connection, ConnectionRegistry } from './connection.js';
 import { encodePush } from './protocol.js';
+import type { SocketWriter } from './socket-writer.js';
 import type { Telemetry } from './telemetry/telemetry.js';
 
 /**
@@ -102,6 +113,8 @@ export class Fanout {
     private readonly subscriber: Redis,
     private readonly registry: ConnectionRegistry,
     private readonly log: Logger,
+    /** The gateway's one writer (tm 428) — the slow-consumer check lives there. */
+    private readonly writer: SocketWriter,
     /** Null when telemetry is off (NODE_ENV=test default) — every call below is then a no-op. */
     private readonly telemetry: Telemetry | null = null,
   ) {
@@ -186,11 +199,7 @@ export class Fanout {
       const timer = setTimeout(() => {
         // Closed (or replaced) while it waited its turn.
         if (this.registry.get(connection.id) !== connection) return;
-        try {
-          connection.ws.send(frame);
-        } catch (error) {
-          this.log.debug({ err: error, connection_id: connection.id }, 'push delivery failed');
-        }
+        this.writer.write(connection, frame);
       }, Math.random() * window);
       timer.unref();
     }
@@ -254,18 +263,17 @@ export class Fanout {
   }
 
   #deliver(connection: Connection, frame: string, action: string, at: number): void {
-    try {
-      connection.ws.send(frame);
-      // NFR-P1's p99 < 500ms budget is measured against this: the gap
-      // between the API deciding something happened (`envelope.at`) and
-      // this gateway actually handing it to the socket. Recorded per
-      // delivered connection, once per successful send, matching what the
-      // metric name promises rather than once per envelope regardless of
-      // whether anyone on this node was reachable. A held frame's wait counts.
-      this.telemetry?.instruments.fanoutDelay.record((Date.now() - at) / 1000, { action });
-    } catch (error) {
-      this.log.debug({ err: error, connection_id: connection.id }, 'push delivery failed');
+    if (!this.writer.write(connection, frame)) {
+      this.log.debug({ connection_id: connection.id, action }, 'push not delivered');
+      return;
     }
+    // NFR-P1's p99 < 500ms budget is measured against this: the gap
+    // between the API deciding something happened (`envelope.at`) and
+    // this gateway actually handing it to the socket. Recorded per
+    // delivered connection, once per successful send, matching what the
+    // metric name promises rather than once per envelope regardless of
+    // whether anyone on this node was reachable. A held frame's wait counts.
+    this.telemetry?.instruments.fanoutDelay.record((Date.now() - at) / 1000, { action });
   }
 
   /** Keep `frame` as this chat's newest on a congested socket, replacing an older one. */
@@ -322,11 +330,19 @@ export class Fanout {
   #isAddressed(connection: Connection, envelope: BusEnvelope): boolean {
     const { audience } = envelope;
 
-    if (connection.side === 'customer') {
-      // A customer receives only what is addressed to them by id. `allAgents`
-      // and team audiences must never reach the widget.
-      return audience.customerId !== undefined && audience.customerId === connection.actorId;
+    // Keyed on the principal as well as the door (tm 425). A visitor's
+    // credential receives only what is addressed to it by id, wherever it was
+    // presented; `allAgents` and team audiences must never reach a widget, nor
+    // a visitor at the agent door. Nothing but a member or a bot hears them,
+    // and only at the agent door.
+    if (connection.actorType === 'customer' || connection.side === 'customer') {
+      return (
+        connection.actorType === 'customer' &&
+        audience.customerId !== undefined &&
+        audience.customerId === connection.actorId
+      );
     }
+    if (connection.actorType !== 'agent' && connection.actorType !== 'bot') return false;
 
     if (audience.allAgents) return true;
     if (audience.agentIds?.includes(connection.actorId ?? '')) return true;

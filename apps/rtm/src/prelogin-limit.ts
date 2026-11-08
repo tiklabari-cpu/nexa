@@ -7,9 +7,11 @@
  * login window (`RTM_LIMITS.loginTimeoutMs`, 30 s) to do so — so a single
  * source that opens sockets and never logs in held every one of them for that
  * long, and enough of them filled the ceiling for everybody. This bounds what
- * one source can hold that way. It does not bound what one source holds once
- * logged in: those sockets carry a credential, and what they may do is decided
- * by it.
+ * one source can hold that way. What a source holds once logged in is bounded
+ * by the credential for a member or a bot, and for a visitor — whose token is
+ * anyone's for a page view — by the post-login caps per visitor and per
+ * network (`customer-socket-limit.ts`, tm 427), which take over from this one
+ * at the login.
  *
  * Counted per socket, by connection id, so the count cannot leak:
  *

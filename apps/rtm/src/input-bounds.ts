@@ -13,6 +13,13 @@
  * token, and its `login` arrives before even that is checked: its push list is
  * bounded here. `sync`'s chat count was already bounded (`MAX_SYNC_CHATS`) —
  * it is now counted without materialising the entries first, on every socket.
+ *
+ * And the length of each cursor (tm 428). A chat the caller names but cannot see
+ * comes back in `removed_chat_ids`, so a cursor key was an echo: 200 keys of a
+ * kilobyte each made every `sync` answer a quarter of a megabyte the caller
+ * chose, ten times a second. A key is now at most a chat id long, a value at
+ * most an event id long — the database's own column widths, so no key or value
+ * refused here could have named a chat or an event.
  */
 
 /**
@@ -24,6 +31,12 @@ export const MAX_LOGIN_PUSHES = 64;
 
 /** The most protocol versions a version-keyed push list (`{ "3.6": [...] }`) may name. */
 export const MAX_PUSH_VERSIONS = 4;
+
+/** `chats.id` is `varchar(12)` (PRD §8.4 · `ids.ts`): a longer cursor key names no chat. */
+export const MAX_SYNC_CHAT_ID_LENGTH = 12;
+
+/** `events.id` is `varchar(40)`: a longer cursor value names no event. */
+export const MAX_SYNC_EVENT_ID_LENGTH = 40;
 
 /** Whether `value` has more than `max` own enumerable keys — stops counting at `max + 1`. */
 export function hasMoreKeysThan(value: object, max: number): boolean {
@@ -49,6 +62,23 @@ export function pushesWithinBounds(value: unknown): boolean {
   for (const list of Object.values(value as Record<string, unknown>)) {
     if (Array.isArray(list)) total += list.length;
     if (total > MAX_LOGIN_PUSHES) return false;
+  }
+  return true;
+}
+
+/**
+ * Whether every cursor of a `sync` is shaped like an id (tm 428): each key at
+ * most {@link MAX_SYNC_CHAT_ID_LENGTH} characters, each string value at most
+ * {@link MAX_SYNC_EVENT_ID_LENGTH}. A value that is not a string means "no
+ * cursor" (`dispatcher.ts`) and is within bounds. Call after the count check
+ * (`hasMoreKeysThan(cursors, MAX_SYNC_CHATS)`), which keeps this walk short.
+ */
+export function cursorsWithinBounds(cursors: object): boolean {
+  for (const key in cursors) {
+    if (!Object.prototype.hasOwnProperty.call(cursors, key)) continue;
+    if (key.length > MAX_SYNC_CHAT_ID_LENGTH) return false;
+    const value = (cursors as Record<string, unknown>)[key];
+    if (typeof value === 'string' && value.length > MAX_SYNC_EVENT_ID_LENGTH) return false;
   }
   return true;
 }

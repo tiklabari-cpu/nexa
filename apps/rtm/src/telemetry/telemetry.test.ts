@@ -72,14 +72,26 @@ describe('OTEL_EXPORTER (M-OTEL-b reuses M-OTEL-a)', () => {
  * 4402) fails here rather than only showing up as a mislabelled dashboard.
  */
 describe('classifyDisconnectReason', () => {
-  it('names exactly the five reasons the taxonomy allows', () => {
+  it('names exactly the eight reasons the taxonomy allows', () => {
     expect(DISCONNECT_REASONS).toEqual([
       'normal',
       'protocol_violation',
       'identity_timeout',
       'idle_timeout',
       'server_shutdown',
+      'login_refused',
+      'socket_limit',
+      'slow_consumer',
     ]);
+  });
+
+  it('never reads the three gateway-decided reasons off a close code (tm 425 · tm 427 · tm 428)', () => {
+    // They are recorded on the connection when the gateway decides to close:
+    // a slow consumer never answers the close frame (its socket reports 1006),
+    // and a client can send 1008 or 1013 on its own.
+    for (const code of [1006, 1008, 1013]) {
+      expect(classifyDisconnectReason(code, false)).toBe('normal');
+    }
   });
 
   it('reads the login-timeout close code (4401) as identity_timeout', () => {

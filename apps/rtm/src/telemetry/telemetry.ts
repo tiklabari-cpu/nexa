@@ -90,8 +90,21 @@ function buildMetricExporter(
  *   - `protocol_violation` — `ws` itself closed the socket over a framing
  *     problem it detected (oversized payload, bad opcode, invalid UTF-8) —
  *     codes 1002/1003/1007/1009/1010.
+ *   - `login_refused` — the gateway answered a `login` and closed the socket:
+ *     the credential belongs at the other door (tm 425 · close code 1008).
+ *   - `socket_limit` — the gateway closed a visitor socket at login because its
+ *     visitor, or its client network, already holds as many as it may (tm 427 ·
+ *     close code 1013).
+ *   - `slow_consumer` — the peer stopped reading and its unsent frames passed
+ *     `RTM_MAX_BUFFERED_BYTES` (tm 428 · close code 1013).
  *   - `normal` — anything else, chiefly a client-initiated close (1000) or a
  *     network drop the socket layer cannot further distinguish.
+ *
+ * The last three are not read from the close code: the gateway records them on
+ * the connection when it decides to close (`Connection.closedBy`). A peer that
+ * has stopped reading never answers the close frame either, so the code the
+ * socket finally reports for a slow consumer is 1006, not the 1013 that was
+ * sent; and a client may send 1013 itself.
  *
  * Deliberately NOT included: a rate-limit reason. `dispatcher.ts`'s
  * `#withinRateLimit` throttles by design rather than disconnecting — "the
@@ -105,8 +118,17 @@ export const DISCONNECT_REASONS = [
   'identity_timeout',
   'idle_timeout',
   'server_shutdown',
+  'login_refused',
+  'socket_limit',
+  'slow_consumer',
 ] as const;
 export type DisconnectReason = (typeof DISCONNECT_REASONS)[number];
+
+/** The closes the gateway decides itself and records on the connection (`Connection.closedBy`). */
+export type GatewayCloseReason = Extract<
+  DisconnectReason,
+  'login_refused' | 'socket_limit' | 'slow_consumer'
+>;
 
 /**
  * Why an upgrade was turned away before the handshake — the same strings the

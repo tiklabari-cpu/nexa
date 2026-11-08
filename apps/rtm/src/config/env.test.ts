@@ -10,7 +10,15 @@
 import { describe, expect, it } from 'vitest';
 import { DISCONNECT_OFFLINE_DEFAULT_MS, REGIONS } from '@siyahtus/types';
 import { OTEL_EXPORTERS } from '../telemetry/telemetry.js';
-import { RTM_MAX_PRELOGIN_PER_IP_DEFAULT, SECRET_KEYS, parseEnv } from './env.js';
+import {
+  RTM_MAX_BUFFERED_BYTES_DEFAULT,
+  RTM_MAX_BUFFERED_BYTES_MIN,
+  RTM_MAX_CUSTOMER_SOCKETS_PER_IP_DEFAULT,
+  RTM_MAX_PRELOGIN_PER_IP_DEFAULT,
+  RTM_MAX_SOCKETS_PER_CUSTOMER_DEFAULT,
+  SECRET_KEYS,
+  parseEnv,
+} from './env.js';
 
 const BASE: NodeJS.ProcessEnv = {
   NODE_ENV: 'test',
@@ -164,6 +172,66 @@ describe('RTM_MAX_PRELOGIN_PER_IP', () => {
       );
     }
   });
+});
+
+/**
+ * The post-login visitor socket caps (tm 427) and the unsent-bytes limit
+ * (tm 428): the pre-login cap's four spellings — unset and blank are the
+ * default, `0` is off, a number is that number.
+ */
+describe.each([
+  {
+    key: 'RTM_MAX_SOCKETS_PER_CUSTOMER',
+    resolved: 'maxSocketsPerCustomer',
+    fallback: RTM_MAX_SOCKETS_PER_CUSTOMER_DEFAULT,
+    documented: 5,
+    valid: '12',
+    bad: ['-1', '1.5', 'lots', '1001'],
+  },
+  {
+    key: 'RTM_MAX_CUSTOMER_SOCKETS_PER_IP',
+    resolved: 'maxCustomerSocketsPerIp',
+    fallback: RTM_MAX_CUSTOMER_SOCKETS_PER_IP_DEFAULT,
+    documented: 50,
+    valid: '200',
+    bad: ['-1', '1.5', 'lots', '100001'],
+  },
+  {
+    key: 'RTM_MAX_BUFFERED_BYTES',
+    resolved: 'maxBufferedBytes',
+    fallback: RTM_MAX_BUFFERED_BYTES_DEFAULT,
+    documented: 1024 * 1024,
+    valid: '65536',
+    // Below the draft preview's congestion threshold a socket would be closed
+    // before its drafts could ever be held (`fanout.ts`).
+    bad: ['-1', '1.5', 'lots', '65535', '1024', String(256 * 1024 * 1024 + 1)],
+  },
+] as const)('$key', ({ key, resolved, fallback, documented, valid, bad }) => {
+  it('is on by default, at the documented value', () => {
+    expect(fallback).toBe(documented);
+    expect(parseEnv(BASE)[resolved]).toBe(documented);
+    expect(parseEnv({ ...BASE, NODE_ENV: 'development' })[resolved]).toBe(documented);
+  });
+
+  it('reads blank as unset', () => {
+    expect(parseEnv({ ...BASE, [key]: '' })[resolved]).toBe(documented);
+    expect(parseEnv({ ...BASE, [key]: '  ' })[resolved]).toBe(documented);
+  });
+
+  it('takes a number as itself and 0 as off', () => {
+    expect(parseEnv({ ...BASE, [key]: valid })[resolved]).toBe(Number(valid));
+    expect(parseEnv({ ...BASE, [key]: '0' })[resolved]).toBeNull();
+  });
+
+  it('refuses what it cannot mean, naming the key', () => {
+    for (const value of bad) {
+      expect(() => parseEnv({ ...BASE, [key]: value }), value).toThrow(new RegExp(key));
+    }
+  });
+});
+
+it('holds the unsent-bytes floor at the draft preview’s congestion threshold (tm 428)', () => {
+  expect(RTM_MAX_BUFFERED_BYTES_MIN).toBe(64 * 1024);
 });
 
 /**

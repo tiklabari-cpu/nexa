@@ -413,3 +413,85 @@ describe("the gateway's bus came back under an open socket (tm 408)", () => {
     });
   });
 });
+
+/**
+ * The gateway closes a socket that stopped reading with 1013, "try again later"
+ * (tm 428): it stops writing to it rather than buffer frames for it without
+ * limit. Whatever it did not write is in the database, so the remedy is the one
+ * every dropped connection gets — reconnect, log in, and `sync` from the
+ * cursors (NFR-R2). Pinned here because the client must not read 1013 as a
+ * refusal and go offline.
+ */
+describe('a gateway that closes the socket as a slow consumer (tm 428)', () => {
+  async function settle(): Promise<void> {
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+  }
+
+  function respond(socket: FakeWebSocket, payload: object = {}): void {
+    const request = JSON.parse(socket.sent.at(-1)!) as { request_id: string; action: string };
+    socket.emit('message', {
+      data: JSON.stringify({
+        request_id: request.request_id,
+        action: request.action,
+        type: 'response',
+        success: true,
+        payload,
+      }),
+    });
+  }
+
+  it('reconnects after a 1013 close, logs in again and syncs from where it was (NFR-R2)', async () => {
+    install();
+    const pushes: Array<[string, Record<string, unknown>]> = [];
+    const statuses: RtmStatus[] = [];
+    const client = new RtmClient({
+      url: 'ws://127.0.0.1:4001/v1/agent/rtm/ws',
+      organizationId: '11111111-1111-4111-8111-111111111111',
+      getToken: () => 'token',
+      pushes: ['incoming_event'],
+      onPush: (action, payload) => pushes.push([action, payload]),
+      onStatusChange: (status) => statuses.push(status),
+    });
+    client.connect();
+    const first = FakeWebSocket.instances[0]!;
+    first.emit('open');
+    respond(first);
+    await settle();
+    first.emit('message', {
+      data: JSON.stringify({
+        action: 'incoming_event',
+        type: 'push',
+        payload: { chat_id: 'CH1', event: { id: 'TH1_4', text: 'read' } },
+      }),
+    });
+
+    first.emit('close', { code: 1013, reason: 'slow consumer' });
+    expect(client.status).toBe('reconnecting');
+    const retry = scheduled.pop();
+    if (!retry) throw new Error('a 1013 close scheduled no reconnect');
+    retry.run();
+
+    const second = FakeWebSocket.instances[1]!;
+    second.emit('open');
+    expect(JSON.parse(second.sent[0]!)).toMatchObject({ action: 'login' });
+    respond(second);
+    await settle();
+    expect(client.status).toBe('live');
+    expect(JSON.parse(second.sent.at(-1)!)).toMatchObject({
+      action: 'sync',
+      payload: { cursors: { CH1: 'TH1_4' } },
+    });
+
+    respond(second, {
+      chats: [{ chat_id: 'CH1', events: [{ id: 'TH1_5', text: 'not written' }], truncated: false }],
+      removed_chat_ids: [],
+      new_chat_ids: [],
+    });
+    await settle();
+    expect(pushes.at(-1)).toEqual([
+      'incoming_event',
+      { chat_id: 'CH1', event: { id: 'TH1_5', text: 'not written' } },
+    ]);
+    expect(statuses).toEqual(['connecting', 'live', 'reconnecting', 'live']);
+  });
+});

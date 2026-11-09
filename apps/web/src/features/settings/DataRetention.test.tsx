@@ -13,6 +13,9 @@
  *      second copy of the rule, free to disagree.
  *   3. It saves a *tier*, never a day count — and "keep indefinitely" is never
  *      sent as `0`, the value the sweep's own guard exists to refuse.
+ *   4. It does not promise a deletion the installation will not perform: with
+ *      the sweep switched off (`enforced: false`, tm 447) a band says so
+ *      before any "deleted after N days".
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -49,6 +52,7 @@ const INHERITING = {
   max_thread_days: null,
   max_visit_days: null,
   hipaa_scope: false,
+  enforced: true,
 };
 
 /** Chose "keep indefinitely", then signed a BAA — so the choice and the effect differ. */
@@ -62,6 +66,7 @@ const CAPPED = {
   max_thread_days: 365,
   max_visit_days: 90,
   hipaa_scope: true,
+  enforced: true,
 };
 
 function renderComponent(ui: ReactElement): void {
@@ -207,6 +212,66 @@ describe('DataRetention (NFR-C8)', () => {
     const visitSelect = screen.getByLabelText('Visitor data');
     expect(within(visitSelect).getByText('60 days')).toBeInTheDocument();
     expect(within(visitSelect).queryByText('365 days')).not.toBeInTheDocument();
+  });
+
+  describe('when the installation does not run the sweep (tm 447)', () => {
+    const NOT_ENFORCED_TEXT =
+      'Automatic deletion is not active on this installation. The periods are saved but not applied: nothing is deleted when they end.';
+
+    it('says so in a band above the windows, which stay editable (NFR-C8)', async () => {
+      api.get.mockResolvedValue({ ...INHERITING, enforced: false });
+
+      renderComponent(<DataRetention canEdit />);
+
+      const band = await screen.findByRole('note');
+      expect(band).toHaveTextContent(NOT_ENFORCED_TEXT);
+      // Above the first "deleted after N days" — read before the promise.
+      const effective = screen.getByText('Deleted after 365 days.');
+      expect(
+        band.compareDocumentPosition(effective) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      // The windows are still a setting: saved now, applied once it is switched on.
+      expect(screen.getByLabelText('Closed conversations')).toBeEnabled();
+      // Not a live region: the save bar owns the card's `status`.
+      expect(band).not.toHaveAttribute('role', 'status');
+    });
+
+    it('shows the band to a read-only viewer too', async () => {
+      api.get.mockResolvedValue({ ...INHERITING, enforced: false });
+
+      renderComponent(<DataRetention canEdit={false} />);
+
+      expect(await screen.findByText(NOT_ENFORCED_TEXT)).toBeInTheDocument();
+    });
+
+    it('shows no band where the sweep runs', async () => {
+      api.get.mockResolvedValue(INHERITING);
+
+      renderComponent(<DataRetention canEdit />);
+
+      expect(await screen.findByLabelText('Closed conversations')).toBeInTheDocument();
+      expect(screen.queryByText(NOT_ENFORCED_TEXT)).not.toBeInTheDocument();
+      expect(screen.queryByRole('note')).not.toBeInTheDocument();
+    });
+
+    it('takes the flag from the save response, not only the first read', async () => {
+      const user = userEvent.setup();
+      api.get.mockResolvedValue(INHERITING);
+      api.patch.mockResolvedValue({
+        ...INHERITING,
+        thread_window: '30d',
+        effective_thread_days: 30,
+        enforced: false,
+      });
+
+      renderComponent(<DataRetention canEdit />);
+
+      await user.selectOptions(await screen.findByLabelText('Closed conversations'), '30d');
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      await confirmWithReason(user, 'Legal asked for a month');
+
+      expect(await screen.findByText(NOT_ENFORCED_TEXT)).toBeInTheDocument();
+    });
   });
 
   it('hides itself from a role below admin, mirroring the route’s own gate', async () => {

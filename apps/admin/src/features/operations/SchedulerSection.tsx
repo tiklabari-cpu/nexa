@@ -203,6 +203,12 @@ function ResultBadge({ job, t }: { job: PlatformOperationsJob; t: TFunction }): 
       </div>
     );
   }
+  if (status === 'partial') {
+    // The pass finished but skipped work it could not do (tm 441 — a
+    // retention pass that could not sweep one workspace). Not a failure of
+    // the job, not clean either; the job's log line names what was skipped.
+    return <StateBadge state="degraded" label={t('operations.scheduler.status.partial')} />;
+  }
   if (status === 'skipped') {
     return <StateBadge state="unknown" label={t('operations.scheduler.status.skipped')} />;
   }
@@ -218,14 +224,15 @@ function manualText(job: PlatformOperationsJob, t: TFunction): string {
   if (!manual) return t('operations.scheduler.manual.none');
   const time = formatDateTime(manual.at) ?? '–';
   if (manual.result === 'finished') {
-    return manual.status === 'error'
-      ? t('operations.scheduler.manual.error', { time, class: manual.error_class ?? '—' })
-      : t('operations.scheduler.manual.ok', {
-          time,
-          duration: t('operations.scheduler.duration', {
-            ms: formatCount(manual.duration_ms) ?? '–',
-          }),
-        });
+    if (manual.status === 'error') {
+      return t('operations.scheduler.manual.error', { time, class: manual.error_class ?? '—' });
+    }
+    const duration = t('operations.scheduler.duration', {
+      ms: formatCount(manual.duration_ms) ?? '–',
+    });
+    return manual.status === 'partial'
+      ? t('operations.scheduler.manual.partial', { time, duration })
+      : t('operations.scheduler.manual.ok', { time, duration });
   }
   return t(`operations.scheduler.manual.${manual.result}`, { time });
 }

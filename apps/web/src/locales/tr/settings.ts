@@ -1154,6 +1154,8 @@ export const settings: Messages = {
   'settings.retention.tier.unlimited': 'Süresiz sakla',
   'settings.retention.effectiveDays': '{days} gün sonra siliniyor.',
   'settings.retention.effectiveUnlimited': 'Otomatik olarak hiç silinmiyor.',
+  'settings.retention.notEnforced':
+    'Otomatik silme bu kurulumda etkin değil. Süreler kaydedilir ama uygulanmaz: süre dolduğunda hiçbir şey silinmez.',
   'settings.retention.hipaaNote':
     'Bu çalışma alanının imzalı bir HIPAA sözleşmesi var; veriler {days} günden uzun süre ve süresiz olarak saklanamaz.',
   'settings.retention.auditNote':

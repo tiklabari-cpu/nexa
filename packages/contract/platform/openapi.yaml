@@ -1119,7 +1119,10 @@ components:
                   enabled: { type: boolean }
                   last_run_at: { type: ["string", "null"], format: date-time }
                   last_status:
-                    { type: ["string", "null"], enum: [ok, skipped, error, disabled, null] }
+                    {
+                      type: ["string", "null"],
+                      enum: [ok, partial, skipped, error, disabled, null],
+                    }
                   last_error_class: { type: string }
         event_partitions:
           type: object
@@ -3022,7 +3025,7 @@ components:
           description: When the job last ticked on the publishing process, whatever came of it.
         last_status:
           type: ["string", "null"]
-          enum: [ok, skipped, error, disabled, null]
+          enum: [ok, partial, skipped, error, disabled, null]
         last_error_class:
           type: string
           description: The error's class, never its message.
@@ -3046,7 +3049,7 @@ components:
           enum: [finished, already_running, disabled, unknown_job]
         status:
           type: ["string", "null"]
-          enum: [ok, error, null]
+          enum: [ok, partial, error, null]
         duration_ms: { type: ["integer", "null"] }
         error_class: { type: ["string", "null"] }
 

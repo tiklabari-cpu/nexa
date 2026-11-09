@@ -388,6 +388,56 @@ describe('a job that fails', () => {
     expect(instance.snapshot().jobs[0]?.last_status).toBe('error');
   });
 
+  it('reports a pass that skipped some of its work as partial — a warning, not a failure (tm 441)', async () => {
+    let pass = 0;
+    const instance = scheduler();
+    instance.register({
+      name: 'retention',
+      intervalMs: INTERVAL,
+      run: async () => {
+        pass += 1;
+        // Two failures, then a pass that skipped one workspace, then a clean one.
+        if (pass <= 2) throw new Error('nope');
+        return pass === 3 ? { status: 'partial', counts: { failedTenants: 1 } } : undefined;
+      },
+    });
+    instance.start();
+
+    await vi.advanceTimersByTimeAsync(INTERVAL * 3);
+    expect(instance.snapshot().jobs[0]).toMatchObject({
+      name: 'retention',
+      last_status: 'partial',
+    });
+    expect(instance.snapshot().jobs[0]).not.toHaveProperty('last_error_class');
+    const warned = log.at('warn').map((entry) => entry.payload);
+    expect(warned.at(-1)).toMatchObject({ job: 'retention', outcome: 'partial', failedTenants: 1 });
+
+    // The job itself ran: the failure streak is over, so the next two errors
+    // are warnings again rather than an escalation.
+    pass = 0;
+    await vi.advanceTimersByTimeAsync(INTERVAL * 2);
+    expect(log.at('error')).toHaveLength(0);
+
+    pass = 3;
+    await vi.advanceTimersByTimeAsync(INTERVAL);
+    expect(instance.snapshot().jobs[0]?.last_status).toBe('ok');
+  });
+
+  it('answers a manual run of a partial pass as partial', async () => {
+    const instance = scheduler();
+    instance.register({
+      name: 'retention',
+      intervalMs: INTERVAL * 100,
+      run: async () => ({ status: 'partial' }),
+    });
+    instance.start();
+
+    await expect(instance.runNow('retention')).resolves.toMatchObject({
+      result: 'finished',
+      status: 'partial',
+    });
+  });
+
   it('never lets a failure reach the process', async () => {
     // An unhandled rejection out of a timer callback exits Node — a sweep with a
     // bad minute must not take the API with it.

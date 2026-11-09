@@ -14383,8 +14383,11 @@ export interface components {
        * @description When the job last ticked, whatever came of it. Null before its first pass.
        */
       last_run_at: string | null;
-      /** @enum {string|null} */
-      last_status: 'ok' | 'skipped' | 'error' | 'disabled' | null;
+      /**
+       * @description `partial` — the pass finished but skipped work it could not do (a retention pass that could not sweep one workspace and swept the rest).
+       * @enum {string|null}
+       */
+      last_status: 'ok' | 'partial' | 'skipped' | 'error' | 'disabled' | null;
       /** @description The error's class, never its message — driver messages can carry connection strings. */
       last_error_class?: string;
     };
@@ -20508,6 +20511,8 @@ export interface components {
       max_visit_days: number | null;
       /** @description Whether a Business Associate Agreement is in force for this workspace, which is what puts the ceilings above in force. */
       hipaa_scope: boolean;
+      /** @description Whether this deployment runs the sweep at all (tm 447). False means the windows are stored but nothing is deleted on any schedule — the operator has automatic deletion switched off — so the screen must not say "deleted after N days" without saying that first. */
+      enforced: boolean;
     };
     /**
      * @description A retention choice. An absent key leaves that window alone; an explicit

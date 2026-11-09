@@ -12,12 +12,15 @@ import type { FastifyBaseLogger } from 'fastify';
  * How a pass ended.
  *
  * - `ok`       — the job ran to completion.
+ * - `partial`  — the job ran to completion but some of its units of work
+ *                failed and were skipped (tm 441: a retention pass that
+ *                could not sweep one workspace and swept the rest).
  * - `skipped`  — another instance held this interval's lock, so this one
  *                deliberately did nothing (see `lock.ts`).
  * - `error`    — the job threw, or the lock could not be reached.
  * - `disabled` — registered but switched off: it has never run and will not.
  */
-export type JobStatus = 'ok' | 'skipped' | 'error' | 'disabled';
+export type JobStatus = 'ok' | 'partial' | 'skipped' | 'error' | 'disabled';
 
 export interface JobRunContext {
   /**
@@ -38,6 +41,12 @@ export interface JobOutcome {
    * (the same reason `req.url` is masked rather than trusted — `log-redact.ts`).
    */
   readonly counts?: Readonly<Record<string, number>>;
+  /**
+   * `partial` when the pass finished but skipped work it could not do — the
+   * job's own failures stayed inside it (tm 441). Omitted means `ok`; a job
+   * that cannot finish at all throws instead.
+   */
+  readonly status?: 'partial';
 }
 
 export interface JobDefinition {
@@ -109,5 +118,10 @@ export interface SchedulerDetail {
  * - `disabled`        — registered but switched off (`enabled: false`); never run on request.
  */
 export type ManualRunResult =
-  | { result: 'finished'; status: 'ok' | 'error'; duration_ms: number; error_class?: string }
+  | {
+      result: 'finished';
+      status: 'ok' | 'partial' | 'error';
+      duration_ms: number;
+      error_class?: string;
+    }
   | { result: 'already_running' | 'unknown_job' | 'disabled' };

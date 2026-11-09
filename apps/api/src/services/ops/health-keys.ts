@@ -40,7 +40,7 @@ export interface StoredJobRun {
   /** ISO-8601, when the request was settled. */
   at: string;
   result: 'finished' | 'already_running' | 'disabled' | 'unknown_job';
-  status: 'ok' | 'error' | null;
+  status: 'ok' | 'partial' | 'error' | null;
   duration_ms: number | null;
   error_class: string | null;
 }

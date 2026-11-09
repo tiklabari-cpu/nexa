@@ -201,7 +201,11 @@ async function testPasswordHash(): Promise<string> {
   return passwordHashCache;
 }
 
-async function seedTenant(db: PrismaClient, slug: string, index: number): Promise<TenantFixture> {
+export async function seedTenant(
+  db: PrismaClient,
+  slug: string,
+  index: number,
+): Promise<TenantFixture> {
   const passwordHash = await testPasswordHash();
 
   const organization = await db.organization.create({

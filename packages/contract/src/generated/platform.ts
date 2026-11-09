@@ -3506,7 +3506,7 @@ export interface components {
           /** Format: date-time */
           last_run_at: string | null;
           /** @enum {string|null} */
-          last_status: 'ok' | 'skipped' | 'error' | 'disabled' | null;
+          last_status: 'ok' | 'partial' | 'skipped' | 'error' | 'disabled' | null;
           last_error_class?: string;
         }[];
       };
@@ -4781,7 +4781,7 @@ export interface components {
        */
       last_run_at: string | null;
       /** @enum {string|null} */
-      last_status: 'ok' | 'skipped' | 'error' | 'disabled' | null;
+      last_status: 'ok' | 'partial' | 'skipped' | 'error' | 'disabled' | null;
       /** @description The error's class, never its message. */
       last_error_class?: string;
       last_duration_ms: number | null;
@@ -4797,7 +4797,7 @@ export interface components {
       /** @enum {string} */
       result: 'finished' | 'already_running' | 'disabled' | 'unknown_job';
       /** @enum {string|null} */
-      status: 'ok' | 'error' | null;
+      status: 'ok' | 'partial' | 'error' | null;
       duration_ms: number | null;
       error_class: string | null;
     };

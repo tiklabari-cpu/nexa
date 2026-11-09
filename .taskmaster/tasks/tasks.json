@@ -16859,12 +16859,12 @@
         "description": "Sinyal yokken ya da sunucu 503 dönerken açılışta uygulama 'Opening SiyahTuş…' ekranında sonsuza kadar kalıyor; status='unknown' kalıcı, bağlantı gelse de yeniden denenmiyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F17 (medium ← high). Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/mobile/src/app/services.tsx:66-72` `void value.session.restore();` (catch yok); `apps/mobile/src/auth/session.ts:~435` retryable hatayı yeniden fırlatıyor; `apps/mobile/src/navigation/RootNavigator.tsx:~63` unknown → LoadingScreen.\n\nYAPILACAK: restore reddini yakala; retryable hatada üstel geri çekilme (1, 2, 4 … 30 sn tavan) ile yeniden dene; uygulama ön plana gelince / connectivity değişince hemen dene (mevcut connectivity kaynağı varsa; yoksa AppState). LoadingScreen'de belli bir süre sonra (ör. 5 sn) \"Bağlanılamıyor — Tekrar dene\" düğmesi (mobil i18n). Kalıcı (auth) hata mevcut davranışla signed-out.\n\nTUZAK: memory mobile-tests-have-no-node-types (jest.mock hoisting, Node tipleri yok). Zamanlayıcılar unmount'ta temizlenmeli.\n\nKAPSAM DIŞI: RTM token yenileme (MOBILE-RTM-TOKEN-REFRESH).\nDENETİM BULGULARI: F17",
         "testStrategy": "mobil jest: restore iki kez retryable hata sonra başarı → status signed-in (sahte zamanlayıcı); kalıcı auth hatası → signed-out; 5 sn sonra Tekrar dene düğmesi görünür ve basınca restore çağrılır; unhandled rejection yok. DoD: CONVENTIONS §1.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "417"
         ],
         "priority": "medium",
-        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "updatedAt": "2026-11-09T14:12:04.620Z",
         "subtasks": []
       },
       {
@@ -17778,7 +17778,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-09T14:11:09.314Z",
+      "lastModified": "2026-11-09T14:12:04.620Z",
       "taskCount": 478,
       "completedCount": 429,
       "tags": [

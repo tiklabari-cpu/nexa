@@ -170,13 +170,21 @@ export function priceSeats(
 }
 
 /**
+ * The plans a workspace may put itself on at its own checkout: the listed ones.
+ * A quoted tier is reached only through the platform (`setPlan`,
+ * `services/platform/workspace-actions.ts`), because what it costs is agreed in
+ * a contract this deployment never sees (tm 432).
+ */
+export const SELF_SERVE_PLAN_IDS = PLAN_IDS.filter((id) => PLANS[id].pricing === 'listed');
+
+/**
  * Apply a checkout change and persist it, or reject it with a reason.
  *
  * Everything that can be wrong is settled before the write: an unknown plan or
- * cycle, seats below the people already on the workspace (FR-MOD-10.1.3), or a
- * plan whose quota is under what has already been spent this month
- * (FR-MOD-10.1.1). A workspace with no subscription row yet — the trial case —
- * gets one created.
+ * cycle, a quoted plan asked for at the self-serve checkout, seats below the
+ * people already on the workspace (FR-MOD-10.1.3), or a plan whose quota is
+ * under what has already been spent this month (FR-MOD-10.1.1). A workspace
+ * with no subscription row yet — the trial case — gets one created.
  */
 export async function updateSubscription(
   tx: TenantClient,
@@ -195,7 +203,20 @@ export async function updateSubscription(
     throw ApiError.validation(`Unknown plan: ${plan}.`, { reason: 'plan_unknown' });
   }
   const planId = plan as PlanId;
-  const spec = PLANS[planId];
+  const spec: PlanSpec = PLANS[planId];
+
+  // A quoted tier is not for sale here (tm 432 · denetim F14). Its price lives
+  // in a contract, so the self-serve move used to unlock every Enterprise
+  // capability (SSO, SIEM export, white-label, sandbox) while the bill stayed
+  // at the listed figure already on the row. Only a plan the request *names*
+  // is refused: a workspace the platform put on Enterprise sends no `plan`
+  // when it changes its seats or cycle, and that stays its own decision.
+  if (input.plan !== undefined && spec.pricing === 'quoted') {
+    throw ApiError.validation(
+      `The ${planId} plan is arranged with sales and cannot be chosen at the self-serve checkout.`,
+      { reason: 'plan_requires_sales', plan: planId },
+    );
+  }
 
   const billingCycle = input.billingCycle ?? existing?.billingCycle ?? 'monthly';
   if (!(BILLING_CYCLES as readonly string[]).includes(billingCycle)) {
@@ -223,9 +244,9 @@ export async function updateSubscription(
   // be able to change seats or cycle.
   //
   // A quoted tier has no catalogue allowance (`null`) and so can never be the
-  // smaller side of a move: refusing an *upgrade* to Enterprise because the
-  // workspace has been heavily using the product would be precisely backwards.
-  // The guard still fires in the other direction — Enterprise → growth with 250
+  // smaller side of a move — and since tm 432 it is never the target of one
+  // here at all (refused above; the platform's `setPlan` skips this guard).
+  // The guard fires in the other direction — Enterprise → growth with 250
   // resolutions spent is a real downgrade, and this is where it is caught.
   const changingPlan = existing != null && planId !== existing.plan;
   if (
@@ -245,17 +266,18 @@ export async function updateSubscription(
     );
   }
 
-  // What a quoted tier bills. The catalogue has no number for Enterprise and
-  // this repo may not invent one (ADR-13's figures are the PRD's), so moving to
-  // it leaves the amounts already on the row exactly where they are: the plan
-  // change alone must not silently re-price a workspace in either direction.
-  // A workspace that has never checked out falls back to the list figures for
-  // the same reason — they are the only numbers anyone has agreed to.
+  // What the row bills. A listed plan bills its own list figures, every time:
+  // a move onto it — Enterprise → growth included — re-prices the row at the
+  // catalogue's number instead of carrying a contract's figures into the
+  // self-serve tier (tm 432).
   //
-  // The honest part is that nobody reads these as an Enterprise price: the
-  // subscription view reports `pricing: "quoted"` alongside them, which is what
-  // a client shows instead of a per-seat figure. The real number arrives from a
-  // signed contract, and this deployment has no surface that takes one.
+  // A quoted plan reaches this line only for a workspace already on it (one
+  // the request names is refused above) changing its seats or cycle, and its
+  // amounts stay exactly where the row has them. The catalogue has no number
+  // for Enterprise and this repo may not invent one (ADR-13's figures are the
+  // PRD's); nobody reads these as an Enterprise price either — the
+  // subscription view reports `pricing: "quoted"` beside them, which is what a
+  // client shows instead of a per-seat figure.
   const fallback = PLANS.growth;
   const data = {
     plan: planId,

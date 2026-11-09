@@ -32,6 +32,7 @@ import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { reasonMessage } from '../../lib/reason-message.js';
 import { formatCount, formatDate, formatMoney, formatPeriod } from '../../lib/format.js';
+import { useDeployment } from '../../lib/deployment.js';
 import { enumLabel } from '../../lib/enum-label.js';
 import { cardLast4, compose, FieldError, required, useForm } from '../../lib/form.js';
 import { newAttemptKey } from './attempt-key.js';
@@ -917,12 +918,18 @@ function titleCase(value: string): string {
  * downgrade guard reads) rather than hardcoded here — a client-side list would
  * silently drift from the server's and could offer a plan that does not exist.
  *
- * Picking a different tier does not PATCH immediately, unlike the cycle
+ * Picking a different listed tier does not PATCH immediately, unlike the cycle
  * toggle and seat stepper below: a plan change re-prices the bill and is not a
  * one-click-undo the way flipping back to monthly is, so it opens an inline
- * confirmation stating the new charge (or, on a quoted tier, that the contract
- * sets the price) and that the change is effective immediately — there is no
- * "at the next cycle" in this mocked billing model.
+ * confirmation stating the new charge and that the change is effective
+ * immediately — there is no "at the next cycle" in this mocked billing model.
+ *
+ * A quoted tier (Enterprise) is not for sale here at all (tm 432): the server
+ * refuses it with `plan_requires_sales`, because its price is a contract term
+ * and the platform operator is who puts a workspace on it. Its option is
+ * tagged "Contact sales" and opens the way to sales — the deployment's contact
+ * address when it publishes one (`GET /deployment`) — with nothing to confirm
+ * and nothing sent.
  *
  * A plan whose catalogue allowance is already below this period's AI usage is
  * disabled up front, with the reason written next to it — matching tm 181.3's
@@ -955,6 +962,7 @@ function PlanSelector({
 }): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
+  const { contact_email: salesEmail } = useDeployment();
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   const catalog = useQuery({
@@ -1004,6 +1012,11 @@ function PlanSelector({
                   className={planButton(isCurrent)}
                 >
                   {enumLabel(t, 'billing.plan.name', plan.id)}
+                  {plan.pricing === 'quoted' && !isCurrent && (
+                    <span className="ml-1 font-normal normal-case opacity-90">
+                      · {t('billing.managePlan.plan.contactSalesTag')}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -1034,8 +1047,43 @@ function PlanSelector({
             (() => {
               const plan = catalog.data.plans.find((p) => p.id === confirmingId);
               if (!plan) return null;
+              if (plan.pricing === 'quoted') {
+                return (
+                  <div
+                    data-testid="plan-contact-sales"
+                    className="mt-2 flex flex-col gap-2 rounded-md border border-border p-3"
+                  >
+                    <p className="text-sm">
+                      {t('billing.managePlan.plan.contactSales', { plan: titleCase(plan.id) })}
+                    </p>
+                    <p className="text-sm">
+                      {salesEmail ? (
+                        <a
+                          href={`mailto:${salesEmail}`}
+                          className="font-semibold text-content-brand underline"
+                        >
+                          {t('billing.managePlan.plan.contactSalesEmail', { email: salesEmail })}
+                        </a>
+                      ) : (
+                        t('billing.managePlan.plan.contactSalesNoEmail')
+                      )}
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingId(null)}
+                        className="rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+                      >
+                        {t('billing.managePlan.plan.closeButton')}
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+              // A listed tier states its price; `null` only for a catalogue row
+              // that breaks that promise, which then says nothing it cannot know.
               const recurringCents =
-                plan.pricing === 'listed' && plan.unit_price_cents !== null
+                plan.unit_price_cents !== null
                   ? seats * plan.unit_price_cents * (annual ? 10 : 1)
                   : null;
               return (
@@ -1044,13 +1092,11 @@ function PlanSelector({
                   className="mt-2 flex flex-col gap-2 rounded-md border border-border p-3"
                 >
                   <p className="text-sm">
-                    {recurringCents !== null
-                      ? t('billing.managePlan.plan.confirmListed', {
-                          plan: titleCase(plan.id),
-                          price: formatMoney(recurringCents) ?? '',
-                          cycle: cycleUnit,
-                        })
-                      : t('billing.managePlan.plan.confirmQuoted', { plan: titleCase(plan.id) })}
+                    {t('billing.managePlan.plan.confirmListed', {
+                      plan: titleCase(plan.id),
+                      price: recurringCents !== null ? (formatMoney(recurringCents) ?? '') : '—',
+                      cycle: cycleUnit,
+                    })}
                   </p>
                   <div className="flex gap-2">
                     <button

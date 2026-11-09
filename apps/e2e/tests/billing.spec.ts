@@ -12,7 +12,8 @@
  *
  * The seed is idempotent and does not reset a subscription a previous run left
  * behind, so the test starts from whatever plan/cycle it finds and puts both
- * back (growth, monthly) — it must not depend on, or leave behind, a
+ * back (the plan through the operator's path since tm 432 — `assign-plan.ts` —
+ * because the checkout no longer sells Enterprise; the cycle to monthly) — it must not depend on, or leave behind, a
  * particular state; `entitlements.spec.ts` reads this same workspace's plan
  * and Playwright runs this suite with a single worker (`playwright.config.ts`,
  * `workers: 1`), so "restore before returning" is what keeps that read
@@ -23,7 +24,8 @@
  * 256.1) — nothing after it in the suite reads the trial.
  */
 import type { Locator } from '@playwright/test';
-import { expect, test } from './fixtures.js';
+import { assignPlan } from './assign-plan.js';
+import { ACME_OWNER, expect, test } from './fixtures.js';
 
 /**
  * Digits only, so an assertion compares an amount and not the locale's
@@ -129,49 +131,57 @@ test.describe('billing checkout', () => {
     await expect(settled).toBeVisible();
     await expect(settled.getByTestId('invoice-origin')).toHaveCount(0);
 
-    // Plan tier (FR-MOD-10.1.1): known starting point first, same discipline as
-    // the cycle toggle above — growth is disabled only when already active.
+    // Plan tier (FR-MOD-10.1.1). The seed puts Acme on Enterprise, which a
+    // workspace cannot choose for itself (tm 432): the way down to the listed
+    // tier is the owner's, at this checkout; the way back up is the operator's
+    // (`assignPlan`). The tier is printed on the statement itself ("<plan>
+    // plan — free during trial" while trialing), so the move is observable in
+    // the list — which is what makes the closed-statement assertion mean
+    // something.
+    //
+    // Waited for rather than read: a plan change invalidates the invoices query,
+    // and a plain `innerText()` races that refetch.
+    await expect(estimate.getByTestId('invoice-line-items')).toContainText(
+      startedOnGrowth ? 'growth' : 'enterprise',
+    );
+    const settledBefore = await settled.innerText();
+
     if (await growthPlan.isEnabled()) {
       await growthPlan.click();
+      // A listed tier states what it will cost before anything is sent.
+      await expect(manage.getByTestId('plan-confirm')).toContainText(/\d.* \/ month/);
       await confirmPlanChange.click();
     }
     await expect(growthPlan).toHaveAttribute('aria-pressed', 'true');
 
-    // What both rows say while the workspace is on growth. The tier is printed
-    // on the statement itself ("<plan> plan — free during trial" while
-    // trialing), so the plan switch below is observable in the list — which is
-    // exactly what makes the next assertion mean something.
-    //
-    // Waited for rather than read: a plan change invalidates the invoices query,
-    // and a plain `innerText()` here races that refetch — it read the *previous*
-    // tier on the first run of this assertion.
-    await expect(estimate.getByTestId('invoice-line-items')).toContainText('growth');
-    const settledBefore = await settled.innerText();
-
-    await enterprisePlan.click();
-    // Enterprise is quoted, not listed — the confirm step says so rather than
-    // inventing a total for a price this product does not set.
-    await expect(manage.getByTestId('plan-confirm')).toContainText(/set in your contract/i);
-    await confirmPlanChange.click();
-    await expect(enterprisePlan).toHaveAttribute('aria-pressed', 'true');
-    await expect(growthPlan).toHaveAttribute('aria-pressed', 'false');
-
     // The whole point of persisting invoices (FR-MOD-10.3), through the real
     // screen: the plan change invalidates the invoices query, so both rows are
     // re-read from the server — and only one of them moves. The running month
-    // now names the new tier; the closed statement is byte-identical to what it
-    // said a moment ago. Before the `invoices` table both were derived from the
-    // same subscription row, so the settled month followed the plan too.
-    await expect(estimate.getByTestId('invoice-line-items')).toContainText('enterprise');
+    // names the new tier; the closed statement is byte-identical to what it
+    // said a moment ago.
+    await expect(estimate.getByTestId('invoice-line-items')).toContainText('growth');
     expect(await settled.innerText()).toBe(settledBefore);
 
-    // Put the plan back the way we found it.
-    const startingPlan = startedOnGrowth ? growthPlan : enterprisePlan;
-    if (await startingPlan.isEnabled()) {
-      await startingPlan.click();
-      await confirmPlanChange.click();
+    // Enterprise from here is not a switch but the way to sales (tm 432):
+    // tagged on the picker, nothing to confirm, nothing sent.
+    await expect(enterprisePlan).toContainText('Contact sales');
+    await enterprisePlan.click();
+    const sales = manage.getByTestId('plan-contact-sales');
+    await expect(sales).toContainText(/arranged with our sales team/i);
+    await expect(confirmPlanChange).toHaveCount(0);
+    await sales.getByRole('button', { name: 'Close' }).click();
+    await expect(sales).toHaveCount(0);
+    await expect(growthPlan).toHaveAttribute('aria-pressed', 'true');
+
+    // Put the plan back the way we found it — Enterprise as the operator
+    // assigns it. That move is not the closed statement's either.
+    if (!startedOnGrowth) {
+      await assignPlan(ACME_OWNER, 'enterprise');
+      await agentPage.reload();
+      await expect(enterprisePlan).toHaveAttribute('aria-pressed', 'true');
+      await expect(estimate.getByTestId('invoice-line-items')).toContainText('enterprise');
+      expect(await settled.innerText()).toBe(settledBefore);
     }
-    await expect(startingPlan).toHaveAttribute('aria-pressed', 'true');
 
     // Adding a seat sticks after the PATCH round trip — the value is the
     // server's, not local optimism — then restore it.

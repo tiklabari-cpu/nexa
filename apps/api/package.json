@@ -29,6 +29,7 @@
     "db:partition-indexes": "tsx scripts/partition-indexes.ts",
     "mail:preview": "tsx scripts/mail-preview.ts",
     "seed:fps-bench": "tsx scripts/seed-fps-workspace.ts",
+    "seed:plan": "tsx scripts/seed-plan.ts",
     "measure:archive-page": "tsx scripts/measure-archive-page.ts",
     "measure:concurrent-migrate": "tsx scripts/measure-concurrent-migrate.ts",
     "measure:knowledge-recall": "tsx scripts/measure-knowledge-recall.ts",

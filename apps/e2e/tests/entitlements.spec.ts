@@ -39,6 +39,7 @@ import {
   widgetFrame,
   type TenantOwner,
 } from './fixtures.js';
+import { assignPlan } from './assign-plan.js';
 
 /** A six-digit run token. Long enough to be unique here, short enough to stay
  *  clear of the 13-digit window card masking rewrites (FR-MOD-08.9.5) — the
@@ -52,25 +53,24 @@ function auth(token: string): Record<string, string> {
 }
 
 /**
- * Move a workspace between commercial tiers, the way the product does it.
+ * Move a workspace down to the self-serve tier, the way its owner does it.
  *
  * `PATCH /billing/subscription` rather than a database write: the downgrade
  * guard, the seat floor and the audit entry all live on that path, and a test
  * that edited the row directly would be proving the read side against a state
  * the product cannot actually produce.
+ *
+ * The way back up is not the owner's (tm 432): the checkout refuses Enterprise
+ * with `plan_requires_sales`, and the operator assigns it — `assignPlan`.
  */
-async function setPlan(
-  request: APIRequestContext,
-  token: string,
-  plan: 'growth' | 'enterprise',
-): Promise<void> {
+async function downgradeToGrowth(request: APIRequestContext, token: string): Promise<void> {
   const response = await request.patch(`${API_BASE}/billing/subscription`, {
     headers: auth(token),
-    data: { plan },
+    data: { plan: 'growth' },
   });
   expect(
     response.ok(),
-    `moving to ${plan} failed: ${response.status()} ${await response.text()}`,
+    `moving to growth failed: ${response.status()} ${await response.text()}`,
   ).toBe(true);
 }
 
@@ -131,7 +131,7 @@ test.describe('white-label widget (11.5-b · 11.5-c)', () => {
       await page.screenshot({ path: 'kanit/11.5-white-label-enterprise.png', fullPage: true });
 
       // --- Downgrade --------------------------------------------------------
-      await setPlan(request, token, 'growth');
+      await downgradeToGrowth(request, token);
 
       // The row still says "hide it" — nothing swept it, and a re-upgrade will
       // find it (§C-A26). What changed is what the stored value is allowed to
@@ -172,7 +172,7 @@ test.describe('white-label widget (11.5-b · 11.5-c)', () => {
     } finally {
       // Back to the seeded fixture, in this order: the tier first, because
       // putting the branding back is itself a gated write.
-      await setPlan(request, token, 'enterprise');
+      await assignPlan(ACME_OWNER, 'enterprise');
       await setStoredBranding(request, token, true);
       await adminContext.close();
     }
@@ -209,11 +209,7 @@ test.describe('white-label widget (11.5-b · 11.5-c)', () => {
 // ===========================================================================
 
 test.describe('sandbox workspace (11.5-f · 11.5-g)', () => {
-  test('is a workspace of its own, with none of production in it', async ({
-    browser,
-    page,
-    request,
-  }) => {
+  test('is a workspace of its own, with none of production in it', async ({ browser, page }) => {
     // A signup, a plan change, a wizard and two sign-ins.
     test.setTimeout(120_000);
 
@@ -253,11 +249,11 @@ test.describe('sandbox workspace (11.5-f · 11.5-g)', () => {
     await page.getByRole('button', { name: 'Finish setup' }).click();
     await expect(page).toHaveURL(/\/app\/inbox/);
 
-    // Resolved before the sandbox exists, on purpose: afterwards two
-    // memberships match this prefix ("… " and "… (Sandbox)") and which one a
-    // prefix search returns is not something this test should depend on.
-    const token = await ownerAccessTokenFor(request, owner);
-    await setPlan(request, token, 'enterprise');
+    // Enterprise, as the operator assigns it (tm 432 — the checkout refuses a
+    // quoted tier). Before the sandbox exists, on purpose: afterwards this
+    // address owns two workspaces ("… " and "… (Sandbox)") and `assignPlan`
+    // refuses to guess which one is meant.
+    await assignPlan(owner, 'enterprise');
 
     // The contact the sandbox must never see, confirmed present in production
     // first — an absence proves nothing unless the thing is somewhere.
@@ -466,7 +462,7 @@ test.describe('SLA targets (11.5-d · 11.5-e)', () => {
     // the real HTTP stack.
     const token = await ownerAccessTokenFor(request, ACME_OWNER);
     try {
-      await setPlan(request, token, 'growth');
+      await downgradeToGrowth(request, token);
 
       const refused = await request.put(`${API_BASE}/settings/sla`, {
         headers: auth(token),
@@ -485,7 +481,7 @@ test.describe('SLA targets (11.5-d · 11.5-e)', () => {
       expect(read.ok()).toBe(true);
       expect((await read.json()) as { active: boolean }).toMatchObject({ active: false });
     } finally {
-      await setPlan(request, token, 'enterprise');
+      await assignPlan(ACME_OWNER, 'enterprise');
     }
   });
 });
@@ -501,7 +497,7 @@ test.describe('single sign-on (FR-MOD-11.5 · S11-g)', () => {
   }) => {
     const token = await ownerAccessToken(request);
     try {
-      await setPlan(request, token, 'growth');
+      await downgradeToGrowth(request, token);
 
       await agentPage.goto('/app/settings/sso');
       const section = agentPage.getByRole('region', { name: 'Single sign-on' });
@@ -532,7 +528,7 @@ test.describe('single sign-on (FR-MOD-11.5 · S11-g)', () => {
       // screen to see it (tm 133.12's finding).
       await expect(section.getByRole('alert')).toContainText(/Enterprise feature/i);
     } finally {
-      await setPlan(request, token, 'enterprise');
+      await assignPlan(ACME_OWNER, 'enterprise');
     }
   });
 });
@@ -548,7 +544,7 @@ test.describe('SIEM export (NFR-C6 · C6-f)', () => {
   }) => {
     const token = await ownerAccessToken(request);
     try {
-      await setPlan(request, token, 'growth');
+      await downgradeToGrowth(request, token);
 
       await agentPage.goto('/app/settings/siem');
       const section = agentPage.getByRole('region', { name: 'SIEM export' });
@@ -580,7 +576,7 @@ test.describe('SIEM export (NFR-C6 · C6-f)', () => {
           .getByRole('checkbox', { name: /Enable export/ }),
       ).toBeChecked({ checked: before });
     } finally {
-      await setPlan(request, token, 'enterprise');
+      await assignPlan(ACME_OWNER, 'enterprise');
     }
   });
 });
@@ -610,7 +606,7 @@ test.describe('HIPAA cover (NFR-C4 · C4-d · C4-f)', () => {
     // mint but this deployment cannot.
     const token = await ownerAccessTokenFor(request, ACME_OWNER);
     try {
-      await setPlan(request, token, 'growth');
+      await downgradeToGrowth(request, token);
 
       const refused = await request.post(`${API_BASE}/settings/compliance/baa`, {
         headers: auth(token),
@@ -623,7 +619,7 @@ test.describe('HIPAA cover (NFR-C4 · C4-d · C4-f)', () => {
       expect(body.error.type).toBe('not_allowed');
       expect(body.error.details).toMatchObject({ entitlement: 'hipaa', plan: 'growth' });
     } finally {
-      await setPlan(request, token, 'enterprise');
+      await assignPlan(ACME_OWNER, 'enterprise');
     }
   });
 });

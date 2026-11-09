@@ -69,13 +69,21 @@ export const billing: Messages = {
   'billing.reason.seats_below_active':
     'Seats cannot be fewer than the {active_agents} active agent(s) on this workspace.',
   'billing.reason.plan_unknown': 'That plan is not available.',
+  'billing.reason.plan_requires_sales':
+    'The {plan} plan is arranged with our sales team and cannot be chosen here.',
   'billing.reason.cycle_unknown': 'That billing cycle is not available.',
   'billing.managePlan.plan.overQuotaReason':
     'The {plan} plan includes {included} AI resolutions — below the {used} already used this period.',
   'billing.managePlan.plan.confirmListed':
     'Switch to the {plan} plan for {price} / {cycle}? This takes effect immediately.',
-  'billing.managePlan.plan.confirmQuoted':
-    "Switch to the {plan} plan? Its price is set in your contract, so today's charges stay the same until that changes. This takes effect immediately.",
+  // A quoted tier is not sold here (tm 432): the picker points to sales.
+  'billing.managePlan.plan.contactSalesTag': 'Contact sales',
+  'billing.managePlan.plan.contactSales':
+    'The {plan} plan is arranged with our sales team: its price and terms are set in a contract, so it cannot be switched on here.',
+  'billing.managePlan.plan.contactSalesEmail': 'Write to {email} to arrange it.',
+  'billing.managePlan.plan.contactSalesNoEmail':
+    'Ask the team that runs this service to arrange it.',
+  'billing.managePlan.plan.closeButton': 'Close',
   'billing.managePlan.plan.confirmButton': 'Confirm plan change',
   'billing.managePlan.plan.confirming': 'Switching…',
   'billing.managePlan.plan.cancelButton': 'Cancel',

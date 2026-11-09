@@ -5,11 +5,15 @@
  * in `test/integration/reports-billing.test.ts`; what is unit-testable here is
  * the catalogue itself — the part every gate will read.
  */
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { ENTITLEMENTS } from '@siyahtus/types';
 import {
   PLANS,
   PLAN_IDS,
+  SELF_SERVE_PLAN_IDS,
   entitlementsForPlan,
   isPlanId,
   priceSeats,
@@ -100,6 +104,39 @@ describe('pricingForPlan', () => {
     // whoever put it there — reporting them as negotiable would be a guess.
     expect(pricingForPlan('platinum')).toBe('listed');
     expect(pricingForPlan(null)).toBe('listed');
+  });
+});
+
+// src/services/billing → apps/api → apps → repo root.
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..');
+
+/**
+ * The inline `enum` of `plan` in `PATCH /billing/subscription`'s body. A miss
+ * throws rather than returning an empty list, so the check below cannot pass
+ * while measuring nothing.
+ */
+function contractSelfServePlans(): string[] {
+  const yaml = readFileSync(
+    resolve(REPO_ROOT, 'packages/contract/openapi/paths/reports.yaml'),
+    'utf8',
+  );
+  const start = yaml.indexOf('operationId: updateSubscription');
+  if (start < 0) throw new Error('reports.yaml has no updateSubscription');
+  const body = yaml.slice(yaml.indexOf('requestBody:', start), yaml.indexOf('responses:', start));
+  const match = /\n\s+plan:\n\s+type: string\n\s+enum: \[([^\]]+)\]/.exec(body);
+  if (!match) throw new Error('updateSubscription carries no inline plan enum');
+  return (match[1] as string).split(',').map((value) => value.trim());
+}
+
+describe('the self-serve checkout (tm 432)', () => {
+  it('sells only the listed tiers — never a quoted one', () => {
+    expect(SELF_SERVE_PLAN_IDS).toEqual(['growth']);
+    for (const id of SELF_SERVE_PLAN_IDS) expect(PLANS[id].pricing).toBe('listed');
+    expect(SELF_SERVE_PLAN_IDS).not.toContain('enterprise');
+  });
+
+  it('is what the contract offers in the PATCH body', () => {
+    expect(contractSelfServePlans()).toEqual([...SELF_SERVE_PLAN_IDS]);
   });
 });
 

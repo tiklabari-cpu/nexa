@@ -246,6 +246,13 @@ const purchaseAiPackageBody = z.object({
   idempotency_key: z.string().uuid(),
 });
 
+/**
+ * The checkout body. `plan` is a bounded string here, not the contract's enum
+ * of self-serve plans (`SELF_SERVE_PLAN_IDS`): `updateSubscription` refuses
+ * every other value itself, with the reason the console words — `plan_unknown`
+ * for a name the catalogue lacks, `plan_requires_sales` for a quoted tier
+ * (tm 432). An enum here would answer both with one generic validation error.
+ */
 const updateSubscriptionBody = z
   .object({
     plan: z.string().min(1).max(64).optional(),

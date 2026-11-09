@@ -254,6 +254,10 @@ export async function unsuspend(tx: Tx, licenseId: bigint): Promise<ActionOutcom
  * apply. A workspace without a subscription gets one, sized to its headcount;
  * the move from a quoted tier re-prices it at the list figures, a move to one
  * keeps the amounts already on the row (the rule `updateSubscription` states).
+ *
+ * This is the only way onto a quoted tier: the workspace's own checkout
+ * refuses one with `plan_requires_sales` (tm 432), because its price is a
+ * contract term and an operator is who records that the contract exists.
  */
 export async function setPlan(tx: Tx, licenseId: bigint, plan: PlanId): Promise<ActionOutcome> {
   const license = await lockLicense(tx, licenseId);

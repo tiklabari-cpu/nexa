@@ -468,13 +468,18 @@ function caddyLines(source: string): string[] {
     .filter((line) => line.trim() !== '');
 }
 
-/** Top-level site blocks (`name {` … `}` at column 0), by site address. */
+/**
+ * Top-level site blocks (`name {` … `}` at column 0), by site address. The
+ * `http://` block is the port-80 redirect (tm 467), not a site that serves
+ * anything; its own test reads it.
+ */
 function caddySites(source: string): Map<string, string[]> {
   const sites = new Map<string, string[]>();
   let current: string[] | null = null;
   for (const line of caddyLines(source)) {
     const open = /^(\S+) \{$/.exec(line);
-    if (open) sites.set(open[1]!, (current = []));
+    if (open?.[1]!.startsWith('http://')) current = null;
+    else if (open) sites.set(open[1]!, (current = []));
     else if (line === '}') current = null;
     else current?.push(line.trim());
   }
@@ -557,6 +562,25 @@ describe("the pilot's edge and operations (tm 256.5)", () => {
     expect(uncommented).not.toContain('trusted_proxies');
     expect(uncommented).not.toMatch(/header_up\s+\+?X-Forwarded-For/i);
   });
+
+  it('sends every name from http to https in so many words, keeping the method (tm 467 · NY-18)', () => {
+    // The block's addresses span lines (`http://a,` … `http://e {`);
+    // `caddySites` skips it, so it is read here.
+    const lines = caddyLines(CADDYFILE).map((line) => line.trim());
+    const start = lines.findIndex((line) => line.startsWith('http://'));
+    expect(start, 'no http:// redirect block').toBeGreaterThan(-1);
+    const open = lines.findIndex((line, index) => index >= start && line.endsWith('{'));
+    const close = lines.indexOf('}', open);
+    const addresses = lines
+      .slice(start, open + 1)
+      .map((line) => line.replace(/[,{]/g, '').trim())
+      .filter((line) => line !== '');
+    expect(addresses.sort()).toEqual([...sites.keys()].map((name) => `http://${name}`).sort());
+    // 308, not `permanent` (301): a browser turns a redirected 301 POST into a GET.
+    expect(lines.slice(open + 1, close)).toEqual(['redir https://{host}{uri} 308']);
+    // Nothing turns Caddy's own redirect off behind the block's back either.
+    expect(lines.join('\n')).not.toMatch(/auto_https/);
+  });
 });
 
 /** One cloudflared ingress rule — first match wins, as cloudflared reads them. */
@@ -635,6 +659,22 @@ describe("the pilot's Cloudflare Tunnel edge (tm 257.10)", () => {
     ];
     expect(names.sort()).toEqual(caddyNames().sort());
     expect(names).toHaveLength(5);
+  });
+
+  it("leaves http to https to Cloudflare's Always Use HTTPS, and says so where the owner reads (tm 467 · NY-18)", () => {
+    // No ingress rule can tell the schemes apart — the tunnel hands both to the
+    // same origin port — so the redirect is a dashboard setting, and the only
+    // things the repository can hold are the instruction and its check.
+    const checklist = read('docs/production-checklist.md');
+    const tunnelSection = checklist.slice(
+      checklist.indexOf('### Now: Cloudflare Tunnel'),
+      checklist.indexOf('### After the move: Caddy'),
+    );
+    expect(tunnelSection).toMatch(/\*\*Always Use HTTPS\*\* is on/);
+    expect(tunnelSection).toContain('curl -sI http://panel.<domain>/');
+    // Cloudflare's HSTS stays off: nginx and the api already send one.
+    expect(tunnelSection).toMatch(/Cloudflare's HTTP Strict\s+Transport Security setting[^.]*off/);
+    expect(tunnelText()).toMatch(/Always Use HTTPS/);
   });
 
   it("dials each name's published port on 127.0.0.1", () => {

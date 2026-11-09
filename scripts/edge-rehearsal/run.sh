@@ -78,13 +78,17 @@ case "$EDGE" in
     # Caddy shares the host's network, so the example's 127.0.0.1 upstreams
     # stand as written; Docker Desktop has no host network, so they become
     # host.docker.internal. The routing, the panel's /api/* rule and the
-    # absence of trusted_proxies are the example's own.
+    # absence of trusted_proxies are the example's own. The example's http://
+    # redirect block (tm 467) is left out: its names are the plain-http sites
+    # here, and two sites on one address are a conflict Caddy refuses.
     if [ "$(uname -s)" = Linux ]; then
       site_port=":$port" upstream='127.0.0.1' network=(--network host)
     else
       site_port='' upstream='host.docker.internal' network=(-p "127.0.0.1:$port:80")
     fi
     awk -v site_port="$site_port" -v upstream="$upstream" '
+      /^http:\/\// { redirect = 1 }
+      redirect { if ($0 ~ /^\}$/) redirect = 0; next }
       /^[a-z0-9.-]+\.example\.com \{$/ {
         sub(/ \{$/, "")
         print "http://" $0 site_port " {"

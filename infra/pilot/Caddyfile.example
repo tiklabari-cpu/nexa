@@ -54,6 +54,26 @@
 	# email ops@example.com
 }
 
+# HTTP to HTTPS, written out (tm 467 · NY-18). Caddy's automatic HTTPS already
+# redirects port 80 for every name it holds a certificate for; this block says
+# so in the file, where a reader and env.pilot.test.ts can see it, rather than
+# leaving it to a default that one global option (`auto_https off` or
+# `disable_redirects`) turns off without a word. Caddy uses an explicit http://
+# site instead of adding its own redirect, so behaviour does not change. The
+# names are the five sites below; add or remove one in both places.
+#
+# 308 rather than `permanent` (a 301): a browser follows a 301 by turning a POST
+# into a GET and dropping the body, and 308 keeps both. It is also the code
+# Caddy's own redirect uses. RTM is listed for completeness: a WebSocket client
+# does not follow redirects, and the bundles dial wss:// anyway.
+http://panel.example.com,
+http://widget.example.com,
+http://api.example.com,
+http://rtm.example.com,
+http://admin.example.com {
+	redir https://{host}{uri} 308
+}
+
 # The agent panel. REST goes to the api directly (one hop); everything else is
 # the panel's static app, served by its own nginx.
 panel.example.com {

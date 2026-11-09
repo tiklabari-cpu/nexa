@@ -134,8 +134,15 @@ const STACK_LAUNCH = PRIVATE
     }
   : {};
 
-/** Specs that need a stack of their own (`playwright.pilot.config.ts`, `playwright.session.config.ts`). */
-const SPECS_ON_OTHER_STACKS = ['**/pilot-mode.spec.ts', '**/session-refresh.spec.ts'];
+/**
+ * Specs that need a stack of their own (`playwright.pilot.config.ts`, `playwright.session.config.ts`),
+ * or the built images rather than the dev servers (`playwright.csp.config.ts`, tm 434).
+ */
+const SPECS_ON_OTHER_STACKS = [
+  '**/pilot-mode.spec.ts',
+  '**/session-refresh.spec.ts',
+  '**/csp-smoke.spec.ts',
+];
 
 /** Specs written for the narrow projects, run at 375 and 768 px instead of the desktop. */
 const NARROW_SPECS = ['**/narrow-inbox.spec.ts'];

@@ -35,6 +35,7 @@ import { effectiveScopes, isScope } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import { generateClientId, generateToken, hashToken } from '../../lib/crypto.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import { FIRST_PARTY_CLIENT_ORDER, firstPartyClientId } from '../auth/first-party-client.js';
 
 export const PARTNER_APP_CLIENT_TYPES = ['public', 'confidential'] as const;
 export type PartnerAppClientType = (typeof PARTNER_APP_CLIENT_TYPES)[number];
@@ -55,7 +56,7 @@ export interface PartnerApp {
   scopes: string[];
   created_at: string;
   /**
-   * True for the workspace's own sign-in client (see `firstPartyClientId`) —
+   * True for the workspace's own sign-in client (`services/auth/first-party-client.ts`) —
    * the one row the routes refuse to edit, delete or re-key. Lets a client show
    * it as built in instead of offering buttons the server will answer with 400.
    */
@@ -255,11 +256,11 @@ export class PartnerAppService {
     // RLS narrows to the caller's organization; oldest-first gives a stable
     // order (and puts the workspace's own sign-in client first, where it is).
     const rows = await tx.oauthClient.findMany({
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      orderBy: FIRST_PARTY_CLIENT_ORDER,
       select: SAFE_SELECT,
     });
-    // The list is already ordered the way `firstPartyClientId` picks, so the
-    // first row is the sign-in client — no second query.
+    // Sorted by the very order `firstPartyClientId` picks with, so the first
+    // row is the sign-in client — no second query.
     return rows.map((row, index) => this.serialise(row, index === 0));
   }
 
@@ -268,7 +269,7 @@ export class PartnerAppService {
     // keeps the shape identical to the update/delete paths below.
     const row = await tx.oauthClient.findFirst({ where: { id: clientId }, select: SAFE_SELECT });
     if (!row) return null;
-    return this.serialise(row, (await this.firstPartyClientId(tx)) === row.id);
+    return this.serialise(row, (await firstPartyClientId(tx)) === row.id);
   }
 
   /**
@@ -377,27 +378,6 @@ export class PartnerAppService {
   async remove(tx: TenantClient, clientId: string): Promise<number> {
     const { count } = await tx.oauthClient.deleteMany({ where: { id: clientId } });
     return count;
-  }
-
-  /**
-   * The organization's own sign-in client — the one `auth_list_memberships`
-   * hands to the agent app, defined there as the oldest client of the
-   * organization. It lives in this same table, so without asking, a partner
-   * surface would happily let an admin delete the row every member of the
-   * workspace logs in through. Reads and writes both go through here rather
-   * than guessing from the id format.
-   *
-   * Returns null for an organization with no clients at all, in which case
-   * nothing is protected — correct, because there is no sign-in client to break.
-   */
-  async firstPartyClientId(tx: TenantClient): Promise<string | null> {
-    const row = await tx.oauthClient.findFirst({
-      // Matches `auth_list_memberships`' `ORDER BY c.created_at LIMIT 1`, with
-      // `id` added only to break a tie deterministically.
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      select: { id: true },
-    });
-    return row?.id ?? null;
   }
 
   serialise(row: PartnerAppRow, firstParty: boolean): PartnerApp {

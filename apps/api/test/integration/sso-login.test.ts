@@ -37,6 +37,7 @@ import {
   type IssueAssertionOptions,
 } from '../helpers/mock-idp.js';
 import {
+  grantToken,
   ownerClient,
   proveSsoDomains,
   seedFixtures,
@@ -766,6 +767,237 @@ describe('saml sign-in', () => {
         RelayState: login.relayState,
       });
       expect(res.statusCode).toBe(404);
+    });
+  });
+
+  // =========================================================================
+  // The workspace's own sign-in client, and no other (tm 438)
+  // =========================================================================
+  //
+  // Federation asks the person nothing — their IdP answers silently — and the
+  // code it ends in carries their role's scopes. So it signs in to exactly one
+  // client: the workspace's own, its oldest (ties broken by id), the client
+  // `/auth/login` hands the console. Before tm 438 a partner app could start
+  // the flow and collect a member's code, and registering one made discovery
+  // answer `null`, which stranded every identity-provider tile.
+
+  describe('the workspace’s own sign-in client, and no other (tm 438)', () => {
+    const PARTNER_CALLBACK = 'https://partner.example.test/callback';
+
+    /** A partner app, registered the way a workspace admin registers one. */
+    async function registerPartnerApp(): Promise<string> {
+      const token = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['access_rules:rw', 'chats--all:rw'],
+      });
+      const res = await server.post(
+        '/partner/apps',
+        {
+          display_name: 'Partner App',
+          client_type: 'public',
+          redirect_uris: [PARTNER_CALLBACK],
+          scopes: ['chats--all:rw'],
+        },
+        { authorization: `Bearer ${token}` },
+      );
+      expect(res.statusCode, res.payload).toBe(201);
+      return (res.json() as { client_id: string }).client_id;
+    }
+
+    /** `/login` for any client, unwrapped — `startLogin` insists on a 302. */
+    const loginWith = (connectionId: string, clientId: string, redirectUri: string) =>
+      server.get(
+        `/auth/saml/${connectionId}/login?${new URLSearchParams({
+          client_id: clientId,
+          redirect_uri: redirectUri,
+          code_challenge: pkce().challenge,
+        }).toString()}`,
+      );
+
+    const expectNotFirstParty = (res: Awaited<ReturnType<typeof loginWith>>) => {
+      expect(res.statusCode).toBe(400);
+      expect(res.headers['location']).toBeUndefined();
+      expect(res.json().error.type).toBe('validation');
+      expect(res.json().error.details).toEqual({ reason: 'client_not_first_party' });
+    };
+
+    /** The client `/auth/login` hands the sign-in screen for workspace A. */
+    async function clientFromPasswordLogin(): Promise<string | null> {
+      const res = await server.post('/auth/login', {
+        email: fx.a.ownerEmail,
+        password: fx.a.password,
+      });
+      expect(res.statusCode).toBe(200);
+      const { memberships } = res.json() as {
+        memberships: Array<{ license_id: string; client_id: string | null }>;
+      };
+      return memberships.find((m) => m.license_id === fx.a.licenseId.toString())!.client_id;
+    }
+
+    /** The client an identity-provider tile's arrival is told to sign in with. */
+    async function discoveredClient(connectionId: string): Promise<string | null> {
+      const res = await server.get(`/auth/sso/${connectionId}`);
+      expect(res.statusCode).toBe(200);
+      return (res.json() as { client_id: string | null }).client_id;
+    }
+
+    const parkedLogins = async () => (await server.app.redis.keys('saml:relay:*')).length;
+
+    it('starts an IdP-initiated sign-in with the workspace’s own client after a partner app is registered (NFR-S11)', async () => {
+      const connection = await connect({ allowIdpInitiated: true });
+      const partner = await registerPartnerApp();
+
+      // The tile: an accepted unsolicited assertion is converted into a login
+      // the app starts itself.
+      const tile = await acs(connection.id, {
+        SAMLResponse: goodAssertion(connection, null).samlResponseBase64,
+      });
+      expect(tile.headers['location']).toBe(`${webAppUrl}/login?sso=${connection.id}`);
+
+      // What the app reads there. With two clients this used to be `null`, and
+      // the sign-in screen stopped at "This workspace has no app to sign in to."
+      const discovered = await discoveredClient(connection.id);
+      expect(discovered).toBe(fx.a.clientId);
+      expect(discovered).not.toBe(partner);
+
+      // The login it starts with that client ends in a working session.
+      const login = await startLogin(connection, { client_id: discovered! });
+      const res = await acs(connection.id, {
+        SAMLResponse: goodAssertion(connection, login).samlResponseBase64,
+        RelayState: login.relayState,
+      });
+      expect(res.statusCode).toBe(302);
+      const grant = await redeem(res.headers['location'] as string, login.verifier);
+      const me = await server.get('/auth/me', { authorization: `Bearer ${grant.access_token}` });
+      expect(me.json()).toMatchObject({ email: fx.a.agentEmail });
+    });
+
+    it('refuses a partner app’s client_id before the browser leaves, and parks nothing (NFR-S11)', async () => {
+      const connection = await connect();
+      const partner = await registerPartnerApp();
+      const parkedBefore = await parkedLogins();
+
+      // With the partner's own registered callback: the refusal is about whose
+      // client it is, not about the redirect.
+      expectNotFirstParty(await loginWith(connection.id, partner, PARTNER_CALLBACK));
+      // No relay handle exists, so no assertion can ever be turned into a code
+      // for it.
+      expect(await parkedLogins()).toBe(parkedBefore);
+
+      // The workspace's own client, beside the partner, signs in as before.
+      const login = await startLogin(connection);
+      const res = await acs(connection.id, {
+        SAMLResponse: goodAssertion(connection, login).samlResponseBase64,
+        RelayState: login.relayState,
+      });
+      expect(res.statusCode).toBe(302);
+      expect(await owner.oauthAuthorizationCode.count({ where: { clientId: partner } })).toBe(0);
+      expect(await owner.oauthAuthorizationCode.count({ where: { clientId: fx.a.clientId } })).toBe(
+        1,
+      );
+    });
+
+    it('agrees with /auth/login on which client is the workspace’s own: the oldest, not the first inserted (NFR-S11)', async () => {
+      const connection = await connect();
+      const fixtureClient = await owner.oauthClient.findUniqueOrThrow({
+        where: { id: fx.a.clientId },
+      });
+      // Inserted after the fixture's client, dated a day before it. "Oldest" is
+      // a property of the rows: an unordered read would return the fixture's
+      // client (first on the page), and so would newest-first or id order.
+      const older = 'zz-older-client';
+      await owner.oauthClient.create({
+        data: {
+          id: older,
+          organizationId: fx.a.organizationId,
+          displayName: 'SiyahTuş Agent App (restored)',
+          clientType: 'public',
+          redirectUris: [fx.a.redirectUri],
+          scopes: [],
+          createdAt: new Date(fixtureClient.createdAt.getTime() - 86_400_000),
+        },
+      });
+
+      expect(await clientFromPasswordLogin()).toBe(older);
+      expect(await discoveredClient(connection.id)).toBe(older);
+      expect((await loginWith(connection.id, older, fx.a.redirectUri)).statusCode).toBe(302);
+      expectNotFirstParty(await loginWith(connection.id, fx.a.clientId, fx.a.redirectUri));
+    });
+
+    it('breaks a tie on the creation instant by id, at every door alike (NFR-S11)', async () => {
+      const connection = await connect();
+      // Two clients inserted in one transaction share `now()`. Copied in SQL to
+      // the microsecond — a JS Date would truncate it and make the copy older.
+      // `a-tied-client` sorts before the fixture's `client_…`.
+      const tied = 'a-tied-client';
+      await owner.$executeRaw`
+        INSERT INTO oauth_clients
+               (id, organization_id, display_name, client_type, redirect_uris, scopes, created_at)
+        SELECT ${tied}, organization_id, 'Tied', client_type, redirect_uris, scopes, created_at
+          FROM oauth_clients
+         WHERE id = ${fx.a.clientId}`;
+
+      // `auth_list_memberships` used to order by `created_at` alone, so on a tie
+      // it could hand the sign-in screen a client SAML then refused.
+      expect(await clientFromPasswordLogin()).toBe(tied);
+      expect(await discoveredClient(connection.id)).toBe(tied);
+      expect((await loginWith(connection.id, tied, fx.a.redirectUri)).statusCode).toBe(302);
+      expectNotFirstParty(await loginWith(connection.id, fx.a.clientId, fx.a.redirectUri));
+    });
+
+    it('mints no code for a login parked for a partner app, and provisions nobody (NFR-S11)', async () => {
+      const connection = await connect();
+      const partner = await registerPartnerApp();
+      const newcomer = 'parked@corp.example.test';
+
+      // A login parked for the partner, as the release before this rule parked
+      // one — handles live ten minutes, so they cross a deploy.
+      const login = await startLogin(connection);
+      const key = `saml:relay:${login.relayState}`;
+      const parked = JSON.parse((await server.app.redis.get(key))!) as Record<string, unknown>;
+      await server.app.redis.set(
+        key,
+        JSON.stringify({ ...parked, clientId: partner, redirectUri: PARTNER_CALLBACK }),
+        'EX',
+        600,
+      );
+
+      const res = await acs(connection.id, {
+        SAMLResponse: goodAssertion(connection, login, {
+          subject: newcomer,
+          attributes: { email: [newcomer] },
+        }).samlResponseBase64,
+        RelayState: login.relayState,
+      });
+      expect(res.statusCode).toBe(401);
+      expect(res.headers['location']).toBeUndefined();
+      expect(await failureReasons()).toEqual(['client_not_first_party']);
+      expect(await successEntries()).toHaveLength(0);
+      expect(await owner.oauthAuthorizationCode.count({ where: { clientId: partner } })).toBe(0);
+      // Refused before provisioning: the address is still nobody's.
+      expect(await owner.account.count({ where: { email: newcomer } })).toBe(0);
+    });
+
+    it('still caps the session at the scopes the workspace’s own client registers (NFR-S11)', async () => {
+      const connection = await connect();
+      await registerPartnerApp();
+      // Two of an agent's scopes, and one an agent does not hold.
+      await owner.oauthClient.update({
+        where: { id: fx.a.clientId },
+        data: { scopes: ['chats--access:rw', 'agents--my:rw', 'access_rules:rw'] },
+      });
+
+      const login = await startLogin(connection);
+      const res = await acs(connection.id, {
+        SAMLResponse: goodAssertion(connection, login).samlResponseBase64,
+        RelayState: login.relayState,
+      });
+      expect(res.statusCode).toBe(302);
+      const grant = await redeem(res.headers['location'] as string, login.verifier);
+      // Comma-separated, as every grant from `/auth/token` spells its scopes.
+      expect(grant.scope.split(',').sort()).toEqual(['agents--my:rw', 'chats--access:rw']);
     });
   });
 });

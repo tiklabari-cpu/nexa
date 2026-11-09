@@ -32,6 +32,7 @@ import { z } from 'zod';
 import { ApiError } from '../lib/api-error.js';
 import type { TenantClient } from '../lib/tenant.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
+import { firstPartyClientId } from '../services/auth/first-party-client.js';
 import { scopesOf } from '../services/auth/principal.js';
 import {
   MAX_REDIRECT_URIS,
@@ -105,20 +106,19 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 
 /**
  * The workspace's own sign-in client shares this table (signup inserts one per
- * organization) and `auth_list_memberships` identifies it as the organization's
- * oldest client. Editing its redirect URIs would break the agent app's callback;
- * deleting it would lock every member out of the workspace. Neither is a
- * partner-app operation, so both are refused — as a 400, because the row is
- * plainly visible in the list and pretending it does not exist would be the
- * confusing answer.
+ * organization) and is the organization's oldest client — `firstPartyClientId`,
+ * the definition SAML and `auth_list_memberships` use too. Editing its redirect
+ * URIs would break the agent app's callback; deleting it would lock every
+ * member out of the workspace. Neither is a partner-app operation, so both are
+ * refused — as a 400, because the row is plainly visible in the list and
+ * pretending it does not exist would be the confusing answer.
  */
 async function assertNotFirstParty(
-  partnerApps: PartnerAppService,
   tx: TenantClient,
   clientId: string,
   verb: string,
 ): Promise<void> {
-  if ((await partnerApps.firstPartyClientId(tx)) === clientId) {
+  if ((await firstPartyClientId(tx)) === clientId) {
     throw ApiError.validation(
       `This is the workspace's own sign-in client and cannot be ${verb} here.`,
     );
@@ -214,7 +214,7 @@ export default async function partnerAppRoutes(app: FastifyInstance): Promise<vo
       // Write and read-back in one transaction, so the response is the row that
       // was just written rather than whatever a second transaction happens to see.
       const item = await request.withTenant(async (tx) => {
-        await assertNotFirstParty(partnerApps, tx, clientId, 'edited');
+        await assertNotFirstParty(tx, clientId, 'edited');
         const count = await partnerApps.update(tx, clientId, {
           ...(body.display_name !== undefined ? { displayName: body.display_name } : {}),
           ...(uris !== undefined ? { redirectUris: uris } : {}),
@@ -253,7 +253,7 @@ export default async function partnerAppRoutes(app: FastifyInstance): Promise<vo
       const clientId = parse(clientIdSchema, request.params.clientId);
 
       const removed = await request.withTenant(async (tx) => {
-        await assertNotFirstParty(partnerApps, tx, clientId, 'removed');
+        await assertNotFirstParty(tx, clientId, 'removed');
         // Read before deleting so the entry can say what the client was
         // allowed to do; `remove` returns only a count. The read is RLS-scoped,
         // so another tenant's id reads as null, deletes nothing and logs
@@ -291,7 +291,7 @@ export default async function partnerAppRoutes(app: FastifyInstance): Promise<vo
       const clientId = parse(clientIdSchema, request.params.clientId);
 
       const rotated = await request.withTenant(async (tx) => {
-        await assertNotFirstParty(partnerApps, tx, clientId, 're-keyed');
+        await assertNotFirstParty(tx, clientId, 're-keyed');
         const result = await partnerApps.rotateSecret(tx, clientId);
         if (!result) return null;
 

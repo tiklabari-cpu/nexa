@@ -8063,9 +8063,10 @@ components:
           type: string
           nullable: true
           description: |
-            The OAuth client to start the login with. `null` when the workspace
-            registers none or more than one — the caller must then be told which
-            to use rather than have one guessed for it.
+            The OAuth client to start the login with: the workspace's own
+            sign-in client, whatever partner apps sit beside it — the only one
+            `/auth/saml/{connectionId}/login` accepts (tm 438). `null` only when
+            the workspace registers no client at all.
 
     SsoConnection:
       type: object

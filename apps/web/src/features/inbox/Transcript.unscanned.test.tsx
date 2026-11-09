@@ -11,6 +11,7 @@
  */
 import { render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type * as AuthStore from '../../lib/auth-store.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 import { Transcript } from './Transcript.js';
 import type { ChatEvent } from './types.js';
@@ -18,7 +19,7 @@ import type { ChatEvent } from './types.js';
 // The file itself is fetched with the session's credentials; held pending here
 // so the test reads the label, not a download.
 vi.mock('../../lib/auth-store.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/auth-store.js')>()),
+  ...(await importOriginal<typeof AuthStore>()),
   useApiClient: () => ({ getBlob: () => new Promise<Blob>(() => {}) }),
 }));
 

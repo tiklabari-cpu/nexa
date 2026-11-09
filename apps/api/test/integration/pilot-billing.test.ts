@@ -61,7 +61,7 @@ const WRITES: readonly BillingWrite[] = [
   {
     method: 'PATCH',
     path: '/billing/subscription',
-    valid: () => ({ plan: 'enterprise', seats: 3 }),
+    valid: () => ({ plan: 'growth', seats: 3 }),
   },
   { method: 'PUT', path: '/billing/payment-method', valid: () => CARD },
   {

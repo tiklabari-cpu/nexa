@@ -15,10 +15,13 @@
  * open behind it: a reference from an earlier run is reused (one per term),
  * the crypto request is withdrawn again, and the plan is put back. Acme is
  * seeded on Enterprise, a quoted plan with nothing to pay here, so the test
- * moves it to the listed plan first — the way `billing.spec.ts` does.
+ * moves it to the listed plan first — the way `billing.spec.ts` does — and
+ * the operator's path (`assign-plan.ts`) puts it back, since the checkout no
+ * longer sells Enterprise (tm 432).
  */
 import { assertNoBlockingViolations, scanScreen } from './a11y.js';
-import { expect, test } from './fixtures.js';
+import { assignPlan } from './assign-plan.js';
+import { ACME_OWNER, expect, test } from './fixtures.js';
 
 test.describe('payment methods (tm 382)', () => {
   test('issues a transfer reference and asks for a crypto address without showing one', async ({
@@ -30,7 +33,6 @@ test.describe('payment methods (tm 382)', () => {
     // A quoted plan has nothing to pay here; the listed one does.
     const manage = agentPage.getByRole('region', { name: 'Manage plan' });
     const growthPlan = manage.getByTestId('plan-option-growth');
-    const enterprisePlan = manage.getByTestId('plan-option-enterprise');
     const confirmPlanChange = manage.getByRole('button', { name: 'Confirm plan change' });
     await expect(growthPlan).toBeVisible();
     const startedOnGrowth = (await growthPlan.getAttribute('aria-pressed')) === 'true';
@@ -83,11 +85,9 @@ test.describe('payment methods (tm 382)', () => {
       await expect(request).toBeVisible();
       await expect(section.getByText(/Withdrawn/).first()).toBeVisible();
     } finally {
-      if (!startedOnGrowth && (await enterprisePlan.isEnabled())) {
-        await enterprisePlan.click();
-        await confirmPlanChange.click();
-        await expect(enterprisePlan).toHaveAttribute('aria-pressed', 'true');
-      }
+      // Back on Enterprise the way an operator puts a workspace there — the
+      // checkout no longer sells it (tm 432).
+      if (!startedOnGrowth) await assignPlan(ACME_OWNER, 'enterprise');
     }
   });
 

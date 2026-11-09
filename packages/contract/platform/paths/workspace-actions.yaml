@@ -73,6 +73,11 @@ setPlan:
       subscription (sized to its headcount) when it has none. The self-serve
       downgrade guard does not apply, the workspace's own checkout is
       untouched, and an override (`PUT …/overrides`) still beats the plan.
+
+      The only way onto a quoted tier (`enterprise`): the workspace's own
+      `PATCH /billing/subscription` refuses one with `plan_requires_sales`.
+      A move onto a quoted tier keeps the amounts already on the row; a move
+      to a listed tier re-prices it at that tier's list price.
     x-platform-permission: workspaces.billing
     x-platform-audit: workspace.plan_changed
     parameters:

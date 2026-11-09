@@ -64,13 +64,21 @@ export const billing: Messages = {
   'billing.reason.seats_below_active':
     'Koltuk sayısı, bu çalışma alanındaki {active_agents} etkin temsilcinin altında olamaz.',
   'billing.reason.plan_unknown': 'Bu plan kullanılamıyor.',
+  'billing.reason.plan_requires_sales':
+    '{plan} planı satış ekibimizle düzenlenir ve buradan seçilemez.',
   'billing.reason.cycle_unknown': 'Bu faturalama dönemi kullanılamıyor.',
   'billing.managePlan.plan.overQuotaReason':
     '{plan} planı {included} AI çözümü içeriyor — bu dönem kullanılan {used} çözümün altında.',
   'billing.managePlan.plan.confirmListed':
     '{plan} planına {price} / {cycle} karşılığında geçilsin mi? Bu değişiklik hemen geçerli olur.',
-  'billing.managePlan.plan.confirmQuoted':
-    '{plan} planına geçilsin mi? Fiyatı sözleşmenizde belirlenir, bu yüzden bugünkü ücretiniz o değişene kadar aynı kalır. Bu değişiklik hemen geçerli olur.',
+  // A quoted tier is not sold here (tm 432): the picker points to sales.
+  'billing.managePlan.plan.contactSalesTag': 'Satışla görüşün',
+  'billing.managePlan.plan.contactSales':
+    '{plan} planı satış ekibimizle düzenlenir: fiyatı ve koşulları bir sözleşmede belirlenir, bu yüzden buradan açılamaz.',
+  'billing.managePlan.plan.contactSalesEmail': 'Düzenlemek için {email} adresine yazın.',
+  'billing.managePlan.plan.contactSalesNoEmail':
+    'Düzenlemek için bu hizmeti işleten ekibe başvurun.',
+  'billing.managePlan.plan.closeButton': 'Kapat',
   'billing.managePlan.plan.confirmButton': 'Plan değişikliğini onayla',
   'billing.managePlan.plan.confirming': 'Geçiliyor…',
   'billing.managePlan.plan.cancelButton': 'Vazgeç',

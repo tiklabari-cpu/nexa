@@ -346,6 +346,45 @@ describe('platform workspace actions (tm 389.10)', () => {
       await refused(act(fx.a, 'set-plan', { plan: 'platinum' }, 'billing'), 400, 'validation');
     });
 
+    it('is the only way onto Enterprise: the workspace checkout refuses it, the operator assigns it (tm 432)', async () => {
+      const billing = auth(await memberToken(fx.a, ['billing_manage']));
+
+      // The owner at their own checkout: refused with the sales reason, nothing opened.
+      const asked = await tenant.patch('/billing/subscription', { plan: 'enterprise' }, billing);
+      expect(asked.statusCode).toBe(400);
+      expect(asked.json().error.details).toEqual({
+        reason: 'plan_requires_sales',
+        plan: 'enterprise',
+      });
+      expect((await entitlementsOf(fx.a))['sso']).toBe(false);
+      expect(await owner.subscription.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
+
+      // The operator: assigned, unlocked, recorded in both trails.
+      await ok(act(fx.a, 'set-plan', { plan: 'enterprise' }, 'billing'));
+      expect(await entitlementsOf(fx.a)).toMatchObject({ sso: true, siem_export: true });
+      await expectDoubleEntry(fx.a, 'workspace.plan_changed', { from: 'growth', to: 'enterprise' });
+
+      // What stays the workspace's own: seats, with the plan the operator set.
+      const seats = await tenant.patch('/billing/subscription', { seats: 4 }, billing);
+      expect(seats.statusCode).toBe(200);
+      expect(seats.json()).toMatchObject({ plan: 'enterprise', pricing: 'quoted', seats: 4 });
+
+      // Leaving it for the listed tier is the workspace's call too — at the list price.
+      const down = await tenant.patch('/billing/subscription', { plan: 'growth' }, billing);
+      expect(down.statusCode).toBe(200);
+      expect(down.json()).toMatchObject({
+        plan: 'growth',
+        pricing: 'listed',
+        unit_price_cents: 9900,
+      });
+      expect((await entitlementsOf(fx.a))['sso']).toBe(false);
+      // …and only the operator brings it back.
+      const again = await tenant.patch('/billing/subscription', { plan: 'enterprise' }, billing);
+      expect(again.json().error.details?.reason).toBe('plan_requires_sales');
+      await ok(act(fx.a, 'set-plan', { plan: 'enterprise' }, 'billing'));
+      expect((await entitlementsOf(fx.a))['sso']).toBe(true);
+    });
+
     it('replaces the seat ceiling as a whole row, reads it back, and removes it when nothing is overridden', async () => {
       const token = await memberToken(fx.a, ['accounts--all:rw']);
       const invite = (email: string) =>

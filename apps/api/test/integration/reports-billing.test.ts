@@ -4847,57 +4847,189 @@ describe('reports and billing', () => {
       expect(response.json().error.type).toBe('validation');
     });
 
-    it('accepts the enterprise tier and keeps the amounts already on file', async () => {
-      await activate();
-      await server.patch('/billing/subscription', { seats: 2 }, auth);
+    // tm 432 · denetim F14: the self-serve PATCH used to put a workspace on
+    // Enterprise — every Enterprise capability unlocked, the bill left at the
+    // listed figure on the row. A quoted tier is the platform's to assign
+    // (`setPlan`, proved in `platform-workspace-actions.test.ts`).
+    describe('a quoted tier is not self-serve (tm 432)', () => {
+      const ENTERPRISE_ONLY = ['white_label', 'sandbox', 'sla', 'sso', 'hipaa', 'siem_export'];
 
-      const response = await server.patch('/billing/subscription', { plan: 'enterprise' }, auth);
-      expect(response.statusCode).toBe(200);
-      expect(response.json().plan).toBe('enterprise');
-      // Quoted, so a client shows "contact sales" rather than the figure — but
-      // the figure is unchanged, because the catalogue prices nothing for
-      // Enterprise and this deployment may not invent a price.
-      expect(response.json().pricing).toBe('quoted');
-      expect(response.json().unit_price_cents).toBe(9900);
+      const expectSalesRefusal = (response: Awaited<ReturnType<TestServer['patch']>>) => {
+        expect(response.statusCode).toBe(400);
+        expect(response.json().error.type).toBe('validation');
+        expect(response.json().error.details).toEqual({
+          reason: 'plan_requires_sales',
+          plan: 'enterprise',
+        });
+      };
 
-      const row = await owner.subscription.findFirstOrThrow({
-        where: { licenseId: fx.a.licenseId },
+      it('refuses Enterprise to a paying growth workspace, and nothing it unlocks opens (FR-MOD-10.1.1 · FR-MOD-11.5)', async () => {
+        await activate();
+        await server.patch('/billing/subscription', { seats: 3, billing_cycle: 'annual' }, auth);
+        const before = await owner.subscription.findFirstOrThrow({
+          where: { licenseId: fx.a.licenseId },
+        });
+
+        expectSalesRefusal(
+          await server.patch('/billing/subscription', { plan: 'enterprise' }, auth),
+        );
+        // Named alongside fields that would be fine alone: refused as a whole,
+        // nothing half-written.
+        expectSalesRefusal(
+          await server.patch(
+            '/billing/subscription',
+            { plan: 'enterprise', seats: 4, billing_cycle: 'monthly' },
+            auth,
+          ),
+        );
+
+        const after = await owner.subscription.findFirstOrThrow({
+          where: { licenseId: fx.a.licenseId },
+        });
+        expect(after).toEqual(before);
+        expect(await owner.subscription.count({ where: { licenseId: fx.a.licenseId } })).toBe(1);
+
+        const entitlements = (await server.get('/billing/entitlements', auth)).json();
+        expect(entitlements.plan).toBe('growth');
+        expect(Object.values(entitlements.entitlements)).toEqual(ENTERPRISE_ONLY.map(() => false));
+        // And the bill still reads as the listed tier it is.
+        const view = (await server.get('/billing/subscription', auth)).json();
+        expect(view).toMatchObject({ plan: 'growth', pricing: 'listed', unit_price_cents: 9900 });
       });
-      expect(row.plan).toBe('enterprise');
-      expect(row.unitPriceCents).toBe(9900);
+
+      it('refuses it on a trial too, without creating the subscription row', async () => {
+        // Fixtures ship a trial with no row: the request names a plan and
+        // nothing else, so the refusal is the whole answer.
+        expectSalesRefusal(
+          await server.patch('/billing/subscription', { plan: 'enterprise', seats: 2 }, auth),
+        );
+        expect(await owner.subscription.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
+        const license = await owner.license.findUniqueOrThrow({ where: { id: fx.a.licenseId } });
+        expect(license.plan).not.toBe('enterprise');
+        expect((await server.get('/billing/entitlements', auth)).json().entitlements.sso).toBe(
+          false,
+        );
+      });
+
+      it('says sales, not usage, to a heavy user asking for Enterprise', async () => {
+        await activate();
+        await server.patch('/billing/subscription', { seats: 2 }, auth);
+        await owner.usageRecord.create({
+          data: {
+            licenseId: fx.a.licenseId,
+            metric: 'ai_resolutions',
+            period: currentPeriod(),
+            quantity: 250n,
+            included: 200n,
+            overageUnit: 50,
+            overageUnitPriceCents: 50,
+          },
+        });
+
+        expectSalesRefusal(
+          await server.patch('/billing/subscription', { plan: 'enterprise' }, auth),
+        );
+      });
+
+      it('lets a workspace already on Enterprise change seats and cycle, keeping its contract figures', async () => {
+        await activate();
+        // As the platform leaves it: Enterprise, with the contract's numbers.
+        await owner.subscription.create({
+          data: {
+            licenseId: fx.a.licenseId,
+            plan: 'enterprise',
+            status: 'active',
+            seats: 2,
+            unitPriceCents: 15_000,
+            aiResolutionsIncluded: 1_000,
+          },
+        });
+
+        const seats = await server.patch('/billing/subscription', { seats: 5 }, auth);
+        expect(seats.statusCode).toBe(200);
+        expect(seats.json()).toMatchObject({
+          plan: 'enterprise',
+          pricing: 'quoted',
+          seats: 5,
+          unit_price_cents: 15_000,
+        });
+        const cycle = await server.patch(
+          '/billing/subscription',
+          { billing_cycle: 'annual' },
+          auth,
+        );
+        expect(cycle.statusCode).toBe(200);
+
+        const row = await owner.subscription.findFirstOrThrow({
+          where: { licenseId: fx.a.licenseId },
+        });
+        expect(row).toMatchObject({
+          plan: 'enterprise',
+          seats: 5,
+          billingCycle: 'annual',
+          unitPriceCents: 15_000,
+          aiResolutionsIncluded: 1_000,
+        });
+        // Still Enterprise in what it unlocks — the seat change did not touch it.
+        expect((await server.get('/billing/entitlements', auth)).json().entitlements.sso).toBe(
+          true,
+        );
+
+        // Naming the plan it is already on is still naming a quoted plan.
+        expectSalesRefusal(
+          await server.patch('/billing/subscription', { plan: 'enterprise', seats: 6 }, auth),
+        );
+        expect(
+          (await owner.subscription.findFirstOrThrow({ where: { licenseId: fx.a.licenseId } }))
+            .seats,
+        ).toBe(5);
+      });
+
+      it('re-prices a move from Enterprise to growth at the list price, not the contract figures', async () => {
+        await activate();
+        await owner.subscription.create({
+          data: {
+            licenseId: fx.a.licenseId,
+            plan: 'enterprise',
+            status: 'active',
+            seats: 3,
+            unitPriceCents: 15_000,
+            aiResolutionsIncluded: 1_000,
+          },
+        });
+
+        const response = await server.patch('/billing/subscription', { plan: 'growth' }, auth);
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toMatchObject({
+          plan: 'growth',
+          pricing: 'listed',
+          seats: 3,
+          unit_price_cents: 9900,
+          estimated_total_cents: 3 * 9900,
+        });
+        const row = await owner.subscription.findFirstOrThrow({
+          where: { licenseId: fx.a.licenseId },
+        });
+        expect(row).toMatchObject({
+          plan: 'growth',
+          unitPriceCents: 9900,
+          aiResolutionsIncluded: 200,
+        });
+        // And there is no way back from here at the checkout.
+        expectSalesRefusal(
+          await server.patch('/billing/subscription', { plan: 'enterprise' }, auth),
+        );
+      });
     });
 
     it('reports the self-serve tier as listed', async () => {
       expect((await server.get('/billing/subscription', auth)).json().pricing).toBe('listed');
     });
 
-    it('never refuses the move up to Enterprise over usage already spent', async () => {
-      await activate();
-      await server.patch('/billing/subscription', { seats: 2 }, auth);
-      // Well past growth's 200 included resolutions. Enterprise has no
-      // catalogue allowance, so it can never be the smaller side of a move —
-      // refusing an upgrade because the workspace uses the product a lot would
-      // be exactly backwards.
-      await owner.usageRecord.create({
-        data: {
-          licenseId: fx.a.licenseId,
-          metric: 'ai_resolutions',
-          period: currentPeriod(),
-          quantity: 250n,
-          included: 200n,
-          overageUnit: 50,
-          overageUnitPriceCents: 50,
-        },
-      });
-
-      const response = await server.patch('/billing/subscription', { plan: 'enterprise' }, auth);
-      expect(response.statusCode).toBe(200);
-      expect(response.json().plan).toBe('enterprise');
-    });
-
     it('still refuses the move down from Enterprise once the quota is spent', async () => {
       await activate();
-      await server.patch('/billing/subscription', { plan: 'enterprise', seats: 2 }, auth);
+      // Enterprise as the platform assigns it (the checkout no longer can).
+      await seedSubscription(owner, fx.a.licenseId, 'enterprise');
       await owner.usageRecord.create({
         data: {
           licenseId: fx.a.licenseId,
@@ -5023,7 +5155,7 @@ describe('reports and billing', () => {
     });
 
     it('grants them all once the workspace is on Enterprise', async () => {
-      await server.patch('/billing/subscription', { plan: 'enterprise', seats: 2 }, auth);
+      await seedSubscription(owner, fx.a.licenseId, 'enterprise');
 
       const response = await server.get('/billing/entitlements', auth);
       expect(response.json().plan).toBe('enterprise');
@@ -5038,7 +5170,7 @@ describe('reports and billing', () => {
     });
 
     it('takes them away again on the way back down', async () => {
-      await server.patch('/billing/subscription', { plan: 'enterprise', seats: 2 }, auth);
+      await seedSubscription(owner, fx.a.licenseId, 'enterprise');
       expect(
         (await server.get('/billing/entitlements', auth)).json().entitlements.white_label,
       ).toBe(true);
@@ -5106,7 +5238,7 @@ describe('reports and billing', () => {
 
     it("never reports another licence's plan", async () => {
       // A goes Enterprise; B must still answer for itself.
-      await server.patch('/billing/subscription', { plan: 'enterprise', seats: 2 }, auth);
+      await seedSubscription(owner, fx.a.licenseId, 'enterprise');
       const tokenB = await grantToken(owner, {
         licenseId: fx.b.licenseId,
         organizationId: fx.b.organizationId,

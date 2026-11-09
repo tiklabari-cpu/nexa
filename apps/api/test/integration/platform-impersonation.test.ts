@@ -492,7 +492,7 @@ describe('platform impersonation (tm 389.15)', () => {
         [tenant.post('/auth/personal-access-tokens', { name: 'x', scopes: [] }, as), 'credentials'],
         [tenant.patch('/settings/security', { require_two_factor: true }, as), 'security'],
         [tenant.post(`/customers/${fx.a.customerId}/erase`, {}, as), 'data_deletion'],
-        [tenant.patch('/billing/subscription', { plan: 'enterprise' }, as), 'subscription'],
+        [tenant.patch('/billing/subscription', { plan: 'growth' }, as), 'subscription'],
         [tenant.post('/settings/sandbox/reset', {}, as), 'sandbox'],
         [
           tenant.post('/invitations', { email: 'new@example.test', role: 'admin' }, as),

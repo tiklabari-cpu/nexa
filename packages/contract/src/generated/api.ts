@@ -12640,6 +12640,21 @@ export interface paths {
      *     including the downgrade guard that refuses a plan whose included quota is
      *     below what the workspace has already used this month.
      *
+     *     `plan` takes only a **listed** tier — one whose price the catalogue
+     *     states (`pricing: "listed"` in `GET /billing/entitlements`). A quoted
+     *     tier (`enterprise`) is sold through sales under a contract this
+     *     deployment never sees, so naming it here answers `400 validation` with
+     *     `error.details: { reason: "plan_requires_sales", plan }` and changes
+     *     nothing. The platform operator puts a workspace on a quoted tier
+     *     (root panel; platform API `POST /workspaces/{licenseId}/set-plan`); a
+     *     workspace already there may still change `seats` and `billing_cycle`
+     *     here (its contract figures stay on the row) or move itself to a listed
+     *     tier, which re-prices it at that tier's list price.
+     *
+     *     Other refusals carry their own `error.details.reason`: `plan_unknown`,
+     *     `cycle_unknown`, `seats_below_active` (with `active_agents`) and
+     *     `plan_below_usage` (with `plan`, `included`, `used`).
+     *
      *     **Owner only** (K7): the billing scope and the owner role are both
      *     checked. An admin or vice owner reads billing (`reports_read`) and gets
      *     `403` here, on a token minted before the change too.
@@ -45534,8 +45549,11 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': {
-          /** @description Plan id. Today: `growth`. */
-          plan?: string;
+          /**
+           * @description A self-serve (listed) plan id. A quoted tier such as `enterprise` is refused with `plan_requires_sales`.
+           * @enum {string}
+           */
+          plan?: 'growth';
           /** @enum {string} */
           billing_cycle?: 'monthly' | 'annual';
           /** @description Purchased seats. Must be at least `min_seats`. */

@@ -16,17 +16,32 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import { defaultScopesForRole } from '@siyahtus/types';
 import type * as AuthStore from '../../lib/auth-store.js';
+import type * as Deployment from '../../lib/deployment.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
-const { api } = vi.hoisted(() => ({
+const { api, deployment } = vi.hoisted(() => ({
   api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), put: vi.fn(), getBlob: vi.fn() },
+  // The deployment's published contact address, which the Enterprise option
+  // points to (tm 432). `null` unless a test sets it.
+  deployment: { contactEmail: null as string | null },
 }));
 
 vi.mock('../../lib/auth-store.js', async (importOriginal) => {
   const actual = await importOriginal<typeof AuthStore>();
   return { ...actual, useApiClient: () => api };
+});
+
+vi.mock('../../lib/deployment.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof Deployment>();
+  return {
+    ...actual,
+    useDeployment: () => ({
+      ...actual.DEPLOYMENT_FALLBACK,
+      contact_email: deployment.contactEmail,
+    }),
+  };
 });
 
 const { BillingPage } = await import('./BillingPage.js');
@@ -318,6 +333,7 @@ beforeEach(() => {
 
 afterEach(() => {
   useAuth.setState({ agent: null });
+  deployment.contactEmail = null;
 });
 
 describe('BillingPage — AI resolutions meter', () => {
@@ -654,11 +670,11 @@ describe('BillingPage — plan, seats and billing cycle (FR-MOD-10.1.1 · FR-MOD
     expect(screen.getByText(/Minimum 1/)).toBeInTheDocument();
   });
 
-  it('switches plan tier through a confirm step, PATCHing the plan field (FR-MOD-10.1.1)', async () => {
+  it('switches to a listed tier through a confirm step, PATCHing the plan field (FR-MOD-10.1.1)', async () => {
     const user = userEvent.setup();
-    mockBilling({ plan: 'growth', seats: 3, billingCycle: 'monthly' });
+    mockBilling({ plan: 'enterprise', seats: 3, billingCycle: 'monthly' });
     api.patch.mockResolvedValue({
-      plan: 'enterprise',
+      plan: 'growth',
       billing_cycle: 'monthly',
       status: 'active',
       access: 'active',
@@ -690,26 +706,87 @@ describe('BillingPage — plan, seats and billing cycle (FR-MOD-10.1.1 · FR-MOD
     });
     renderBilling(<BillingPage />);
 
-    const growthButton = await screen.findByTestId('plan-option-growth');
-    expect(growthButton).toHaveAttribute('aria-pressed', 'true');
-    const enterpriseButton = screen.getByTestId('plan-option-enterprise');
-    expect(enterpriseButton).toHaveAttribute('aria-pressed', 'false');
+    const enterpriseButton = await screen.findByTestId('plan-option-enterprise');
+    expect(enterpriseButton).toHaveAttribute('aria-pressed', 'true');
+    const growthButton = screen.getByTestId('plan-option-growth');
+    expect(growthButton).toHaveAttribute('aria-pressed', 'false');
 
-    await user.click(enterpriseButton);
+    await user.click(growthButton);
     // Unlike the cycle toggle and seat stepper, a plan pick opens a confirm
     // step first — nothing is sent until it is accepted.
     expect(api.patch).not.toHaveBeenCalled();
-    // The contract's price lives outside this product, so the confirm text
-    // says so instead of inventing a total.
-    expect(screen.getByTestId('plan-confirm')).toHaveTextContent(/set in your contract/i);
+    expect(screen.getByTestId('plan-confirm')).toHaveTextContent('$297.00 / month');
     expect(screen.getByTestId('plan-confirm')).toHaveTextContent(/effect immediately/i);
 
     await user.click(screen.getByRole('button', { name: 'Confirm plan change' }));
 
-    expect(api.patch).toHaveBeenCalledWith('/billing/subscription', { plan: 'enterprise' });
+    expect(api.patch).toHaveBeenCalledWith('/billing/subscription', { plan: 'growth' });
     await vi.waitFor(() => {
-      expect(screen.getByTestId('plan-option-enterprise')).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByTestId('plan-option-growth')).toHaveAttribute('aria-pressed', 'true');
     });
+  });
+
+  it('offers Enterprise through sales, with nothing to confirm and nothing sent (tm 432)', async () => {
+    const user = userEvent.setup();
+    mockBilling({ plan: 'growth', seats: 3, billingCycle: 'monthly' });
+    renderBilling(<BillingPage />);
+
+    const enterpriseButton = await screen.findByTestId('plan-option-enterprise');
+    expect(enterpriseButton).toHaveAttribute('aria-pressed', 'false');
+    // Tagged on the picker itself, before anything is clicked.
+    expect(enterpriseButton).toHaveTextContent('Contact sales');
+    expect(screen.getByTestId('plan-option-growth')).not.toHaveTextContent('Contact sales');
+
+    await user.click(enterpriseButton);
+    const sales = screen.getByTestId('plan-contact-sales');
+    expect(sales).toHaveTextContent(/arranged with our sales team/i);
+    // No contact address published: the sentence says who to ask, no link.
+    expect(sales).toHaveTextContent('Ask the team that runs this service to arrange it.');
+    expect(within(sales).queryByRole('link')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('plan-confirm')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Confirm plan change' })).not.toBeInTheDocument();
+
+    await user.click(within(sales).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByTestId('plan-contact-sales')).not.toBeInTheDocument();
+    expect(api.patch).not.toHaveBeenCalled();
+    expect(screen.getByTestId('plan-option-growth')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it("points Enterprise at the deployment's contact address when it publishes one", async () => {
+    const user = userEvent.setup();
+    deployment.contactEmail = 'sales@example.test';
+    mockBilling({ plan: 'growth' });
+    renderBilling(<BillingPage />);
+
+    await user.click(await screen.findByTestId('plan-option-enterprise'));
+    const link = within(screen.getByTestId('plan-contact-sales')).getByRole('link', {
+      name: 'Write to sales@example.test to arrange it.',
+    });
+    expect(link).toHaveAttribute('href', 'mailto:sales@example.test');
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+
+  it("words a sales refusal from the server in the console's language, should one arrive (tm 432)", async () => {
+    const user = userEvent.setup();
+    mockBilling({ plan: 'enterprise', seats: 3 });
+    api.patch.mockRejectedValue(
+      new ApiClientError({
+        type: 'validation',
+        status: 400,
+        message:
+          'The enterprise plan is arranged with sales and cannot be chosen at the self-serve checkout.',
+        requestId: 'req-1',
+        details: { reason: 'plan_requires_sales', plan: 'enterprise' },
+      }),
+    );
+    renderBilling(<BillingPage />);
+
+    await user.click(await screen.findByTestId('plan-option-growth'));
+    await user.click(screen.getByRole('button', { name: 'Confirm plan change' }));
+
+    expect(await screen.findByTestId('plan-change-error')).toHaveTextContent(
+      'The Enterprise plan is arranged with our sales team and cannot be chosen here.',
+    );
   });
 
   it('states the new recurring price when confirming a switch to a listed plan', async () => {
@@ -761,9 +838,9 @@ describe('BillingPage — plan, seats and billing cycle (FR-MOD-10.1.1 · FR-MOD
 
   it('refreshes the AI usage meter after a plan change', async () => {
     const user = userEvent.setup();
-    mockBilling({ plan: 'growth', seats: 3 });
+    mockBilling({ plan: 'enterprise', seats: 3 });
     api.patch.mockResolvedValue({
-      plan: 'enterprise',
+      plan: 'growth',
       billing_cycle: 'monthly',
       status: 'active',
       access: 'active',
@@ -795,12 +872,12 @@ describe('BillingPage — plan, seats and billing cycle (FR-MOD-10.1.1 · FR-MOD
     });
     renderBilling(<BillingPage />);
 
-    await screen.findByTestId('plan-option-growth');
+    await screen.findByTestId('plan-option-enterprise');
     const usageCallsBefore = api.get.mock.calls.filter(
       (call) => call[0] === '/billing/usage',
     ).length;
 
-    await user.click(screen.getByTestId('plan-option-enterprise'));
+    await user.click(screen.getByTestId('plan-option-growth'));
     await user.click(screen.getByRole('button', { name: 'Confirm plan change' }));
 
     await vi.waitFor(() => {

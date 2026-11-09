@@ -19,12 +19,19 @@
  * weigh.
  */
 import type { InboxApi } from './api';
+import type { ComposerDraft } from './failedSend';
 import { REFUSED_PROPERTY, type ReplyAccess, type ReplyLock } from './replyGuard';
 import {
+  LOCAL_EVENT_PREFIX,
+  PENDING_PROPERTY,
+  SEND_FAILED_PROPERTY,
+  failedSendOf,
+  isLocalOnly,
   isPending,
   type ChatEvent,
   type ChatSummary,
   type EventRecipients,
+  type FailedSend,
   type InboxView,
 } from './types';
 import type { RtmClientAction, RtmStatus } from '../../rtm/client';
@@ -40,7 +47,9 @@ export interface TranscriptState {
   /** Whether a further page of history exists behind the oldest loaded event. */
   hasMore: boolean;
   loadingOlder: boolean;
+  /** A composer send is in flight (a retry from a bubble does not count). */
   sending: boolean;
+  /** Why the latest attempt failed; the bubble itself says "not sent" (tm 437). */
   sendError: string | null;
 }
 
@@ -247,8 +256,16 @@ export class InboxStore {
     try {
       const page = await this.#options.api.listEvents(chatId, {});
       if (generation !== this.#transcriptGeneration.get(chatId)) return;
+      // Bubbles only this phone holds — sending, failed, refused — are not in
+      // the server's page, and replacing the transcript with it would delete
+      // them. A reload follows a reconnect (`sync_truncated`), which on a weak
+      // signal is exactly when a send has just failed (tm 437). They stay at
+      // the newest end, next to the composer, where an open question belongs;
+      // one whose message the page does hold settles by id when its request
+      // (or its retry) answers.
+      const local = this.transcriptOf(chatId).events.filter(isLocalOnly);
       this.#patchTranscript(chatId, {
-        events: page.items,
+        events: [...local, ...page.items],
         status: 'ready',
         error: null,
         hasMore: page.next_page_id !== undefined,
@@ -302,6 +319,9 @@ export class InboxStore {
    * happen presses send again, and on a slow connection that is how one message
    * becomes three — so the optimistic bubble is not a nicety, and the
    * idempotency key is what makes the retry behind it safe.
+   *
+   * The key is minted here, once per message, and never again: a failed send
+   * keeps it on the bubble and {@link retrySend} sends it unchanged (tm 437).
    */
   async send(
     chatId: string,
@@ -311,9 +331,9 @@ export class InboxStore {
     if (text === '') return false;
 
     const stamp = (this.#options.now ?? Date.now)();
-    const pendingId = `pending-${++this.#pendingCounter}`;
+    const localId = `${LOCAL_EVENT_PREFIX}${++this.#pendingCounter}`;
     const optimistic: ChatEvent = {
-      id: pendingId,
+      id: localId,
       chat_id: chatId,
       thread_id: '',
       type: 'message',
@@ -322,7 +342,7 @@ export class InboxStore {
       author_type: 'agent',
       recipients: input.recipients,
       attachment_url: null,
-      properties: { pending: true },
+      properties: { [PENDING_PROPERTY]: true },
       created_at: new Date(stamp).toISOString(),
     };
 
@@ -333,58 +353,153 @@ export class InboxStore {
       sendError: null,
     });
 
+    return this.#deliver(
+      chatId,
+      localId,
+      { text, recipients: input.recipients, idempotencyKey: `${stamp.toString(36)}-${localId}` },
+      { fromComposer: true },
+    );
+  }
+
+  /**
+   * Send a failed message again, with the key its first attempt carried
+   * (tm 437).
+   *
+   * That key is the point. On a weak signal the usual failure is a timeout
+   * whose request did arrive: the server saved the message and the answer was
+   * lost on the way back. A fresh key would save it a second time; the same
+   * key gets the saved one back (`replayed`), and the bubble turns into it.
+   *
+   * The text and the mode are read off the bubble — what the agent sees is
+   * what goes — so a note retried is still a note. A second tap while the
+   * first retry is in flight finds the bubble pending again and does nothing.
+   */
+  async retrySend(chatId: string, eventId: string): Promise<boolean> {
+    const bubble = this.transcriptOf(chatId).events.find((event) => event.id === eventId);
+    const failed = bubble === undefined ? null : failedSendOf(bubble);
+    if (bubble === undefined || failed === null || !failed.retryable) return false;
+
+    this.#replaceBubble(chatId, eventId, { [PENDING_PROPERTY]: true });
+    this.#patchTranscript(chatId, { sendError: null });
+
+    return this.#deliver(
+      chatId,
+      eventId,
+      {
+        text: bubble.text ?? '',
+        recipients: bubble.recipients,
+        idempotencyKey: failed.idempotency_key,
+      },
+      { fromComposer: false },
+    );
+  }
+
+  /**
+   * Take a failed message back (tm 437): the bubble goes, and its text and
+   * mode are returned for the composer. Only a failed bubble can be taken —
+   * one still sending may yet arrive, and one the server refused stays as the
+   * record that it did not go.
+   */
+  discardFailedSend(chatId: string, eventId: string): ComposerDraft | null {
+    const current = this.transcriptOf(chatId);
+    const bubble = current.events.find((event) => event.id === eventId);
+    if (bubble === undefined || failedSendOf(bubble) === null) return null;
+
+    this.#patchTranscript(chatId, {
+      events: current.events.filter((event) => event.id !== eventId),
+      sendError: null,
+    });
+    return { text: bubble.text ?? '', recipients: bubble.recipients };
+  }
+
+  /**
+   * One attempt at one message, settling its bubble whichever way it goes.
+   *
+   * - Accepted (or replayed): the bubble becomes the server's event — or is
+   *   dropped, if the socket already put that event on screen.
+   * - Refused because the chat is not mine (tm 475.5): kept, marked refused,
+   *   never retried.
+   * - Anything else: kept, marked failed with this message's key (tm 437).
+   *
+   * `fromComposer` says whether this attempt is the one the composer is
+   * waiting on; a retry from the bubble leaves the composer's state alone.
+   */
+  async #deliver(
+    chatId: string,
+    localId: string,
+    message: { text: string; recipients: EventRecipients; idempotencyKey: string },
+    options: { fromComposer: boolean },
+  ): Promise<boolean> {
+    const released: Partial<TranscriptState> = options.fromComposer ? { sending: false } : {};
+
     try {
       const event = await this.#options.api.sendEvent(chatId, {
         type: 'message',
-        text,
-        recipients: input.recipients,
-        // Survives a retry after a timeout without posting twice.
-        idempotency_key: `${stamp.toString(36)}-${pendingId}`,
+        text: message.text,
+        recipients: message.recipients,
+        idempotency_key: message.idempotencyKey,
       });
 
       const current = this.transcriptOf(chatId);
-      // The socket may have echoed this event back before the POST resolved.
+      // The socket may have echoed this event back before the POST resolved —
+      // or, for a retry, the first attempt's echo arrived while it sat failed.
       const alreadyThere = current.events.some((existing) => existing.id === event.id);
       this.#patchTranscript(chatId, {
         events: alreadyThere
-          ? current.events.filter((existing) => existing.id !== pendingId)
-          : current.events.map((existing) => (existing.id === pendingId ? event : existing)),
-        sending: false,
+          ? current.events.filter((existing) => existing.id !== localId)
+          : current.events.map((existing) => (existing.id === localId ? event : existing)),
+        ...released,
         sendError: null,
       });
       this.#noteEvent(chatId, event);
       this.#applyToChatList(chatId, event);
       return true;
     } catch (error) {
-      const current = this.transcriptOf(chatId);
+      if (!this.transcriptOf(chatId).events.some((existing) => existing.id === localId)) {
+        // The bubble is gone: the socket delivered this very message while the
+        // request was still out (its echo took the bubble's place), or the
+        // conversation was dropped. There is nothing left to mark, and an
+        // error line under a message the screen shows as sent would only
+        // invite the agent to type it again.
+        if (options.fromComposer) this.#patchTranscript(chatId, released);
+        return false;
+      }
+
       if (isReplyRefusal(error)) {
         // The chat is not mine to answer (tm 475.5 · D10). Retrying cannot
         // help — the answer will be the same until someone assigns it to me —
         // so there is no retry; but the words are not thrown away either: the
         // bubble stays, marked as not sent, and the composer closes.
-        this.#patchTranscript(chatId, {
-          events: current.events.map((existing) =>
-            existing.id === pendingId
-              ? { ...existing, properties: { [REFUSED_PROPERTY]: true } }
-              : existing,
-          ),
-          sending: false,
-          sendError: null,
-        });
+        this.#replaceBubble(chatId, localId, { [REFUSED_PROPERTY]: true });
+        this.#patchTranscript(chatId, { ...released, sendError: null });
         this.#lock(chatId, 'not_mine');
         // The list still says it is mine; read who has it now.
         void this.loadChats({ refresh: true });
         return false;
       }
-      // Roll the bubble back rather than leave a message on screen that nobody
-      // received — a greyed-out "sent" is the worst of both answers.
-      this.#patchTranscript(chatId, {
-        events: current.events.filter((existing) => existing.id !== pendingId),
-        sending: false,
-        sendError: messageOf(error),
-      });
+
+      // Keep the bubble (tm 437). Rolling it back, as this once did, lost the
+      // reply outright on a weak signal: the composer had already cleared. It
+      // stays with its key, marked not sent, until the agent tries again or
+      // takes the text back.
+      const failed: FailedSend = {
+        idempotency_key: message.idempotencyKey,
+        retryable: !(error instanceof ApiClientError) || error.isRetryable,
+      };
+      this.#replaceBubble(chatId, localId, { [SEND_FAILED_PROPERTY]: failed });
+      this.#patchTranscript(chatId, { ...released, sendError: messageOf(error) });
       return false;
     }
+  }
+
+  /** Swap a local bubble's state marker, leaving its words and place alone. */
+  #replaceBubble(chatId: string, localId: string, properties: Record<string, unknown>): void {
+    const current = this.transcriptOf(chatId);
+    this.#patchTranscript(chatId, {
+      events: current.events.map((existing) =>
+        existing.id === localId ? { ...existing, properties } : existing,
+      ),
+    });
   }
 
   // --- Realtime --------------------------------------------------------------
@@ -466,9 +581,12 @@ export class InboxStore {
       // and after a reconnect they routinely do.
       if (!transcript.events.some((existing) => existing.id === event.id)) {
         // Our own message, echoed back before the POST resolved. Replace the
-        // placeholder instead of showing the sentence twice.
+        // placeholder instead of showing the sentence twice. Only my own words
+        // in the same mode count as the echo: a customer who happens to write
+        // the same "ok" must not sweep away a bubble whose send may yet fail
+        // (tm 437) — the request's failure would then have nothing to mark.
         const withoutEcho = transcript.events.filter(
-          (existing) => !(isPending(existing) && existing.text === event.text),
+          (existing) => !(isPending(existing) && isEchoOf(existing, event)),
         );
         this.#patchTranscript(chatId, { events: [event, ...withoutEcho] });
       }
@@ -479,7 +597,7 @@ export class InboxStore {
   }
 
   #noteEvent(chatId: string, event: ChatEvent): void {
-    if (typeof event.id === 'string' && !event.id.startsWith('pending-')) {
+    if (typeof event.id === 'string' && !isLocalOnly(event)) {
       this.#options.onCursor?.(chatId, event.id);
     }
   }
@@ -555,6 +673,16 @@ export class InboxStore {
   #emit(): void {
     for (const listener of this.#listeners) listener();
   }
+}
+
+/** Whether a pushed event is the server's copy of this phone's pending bubble. */
+function isEchoOf(bubble: ChatEvent, event: ChatEvent): boolean {
+  return (
+    typeof bubble.author_id === 'string' &&
+    bubble.author_id === event.author_id &&
+    bubble.recipients === event.recipients &&
+    bubble.text === event.text
+  );
 }
 
 function isReplyRefusal(error: unknown): boolean {

@@ -5,11 +5,11 @@
  * screen — which is what stops an unread badge appearing for a message the
  * agent is looking at — and everything else is the store's state rendered.
  */
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ChatIds } from './ChatIds';
-import { Composer } from './Composer';
+import { Composer, type ComposerHandle } from './Composer';
 import { ConnectionBanner } from './ConnectionBanner';
 import { Transcript } from './Transcript';
 import { useInboxState, useTranscript } from './useInbox';
@@ -23,6 +23,7 @@ export function ChatScreen({ chatId }: { chatId: string }) {
   const state = useInboxState();
   const transcript = useTranscript(chatId);
   const { colors } = useTheme();
+  const composer = useRef<ComposerHandle>(null);
 
   useEffect(() => {
     store.openChat(chatId);
@@ -37,6 +38,16 @@ export function ChatScreen({ chatId }: { chatId: string }) {
   const access = store.replyAccessOf(chatId);
   const closed = access === 'closed';
   const notMine = access === 'not_mine';
+
+  // A message that was not sent, taken back (tm 437): its text and mode go
+  // into the composer. The bubble is only removed once there is a composer to
+  // receive it, so the words always exist in one of the two places.
+  const cancelFailedSend = (eventId: string): void => {
+    const field = composer.current;
+    if (field === null) return;
+    const returned = store.discardFailedSend(chatId, eventId);
+    if (returned !== null) field.restore(returned);
+  };
 
   return (
     <KeyboardAvoidingView
@@ -80,6 +91,11 @@ export function ChatScreen({ chatId }: { chatId: string }) {
           loadingOlder={transcript.loadingOlder}
           onLoadOlder={() => void store.loadOlder(chatId)}
           currentAccountId={store.accountId}
+          // Offered whatever the reply guard says: a retry carries the first
+          // attempt's key, so a message the server already saved comes back
+          // as a replay, which is answered before anyone asks whose chat it is.
+          onRetrySend={(eventId) => void store.retrySend(chatId, eventId)}
+          onCancelSend={cancelFailedSend}
         />
       )}
 
@@ -100,6 +116,7 @@ export function ChatScreen({ chatId }: { chatId: string }) {
       )}
 
       <Composer
+        ref={composer}
         chatId={chatId}
         onSend={(input) => void store.send(chatId, input)}
         sending={transcript.sending}

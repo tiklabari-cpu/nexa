@@ -8,7 +8,7 @@ import { InboxStore } from './store';
 import type { EventPage, InboxApi } from './api';
 import { REFUSED_PROPERTY } from './replyGuard';
 import { ApiClientError } from '../../lib/api-client';
-import type { ChatEvent, ChatSummary } from './types';
+import { failedSendOf, type ChatEvent, type ChatSummary, type NewEvent } from './types';
 
 function event(overrides: Partial<ChatEvent> & { id: string }): ChatEvent {
   return {
@@ -274,17 +274,25 @@ describe('sending', () => {
     expect(typeof bodies[0]?.['idempotency_key']).toBe('string');
   });
 
-  it('rolls the bubble back when the send fails, and says why', async () => {
+  it('keeps the bubble when the send fails, marked not sent, and says why (tm 437)', async () => {
     const api = fakeApi({ failSendWith: new Error('Could not reach the server.') });
-    const store = new InboxStore({ api });
+    const store = new InboxStore({ api, accountId: 'agent-1' });
     await store.loadTranscript('chat-1');
 
     const ok = await store.send('chat-1', { text: 'on my way', recipients: 'all' });
 
-    // A greyed-out message that nobody received is the worst of both answers.
+    // The composer has already cleared: rolling the bubble back would lose the
+    // reply outright.
     expect(ok).toBe(false);
-    expect(store.transcriptOf('chat-1').events).toEqual([]);
-    expect(store.transcriptOf('chat-1').sendError).toBe('Could not reach the server.');
+    const transcript = store.transcriptOf('chat-1');
+    expect(transcript.events).toHaveLength(1);
+    expect(transcript.events[0]?.text).toBe('on my way');
+    expect(failedSendOf(transcript.events[0] as ChatEvent)).toEqual({
+      idempotency_key: expect.any(String),
+      retryable: true,
+    });
+    expect(transcript.sending).toBe(false);
+    expect(transcript.sendError).toBe('Could not reach the server.');
   });
 
   it('sends an internal note as one, not as a reply', async () => {
@@ -303,6 +311,301 @@ describe('sending', () => {
 
     expect(await store.send('chat-1', { text: '   ', recipients: 'all' })).toBe(false);
     expect(api.sent).toEqual([]);
+  });
+});
+
+/**
+ * A send that fails keeps its words and its key (tm 437): on a weak signal
+ * the composer has already cleared, so the bubble is the only copy left, and
+ * the key the first attempt carried is what keeps a retry from posting twice.
+ */
+describe('a send that fails (tm 437 · FR-MOD-02.3.6)', () => {
+  type Outcome = 'ok' | 'saved-then-timeout' | 'network' | 'invalid';
+
+  /**
+   * The server's half, as far as the phone can tell: `POST /chats/{id}/events`
+   * saves once per idempotency key and answers a repeat with the saved event
+   * (chat-service `sendEvent` → `replayed`). Each call takes the next outcome.
+   */
+  function idempotentServer(outcomes: Outcome[]) {
+    const saved = new Map<string, ChatEvent>();
+    const calls: NewEvent[] = [];
+    let minted = 0;
+    const api = fakeApi();
+    api.sendEvent = async (_chatId, body) => {
+      calls.push(body);
+      const outcome = outcomes.shift() ?? 'ok';
+      if (outcome === 'network') {
+        throw new ApiClientError({
+          type: 'network',
+          status: 0,
+          message: 'Could not reach the server.',
+          requestId: '-',
+        });
+      }
+      if (outcome === 'invalid') {
+        throw new ApiClientError({
+          type: 'validation',
+          status: 400,
+          message: 'Text is too long.',
+          requestId: 'req-2',
+        });
+      }
+      const key = body.idempotency_key ?? `no-key-${calls.length}`;
+      let stored = saved.get(key);
+      if (stored === undefined) {
+        minted += 1;
+        stored = event({
+          id: `THREAD1_${minted}`,
+          text: body.text ?? '',
+          author_type: 'agent',
+          author_id: 'agent-1',
+          recipients: body.recipients ?? 'all',
+        });
+        saved.set(key, stored);
+      }
+      if (outcome === 'saved-then-timeout') {
+        throw new ApiClientError({
+          type: 'timeout',
+          status: 0,
+          message: 'The server did not answer within 15000ms.',
+          requestId: '-',
+        });
+      }
+      return stored;
+    };
+    return { api, calls, saved };
+  }
+
+  async function failedStore(outcomes: Outcome[], text = 'on my way') {
+    const server = idempotentServer(outcomes);
+    const store = new InboxStore({ api: server.api, accountId: 'agent-1' });
+    await store.loadTranscript('chat-1');
+    await store.send('chat-1', { text, recipients: 'all' });
+    const bubble = store.transcriptOf('chat-1').events[0] as ChatEvent;
+    return { ...server, store, bubble };
+  }
+
+  it('sends again with the first attempt’s key, and the bubble becomes the server’s event', async () => {
+    const { store, calls, bubble } = await failedStore(['network', 'ok']);
+    expect(failedSendOf(bubble)).not.toBeNull();
+
+    const ok = await store.retrySend('chat-1', bubble.id);
+
+    expect(ok).toBe(true);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.idempotency_key).toBe(calls[0]?.idempotency_key);
+    expect(calls[1]?.text).toBe('on my way');
+    const transcript = store.transcriptOf('chat-1');
+    expect(transcript.events.map((e) => e.id)).toEqual(['THREAD1_1']);
+    expect(transcript.sendError).toBeNull();
+  });
+
+  it('a timeout the server had already saved is replayed on retry, not posted twice', async () => {
+    const { store, calls, saved, bubble } = await failedStore(['saved-then-timeout', 'ok']);
+    // The request arrived; only the answer was lost.
+    expect(saved.size).toBe(1);
+    expect(store.transcriptOf('chat-1').sendError).toBe(
+      'The server did not answer within 15000ms.',
+    );
+
+    await store.retrySend('chat-1', bubble.id);
+
+    expect(calls).toHaveLength(2);
+    expect(saved.size).toBe(1);
+    expect(store.transcriptOf('chat-1').events.map((e) => e.id)).toEqual(['THREAD1_1']);
+  });
+
+  it('drops the bubble on retry when the first attempt’s echo is already on screen', async () => {
+    const { store, bubble, saved } = await failedStore(['saved-then-timeout', 'ok']);
+    // The socket delivered what the server saved while the bubble sat failed.
+    const [echo] = [...saved.values()];
+    store.applyPush('incoming_event', { chat_id: 'chat-1', event: echo });
+    expect(store.transcriptOf('chat-1').events).toHaveLength(2);
+
+    await store.retrySend('chat-1', bubble.id);
+
+    expect(store.transcriptOf('chat-1').events.map((e) => e.id)).toEqual(['THREAD1_1']);
+  });
+
+  it('keeps the same key however many times it fails', async () => {
+    const { store, calls, bubble } = await failedStore(['network', 'network', 'ok']);
+
+    expect(await store.retrySend('chat-1', bubble.id)).toBe(false);
+    const again = store.transcriptOf('chat-1').events[0] as ChatEvent;
+    expect(again.id).toBe(bubble.id);
+    expect(failedSendOf(again)).toEqual(failedSendOf(bubble));
+    expect(await store.retrySend('chat-1', bubble.id)).toBe(true);
+
+    expect(new Set(calls.map((call) => call.idempotency_key)).size).toBe(1);
+    expect(calls).toHaveLength(3);
+  });
+
+  it('sends one request for a double tap on "Try again"', async () => {
+    const { store, calls, bubble } = await failedStore(['network', 'ok']);
+
+    const first = store.retrySend('chat-1', bubble.id);
+    // In flight: the bubble is pending again, so the second tap finds nothing to retry.
+    expect(store.transcriptOf('chat-1').events[0]?.properties).toEqual({ pending: true });
+    const second = store.retrySend('chat-1', bubble.id);
+
+    expect(await second).toBe(false);
+    expect(await first).toBe(true);
+    expect(calls).toHaveLength(2);
+  });
+
+  it('retries a note as a note', async () => {
+    const server = idempotentServer(['network', 'ok']);
+    const store = new InboxStore({ api: server.api, accountId: 'agent-1' });
+    await store.loadTranscript('chat-1');
+    await store.send('chat-1', { text: 'card declined twice', recipients: 'agents' });
+
+    await store.retrySend('chat-1', (store.transcriptOf('chat-1').events[0] as ChatEvent).id);
+
+    expect(server.calls.map((call) => call.recipients)).toEqual(['agents', 'agents']);
+  });
+
+  it('offers no retry for a failure the request itself caused, but keeps the words', async () => {
+    const { store, calls, bubble } = await failedStore(['invalid']);
+
+    expect(bubble.text).toBe('on my way');
+    expect(failedSendOf(bubble)?.retryable).toBe(false);
+    expect(await store.retrySend('chat-1', bubble.id)).toBe(false);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('turns a retry the server refuses as not mine into a refused bubble, with no further retry', async () => {
+    const { store, api, bubble } = await failedStore(['network']);
+    api.sendEvent = async () => {
+      throw new ApiClientError({
+        type: 'reply_requires_assignment',
+        status: 409,
+        message: 'Only the agent this chat is assigned to can reply to the customer.',
+        requestId: 'req-3',
+      });
+    };
+
+    await store.retrySend('chat-1', bubble.id);
+
+    const [refused] = store.transcriptOf('chat-1').events;
+    expect(refused?.text).toBe('on my way');
+    expect(refused?.properties).toEqual({ [REFUSED_PROPERTY]: true });
+    expect(store.replyAccessOf('chat-1')).toBe('not_mine');
+    expect(store.transcriptOf('chat-1').sendError).toBeNull();
+  });
+
+  it('gives the text and mode back on cancel, and removes the bubble', async () => {
+    const server = idempotentServer(['network']);
+    const store = new InboxStore({ api: server.api, accountId: 'agent-1' });
+    await store.loadTranscript('chat-1');
+    await store.send('chat-1', { text: 'card declined twice', recipients: 'agents' });
+    const bubble = store.transcriptOf('chat-1').events[0] as ChatEvent;
+
+    expect(store.discardFailedSend('chat-1', bubble.id)).toEqual({
+      text: 'card declined twice',
+      recipients: 'agents',
+    });
+
+    expect(store.transcriptOf('chat-1').events).toEqual([]);
+    expect(store.transcriptOf('chat-1').sendError).toBeNull();
+    // Gone, so a late "Try again" has nothing to send.
+    expect(await store.retrySend('chat-1', bubble.id)).toBe(false);
+    expect(server.calls).toHaveLength(1);
+  });
+
+  it('will not take back a message still sending, nor one the server has', async () => {
+    const api = fakeApi({ pages: [{ items: [event({ id: 'THREAD1_1' })] }] });
+    let release: (() => void) | undefined;
+    api.sendEvent = () =>
+      new Promise((_resolve, reject) => {
+        release = () => reject(new Error('Could not reach the server.'));
+      });
+    const store = new InboxStore({ api, accountId: 'agent-1' });
+    await store.loadTranscript('chat-1');
+    const inFlight = store.send('chat-1', { text: 'on my way', recipients: 'all' });
+    const pendingId = (store.transcriptOf('chat-1').events[0] as ChatEvent).id;
+
+    expect(store.discardFailedSend('chat-1', pendingId)).toBeNull();
+    expect(store.discardFailedSend('chat-1', 'THREAD1_1')).toBeNull();
+    expect(store.transcriptOf('chat-1').events).toHaveLength(2);
+
+    release?.();
+    await inFlight;
+    expect(failedSendOf(store.transcriptOf('chat-1').events[0] as ChatEvent)).not.toBeNull();
+  });
+
+  it('keeps unsent bubbles through a transcript reload after a reconnect', async () => {
+    const server = idempotentServer(['network']);
+    server.api.pages = [
+      { items: [event({ id: 'THREAD1_1', text: 'hello' })] },
+      { items: [event({ id: 'THREAD1_3', text: 'anyone?' }), event({ id: 'THREAD1_1' })] },
+    ];
+    const store = new InboxStore({ api: server.api, accountId: 'agent-1' });
+    await store.loadTranscript('chat-1');
+    await store.send('chat-1', { text: 'on my way', recipients: 'all' });
+    const failedId = (store.transcriptOf('chat-1').events[0] as ChatEvent).id;
+
+    // The gateway could not replay the gap; the phone refetches the page.
+    store.applyPush('sync_truncated', { chat_id: 'chat-1' });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const events = store.transcriptOf('chat-1').events;
+    expect(events.map((e) => e.id)).toEqual([failedId, 'THREAD1_3', 'THREAD1_1']);
+    expect(failedSendOf(events[0] as ChatEvent)).not.toBeNull();
+  });
+
+  it('does not let a customer’s identical words sweep away a bubble whose send then fails', async () => {
+    const api = fakeApi();
+    let fail: (() => void) | undefined;
+    api.sendEvent = () =>
+      new Promise((_resolve, reject) => {
+        fail = () => reject(new Error('Could not reach the server.'));
+      });
+    const store = new InboxStore({ api, accountId: 'agent-1' });
+    await store.loadTranscript('chat-1');
+    const inFlight = store.send('chat-1', { text: 'ok', recipients: 'all' });
+
+    store.applyPush('incoming_event', {
+      chat_id: 'chat-1',
+      event: event({ id: 'THREAD1_5', text: 'ok', author_id: 'customer-1' }),
+    });
+    fail?.();
+    await inFlight;
+
+    const events = store.transcriptOf('chat-1').events;
+    expect(events).toHaveLength(2);
+    expect(events.filter((e) => failedSendOf(e) !== null).map((e) => e.text)).toEqual(['ok']);
+  });
+
+  it('says nothing failed when the socket delivered the message before its request timed out', async () => {
+    const api = fakeApi();
+    let timeOut: (() => void) | undefined;
+    api.sendEvent = () =>
+      new Promise((_resolve, reject) => {
+        timeOut = () => reject(new Error('The server did not answer within 15000ms.'));
+      });
+    const store = new InboxStore({ api, accountId: 'agent-1' });
+    await store.loadTranscript('chat-1');
+    const inFlight = store.send('chat-1', { text: 'on my way', recipients: 'all' });
+
+    store.applyPush('incoming_event', {
+      chat_id: 'chat-1',
+      event: event({
+        id: 'THREAD1_1',
+        text: 'on my way',
+        author_type: 'agent',
+        author_id: 'agent-1',
+      }),
+    });
+    timeOut?.();
+    await inFlight;
+
+    // An error under a message the screen shows as sent would invite typing it again.
+    const transcript = store.transcriptOf('chat-1');
+    expect(transcript.events.map((e) => e.id)).toEqual(['THREAD1_1']);
+    expect(transcript.sendError).toBeNull();
+    expect(transcript.sending).toBe(false);
   });
 });
 
@@ -403,8 +706,15 @@ describe('realtime', () => {
     const inFlight = store.send('chat-1', { text: 'on my way', recipients: 'all' });
     store.applyPush('incoming_event', {
       chat_id: 'chat-1',
-      event: event({ id: 'THREAD1_1', text: 'on my way', author_type: 'agent' }),
+      event: event({
+        id: 'THREAD1_1',
+        text: 'on my way',
+        author_type: 'agent',
+        author_id: 'agent-1',
+      }),
     });
+    // Replaced on arrival, not only once the POST answers.
+    expect(store.transcriptOf('chat-1').events.map((e) => e.id)).toEqual(['THREAD1_1']);
     await inFlight;
 
     // The agent must not see their own sentence twice.
@@ -672,7 +982,7 @@ describe('reply guard (tm 475.5)', () => {
     expect(store.replyAccessOf('chat-1')).toBe('not_mine');
   });
 
-  it('still rolls back a reply that failed for any other reason', async () => {
+  it('keeps a reply that failed for any other reason to try again, and leaves the composer open (tm 437)', async () => {
     const api = fakeApi({
       failSendWith: new ApiClientError({
         type: 'network',
@@ -686,7 +996,10 @@ describe('reply guard (tm 475.5)', () => {
 
     await store.send('chat-1', { text: 'on my way', recipients: 'all' });
 
-    expect(store.transcriptOf('chat-1').events).toEqual([]);
+    const [bubble] = store.transcriptOf('chat-1').events;
+    expect(bubble?.text).toBe('on my way');
+    expect(failedSendOf(bubble as ChatEvent)?.retryable).toBe(true);
+    expect(bubble?.properties).not.toHaveProperty(REFUSED_PROPERTY);
     expect(store.transcriptOf('chat-1').sendError).toBe('Could not reach the server.');
     expect(store.replyAccessOf('chat-1')).toBe('unknown');
   });

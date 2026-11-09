@@ -11,9 +11,10 @@
  * Attachments are the console's (`13.7-k` weighs the parity); this is text,
  * which is what a phone is for.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useImperativeHandle, useState, type Ref } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { mergeReturnedDraft, type ComposerDraft } from './failedSend';
 import type { EventRecipients } from './types';
 import { useCopilotDraft, clearCopilotDraft } from '../copilot/copilotDraft';
 import { FONT_SIZE, RADIUS, SPACING } from '../../theme/tokens';
@@ -31,12 +32,40 @@ export interface ComposerProps {
    * the field.
    */
   disabled?: boolean;
+  /** What the screen may do to the field from outside it — see {@link ComposerHandle}. */
+  ref?: Ref<ComposerHandle>;
 }
 
-export function Composer({ chatId, onSend, sending, error, disabled = false }: ComposerProps) {
+export interface ComposerHandle {
+  /**
+   * Put a message the agent took back from a failed bubble into the field
+   * (tm 437), merged with whatever is already there ({@link mergeReturnedDraft}).
+   * A method rather than a prop: two bubbles cancelled in quick succession
+   * are two updates queued on the same state, and neither can overwrite the
+   * other before a render picks it up.
+   */
+  restore: (draft: ComposerDraft) => void;
+}
+
+const EMPTY_DRAFT: ComposerDraft = { text: '', recipients: 'all' };
+
+export function Composer({ chatId, onSend, sending, error, disabled = false, ref }: ComposerProps) {
   const { colors } = useTheme();
-  const [text, setText] = useState('');
-  const [recipients, setRecipients] = useState<EventRecipients>('all');
+  // Text and mode in one state, because a returned message moves both and
+  // the mode it lands in depends on the text already there.
+  const [draft, setDraft] = useState<ComposerDraft>(EMPTY_DRAFT);
+  const { text, recipients } = draft;
+  const setText = (next: string): void => setDraft((current) => ({ ...current, text: next }));
+  const setRecipients = (next: EventRecipients): void =>
+    setDraft((current) => ({ ...current, recipients: next }));
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      restore: (returned) => setDraft((current) => mergeReturnedDraft(current, returned)),
+    }),
+    [],
+  );
 
   // A suggestion handed over from Copilot (FR-MOD-12.3 / 13.7-i). It fills
   // the reply — always a customer-facing reply, never a note — for the agent
@@ -45,8 +74,7 @@ export function Composer({ chatId, onSend, sending, error, disabled = false }: C
   const copilotDraft = useCopilotDraft(chatId);
   useEffect(() => {
     if (copilotDraft === undefined) return;
-    setText(copilotDraft);
-    setRecipients('all');
+    setDraft({ text: copilotDraft, recipients: 'all' });
     clearCopilotDraft(chatId);
   }, [copilotDraft, chatId]);
 
@@ -57,8 +85,9 @@ export function Composer({ chatId, onSend, sending, error, disabled = false }: C
     if (!canSend) return;
     onSend({ text: text.trim(), recipients });
     // Cleared optimistically, exactly as the transcript shows the message
-    // optimistically: if the send fails the error says so, and retyping a
-    // sentence the screen still shows would be worse.
+    // optimistically. Nothing is lost by it: the words now live in the bubble,
+    // which stays if the send fails — with "Try again", and "Cancel" to bring
+    // them back here (tm 437).
     setText('');
   };
 

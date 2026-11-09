@@ -16803,12 +16803,12 @@
         "description": "PILOT_MODE=false, deneme 10 Ekim'de bitti ve ödeme yok; 1 Kasım süpürmesi Ekim'i 'paid' donduruyor, gelir raporu şişiyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F13. Kanıt yeterlidir.\n\nXHIGH GEREKÇESİ: (2) para doğruluğu.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/services/billing/invoice-close-sweep.ts:298` `status: composed.trialing ? 'trial' : 'paid'`; `apps/api/src/services/billing/invoice-service.ts:60` `InvoiceStatus = 'paid' | 'open' | 'trial'` ('open' sözlükte ZATEN var, tahmin yolu `:309` kullanıyor); `:~361` anlık `trialState`; `:~452` `periodPaid` yalnız tahmin yolunda; `apps/api/src/services/platform/billing.ts:~534` `status='paid'` toplamı.\n\nYAPILACAK: `#freeze` içinde dönem için `periodPaid` (mevcut hesap) kullan: ödenmiş → 'paid', değil → mevcut 'open'; deneme durumu `trial_ends_at` ile dönem penceresinin kesişiminden (dönemin tamamı deneme içindeyse 'trial'; kısmen ise kısmi tutar + 'open' — mevcut composer kısmi dönemi hesaplıyorsa onu kullan; değilse varsayımı HANDOFF'a yaz, memory underspecified-prd-row-needs-documented-assumption). Kontrat ve web etiketi değişmez ('open' zaten tanımlı) — web'in donmuş faturada 'open'ı gösterdiğini yalnız doğrula.\n\nTUZAK: Platform gelir raporu 'paid' topluyor — donmuş 'open' faturalar platform testlerini ripple edebilir. Saat/dönem testleri UTC 00-01 arasında kırmızı olabilir (memory integration-reds-between-00-and-01-utc). Para birimi kuruş (cents) tamsayı.\n\nKAPSAM DIŞI: tahsilat, Stripe (sahip kararı H-06).\nDENETİM BULGULARI: F13",
         "testStrategy": "api entegrasyon (sahte saat): deneme 10 Ekim'de biter, ödeme yok → 1 Kasım süpürmesi Ekim faturasını 'open' dondurur; ödeme kaydı varsa 'paid'; dönemin tamamı denemedeyse 'trial'; süpürme sonradan koşsa da sonuç aynı. platform billing toplamı open'ı paid saymaz. Mutasyon: periodPaid yerine sabit 'paid' → kırmızı. DoD: CONVENTIONS §1.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "417"
         ],
         "priority": "medium",
-        "updatedAt": "2026-11-08T22:32:22.861Z",
+        "updatedAt": "2026-11-09T07:25:45.086Z",
         "subtasks": []
       },
       {
@@ -17778,9 +17778,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-08T22:32:22.862Z",
+      "lastModified": "2026-11-09T07:25:45.087Z",
       "taskCount": 478,
-      "completedCount": 425,
+      "completedCount": 426,
       "tags": [
         "master"
       ]

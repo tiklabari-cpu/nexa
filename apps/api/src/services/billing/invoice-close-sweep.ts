@@ -19,8 +19,8 @@
  *   1. **Only closed periods.** The current period is never written. It has not
  *      ended, nothing has been billed, and its figures are supposed to move; the
  *      list endpoint serves it as an `estimate` computed on read. The database
- *      agrees rather than trusting this code — `invoices_status_check` refuses
- *      `open` and `invoices_origin_check` refuses `estimate`.
+ *      agrees rather than trusting this code — `invoices_origin_check` refuses
+ *      `estimate`.
  *
  *   2. **Idempotent by constraint, not by care.** `UNIQUE (license_id, period)`
  *      is the guarantee. A second pass — the scheduler ticking while an operator
@@ -46,6 +46,19 @@
  * carries its own price. Writing a reconstruction unmarked would be worse than
  * the derivation it replaces: same guess, now permanent and no longer visibly a
  * guess.
+ *
+ * **Paid, open or trial (tm 431 · F13).** A closed period is frozen with the
+ * answer that was true *of that period*, not of the moment the sweep ran. It
+ * is `trial` when the trial covered the whole period (`trialCoversPeriod`,
+ * from `trial_ends_at`). Otherwise it is `paid` when a payment covers it
+ * (`periodPaid`, from the payments' own terms) and `open` when none does. The
+ * sweep used to freeze every month that was not a trial month as `paid`, and
+ * to read the trial as it stood when the sweep ran: a trial that ended on the
+ * 10th, with nothing paid, froze its month `paid` on the 1st, and the root
+ * panel's revenue counted it. Both answers are fixed facts about the period,
+ * so a pass that runs late, or a reconstruction months on, freezes the same
+ * statement the 1st would have. A frozen `open` stays `open`. Collecting it
+ * later is a separate matter (H-06).
  *
  * **Credits (tm 389.12).** The root panel grants a workspace credits
  * (`platform_credits`); each open one comes off the next statement this sweep
@@ -88,6 +101,7 @@ import {
   composeInvoice,
   INVOICE_CURRENCY,
   issuedAt,
+  periodPaid,
   periodWindow,
   previousPeriod,
   readComposition,
@@ -268,11 +282,12 @@ export class InvoiceCloseSweeper {
 
     try {
       await withTenant(this.#db, context, async (tx) => {
-        const [composition, seller, buyer, payment] = await Promise.all([
-          readComposition(tx, context, period, this.#env),
+        const [composition, seller, buyer, payment, paid] = await Promise.all([
+          readComposition(tx, context, period, this.#env, { closed: true }),
           sellerSnapshot(tx),
           buyerSnapshot(tx, context),
           periodPayment(tx, context, period),
+          periodPaid(tx, context, period),
         ]);
         const composed = composeInvoice(composition);
 
@@ -295,7 +310,9 @@ export class InvoiceCloseSweeper {
             periodEnd: window.end,
             issuedAt: issued,
             origin,
-            status: composed.trialing ? 'trial' : 'paid',
+            // Owed and paid, or owed and not (tm 431 · F13). Freezing every
+            // owed month `paid` billed an unpaid one as revenue.
+            status: composed.trialing ? 'trial' : paid ? 'paid' : 'open',
             currency: INVOICE_CURRENCY,
             subtotalCents: composed.subtotal_cents,
             totalCents: composed.total_cents,
@@ -318,8 +335,8 @@ export class InvoiceCloseSweeper {
           })),
         });
 
-        // The workspace's open credits, off this statement — or nothing, on a
-        // trial month or a statement that owes nothing.
+        // The workspace's open credits, off this statement, paid or unpaid —
+        // or nothing, on a trial month or a statement that owes nothing.
         await tx.$queryRaw`SELECT billing_apply_platform_credits(${invoice.id}::uuid) AS applied`;
 
         // The document, from the statement as it now stands — credits included.

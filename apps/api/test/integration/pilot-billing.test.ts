@@ -370,7 +370,7 @@ describe('pilot mode: billing purchases and the HIPAA BAA (tm 257.2)', () => {
       expect(listed.total_cents).toBe(0);
     });
 
-    it('closes the same period as a paid statement on an ordinary deployment', async () => {
+    it('closes the same period as an owed statement on an ordinary deployment — `open`, since activating by hand paid nothing (tm 431)', async () => {
       await activateByHand(fx.a.licenseId);
       await meterOverage(fx.a.licenseId, justClosed);
 
@@ -380,7 +380,7 @@ describe('pilot mode: billing purchases and the HIPAA BAA (tm 257.2)', () => {
         where: { licenseId: fx.a.licenseId, period: justClosed },
         include: { lineItems: { orderBy: { position: 'asc' } } },
       });
-      expect(invoice.status).toBe('paid');
+      expect(invoice.status).toBe('open');
       expect(invoice.totalCents).toBeGreaterThan(0);
       expect(invoice.lineItems.map((item) => item.description)).toContainEqual(
         expect.stringMatching(/^AI resolutions overage/),

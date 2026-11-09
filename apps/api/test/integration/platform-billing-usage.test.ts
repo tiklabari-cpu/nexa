@@ -37,7 +37,7 @@ import type {
   LlmProvider,
 } from '../../src/services/ai/provider/llm-provider.js';
 import { InvoiceCloseSweeper } from '../../src/services/billing/invoice-close-sweep.js';
-import { previousPeriod } from '../../src/services/billing/invoice-service.js';
+import { periodWindow, previousPeriod } from '../../src/services/billing/invoice-service.js';
 import { currentPeriod } from '../../src/services/billing/metering.js';
 import { customerAsks, seedAiWorkspace } from '../helpers/ai-workspace.js';
 import {
@@ -164,6 +164,33 @@ describe('platform billing and usage (tm 389.12)', () => {
       });
     }
 
+    let payments = 0;
+    /**
+     * The payment behind an active subscription: a year's term from the day
+     * before `older`, so every closed period here was paid for and freezes
+     * `paid`. A closed period no payment covers freezes `open` (tm 431).
+     */
+    async function pay(t: TenantFixture) {
+      payments += 1;
+      const from = new Date(periodWindow(older).start.getTime() - DAY);
+      await owner.paymentTransaction.create({
+        data: {
+          licenseId: t.licenseId,
+          provider: 'swift_manual',
+          kind: 'checkout',
+          reference: `ST-PAID-${String(payments).padStart(4, '0')}`,
+          amountMinor: 19_800 * 12,
+          currency: 'usd',
+          period: currentPeriod(from),
+          billingCycle: 'annual',
+          status: 'succeeded',
+          termStart: from,
+          termEnd: new Date(from.getTime() + 400 * DAY),
+          settledAt: from,
+        },
+      });
+    }
+
     /** Something billable happened in `period`. */
     async function meter(t: TenantFixture, period: string, quantity = 10n) {
       await owner.usageRecord.create({
@@ -277,6 +304,7 @@ describe('platform billing and usage (tm 389.12)', () => {
 
     it('lists issued statements and revenue from the closed periods exactly, downloads one as the workspace’s CSV, and counts this period’s packages', async () => {
       await activate(fx.a, 2);
+      await pay(fx.a);
       await meter(fx.a, justClosed);
       await meter(fx.b, justClosed);
       await sweep();
@@ -356,6 +384,52 @@ describe('platform billing and usage (tm 389.12)', () => {
       });
     });
 
+    it('freezes a month nobody paid for `open` — listed and filtered as such, never counted as revenue, and it still takes the workspace’s credit (tm 431)', async () => {
+      await activate(fx.a, 2);
+      await pay(fx.a);
+      await activate(fx.b, 2); // subscribed, never paid
+      await meter(fx.a, justClosed);
+      await meter(fx.b, justClosed);
+      await ok(grant(fx.b, 5_000), 201);
+
+      await sweep();
+
+      const unpaid = await ok<{ data: Array<Record<string, unknown>> }>(
+        call('GET', '/billing/invoices?status=open', undefined, 'support'),
+      );
+      expect(unpaid.data).toHaveLength(1);
+      expect(unpaid.data[0]).toMatchObject({
+        license_id: fx.b.licenseId.toString(),
+        period: justClosed,
+        origin: 'issued',
+        status: 'open',
+        subtotal_cents: 19_800,
+        credit_cents: 5_000,
+        total_cents: 14_800,
+      });
+      const paid = await ok<{ data: Array<{ license_id: string; status: string }> }>(
+        call('GET', '/billing/invoices?status=paid'),
+      );
+      expect(paid.data.map((row) => [row.license_id, row.status])).toEqual([
+        [fx.a.licenseId.toString(), 'paid'],
+      ]);
+
+      // Only A's paid month is revenue; what B owes is not.
+      const revenue = await ok<{ months: Array<Record<string, unknown>> }>(
+        call('GET', '/billing/revenue?months=1', undefined, 'billing'),
+      );
+      expect(revenue.months).toEqual([
+        {
+          period: justClosed,
+          currency: 'usd',
+          invoices: 1,
+          subtotal_cents: 19_800,
+          credit_cents: 0,
+          total_cents: 19_800,
+        },
+      ]);
+    });
+
     it('grants a credit as billing, never as support or readonly, in USD only, on both trails', async () => {
       const created = await ok<{ credit: Record<string, unknown> }>(grant(fx.a, 5_000), 201);
       expect(created.credit).toMatchObject({
@@ -415,6 +489,7 @@ describe('platform billing and usage (tm 389.12)', () => {
 
     it('takes a credit off the next statement as a negative line, never below zero — the rest carries to the next one, once', async () => {
       await activate(fx.a, 2); // $198.00 a month
+      await pay(fx.a);
       await meter(fx.a, older);
       await meter(fx.a, justClosed);
       await meter(fx.b, justClosed); // B is on trial: owes nothing, takes nothing
@@ -494,6 +569,7 @@ describe('platform billing and usage (tm 389.12)', () => {
 
     it('applies one credit once when two closes race on separate connections', async () => {
       await activate(fx.a, 2);
+      await pay(fx.a);
       await meter(fx.a, older);
       await meter(fx.a, justClosed);
       await ok(grant(fx.a, 30_000), 201);

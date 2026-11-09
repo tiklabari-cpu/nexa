@@ -158,6 +158,7 @@ export const workspaces: Messages = {
   'workspaces.invoices.downloadFailed': '{period} faturası indirilemedi.',
   'workspaces.invoices.status.paid': 'Ödendi',
   'workspaces.invoices.status.open': 'Açık (tahmin)',
+  'workspaces.invoices.status.unpaid': 'Açık — ödenmedi',
   'workspaces.invoices.status.trial': 'Deneme — borç yok',
 
   'workspaces.audit.window': 'Çalışma alanının kendi denetim kaydı, salt okunur — son 30 gün.',

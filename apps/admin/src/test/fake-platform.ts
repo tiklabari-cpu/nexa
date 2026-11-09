@@ -471,6 +471,20 @@ function handleWorkspaces(
         return json(200, {
           invoices: [
             {
+              number: 'SIYAHTUS-202610',
+              period: '202610',
+              period_label: 'October 2026',
+              period_start: '2026-10-01T00:00:00.000Z',
+              period_end: '2026-11-01T00:00:00.000Z',
+              issued_at: '2026-10-31T00:00:00.000Z',
+              origin: 'estimate',
+              status: 'open',
+              currency: 'usd',
+              line_items: [{ description: 'Seats', amount_cents: 9900 }],
+              subtotal_cents: 9900,
+              total_cents: 9900,
+            },
+            {
               number: 'SIYAHTUS-202609',
               period: '202609',
               period_label: 'September 2026',
@@ -479,6 +493,21 @@ function handleWorkspaces(
               issued_at: '2026-09-30T00:00:00.000Z',
               origin: 'issued',
               status: 'paid',
+              currency: 'usd',
+              line_items: [{ description: 'Seats', amount_cents: 9900 }],
+              subtotal_cents: 9900,
+              total_cents: 9900,
+            },
+            {
+              // Owed and nothing paid for it (tm 431).
+              number: 'SIYAHTUS-202608',
+              period: '202608',
+              period_label: 'August 2026',
+              period_start: '2026-08-01T00:00:00.000Z',
+              period_end: '2026-09-01T00:00:00.000Z',
+              issued_at: '2026-08-31T00:00:00.000Z',
+              origin: 'issued',
+              status: 'open',
               currency: 'usd',
               line_items: [{ description: 'Seats', amount_cents: 9900 }],
               subtotal_cents: 9900,

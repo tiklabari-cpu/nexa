@@ -158,6 +158,7 @@ export const workspaces: Messages = {
   'workspaces.invoices.downloadFailed': 'The {period} invoice could not be downloaded.',
   'workspaces.invoices.status.paid': 'Paid',
   'workspaces.invoices.status.open': 'Open (estimate)',
+  'workspaces.invoices.status.unpaid': 'Open — not paid',
   'workspaces.invoices.status.trial': 'Trial — nothing owed',
 
   'workspaces.audit.window': 'The workspace’s own audit log, read-only — the last 30 days.',

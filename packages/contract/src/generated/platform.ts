@@ -1904,6 +1904,7 @@ export interface paths {
      * @description The frozen statements of every workspace (`invoices`), newest period
      *     first, keyset-paged. The open period is not a statement and is not
      *     listed — a workspace's own estimate is `GET /workspaces/{id}/invoices`.
+     *     A closed period owed and not paid for is listed `open` (#431).
      */
     get: operations['listPlatformInvoices'];
     put?: never;
@@ -4363,8 +4364,13 @@ export interface components {
       period: string;
       /** @enum {string} */
       origin: 'issued' | 'reconstructed';
-      /** @enum {string} */
-      status: 'paid' | 'trial';
+      /**
+       * @description `paid` when a payment covers the period, `open` when it was owed
+       *     and nothing paid for it (#431), `trial` when the trial covered the
+       *     whole period. Only `paid` counts as revenue.
+       * @enum {string}
+       */
+      status: 'paid' | 'open' | 'trial';
       currency: string;
       subtotal_cents: number;
       /** @description What the platform's credits took off the statement (a positive figure). */
@@ -7874,7 +7880,7 @@ export interface operations {
       query?: {
         license_id?: string;
         period?: string;
-        status?: 'paid' | 'trial';
+        status?: 'paid' | 'open' | 'trial';
         cursor?: string;
         limit?: number;
       };

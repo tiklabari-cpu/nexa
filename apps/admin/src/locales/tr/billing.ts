@@ -50,6 +50,7 @@ export const billing: Messages = {
   'billing.invoices.number': 'Numara',
   'billing.invoices.status': 'Durum',
   'billing.invoices.state.paid': 'Ödendi',
+  'billing.invoices.state.open': 'Açık — ödenmedi',
   'billing.invoices.state.trial': 'Deneme — borç yok',
   'billing.invoices.file': 'Dosya',
   'billing.invoices.download': '{number} indir (CSV)',

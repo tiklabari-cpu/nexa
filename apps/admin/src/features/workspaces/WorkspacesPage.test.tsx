@@ -134,6 +134,15 @@ describe('the workspace detail', () => {
     expect(screen.queryByLabelText('New note')).not.toBeInTheDocument();
   });
 
+  it('tells the estimate still accruing from a closed month nobody paid for', async () => {
+    await open(`/workspaces/${WORKSPACE_ID}/invoices`);
+    const row = async (number: string) =>
+      (await screen.findByRole('cell', { name: number })).closest('tr') as HTMLElement;
+    expect(within(await row('SIYAHTUS-202610')).getByText('Open (estimate)')).toBeVisible();
+    expect(within(await row('SIYAHTUS-202609')).getByText('Paid')).toBeVisible();
+    expect(within(await row('SIYAHTUS-202608')).getByText('Open — not paid')).toBeVisible();
+  });
+
   it('downloads an invoice as CSV through the session', async () => {
     const fake = await open(`/workspaces/${WORKSPACE_ID}/invoices`);
     const button = await screen.findByRole('button', {

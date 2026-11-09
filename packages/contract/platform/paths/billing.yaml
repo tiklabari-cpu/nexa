@@ -68,13 +68,14 @@ invoices:
       The frozen statements of every workspace (`invoices`), newest period
       first, keyset-paged. The open period is not a statement and is not
       listed — a workspace's own estimate is `GET /workspaces/{id}/invoices`.
+      A closed period owed and not paid for is listed `open` (#431).
     x-platform-permission: billing.read
     parameters:
       - name: license_id
         in: query
         schema: { type: string, pattern: "^[1-9][0-9]{0,18}$" }
       - { name: period, in: query, schema: { type: string, pattern: "^[0-9]{6}$" } }
-      - { name: status, in: query, schema: { type: string, enum: [paid, trial] } }
+      - { name: status, in: query, schema: { type: string, enum: [paid, open, trial] } }
       - { name: cursor, in: query, schema: { type: string, maxLength: 512 } }
       - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
     responses:

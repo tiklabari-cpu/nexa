@@ -16901,12 +16901,12 @@
         "description": "Workspace'te ikinci OAuth client (partner app) olunca IdP-initiated SSO client_id:null dönüp bozuluyor; ayrıca SAML /login herhangi bir client'a (partner dahil) kullanıcı onayı olmadan authorization code veriyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgular F20 (medium) ve F40 (low ← medium) — aynı kök: saml.ts first-party client seçimi. Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/routes/saml.ts:355` `oauthClient.findMany({ select: {id:true}, take: 2 })` orderBy yok; `:363` `client_id: found.clients.length === 1 ? ... : null`; `:~385-393` /login first-party kontrolü yok; `:~584-588` `defaultScopesForRole`. First-party tanımı: `apps/api/prisma/migrations/20260826230000_two_factor_enforcement/migration.sql:72-75` \"en eski client\" (kodda `firstPartyClientId` benzeri yardımcı var mı `rg firstParty` ile bak).\n\nYAPILACAK: tek ortak `firstPartyClient(tx)` (migration tanımıyla aynı: ORDER BY created_at, id LIMIT 1) — IdP-initiated discovery bunu döner; SAML /login yalnız bu client_id için code verir, başka client_id → 400 `client_not_first_party` (partner'lar OAuth consent akışını kullanır).\n\nTUZAK: SAML testleri fixture client sayısına bağlı olabilir. Yeni hata türü en+tr. OAuth scope ceiling davranışı değişmemeli.\n\nKAPSAM DIŞI: OAuth consent ekranı, SCIM.\nDENETİM BULGULARI: F20; F40",
         "testStrategy": "api entegrasyon: workspace'te first-party + partner client → IdP-initiated discovery first-party client_id döner (null değil); /login partner client_id ile → 400, code verilmez; first-party ile → mevcut akış. Mutasyon: orderBy'ı kaldır/ters çevir → kırmızı. DoD: CONVENTIONS §1.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "417"
         ],
         "priority": "medium",
-        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "updatedAt": "2026-11-09T19:11:45.358Z",
         "subtasks": []
       },
       {
@@ -17778,9 +17778,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-09T16:24:34.724Z",
+      "lastModified": "2026-11-09T19:11:45.358Z",
       "taskCount": 478,
-      "completedCount": 431,
+      "completedCount": 432,
       "tags": [
         "master"
       ]

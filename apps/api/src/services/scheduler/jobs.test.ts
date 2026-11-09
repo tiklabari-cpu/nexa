@@ -324,6 +324,7 @@ describe('buildSchedulerJobs', () => {
         delivered: 0,
         skipped: 0,
         failed: 0,
+        not_sent: 0,
         digests_delivered: 0,
         digests_failed: 0,
       });

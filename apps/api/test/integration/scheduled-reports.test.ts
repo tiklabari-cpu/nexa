@@ -36,6 +36,7 @@ import { generateShortId } from '@siyahtus/types';
 import { FileMailer, type Mailer } from '../../src/services/mail/mailer.js';
 import { ScheduledReportSweeper } from '../../src/services/reports/scheduled-report-sweeper.js';
 import {
+  grantReportsView,
   grantToken,
   ownerClient,
   seedFixtures,
@@ -112,6 +113,11 @@ describe('scheduled report exports', () => {
 
   beforeEach(async () => {
     fx = await seedFixtures(owner);
+    // Every recipient here is a member who may read the workspace's reports —
+    // the fixture's agent role cannot by default (tm 440).
+    await grantReportsView(owner, fx.a.licenseId);
+    await grantReportsView(owner, fx.b.licenseId);
+    server.app.permissionMatrix.cache.invalidate();
     await clearRateLimits(server.app);
     manageToken = await grantToken(owner, {
       licenseId: fx.a.licenseId,
@@ -285,6 +291,28 @@ describe('scheduled report exports', () => {
     expect(response.statusCode).toBe(400);
   });
 
+  it('rejects a member whose role may not read the workspace reports (tm 440)', async () => {
+    // The same roster the sweep checks at send time: an agent without
+    // `reports.view = all` would be mailed figures their panel refuses them.
+    await owner.roleCapabilityOverride.delete({
+      where: {
+        licenseId_role_capability: {
+          licenseId: fx.a.licenseId,
+          role: 'agent',
+          capability: 'reports.view',
+        },
+      },
+    });
+    server.app.permissionMatrix.cache.invalidate();
+
+    const response = await create(manageToken, validBody({ recipients: [fx.a.agentEmail] }));
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toContain('access to reports');
+    // The owner still may.
+    const owners = await create(manageToken, validBody({ recipients: [fx.a.ownerEmail] }));
+    expect(owners.statusCode).toBe(201);
+  });
+
   it('rejects a malformed address before it ever reaches the roster', async () => {
     const response = await create(manageToken, validBody({ recipients: ['not-an-email'] }));
     expect(response.statusCode).toBe(400);
@@ -429,6 +457,29 @@ describe('scheduled report exports', () => {
       expect((await read(manageToken, schedule.id)).enabled).toBe(false);
       // Paused, not cancelled: it is still in the list.
       expect(await list(manageToken)).toHaveLength(1);
+    });
+
+    it('restarts the catch-up floor when a schedule is switched back on or changes cadence (tm 460)', async () => {
+      const schedule = await seed({ frequency: 'daily' });
+      const enabledAt = async () =>
+        (await owner.scheduledReport.findUniqueOrThrow({ where: { id: schedule.id } })).enabledAt;
+      const long = new Date('2026-01-01T00:00:00.000Z');
+      const backdate = () =>
+        owner.scheduledReport.update({ where: { id: schedule.id }, data: { enabledAt: long } });
+
+      await backdate();
+      // Pausing, or an edit that starts nothing, leaves it alone.
+      await server.patch(at(schedule.id), { enabled: false }, auth(manageToken));
+      await server.patch(at(schedule.id), { frequency: 'daily' }, auth(manageToken));
+      expect(await enabledAt()).toEqual(long);
+
+      const before = Date.now();
+      await server.patch(at(schedule.id), { enabled: true }, auth(manageToken));
+      expect((await enabledAt()).getTime()).toBeGreaterThanOrEqual(before - 1000);
+
+      await backdate();
+      await server.patch(at(schedule.id), { frequency: 'weekly' }, auth(manageToken));
+      expect((await enabledAt()).getTime()).toBeGreaterThanOrEqual(before - 1000);
     });
 
     it('replaces the recipient list, normalised the same way create normalises it', async () => {
@@ -847,6 +898,31 @@ describe('scheduled report exports', () => {
       // Nothing was delivered, and the history says so rather than reporting a
       // partial success.
       expect(run?.recipient_count).toBe(0);
+    });
+
+    it('shows a skipped period, why, and how many recipients were left out (tm 440)', async () => {
+      const id = await defineFor(fx.a);
+      await owner.agentMembership.update({
+        where: {
+          licenseId_agentId: { licenseId: fx.a.licenseId, agentId: fx.a.agentAccountId },
+        },
+        data: { suspended: true },
+      });
+
+      const report = await sweep();
+      expect(report.totals).toMatchObject({ delivered: 0, notSent: 1 });
+
+      const [run] = await history(readToken, id);
+      expect(run).toMatchObject({
+        period_key: PERIOD_KEY,
+        status: 'skipped',
+        skip_reason: 'no_recipients',
+        recipient_count: 0,
+        skipped_recipient_count: 1,
+        error: null,
+      });
+      // A count, never the address.
+      expect(JSON.stringify(run)).not.toContain(fx.a.agentEmail);
     });
 
     it('is empty for a schedule that has never run — not a 404', async () => {

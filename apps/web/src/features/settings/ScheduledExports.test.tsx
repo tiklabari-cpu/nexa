@@ -84,6 +84,8 @@ const DELIVERED_RUN = {
   status: 'delivered',
   row_count: 12,
   recipient_count: 1,
+  skipped_recipient_count: 0,
+  skip_reason: null,
   error: null,
   created_at: '2026-08-02T00:00:00.000Z',
 };
@@ -204,6 +206,32 @@ describe('ScheduledExports', () => {
     expect(await screen.findByText('Delivered')).toBeInTheDocument();
     expect(await screen.findByText('Failed')).toBeInTheDocument();
     expect(await screen.findByText('Never run')).toBeInTheDocument();
+  });
+
+  it('says a run was skipped, and why when nobody could receive it (tm 440)', async () => {
+    const skipped = (skip_reason: string) => ({
+      ...DELIVERED_RUN,
+      status: 'skipped',
+      row_count: 0,
+      recipient_count: 0,
+      skipped_recipient_count: skip_reason === 'no_recipients' ? 1 : 0,
+      skip_reason,
+    });
+    api.get.mockImplementation((path: string) => {
+      if (path === '/reports/scheduled-exports')
+        return Promise.resolve({ items: SCHEDULED_EXPORTS.slice(0, 2) });
+      if (path.startsWith('/reports/scheduled-exports/se-1/runs'))
+        return Promise.resolve({ items: [skipped('no_recipients')] });
+      if (path.startsWith('/reports/scheduled-exports/se-2/runs'))
+        return Promise.resolve({ items: [skipped('missed_window')] });
+      return mockGet(path);
+    });
+
+    renderComponent(<ScheduledExports canEdit />);
+
+    expect(await screen.findByText('Skipped — no eligible recipients')).toBeInTheDocument();
+    expect(await screen.findByText('Skipped')).toBeInTheDocument();
+    expect(screen.queryByText('Running')).not.toBeInTheDocument();
   });
 
   it('cancels a scheduled export by DELETEing its id, only after a confirming click', async () => {

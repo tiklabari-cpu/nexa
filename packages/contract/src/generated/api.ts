@@ -25975,14 +25975,32 @@ export interface components {
        *     but a process killed mid-delivery leaves one, and the history says
        *     so rather than pretending the run never happened. `failed` keeps its
        *     period: an unrecallable e-mail is not re-sent on the guess that the
-       *     first one never left.
+       *     first one never left. `skipped` is a period recorded but not mailed;
+       *     `skip_reason` says why.
        * @enum {string}
        */
-      status: 'pending' | 'delivered' | 'failed';
+      status: 'pending' | 'delivered' | 'failed' | 'skipped';
       /** @description Data rows in the CSV that was sent, excluding the header. */
       row_count: number;
       /** @description Mailboxes the run actually reached — not the number configured. */
       recipient_count: number;
+      /**
+       * @description Configured recipients left out at send time because they were no
+       *     longer an active member who may read the workspace's reports
+       *     (suspended, removed, or report access taken away). A count, never
+       *     the addresses.
+       */
+      skipped_recipient_count: number;
+      /**
+       * @description Why a `skipped` run was not mailed; `null` for every other status.
+       *     `no_recipients` — nobody configured was still an active member with
+       *     report access when the period was sent. `missed_window` — the sweep
+       *     was down for longer than its catch-up allowance (7 daily, 2 weekly,
+       *     1 monthly period), so this older period was recorded instead of
+       *     mailed late.
+       * @enum {string|null}
+       */
+      skip_reason: 'no_recipients' | 'missed_window' | null;
       /** @description Why the delivery failed: one bounded, sanitised line, or `null`. */
       error: string | null;
       /**

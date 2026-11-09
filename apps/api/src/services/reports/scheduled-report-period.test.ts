@@ -9,7 +9,7 @@
  * delivered again) or misses one (a report delivered twice).
  */
 import { describe, expect, it } from 'vitest';
-import { periodFor } from './scheduled-report-period.js';
+import { duePeriods, periodFor } from './scheduled-report-period.js';
 
 /** `scheduled_report_runs_period_key_check`, copied from the migration. */
 const PERIOD_KEY_CHECK = /^[0-9]{4}-(W[0-9]{2}|[0-9]{2}(-[0-9]{2})?)$/;
@@ -149,5 +149,108 @@ describe('periodFor', () => {
     expect(() => periodFor('hourly' as 'daily', at('2026-08-08T00:00:00.000Z'))).toThrow(
       RangeError,
     );
+  });
+});
+
+describe('duePeriods — missed periods are caught up within a bound (tm 460)', () => {
+  const keys = (periods: { periodKey: string }[]): string[] => periods.map((p) => p.periodKey);
+  const LONG_AGO = at('2026-01-01T00:00:00.000Z');
+
+  it('a schedule that has never run sends the current period only', () => {
+    const due = duePeriods('daily', at('2026-11-07T09:00:00.000Z'), {
+      lastClaimedFrom: null,
+      enabledAt: LONG_AGO,
+    });
+    expect(keys(due.deliver)).toEqual(['2026-11-06']);
+    expect(due.missed).toEqual([]);
+  });
+
+  it('a sweep the day after the last run has nothing to catch up', () => {
+    const due = duePeriods('daily', at('2026-11-07T09:00:00.000Z'), {
+      lastClaimedFrom: at('2026-11-05T00:00:00.000Z'),
+      enabledAt: LONG_AGO,
+    });
+    expect(keys(due.deliver)).toEqual(['2026-11-06']);
+  });
+
+  it('last run 4 November, now 7 November: the 5th and the 6th, oldest first', () => {
+    const due = duePeriods('daily', at('2026-11-07T09:00:00.000Z'), {
+      lastClaimedFrom: at('2026-11-04T00:00:00.000Z'),
+      enabledAt: LONG_AGO,
+    });
+    expect(keys(due.deliver)).toEqual(['2026-11-05', '2026-11-06']);
+    expect(due.missed).toEqual([]);
+  });
+
+  it('ten missed days: the newest seven are mailed, the three before are recorded', () => {
+    const due = duePeriods('daily', at('2026-11-11T09:00:00.000Z'), {
+      lastClaimedFrom: at('2026-10-31T00:00:00.000Z'),
+      enabledAt: LONG_AGO,
+    });
+    expect(keys(due.deliver)).toEqual([
+      '2026-11-04',
+      '2026-11-05',
+      '2026-11-06',
+      '2026-11-07',
+      '2026-11-08',
+      '2026-11-09',
+      '2026-11-10',
+    ]);
+    expect(keys(due.missed)).toEqual(['2026-11-01', '2026-11-02', '2026-11-03']);
+  });
+
+  it('weekly catches up two weeks, monthly one month', () => {
+    const weekly = duePeriods('weekly', at('2026-11-11T09:00:00.000Z'), {
+      lastClaimedFrom: at('2026-10-05T00:00:00.000Z'), // 2026-W41
+      enabledAt: LONG_AGO,
+    });
+    expect(keys(weekly.deliver)).toEqual(['2026-W44', '2026-W45']);
+    expect(keys(weekly.missed)).toEqual(['2026-W42', '2026-W43']);
+
+    const monthly = duePeriods('monthly', at('2026-11-11T09:00:00.000Z'), {
+      lastClaimedFrom: at('2026-08-01T00:00:00.000Z'),
+      enabledAt: LONG_AGO,
+    });
+    expect(keys(monthly.deliver)).toEqual(['2026-10']);
+    expect(keys(monthly.missed)).toEqual(['2026-09']);
+  });
+
+  it('never reaches behind the moment the schedule was switched back on', () => {
+    // Paused from 1 October, back on at 15:00 on 9 November: 9 November is a
+    // missed delivery if the host was then down, 8 November was the pause.
+    const due = duePeriods('daily', at('2026-11-11T09:00:00.000Z'), {
+      lastClaimedFrom: at('2026-09-30T00:00:00.000Z'),
+      enabledAt: at('2026-11-09T15:00:00.000Z'),
+    });
+    expect(keys(due.deliver)).toEqual(['2026-11-09', '2026-11-10']);
+    expect(due.missed).toEqual([]);
+  });
+
+  it('bounds the look-back, so a year off does not record a year of rows', () => {
+    const due = duePeriods('daily', at('2026-11-11T09:00:00.000Z'), {
+      lastClaimedFrom: at('2025-11-01T00:00:00.000Z'),
+      enabledAt: LONG_AGO,
+    });
+    expect(due.deliver).toHaveLength(7);
+    expect(due.deliver.length + due.missed.length).toBe(92);
+  });
+
+  it('a newest run at or past the current period changes nothing — the claim decides', () => {
+    const due = duePeriods('daily', at('2026-11-07T09:00:00.000Z'), {
+      lastClaimedFrom: at('2026-11-20T00:00:00.000Z'),
+      enabledAt: LONG_AGO,
+    });
+    expect(keys(due.deliver)).toEqual(['2026-11-06']);
+    expect(due.missed).toEqual([]);
+  });
+
+  it('compares by instant across a change of frequency', () => {
+    // Daily until 4 November, weekly since: W45 (2–8 Nov) began before the last
+    // daily run, so only the current week is due.
+    const due = duePeriods('weekly', at('2026-11-11T09:00:00.000Z'), {
+      lastClaimedFrom: at('2026-11-04T00:00:00.000Z'),
+      enabledAt: LONG_AGO,
+    });
+    expect(keys(due.deliver)).toEqual(['2026-W45']);
   });
 });

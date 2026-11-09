@@ -305,6 +305,27 @@ export interface SeedOptions {
   plan?: string;
 }
 
+/**
+ * Let a role read the workspace's reports — an RL-02 override `reports.view =
+ * all`. A scheduled report's recipient must hold it, on save and again at
+ * send time (tm 440), and the fixture's `agent` role does not by default.
+ *
+ * Written through the owner client, like a test's other fixture rows. A suite
+ * whose server already cached the matrix invalidates it itself
+ * (`server.app.permissionMatrix.cache.invalidate()`).
+ */
+export async function grantReportsView(
+  db: PrismaClient,
+  licenseId: bigint,
+  role = 'agent',
+): Promise<void> {
+  await db.roleCapabilityOverride.upsert({
+    where: { licenseId_role_capability: { licenseId, role, capability: 'reports.view' } },
+    create: { licenseId, role, capability: 'reports.view', value: 'all' },
+    update: { value: 'all' },
+  });
+}
+
 export async function seedFixtures(db: PrismaClient, options: SeedOptions = {}): Promise<Fixtures> {
   await resetDatabase(db);
   const fixtures = {

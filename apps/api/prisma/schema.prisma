@@ -5410,6 +5410,10 @@ model ScheduledReport {
   /// list screen (07.9-sched-h) only — never the idempotency check, which reads
   /// `scheduled_report_runs`.
   lastRunAt        DateTime? @map("last_run_at") @db.Timestamptz(6)
+  /// When the schedule last started — created, switched back on, or moved to
+  /// another frequency (tm 460). The sweep's catch-up never reaches a period
+  /// that was over before this: a paused schedule did not miss its pause.
+  enabledAt        DateTime  @default(now()) @map("enabled_at") @db.Timestamptz(6)
   /// The report filter every run applies (RP-01 · tm 368), a `ReportFilter`
   /// (`@siyahtus/types`); `{}` = none. CHECK `scheduled_reports_filters_object`.
   filters          Json      @default("{}")
@@ -5457,12 +5461,20 @@ model ScheduledReportRun {
   periodKey         String   @map("period_key")
   periodFrom        DateTime @map("period_from") @db.Timestamptz(6)
   periodTo          DateTime @map("period_to") @db.Timestamptz(6)
-  /// 'pending' (claimed, not yet delivered) | 'sent' | 'failed'.
+  /// 'pending' (claimed, not yet delivered) | 'sent' | 'failed' | 'skipped'.
   status            String   @default("pending")
   recipientCount    Int      @default(0) @map("recipient_count")
   rowCount          Int      @default(0) @map("row_count")
   /// Why the delivery failed, for the history screen (07.9-sched-g).
   error             String?
+  /// Configured recipients the send-time roster check dropped (tm 440): no
+  /// longer a member, suspended, awaiting approval, or without `reports.view =
+  /// all`. A count only — the history carries no addresses.
+  skippedRecipientCount Int    @default(0) @map("skipped_recipient_count")
+  /// Set exactly when `status = 'skipped'` (`scheduled_report_runs_skip_reason_check`):
+  /// 'no_recipients' (nobody left after the roster check) | 'missed_window'
+  /// (a period the sweep missed beyond its catch-up allowance, tm 460).
+  skipReason        String?  @map("skip_reason")
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   license         License         @relation(fields: [licenseId], references: [id], onDelete: Cascade)

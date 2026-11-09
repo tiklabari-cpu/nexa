@@ -85,6 +85,86 @@ export function periodFor(frequency: ScheduledExportFrequency, now: Date): Repor
   }
 }
 
+/**
+ * How many missed periods one sweep still mails late (tm 460 · F46): a week of
+ * daily reports, a fortnight of weekly ones, the last month. Beyond that a
+ * late report is noise rather than news, and an outage would otherwise turn
+ * into a burst of dozens of mails per schedule.
+ */
+export const CATCH_UP_LIMIT: Readonly<Record<ScheduledExportFrequency, number>> = {
+  daily: 7,
+  weekly: 2,
+  monthly: 1,
+};
+
+/**
+ * How far back one sweep looks for missed periods at all, counting the current
+ * one — about a quarter. Older periods are neither mailed nor recorded: the
+ * bound keeps a schedule whose host was off for a year from writing hundreds
+ * of `skipped` rows in one go.
+ */
+export const MISSED_LOOKBACK: Readonly<Record<ScheduledExportFrequency, number>> = {
+  daily: 92,
+  weekly: 13,
+  monthly: 3,
+};
+
+export interface DuePeriods {
+  /** Periods to claim and mail, oldest first; the current period is always last. */
+  deliver: ReportPeriod[];
+  /** Missed periods past the catch-up allowance, oldest first: recorded `skipped`. */
+  missed: ReportPeriod[];
+}
+
+/**
+ * Every period one sweep should act on (tm 460 · F46).
+ *
+ * The current period ({@link periodFor}) is always due, exactly as before —
+ * whether it is still open is the claim's question, not this one's. Behind it,
+ * the periods that ended after the schedule's newest run and were never
+ * claimed are *missed*: the host was down when they fell due. The newest
+ * {@link CATCH_UP_LIMIT} of them (with the current one) are delivered, oldest
+ * first; the rest are returned as `missed` so the sweep can leave a row saying
+ * so instead of a silent gap.
+ *
+ * Two floors stop the walk:
+ *
+ *   - `lastClaimedFrom` — the start of the newest period this schedule has a
+ *     run row for, whatever its status. A schedule that has never run has
+ *     nothing to catch up on (its first sweep sends the current period, as it
+ *     always did), so `null` means "current period only".
+ *   - `enabledAt` — when the schedule last started. A period that was over
+ *     before then was not missed: the schedule was off, or did not exist yet.
+ *
+ * Periods are compared by instant rather than by key, so a schedule that moved
+ * from daily to weekly compares its new weeks against its last day correctly.
+ */
+export function duePeriods(
+  frequency: ScheduledExportFrequency,
+  now: Date,
+  floor: { lastClaimedFrom: Date | null; enabledAt: Date },
+): DuePeriods {
+  const current = periodFor(frequency, now);
+  if (floor.lastClaimedFrom === null) return { deliver: [current], missed: [] };
+
+  const lookback = MISSED_LOOKBACK[frequency];
+  const newestFirst: ReportPeriod[] = [current];
+  // `periodFor` at a period's first instant is the period before it.
+  let previous = periodFor(frequency, current.from);
+  while (
+    newestFirst.length < lookback &&
+    previous.from.getTime() > floor.lastClaimedFrom.getTime() &&
+    previous.to.getTime() >= floor.enabledAt.getTime()
+  ) {
+    newestFirst.push(previous);
+    previous = periodFor(frequency, previous.from);
+  }
+
+  const oldestFirst = newestFirst.reverse();
+  const cut = Math.max(0, oldestFirst.length - CATCH_UP_LIMIT[frequency]);
+  return { deliver: oldestFirst.slice(cut), missed: oldestFirst.slice(0, cut) };
+}
+
 // ---------------------------------------------------------------------------
 // UTC calendar boundaries.
 //

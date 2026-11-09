@@ -955,8 +955,24 @@ export interface ScheduledExport {
  * `delivered` is the row's `sent`: the stored spelling is fixed by a database
  * CHECK, while the wire vocabulary matches the sweep report an operator reads,
  * so one word means one thing across everything a human looks at.
+ *
+ * `skipped` (tm 440 · tm 460) is a period that was recorded but deliberately
+ * not mailed — `skip_reason` says why.
  */
-export type ScheduledExportRunStatus = 'pending' | 'delivered' | 'failed';
+export type ScheduledExportRunStatus = 'pending' | 'delivered' | 'failed' | 'skipped';
+
+/**
+ * Why a run was `skipped`:
+ *
+ * - `no_recipients` — at the moment of sending, none of the configured
+ *   recipients was still an active member who may read the workspace's
+ *   reports (suspended, removed, or `reports.view` taken away).
+ * - `missed_window` — the sweep did not run for longer than its catch-up
+ *   allowance (7 daily / 2 weekly / 1 monthly period), and this older period
+ *   was recorded rather than mailed late.
+ */
+export const SCHEDULED_EXPORT_SKIP_REASONS = ['no_recipients', 'missed_window'] as const;
+export type ScheduledExportSkipReason = (typeof SCHEDULED_EXPORT_SKIP_REASONS)[number];
 
 /**
  * One delivery attempt of a scheduled export (PRD §5.3-Reports).
@@ -987,6 +1003,13 @@ export interface ScheduledExportRun {
   row_count: number;
   /** Mailboxes the run actually reached — not the number configured. */
   recipient_count: number;
+  /**
+   * Configured recipients left out at send time because they were no longer
+   * an active member with report access (tm 440). A count, never addresses.
+   */
+  skipped_recipient_count: number;
+  /** Why the run was `skipped`; null for every other status. */
+  skip_reason: ScheduledExportSkipReason | null;
   /** Why the delivery failed: one bounded, sanitised line, or null. */
   error: string | null;
   /** When the period was claimed — i.e. when the attempt started. */

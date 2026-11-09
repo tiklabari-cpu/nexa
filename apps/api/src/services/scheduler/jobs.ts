@@ -341,8 +341,10 @@ export function buildSchedulerJobs({
     {
       name: 'scheduled_reports',
       intervalMs: intervals.scheduled_reports,
-      async run() {
-        const report = await new ScheduledReportSweeper(db, mailer, readDb).run();
+      async run(context) {
+        const report = await new ScheduledReportSweeper(db, mailer, readDb, {
+          logger: context.logger,
+        }).run();
         // The morning summary e-mails (RP-05 · tm 372) ride this job: the same
         // minute-long tick that asks whether a scheduled report is due asks
         // whether a summary is, and a job of its own would be a second lock,
@@ -357,6 +359,7 @@ export function buildSchedulerJobs({
             delivered: report.totals.delivered,
             skipped: report.totals.skipped,
             failed: report.totals.failed,
+            not_sent: report.totals.notSent,
             digests_delivered: digests.totals.delivered,
             digests_failed: digests.totals.failed,
           },

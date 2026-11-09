@@ -49,9 +49,25 @@
  * and the row tells the history screen what happened in the meantime. A cap
  * that stops a delivery halfway, after some recipient may already have it,
  * consumes the period as any failure does.
+ *
+ * **Recipients are checked again at send time (tm 440 · F23).** The stored
+ * list was validated when the schedule was saved; a member suspended, removed
+ * or stripped of report access since then is dropped here, by the same roster
+ * the save used (`reportRecipientRoster`). The drop is logged with the
+ * addresses masked and counted on the run (`skipped_recipient_count`); when
+ * nobody is left, the period is resolved `skipped` (`no_recipients`) rather
+ * than mailed to no one or failed.
+ *
+ * **Missed periods are caught up, within a bound (tm 460 · F46).** A host that
+ * was down when a period fell due used to skip it without a trace, because
+ * each sweep only ever looked at the current period. `duePeriods` now walks
+ * back to the schedule's newest run: the newest few missed periods are claimed
+ * and mailed oldest first, the older ones are recorded `skipped`
+ * (`missed_window`). Every one of them goes through the same unique claim, so
+ * two sweeps catching up at once still mail each period once.
  */
 import { Prisma, type PrismaClient } from '@prisma/client';
-import type { ScheduledExportFrequency } from '@siyahtus/types';
+import type { ScheduledExportFrequency, ScheduledExportSkipReason } from '@siyahtus/types';
 import { type TenantContext, withTenant, withTenantRead } from '../../lib/tenant.js';
 import { exportFilename, reportGroup, toCsv } from '../../routes/reports-export.js';
 import { deliver, isCapRefusal } from '../mail/delivery.js';
@@ -59,8 +75,19 @@ import type { Mailer } from '../mail/mailer.js';
 import { buildGroupCsv } from './report-csv.js';
 import { storedReportFilter, toThreadFilter } from './report-filter.js';
 import { buildScheduledReportMail } from './scheduled-report-mail.js';
-import { isMailLocale, type MailLocale } from '../mail/templates/layout.js';
-import { periodFor, type ReportPeriod } from './scheduled-report-period.js';
+import type { MailLocale } from '../mail/templates/layout.js';
+import { duePeriods, type DuePeriods, type ReportPeriod } from './scheduled-report-period.js';
+import {
+  maskRecipient,
+  reportRecipientRoster,
+  splitRecipients,
+  type ReportRecipientRoster,
+} from './scheduled-report-recipients.js';
+
+/** Where the sweep writes the one line it has to say (a dropped recipient) — pino or Fastify's logger. */
+export interface ScheduledReportSweepLogger {
+  warn(details: Record<string, unknown>, message: string): void;
+}
 
 /**
  * How much of a failure's message is kept. Long enough to name the cause,
@@ -100,10 +127,16 @@ export interface ScheduledReportDelivery {
    * (or is being taken right now by another sweep). `deferred` is a run the
    * daily mail cap refused before anything went out (tm 257.14): stored as
    * `failed` with {@link MAIL_CAP_DEFERRED}, re-claimed by the next sweep.
+   * `not_sent` is a period this sweep recorded as the row's `skipped` without
+   * mailing it — `skipReason` says why (tm 440 · tm 460).
    */
-  status: 'delivered' | 'skipped' | 'failed' | 'deferred';
+  status: 'delivered' | 'skipped' | 'failed' | 'deferred' | 'not_sent';
   /** Recipients the mail actually reached — not the number configured. */
   recipientCount: number;
+  /** Configured recipients the send-time roster check left out (tm 440). */
+  skippedRecipientCount: number;
+  /** Why a `not_sent` period was not mailed; null otherwise. */
+  skipReason: ScheduledExportSkipReason | null;
   /** Data rows in the CSV, excluding the header row. */
   rowCount: number;
   error: string | null;
@@ -118,6 +151,7 @@ export interface TenantScheduledReportResult {
   skipped: number;
   failed: number;
   deferred: number;
+  notSent: number;
 }
 
 export interface ScheduledReportSweepReport {
@@ -130,6 +164,7 @@ export interface ScheduledReportSweepReport {
     skipped: number;
     failed: number;
     deferred: number;
+    notSent: number;
   };
 }
 
@@ -146,12 +181,25 @@ interface DefinitionRow {
   recipients: string[];
   /** The stored report filter (RP-01), a JSONB `ReportFilter`. */
   filters: unknown;
+  /** When the schedule last started — the floor of its catch-up (tm 460). */
+  enabledAt: Date;
 }
+
+type Outcome = Omit<ScheduledReportDelivery, 'scheduledReportId' | 'group' | 'periodKey'>;
+
+const NOTHING_SENT = {
+  recipientCount: 0,
+  skippedRecipientCount: 0,
+  skipReason: null,
+  rowCount: 0,
+  error: null,
+} as const;
 
 export class ScheduledReportSweeper {
   readonly #db: PrismaClient;
   readonly #readDb: PrismaClient;
   readonly #mailer: Mailer;
+  readonly #logger: ScheduledReportSweepLogger | null;
 
   /**
    * `readDb` is the read path (M-SCALE-c): the replica when one is configured,
@@ -164,12 +212,20 @@ export class ScheduledReportSweeper {
    * claim written to the primary but *read back* from a replica that has not
    * caught up would let two sweeps both believe they won. Nothing here reads the
    * claim back — the constraint violation is the answer — but a future guard
-   * that does must not find it on a lagging connection.
+   * that does must not find it on a lagging connection. The recipient roster
+   * is read on `db` too: it is the check that stops a suspended member's mail,
+   * and a replica that has not seen the suspension yet would let one through.
    */
-  constructor(db: PrismaClient, mailer: Mailer, readDb: PrismaClient = db) {
+  constructor(
+    db: PrismaClient,
+    mailer: Mailer,
+    readDb: PrismaClient = db,
+    options: { logger?: ScheduledReportSweepLogger } = {},
+  ) {
     this.#db = db;
     this.#readDb = readDb;
     this.#mailer = mailer;
+    this.#logger = options.logger ?? null;
   }
 
   /**
@@ -197,6 +253,7 @@ export class ScheduledReportSweeper {
         skipped: results.reduce((sum, r) => sum + r.skipped, 0),
         failed: results.reduce((sum, r) => sum + r.failed, 0),
         deferred: results.reduce((sum, r) => sum + r.deferred, 0),
+        notSent: results.reduce((sum, r) => sum + r.notSent, 0),
       },
     };
   }
@@ -219,18 +276,40 @@ export class ScheduledReportSweeper {
 
     const definitions = await this.#enabledDefinitions(context);
     const deliveries: ScheduledReportDelivery[] = [];
-    for (const definition of definitions) {
-      deliveries.push(await this.#deliver(context, definition, now));
+    if (definitions.length > 0) {
+      // Both read before any claim, so a database error here throws before a
+      // single period is consumed — like a failure to list the definitions.
+      const lastClaimed = await this.#lastClaimedFrom(context);
+      const roster = await withTenant(
+        this.#db,
+        context,
+        (tx) => reportRecipientRoster(tx, context.licenseId),
+        { readOnly: true },
+      );
+      for (const definition of definitions) {
+        deliveries.push(
+          ...(await this.#sweepDefinition(
+            context,
+            definition,
+            now,
+            lastClaimed.get(definition.id) ?? null,
+            roster,
+          )),
+        );
+      }
     }
 
+    const count = (status: ScheduledReportDelivery['status']): number =>
+      deliveries.filter((d) => d.status === status).length;
     return {
       licenseId: tenant.license_id.toString(),
       organizationId: tenant.organization_id,
       deliveries,
-      delivered: deliveries.filter((d) => d.status === 'delivered').length,
-      skipped: deliveries.filter((d) => d.status === 'skipped').length,
-      failed: deliveries.filter((d) => d.status === 'failed').length,
-      deferred: deliveries.filter((d) => d.status === 'deferred').length,
+      delivered: count('delivered'),
+      skipped: count('skipped'),
+      failed: count('failed'),
+      deferred: count('deferred'),
+      notSent: count('not_sent'),
     };
   }
 
@@ -244,54 +323,200 @@ export class ScheduledReportSweeper {
     return withTenant(this.#db, context, async (tx) =>
       tx.scheduledReport.findMany({
         where: { licenseId: context.licenseId, enabled: true },
-        select: { id: true, groupId: true, frequency: true, recipients: true, filters: true },
+        select: {
+          id: true,
+          groupId: true,
+          frequency: true,
+          recipients: true,
+          filters: true,
+          enabledAt: true,
+        },
         orderBy: { createdAt: 'asc' },
       }),
     );
   }
 
   /**
-   * One definition, one period: claim it, then build and send.
+   * The start of each definition's newest claimed period, whatever became of
+   * it — the floor of the catch-up (tm 460). Read on the primary: it decides
+   * which periods are claimed next, the same side of the split as the claim.
+   */
+  async #lastClaimedFrom(context: TenantContext): Promise<Map<string, Date>> {
+    const rows = await withTenant(
+      this.#db,
+      context,
+      (tx) =>
+        tx.scheduledReportRun.groupBy({
+          by: ['scheduledReportId'],
+          where: { licenseId: context.licenseId },
+          _max: { periodFrom: true },
+        }),
+      { readOnly: true },
+    );
+    const out = new Map<string, Date>();
+    for (const row of rows) {
+      if (row._max.periodFrom) out.set(row.scheduledReportId, row._max.periodFrom);
+    }
+    return out;
+  }
+
+  /**
+   * Every period one definition owes: the missed ones beyond the catch-up
+   * allowance recorded `skipped`, then the due ones delivered, oldest first.
    *
-   * The period is computed before the claim because the claim is *keyed* on it.
-   * That is also why a definition whose frequency yields no period is reported
-   * as `failed` with no run row: there is no key to write a row under. The
-   * database's `scheduled_reports_frequency_check` makes it unreachable; it is
-   * reported rather than thrown so one broken definition cannot stop the sweep
-   * for the rest of the workspace.
+   * The periods are computed before any claim because each claim is *keyed*
+   * on one. That is also why a definition whose frequency yields no period is
+   * reported as `failed` with no run row: there is no key to write a row
+   * under. The database's `scheduled_reports_frequency_check` makes it
+   * unreachable; it is reported rather than thrown so one broken definition
+   * cannot stop the sweep for the rest of the workspace.
+   */
+  async #sweepDefinition(
+    context: TenantContext,
+    definition: DefinitionRow,
+    now: Date,
+    lastClaimedFrom: Date | null,
+    roster: ReportRecipientRoster,
+  ): Promise<ScheduledReportDelivery[]> {
+    let due: DuePeriods;
+    try {
+      due = duePeriods(definition.frequency as ScheduledExportFrequency, now, {
+        lastClaimedFrom,
+        enabledAt: definition.enabledAt,
+      });
+    } catch (error) {
+      return [
+        {
+          scheduledReportId: definition.id,
+          group: definition.groupId,
+          periodKey: null,
+          ...NOTHING_SENT,
+          status: 'failed',
+          error: sanitiseError(error),
+        },
+      ];
+    }
+
+    const out: ScheduledReportDelivery[] = [];
+    for (const period of due.missed) {
+      out.push(
+        this.#labelled(
+          definition,
+          period,
+          await this.#recordMissed(context, definition.id, period),
+        ),
+      );
+    }
+    for (const period of due.deliver) {
+      out.push(
+        this.#labelled(
+          definition,
+          period,
+          await this.#deliver(context, definition, period, now, roster),
+        ),
+      );
+    }
+    return out;
+  }
+
+  #labelled(
+    definition: DefinitionRow,
+    period: ReportPeriod,
+    outcome: Outcome,
+  ): ScheduledReportDelivery {
+    return {
+      scheduledReportId: definition.id,
+      group: definition.groupId,
+      periodKey: period.periodKey,
+      ...outcome,
+    };
+  }
+
+  /**
+   * A missed period past the catch-up allowance (tm 460): recorded `skipped`
+   * (`missed_window`) instead of mailed late, through the same unique claim —
+   * a period another sweep already holds keeps its row.
+   */
+  async #recordMissed(
+    context: TenantContext,
+    scheduledReportId: string,
+    period: ReportPeriod,
+  ): Promise<Outcome> {
+    try {
+      await withTenant(this.#db, context, (tx) =>
+        tx.scheduledReportRun.create({
+          data: {
+            licenseId: context.licenseId,
+            scheduledReportId,
+            periodKey: period.periodKey,
+            periodFrom: period.from,
+            periodTo: period.to,
+            status: 'skipped',
+            skipReason: 'missed_window',
+          },
+          select: { id: true },
+        }),
+      );
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return { ...NOTHING_SENT, status: 'skipped' };
+      }
+      throw error;
+    }
+    return { ...NOTHING_SENT, status: 'not_sent', skipReason: 'missed_window' };
+  }
+
+  /**
+   * One period: claim it, check who may still receive it, then build and send.
    */
   async #deliver(
     context: TenantContext,
     definition: DefinitionRow,
+    period: ReportPeriod,
     now: Date,
-  ): Promise<ScheduledReportDelivery> {
-    let period: ReportPeriod;
-    try {
-      period = periodFor(definition.frequency as ScheduledExportFrequency, now);
-    } catch (error) {
-      return {
-        scheduledReportId: definition.id,
-        group: definition.groupId,
-        periodKey: null,
-        status: 'failed',
-        recipientCount: 0,
-        rowCount: 0,
-        error: sanitiseError(error),
-      };
-    }
-
-    const base = {
-      scheduledReportId: definition.id,
-      group: definition.groupId,
-      periodKey: period.periodKey,
-    };
-
+    roster: ReportRecipientRoster,
+  ): Promise<Outcome> {
     const runId = await this.#claim(context, definition.id, period);
     // Someone else holds this period — the second sweep of a repeated trigger,
     // or a concurrent one that won the insert. Not an error: the report is
     // already delivered, or is being delivered right now.
     if (runId === null) {
-      return { ...base, status: 'skipped', recipientCount: 0, rowCount: 0, error: null };
+      return { ...NOTHING_SENT, status: 'skipped' };
+    }
+
+    // The roster as it stands now, not as it stood when the schedule was saved
+    // (tm 440). Dropped addresses are logged masked and counted on the run.
+    const { kept, dropped } = splitRecipients(definition.recipients, roster);
+    const skippedRecipientCount = dropped.length;
+    if (dropped.length > 0) {
+      this.#logger?.warn(
+        {
+          event: 'scheduled_report.recipients_dropped',
+          scheduled_report_id: definition.id,
+          period_key: period.periodKey,
+          dropped_count: dropped.length,
+          kept_count: kept.length,
+          recipients_masked: dropped.map(maskRecipient),
+        },
+        'scheduled report recipients no longer on the roster were left out',
+      );
+    }
+    if (kept.length === 0) {
+      await this.#resolve(context, runId, definition.id, {
+        status: 'skipped',
+        recipientCount: 0,
+        skippedRecipientCount,
+        skipReason: 'no_recipients',
+        rowCount: 0,
+        error: null,
+        deliveredAt: null,
+      });
+      return {
+        ...NOTHING_SENT,
+        status: 'not_sent',
+        skippedRecipientCount,
+        skipReason: 'no_recipients',
+      };
     }
 
     // Past this point the period is consumed. Everything that can fail is
@@ -300,49 +525,27 @@ export class ScheduledReportSweeper {
     let recipientCount = 0;
     let rowCount = 0;
     try {
-      const { table, workspaceName, localeByEmail } = await withTenantRead(
-        this.#readDb,
-        context,
-        async (tx) => {
-          const [csvTable, organization, members] = await Promise.all([
-            buildGroupCsv(
-              tx,
-              context.licenseId,
-              definition.groupId,
-              period.from,
-              period.to,
-              undefined,
-              {
-                // The definition's own report filter (RP-01), every run alike.
-                thread: toThreadFilter(storedReportFilter(definition.filters)),
-              },
-            ),
-            tx.organization.findUnique({
-              where: { id: context.organizationId },
-              select: { name: true },
-            }),
-            // A recipient who is a member of this workspace reads the report
-            // in their panel language (tm 265); anyone else in English.
-            tx.agentMembership.findMany({
-              where: {
-                licenseId: context.licenseId,
-                agent: { email: { in: definition.recipients } },
-              },
-              select: { locale: true, agent: { select: { email: true } } },
-            }),
-          ]);
-          return {
-            table: csvTable,
-            workspaceName: organization?.name ?? 'SiyahTuş',
-            localeByEmail: new Map(
-              members.map((m) => [
-                m.agent.email.toLowerCase(),
-                isMailLocale(m.locale) ? m.locale : ('en' as MailLocale),
-              ]),
-            ),
-          };
-        },
-      );
+      const { table, workspaceName } = await withTenantRead(this.#readDb, context, async (tx) => {
+        const [csvTable, organization] = await Promise.all([
+          buildGroupCsv(
+            tx,
+            context.licenseId,
+            definition.groupId,
+            period.from,
+            period.to,
+            undefined,
+            {
+              // The definition's own report filter (RP-01), every run alike.
+              thread: toThreadFilter(storedReportFilter(definition.filters)),
+            },
+          ),
+          tx.organization.findUnique({
+            where: { id: context.organizationId },
+            select: { name: true },
+          }),
+        ]);
+        return { table: csvTable, workspaceName: organization?.name ?? 'SiyahTuş' };
+      });
       rowCount = table.rows.length;
 
       const csv = toCsv(table.headers, table.rows);
@@ -378,11 +581,12 @@ export class ScheduledReportSweeper {
       let firstFailure: { error: unknown } | null = null;
       let mayHaveArrived = false;
       let capped = false;
-      for (const to of definition.recipients) {
+      for (const member of kept) {
         const outcome = await deliver(this.#mailer, {
-          to,
+          to: member.email,
           licenseId: context.licenseId,
-          ...mails[localeByEmail.get(to.toLowerCase()) ?? 'en'],
+          // Each member reads the report in their panel language (tm 265).
+          ...mails[member.locale],
           kind: 'scheduled_report',
         });
         if (outcome.status === 'sent') {
@@ -399,21 +603,23 @@ export class ScheduledReportSweeper {
         await this.#resolve(context, runId, definition.id, {
           status: 'failed',
           recipientCount: 0,
+          skippedRecipientCount,
+          skipReason: null,
           rowCount,
           error: MAIL_CAP_DEFERRED,
           deliveredAt: null,
         });
         return {
-          ...base,
+          ...NOTHING_SENT,
           status: 'deferred',
-          recipientCount: 0,
+          skippedRecipientCount,
           rowCount,
           error: MAIL_CAP_DEFERRED,
         };
       }
       if (capped) {
         throw new Error(
-          `Today's email limit was reached after ${recipientCount} of ${definition.recipients.length} recipients.`,
+          `Today's email limit was reached after ${recipientCount} of ${kept.length} recipients.`,
         );
       }
       if (firstFailure) throw firstFailure.error;
@@ -421,21 +627,38 @@ export class ScheduledReportSweeper {
       await this.#resolve(context, runId, definition.id, {
         status: 'sent',
         recipientCount,
+        skippedRecipientCount,
+        skipReason: null,
         rowCount,
         error: null,
         deliveredAt: now,
       });
-      return { ...base, status: 'delivered', recipientCount, rowCount, error: null };
+      return {
+        ...NOTHING_SENT,
+        status: 'delivered',
+        recipientCount,
+        skippedRecipientCount,
+        rowCount,
+      };
     } catch (error) {
       const message = sanitiseError(error);
       await this.#resolve(context, runId, definition.id, {
         status: 'failed',
         recipientCount,
+        skippedRecipientCount,
+        skipReason: null,
         rowCount,
         error: message,
         deliveredAt: null,
       });
-      return { ...base, status: 'failed', recipientCount, rowCount, error: message };
+      return {
+        ...NOTHING_SENT,
+        status: 'failed',
+        recipientCount,
+        skippedRecipientCount,
+        rowCount,
+        error: message,
+      };
     }
   }
 
@@ -526,8 +749,10 @@ export class ScheduledReportSweeper {
     runId: string,
     scheduledReportId: string,
     outcome: {
-      status: 'sent' | 'failed';
+      status: 'sent' | 'failed' | 'skipped';
       recipientCount: number;
+      skippedRecipientCount: number;
+      skipReason: ScheduledExportSkipReason | null;
       rowCount: number;
       error: string | null;
       deliveredAt: Date | null;
@@ -539,6 +764,8 @@ export class ScheduledReportSweeper {
         data: {
           status: outcome.status,
           recipientCount: outcome.recipientCount,
+          skippedRecipientCount: outcome.skippedRecipientCount,
+          skipReason: outcome.skipReason,
           rowCount: outcome.rowCount,
           error: outcome.error,
         },

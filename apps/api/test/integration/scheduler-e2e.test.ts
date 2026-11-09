@@ -58,6 +58,7 @@ import { FileMailer } from '../../src/services/mail/mailer.js';
 import { startOfUtcDay } from '../../src/services/reports/scheduled-report-period.js';
 import type { SchedulerSnapshot } from '../../src/services/scheduler/types.js';
 import {
+  grantReportsView,
   grantToken,
   ownerClient,
   resetDatabase,
@@ -291,6 +292,10 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
     // would only mean the sweeps ran and correctly found nothing, which is
     // indistinguishable from a scheduler that never ticked.
     fx = await seedFixtures(owner, { plan: 'enterprise' });
+    // Every recipient here is a member who may read the workspace's reports —
+    // the fixture's agent role cannot by default (tm 440).
+    await grantReportsView(owner, fx.a.licenseId);
+    await grantReportsView(owner, fx.b.licenseId);
     await Promise.all([
       seedDefaultBrand(owner, fx.a.licenseId),
       seedDefaultBrand(owner, fx.b.licenseId),

@@ -1400,6 +1400,8 @@ export const settings: Messages = {
   'settings.scheduledExports.delivered': 'Teslim edildi',
   'settings.scheduledExports.failed': 'Başarısız',
   'settings.scheduledExports.running': 'Çalışıyor',
+  'settings.scheduledExports.skipped': 'Atlandı',
+  'settings.scheduledExports.skippedNoRecipients': 'Atlandı — uygun alıcı yok',
   'settings.scheduledExports.checking': 'Kontrol ediliyor…',
   'settings.scheduledExports.recipientCount.one': '{count} alıcı',
   'settings.scheduledExports.recipientCount.other': '{count} alıcı',

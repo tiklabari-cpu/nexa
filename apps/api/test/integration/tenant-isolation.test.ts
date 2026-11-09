@@ -30,7 +30,13 @@ import { FileMailer } from '../../src/services/mail/mailer.js';
 import { buildGroupCsv } from '../../src/services/reports/report-csv.js';
 import { ScheduledReportSweeper } from '../../src/services/reports/scheduled-report-sweeper.js';
 import { toPdf, type CsvCell } from '../../src/routes/reports-export.js';
-import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import {
+  grantReportsView,
+  grantToken,
+  ownerClient,
+  seedFixtures,
+  type Fixtures,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 /** The CSV a scheduled report carried — an attachment since tm 265, not the body. */
@@ -1200,6 +1206,12 @@ describe('tenant isolation (RLS)', () => {
           scopes,
         }),
       ]);
+
+      // Each licence's agent is the recipient, so their role may read reports —
+      // on save and again at send time (tm 440).
+      await grantReportsView(owner, fixtures.a.licenseId);
+      await grantReportsView(owner, fixtures.b.licenseId);
+      server.app.permissionMatrix.cache.invalidate();
 
       await seedAssignedThread(fixtures.a, fixtures.a.agentAccountId);
       const bThreadId = await seedAssignedThread(fixtures.b, fixtures.b.agentAccountId);

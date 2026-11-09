@@ -19,6 +19,7 @@ import { systemBrowser } from '../auth/browser';
 import { DeviceTokenLifecycle } from '../auth/device-token';
 import { createDeviceTokenTransport } from '../auth/device-token-transport';
 import { currentDevicePlatform, expoPushTokens } from '../auth/push-tokens';
+import { SessionRestorer } from '../auth/restore-retry';
 import { SessionStore } from '../auth/secure-store';
 import { MobileSession, type SessionState } from '../auth/session';
 import type { MobileConfig } from '../config';
@@ -63,15 +64,39 @@ export function ServicesProvider({ config, services, children }: ServicesProvide
     };
   }, [config, services]);
 
+  // Turn whatever survived in the protected store into a live session, or
+  // decide there is not one. An expired or revoked refresh token is not
+  // exceptional — it ends as "signed out", which the session has already told
+  // its subscribers by the time `restore()` settles. A request that reached no
+  // server decides nothing, and used to leave the launch screen up for good
+  // (tm 435 · F17): the restorer catches that rejection and tries again — on a
+  // backoff, on return to the foreground, and on the loading screen's button.
+  const restorer = useMemo(() => new SessionRestorer({ session: value.session }), [value]);
   useEffect(() => {
-    // Turn whatever survived in the protected store into a live session, or
-    // decide there is not one. Failure here is not exceptional — an expired or
-    // revoked refresh token ends as "signed out", which the session has already
-    // told its subscribers by the time this settles.
-    void value.session.restore();
-  }, [value]);
+    restorer.start();
+    return () => restorer.stop();
+  }, [restorer]);
 
-  return <ServicesContext.Provider value={value}>{children}</ServicesContext.Provider>;
+  return (
+    <ServicesContext.Provider value={value}>
+      <RestoreRetryContext.Provider value={restorer}>{children}</RestoreRetryContext.Provider>
+    </ServicesContext.Provider>
+  );
+}
+
+const RestoreRetryContext = createContext<SessionRestorer | null>(null);
+
+/**
+ * "Try again" for the launch screen: one more `restore()` now, unless one is
+ * already running or the session has decided. Kept out of `AppServices` so a
+ * test that supplies its own services does not have to supply this too.
+ */
+export function useRetryRestore(): () => void {
+  const restorer = useContext(RestoreRetryContext);
+  if (restorer === null) {
+    throw new Error('useRetryRestore must be called within a ServicesProvider');
+  }
+  return restorer.retryNow;
 }
 
 /**

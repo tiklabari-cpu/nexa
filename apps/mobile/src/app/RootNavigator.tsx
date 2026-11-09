@@ -34,7 +34,7 @@ import { linkingFor } from './linking';
 import type { RootTabParamList } from './navigation';
 import { navigationRef } from './navigationRef';
 import { buildNavigationTheme, buildTabScreenOptions } from './navigationTheme';
-import { useSessionState } from './services';
+import { useRetryRestore, useSessionState } from './services';
 import { CustomersStack } from './stacks/CustomersStack';
 import { InboxStack } from './stacks/InboxStack';
 import { ReportsStack } from './stacks/ReportsStack';
@@ -49,6 +49,7 @@ const Tab = createBottomTabNavigator<RootTabParamList>();
 export function RootNavigator() {
   const { theme, colors } = useTheme();
   const { status } = useSessionState();
+  const retryRestore = useRetryRestore();
   const [navigatorReady, setNavigatorReady] = useState(false);
 
   // Above the `unknown` branch on purpose: a notification that launched the app
@@ -59,8 +60,10 @@ export function RootNavigator() {
 
   // Outside the container rather than inside it: there is no navigator to be
   // the child yet, and mounting one only to replace it a moment later would
-  // make the first real navigator remount with it.
-  if (status === 'unknown') return <LoadingScreen />;
+  // make the first real navigator remount with it. The only branch with a
+  // "Try again": a launch that cannot reach the server keeps retrying on its
+  // own, and after a few seconds says so (tm 435).
+  if (status === 'unknown') return <LoadingScreen onRetry={retryRestore} />;
 
   return (
     <NavigationContainer

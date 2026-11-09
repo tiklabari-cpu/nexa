@@ -5,6 +5,7 @@ import { Linking } from 'react-native';
 import App from './App';
 import { ROOT_TABS } from './app/navigation';
 import { navigationRef } from './app/navigationRef';
+import { CANNOT_CONNECT, RESTORE_RETRY_OFFER_MS } from './features/auth/LoadingScreen';
 import { RETURNED_FROM_BROWSER } from './features/auth/messages';
 import type { ChatSummary } from './features/inbox/types';
 
@@ -306,6 +307,54 @@ describe('App', () => {
     expect(screen.getByTestId('session-loading')).toBeOnTheScreen();
     expect(screen.queryByTestId('sign-in')).not.toBeOnTheScreen();
     expect(screen.queryByLabelText(/^Inbox, tab,/)).not.toBeOnTheScreen();
+  });
+
+  it('keeps retrying a launch that cannot reach the server, and its "Try again" signs in (tm 435)', async () => {
+    // F17: a cold start with no signal used to stay on the launch screen for
+    // good — one `restore()`, its rejection dropped on the floor.
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'] });
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      mockStore.session = STORED_SESSION;
+      const answer = globalThis.fetch;
+      let reachable = false;
+      let tokenCalls = 0;
+      globalThis.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input).includes('/auth/token')) {
+          tokenCalls += 1;
+          if (!reachable) throw new TypeError('Network request failed');
+        }
+        return answer(input, init);
+      }) as unknown as typeof fetch;
+
+      await render(<App />);
+      await act(() => jest.advanceTimersByTimeAsync(0));
+      expect(tokenCalls).toBe(1);
+      expect(screen.getByTestId('session-loading')).toBeOnTheScreen();
+
+      // Retried on its own at 1 s and 3 s; no button yet.
+      await act(() => jest.advanceTimersByTimeAsync(RESTORE_RETRY_OFFER_MS - 1));
+      expect(tokenCalls).toBe(3);
+      expect(screen.queryByTestId('session-retry')).not.toBeOnTheScreen();
+
+      await act(() => jest.advanceTimersByTimeAsync(1));
+      expect(screen.getByText(CANNOT_CONNECT)).toBeOnTheScreen();
+      expect(screen.queryByTestId('sign-in')).not.toBeOnTheScreen();
+
+      // The bars come back; the button does not wait out the 4 s backoff.
+      reachable = true;
+      await fireEvent.press(screen.getByTestId('session-retry'));
+      await act(() => jest.advanceTimersByTimeAsync(0));
+      expect(tokenCalls).toBe(4);
+      expect(await screen.findByTestId('chat-list')).toBeOnTheScreen();
+      expect(screen.queryByTestId('session-loading')).not.toBeOnTheScreen();
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+      jest.useRealTimers();
+    }
   });
 
   it('opens the sign-in screen, not the inbox, when there is no session', async () => {

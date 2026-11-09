@@ -49,6 +49,7 @@ interface HealthBody {
     llm: string;
     virus_scanner: string;
   };
+  provider_warnings?: Array<{ provider: string; message: string }>;
 }
 
 // The admin-only body (M-SEC-b2) needs a bearer token that resolves to at
@@ -203,6 +204,9 @@ describe('GET /health — scheduler (admin caller)', () => {
         llm: 'mock',
         virus_scanner: 'mock',
       });
+      // Every one of them a mock, and not one warning: this is not production
+      // (tm 433 — `mockProviderWarnings` speaks only there).
+      expect(body.provider_warnings).toEqual([]);
     } finally {
       await server.close();
     }

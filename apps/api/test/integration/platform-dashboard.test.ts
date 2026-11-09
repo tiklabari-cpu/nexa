@@ -303,6 +303,7 @@ describe('the platform dashboard (tm 389.8)', () => {
         'event_partitions',
         'ai_jobs',
         'providers',
+        'provider_warnings',
       ]);
     });
 

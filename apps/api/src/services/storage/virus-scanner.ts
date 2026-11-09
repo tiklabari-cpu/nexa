@@ -55,7 +55,11 @@ export class UnavailableVirusScanner implements VirusScanner {
   }
 }
 
-export function createVirusScanner(provider: 'mock' | 'unavailable'): VirusScanner {
+/** The `VIRUS_SCANNER` values — no real scanner yet (ClamAV is out of the pilot, owner S12). */
+export const VIRUS_SCANNERS = ['mock', 'unavailable'] as const;
+export type VirusScannerProvider = (typeof VIRUS_SCANNERS)[number];
+
+export function createVirusScanner(provider: VirusScannerProvider): VirusScanner {
   return provider === 'unavailable' ? new UnavailableVirusScanner() : new MockVirusScanner();
 }
 

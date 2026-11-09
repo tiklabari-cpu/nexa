@@ -5,7 +5,22 @@
  */
 import { describe, expect, it } from 'vitest';
 import { testEnv } from '../../../../test/helpers/fixtures.js';
-import { createCrawlFetcher, crawlerProviderWarning } from './provider.js';
+import { mockProviderWarnings } from '../../../config/mock-provider-warnings.js';
+import { createCrawlFetcher } from './provider.js';
+
+/** The crawler's line of the shared mock-provider warnings (moved there by tm 433), or null. */
+function crawlerProviderWarning(env: {
+  NODE_ENV: string;
+  PILOT_MODE: boolean;
+  CRAWLER_PROVIDER: 'mock' | 'http';
+}): string | null {
+  const warnings = mockProviderWarnings({
+    ...env,
+    VIRUS_SCANNER: 'unavailable',
+    STRIPE_PROVIDER: 'stripe',
+  });
+  return warnings.find((warning) => warning.provider === 'crawler')?.message ?? null;
+}
 
 describe('CRAWLER_PROVIDER (AI-17)', () => {
   it('is the mock unless a deployment names the real crawler', () => {

@@ -26,6 +26,7 @@ import { createEmbeddingProvider } from '../services/ai/provider/create-embeddin
 import { createLlmProvider } from '../services/ai/provider/llm-provider.js';
 import { createMailer } from '../services/mail/mailer.js';
 import { parseEnv, SECRET_KEYS, TEMPLATE_PLACEHOLDER } from './env.js';
+import { mockProviderWarnings } from './mock-provider-warnings.js';
 
 // src/config → apps/api → apps → repo root (same resolution as env.parity.test.ts)
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -289,6 +290,34 @@ describe('the pilot configuration passes the production gate (tm 255.15)', () =>
         smtp: { ...env.mail.smtp!, from: 'SiyahTuş <pilot@siyahtus.test>' },
       }),
     ).toThrow('SMTP_FROM must be a bare email address');
+  });
+
+  /**
+   * The pilot ships `VIRUS_SCANNER=mock` and `STRIPE_PROVIDER=mock` (tm 433 ·
+   * F21, F32). Owner 2026-11-06 S18: both are warnings, never boot refusals —
+   * so the gate boots them, and the warnings are what says so: the unscanned
+   * attachments in the pilot too (S9 · S12), the free card only once
+   * `PILOT_MODE` is off.
+   */
+  it('boots the pilot on the mock scanner and card processor, and warns of the scanner (tm 433)', () => {
+    expect(TEMPLATE_ENTRIES['VIRUS_SCANNER']).toBe('mock');
+    expect(TEMPLATE_ENTRIES['STRIPE_PROVIDER']).toBe('mock');
+    const env = parseEnv(PILOT_ENV);
+    expect(env.VIRUS_SCANNER).toBe('mock');
+    expect(mockProviderWarnings(env).map((warning) => warning.provider)).toContain('virus_scanner');
+    expect(mockProviderWarnings(env).map((warning) => warning.provider)).not.toContain('payment');
+  });
+
+  it('boots the same file with PILOT_MODE=false and warns of the mock card processor (tm 433)', () => {
+    let env: ReturnType<typeof parseEnv> | undefined;
+    expect(() => {
+      env = parseEnv({ ...PILOT_ENV, PILOT_MODE: 'false' });
+    }).not.toThrow();
+    expect(env!.isProduction).toBe(true);
+    expect(env!.STRIPE_PROVIDER).toBe('mock');
+    const providers = mockProviderWarnings(env!).map((warning) => warning.provider);
+    expect(providers).toContain('payment');
+    expect(providers).toContain('virus_scanner');
   });
 });
 

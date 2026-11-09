@@ -1134,6 +1134,17 @@ components:
         providers:
           type: object
           additionalProperties: { type: string }
+        provider_warnings:
+          type: array
+          description: |
+            The tenant API's mock-provider warnings (tm 433) — absent from a
+            snapshot an older leader published.
+          items:
+            type: object
+            required: [provider, message]
+            properties:
+              provider: { type: string, enum: [virus_scanner, payment, crawler] }
+              message: { type: string }
 
     PlatformComponentStatus:
       type: object

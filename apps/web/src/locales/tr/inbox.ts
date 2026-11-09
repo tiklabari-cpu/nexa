@@ -332,6 +332,9 @@ export const inbox: Messages = {
   'inbox.attachment.unavailable': 'Ek kullanılamıyor',
   'inbox.attachment.loading': 'Ek yükleniyor',
   'inbox.attachment.loadingText': 'Yükleniyor…',
+  'inbox.attachment.unscanned': 'Virüs taraması yapılmadı',
+  'inbox.attachment.unscannedHint':
+    'Bu dosya virüslere karşı denetlenmedi. Yalnızca gönderene güveniyorsanız açın.',
 
   // Details panel
   'inbox.details.panelLabel': 'Sohbet ayrıntıları',

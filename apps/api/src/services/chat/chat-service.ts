@@ -46,6 +46,7 @@ import {
   SENSITIVE_TYPES,
   SENSITIVE_TYPES_PROPERTY,
   SENSITIVE_WARNING_SYSTEM_EVENT,
+  ATTACHMENT_SCANNED_PROPERTY,
   sensitiveWarningText,
   sensitiveWarningTypes,
   stripEditMarkers,
@@ -5511,6 +5512,13 @@ export class ChatService {
     // own message (`card-postback.ts`); nobody else may claim one.
     if (input.authorType !== 'customer') delete properties['postback'];
     if (card) properties['card'] = card.card;
+    // Whether the attachment was scanned for malware is the server's to say
+    // (tm 433 · F21): a caller-supplied `scanned` is dropped, and every event
+    // with a file says `false` — no deployment scanner searches the bytes yet
+    // (`virus-scanner.ts`: the mock refuses only EICAR), so the panel labels it
+    // "Not checked for viruses" rather than letting an agent assume a scan.
+    delete properties[ATTACHMENT_SCANNED_PROPERTY];
+    if (input.input.attachmentUrl) properties[ATTACHMENT_SCANNED_PROPERTY] = false;
 
     // The last line before the text comes to rest (tm 300.2 · AI-26 · K12):
     // whoever wrote it, masked under their author's policy. The write paths

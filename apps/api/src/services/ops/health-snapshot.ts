@@ -16,6 +16,7 @@
 import type { PrismaClient } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
 import type { Env } from '../../config/env.js';
+import { type MockProviderKey, mockProviderWarnings } from '../../config/mock-provider-warnings.js';
 import { type AiJobsHealth, readAiJobsHealth } from '../ai/ai-jobs.js';
 import type { EventPartitionsSnapshot } from '../chat/event-partitions.js';
 import type { SchedulerSnapshot } from '../scheduler/types.js';
@@ -89,6 +90,8 @@ export interface HealthSnapshotBody {
   event_partitions: EventPartitionsSnapshot;
   ai_jobs: AiJobsHealth | null;
   providers: Record<string, string>;
+  /** The boot's mock-provider warnings (tm 433), empty when there are none. */
+  provider_warnings: Array<{ provider: MockProviderKey; message: string }>;
 }
 
 export interface BuildHealthSnapshotInput {
@@ -103,6 +106,9 @@ export interface BuildHealthSnapshotInput {
     | 'SIEM_PROVIDER'
     | 'LLM_PROVIDER'
     | 'VIRUS_SCANNER'
+    | 'NODE_ENV'
+    | 'PILOT_MODE'
+    | 'CRAWLER_PROVIDER'
   >;
   version: string;
   uptimeS: number;
@@ -168,5 +174,13 @@ export async function buildHealthSnapshot(
       llm: env.LLM_PROVIDER,
       virus_scanner: env.VIRUS_SCANNER,
     },
+    // The same warnings the boot logged (tm 433 · F21, F32): a mock where real
+    // people use the system — the virus scanner, the card processor outside
+    // the pilot, the crawler inside it. Information only, like `providers`;
+    // never the status code.
+    provider_warnings: mockProviderWarnings(env).map(({ provider, message }) => ({
+      provider,
+      message,
+    })),
   };
 }

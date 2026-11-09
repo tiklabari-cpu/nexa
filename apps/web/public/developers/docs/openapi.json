@@ -3794,6 +3794,13 @@
           },
           "providers": {
             "$ref": "#/components/schemas/HealthProviders"
+          },
+          "provider_warnings": {
+            "type": "array",
+            "description": "The mock providers this deployment runs where real people use it — the same lines the boot logged at `warn`, empty outside\nproduction. `virus_scanner`: uploads are not scanned (only the\nEICAR test file is refused), pilot included. `payment`: a card on\nthe masked form activates a workspace without being charged\n(`PILOT_MODE=false` only). `crawler`: website sources index an\ninvented page (`PILOT_MODE=true` only). Information, never the\nstatus code — none of them stops the boot.\n",
+            "items": {
+              "$ref": "#/components/schemas/HealthProviderWarning"
+            }
           }
         }
       },
@@ -3979,6 +3986,28 @@
             "type": "number",
             "nullable": true,
             "description": "Seconds since the oldest unfinished (`pending` or `running`) job\nwas written, by the database's clock. Null when there is none.\n"
+          }
+        }
+      },
+      "HealthProviderWarning": {
+        "type": "object",
+        "required": [
+          "provider",
+          "message"
+        ],
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "virus_scanner",
+              "payment",
+              "crawler"
+            ],
+            "description": "The key the dependency has under `providers` (`crawler` is not listed there)."
+          },
+          "message": {
+            "type": "string",
+            "description": "One sentence for an operator — what the mock does and which setting replaces it."
           }
         }
       },
@@ -4736,7 +4765,7 @@
           "properties": {
             "type": "object",
             "additionalProperties": true,
-            "description": "Free-form, with three reserved keys the server owns: `edited_at`\n(ISO-8601, present once the message has been corrected after\nsending), `edited_by` (the account that corrected it) and\n`sensitive_types` (tm 300.2 · AI-26: the kinds of value masked out\nof `text` before it was stored — `card`, `cvv`, `otp`, `password`,\n`iban`, `seed_phrase`, `private_key`, `banking_credential` — in that\norder). All three are stripped from a caller-supplied `properties`\non send, so a client cannot make a fresh message claim it was\nedited or masked. The warning a visitor is shown after sharing a\nsecret is a `system_message` addressed to `all` with\n`system_event: sensitive_data_warning`, once per chat per type; its\n`sensitive_types` are the types it is the first warning for.\n\nA `rich_message` carries its card as `card` (`RichCard`, EN-02)\nand its plain text as `text`. A player's message sent by a card\nbutton carries `postback` (`CardPostback`), which only the\nserver writes — it is stripped from a caller-supplied\n`properties` too.\n"
+            "description": "Free-form, with three reserved keys the server owns: `edited_at`\n(ISO-8601, present once the message has been corrected after\nsending), `edited_by` (the account that corrected it) and\n`sensitive_types` (tm 300.2 · AI-26: the kinds of value masked out\nof `text` before it was stored — `card`, `cvv`, `otp`, `password`,\n`iban`, `seed_phrase`, `private_key`, `banking_credential` — in that\norder). All three are stripped from a caller-supplied `properties`\non send, so a client cannot make a fresh message claim it was\nedited or masked. A fourth, `scanned`, is on every event\nwith an `attachment_url`: `false` while the deployment's virus\nscanner does not look for malware (today's only scanner, the mock,\nrefuses just the EICAR test file) — the panel labels such an\nattachment \"Not checked for viruses\". The server writes it; a\ncaller-supplied one is stripped. The warning a visitor is shown after sharing a\nsecret is a `system_message` addressed to `all` with\n`system_event: sensitive_data_warning`, once per chat per type; its\n`sensitive_types` are the types it is the first warning for.\n\nA `rich_message` carries its card as `card` (`RichCard`, EN-02)\nand its plain text as `text`. A player's message sent by a card\nbutton carries `postback` (`CardPostback`), which only the\nserver writes — it is stripped from a caller-supplied\n`properties` too.\n"
           },
           "created_at": {
             "type": "string",

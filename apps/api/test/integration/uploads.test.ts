@@ -439,6 +439,40 @@ describe('uploads', () => {
       expect(sent.statusCode).toBe(400);
     });
 
+    it('stamps an attachment the mock passed as not scanned, whatever the caller claims (tm 433)', async () => {
+      // The mock passes every file but EICAR without looking for malware, so the
+      // event says `scanned: false` and the panel labels it (F21 · NY-51).
+      const { fileUrl, putStatus } = await upload(tokenA);
+      expect(putStatus).toBe(201);
+      const chat = await server.post('/chats', { customer_id: fx.a.customerId }, auth(tokenA));
+      const chatId = (chat.json() as { id: string }).id;
+
+      const sent = await server.post(
+        `/chats/${chatId}/events`,
+        { type: 'file', attachment_url: fileUrl, properties: { scanned: true, note: 'kept' } },
+        auth(tokenA),
+      );
+      expect(sent.statusCode).toBe(201);
+      const event = sent.json() as { id: string; properties: Record<string, unknown> };
+      expect(event.properties).toMatchObject({ scanned: false, note: 'kept' });
+
+      // What is stored, not only what was answered.
+      const stored = await owner.event.findFirst({
+        where: { id: event.id },
+        select: { properties: true },
+      });
+      expect(stored?.properties).toMatchObject({ scanned: false });
+
+      // A message with no file cannot claim a scan either: the key is the server's.
+      const plain = await server.post(
+        `/chats/${chatId}/events`,
+        { type: 'message', text: 'hello', properties: { scanned: true } },
+        auth(tokenA),
+      );
+      expect(plain.statusCode).toBe(201);
+      expect(plain.json().properties).not.toHaveProperty('scanned');
+    });
+
     it('refuses the upload when the scanner is unreachable (fail closed)', async () => {
       const down = await startTestServer({
         STORAGE_LOCAL_DIR: mkdtempSync(join(tmpdir(), 'siyahtus-uploads-')),

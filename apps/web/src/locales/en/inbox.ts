@@ -355,6 +355,9 @@ export const inbox: Messages = {
   'inbox.attachment.unavailable': 'Attachment unavailable',
   'inbox.attachment.loading': 'Loading attachment',
   'inbox.attachment.loadingText': 'Loading…',
+  'inbox.attachment.unscanned': 'Not checked for viruses',
+  'inbox.attachment.unscannedHint':
+    'This file was not checked for viruses. Open it only if you trust the sender.',
 
   // Details panel
   'inbox.details.panelLabel': 'Conversation details',

@@ -31,6 +31,17 @@
  * `code_challenge` — the same three things `/auth/authorize` takes — parks them
  * server-side under a relay handle, and picks them back up when the IdP answers.
  * Nothing security-relevant travels through the IdP except an opaque id.
+ *
+ * ## Only the workspace's own app (tm 438)
+ *
+ * Unlike `/auth/authorize`, this door asks the person nothing: an identity
+ * provider they already hold a session with answers silently, and the code the
+ * ACS mints carries their role's scopes. A typed password is at least a sign
+ * that the person meant to sign in to the app asking; here a link they click
+ * would do. So federation signs people in to the workspace's own sign-in client
+ * and to nothing else — `firstPartyClientId`, the client `/auth/login` hands the
+ * console and the phone. A partner app's `client_id` is refused at `/login`
+ * before the browser leaves, and again at the ACS before a code exists.
  */
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -49,6 +60,7 @@ import {
 } from '../lib/saml-sp.js';
 import { withTenant } from '../lib/tenant.js';
 import { writeAuditEntry, type AuditEntry } from '../services/audit/audit-log.js';
+import { firstPartyClientId } from '../services/auth/first-party-client.js';
 import { OauthService } from '../services/auth/oauth-service.js';
 import { defaultScopesForRole } from '../services/auth/principal.js';
 
@@ -136,6 +148,12 @@ type LoginRejection =
   | 'unknown_relay_state'
   /** The client that started the login is gone, or registers no usable scope. */
   | 'client_unavailable'
+  /**
+   * The client that started the login is not the workspace's own sign-in
+   * client (tm 438) — a login parked before `/login` refused partner apps, or
+   * one whose client stopped being the oldest before the IdP answered.
+   */
+  | 'client_not_first_party'
   /**
    * The asserted address is outside the domains this connection has verified
    * (§D116 MEDIUM (a)). Recorded under its own name rather than folded into
@@ -225,6 +243,19 @@ export default async function samlRoutes(
       throw ApiError.notFound('Single sign-on is not available for this connection.');
     }
     return row;
+  }
+
+  /**
+   * The workspace's own sign-in client — the only one a federated sign-in may
+   * end in (see the file header). Read under the connection's tenant, so RLS
+   * scopes it to the workspace the row names, never one the caller did.
+   */
+  function ownClientOf(connection: SsoConnectionRow): Promise<string | null> {
+    return withTenant(
+      app.db,
+      { licenseId: connection.license_id, organizationId: connection.organization_id },
+      (tx) => firstPartyClientId(tx),
+    );
   }
 
   /**
@@ -330,6 +361,13 @@ export default async function samlRoutes(
    * The organization *name* rides along so the sign-in screen can say where it
    * is about to send somebody. Missing, disabled and canceled are one "not
    * found", the same reading `/login` and `/acs` give a connection id.
+   *
+   * The client is the workspace's own sign-in client, however many partner
+   * apps sit beside it (tm 438). This used to answer `null` as soon as a second
+   * client existed — "which one?" had no answer — so registering a partner app
+   * silently broke every identity-provider tile of the workspace. It has an
+   * answer now, the one `/login` accepts and `/auth/login` gives the console:
+   * `null` means the workspace registers no client at all.
    */
   app.get<{ Params: { connectionId: string } }>(
     '/auth/sso/:connectionId',
@@ -348,11 +386,7 @@ export default async function samlRoutes(
             where: { id: connection.organization_id },
             select: { name: true },
           }),
-          // Exactly one client, or none: a workspace with two would make "which
-          // client does this connection sign in through" a question with no
-          // answer, and picking one would silently decide which scope ceiling
-          // the session is capped by. `take: 2` is enough to tell the difference.
-          clients: await tx.oauthClient.findMany({ select: { id: true }, take: 2 }),
+          clientId: await firstPartyClientId(tx),
         }),
       );
 
@@ -360,7 +394,7 @@ export default async function samlRoutes(
       return {
         id: connection.id,
         organization_name: found.organization?.name ?? null,
-        client_id: found.clients.length === 1 ? found.clients[0]!.id : null,
+        client_id: found.clientId,
       };
     },
   );
@@ -387,6 +421,18 @@ export default async function samlRoutes(
         // One message for "no such client" and "a client of another workspace":
         // a connection id is public enough, the client registry is not.
         throw ApiError.validation('Unknown client_id.');
+      }
+      // A partner app of this workspace is a real client with real redirect
+      // URIs, and nothing below would stop it: refused here, before anything is
+      // parked, so its login never reaches the IdP (see the file header). Said
+      // apart from "unknown" — the developer of that app needs to hear which
+      // door to use instead, and a partner id is 128 random bits, not a thing an
+      // anonymous caller can probe the registry with.
+      if (client.id !== (await ownClientOf(connection))) {
+        throw ApiError.validation(
+          "client_id is not this workspace's own sign-in client. Single sign-on signs people in to that app only; partner apps use /auth/authorize.",
+          { reason: 'client_not_first_party' },
+        );
       }
       if (!OauthService.isRegisteredRedirect(query.redirect_uri, client.redirect_uris)) {
         throw ApiError.validation('redirect_uri is not registered for this client.');
@@ -511,6 +557,14 @@ export default async function samlRoutes(
       const client = await oauth.findClient(pending.clientId);
       if (!client || client.organization_id !== connection.organization_id) {
         return refuse(request, connection, 'client_unavailable');
+      }
+      // `/login`'s rule again, as it stands now rather than when the login was
+      // parked (tm 438): a handle parked for a partner app before `/login`
+      // refused them — they live ten minutes, across a deploy — gets no code,
+      // and neither does one whose client stopped being the workspace's own.
+      // Before provisioning, so a refused login writes nothing.
+      if (client.id !== (await ownClientOf(connection))) {
+        return refuse(request, connection, 'client_not_first_party');
       }
 
       // --- Email verification (tm 257.7) -------------------------------------

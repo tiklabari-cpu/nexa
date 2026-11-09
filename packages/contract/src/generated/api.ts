@@ -452,9 +452,12 @@ export interface paths {
      *
      *     The client id is not a credential — these are public clients with no
      *     secret, PKCE is mandatory, and the redirect URI set is registered and
-     *     checked before the browser leaves. `client_id` is `null` when the
-     *     workspace registers none or more than one, in which case the caller has to
-     *     be told which to use rather than have one guessed for it.
+     *     checked before the browser leaves. `client_id` is the workspace's own
+     *     sign-in client — its oldest OAuth client, ties broken by id, the one
+     *     `/auth/login` names too — however many partner apps the workspace has
+     *     registered beside it, because that is the only client
+     *     `/auth/saml/{connectionId}/login` accepts (tm 438). It is `null` only
+     *     when the workspace registers no client at all.
      *
      *     Responds `404` for a connection that does not exist, is disabled, or
      *     belongs to a canceled workspace — the same reading `/login` and `/acs`
@@ -486,6 +489,15 @@ export interface paths {
      *     travels through the identity provider, and the `redirect_uri` the
      *     authorization code is eventually delivered to is the one checked at this
      *     step — it cannot be influenced by anything that happens in between.
+     *
+     *     Only the workspace's own sign-in client may start a federated sign-in
+     *     (tm 438). The person is asked nothing on the way — an identity provider
+     *     they already have a session with answers silently, and the code carries
+     *     their role's scopes — so a partner app registered in the workspace is
+     *     refused before anything is parked: `400` `validation` with
+     *     `details.reason: "client_not_first_party"`. Partner apps sign people in
+     *     through `/auth/authorize`. The rule is applied again by the ACS before a
+     *     code is minted.
      *
      *     Responds `404` for a connection that does not exist, is disabled, or
      *     belongs to a canceled workspace: a connection id appears in URLs, and the
@@ -19293,9 +19305,10 @@ export interface components {
       /** @description The workspace this connection signs in to, so a screen can name it. */
       organization_name: string | null;
       /**
-       * @description The OAuth client to start the login with. `null` when the workspace
-       *     registers none or more than one — the caller must then be told which
-       *     to use rather than have one guessed for it.
+       * @description The OAuth client to start the login with: the workspace's own
+       *     sign-in client, whatever partner apps sit beside it — the only one
+       *     `/auth/saml/{connectionId}/login` accepts (tm 438). `null` only when
+       *     the workspace registers no client at all.
        */
       client_id: string | null;
     };
@@ -27469,7 +27482,8 @@ export interface operations {
     parameters: {
       query: {
         /**
-         * @description Must be registered to the connection's organization. A browser that
+         * @description Must be the connection's workspace's own sign-in client — the
+         *     `client_id` `/auth/login` returns for the workspace. A browser that
          *     arrived holding only a connection id reads it from
          *     `GET /auth/sso/{connectionId}` first.
          */
@@ -27503,7 +27517,20 @@ export interface operations {
         };
         content?: never;
       };
-      400: components['responses']['BadRequest'];
+      /**
+       * @description `validation`: a malformed query, a `client_id` the connection's
+       *     workspace does not register, a `redirect_uri` the client does not
+       *     register — or a client of the workspace that is not its own sign-in
+       *     client, `details.reason: "client_not_first_party"` (tm 438).
+       */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };

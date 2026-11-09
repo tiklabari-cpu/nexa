@@ -1279,6 +1279,8 @@ export const settings: Messages = {
   'settings.scheduledExports.delivered': 'Delivered',
   'settings.scheduledExports.failed': 'Failed',
   'settings.scheduledExports.running': 'Running',
+  'settings.scheduledExports.skipped': 'Skipped',
+  'settings.scheduledExports.skippedNoRecipients': 'Skipped — no eligible recipients',
   'settings.scheduledExports.checking': 'Checking…',
   'settings.scheduledExports.recipientCount.one': '{count} recipient',
   'settings.scheduledExports.recipientCount.other': '{count} recipients',

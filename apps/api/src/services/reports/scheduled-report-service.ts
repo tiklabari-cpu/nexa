@@ -13,11 +13,14 @@
  *   - `group` is resolved against the report catalogue (`REPORT_GROUPS`), the
  *     same one `GET /reports/export` uses. A schedule naming a group that does
  *     not exist would sit inert until its first run, then fail forever.
- *   - `recipients` must be mailboxes of active agents on this same license. A
- *     schedule is the one place report data leaves the workspace unattended; if
- *     it accepted free text, "define a schedule" would become a way to mail the
- *     workspace's numbers anywhere, to anyone, on a timer. Bounding the list by
- *     the roster keeps the blast radius inside the tenant.
+ *   - `recipients` must be mailboxes of active members on this same license
+ *     who may read its reports (`reportRecipientRoster`, tm 440). A schedule
+ *     is the one place report data leaves the workspace unattended; if it
+ *     accepted free text, "define a schedule" would become a way to mail the
+ *     workspace's numbers anywhere, to anyone, on a timer. Bounding the list
+ *     by the roster keeps the blast radius inside the tenant — and the sweep
+ *     asks the same roster again at send time, so a member who leaves it
+ *     later stops receiving the mail.
  */
 import type {
   ScheduledExport,
@@ -28,8 +31,14 @@ import type {
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { reportGroup } from '../../routes/reports-export.js';
-import { isReportFilterableGroup, type ReportFilter } from '@siyahtus/types';
+import {
+  isReportFilterableGroup,
+  SCHEDULED_EXPORT_SKIP_REASONS,
+  type ReportFilter,
+  type ScheduledExportSkipReason,
+} from '@siyahtus/types';
 import { refuseReportFilter, reportFilterJson, storedReportFilter } from './report-filter.js';
+import { reportRecipientRoster } from './scheduled-report-recipients.js';
 
 export interface ScheduledExportInput {
   group: string;
@@ -74,6 +83,8 @@ interface ScheduledReportRunRow {
   status: string;
   rowCount: number;
   recipientCount: number;
+  skippedRecipientCount: number;
+  skipReason: string | null;
   error: string | null;
   createdAt: Date;
 }
@@ -167,6 +178,7 @@ export class ScheduledReportService {
       format?: string;
       recipients?: string[];
       enabled?: boolean;
+      enabledAt?: Date;
       filters?: Record<string, string[]>;
     } = {};
 
@@ -176,6 +188,15 @@ export class ScheduledReportService {
       data.groupId = group.id;
     }
     if (patch.frequency !== undefined) data.frequency = patch.frequency;
+    // A schedule that starts again — switched back on, or moved to another
+    // cadence — starts its catch-up from now (tm 460): the periods it was off
+    // for, or that belonged to the old cadence, were not missed.
+    if (
+      (patch.enabled === true && !existing.enabled) ||
+      (patch.frequency !== undefined && patch.frequency !== existing.frequency)
+    ) {
+      data.enabledAt = new Date();
+    }
     if (patch.format !== undefined) data.format = patch.format;
     if (patch.recipients !== undefined) {
       data.recipients = await resolveRecipients(tx, tenant, patch.recipients);
@@ -250,37 +271,36 @@ export class ScheduledReportService {
  * Turn the requested addresses into the licence's own stored spellings, or
  * refuse.
  *
- * The roster is read through the tenant client, so RLS has already narrowed it
- * to the caller's licence — another workspace's agent fails here exactly as an
- * invented address does, and the error says the same thing either way, so the
- * endpoint never becomes an oracle for "does this person work at that company".
+ * The roster (`reportRecipientRoster` — the one the sweep asks again at send
+ * time, tm 440) is read through the tenant client, so RLS has already narrowed
+ * it to the caller's licence — another workspace's agent fails here exactly as
+ * an invented address does, and the error says the same thing either way, so
+ * the endpoint never becomes an oracle for "does this person work at that
+ * company".
  *
- * A suspended member is refused too: they have been cut off from the workspace,
- * and a schedule naming them would keep mailing them its reports indefinitely.
- * Addresses are matched case-insensitively (accounts store e-mail as `citext`)
- * and stored in the roster's spelling, so the delivery step never has to guess
- * which of two casings is the real mailbox. Duplicates collapse — a list that
- * named someone twice would mail them twice.
+ * A suspended member, one awaiting approval, and one whose role may not read
+ * the workspace's reports are refused too: a schedule naming them would mail
+ * them figures the workspace does not let them see. Addresses are matched
+ * case-insensitively (accounts store e-mail as `citext`) and stored in the
+ * roster's spelling, so the delivery step never has to guess which of two
+ * casings is the real mailbox. Duplicates collapse — a list that named
+ * someone twice would mail them twice.
  */
 async function resolveRecipients(
   tx: TenantClient,
   tenant: TenantContext,
   requested: readonly string[],
 ): Promise<string[]> {
-  const memberships = await tx.agentMembership.findMany({
-    where: { licenseId: tenant.licenseId, suspended: false },
-    select: { agent: { select: { email: true } } },
-  });
-  const roster = new Map(memberships.map((m) => [m.agent.email.toLowerCase(), m.agent.email]));
+  const roster = await reportRecipientRoster(tx, tenant.licenseId);
 
   const resolved: string[] = [];
   const seen = new Set<string>();
   for (const address of requested) {
     const key = address.trim().toLowerCase();
-    const known = roster.get(key);
+    const known = roster.get(key)?.email;
     if (!known) {
       throw ApiError.validation(
-        `recipients: ${address} is not an active agent on this licence. ` +
+        `recipients: ${address} is not an active agent with access to reports on this licence. ` +
           'A scheduled export may only be delivered to this workspace’s team.',
       );
     }
@@ -320,9 +340,18 @@ function toRunDto(row: ScheduledReportRunRow): ScheduledExportRun {
     status: toRunStatus(row.status),
     row_count: row.rowCount,
     recipient_count: row.recipientCount,
+    skipped_recipient_count: row.skippedRecipientCount,
+    skip_reason: toSkipReason(row.skipReason),
     error: row.error,
     created_at: row.createdAt.toISOString(),
   };
+}
+
+/** The stored reason, passed through; anything else the column held reads as null. */
+function toSkipReason(stored: string | null): ScheduledExportSkipReason | null {
+  return (SCHEDULED_EXPORT_SKIP_REASONS as readonly string[]).includes(stored ?? '')
+    ? (stored as ScheduledExportSkipReason)
+    : null;
 }
 
 /** A non-empty filter only on a conversation group (RP-01), else the 400. */

@@ -16927,12 +16927,12 @@
         "description": "(tm 440) Askıya alınan ya da çıkarılan üyeye günlük rapor e-postası gitmeye devam ediyor; alıcı doğrulaması yalnız oluşturma anında. (tm 460) Sunucu 6 Kasım boyunca kapalıysa 5 Kasım raporu hiç gönderilmiyor ve iz bırakmıyor.",
         "details": "BİRLEŞİK GÖREV (sahip onayı 2026-11-07): tm 440, tm 460 aynı alana dokunduğu için tek pencerede yapılır; DoD kapısı bir kez koşar.\nBölümler sırayla yapılır. Her bölüm kendi kabul ölçütüyle kapanır; biri yeşil değilse görev done değildir.\nBirleşen görevler (tm 460) cancelled durumda ve buraya işaret ediyor; onlara ayrıca dokunma.\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\n━━ BÖLÜM 1 — tm 440 SCHEDULED-REPORT-RECIPIENT-ROSTER · Zamanlanmış rapor gönderim anında alıcıları aktif ve yetkili üyelerle kesiştirsin ━━\nSORUN: Askıya alınan ya da çıkarılan üyeye günlük rapor e-postası gitmeye devam ediyor; alıcı doğrulaması yalnız oluşturma anında.\n\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F23 (medium ← high). Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/services/reports/scheduled-report-sweeper.ts:~243-250` alıcılar roster kontrolü olmadan; `:381` `for (const to of definition.recipients)`; doğrulama `scheduled-report-service.ts:~265-298` (oluşturma).\n\nYAPILACAK: gönderimden önce alıcıları lisansın aktif (askıda olmayan, silinmemiş) ve rapor yetkisi olan üyelerinin e-postalarıyla (küçük harf) kesiştir; düşenleri yapılandırılmış log'a (e-posta maskeli) ve run kaydına `skipped_recipients` sayısı. Hiç alıcı kalmazsa run 'skipped'. Oluşturma anı doğrulamasıyla aynı yardımcıyı paylaş.\n\nTUZAK: Log'da ham e-posta yok (log-keys/url-pii audit'leri). memory new-scheduler-job-ripples (job listesi değişmiyor; yalnız davranış). UTC 00-01 kırmızıları (integration-reds-between-00-and-01-utc).\n\nKAPSAM DIŞI: kaçırılan dönem (SCHEDULED-REPORT-MISSED-PERIOD).\nDENETİM BULGULARI: F23\n\n━━ BÖLÜM 2 — tm 460 SCHEDULED-REPORT-MISSED-PERIOD · Kaçırılan zamanlanmış rapor dönemleri sınırlı telafi edilsin ya da \"atlandı\" run kaydı yazılsın ━━\nSORUN: Sunucu 6 Kasım boyunca kapalıysa 5 Kasım raporu hiç gönderilmiyor ve iz bırakmıyor.\n\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F46. Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/api/src/services/reports/scheduled-report-period.ts:~57-62` tek dönem hesaplanıyor; `scheduled-report-sweeper.ts:~270`, `:~289` claim.\n\nYAPILACAK (varsayılan): `last_run_at`'ten bugüne kaçan dönemler için en fazla 7 dönem (günlük) / 2 dönem (haftalık) sırayla claim edilip gönderilir; sınırı aşanlar için `status='skipped'` run satırı (neden: `missed_window`). Mevcut claim tekilliği (çift gönderim yok) korunur.\n\nTUZAK: Çift gönderim — claim unique kısıtını testle sabitle (race testleri ayrı bağlantı). Sahte saat; UTC 00-01 kırmızıları.\n\nKAPSAM DIŞI: rapor içeriği.\nDENETİM BULGULARI: F46",
         "testStrategy": "BÖLÜM 1 (tm 440): api entegrasyon: alıcı üye askıya alınır → sweep o adrese mail göndermez, diğerine gönderir, run'da skipped_recipients=1; rapor yetkisi kaldırılan üye aynı; tüm alıcılar düşerse run skipped. Mutasyon: kesişimi kaldır → kırmızı. DoD: CONVENTIONS §1.\nBÖLÜM 2 (tm 460): api entegrasyon (sahte saat): last_run 4 Kasım, şimdi 7 Kasım → 5 ve 6 Kasım raporları birer kez; iki eşzamanlı sweep çift göndermez; 10 gün kesinti → 7 gönderim + skipped satırları. DoD: CONVENTIONS §1.\nKapanış: bütün bölümlerin hedefli testleri yeşilken tam DoD kapısı bir kez.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "417"
         ],
         "priority": "medium",
-        "updatedAt": "2026-11-07T11:03:10.748Z",
+        "updatedAt": "2026-11-09T20:19:49.668Z",
         "subtasks": []
       },
       {
@@ -17778,7 +17778,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-09T19:11:45.358Z",
+      "lastModified": "2026-11-09T20:19:49.668Z",
       "taskCount": 478,
       "completedCount": 432,
       "tags": [

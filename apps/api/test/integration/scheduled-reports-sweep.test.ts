@@ -48,6 +48,7 @@ import { PermanentMailError } from '../../src/services/mail/mail-error.js';
 import { periodFor, startOfUtcDay } from '../../src/services/reports/scheduled-report-period.js';
 import { ScheduledReportSweeper } from '../../src/services/reports/scheduled-report-sweeper.js';
 import {
+  grantReportsView,
   ownerClient,
   seedFixtures,
   type Fixtures,
@@ -191,6 +192,10 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
 
   beforeEach(async () => {
     fx = await seedFixtures(owner);
+    // Every recipient here is a member who may read the workspace's reports —
+    // the fixture's agent role cannot by default (tm 440).
+    await grantReportsView(owner, fx.a.licenseId);
+    await grantReportsView(owner, fx.b.licenseId);
     await rm(mailDir, { recursive: true, force: true });
     seq = 0;
   });
@@ -438,6 +443,273 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
 
     const keys = (await runsOf(fx.a)).map((run) => run.periodKey).sort();
     expect(keys).toEqual(['2026-07', '2026-08-07', '2026-W31']);
+  });
+
+  // ==========================================================================
+  // Recipients are checked again at send time (tm 440 · F23): the list was
+  // validated when the schedule was saved, and members leave it afterwards.
+  // ==========================================================================
+
+  describe('recipients at send time (tm 440)', () => {
+    /** Collects the sweep's log lines — the only place a dropped address is named, masked. */
+    function capturingLogger(): {
+      lines: Array<{ details: Record<string, unknown>; message: string }>;
+      warn(details: Record<string, unknown>, message: string): void;
+    } {
+      const lines: Array<{ details: Record<string, unknown>; message: string }> = [];
+      return { lines, warn: (details, message) => lines.push({ details, message }) };
+    }
+
+    const suspend = (t: TenantFixture, agentId: string) =>
+      owner.agentMembership.update({
+        where: { licenseId_agentId: { licenseId: t.licenseId, agentId } },
+        data: { suspended: true },
+      });
+
+    it('leaves out a member suspended since the schedule was saved, mails the rest, and counts the drop', async () => {
+      await defineSchedule(fx.a, { recipients: [fx.a.agentEmail, fx.a.ownerEmail] });
+      await suspend(fx.a, fx.a.agentAccountId);
+      const logger = capturingLogger();
+
+      const report = await new ScheduledReportSweeper(appRole, mailer, appRole, { logger }).run({
+        now: NOW,
+      });
+
+      expect(report.totals).toMatchObject({ delivered: 1, failed: 0, notSent: 0 });
+      expect((await mailbox()).map((m) => m.to)).toEqual([fx.a.ownerEmail]);
+      const [run] = await runsOf(fx.a);
+      expect(run).toMatchObject({
+        status: 'sent',
+        recipientCount: 1,
+        skippedRecipientCount: 1,
+        skipReason: null,
+      });
+
+      // One structured line, and the address in it is masked.
+      expect(logger.lines).toHaveLength(1);
+      const line = logger.lines[0]!;
+      expect(line.details).toMatchObject({
+        event: 'scheduled_report.recipients_dropped',
+        period_key: PERIOD_KEY,
+        dropped_count: 1,
+        kept_count: 1,
+      });
+      const logged = JSON.stringify(line);
+      expect(logged).not.toContain(fx.a.agentEmail);
+      expect(line.details['recipients_masked']).toEqual([
+        `${fx.a.agentEmail.slice(0, 1)}***${fx.a.agentEmail.slice(fx.a.agentEmail.indexOf('@'))}`,
+      ]);
+    });
+
+    it('leaves out a member whose role lost report access, and an address no longer on the team', async () => {
+      await defineSchedule(fx.a, {
+        recipients: [fx.a.agentEmail, fx.a.ownerEmail, 'left-the-team@example.test'],
+      });
+      // The workspace takes `reports.view` away from agents again.
+      await owner.roleCapabilityOverride.delete({
+        where: {
+          licenseId_role_capability: {
+            licenseId: fx.a.licenseId,
+            role: 'agent',
+            capability: 'reports.view',
+          },
+        },
+      });
+
+      const report = await sweep();
+
+      expect(report.totals.delivered).toBe(1);
+      expect((await mailbox()).map((m) => m.to)).toEqual([fx.a.ownerEmail]);
+      const [run] = await runsOf(fx.a);
+      expect(run).toMatchObject({ status: 'sent', recipientCount: 1, skippedRecipientCount: 2 });
+    });
+
+    it('records the period skipped when nobody is left, mails no one, and does not retry it', async () => {
+      await defineSchedule(fx.a, { recipients: [fx.a.agentEmail] });
+      await suspend(fx.a, fx.a.agentAccountId);
+
+      const report = await sweep();
+
+      expect(report.totals).toMatchObject({ delivered: 0, failed: 0, notSent: 1 });
+      expect(report.tenants[0]?.deliveries[0]).toMatchObject({
+        status: 'not_sent',
+        skipReason: 'no_recipients',
+        skippedRecipientCount: 1,
+      });
+      expect(await mailbox()).toHaveLength(0);
+      const [run] = await runsOf(fx.a);
+      expect(run).toMatchObject({
+        status: 'skipped',
+        skipReason: 'no_recipients',
+        recipientCount: 0,
+        skippedRecipientCount: 1,
+        error: null,
+      });
+      // Not a delivery: the "you are receiving these" stamp stays where it was.
+      const definition = await owner.scheduledReport.findFirst({
+        where: { licenseId: fx.a.licenseId },
+      });
+      expect(definition?.lastRunAt).toBeNull();
+
+      // The period is consumed, like a failure: reinstating the member later
+      // does not mail a report for a day they were not entitled to.
+      await owner.agentMembership.update({
+        where: {
+          licenseId_agentId: { licenseId: fx.a.licenseId, agentId: fx.a.agentAccountId },
+        },
+        data: { suspended: false },
+      });
+      expect((await sweep()).totals).toMatchObject({ delivered: 0, skipped: 1 });
+      expect(await mailbox()).toHaveLength(0);
+    });
+
+    it('a member of another licence with the same role is no recipient here', async () => {
+      // B's agent has report access in B; a schedule in A naming them (only
+      // writable around the API) still sends A's figures to nobody outside A.
+      await defineSchedule(fx.a, { recipients: [fx.b.agentEmail] });
+
+      const report = await sweep();
+
+      expect(report.totals.notSent).toBe(1);
+      expect(await mailbox()).toHaveLength(0);
+    });
+  });
+
+  // ==========================================================================
+  // Missed periods are caught up, within a bound (tm 460 · F46). `now` is
+  // fixed, so none of this depends on the wall clock or the UTC hour.
+  // ==========================================================================
+
+  describe('missed periods (tm 460)', () => {
+    const DAY = 86_400_000;
+    const dayStart = (key: string) => new Date(`${key}T00:00:00.000Z`);
+
+    /** A run row as an earlier sweep would have left it. */
+    async function seedSentRun(t: TenantFixture, scheduleId: string, key: string): Promise<void> {
+      await owner.scheduledReportRun.create({
+        data: {
+          licenseId: t.licenseId,
+          scheduledReportId: scheduleId,
+          periodKey: key,
+          periodFrom: dayStart(key),
+          periodTo: new Date(dayStart(key).getTime() + DAY - 1),
+          status: 'sent',
+          recipientCount: 1,
+        },
+      });
+    }
+
+    async function longEnabled(scheduleId: string): Promise<void> {
+      await owner.scheduledReport.update({
+        where: { id: scheduleId },
+        data: { enabledAt: new Date('2026-01-01T00:00:00.000Z') },
+      });
+    }
+
+    const statusByKey = async (t: TenantFixture) =>
+      Object.fromEntries(
+        (await runsOf(t)).map((run) => [run.periodKey, [run.status, run.skipReason]]),
+      );
+
+    it('last run on 4 November, swept on 7 November: the 5th and the 6th, once each', async () => {
+      const id = await defineSchedule(fx.a);
+      await longEnabled(id);
+      await seedSentRun(fx.a, id, '2026-11-04');
+      const now = new Date('2026-11-07T09:00:00.000Z');
+
+      const report = await new ScheduledReportSweeper(appRole, mailer).run({ now });
+
+      expect(report.tenants[0]?.deliveries.map((d) => [d.periodKey, d.status])).toEqual([
+        ['2026-11-05', 'delivered'],
+        ['2026-11-06', 'delivered'],
+      ]);
+      expect(await mailbox()).toHaveLength(2);
+      expect(await statusByKey(fx.a)).toEqual({
+        '2026-11-04': ['sent', null],
+        '2026-11-05': ['sent', null],
+        '2026-11-06': ['sent', null],
+      });
+
+      // Again at the same instant: nothing more goes out.
+      const again = await new ScheduledReportSweeper(appRole, mailer).run({ now });
+      expect(again.totals).toMatchObject({ delivered: 0, skipped: 1 });
+      expect(await mailbox()).toHaveLength(2);
+    });
+
+    it('two sweeps catching up at the same time on separate connections mail each period once', async () => {
+      const id = await defineSchedule(fx.a);
+      await longEnabled(id);
+      await seedSentRun(fx.a, id, '2026-11-04');
+      const now = new Date('2026-11-07T09:00:00.000Z');
+      const second = new PrismaClient({ datasourceUrl: APP_URL });
+      try {
+        const [one, two] = await Promise.all([
+          new ScheduledReportSweeper(appRole, mailer).run({ now }),
+          new ScheduledReportSweeper(second, mailer).run({ now }),
+        ]);
+        expect(one.totals.delivered + two.totals.delivered).toBe(2);
+        expect(one.totals.skipped + two.totals.skipped).toBe(2);
+      } finally {
+        await second.$disconnect();
+      }
+      const mailed = (await mailbox()).map(
+        (m) => (m as { attachments?: Array<{ filename: string }> }).attachments?.[0]?.filename,
+      );
+      expect(mailed).toHaveLength(2);
+      expect(new Set(mailed).size).toBe(2);
+      expect(Object.keys(await statusByKey(fx.a)).sort()).toEqual([
+        '2026-11-04',
+        '2026-11-05',
+        '2026-11-06',
+      ]);
+    });
+
+    it('after ten days down: the newest seven are mailed, the three before are recorded skipped', async () => {
+      const id = await defineSchedule(fx.a);
+      await longEnabled(id);
+      await seedSentRun(fx.a, id, '2026-10-28');
+      // The newest complete day is 7 November; 29 October … 7 November were missed.
+      const now = new Date('2026-11-08T09:00:00.000Z');
+
+      const report = await new ScheduledReportSweeper(appRole, mailer).run({ now });
+
+      expect(report.totals).toMatchObject({ delivered: 7, notSent: 3, failed: 0 });
+      expect(await mailbox()).toHaveLength(7);
+      const rows = await statusByKey(fx.a);
+      for (const key of ['2026-10-29', '2026-10-30', '2026-10-31']) {
+        expect(rows[key]).toEqual(['skipped', 'missed_window']);
+      }
+      for (let day = 1; day <= 7; day += 1) {
+        expect(rows[`2026-11-0${String(day)}`]).toEqual(['sent', null]);
+      }
+      expect(Object.keys(rows)).toHaveLength(11);
+
+      // The skipped rows are history, not a backlog: the next sweep sends nothing.
+      const again = await new ScheduledReportSweeper(appRole, mailer).run({ now });
+      expect(again.totals).toMatchObject({ delivered: 0, notSent: 0 });
+      expect(await mailbox()).toHaveLength(7);
+    });
+
+    it('does not catch up the days a schedule was switched off', async () => {
+      const id = await defineSchedule(fx.a);
+      await seedSentRun(fx.a, id, '2026-10-28');
+      // Back on at 15:00 on 6 November, swept on 8 November: the 6th (the sweep
+      // that should have sent it on the 7th was down) and the 7th.
+      await owner.scheduledReport.update({
+        where: { id },
+        data: { enabledAt: new Date('2026-11-06T15:00:00.000Z') },
+      });
+
+      const report = await new ScheduledReportSweeper(appRole, mailer).run({
+        now: new Date('2026-11-08T09:00:00.000Z'),
+      });
+
+      expect(report.tenants[0]?.deliveries.map((d) => d.periodKey)).toEqual([
+        '2026-11-06',
+        '2026-11-07',
+      ]);
+      expect(report.totals.notSent).toBe(0);
+    });
   });
 
   // ==========================================================================

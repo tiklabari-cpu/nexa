@@ -36,6 +36,7 @@ import {
   ScheduledReportSweeper,
 } from '../../src/services/reports/scheduled-report-sweeper.js';
 import {
+  grantReportsView,
   ownerClient,
   seedDefaultBrand,
   seedFixtures,
@@ -137,6 +138,10 @@ describe('daily mail caps at the counter (tm 257.14)', () => {
 
   beforeEach(async () => {
     fx = await seedFixtures(owner);
+    // Every recipient here is a member who may read the workspace's reports —
+    // the fixture's agent role cannot by default (tm 440).
+    await grantReportsView(owner, fx.a.licenseId);
+    await grantReportsView(owner, fx.b.licenseId);
     await rm(mailDir, { recursive: true, force: true });
     warnings = [];
     errors = [];

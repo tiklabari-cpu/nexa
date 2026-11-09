@@ -288,6 +288,16 @@ function describeLastRun(
     return { tone: 'success', label: t('settings.scheduledExports.delivered') };
   if (run.status === 'failed')
     return { tone: 'danger', label: t('settings.scheduledExports.failed') };
+  // Recorded but not mailed (tm 440 · tm 460): nobody on the list could still
+  // receive it, or the period was missed while the service was down.
+  if (run.status === 'skipped')
+    return {
+      tone: 'warning',
+      label:
+        run.skip_reason === 'no_recipients'
+          ? t('settings.scheduledExports.skippedNoRecipients')
+          : t('settings.scheduledExports.skipped'),
+    };
   return { tone: 'warning', label: t('settings.scheduledExports.running') };
 }
 

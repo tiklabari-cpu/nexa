@@ -648,7 +648,13 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
           new ScheduledReportSweeper(second, mailer).run({ now }),
         ]);
         expect(one.totals.delivered + two.totals.delivered).toBe(2);
-        expect(one.totals.skipped + two.totals.skipped).toBe(2);
+        // How many the loser skips depends on the interleaving: one that reads
+        // the newest run after the winner finished only owes the current
+        // period (1); one that starts alongside owes both (2). Never 0 — the
+        // loser always reaches the current period — and never a second mail.
+        const skipped = one.totals.skipped + two.totals.skipped;
+        expect(skipped).toBeGreaterThanOrEqual(1);
+        expect(skipped).toBeLessThanOrEqual(2);
       } finally {
         await second.$disconnect();
       }

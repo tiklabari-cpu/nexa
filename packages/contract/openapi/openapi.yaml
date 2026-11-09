@@ -1230,6 +1230,18 @@ components:
             - $ref: "#/components/schemas/AiJobsHealth"
           nullable: true
         providers: { $ref: "#/components/schemas/HealthProviders" }
+        provider_warnings:
+          type: array
+          description: |
+            The mock providers this deployment runs where real people use it
+            (tm 433) — the same lines the boot logged at `warn`, empty outside
+            production. `virus_scanner`: uploads are not scanned (only the
+            EICAR test file is refused), pilot included. `payment`: a card on
+            the masked form activates a workspace without being charged
+            (`PILOT_MODE=false` only). `crawler`: website sources index an
+            invented page (`PILOT_MODE=true` only). Information, never the
+            status code — none of them stops the boot.
+          items: { $ref: "#/components/schemas/HealthProviderWarning" }
 
     DeploymentConfig:
       type: object
@@ -1520,6 +1532,18 @@ components:
           description: |
             Seconds since the oldest unfinished (`pending` or `running`) job
             was written, by the database's clock. Null when there is none.
+
+    HealthProviderWarning:
+      type: object
+      required: [provider, message]
+      properties:
+        provider:
+          type: string
+          enum: [virus_scanner, payment, crawler]
+          description: The key the dependency has under `providers` (`crawler` is not listed there).
+        message:
+          type: string
+          description: One sentence for an operator — what the mock does and which setting replaces it.
 
     HealthProviders:
       type: object
@@ -2118,7 +2142,12 @@ components:
             `iban`, `seed_phrase`, `private_key`, `banking_credential` — in that
             order). All three are stripped from a caller-supplied `properties`
             on send, so a client cannot make a fresh message claim it was
-            edited or masked. The warning a visitor is shown after sharing a
+            edited or masked. A fourth, `scanned` (tm 433), is on every event
+            with an `attachment_url`: `false` while the deployment's virus
+            scanner does not look for malware (today's only scanner, the mock,
+            refuses just the EICAR test file) — the panel labels such an
+            attachment "Not checked for viruses". The server writes it; a
+            caller-supplied one is stripped. The warning a visitor is shown after sharing a
             secret is a `system_message` addressed to `all` with
             `system_event: sensitive_data_warning`, once per chat per type; its
             `sensitive_types` are the types it is the first warning for.

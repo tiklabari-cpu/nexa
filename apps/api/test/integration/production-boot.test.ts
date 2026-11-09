@@ -264,3 +264,48 @@ describe('a production server whose widget is a separate origin (NFR-S6)', () =>
     ).rejects.toThrow(/WIDGET_BASE_URL/);
   });
 });
+
+/**
+ * Mock providers in production (tm 433 · F21, F32). The fixture above leaves
+ * `VIRUS_SCANNER` and `STRIPE_PROVIDER` at their `mock` defaults and
+ * `PILOT_MODE` off — what the gate must boot (owner 2026-11-06 S18: warnings,
+ * never refusals), and what the boot must say, once each, in its own log.
+ */
+describe('a production server on the mock scanner and card processor', () => {
+  it('comes up, and warns of each once at boot', async () => {
+    const lines: string[] = [];
+    const sink = {
+      write: (chunk: string) => lines.push(chunk) > 0,
+      end: () => undefined,
+      on: () => undefined,
+      once: () => undefined,
+      emit: () => false,
+    };
+    const server = await startTestServer(
+      { ...PRODUCTION_ENV, LOG_LEVEL: 'warn' },
+      { logStream: sink as unknown as NodeJS.WritableStream },
+    );
+    try {
+      expect((await server.get('/health')).statusCode).toBe(200);
+      const events = lines
+        .map((line) => {
+          try {
+            return JSON.parse(line) as { event?: string; level?: number; msg?: string };
+          } catch {
+            return {};
+          }
+        })
+        .filter((entry) => typeof entry.event === 'string' && /mock/.test(entry.event));
+      expect(events.map((entry) => entry.event)).toEqual([
+        'uploads.virus_scanner_mock',
+        'payments.mock_in_production',
+      ]);
+      // pino's `warn` is 40.
+      expect(events.every((entry) => entry.level === 40)).toBe(true);
+      expect(events[0]!.msg).toMatch(/VIRUS_SCANNER is mock in production/);
+      expect(events[1]!.msg).toMatch(/STRIPE_PROVIDER is mock in production with PILOT_MODE=false/);
+    } finally {
+      await server.close();
+    }
+  });
+});

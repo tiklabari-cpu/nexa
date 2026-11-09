@@ -3521,6 +3521,15 @@ export interface components {
       providers: {
         [key: string]: string;
       };
+      /**
+       * @description The tenant API's mock-provider warnings (tm 433) — absent from a
+       *     snapshot an older leader published.
+       */
+      provider_warnings?: {
+        /** @enum {string} */
+        provider: 'virus_scanner' | 'payment' | 'crawler';
+        message: string;
+      }[];
     };
     PlatformComponentStatus: {
       /**

@@ -15,6 +15,9 @@ const ENV = {
   SIEM_PROVIDER: 'file',
   LLM_PROVIDER: 'mock',
   VIRUS_SCANNER: 'mock',
+  NODE_ENV: 'test',
+  PILOT_MODE: false,
+  CRAWLER_PROVIDER: 'mock',
 } as const;
 
 const up = { status: 'up', latency_ms: 1 } as const;
@@ -53,6 +56,7 @@ describe('buildHealthSnapshot', () => {
       'event_partitions',
       'ai_jobs',
       'providers',
+      'provider_warnings',
     ]);
     expect(body).toMatchObject({
       status: 'ok',
@@ -62,7 +66,32 @@ describe('buildHealthSnapshot', () => {
       uptime_s: 12.5,
       ai_jobs: { pending: 3, running: 1, oldest_age_s: 4.3 },
       providers: { mail: 'file', llm: 'mock', virus_scanner: 'mock', payment: 'mock' },
+      provider_warnings: [],
     });
+  });
+
+  it('names the mock providers a production deployment runs, as the boot warned (tm 433)', async () => {
+    const { input } = fixture();
+    const production = await buildHealthSnapshot({
+      ...input,
+      env: { ...ENV, NODE_ENV: 'production' } as never,
+    });
+    expect(production.status).toBe('ok');
+    expect(production.provider_warnings.map((warning) => warning.provider)).toEqual([
+      'virus_scanner',
+      'payment',
+    ]);
+    expect(production.provider_warnings[0]!.message).toMatch(/VIRUS_SCANNER is mock/);
+
+    // The pilot: still the unscanned attachments, no payment line, the crawler's.
+    const pilot = await buildHealthSnapshot({
+      ...input,
+      env: { ...ENV, NODE_ENV: 'production', PILOT_MODE: true } as never,
+    });
+    expect(pilot.provider_warnings.map((warning) => warning.provider)).toEqual([
+      'virus_scanner',
+      'crawler',
+    ]);
   });
 
   it('is degraded when a dependency is down, and does not read the queue through a dead database', async () => {

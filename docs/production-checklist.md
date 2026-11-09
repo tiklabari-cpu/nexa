@@ -858,8 +858,10 @@ Without the back office, the by-hand path is a footnote.[^psql-activation]
       `/var/lib/siyahtus/uploads` (tm 418). Like the database, it survives `down`, `up --build`
       and a reboot, it goes into the daily backup (`COMPOSE_FILE=docker-compose.pilot.yml`, next
       item), and `docker compose down -v` deletes the files too. Virus scanning is not in the
-      pilot: `VIRUS_SCANNER=mock` passes every file (a boot warning and a "not scanned" label are
-      tm 433, still open). A visitor's erasure deletes their files from the volume too
+      pilot: `VIRUS_SCANNER=mock` passes every file but the EICAR test file. The boot log says so
+      at `warn` (`event: uploads.virus_scanner_mock`), the admin `GET /health` body lists it under
+      `provider_warnings`, and the panel labels every chat attachment "Not checked for viruses" /
+      "Virüs taraması yapılmadı" (tm 433) — a warning, not a boot refusal. A visitor's erasure deletes their files from the volume too
       (tm 423): the receipt's `files_deleted`. A file the volume refused at that moment is
       reported in `files_pending`, listed in the `pending_file_deletions` table and deleted by
       the next retention pass — with `RETENTION_ENABLED=false` (the pilot default) that pass

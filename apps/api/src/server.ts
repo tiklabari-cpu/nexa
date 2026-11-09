@@ -3,6 +3,7 @@ import helmet from '@fastify/helmet';
 import sensible from '@fastify/sensible';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { Env } from './config/env.js';
+import { logMockProviderWarnings } from './config/mock-provider-warnings.js';
 import errorHandler from './plugins/error-handler.js';
 import telemetryPlugin from './plugins/telemetry.js';
 import { createTelemetry, type Telemetry } from './telemetry/telemetry.js';
@@ -14,7 +15,6 @@ import aiBudget from './plugins/ai-budget.js';
 import aiJobs, { type AiJobDiscovery } from './plugins/ai-jobs.js';
 import knowledgeJobs from './plugins/knowledge-jobs.js';
 import type { CrawlFetcher } from './services/ai/crawler/fetcher.js';
-import { crawlerProviderWarning } from './services/ai/crawler/provider.js';
 import aiTesting from './plugins/ai-testing.js';
 import backgroundMail from './plugins/background-mail.js';
 import database, { type QueryObserver } from './plugins/database.js';
@@ -330,10 +330,11 @@ export async function buildServer({
     if (created.warning) app.log.warn({ event: 'geoip.disabled' }, created.warning);
     geo = created.locator;
   }
-  // A pilot crawling with the mock indexes an invented page for every site
-  // (tm 312.3 · AI-17): said at boot, never a refusal (owner, 2026-10-10).
-  const crawlerWarning = crawlerProviderWarning(env);
-  if (crawlerWarning) app.log.warn({ event: 'crawler.mock_in_pilot' }, crawlerWarning);
+  // A mock where real people use the system — the virus scanner (pilot
+  // included), the card processor outside the pilot, the crawler inside it
+  // (tm 433 · tm 312.3): said at boot and in the admin `/health` body, never a
+  // refusal (owner, 2026-10-10 and 2026-11-06 S18).
+  logMockProviderWarnings(app.log, env);
   app.decorate('geo', geo);
 
   // The provider is chosen by the setting that names it, not by `NODE_ENV`

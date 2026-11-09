@@ -23,6 +23,7 @@ export * from './ai-handoff-card.js';
 export * from './archive.js';
 export * from './customer-context.js';
 export * from './sensitive-data.js';
+export * from './attachment-scan.js';
 export * from './slots.js';
 export * from './procedure.js';
 export * from './resolution.js';

@@ -10,16 +10,56 @@ import { useTranslate } from '../../lib/i18n.js';
  * pointed straight at the path could not send the header and would 404. Images
  * preview inline; anything else is a download link, since we cannot safely
  * render an arbitrary type in our own origin.
+ *
+ * `scanned: false` (the event's server-written `properties.scanned`, tm 433)
+ * adds a "Not checked for viruses" label under the file: the deployment's
+ * scanner did not search it for malware, so the agent should not assume it did.
  */
 const IMAGE = /\.(png|jpe?g|gif|webp)$/i;
 
 export function AttachmentView({
   url,
   filename,
+  scanned = null,
 }: {
   url: string;
   filename?: string;
+  /** The event's `properties.scanned`; `false` labels the file, anything else does not. */
+  scanned?: boolean | null;
 }): ReactElement {
+  const t = useTranslate();
+  const file = <AttachmentFile url={url} {...(filename !== undefined ? { filename } : {})} />;
+  if (scanned !== false) return file;
+  return (
+    <div className="flex flex-col items-start gap-1">
+      {file}
+      <span
+        data-testid="attachment-unscanned"
+        title={t('inbox.attachment.unscannedHint')}
+        className="inline-flex items-center gap-1 rounded-sm border border-border px-1.5 text-2xs font-medium text-content-secondary"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          className="h-3 w-3"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
+          <path d="M12 8v4" />
+          <path d="M12 16h.01" />
+        </svg>
+        {t('inbox.attachment.unscanned')}
+        <span className="sr-only">. {t('inbox.attachment.unscannedHint')}</span>
+      </span>
+    </div>
+  );
+}
+
+function AttachmentFile({ url, filename }: { url: string; filename?: string }): ReactElement {
   // `useApiClient` returns a fresh client every render, so it must not be an
   // effect dependency — the effect would re-run each render, revoke the object
   // URL it just made, and leave the `<img>` pointing at a freed blob. A ref

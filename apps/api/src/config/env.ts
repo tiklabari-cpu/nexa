@@ -29,6 +29,7 @@ import { MAIL_PROVIDERS, type MailerOptions } from '../services/mail/mailer.js';
 import { SMTP_DEFAULT_TIMEOUT_MS } from '../services/mail/smtp-mailer.js';
 import { PUSH_PROVIDERS } from '../services/push/push-provider.js';
 import { type ObjectStoreOptions, STORAGE_PROVIDERS } from '../services/storage/object-store.js';
+import { VIRUS_SCANNERS } from '../services/storage/virus-scanner.js';
 import { OTEL_EXPORTERS } from '../telemetry/telemetry.js';
 import {
   DEV_APPS_CREDENTIAL_KEY,
@@ -1248,7 +1249,9 @@ export const envSchema = z.object({
    * takes cards on Stripe's hosted checkout and renews off-session — only with
    * both keys below, otherwise the boot warns and stays on the mock. No key is
    * in this repository; a live key (`sk_live_`) is ignored outside
-   * `NODE_ENV=production`. See services/billing/payment-provider.ts.
+   * `NODE_ENV=production`. See services/billing/payment-provider.ts. `mock` in
+   * production with `PILOT_MODE=false` is warned at boot and in the admin
+   * `/health` body, never refused (`mockProviderWarnings`, tm 433 · S18).
    */
   STRIPE_PROVIDER: z.enum(PAYMENT_PROVIDERS).default('mock'),
   /** Stripe's secret API key (sandbox `sk_test_…` in any build but production's). */
@@ -1267,15 +1270,18 @@ export const envSchema = z.object({
    * locked decision, so every test and demo crawls without egress. `http` —
    * the real crawler, every hop through the SSRF guard
    * (`services/ai/crawler/http-fetcher.ts`). Production under `PILOT_MODE` on
-   * `mock` is warned at boot (`crawlerProviderWarning`), not refused.
+   * `mock` is warned at boot (`mockProviderWarnings`), not refused.
    */
   CRAWLER_PROVIDER: z.enum(CRAWLER_PROVIDERS).default('mock'),
   /**
    * Upload virus scanning (FR-MOD-08.9.4). `mock` flags the EICAR test file and
    * passes the rest; `unavailable` is always-down, for exercising the fail-closed
    * path in tests and drills. A real ClamAV provider slots in here later.
+   * Production on `mock` — the pilot included — is warned at boot and in the
+   * admin `/health` body, never refused (`mockProviderWarnings`, tm 433 · S18);
+   * the panel labels each attachment "Not checked for viruses".
    */
-  VIRUS_SCANNER: z.enum(['mock', 'unavailable']).default('mock'),
+  VIRUS_SCANNER: z.enum(VIRUS_SCANNERS).default('mock'),
 
   /**
    * Background job scheduler (M-SCHED · §D113/K1). Unset it follows the

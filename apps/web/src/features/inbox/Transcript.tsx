@@ -14,6 +14,7 @@ import {
   readEditedAt,
   readRichCard,
   readSensitiveTypes,
+  readAttachmentScanned,
 } from '@siyahtus/types';
 import type { ChatEvent } from './types.js';
 import {
@@ -667,7 +668,10 @@ function Bubble({
                 )}
                 {event.attachment_url && (
                   <div className={event.text ? 'mt-2' : ''}>
-                    <AttachmentView url={event.attachment_url} />
+                    <AttachmentView
+                      url={event.attachment_url}
+                      scanned={readAttachmentScanned(event.properties)}
+                    />
                   </div>
                 )}
               </>

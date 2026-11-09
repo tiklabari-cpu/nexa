@@ -7,7 +7,8 @@
  * The pilot crawling with the mock answers every website with the same
  * invented page, so production under `PILOT_MODE=true` is told at boot — a
  * warning, not a refusal (owner, 2026-10-10: no rule that can stop the
- * system without asking first).
+ * system without asking first). The warning lives with the other mock
+ * providers' in `config/mock-provider-warnings.ts` (tm 433).
  */
 import type { CrawlFetcher } from './fetcher.js';
 import { createHttpCrawlFetcher, type HttpCrawlFetcherOptions } from './http-fetcher.js';
@@ -21,16 +22,4 @@ export function createCrawlFetcher(
   options: HttpCrawlFetcherOptions = {},
 ): CrawlFetcher {
   return provider === 'http' ? createHttpCrawlFetcher(options) : createMockCrawlFetcher();
-}
-
-/** The boot warning for a crawler that cannot read a real site where real people use it, or null. */
-export function crawlerProviderWarning(env: {
-  NODE_ENV: string;
-  PILOT_MODE: boolean;
-  CRAWLER_PROVIDER: CrawlerProvider;
-}): string | null {
-  if (env.NODE_ENV !== 'production' || !env.PILOT_MODE || env.CRAWLER_PROVIDER !== 'mock') {
-    return null;
-  }
-  return 'CRAWLER_PROVIDER is mock under PILOT_MODE=true: website knowledge sources index an invented page instead of the site. Set CRAWLER_PROVIDER=http.';
 }

@@ -504,7 +504,14 @@ config:
   LLM_PROVIDER: mock
   MAIL_PROVIDER: file
   PUSH_PROVIDER: file
+  # mock: a card on the masked form is never charged yet activates the
+  # workspace. With PILOT_MODE off the api warns at boot and in the admin
+  # /health body (`provider_warnings`), never refuses (tm 433).
   STRIPE_PROVIDER: mock
+  # mock: uploads are NOT scanned for viruses — only the EICAR test file is
+  # refused. There is no real scanner yet (ClamAV is not in the pilot). In
+  # production the api warns at boot and in the admin /health body, and the
+  # panel labels each attachment "Not checked for viruses" (tm 433).
   VIRUS_SCANNER: mock
   SIEM_PROVIDER: file
 

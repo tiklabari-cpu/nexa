@@ -13,7 +13,22 @@ import {
   parseRetryAfter,
 } from './fetcher.js';
 import { createMockCrawlFetcher } from './mock-fetcher.js';
-import { createCrawlFetcher, crawlerProviderWarning } from './provider.js';
+import { mockProviderWarnings } from '../../../config/mock-provider-warnings.js';
+import { createCrawlFetcher } from './provider.js';
+
+/** The crawler's line of the shared mock-provider warnings (moved there by tm 433), or null. */
+function crawlerProviderWarning(env: {
+  NODE_ENV: string;
+  PILOT_MODE: boolean;
+  CRAWLER_PROVIDER: 'mock' | 'http';
+}): string | null {
+  const warnings = mockProviderWarnings({
+    ...env,
+    VIRUS_SCANNER: 'unavailable',
+    STRIPE_PROVIDER: 'stripe',
+  });
+  return warnings.find((warning) => warning.provider === 'crawler')?.message ?? null;
+}
 
 describe('crawl fetcher helpers (FR-MOD-06.3.2)', () => {
   it('names the crawler by the token robots.txt addresses it with', () => {

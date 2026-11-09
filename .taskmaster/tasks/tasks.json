@@ -16887,12 +16887,12 @@
         "description": "Zayıf sinyalde Send'e basınca composer boşalıyor ve hata alınca balon siliniyor; yanıt kayboluyor. Timeout'ta sunucu mesajı kaydetmişse yeniden yazılan yanıt yeni anahtarla iki kez gidiyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F19. Kanıt yeterlidir.\n\nXHIGH GEREKÇESİ: (3) teslim güvencesi — mesaj kaybı ve çift gönderim.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/mobile/src/features/inbox/Composer.tsx:52-58` koşulsuz `setText('')`; `apps/mobile/src/features/inbox/store.ts:~301-308` hata alınca balonu siliyor; `store.ts:~285` her denemede yeni idempotency_key.\n\nYAPILACAK: başarısız gönderimde balon \"Gönderilemedi — tekrar dene\" durumunda kalır (metin + orijinal idempotency_key saklı); dokununca aynı anahtarla yeniden gönderir; sunucu replay ederse balon onaylanır. İptal seçeneği metni composer'a geri koyar. Mobil i18n.\n\nTUZAK: Sunucu tarafı idempotency eşzamanlı tekrarda tam değil (IDEMPOTENCY-RESERVE) — bu görev istemciyi düzeltir; sıralı tekrar replay'i zaten çalışıyor. memory mobile-tests-have-no-node-types.\n\nKAPSAM DIŞI: çevrimdışı kuyruk.\nDENETİM BULGULARI: F19",
         "testStrategy": "mobil jest: send hata → balon failed durumda, metin kaybolmaz; tekrar dene → aynı idempotency_key ile ikinci çağrı; başarı → balon sent; iptal → metin composer'da. DoD: CONVENTIONS §1.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "417"
         ],
         "priority": "medium",
-        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "updatedAt": "2026-11-09T16:24:34.724Z",
         "subtasks": []
       },
       {
@@ -17778,9 +17778,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-09T15:16:07.954Z",
+      "lastModified": "2026-11-09T16:24:34.724Z",
       "taskCount": 478,
-      "completedCount": 430,
+      "completedCount": 431,
       "tags": [
         "master"
       ]

@@ -16817,12 +16817,12 @@
         "description": "`PATCH /billing/subscription {\"plan\":\"enterprise\"}` 200 dönüyor; SSO, SIEM, white-label, sandbox açılıyor; ücret Growth fiyatında kalıyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F14. Kanıt yeterlidir.\n\nXHIGH GEREKÇESİ: (1) yetki yükseltme + (2) para doğruluğu.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/services/billing/subscription-service.ts:193-196` yalnız `plan in PLANS`; `:~262` `unitPriceCents` eski değerde; `apps/api/src/routes/reports.ts:~249-255` gövdede enum yok; `apps/api/src/lib/entitlements.ts:~115-127`. Teklifli plan tanımı ZATEN var: `pricingForPlan` ve 'quoted' (`payment-methods.ts:202`, `billing-views.ts:78`).\n\nYAPILACAK: self-servis yolda `pricingForPlan(plan) === 'quoted'` olan planları 403/400 `plan_requires_sales` ile reddet (yeni meta alanı EKLEME); enterprise'a geçiş yalnız platform tarafından (mevcut platform plan atama yolu varsa onu kullan; yoksa KAPSAM DIŞI not). Self-servis plan değişiminde `unitPriceCents` yeni planın liste fiyatından yeniden atanır. Kontrat gövdesine self-servis plan enum'u (contract-first; mobil parity etkilenmez çünkü yol eklenmiyor). Web plan seçicide enterprise \"Satışla görüş\" olarak kalır (zaten öyleyse dokunma).\n\nTUZAK: Pilotta billing yazmaları zaten pilotRefused (pilot-gate.ts:86) — test PILOT_MODE=false. Seed'de enterprise lisans varsa mevcut aboneliğe dokunma. Yeni hata türü en+tr cümle.\n\nKAPSAM DIŞI: fiyat tablosu, tahsilat.\nDENETİM BULGULARI: F14",
         "testStrategy": "api entegrasyon: owner PATCH plan=enterprise → reddedilir, entitlements değişmez; growth→pro (ya da mevcut iki self-servis plan) → unitPriceCents yeni plan fiyatı; platform yoluyla enterprise atanabiliyor (varsa). Mutasyon: quoted kontrolünü kaldır → kırmızı. DoD: CONVENTIONS §1.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "417"
         ],
         "priority": "medium",
-        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "updatedAt": "2026-11-09T09:53:58.420Z",
         "subtasks": []
       },
       {
@@ -17778,9 +17778,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-09T07:25:45.087Z",
+      "lastModified": "2026-11-09T09:53:58.420Z",
       "taskCount": 478,
-      "completedCount": 426,
+      "completedCount": 427,
       "tags": [
         "master"
       ]

@@ -5,6 +5,7 @@ import { InboxContext } from './context';
 import { InboxStore } from './store';
 import type { EventPage, InboxApi } from './api';
 import type { ChatEvent, ChatSummary } from './types';
+import { failedSendCopy } from './failedSend';
 import { replyGuardCopy } from './replyGuard';
 import { ApiClientError } from '../../lib/api-client';
 import { ThemeProvider } from '../../theme/theme';
@@ -211,16 +212,132 @@ describe('ChatScreen', () => {
     expect(api.sent).toEqual([]);
   });
 
-  it('says so when the send failed instead of leaving a message nobody received', async () => {
-    const api = fakeApi({ failSend: new Error('Could not reach the server.') });
-    await mount(new InboxStore({ api }));
+  /**
+   * On a weak signal the composer has cleared before the send fails; the
+   * bubble is the only copy of the reply left (tm 437 · FR-MOD-02.3.6).
+   */
+  describe('a send that fails (tm 437 · FR-MOD-02.3.6)', () => {
+    const COPY = failedSendCopy();
 
-    await fireEvent.changeText(screen.getByTestId('composer-input'), 'on my way');
-    await fireEvent.press(screen.getByTestId('composer-send'));
-    await act(async () => {});
+    function flakyApi(failures: Error[]): Fake & { keys: Array<string | undefined> } {
+      const api = Object.assign(fakeApi(), { keys: [] as Array<string | undefined> });
+      const succeed = api.sendEvent;
+      api.sendEvent = async (chatId, body) => {
+        api.keys.push(body.idempotency_key);
+        const failure = failures.shift();
+        if (failure !== undefined) throw failure;
+        return succeed(chatId, body);
+      };
+      return api;
+    }
 
-    expect(screen.getByTestId('composer-error')).toHaveTextContent('Could not reach the server.');
-    expect(screen.queryByText('on my way')).not.toBeOnTheScreen();
+    const offline = (): ApiClientError =>
+      new ApiClientError({
+        type: 'network',
+        status: 0,
+        message: 'Could not reach the server.',
+        requestId: '-',
+      });
+
+    async function sendAndFail(
+      api: Fake,
+      text = 'on my way',
+      mode: 'reply' | 'note' = 'reply',
+    ): Promise<string> {
+      await mount(new InboxStore({ api, accountId: 'agent-1' }));
+      if (mode === 'note') await fireEvent.press(screen.getByTestId('composer-mode-note'));
+      await fireEvent.changeText(screen.getByTestId('composer-input'), text);
+      await fireEvent.press(screen.getByTestId('composer-send'));
+      await act(async () => {});
+      const row = screen.getByTestId(/^event-send-failed-/);
+      return String(row.props.testID).replace('event-send-failed-', '');
+    }
+
+    it('keeps the message on screen as not sent, with the reason, instead of losing it', async () => {
+      const api = flakyApi([offline()]);
+      const id = await sendAndFail(api);
+
+      expect(screen.getByText('on my way')).toBeOnTheScreen();
+      expect(screen.getByTestId(`event-send-failed-${id}`)).toHaveTextContent(
+        new RegExp(`^${COPY.notSent}`),
+      );
+      expect(screen.getByTestId(`event-retry-${id}`)).toHaveTextContent(COPY.retry);
+      expect(screen.getByTestId(`event-cancel-${id}`)).toHaveTextContent(COPY.cancel);
+      expect(screen.getByTestId('composer-error')).toHaveTextContent('Could not reach the server.');
+      // The words live in the bubble now, so the field is free for the next message.
+      expect(screen.getByTestId('composer-input').props.value).toBe('');
+    });
+
+    it('"Try again" resends with the same key, and the bubble becomes the sent message', async () => {
+      const api = flakyApi([offline()]);
+      const id = await sendAndFail(api);
+
+      await fireEvent.press(screen.getByTestId(`event-retry-${id}`));
+      await act(async () => {});
+
+      expect(api.keys).toHaveLength(2);
+      expect(api.keys[1]).toBe(api.keys[0]);
+      expect(api.sent).toEqual([{ text: 'on my way', recipients: 'all' }]);
+      expect(screen.getByTestId('event-THREAD1_101')).toHaveTextContent(/on my way/);
+      expect(screen.queryByTestId(/^event-send-failed-/)).toBeNull();
+      expect(screen.queryByTestId('composer-error')).toBeNull();
+    });
+
+    it('a retry that fails again stays not sent, still offering "Try again"', async () => {
+      const api = flakyApi([offline(), offline()]);
+      const id = await sendAndFail(api);
+
+      await fireEvent.press(screen.getByTestId(`event-retry-${id}`));
+      await act(async () => {});
+
+      expect(screen.getByTestId(`event-retry-${id}`)).toBeOnTheScreen();
+      expect(screen.getByText('on my way')).toBeOnTheScreen();
+      expect(api.keys).toEqual([api.keys[0], api.keys[0]]);
+    });
+
+    it('"Cancel" puts the text and its mode back in the composer and removes the bubble', async () => {
+      const api = flakyApi([offline()]);
+      const id = await sendAndFail(api, 'card declined twice', 'note');
+      // The composer was left in note mode; switch away to prove Cancel restores it.
+      await fireEvent.press(screen.getByTestId('composer-mode-reply'));
+
+      await fireEvent.press(screen.getByTestId(`event-cancel-${id}`));
+
+      expect(screen.getByTestId('composer-input').props.value).toBe('card declined twice');
+      expect(screen.getByTestId('composer-mode-note')).toHaveProp('accessibilityState', {
+        selected: true,
+      });
+      expect(screen.queryByTestId(`event-send-failed-${id}`)).toBeNull();
+      expect(screen.queryByText('card declined twice', { exact: true })).toBeNull();
+      expect(screen.queryByTestId('composer-error')).toBeNull();
+    });
+
+    it('"Cancel" keeps what was typed since, putting the returned message first', async () => {
+      const api = flakyApi([offline()]);
+      const id = await sendAndFail(api, 'on my way');
+      await fireEvent.changeText(screen.getByTestId('composer-input'), 'one more thing');
+
+      await fireEvent.press(screen.getByTestId(`event-cancel-${id}`));
+
+      expect(screen.getByTestId('composer-input').props.value).toBe('on my way\none more thing');
+    });
+
+    it('offers only "Cancel" when the request itself was refused, so the words are never stranded', async () => {
+      const api = flakyApi([
+        new ApiClientError({
+          type: 'validation',
+          status: 400,
+          message: 'Text is too long.',
+          requestId: 'req-1',
+        }),
+      ]);
+      const id = await sendAndFail(api);
+
+      expect(screen.getByTestId(`event-send-failed-${id}`)).toBeOnTheScreen();
+      expect(screen.queryByTestId(`event-retry-${id}`)).toBeNull();
+      expect(screen.getByTestId(`event-cancel-${id}`)).toBeOnTheScreen();
+      expect(screen.getByTestId('composer-error')).toHaveTextContent('Text is too long.');
+    });
   });
 
   it('drops a pushed message straight into the open transcript', async () => {

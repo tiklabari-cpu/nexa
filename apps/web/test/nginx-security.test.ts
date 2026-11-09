@@ -377,3 +377,47 @@ describe("the panel's proxied locations are one hop for the api and for rtm alik
     expect(block.body).toMatch(/proxy_set_header\s+X-Forwarded-For\s+\$proxy_add_x_forwarded_for;/);
   });
 });
+
+describe("the panel's /api/ proxy carries the largest upload the api accepts (tm 439)", () => {
+  // nginx's default `client_max_body_size` is 1m, answered with an HTML 413
+  // before the api reads a byte: every attachment or knowledge file over 1 MiB
+  // failed through this block. The limit is derived from the api's own
+  // ceiling, read as text the way this file reads the widget's config.
+  const UPLOADS = read('apps/api/src/routes/uploads.ts');
+  const ceiling = /const HARD_CEILING = ([\d_]+);/.exec(UPLOADS)?.[1];
+  const MIB = 1_048_576;
+
+  /** A `client_max_body_size` value in bytes; only the `m` and bare-byte forms are expected. */
+  const bytes = (value: string): number => {
+    const match = /^(\d+)([mk]?)$/i.exec(value);
+    expect(match, `unexpected client_max_body_size: ${value}`).not.toBeNull();
+    const unit = match![2]!.toLowerCase();
+    return Number(match![1]) * (unit === 'm' ? MIB : unit === 'k' ? 1024 : 1);
+  };
+
+  const sizesIn = (body: string): string[] =>
+    [...body.matchAll(/client_max_body_size\s+(\S+);/g)].map((found) => found[1]!);
+
+  it('reads the ceiling from uploads.ts', () => {
+    expect(ceiling, 'HARD_CEILING not found in uploads.ts').toBeDefined();
+    expect(Number(ceiling!.replaceAll('_', ''))).toBeGreaterThan(MIB);
+  });
+
+  it('sets client_max_body_size one MiB above HARD_CEILING, so the api is the one that refuses', () => {
+    const api = locationBlocks(WEB_CONF).find((block) => block.match === '/api/');
+    expect(api, 'no location /api/').toBeDefined();
+    const sizes = sizesIn(api!.body);
+    expect(sizes).toEqual(['26m']);
+    expect(bytes(sizes[0]!)).toBe(Number(ceiling!.replaceAll('_', '')) + MIB);
+  });
+
+  it('raises it nowhere else — static files and the socket keep the default', () => {
+    const elsewhere = locationBlocks(WEB_CONF)
+      .filter((block) => block.match !== '/api/')
+      .flatMap((block) => sizesIn(block.body));
+    expect(elsewhere).toEqual([]);
+    // Nor at server level, where it would reach every location.
+    const outside = stripComments(WEB_CONF).replace(/location\s[^{]*\{[^}]*\}/g, '');
+    expect(sizesIn(outside)).toEqual([]);
+  });
+});

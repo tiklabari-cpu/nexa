@@ -389,8 +389,16 @@ order and the one-hop rule would then guard nothing. Create the tunnel from the 
   - WebSockets are on.
   - Pseudo IPv4 is not set to "Overwrite Headers", and the Managed Transform "Remove visitor IP
     headers" is off.
-  - HSTS comes from nginx or from Cloudflare, not both. nginx already sends it, and the smoke
-    test fails two copies.
+  - **Always Use HTTPS** is on (SSL/TLS → Edge Certificates; tm 467 · NY-18). The edge then
+    answers a plain `http://` request with a redirect to `https://` before it reaches the
+    tunnel. Nothing on the host can do it instead: the tunnel delivers both schemes to the same
+    origin port, and nginx sends HSTS only over https, so a first visit typed without the
+    scheme would load the panel's sign-in in clear. Check each name:
+    `curl -sI http://panel.<domain>/ | head -3` shows a `301` and
+    `Location: https://panel.<domain>/`; the same for the widget, api and rtm names.
+  - HSTS comes from nginx or from Cloudflare, not both: leave Cloudflare's HTTP Strict
+    Transport Security setting (same page) off. nginx already sends it once a request arrived
+    over https, the api sends its own, and the smoke test fails two copies.
   - `LLM_TIMEOUT_MS` stays under Cloudflare's roughly 100 s origin timeout (a 524).
 
 **Opening-day measurement.** `TRUST_PROXY_HOPS=1` is the expectation; this measurement makes it
@@ -427,6 +435,11 @@ separately, `curl -4` and `curl -6`, each against its own result from the first 
       WebSockets are off or a rule breaks the upgrade) and that the panel and `loader.js` carry
       HSTS exactly once (two copies: Cloudflare's HSTS is on as well; none:
       `X-Forwarded-Proto: https` is not arriving).
+- [ ] Before the release, on the build machine: `scripts/csp-smoke.sh` exits 0 (tm 434). It
+      builds the demo images, starts them under a compose project and on ports of their own,
+      signs in to the panel, opens the inbox and its RTM socket, and sends a message from the
+      widget embedded in a customer's page, and fails on any CSP violation the browser reports.
+      The e2e suite cannot see one: it runs on Vite's dev servers, which send no policy.
 - [ ] `curl -sI https://panel.<domain>/ | grep -i content-security-policy` matches nginx's
       policy. In a browser, the panel and the widget embedded in a third party's test page show
       no CSP violation in the console, and a conversation opens.
@@ -455,6 +468,12 @@ result).
       panel request through it would reach the api with two hops while the widget's has one,
       and one number cannot describe both. The Caddyfile sends the panel's `/api/*` straight to
       the api instead, so all four names are one hop. Keep that `handle /api/*` block.
+- [ ] Plain http goes to https (tm 467 · NY-18). The Caddyfile's `http://` block names the five
+      sites and answers each with `redir https://{host}{uri} 308`; keep its names in step with
+      the sites below it, and add no `auto_https` option. Check each name:
+      `curl -sI http://panel.<domain>/ | head -3` shows a `308` and
+      `Location: https://panel.<domain>/`. HSTS then comes from nginx (the panel, the widget) and
+      the api, once the request is on https.
 - [ ] Do not add `trusted_proxies` to the Caddyfile. Without it Caddy replaces any
       `X-Forwarded-For` the caller sent with the address it actually saw. With it, a caller
       can choose the address the api's rate limit, IP ban and agent allow-list see.

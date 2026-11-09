@@ -28,6 +28,13 @@
 # `ingress rule` prints the rule a URL matches: for the panel's /api/ it has
 # to be the one with `path: ^/api/` and the api's port, not the catch-all.
 #
+# HTTP TO HTTPS is not in this file and cannot be (tm 467 · NY-18): the tunnel
+# hands http and https requests to the same origin port, and no rule here can
+# tell them apart. It is a Cloudflare dashboard setting — SSL/TLS → Edge
+# Certificates → Always Use HTTPS, on — with Cloudflare's own HSTS left off,
+# because nginx and the api already send it (docs/production-checklist.md §9,
+# "Now: Cloudflare Tunnel", the dashboard list).
+#
 # Run it as a systemd service that reads this file. The unit, at
 # /etc/systemd/system/cloudflared.service, then `systemctl enable --now cloudflared`:
 #

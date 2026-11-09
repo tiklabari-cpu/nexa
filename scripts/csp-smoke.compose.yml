@@ -1,0 +1,21 @@
+# docker-compose.full.yml, moved off the dev servers' ports (tm 434).
+#
+# Used only by scripts/csp-smoke.sh, as a second `-f` file. The bundles have
+# http://localhost:4000 / ws://localhost:4001 / http://localhost:5174 baked in,
+# so the browser keeps those addresses and Chromium's resolver maps them onto
+# the ports below (apps/e2e/playwright.csp.config.ts). The smoke can then run
+# while `pnpm dev` holds the usual ports. `!override` replaces the base file's
+# list instead of appending to it.
+services:
+  api:
+    ports: !override
+      - '127.0.0.1:${CSP_SMOKE_API_PORT:-14000}:4000'
+  rtm:
+    ports: !override
+      - '127.0.0.1:${CSP_SMOKE_RTM_PORT:-14001}:4001'
+  web:
+    ports: !override
+      - '127.0.0.1:${CSP_SMOKE_WEB_PORT:-15173}:8080'
+  widget:
+    ports: !override
+      - '127.0.0.1:${CSP_SMOKE_WIDGET_PORT:-15174}:8080'

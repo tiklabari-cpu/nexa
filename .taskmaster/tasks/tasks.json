@@ -16981,12 +16981,12 @@
         "description": "pnpm audit: 56 açığın 46'sı apps/mobile ağacında (1 critical shell-quote, 30 high'ın çoğu), yollar apps__mobile>expo>@expo/cli…",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F37. Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/mobile/package.json` expo zinciri; kök `package.json` `pnpm.overrides` (varsa) — oku.\n\nYAPILACAK: `pnpm audit --json` ile mobil yollardaki critical+high paketlerin yamalı sürümlerini listele; yalnız aynı majör içinde kalan yamaları `pnpm.overrides`'a ekle (shell-quote >=1.11.0, @xmldom/xmldom, js-yaml, nanoid vb.). Majör gerektirenleri HANDOFF'a \"kalan\" olarak yaz. Lockfile'ı elle uygula ve `pnpm install --frozen-lockfile` ile doğrula (memory pnpm-add-churns-the-lockfile). Ardından mobil jest + `expo export` (varsa script) koş.\n\nTUZAK: Yeni override @types/react hoist'unu değiştirebilir (memory new-workspace-app-flips-types-react-hoist). Sunucu paketlerini (zod) burada değiştirme.\n\nKAPSAM DIŞI: zod (tm 419 ara önlemi / tm 477 4.x epiği, deferred), CI audit adımı.\nDENETİM BULGULARI: F37",
         "testStrategy": "`pnpm audit --prod` çıktısında mobil critical 0, high sayısı önceki değerden düşük (önce/sonra sayılar HANDOFF'a); `pnpm install --frozen-lockfile` exit 0; mobil testler yeşil. DoD: CONVENTIONS §1.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-06T17:34:51.966Z",
+        "updatedAt": "2026-11-10T06:54:43.183Z",
         "subtasks": []
       },
       {
@@ -17778,7 +17778,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-10T06:53:36.615Z",
+      "lastModified": "2026-11-10T06:54:43.184Z",
       "taskCount": 478,
       "completedCount": 436,
       "tags": [

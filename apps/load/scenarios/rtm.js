@@ -53,7 +53,6 @@ import {
   fanoutLatency,
   observe,
   rtmConnectFailed,
-  rtmConnectionsObserved,
   rtmConnectLatency,
   rtmLoginSuccess,
   rtmPublishLatency,
@@ -330,12 +329,12 @@ function countReplayed(response, state) {
 // ---------------------------------------------------------------------------
 
 /**
- * One message per iteration, stamped with the instant it was sent, plus a read
- * of how many sockets the gateway says it is holding.
+ * One message per iteration, stamped with the instant it was sent.
  *
- * The health poll rides along here rather than in its own scenario because it
- * has to happen while the plateau is up, and this is the VU that is awake for
- * exactly that window.
+ * Until tm 454 this also polled the gateway's `/health` for its socket count
+ * with the owner's token; that body is `{status, service}` for every tenant
+ * caller now (F35). The pod's own count is the `rtm.connections.active` gauge
+ * (`apps/rtm/src/telemetry/telemetry.ts`) — README §"Reading a red run".
  */
 export function publisher(data) {
   const startedAt = Date.now();
@@ -349,8 +348,6 @@ export function publisher(data) {
     'POST /chats/:id/events is 200 or 201': (r) => r.status === 200 || r.status === 201,
   });
   rtmPublishLatency.add(reply.timings.duration);
-
-  observeConnections(data);
 
   // Sleep the *remainder* of the interval, not the whole of it.
   //
@@ -369,23 +366,6 @@ export function publisher(data) {
     'a publish iteration fits inside its interval': (e) => e <= CONFIG.rtmPublishIntervalSeconds,
   });
   sleep(Math.max(0, CONFIG.rtmPublishIntervalSeconds - elapsed));
-}
-
-/**
- * How many sockets the pod reports holding, from its own `/health`.
- *
- * Admin-gated (M-SEC-b2), which the seeded owner's session satisfies. A run
- * whose credential cannot read the detail simply records nothing rather than
- * failing: the connection count is the finding, not the gate, and losing a
- * whole capacity run to a health-route permission would be the worse outcome.
- */
-function observeConnections(data) {
-  const response = get(CONFIG.rtmHealthUrl, OP_TAGS.probe, {
-    headers: authHeaders(data.session),
-  });
-  if (response.status !== 200) return;
-  const connections = response.json('connections');
-  if (typeof connections === 'number') rtmConnectionsObserved.add(connections);
 }
 
 // ---------------------------------------------------------------------------

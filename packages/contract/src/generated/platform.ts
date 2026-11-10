@@ -3482,8 +3482,10 @@ export interface components {
       error?: string;
     };
     /**
-     * @description The tenant API's admin `GET /health` body as its scheduler leader last
-     *     published it (`buildHealthSnapshot`).
+     * @description The tenant API's detailed health body as its scheduler leader last
+     *     published it (`buildHealthSnapshot`) — since tm 454 the only place it
+     *     is served; the tenant `GET /health` answers `{status, service}` to
+     *     every caller.
      */
     PlatformHealthSnapshot: {
       /** @enum {string} */

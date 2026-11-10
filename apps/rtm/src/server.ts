@@ -8,14 +8,14 @@
  * 10 in-flight requests, 15s request deadline — kept compatible on purpose so a
  * client SDK written against the original protocol still works.
  */
-import { createServer, type Server } from 'node:http';
+import { createServer, type Server, type ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { setTimeout as delay } from 'node:timers/promises';
 import { PrismaClient } from '@prisma/client';
 import { Redis } from 'ioredis';
 import { pino, type Logger } from 'pino';
 import { WebSocket, WebSocketServer } from 'ws';
-import { PermissionMatrixCache, RTM_LIMITS, RTM_PATHS, roleAtLeast } from '@siyahtus/types';
+import { PermissionMatrixCache, RTM_LIMITS, RTM_PATHS } from '@siyahtus/types';
 import { SocketAuthenticator, type SocketPrincipal } from './auth.js';
 import { clientAddress } from './client-address.js';
 import { clientNetworkKey } from './client-network.js';
@@ -27,6 +27,7 @@ import { disarmCredentialExpiry } from './credential-expiry.js';
 import { CustomerSocketLimiter } from './customer-socket-limit.js';
 import { Dispatcher } from './dispatcher.js';
 import { Fanout } from './fanout.js';
+import { SharedProbe } from './health-probe.js';
 import {
   listenForMaintenanceChanges,
   MAINTENANCE_CLOSE_CODE,
@@ -121,6 +122,12 @@ export interface RtmServer {
    * when both `RTM_MAX_SOCKETS_PER_CUSTOMER` and `RTM_MAX_CUSTOMER_SOCKETS_PER_IP` are 0.
    */
   customerSockets: CustomerSocketLimiter | null;
+  /**
+   * The dependency probe `/health` and `/health/ready` share (tm 454): one
+   * in flight at a time, its result reused for a second. `runs` is how many
+   * probes a burst of requests actually cost.
+   */
+  healthProbe: SharedProbe<HealthBody>;
   listen: () => Promise<void>;
   close: () => Promise<void>;
   address: () => { port: number } | null;
@@ -190,6 +197,10 @@ export function buildRtmServer(
     maxRetriesPerRequest: 3,
     retryStrategy: (attempt) => Math.min(attempt * 200, 3_000),
   });
+  // Public routes with no limiter in front of them (tm 454 · F34): without
+  // this every health request was its own `SELECT 1` + `PING`, and a flood
+  // of them drained the pool every agent login reads from.
+  const healthProbe = new SharedProbe(() => health(db, commands));
   const subscriber = new Redis(env.REDIS_URL, {
     connectionName: 'siyahtus-rtm-sub',
     // A subscriber that gives up leaves clients silently stale, which is worse
@@ -398,10 +409,8 @@ export function buildRtmServer(
       return;
     }
 
-    // READINESS (M-OPS-a): today's dependency probe, unchanged — 503 takes
-    // the instance out of rotation. Always the narrow body: an orchestrator
-    // probe never carries a bearer token, so the admin-gated detail below
-    // would never be reachable here anyway.
+    // READINESS (M-OPS-a): the dependency probe — 503 takes the instance out
+    // of rotation. Shared with `/health` and reused for a second (tm 454).
     if (pathname === '/health/ready') {
       // Draining short-circuits the probe: mid-close the connections it reads
       // may already be gone, so probing would spend the full
@@ -414,15 +423,12 @@ export function buildRtmServer(
         res.end(JSON.stringify({ status: 'draining', service: 'rtm' }));
         return;
       }
-      void health(db, commands, version, env, registry).then(({ narrow }) => {
-        res.writeHead(narrow.status === 'ok' ? 200 : 503, { 'content-type': 'application/json' });
-        res.end(JSON.stringify(narrow));
-      });
+      answerHealth(res, healthProbe);
       return;
     }
 
     if (pathname === '/health') {
-      // Draining wins over the admin body below, for the reason it does in
+      // Draining wins over the probe, for the reason it does in
       // `apps/api/src/routes/health.ts`: anything still pointed at this route
       // from before the M-OPS-a split reads it as readiness, and a 200 here
       // during a drain keeps traffic arriving at a process that is closing.
@@ -431,23 +437,12 @@ export function buildRtmServer(
         res.end(JSON.stringify({ status: 'draining', service: 'rtm' }));
         return;
       }
-      // Same narrowing as `apps/api/src/routes/health.ts` (M-SEC-b2 · §D116
-      // MEDIUM (b)): region/connection-count/dependency detail is
-      // infrastructure fingerprinting, admin-role callers only. Run alongside
-      // the dependency probes, not after them — both are independently bounded
-      // (`HEALTH_PROBE_TIMEOUT_MS`), and chaining them would mean an admin
-      // token presented while Postgres is down waits out that same timeout
-      // twice before /health answers at all, which defeats the point of a
-      // readiness probe when the dependency it reports on is the one that is
-      // actually unreachable.
-      void Promise.all([
-        health(db, commands, version, env, registry),
-        wantsHealthDetail(req.headers.authorization, authenticator),
-      ]).then(([body, detailed]) => {
-        const response = detailed ? body.detailed : body.narrow;
-        res.writeHead(response.status === 'ok' ? 200 : 503, { 'content-type': 'application/json' });
-        res.end(JSON.stringify(response));
-      });
+      // The narrow body for every caller, a presented token included (tm 454 ·
+      // F35): region, version and the socket count are the deployment's, and
+      // a workspace admin is a tenant. The same rule as `apps/api/src/routes/
+      // health.ts`; the pod's socket count is the `rtm.connections.active`
+      // gauge (telemetry/telemetry.ts) for whoever runs the deployment.
+      answerHealth(res, healthProbe);
       return;
     }
 
@@ -594,6 +589,7 @@ export function buildRtmServer(
     presence,
     preLogin,
     customerSockets,
+    healthProbe,
     address: () => {
       const address = http.address();
       return address && typeof address === 'object' ? { port: address.port } : null;
@@ -707,7 +703,7 @@ export function buildRtmServer(
  * between "the pod refused me" and "my machine ran out of ports", which is the
  * ambiguity §D127 had to pay a whole extra measurement run to resolve. What it
  * would be *capacity* for is the number, and that stays where the rest of the
- * fingerprintable detail is: behind `/health`'s admin gate (M-SEC-b2).
+ * fingerprintable detail is: out of every tenant-facing body (tm 454 · F35).
  */
 const REFUSALS: Record<
   UpgradeRefusalReason,
@@ -832,74 +828,40 @@ async function probeHealth(
   }
 }
 
-// Undefined header → no token to resolve; the common anonymous-probe case
-// never touches the database. A presented token is bound by the same
-// `HEALTH_PROBE_TIMEOUT_MS` the dependency probes use — resolving it means a
-// query against the very Postgres this check might be reporting as down, and
-// an admin caller's credential must not be why an otherwise-fast 503 hangs.
-// Unresolvable (timeout, malformed token, database down) fails closed to "not
-// admin", the same posture as an anonymous request.
-async function wantsHealthDetail(
-  authorization: string | undefined,
-  authenticator: SocketAuthenticator,
-): Promise<boolean> {
-  if (!authorization) return false;
-  try {
-    const outcome = authenticator.resolveAdminRole(authorization);
-    // Same reasoning as `probeHealth`: a resolution that outlives the race
-    // below must not surface as an unhandled rejection later.
-    outcome.catch(() => {});
-    const role = await Promise.race([
-      outcome,
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), HEALTH_PROBE_TIMEOUT_MS)),
-    ]);
-    return role !== null && roleAtLeast(role, 'admin');
-  } catch {
-    return false;
-  }
+/** The only body any health route answers with (tm 454 · F35). */
+export interface HealthBody {
+  status: 'ok' | 'degraded';
+  service: 'rtm';
 }
 
-interface HealthBodies {
-  narrow: { status: 'ok' | 'degraded'; service: string };
-  detailed: { status: 'ok' | 'degraded'; [key: string]: unknown };
-}
-
-async function health(
-  db: PrismaClient,
-  redis: Redis,
-  version: string,
-  env: RtmEnv,
-  registry: ConnectionRegistry,
-): Promise<HealthBodies> {
+async function health(db: PrismaClient, redis: Redis): Promise<HealthBody> {
   // Every agent login reads Postgres (`auth.ts`) — a gateway that reports `ok`
   // with the database down accepts no logins while claiming to be healthy.
   const [database, redisHealth] = await Promise.all([
     probeHealth('database', () => db.$queryRaw`SELECT 1`),
     probeHealth('redis', () => redis.ping()),
   ]);
-  const status = database.status === 'up' && redisHealth.status === 'up' ? 'ok' : 'degraded';
-
   return {
-    narrow: { status, service: 'rtm' },
-    detailed: {
-      status,
-      service: 'rtm',
-      version,
-      region: env.SIYAHTUS_REGION,
-      connections: registry.size,
-      // The ceiling next to the count it bounds (M-LOAD-CAP): a number of open
-      // sockets means nothing without the number this process will stop at, and
-      // reading them from two different places is how they get compared across
-      // two different moments. `null` is unlimited, stated rather than omitted
-      // — an absent field reads as "this build does not report it".
-      //
-      // Admin-only along with everything else in this body (M-SEC-b2): the
-      // ceiling is capacity intelligence, and the refusal an anonymous caller
-      // gets on the upgrade path names the *reason* without the number.
-      max_connections: env.maxConnections,
-      dependencies: { database, redis: redisHealth },
-    },
+    status: database.status === 'up' && redisHealth.status === 'up' ? 'ok' : 'degraded',
+    service: 'rtm',
   };
+}
+
+/**
+ * Writes the shared probe's answer. `probeHealth` never rejects, so the catch
+ * is for a bug, not a dependency: it still answers — 503, never a hung socket.
+ */
+function answerHealth(res: ServerResponse, probe: SharedProbe<HealthBody>): void {
+  void probe.read().then(
+    (body) => {
+      res.writeHead(body.status === 'ok' ? 200 : 503, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(body));
+    },
+    () => {
+      res.writeHead(503, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ status: 'degraded', service: 'rtm' }));
+    },
+  );
 }
 
 function attach(params: {

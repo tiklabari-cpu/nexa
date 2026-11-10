@@ -5,10 +5,12 @@
  * admin-role caller of `GET /api/v1/health`. The root panel's dashboard wants
  * the same facts about the same process without holding a tenant token — and
  * the platform process is not the tenant API, it cannot ask its scheduler or
- * its event partitions anything. So the body is built here, by the one function
- * both the route and the scheduler leader's 30-second publisher call, and the
- * leader leaves the result in Redis (`siyahtus:ops:health`,
- * {@link HealthSnapshotPublisher}) for the platform to read.
+ * its event partitions anything. So the body is built here and the scheduler
+ * leader's 30-second publisher leaves it in Redis (`siyahtus:ops:health`,
+ * {@link HealthSnapshotPublisher}) for the platform to read. Since tm 454 (F35)
+ * that is its only reader: the route answers `{status, service}` to every
+ * caller, a workspace admin included — the scheduler and the AI queue are the
+ * deployment's, not a workspace's.
  *
  * `probe` and the dependency vocabulary live here for the same reason: a body
  * with two builders is a body that drifts.
@@ -78,7 +80,7 @@ export async function probeDependencies(
   };
 }
 
-/** The admin body of `GET /api/v1/health` (and the dashboard's snapshot). */
+/** The detailed health body: the dashboard's snapshot (no tenant route serves it, tm 454). */
 export interface HealthSnapshotBody {
   status: 'ok' | 'degraded';
   service: 'api';

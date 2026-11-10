@@ -21,7 +21,7 @@
 # the widget's origin and nobody else's. Two optional inputs extend it to a
 # signed-in check, since only a real workspace has credentials:
 #   SMOKE_ORGANIZATION_ID  a workspace to mint a visitor token for, cross-origin
-#   SMOKE_ADMIN_TOKEN      an owner's bearer token, to read the admin /health
+#   SMOKE_ADMIN_TOKEN      an owner's bearer token (proves /health stays narrow for it)
 #
 # The pilot profile also checks the edge (tm 257.10): rtm answers a WebSocket
 # upgrade with 101, and over an https base the panel and the widget's
@@ -301,14 +301,14 @@ check 'rtm /health/live is ok (no dependency probe)' \
 check 'rtm /health/ready is ok (Postgres + Redis reachable)' \
   GET "$RTM_BASE/health/ready" 200 '"status":"ok"'
 # `/health` stays backward compatible (M-OPS-a) — same dependency probe as
-# `/health/ready`, admin-gated detail on top.
+# `/health/ready`, same narrow body.
 check 'api /health is ok (Postgres + Redis reachable)' \
   GET "$API_BASE/api/v1/health" 200 '"status":"ok"'
-# The detailed body (version/region/scheduler/providers, M-SEC-b2 · §D116
-# MEDIUM (b)) is admin-only now — an anonymous caller gets only status +
-# service. Proven both ways: the field is gone anonymously, and the seeded
-# demo owner's fixed PAT (apps/api/prisma/seed.ts, same credential
-# apps/api/test/integration/reports-topics.test.ts uses) still sees it.
+# The detailed body (version/region/scheduler/AI queue) is nobody's on the
+# tenant ports since tm 454 (F35): a workspace admin is a tenant, and the
+# scheduler and the AI queue belong to the whole deployment. The root panel's
+# dashboard reads it from the api's own publication (`/dashboard/health`).
+# Proven anonymously here and, below, with an owner's token.
 check_excludes 'api /health hides the scheduler block from an anonymous caller' \
   GET "$API_BASE/api/v1/health" 200 '"scheduler"'
 check 'rtm /health is ok' \
@@ -316,23 +316,23 @@ check 'rtm /health is ok' \
 check_excludes 'rtm /health hides region/connections from an anonymous caller' \
   GET "$RTM_BASE/health" 200 '"region"'
 if [ "$SMOKE_PROFILE" = demo ]; then
+# The seeded demo owner's fixed PAT (apps/api/prisma/seed.ts): an owner is the
+# highest tenant role, and it reads exactly what an anonymous caller does.
 auth_header='Bearer siyahtus_pat_demo_acme'
-# The six background sweeps (M-SCHED) tick inside the api process. A stack
-# where none of them run looks identical to one with nothing to do — which is
-# why /health reports the scheduler and why this asserts on it.
-check 'api /health reports the scheduler enabled (admin caller)' \
-  GET "$API_BASE/api/v1/health" 200 '"enabled":true'
-check 'rtm /health reports region for an admin caller' \
+check_excludes 'api /health hides the scheduler block from a workspace owner' \
+  GET "$API_BASE/api/v1/health" 200 '"scheduler"'
+check_excludes 'rtm /health hides region from a workspace owner' \
   GET "$RTM_BASE/health" 200 '"region"'
 auth_header=''
 elif [ -n "$SMOKE_ADMIN_TOKEN" ]; then
-  # The pilot has no demo PAT; an owner's own token reads the same body. The
-  # partition line is the one tm 255.14 asked the first boot to be checked for.
+  # The pilot has no demo PAT; an owner's own token stands in. The scheduler
+  # and partition lines tm 255.14 asked the first boot to be checked for are
+  # on the root panel's dashboard since tm 454.
   auth_header="Bearer $SMOKE_ADMIN_TOKEN"
-  check 'api /health reports the scheduler enabled (admin caller)' \
-    GET "$API_BASE/api/v1/health" 200 '"enabled":true'
-  check 'api /health reports the event partition pass ok (admin caller)' \
-    GET "$API_BASE/api/v1/health" 200 '"last_status":"ok"'
+  check_excludes 'api /health hides the scheduler block from a workspace owner' \
+    GET "$API_BASE/api/v1/health" 200 '"scheduler"'
+  check_excludes 'api /health hides the AI queue from a workspace owner' \
+    GET "$API_BASE/api/v1/health" 200 '"ai_jobs"'
   auth_header=''
 fi
 

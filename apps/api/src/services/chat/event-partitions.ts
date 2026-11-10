@@ -52,7 +52,7 @@ export interface FailedMonth {
   error_code: string;
 }
 
-/** The `event_partitions` block of the admin `/health` body (OpenAPI `EventPartitionsHealth`). */
+/** The `event_partitions` block of the published health snapshot (`PlatformHealthSnapshot`). */
 export interface EventPartitionsSnapshot {
   interval_ms: number;
   months_ahead: number;

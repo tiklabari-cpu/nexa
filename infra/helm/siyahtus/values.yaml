@@ -510,7 +510,7 @@ config:
   STRIPE_PROVIDER: mock
   # mock: uploads are NOT scanned for viruses — only the EICAR test file is
   # refused. There is no real scanner yet (ClamAV is not in the pilot). In
-  # production the api warns at boot and in the admin /health body, and the
+  # production the api warns at boot and in its published health snapshot, and the
   # panel labels each attachment "Not checked for viruses" (tm 433).
   VIRUS_SCANNER: mock
   SIEM_PROVIDER: file

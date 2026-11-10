@@ -12,28 +12,29 @@
  *   process is no better off.
  * - `/health/ready` runs the real dependency probes below and returns 503
  *   when either is down, taking the instance out of rotation. This is the
- *   READINESS probe. It always answers the narrow `{status, service}` body —
- *   an orchestrator probe never carries a bearer token, so the detailed body
- *   would never be seen there. Since M-OPS-b it also answers 503 while the
- *   process is shutting down, before it stops accepting: that 503 is what
- *   makes a graceful drain possible at all, because an orchestrator only stops
+ *   READINESS probe. Since M-OPS-b it also answers 503 while the process is
+ *   shutting down, before it stops accepting: that 503 is what makes a
+ *   graceful drain possible at all, because an orchestrator only stops
  *   routing here once a probe fails, and `status: 'draining'` distinguishes
  *   "leaving on purpose" from "a dependency is down" for whoever reads it.
- * - `/health` stays backward compatible: same dependency probe, but the body
- *   is admin-gated (M-SEC-b2 · §D116 MEDIUM (b)) — version, region,
- *   dependency latencies, scheduler and event-partition status, which mock
- *   each provider runs is infrastructure fingerprinting an anonymous caller
- *   has no business reading. An admin-role caller still gets all of it;
- *   anyone else gets only `status` + `service`. This narrows the BODY only —
- *   the status code still reflects real dependency health either way, so an
- *   orchestrator watching for 200/503 (never reading the body) keeps working
- *   exactly as before.
+ * - `/health` stays backward compatible: the same dependency probe and the
+ *   same status code as `/health/ready`.
+ *
+ * Every one of them answers the narrow body — `status` + `service`
+ * (`uptime_s` on liveness) — to every caller (tm 454 · F35). Until then an
+ * admin-role bearer token got the detailed body on `/health` (M-SEC-b2):
+ * version, region, dependency latencies, scheduler, event partitions, the
+ * mock providers and `ai_jobs` — the depth of the AI queue across every
+ * workspace. A workspace admin is a tenant, and with public sign-up anyone
+ * can be one, so none of that is theirs. The one reader it is for — the
+ * platform operator — never reaches this process (the platform API is a
+ * separate process with its own principal, design.md §A); the root panel's
+ * dashboard reads the same body from the leader's 30-second publication
+ * (`services/ops/health-publisher.ts` → `GET /platform/v1/dashboard/health`).
+ * So the detail left this route rather than gaining a new credential.
  */
 import type { FastifyInstance } from 'fastify';
-import { roleAtLeast } from '@siyahtus/types';
-import type { Env } from '../config/env.js';
 import {
-  buildHealthSnapshot,
   probe,
   probeDependencies as probeDeps,
   type DependencyHealth,
@@ -43,10 +44,7 @@ import {
 // platform process's probes keep their import.
 export { probe, type DependencyHealth };
 
-export default async function healthRoutes(
-  app: FastifyInstance,
-  options: { env: Env; version: string },
-): Promise<void> {
+export default async function healthRoutes(app: FastifyInstance): Promise<void> {
   const startedAt = Date.now();
   const uptimeS = () => Math.round((Date.now() - startedAt) / 100) / 10;
 
@@ -76,9 +74,7 @@ export default async function healthRoutes(
   );
 
   // READINESS: today's dependency probe, unchanged — 503 takes the instance
-  // out of rotation. Always the narrow body: unlike `/health` below, this is
-  // meant to be hit by an orchestrator, which never presents a bearer token,
-  // so an admin-gated detailed body would never be reachable here anyway.
+  // out of rotation.
   app.get(
     '/health/ready',
     { config: { public: true, healthRateLimit: true } },
@@ -97,38 +93,18 @@ export default async function healthRoutes(
   app.get(
     '/health',
     { config: { public: true, healthRateLimit: true } },
-    async (request, reply) => {
-      // Draining wins over everything below, including the admin body: this
-      // route is still a readiness signal for anything pointed at it from
-      // before the split, and a 200 here during a drain would keep traffic
-      // coming to a process that is closing.
+    async (_request, reply) => {
+      // Draining wins: this route is still a readiness signal for anything
+      // pointed at it from before the split, and a 200 here during a drain
+      // would keep traffic coming to a process that is closing.
       if (app.lifecycle.draining) return reply.status(503).send(drainingBody);
 
-      const { database, redis, healthy } = await probeDependencies();
-      const status = healthy ? 'ok' : 'degraded';
-
-      // `public: true` still resolves a presented bearer token (plugins/auth.ts)
-      // — a customer/SCIM credential never reaches this handler at all (turned
-      // away 404 upstream by the default agent/bot principal gate), so a
-      // populated principal here is always an agent or a bot. Bots hold no
-      // membership role, hence the explicit `kind === 'agent'`.
-      const principal = request.principal;
-      const isAdmin = principal?.kind === 'agent' && roleAtLeast(principal.role, 'admin');
-      if (!isAdmin) {
-        return reply.status(healthy ? 200 : 503).send({ status, service: 'api' });
-      }
-
-      const body = await buildHealthSnapshot({
-        db: app.db,
-        env: options.env,
-        version: options.version,
-        uptimeS: uptimeS(),
-        probes: { database, redis, healthy },
-        scheduler: app.scheduler,
-        eventPartitions: app.eventPartitions,
-        logger: request.log,
-      });
-      return reply.status(healthy ? 200 : 503).send(body);
+      // The narrow body for every caller, a presented credential included
+      // (tm 454 · F35 — see the header for where the detail went).
+      const { healthy } = await probeDependencies();
+      return reply
+        .status(healthy ? 200 : 503)
+        .send({ status: healthy ? 'ok' : 'degraded', service: 'api' });
     },
   );
 }

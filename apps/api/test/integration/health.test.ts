@@ -1,8 +1,14 @@
 /**
- * `GET /health`'s `scheduler` block (M-SCHED-b, sixth job M-SCHED-e · §D113/K1)
- * and, since M-SEC-b2 (§D116 MEDIUM (b)), the admin-only narrowing of the
- * whole body. Also `GET /health/live` and `GET /health/ready` (M-OPS-a), the
- * liveness/readiness split alongside it.
+ * The detailed health body's `scheduler` block (M-SCHED-b, sixth job
+ * M-SCHED-e · §D113/K1), and `GET /health` / `/health/live` /
+ * `/health/ready` (M-OPS-a).
+ *
+ * Since tm 454 (F35) no tenant caller reads the detailed body — every
+ * `/health` answer is `{status, service}`, a workspace owner's token
+ * included. The detail is the platform operator's: the leader publishes it
+ * every 30 s and the root panel's `/dashboard/health` reads it. So the
+ * scheduler/provider/shape tests below read the publication itself
+ * (`app.opsHealth.publish()`, what the dashboard serves), not a route.
  *
  * The dependency probes (`database`, `redis`) already existed and are
  * unchanged by this slice. What is new is the one thing `/health` used to be
@@ -52,11 +58,10 @@ interface HealthBody {
   provider_warnings?: Array<{ provider: string; message: string }>;
 }
 
-// The admin-only body (M-SEC-b2) needs a bearer token that resolves to at
-// least the `admin` role, and a non-admin one to prove the gate reads the
-// membership role, not merely "some credential was presented". Seeded once —
-// every test in this file reads `/health`, none of them writes tenant data,
-// so one owner/agent pair serves the whole suite.
+// An owner token (the highest tenant role) and an agent one, to prove no
+// tenant credential widens the body (tm 454). Seeded once — every test in this
+// file reads health, none of them writes tenant data, so one owner/agent pair
+// serves the whole suite.
 let owner: ReturnType<typeof ownerClient>;
 let adminAuth: { authorization: string };
 let agentAuth: { authorization: string };
@@ -86,13 +91,21 @@ afterAll(async () => {
   await owner.$disconnect();
 });
 
-describe('GET /health — scheduler (admin caller)', () => {
+/**
+ * The detailed body, as the root panel's dashboard gets it: one publication by
+ * this server's health leader (`services/ops/health-publisher.ts`).
+ */
+async function published(server: Awaited<ReturnType<typeof startTestServer>>): Promise<HealthBody> {
+  const stored = await server.app.opsHealth.publish();
+  expect(stored).not.toBeNull();
+  return stored!.health as unknown as HealthBody;
+}
+
+describe('the published health snapshot — scheduler (what the root panel reads)', () => {
   it('lists every registered job, disabled by default under test', async () => {
     const server = await startTestServer();
     try {
-      const response = await server.get('/health', adminAuth);
-      expect(response.statusCode).toBe(200);
-      const body = response.json() as HealthBody;
+      const body = await published(server);
 
       expect(body.scheduler?.enabled).toBe(false);
       expect(body.scheduler?.jobs.map((job) => job.name)).toEqual([
@@ -133,7 +146,7 @@ describe('GET /health — scheduler (admin caller)', () => {
   it('marks retention and the unverified sign-up sweep disabled from registration — no other job is gated', async () => {
     const server = await startTestServer();
     try {
-      const body = (await server.get('/health', adminAuth)).json() as HealthBody;
+      const body = await published(server);
       const byName = Object.fromEntries((body.scheduler?.jobs ?? []).map((job) => [job.name, job]));
 
       expect(byName['retention']).toMatchObject({ enabled: false, last_status: 'disabled' });
@@ -174,7 +187,7 @@ describe('GET /health — scheduler (admin caller)', () => {
   it('lists the unverified sign-up sweep enabled, hourly, once SIGNUP_EMAIL_VERIFICATION is on (tm 257.19)', async () => {
     const server = await startTestServer({ SIGNUP_EMAIL_VERIFICATION: 'true' });
     try {
-      const body = (await server.get('/health', adminAuth)).json() as HealthBody;
+      const body = await published(server);
       const job = body.scheduler?.jobs.find((row) => row.name === 'unverified_signups');
       expect(job).toMatchObject({
         enabled: true,
@@ -190,7 +203,7 @@ describe('GET /health — scheduler (admin caller)', () => {
   it('names which implementation each mockable dependency runs', async () => {
     const server = await startTestServer();
     try {
-      const body = (await server.get('/health', adminAuth)).json() as HealthBody;
+      const body = await published(server);
 
       // Straight off the validated env (`fixtures.ts`'s `testEnv()`), not a
       // separate snapshot — so this can never drift from what `server.ts`
@@ -226,7 +239,7 @@ describe('GET /health — scheduler (admin caller)', () => {
       SMTP_FROM: 'info@nolnk.test',
     });
     try {
-      const body = (await server.get('/health', adminAuth)).json() as HealthBody;
+      const body = await published(server);
       expect(body.providers?.mail).toBe('smtp');
     } finally {
       await server.close();
@@ -242,7 +255,7 @@ describe('GET /health — scheduler (admin caller)', () => {
       SIGNUP_EMAIL_VERIFICATION: 'true',
     });
     try {
-      const body = (await server.get('/health', adminAuth)).json() as HealthBody;
+      const body = await published(server);
 
       expect(body.scheduler?.enabled).toBe(true);
       expect(body.scheduler?.jobs.every((job) => job.enabled)).toBe(true);
@@ -255,13 +268,11 @@ describe('GET /health — scheduler (admin caller)', () => {
   });
 });
 
-describe('GET /health — body shape (M4-a · §D113/K4-K6, admin caller)', () => {
+describe('the published health snapshot — body shape (M4-a · §D113/K4-K6)', () => {
   it('reports status, version, region, uptime and both dependencies when everything is up', async () => {
     const server = await startTestServer();
     try {
-      const response = await server.get('/health', adminAuth);
-      expect(response.statusCode).toBe(200);
-      const body = response.json() as HealthBody;
+      const body = await published(server);
 
       expect(body.status).toBe('ok');
       expect(body.service).toBe('api');
@@ -276,7 +287,21 @@ describe('GET /health — body shape (M4-a · §D113/K4-K6, admin caller)', () =
   });
 });
 
-describe('GET /health — anonymous and non-admin bodies are narrowed (M-SEC-b2 · §D116 MEDIUM (b))', () => {
+describe('GET /health — the narrow body for every caller, a workspace owner included (tm 454 · F35)', () => {
+  it('gives an owner-role caller only status + service — no scheduler, version or AI queue', async () => {
+    // Until tm 454 an admin-role token read the whole deployment's scheduler,
+    // version and `ai_jobs` queue depth here; with public sign-up anyone can
+    // hold one.
+    const server = await startTestServer();
+    try {
+      const response = await server.get('/health', adminAuth);
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ status: 'ok', service: 'api' });
+    } finally {
+      await server.close();
+    }
+  });
+
   it('gives an anonymous caller only status + service', async () => {
     const server = await startTestServer();
     try {
@@ -305,7 +330,7 @@ describe('GET /health — anonymous and non-admin bodies are narrowed (M-SEC-b2 
 });
 
 describe('GET /health — degraded when a dependency is down (M4-a · §D113/K4-K6)', () => {
-  it('reports 503 either way, narrow body anonymously and full detail for an admin', async () => {
+  it('reports 503 with the narrow body, anonymously and for an owner alike', async () => {
     const server = await startTestServer();
     try {
       // A dedicated, deliberately unreachable client swapped onto *this*
@@ -333,10 +358,7 @@ describe('GET /health — degraded when a dependency is down (M4-a · §D113/K4-
 
         const adminResponse = await server.get('/health', adminAuth);
         expect(adminResponse.statusCode).toBe(503);
-        const adminBody = adminResponse.json() as HealthBody;
-        expect(adminBody.status).toBe('degraded');
-        expect(adminBody.dependencies?.redis.status).toBe('down');
-        expect(adminBody.dependencies?.database.status).toBe('up');
+        expect(adminResponse.json()).toEqual({ status: 'degraded', service: 'api' });
       } finally {
         broken.disconnect();
       }
@@ -421,9 +443,7 @@ describe('GET /health/ready — readiness probes for real, narrow body always (M
       server.app.redis = broken;
 
       try {
-        // No admin/anonymous split here (unlike /health) — an orchestrator
-        // probe never presents a bearer token, so the body stays narrow
-        // regardless of what is presented.
+        // The body stays narrow whatever is presented.
         const response = await server.get('/health/ready', adminAuth);
         expect(response.statusCode).toBe(503);
         expect(response.json()).toEqual({ status: 'degraded', service: 'api' });

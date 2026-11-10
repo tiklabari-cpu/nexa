@@ -107,7 +107,7 @@ All optional; the defaults target a local `make dev` stack.
 | Variable              | Default                               | Meaning                                |
 | --------------------- | ------------------------------------- | -------------------------------------- |
 | `LOAD_API_ORIGIN`     | `http://localhost:4000`               | API origin; `/api/v1` is appended      |
-| `LOAD_RTM_ORIGIN`     | `ws://localhost:4001`                 | RTM origin, socket and `/health` alike |
+| `LOAD_RTM_ORIGIN`     | `ws://localhost:4001`                 | RTM origin (the socket)                |
 | `LOAD_EMAIL`          | `owner@acme.localhost`                | Seeded owner to sign in as             |
 | `LOAD_PASSWORD`       | `siyahtus-demo-password`              | Its demo password                      |
 | `LOAD_ORG_PREFIX`     | `Acme`                                | Which membership to use                |
@@ -218,10 +218,11 @@ per-socket check, so none of them is an after-the-fact judgement call:
    can see this (the run's total delivery count stays high while one socket goes quiet), so
    every socket checks its own count at close and `checks rate==1.00` fails the run.
 
-A fifth reading is recorded but not thresholded: `siyahtus_rtm_connections_observed`, sampled
-from the gateway's own `/health` while the plateau is up. "We opened 8000 sockets" and "the
-pod is holding 8000 sockets" are different claims and only the second one is NFR-P8; the
-`max` of that trend is the number to quote.
+"We opened 8000 sockets" and "the pod is holding 8000 sockets" are different claims and only
+the second one is NFR-P8. The pod's own count is the gateway's `rtm.connections.active` gauge
+(OpenTelemetry, `OTEL_EXPORTER` on the stack under test). Until tm 454 the suite also sampled
+it from the gateway's `/health` with the owner's token; that body is `{status, service}` for
+every tenant caller now, because the count is the deployment's, not a workspace's.
 
 ### Reading a red run: the pod, or this laptop?
 
@@ -232,10 +233,8 @@ a report that does not separate them feeds the next decision the wrong number:
   directly rather than inferred. If `RTM_MAX_CONNECTIONS` is set on the stack under test, the
   gateway refuses upgrades past it with `503` and
   `{"error":{"details":{"reason":"connection_limit_reached"}}}`, so a rung that goes red at
-  exactly the configured number is measuring the ceiling, not the machine. `/health` reports
-  `max_connections` alongside `connections` for an admin caller, which is the credential
-  `rtm.js` already uses for `siyahtus_rtm_connections_observed` — read it before a ladder and you
-  know which rung is expected to fail. A ladder meant to find the pod's real limit should
+  exactly the configured number is measuring the ceiling, not the machine. Read the key off
+  the stack's environment before a ladder and you know which rung is expected to fail. A ladder meant to find the pod's real limit should
   leave the key **unset** (its default), or the ladder measures the configuration.
 - **The address cap refused.** Also a product setting, not the machine. k6 on one machine is
   **one client address**, and the gateway caps how many sockets one client network (that

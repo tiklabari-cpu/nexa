@@ -13,19 +13,15 @@ export interface paths {
     };
     /**
      * Liveness and dependency check
-     * @description Reports the process plus each backing store. Returns 200 only when every
-     *     dependency is reachable, so it is safe to use as a readiness probe.
+     * @description Probes Postgres and Redis and returns 200 only when both are reachable,
+     *     so it is safe to use as a readiness probe — the same answer as
+     *     `/health/ready`, kept for monitors pointed here before that split.
      *
-     *     The body has two shapes (M-SEC-b2 · §D116 MEDIUM (b)). An anonymous
-     *     caller — or one whose credential does not resolve to at least the
-     *     `admin` role — gets only `status` + `service`: version, region,
-     *     dependency latencies, scheduler and event-partition status and which
-     *     mock each provider runs are infrastructure detail an unauthenticated
-     *     caller has no business reading. An admin-role bearer token gets every
-     *     field below.
-     *     Either way the status code (200/503) reflects real dependency health —
-     *     narrowing applies to the body only, so an orchestrator that reads only
-     *     the status code is unaffected.
+     *     The body is `status` + `service` for every caller, a bearer token of
+     *     any role included. The deployment's detail — version, region,
+     *     scheduler, event partitions, providers and the AI queue across every
+     *     workspace — belongs to whoever runs the deployment, not to a
+     *     workspace, and is read on the root panel's dashboard instead.
      */
     get: operations['getHealth'];
     put?: never;
@@ -70,11 +66,9 @@ export interface paths {
     /**
      * Readiness probe
      * @description Probes Postgres and Redis for real and returns 503 when either is
-     *     unreachable, so an orchestrator takes the instance out of rotation. This
-     *     is the same dependency probe `/health` runs, but always answers the
-     *     narrow `{status, service}` body — an orchestrator probe never carries a
-     *     bearer token, so the admin-only detail `/health` can return would never
-     *     be reachable here anyway.
+     *     unreachable, so an orchestrator takes the instance out of rotation. The
+     *     same dependency probe and the same `{status, service}` body as
+     *     `/health`.
      */
     get: operations['getHealthReady'];
     put?: never;
@@ -14226,9 +14220,8 @@ export interface components {
       user_font_preset_set_at: string | null;
     };
     /**
-     * @description `status` + `service` are always present. Every other field is
-     *     admin-only (M-SEC-b2) — absent for an anonymous or non-admin caller,
-     *     present together for an admin-role one.
+     * @description The same narrow body for every caller. `uptime_s` only on
+     *     `/health/live`.
      */
     Health: {
       /**
@@ -14243,30 +14236,7 @@ export interface components {
       status: 'ok' | 'degraded' | 'draining';
       /** @example api */
       service: string;
-      version?: string;
-      /** @enum {string} */
-      region?: 'eu';
       uptime_s?: number;
-      dependencies?: {
-        database: components['schemas']['DependencyHealth'];
-        redis: components['schemas']['DependencyHealth'];
-      };
-      scheduler?: components['schemas']['SchedulerHealth'];
-      event_partitions?: components['schemas']['EventPartitionsHealth'];
-      /** @description Null when the queue could not be read. */
-      ai_jobs?: components['schemas']['AiJobsHealth'] | null;
-      providers?: components['schemas']['HealthProviders'];
-      /**
-       * @description The mock providers this deployment runs where real people use it
-       *     (tm 433) — the same lines the boot logged at `warn`, empty outside
-       *     production. `virus_scanner`: uploads are not scanned (only the
-       *     EICAR test file is refused), pilot included. `payment`: a card on
-       *     the masked form activates a workspace without being charged
-       *     (`PILOT_MODE=false` only). `crawler`: website sources index an
-       *     invented page (`PILOT_MODE=true` only). Information, never the
-       *     status code — none of them stops the boot.
-       */
-      provider_warnings?: components['schemas']['HealthProviderWarning'][];
     };
     /**
      * @description Deployment-wide settings (tm 257.13), the same for every caller and
@@ -14373,153 +14343,6 @@ export interface components {
         en: string;
         tr: string;
       } | null;
-    };
-    DependencyHealth: {
-      /** @enum {string} */
-      status: 'up' | 'down';
-      latency_ms?: number;
-      error?: string;
-    };
-    /**
-     * @description The in-process background scheduler (M-SCHED · §D113/K1) — idle-chat
-     *     auto-close, SLA breach marking, the SIEM export, scheduled reports and
-     *     retention. `enabled` false means this process runs none of them (every
-     *     job below is still listed, each `disabled`); a deployment that would
-     *     rather drive the sweeps from a host cron leaves it off and uses each
-     *     job's own `pnpm --filter @siyahtus/api <job>:run` script instead.
-     */
-    SchedulerHealth: {
-      enabled: boolean;
-      jobs: components['schemas']['SchedulerJob'][];
-    };
-    SchedulerJob: {
-      /**
-       * @example chat_timeout
-       * @example sla
-       * @example siem
-       * @example scheduled_reports
-       * @example retention
-       */
-      name: string;
-      interval_ms: number;
-      /**
-       * @description False for a job registered but switched off from the moment it was
-       *     registered — `retention`, gated by `RETENTION_ENABLED` because it
-       *     hard-deletes data, and `unverified_signups`, which runs only while
-       *     `SIGNUP_EMAIL_VERIFICATION` is on: with it off an unverified account
-       *     signs in like any other, so there is nothing to delete it for.
-       */
-      enabled: boolean;
-      /**
-       * Format: date-time
-       * @description When the job last ticked, whatever came of it. Null before its first pass.
-       */
-      last_run_at: string | null;
-      /**
-       * @description `partial` — the pass finished but skipped work it could not do (a retention pass that could not sweep one workspace and swept the rest).
-       * @enum {string|null}
-       */
-      last_status: 'ok' | 'partial' | 'skipped' | 'error' | 'disabled' | null;
-      /** @description The error's class, never its message — driver messages can carry connection strings. */
-      last_error_class?: string;
-    };
-    /**
-     * @description The `events` monthly partition maintenance (SEMA-MIMARI.8.4c · PLAN
-     *     §D187). Not a scheduler job: every API process runs it at boot and
-     *     every `interval_ms`, whatever `SCHEDULER_ENABLED` says, opening each
-     *     month from `months_behind` before the current one to `months_ahead`
-     *     after it. A month that has no partition when its first event arrives
-     *     sends every event of that month to the unindexed `events_default`
-     *     catch-all, so a failing pass is worth noticing three months early —
-     *     which is what this block is for. It never changes the status code:
-     *     the process still serves, and restarting it fixes nothing.
-     */
-    EventPartitionsHealth: {
-      interval_ms: number;
-      months_ahead: number;
-      months_behind: number;
-      /**
-       * Format: date-time
-       * @description When the last pass finished, whatever came of it. Null only before the boot pass.
-       */
-      last_run_at: string | null;
-      /**
-       * @description `error` when at least one month of the last pass failed.
-       * @enum {string|null}
-       */
-      last_status: 'ok' | 'error' | null;
-      /** @description Failed passes in a row; back to 0 on the first clean one. */
-      consecutive_errors: number;
-      /** @description The months the last pass could not open or secure. Empty when it was clean. */
-      failed_months: {
-        /** @example 2026-12 */
-        month: string;
-        /**
-         * @description The SQLSTATE the database answered with — `42501` the
-         *     runtime role lacks the owner's rights (the maintenance
-         *     functions lost SECURITY DEFINER), `23514` rows for that
-         *     month already sit in `events_default` (the owner releases
-         *     them — `docs/runbooks/event-partitions.md`), `55P03` a lock
-         *     was not free within a second (retried next pass). When the
-         *     database never answered, the error's class. Never the
-         *     message.
-         * @example 42501
-         * @example 23514
-         * @example 55P03
-         */
-        error_code: string;
-      }[];
-    };
-    /**
-     * @description The durable AI job queue (tm 289.5 · ADR-11a · GV-02), across every
-     *     workspace: the replies visitor messages are still owed. A queue that
-     *     grows, or whose oldest job keeps ageing, means no worker is taking
-     *     jobs; past 120 s a job is handed to a person instead of answered.
-     *     Body only, never the status code.
-     */
-    AiJobsHealth: {
-      /** @description Jobs waiting for a worker, those handed back for a retry included. */
-      pending: number;
-      /** @description Jobs a worker holds right now. */
-      running: number;
-      /**
-       * @description Seconds since the oldest unfinished (`pending` or `running`) job
-       *     was written, by the database's clock. Null when there is none.
-       */
-      oldest_age_s: number | null;
-    };
-    HealthProviderWarning: {
-      /**
-       * @description The key the dependency has under `providers` (`crawler` is not listed there).
-       * @enum {string}
-       */
-      provider: 'virus_scanner' | 'payment' | 'crawler';
-      /** @description One sentence for an operator — what the mock does and which setting replaces it. */
-      message: string;
-    };
-    /**
-     * @description Which implementation each mockable dependency (M-ENV-b · §D113/K3)
-     *     currently runs, read straight off the validated environment — so an
-     *     operator can tell "mail is really SMTP" from "mail writes to disk"
-     *     without reading `.env` on the box. Every dependency here is mocked or
-     *     file-backed by default (MASTER-PROMPT "dış servisler mock'lanır");
-     *     none of these becoming a real provider changes this endpoint's shape.
-     */
-    HealthProviders: {
-      /** @example file */
-      mail: string;
-      /** @example file */
-      push: string;
-      /** @example local */
-      storage: string;
-      /** @example mock */
-      payment: string;
-      /** @example file */
-      siem: string;
-      /** @example mock */
-      llm: string;
-      /** @example mock */
-      virus_scanner: string;
     };
     TokenGrant: {
       access_token: string;

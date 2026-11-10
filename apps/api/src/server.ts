@@ -332,7 +332,7 @@ export async function buildServer({
   }
   // A mock where real people use the system — the virus scanner (pilot
   // included), the card processor outside the pilot, the crawler inside it
-  // (tm 433 · tm 312.3): said at boot and in the admin `/health` body, never a
+  // (tm 433 · tm 312.3): said at boot and in the published health snapshot, never a
   // refusal (owner, 2026-10-10 and 2026-11-06 S18).
   logMockProviderWarnings(app.log, env);
   app.decorate('geo', geo);
@@ -677,7 +677,7 @@ export async function buildServer({
 
   await app.register(
     async (api) => {
-      await api.register(healthRoutes, { env, version: VERSION });
+      await api.register(healthRoutes);
       await api.register(deploymentRoutes, { env });
       await api.register(authRoutes, { env, mailer });
       await api.register(impersonationRoutes);

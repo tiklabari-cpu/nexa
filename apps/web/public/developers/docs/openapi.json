@@ -3465,7 +3465,7 @@
         ],
         "operationId": "putUpload",
         "summary": "Send the bytes for a granted upload",
-        "description": "Authorised by the signature in the query string, not by a session — it is\nnarrower than one: a single key, type and length, inside a short window.\nThe declared type and length are compared against what the request\nactually carries, so a grant for a small PNG cannot deliver a large\nanything-else.\n\nEvery rejection answers the same way. Telling a caller which part of a\nforgery failed is how a forgery gets refined.\n\nThe bytes are virus-scanned before anything is stored; a scanner that\ncannot be reached refuses the upload (503) rather than storing it\nunscanned. A `knowledge_document`'s type is then read from its bytes —\n`%PDF-` at the first byte, or a ZIP listing `word/document.xml` and no\nVBA project — and must be the type the grant was for: anything else\n(a renamed executable, a `.docm`) is a 400 with `details.reason`\n`unsupported_type`, and nothing is stored.\n",
+        "description": "Authorised by the signature in the query string, not by a session — it is\nnarrower than one: a single key, type and length, inside a short window,\nand a single use. The granted length is compared against the bytes the\nrequest actually sent, so a grant for a small PNG cannot deliver a large\nanything-else.\n\nEvery rejection of the URL itself answers the same way (403). Telling a\ncaller which part of a forgery failed is how a forgery gets refined.\n\n**The type.** The request's own `Content-Type` header\n(parameters such as `; charset=` ignored) must name the granted type —\nsend the bytes under the type you asked for; a different one is a 400\nwith `details.reason` `content_type_mismatch`. Every type arrives as raw\nbytes, `text/plain` and `application/json` included.\n\nThe bytes are virus-scanned before anything is stored; a scanner that\ncannot be reached refuses the upload (503) rather than storing it\nunscanned. Their type is then read from the bytes themselves and must be\nthe type the grant was for, with nothing stored otherwise:\n\n- an **attachment** whose granted type has a known signature (PNG, JPEG,\n  GIF, WebP, PDF, the Word/Excel/PowerPoint formats, ZIP and other\n  archives, common audio and video) must open with it; a text type\n  (`text/*`, JSON, XML) must be text — no binary signature, no NUL in its\n  first 8,000 bytes; any other type may not be a native executable.\n  Anything else — a program renamed `.pdf` — is a 400 with\n  `details.reason` `content_type_mismatch`.\n- a **`knowledge_document`** must be `%PDF-` at the first byte, or a ZIP\n  listing `word/document.xml` and no VBA project; anything else (a\n  renamed executable, a `.docm`) is a 400 with `details.reason`\n  `unsupported_type`.\n\n**One use.** The first PUT that stores bytes spends the key: any\nlater PUT to it — even with the same bytes, inside the URL's window — is\na `409 upload_already_written` and changes nothing, so a file a\nconversation shows is the file every reader gets. A PUT that was refused\nor failed does not spend the key. A client retrying after a lost\nresponse that meets the 409 asks `POST /uploads` for a new URL.\n",
         "security": [],
         "parameters": [
           {
@@ -3546,7 +3546,7 @@
             }
           },
           "400": {
-            "description": "The virus scan refused the file (`details.reason` `virus_detected`),\nor a `knowledge_document`'s bytes are not the document type granted\n(`unsupported_type`). Nothing was stored.\n",
+            "description": "The virus scan refused the file (`details.reason` `virus_detected`);\nthe request's `Content-Type`, or an attachment's bytes, are not the\ngranted type (`content_type_mismatch`); or a `knowledge_document`'s\nbytes are not the document type granted (`unsupported_type`).\nNothing was stored.\n",
             "content": {
               "application/json": {
                 "schema": {
@@ -3556,7 +3556,17 @@
             }
           },
           "403": {
-            "description": "The URL is expired, forged, or does not match the bytes sent",
+            "description": "The URL is expired, forged, or its length does not match the bytes sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`upload_already_written` — an earlier PUT already stored a file under\nthis key. Nothing was changed; ask `POST /uploads` for a new URL.\n",
             "content": {
               "application/json": {
                 "schema": {
@@ -3566,7 +3576,7 @@
             }
           },
           "503": {
-            "description": "The virus scanner could not be reached; nothing was stored.",
+            "description": "The virus scanner, or the store of single-use claims, could not be\nreached; nothing was stored.\n",
             "content": {
               "application/json": {
                 "schema": {
@@ -6911,6 +6921,7 @@
           "ticket_no_recipient",
           "too_many_requests",
           "unsupported_version",
+          "upload_already_written",
           "users_limit_reached",
           "validation",
           "website_exists",
@@ -7098,7 +7109,7 @@
     {
       "id": "errors",
       "title": "Errors",
-      "markdown": "Every error has the same envelope. Switch on `error.type`; the HTTP status follows from it and the two never disagree.\n\n```json\n{\n  \"error\": {\n    \"type\": \"validation\",\n    \"message\": \"limit must be between 1 and 100\",\n    \"request_id\": \"01JAB2…\",\n    \"details\": { \"field\": \"limit\" }\n  }\n}\n```\n\nQuote `request_id` when you contact support. `details` is optional and depends on the type.\n\n| Type | HTTP status |\n| --- | --- |\n| `unsupported_version` | 400 |\n| `validation` | 400 |\n| `authentication` | 401 |\n| `invitation_requires_sign_in` | 401 |\n| `two_factor_required` | 401 |\n| `license_expired` | 402 |\n| `authorization` | 403 |\n| `challenge_required` | 403 |\n| `customer_banned` | 403 |\n| `message_rejected` | 403 |\n| `not_allowed` | 403 |\n| `recipient_not_allowed` | 403 |\n| `brand_not_found` | 404 |\n| `greeting_not_found` | 404 |\n| `group_not_found` | 404 |\n| `not_found` | 404 |\n| `request_timeout` | 408 |\n| `account_exists` | 409 |\n| `ai_agent_exists` | 409 |\n| `ai_config_revision_conflict` | 409 |\n| `ai_config_version_state` | 409 |\n| `ai_guardrail_setup_incomplete` | 409 |\n| `ai_mode_transition_refused` | 409 |\n| `ai_return_blocked` | 409 |\n| `ai_suggestion_state` | 409 |\n| `ai_test_run_in_progress` | 409 |\n| `brand_exists` | 409 |\n| `chat_claim_refused` | 409 |\n| `chat_inactive` | 409 |\n| `fallback_rule_exists` | 409 |\n| `group_expertise_missing` | 409 |\n| `group_in_use` | 409 |\n| `group_offline` | 409 |\n| `group_protected` | 409 |\n| `group_topic_role_taken` | 409 |\n| `group_unavailable` | 409 |\n| `groups_offline` | 409 |\n| `knowledge_job_in_progress` | 409 |\n| `knowledge_source_exists` | 409 |\n| `ownership_transfer_state` | 409 |\n| `qa_review_state` | 409 |\n| `reply_requires_assignment` | 409 |\n| `takeover_conflict` | 409 |\n| `template_locked` | 409 |\n| `ticket_exists` | 409 |\n| `ticket_merged` | 409 |\n| `ticket_no_recipient` | 409 |\n| `two_factor_already_enabled` | 409 |\n| `website_exists` | 409 |\n| `wrong_product_version` | 409 |\n| `chat_anonymized` | 410 |\n| `misdirected_request` | 421 |\n| `limit_reached` | 429 |\n| `pending_requests_limit_reached` | 429 |\n| `too_many_requests` | 429 |\n| `users_limit_reached` | 429 |\n| `internal` | 500 |\n| `service_unavailable` | 503 |"
+      "markdown": "Every error has the same envelope. Switch on `error.type`; the HTTP status follows from it and the two never disagree.\n\n```json\n{\n  \"error\": {\n    \"type\": \"validation\",\n    \"message\": \"limit must be between 1 and 100\",\n    \"request_id\": \"01JAB2…\",\n    \"details\": { \"field\": \"limit\" }\n  }\n}\n```\n\nQuote `request_id` when you contact support. `details` is optional and depends on the type.\n\n| Type | HTTP status |\n| --- | --- |\n| `unsupported_version` | 400 |\n| `validation` | 400 |\n| `authentication` | 401 |\n| `invitation_requires_sign_in` | 401 |\n| `two_factor_required` | 401 |\n| `license_expired` | 402 |\n| `authorization` | 403 |\n| `challenge_required` | 403 |\n| `customer_banned` | 403 |\n| `message_rejected` | 403 |\n| `not_allowed` | 403 |\n| `recipient_not_allowed` | 403 |\n| `brand_not_found` | 404 |\n| `greeting_not_found` | 404 |\n| `group_not_found` | 404 |\n| `not_found` | 404 |\n| `request_timeout` | 408 |\n| `account_exists` | 409 |\n| `ai_agent_exists` | 409 |\n| `ai_config_revision_conflict` | 409 |\n| `ai_config_version_state` | 409 |\n| `ai_guardrail_setup_incomplete` | 409 |\n| `ai_mode_transition_refused` | 409 |\n| `ai_return_blocked` | 409 |\n| `ai_suggestion_state` | 409 |\n| `ai_test_run_in_progress` | 409 |\n| `brand_exists` | 409 |\n| `chat_claim_refused` | 409 |\n| `chat_inactive` | 409 |\n| `fallback_rule_exists` | 409 |\n| `group_expertise_missing` | 409 |\n| `group_in_use` | 409 |\n| `group_offline` | 409 |\n| `group_protected` | 409 |\n| `group_topic_role_taken` | 409 |\n| `group_unavailable` | 409 |\n| `groups_offline` | 409 |\n| `knowledge_job_in_progress` | 409 |\n| `knowledge_source_exists` | 409 |\n| `ownership_transfer_state` | 409 |\n| `qa_review_state` | 409 |\n| `reply_requires_assignment` | 409 |\n| `takeover_conflict` | 409 |\n| `template_locked` | 409 |\n| `ticket_exists` | 409 |\n| `ticket_merged` | 409 |\n| `ticket_no_recipient` | 409 |\n| `two_factor_already_enabled` | 409 |\n| `upload_already_written` | 409 |\n| `website_exists` | 409 |\n| `wrong_product_version` | 409 |\n| `chat_anonymized` | 410 |\n| `misdirected_request` | 421 |\n| `limit_reached` | 429 |\n| `pending_requests_limit_reached` | 429 |\n| `too_many_requests` | 429 |\n| `users_limit_reached` | 429 |\n| `internal` | 500 |\n| `service_unavailable` | 503 |"
     }
   ],
   "x-changelog": [

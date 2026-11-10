@@ -116,6 +116,8 @@ export const common: Messages = {
   'common.errors.two_factor_required': 'Enter your two-factor code to continue.',
   'common.errors.unknown': 'Something went wrong — try again.',
   'common.errors.unsupported_version': 'This page is out of date — reload and try again.',
+  'common.errors.upload_already_written':
+    'This upload link has already been used — attach the file again.',
   'common.errors.users_limit_reached': 'Your plan has no seats left.',
   'common.errors.validation': 'Check the highlighted fields and try again.',
   'common.errors.website_exists': 'That website is already connected.',

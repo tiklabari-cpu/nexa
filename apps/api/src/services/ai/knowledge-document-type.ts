@@ -47,8 +47,35 @@ const MACRO_PART = /(^|\/)vbaproject\.bin$/;
 
 export function identifyKnowledgeDocument(bytes: Buffer): KnowledgeDocumentType {
   if (isPdf(bytes)) return { ok: true, mime: KNOWLEDGE_DOCUMENT_PDF };
+  const office = readOfficePackage(bytes);
+  if (!office.ok) {
+    if (office.why === 'not_zip') return { ok: false, why: 'not_pdf_or_zip' };
+    return { ok: false, why: office.why === 'not_office' ? 'not_word' : office.why };
+  }
+  if (!office.parts.has('word/document.xml')) return { ok: false, why: 'not_word' };
+  return { ok: true, mime: KNOWLEDGE_DOCUMENT_DOCX };
+}
+
+/**
+ * An Office Open XML package's part names, read from its central directory —
+ * lower-cased, as OPC compares them — or why it is not one this API takes.
+ * The walk a DOCX is read with above; an attachment granted as a Word, Excel
+ * or PowerPoint file is held to the same one (`content-sniff.ts`, tm 446), so
+ * the knowledge base and a conversation cannot disagree about what such a file
+ * is. No name may appear twice and no part may be a VBA project, and
+ * `[Content_Types].xml` must be listed; which main part the package must
+ * carry is the caller's question.
+ */
+export type OfficePackage =
+  | { ok: true; parts: ReadonlySet<string> }
+  | {
+      ok: false;
+      why: 'not_zip' | 'zip_unreadable' | 'zip_unsupported' | 'not_office' | 'macro_enabled';
+    };
+
+export function readOfficePackage(bytes: Buffer): OfficePackage {
   if (bytes.length < 4 || bytes.readUInt32LE(0) !== LOCAL_FILE_HEADER) {
-    return { ok: false, why: 'not_pdf_or_zip' };
+    return { ok: false, why: 'not_zip' };
   }
 
   const directory = readZipDirectory(bytes);
@@ -61,13 +88,12 @@ export function identifyKnowledgeDocument(bytes: Buffer): KnowledgeDocumentType 
     seen.add(name);
     if (MACRO_PART.test(name)) return { ok: false, why: 'macro_enabled' };
   }
-  if (!seen.has('[content_types].xml') || !seen.has('word/document.xml')) {
-    return { ok: false, why: 'not_word' };
-  }
-  return { ok: true, mime: KNOWLEDGE_DOCUMENT_DOCX };
+  if (!seen.has('[content_types].xml')) return { ok: false, why: 'not_office' };
+  return { ok: true, parts: seen };
 }
 
-function isPdf(bytes: Buffer): boolean {
+/** `%PDF-` and a version digit at offset 0 — the knowledge base's PDF rule, and an attachment's (tm 446). */
+export function isPdf(bytes: Buffer): boolean {
   if (bytes.length < 8) return false;
   if (bytes.toString('latin1', 0, 5) !== '%PDF-') return false;
   const version = bytes[5]!;

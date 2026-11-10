@@ -17,6 +17,8 @@ interface Script {
   grant: { status: number; body: unknown } | 'network';
   /** What the signed `PUT` does: a status, or `network` to reject. */
   put?: number | 'network';
+  /** The signed PUT's refusal body, when it has one. */
+  putBody?: unknown;
 }
 
 function reply(status: number, body: unknown) {
@@ -40,7 +42,7 @@ function stubFetch(script: Script): void {
       }
       if (init?.method === 'PUT') {
         if (script.put === 'network') throw new TypeError('Failed to fetch');
-        return reply(script.put ?? 200, {});
+        return reply(script.put ?? 200, script.putBody ?? {});
       }
       return reply(200, { items: [] });
     }),
@@ -122,6 +124,21 @@ describe('Composer upload failures', () => {
     await pickFile({ grant: GRANT_OK, put: 500 }, 'tr', PNG);
     expect(await screen.findByText(/Yükleme başarısız oldu \(durum 500\)/)).toBeInTheDocument();
     expect(screen.queryByText(/Upload failed with status/)).not.toBeInTheDocument();
+  });
+
+  it('says a file is not the type its name claims when the PUT reads its bytes (tm 446)', async () => {
+    const mismatch = refusal(
+      'validation',
+      'The contents of this file are not the type it was granted as.',
+      {
+        reason: 'content_type_mismatch',
+      },
+    );
+    await pickFile({ grant: GRANT_OK, put: 400, putBody: mismatch }, 'tr', PNG);
+    const alert = await screen.findByText(/gerçekte bir image\/png dosyası değil/);
+    expect(alert).toBeInTheDocument();
+    expect(screen.queryByText(/durum 400/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/granted as/)).not.toBeInTheDocument();
   });
 
   it('is understandable when the connection drops during the upload (not “Failed to fetch”)', async () => {

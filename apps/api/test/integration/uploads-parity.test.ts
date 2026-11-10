@@ -24,10 +24,12 @@
  *
  *   1. **fail closed on the scanner** — an infected file, and an upload the
  *      scanner could not reach at all, must both end with nothing stored
- *   2. **the signed PUT** — a forged signature, an expired grant, and a grant
- *      replayed against something other than what it authorised
+ *   2. **the signed PUT** — a forged signature, an expired grant, a grant
+ *      replayed against something other than what it authorised, and a second
+ *      PUT to a key the first one already wrote (tm 446)
  *   3. **allow-list and ceiling** — the type and size rules, at the grant step
- *      and again at the PUT, where the bytes can contradict the grant
+ *      and again at the PUT, where the bytes — their length, their signature,
+ *      the request's own Content-Type — can contradict the grant
  *   4. **nosniff, and the type that gets served** — a stored file must come
  *      back inert and typed as the grant vetted it
  *
@@ -79,6 +81,7 @@ import { startFakeBucket } from '../helpers/s3-bucket.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 import { UploadSigner } from '../../src/services/storage/upload-url.js';
 import { EICAR_SIGNATURE } from '../../src/services/storage/virus-scanner.js';
+import { EXE } from '../helpers/document-fixtures.js';
 
 /** A provider, plus a way to see what it is holding without asking the API. */
 interface Backend {
@@ -242,14 +245,23 @@ describe.each(PROVIDERS)('upload security with STORAGE_PROVIDER=$name', ({ start
 
   // --- nosniff, and the type that gets served --------------------------------
 
-  it('serves the type the grant vetted, not the one the uploading request claimed', async () => {
+  it('refuses a PUT whose own Content-Type is not the granted type, then serves the granted one (tm 446)', async () => {
     await server.patch('/settings/security', { allowed_file_types: ['text/plain'] }, auth());
     const markup = Buffer.from('<script>alert(document.domain)</script>', 'utf8');
     const granted = await grant('text/plain', markup.byteLength);
 
-    // The PUT declares `text/html` in its own header. The route signs and
-    // stores the *granted* type, so the header is not a way to choose one.
-    const stored = await put(granted.uploadUrl, markup, 'text/html');
+    // The PUT declares `text/html` in its own header. Before tm 446 the route
+    // compared the URL's type with itself and stored this; the header is now
+    // what the grant is compared with, so it is refused — and says why, since
+    // only the holder of a genuine grant gets this far.
+    const refused = await put(granted.uploadUrl, markup, 'text/html');
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json().error.details.reason).toBe('content_type_mismatch');
+    expect(await backend.stored()).not.toContain(granted.key);
+
+    // Under its own type it lands — `text/plain` arriving as bytes, not as a
+    // string Fastify parsed — and is still served typed and inert.
+    const stored = await put(granted.uploadUrl, markup, 'text/plain; charset=utf-8');
     expect(stored.statusCode, stored.body).toBe(201);
 
     const fetched = await download(granted.fileUrl);
@@ -288,6 +300,20 @@ describe.each(PROVIDERS)('upload security with STORAGE_PROVIDER=$name', ({ start
     expect(refused.statusCode).toBe(400);
     expect(refused.json().error.details.max_file_size_bytes).toBe(10_485_760);
     expect(refused.json()).not.toHaveProperty('upload_url');
+  });
+
+  it('refuses a program sent under a PDF grant, and stores nothing (tm 446)', async () => {
+    // The audit's case (F42): `setup.exe` renamed `terms.pdf`. Allowed type,
+    // exact length, the right header — only the bytes say what it is.
+    const granted = await grant('application/pdf', EXE.byteLength);
+
+    const refused = await put(granted.uploadUrl, EXE, 'application/pdf');
+
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json().error.type).toBe('validation');
+    expect(refused.json().error.details.reason).toBe('content_type_mismatch');
+    expect(await backend.stored()).not.toContain(granted.key);
+    expect((await download(granted.fileUrl)).statusCode).toBe(404);
   });
 
   it('refuses bytes longer than the grant was signed for, and stores nothing', async () => {
@@ -377,7 +403,7 @@ describe.each(PROVIDERS)('upload security with STORAGE_PROVIDER=$name', ({ start
     expect(await backend.stored()).not.toContain(granted.key);
   });
 
-  it('lets a live grant be spent more than once, overwriting — the same either way', async () => {
+  it('spends a grant on its first stored PUT: a second is 409 and the first file stays (tm 446)', async () => {
     const granted = await grant();
     const other = Buffer.from('89504e470d0a1a0a0000000d49484453', 'hex');
     expect(other.byteLength).toBe(PNG.byteLength);
@@ -385,16 +411,30 @@ describe.each(PROVIDERS)('upload security with STORAGE_PROVIDER=$name', ({ start
     expect((await put(granted.uploadUrl, PNG)).statusCode).toBe(201);
     const again = await put(granted.uploadUrl, other);
 
-    // Measured, not desired. A grant is single-*key* but not single-use: until
-    // it expires it will take any bytes of the signed type and length, and the
-    // second set replaces the first. It is pinned here because this file's
-    // question is whether the providers agree, and an overwrite is exactly
-    // where they could stop agreeing — a versioned or object-locked bucket
-    // would answer differently from a filesystem. Making the grant single-use
-    // needs state neither provider has, and is its own item.
-    expect(again.statusCode).toBe(201);
+    // Until tm 446 this pinned the opposite — "single-key, not single-use":
+    // the second set of bytes replaced the first under a key a conversation
+    // already showed and the GET serves as `immutable` for a year (audit F43).
+    // The first PUT that stores bytes now spends the key.
+    expect(again.statusCode).toBe(409);
+    expect(again.json().error.type).toBe('upload_already_written');
     const fetched = await download(granted.fileUrl);
-    expect(Buffer.from(fetched.rawPayload).equals(other)).toBe(true);
+    expect(Buffer.from(fetched.rawPayload).equals(PNG)).toBe(true);
+  });
+
+  it('refuses the second PUT from the store itself once Redis has forgotten the claim (tm 446)', async () => {
+    const granted = await grant();
+    expect((await put(granted.uploadUrl, PNG)).statusCode).toBe(201);
+
+    // A Redis restart inside the grant's window: the claim is gone, the bytes
+    // are not. `store.exists` is the durable record — the one question here a
+    // provider could answer wrongly, which is why it is asked of both.
+    await server.app.redis.del(`siyahtus:upload-claim:${granted.key}`);
+    const other = Buffer.from('89504e470d0a1a0a0000000d49484453', 'hex');
+    const again = await put(granted.uploadUrl, other);
+
+    expect(again.statusCode).toBe(409);
+    const fetched = await download(granted.fileUrl);
+    expect(Buffer.from(fetched.rawPayload).equals(PNG)).toBe(true);
   });
 
   // --- Fail closed on the scanner (FR-MOD-08.9.4) ----------------------------

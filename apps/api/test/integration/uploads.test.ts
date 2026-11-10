@@ -297,6 +297,34 @@ describe('uploads', () => {
     expect(granted.json().file_url).toContain(`/uploads/${fx.a.licenseId}-`);
   });
 
+  it('lets one of two PUTs racing on the same grant store its bytes, never both (tm 446)', async () => {
+    const granted = await server.post(
+      '/uploads',
+      { content_type: 'image/png', size_bytes: PNG.byteLength },
+      auth(tokenA),
+    );
+    expect(granted.statusCode).toBe(201);
+    const grant = granted.json();
+    const other = Buffer.from('89504e470d0a1a0a0000000d49484453', 'hex');
+    const send = (payload: Buffer) =>
+      server.app.inject({
+        method: 'PUT',
+        url: grant.upload_url,
+        headers: { 'content-type': 'image/png' },
+        payload,
+      });
+
+    // Both pass every check on the bytes; only the claim decides.
+    const [left, right] = await Promise.all([send(PNG), send(other)]);
+    expect([left.statusCode, right.statusCode].sort()).toEqual([201, 409]);
+
+    // Whichever won is what every reader of the key gets, for good.
+    const winner = left.statusCode === 201 ? PNG : other;
+    const fetched = await server.get(grant.file_url.replace('/api/v1', ''), auth(tokenA));
+    expect(fetched.statusCode).toBe(200);
+    expect(Buffer.from(fetched.rawPayload).equals(winner)).toBe(true);
+  });
+
   it('refuses a key that is not in our own format', async () => {
     const traversal = await server.get('/uploads/..%2F..%2Fetc%2Fpasswd', auth(tokenA));
     expect(traversal.statusCode).toBe(404);

@@ -4760,7 +4760,9 @@ function formatBytes(bytes: number, locale: WidgetLocale): string {
 /**
  * Why an upload was refused. The grant endpoint answers 400 `validation` with the
  * licence's limit in `details` (`uploads.ts`); a 413/415 from the byte PUT or a
- * proxy in front of it means the same two things. Anything else stays generic.
+ * proxy in front of it means the same two things, and the PUT's 400
+ * `content_type_mismatch` (tm 446: the bytes are not the type the name claims)
+ * is a type refusal too. Anything else stays generic.
  */
 function uploadRefusal(error: unknown, t: WidgetTranslate, locale: WidgetLocale): string {
   if (error instanceof WidgetApiError) {
@@ -4769,7 +4771,11 @@ function uploadRefusal(error: unknown, t: WidgetTranslate, locale: WidgetLocale)
       return t('error.uploadTooLargeMax', { max: formatBytes(max, locale) });
     }
     if (error.status === 413) return t('error.uploadTooLarge');
-    if (error.details?.allowed_file_types !== undefined || error.status === 415) {
+    if (
+      error.details?.allowed_file_types !== undefined ||
+      error.details?.reason === 'content_type_mismatch' ||
+      error.status === 415
+    ) {
       return t('error.uploadType');
     }
   }

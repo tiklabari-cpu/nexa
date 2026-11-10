@@ -281,6 +281,8 @@ export const inbox: Messages = {
   'inbox.composer.upload.tooLarge':
     'Bu dosya, çalışma alanının izin verdiğinden büyük (en fazla {max}).',
   'inbox.composer.upload.tooLargeUnknown': 'Bu dosya yüklemek için çok büyük.',
+  'inbox.composer.upload.typeMismatch':
+    'Bu dosya gerçekte bir {type} dosyası değil — adı bir türü, içeriği başka bir türü gösteriyor.',
   'inbox.composer.upload.failedStatus': 'Yükleme başarısız oldu (durum {status}). Yeniden deneyin.',
   'inbox.composer.send.pending': 'Gönderiliyor…',
   'inbox.composer.send.cta': 'Gönder',

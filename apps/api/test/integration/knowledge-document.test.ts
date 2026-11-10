@@ -218,6 +218,34 @@ describe('knowledge documents — upload and source (FR-MOD-06.3.2)', () => {
     }
   });
 
+  it('holds a document PUT to the same Content-Type and single use as an attachment (tm 446)', async () => {
+    const bytes = docx(['Çekim talepleri 24 saat içinde onaylanır.']);
+    const granted = await grant(await editor('a'), KNOWLEDGE_DOCUMENT_DOCX, bytes.byteLength);
+    expect(granted.status).toBe(201);
+    const uploadId = granted.body.upload_id as string;
+    const send = (contentType: string) =>
+      server.app.inject({
+        method: 'PUT',
+        url: granted.body.upload_url as string,
+        headers: { 'content-type': contentType },
+        payload: bytes,
+      });
+
+    // A real DOCX under the PDF type in the request's own header: refused
+    // before its bytes are read, nothing stored.
+    const mislabelled = await send(PDF);
+    expect(mislabelled.statusCode).toBe(400);
+    expect(mislabelled.json().error.details.reason).toBe('content_type_mismatch');
+    expect(storedAt('a', uploadId)).toBe(false);
+
+    // Under its own type it lands, once; the same URL again is a 409.
+    expect((await send(KNOWLEDGE_DOCUMENT_DOCX)).statusCode).toBe(201);
+    expect(storedAt('a', uploadId)).toBe(true);
+    const again = await send(KNOWLEDGE_DOCUMENT_DOCX);
+    expect(again.statusCode).toBe(409);
+    expect(again.json().error.type).toBe('upload_already_written');
+  });
+
   it('refuses an EICAR file, inside a PDF or on its own, storing nothing (FR-MOD-08.9.4)', async () => {
     for (const bytes of [
       pdf(['Bonus'], { trailer: EICAR_SIGNATURE }),

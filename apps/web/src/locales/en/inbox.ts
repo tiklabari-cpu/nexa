@@ -300,6 +300,8 @@ export const inbox: Messages = {
     'Files of type {type} are not allowed. Allowed types: {allowed}.',
   'inbox.composer.upload.tooLarge': 'That file is larger than this workspace allows (up to {max}).',
   'inbox.composer.upload.tooLargeUnknown': 'That file is too large to upload.',
+  'inbox.composer.upload.typeMismatch':
+    'That file is not really a {type} file — its name says one type, its contents another.',
   'inbox.composer.upload.failedStatus': 'The upload failed (status {status}). Try again.',
   'inbox.composer.send.pending': 'Sending…',
   'inbox.composer.send.cta': 'Send',

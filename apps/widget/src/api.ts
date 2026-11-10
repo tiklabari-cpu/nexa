@@ -620,21 +620,26 @@ export class WidgetApi {
    * `file_url` to hang on the message's `attachment_url`.
    */
   async upload(file: File): Promise<string> {
-    const grant = await this.#request<{ upload_url: string; file_url: string }>(
-      'POST',
-      '/uploads',
-      { filename: file.name, content_type: file.type, size_bytes: file.size },
-    );
-    // The PUT is authorised by the signature in the URL, not the token, and its
-    // body is raw bytes. `upload_url` is root-relative; resolve it against the
-    // API base so it does not hit the widget's own origin.
-    const response = await fetch(new URL(grant.upload_url, this.baseUrl).toString(), {
-      method: 'PUT',
-      headers: { 'content-type': file.type },
-      body: file,
-    });
-    if (!response.ok) throw await failure(response);
-    return grant.file_url;
+    // An upload URL is single-use (tm 446): a 409 means its key already holds
+    // a file this attempt cannot vouch for, so it asks for a fresh grant, once.
+    for (let attempt = 0; ; attempt++) {
+      const grant = await this.#request<{ upload_url: string; file_url: string }>(
+        'POST',
+        '/uploads',
+        { filename: file.name, content_type: file.type, size_bytes: file.size },
+      );
+      // The PUT is authorised by the signature in the URL, not the token, and its
+      // body is raw bytes under the granted type (the server compares the two).
+      // `upload_url` is root-relative; resolve it against the API base so it does
+      // not hit the widget's own origin.
+      const response = await fetch(new URL(grant.upload_url, this.baseUrl).toString(), {
+        method: 'PUT',
+        headers: { 'content-type': file.type },
+        body: file,
+      });
+      if (response.ok) return grant.file_url;
+      if (response.status !== 409 || attempt) throw await failure(response);
+    }
   }
 
   /** Fetch an attachment's bytes with the token, for inline rendering. */

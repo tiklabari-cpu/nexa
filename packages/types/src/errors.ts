@@ -287,6 +287,13 @@ export const ERROR_TYPES = [
   // show a code screen or a login form.
   'two_factor_required',
   'unsupported_version',
+  // SiyahTuş addition — single-use upload URLs (tm 446 · audit F43). A signed
+  // `PUT /uploads/{key}` to a key that already holds a file: the first PUT
+  // that stored bytes spent the grant. 409 like `knowledge_source_exists` —
+  // the URL is genuine and live, the key's state refused it — and a client
+  // asks for a new grant rather than replacing what a conversation may
+  // already be showing.
+  'upload_already_written',
   'users_limit_reached',
   'validation',
   // SiyahTuş addition. Websites (FR-MOD-08.5.2) are not in the source catalogue
@@ -374,6 +381,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   // the missing piece, not a different kind of failure.
   two_factor_required: 401,
   unsupported_version: 400,
+  upload_already_written: 409,
   users_limit_reached: 429,
   validation: 400,
   website_exists: 409,

@@ -20,6 +20,7 @@ import {
   licenseOfKnowledgeKey,
   licenseOfMailKey,
   licenseOfStoredKey,
+  mediaTypeOf,
   storedObjectPath,
   UPLOAD_PATH_PREFIX,
   UploadSigner,
@@ -173,5 +174,45 @@ describe('invoice PDF keys (tm 383 · BL-02)', () => {
     const key = buildInvoiceKey(42n);
     expect(licenseOfInvoiceKey(key.replace('.pdf', '.csv'))).toBeNull();
     expect(licenseOfInvoiceKey(`../${key}`)).toBeNull();
+  });
+});
+
+describe('the type a PUT carries (tm 446 · audit F42)', () => {
+  it('reads the media type from a Content-Type header, parameters and case aside', () => {
+    expect(mediaTypeOf('image/png')).toBe('image/png');
+    expect(mediaTypeOf(' Text/Plain ; charset=UTF-8')).toBe('text/plain');
+    expect(mediaTypeOf(['application/pdf', 'text/html'])).toBe('application/pdf');
+    expect(mediaTypeOf(undefined)).toBe('');
+    expect(mediaTypeOf('')).toBe('');
+  });
+
+  it('refuses a genuine, live grant whose request names another type, and only past the signature', () => {
+    const signer = new UploadSigner('test-signing-key-test-signing-key');
+    const grant = {
+      key: buildKey(42n, 'application/pdf'),
+      contentType: 'application/pdf',
+      sizeBytes: 10,
+      expiresAt: Math.floor(Date.now() / 1000) + 60,
+    };
+    const signed = { ...grant, signature: signer.sign(grant) };
+
+    expect(signer.verify(signed, { contentType: 'application/pdf', sizeBytes: 10 })).toEqual({
+      ok: true,
+      grant,
+    });
+    expect(signer.verify(signed, { contentType: 'APPLICATION/PDF', sizeBytes: 10 })).toMatchObject({
+      ok: true,
+    });
+    for (const header of ['application/x-msdownload', 'text/html', '']) {
+      expect(signer.verify(signed, { contentType: header, sizeBytes: 10 }), header).toEqual({
+        ok: false,
+        reason: 'content_type_mismatch',
+      });
+    }
+    // A forged signature says `bad_signature` whatever the header is: the
+    // mismatch is only ever reported to the holder of a real grant.
+    expect(
+      signer.verify({ ...signed, signature: 'AAAA' }, { contentType: 'text/html', sizeBytes: 10 }),
+    ).toEqual({ ok: false, reason: 'bad_signature' });
   });
 });

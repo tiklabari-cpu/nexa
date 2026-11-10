@@ -15,14 +15,16 @@ export interface UploadedAttachment {
   name: string;
 }
 
-/** The signed `PUT` was refused: carries the status, never a sentence. */
+/** The signed `PUT` was refused: carries the status and `details.reason`, never a sentence. */
 export class UploadHttpError extends Error {
   readonly status: number;
+  readonly reason: string | null;
 
-  constructor(status: number) {
+  constructor(status: number, reason: string | null = null) {
     super(`upload PUT ${status}`);
     this.name = 'UploadHttpError';
     this.status = status;
+    this.reason = reason;
   }
 }
 
@@ -52,6 +54,11 @@ export function uploadFailureMessage(t: TFunction, error: unknown, file?: File):
     return t(errorMessageKey(error));
   }
   if (error instanceof UploadHttpError) {
+    // The PUT reads the file's bytes (tm 446): a JPEG renamed `.png` is
+    // refused for what it is, which a bare status would not say.
+    if (error.reason === 'content_type_mismatch') {
+      return t('inbox.composer.upload.typeMismatch', { type: file?.type || file?.name || '?' });
+    }
     return error.status === 413
       ? t('inbox.composer.upload.tooLargeUnknown')
       : t('inbox.composer.upload.failedStatus', { status: error.status });
@@ -68,24 +75,43 @@ function formatFileSize(bytes: number): string {
 }
 
 export async function uploadAttachment(api: ApiClient, file: File): Promise<UploadedAttachment> {
-  const grant = await api.post<{ upload_url: string; file_url: string }>('/uploads', {
-    filename: file.name,
-    content_type: file.type,
-    size_bytes: file.size,
-  });
+  // An upload URL is single-use (tm 446): a 409 means its key already holds a
+  // file — an earlier attempt of ours whose answer was lost, or someone else's
+  // bytes. Either way the message must point at a file this attempt wrote, so
+  // a 409 asks for a fresh grant, once, rather than counting as success.
+  for (let attempt = 0; ; attempt += 1) {
+    const grant = await api.post<{ upload_url: string; file_url: string }>('/uploads', {
+      filename: file.name,
+      content_type: file.type,
+      size_bytes: file.size,
+    });
 
-  // The PUT is authorised by the signature inside the URL, not the session, and
-  // its body is raw bytes — so it bypasses the JSON client and goes to `fetch`
-  // directly. The dev proxy sends `/api/...` to the API just the same.
-  const response = await fetch(grant.upload_url, {
-    method: 'PUT',
-    headers: { 'Content-Type': file.type },
-    body: file,
-    credentials: 'same-origin',
-  });
-  if (!response.ok) {
-    throw new UploadHttpError(response.status);
+    // The PUT is authorised by the signature inside the URL, not the session,
+    // and its body is raw bytes — so it bypasses the JSON client and goes to
+    // `fetch` directly. The dev proxy sends `/api/...` to the API just the same.
+    // `Content-Type` must be the granted type: the server compares the two.
+    const response = await fetch(grant.upload_url, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type },
+      body: file,
+      credentials: 'same-origin',
+    });
+    if (response.ok) {
+      return { fileUrl: grant.file_url, contentType: file.type, name: file.name };
+    }
+    if (response.status === 409 && attempt === 0) continue;
+    throw new UploadHttpError(response.status, await refusalReason(response));
   }
+}
 
-  return { fileUrl: grant.file_url, contentType: file.type, name: file.name };
+/** The refusal's `details.reason`, or null when the body carries none. */
+async function refusalReason(response: Response): Promise<string | null> {
+  try {
+    const body = (await response.json()) as { error?: { details?: { reason?: unknown } } } | null;
+    const reason = body?.error?.details?.reason;
+    return typeof reason === 'string' ? reason : null;
+  } catch {
+    // A proxy's HTML error page, or no body at all.
+    return null;
+  }
 }

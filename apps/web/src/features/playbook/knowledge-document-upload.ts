@@ -96,29 +96,38 @@ export function documentRequestErrorKey(error: unknown): string | null {
  */
 export async function uploadKnowledgeDocument(api: ApiClient, file: File): Promise<string> {
   const mime = knowledgeDocumentMimeFor(file.name, file.type) as KnowledgeDocumentMimeType;
-  const grant = await api.post<{ upload_url: string; upload_id: string }>('/uploads', {
-    content_type: mime,
-    size_bytes: file.size,
-    purpose: 'knowledge_document',
-  });
-  const response = await fetch(grant.upload_url, {
-    method: 'PUT',
-    headers: { 'Content-Type': mime },
-    body: file,
-    credentials: 'same-origin',
-  });
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as {
-      error?: { type?: string; message?: string; details?: Record<string, unknown> };
-    } | null;
-    throw new ApiClientError({
-      // The envelope's type is read off the wire; `errorMessageKey` narrows it.
-      type: (body?.error?.type ?? 'internal') as ApiClientError['type'],
-      status: response.status,
-      message: body?.error?.message ?? 'The document upload was refused.',
-      requestId: response.headers.get('x-request-id') ?? '',
-      ...(body?.error?.details ? { details: body.error.details } : {}),
+  // An upload URL is single-use (tm 446): a 409 means its key already holds a
+  // file this attempt cannot vouch for, so it asks for a fresh grant, once.
+  for (let attempt = 0; ; attempt += 1) {
+    const grant = await api.post<{ upload_url: string; upload_id: string }>('/uploads', {
+      content_type: mime,
+      size_bytes: file.size,
+      purpose: 'knowledge_document',
     });
+    // `Content-Type` must be the granted type: the server compares the two.
+    const response = await fetch(grant.upload_url, {
+      method: 'PUT',
+      headers: { 'Content-Type': mime },
+      body: file,
+      credentials: 'same-origin',
+    });
+    if (response.ok) return grant.upload_id;
+    if (response.status === 409 && attempt === 0) continue;
+    throw await documentUploadRefusal(response);
   }
-  return grant.upload_id;
+}
+
+/** The PUT's refusal as the `ApiClientError` the JSON client would have thrown. */
+async function documentUploadRefusal(response: Response): Promise<ApiClientError> {
+  const body = (await response.json().catch(() => null)) as {
+    error?: { type?: string; message?: string; details?: Record<string, unknown> };
+  } | null;
+  return new ApiClientError({
+    // The envelope's type is read off the wire; `errorMessageKey` narrows it.
+    type: (body?.error?.type ?? 'internal') as ApiClientError['type'],
+    status: response.status,
+    message: body?.error?.message ?? 'The document upload was refused.',
+    requestId: response.headers.get('x-request-id') ?? '',
+    ...(body?.error?.details ? { details: body.error.details } : {}),
+  });
 }

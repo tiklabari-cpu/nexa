@@ -16995,12 +16995,12 @@
         "description": "`active eq \"false\"` tırnaklı değer string kaldığı için `!(value as boolean)` false veriyor ve aktif kullanıcılar dönüyor; reconciliation yanlış kümeyle çalışıyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F41. Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/routes/scim.ts:378` `if (attribute === 'active') return { suspended: !(value as boolean) };`; `apps/api/src/lib/scim.ts:~292-297` tırnaklı değer string.\n\nYAPILACAK: `active` için boolean true/false ve string 'true'/'false' (büyük/küçük harf duyarsız) kabul; başka değer → SCIM 400 `invalidFilter` (mevcut `rejectFilter`).\n\nTUZAK: SCIM hata gövdesi biçimi RFC 7644 (mevcut yardımcıyı kullan).\n\nKAPSAM DIŞI: diğer filtre öznitelikleri.\nDENETİM BULGULARI: F41",
         "testStrategy": "api entegrasyon: `active eq \"false\"` → yalnız askıdaki kullanıcılar; `active eq false` aynı; `active eq \"maybe\"` → 400 invalidFilter. Mutasyon: string dönüşümünü kaldır → kırmızı. DoD: CONVENTIONS §1.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-10T08:24:40.204Z",
+        "updatedAt": "2026-11-10T10:42:15.424Z",
         "subtasks": []
       },
       {
@@ -17778,9 +17778,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-10T08:24:40.205Z",
+      "lastModified": "2026-11-10T10:42:15.426Z",
       "taskCount": 478,
-      "completedCount": 437,
+      "completedCount": 438,
       "tags": [
         "master"
       ]

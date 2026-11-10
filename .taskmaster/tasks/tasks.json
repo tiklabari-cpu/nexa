@@ -16941,12 +16941,12 @@
         "description": "(tm 441) Tek kiracıdaki hata (ör. 10 sn transaction zaman aşımı P2028) tüm saklama turunu durduruyor; sabit sıralama yüzünden sonraki kiracılar hiç taranmıyor. (tm 447) Saklama taraması varsayılan olarak kapalı (RETENTION_ENABLED=false) ama panel ve API \"30 gün sonra siliniyor\" diyor; pilotta hiçbir şey silinmiyor.",
         "details": "BİRLEŞİK GÖREV (sahip onayı 2026-11-07): tm 441, tm 447 aynı alana dokunduğu için tek pencerede yapılır; DoD kapısı bir kez koşar.\nBölümler sırayla yapılır. Her bölüm kendi kabul ölçütüyle kapanır; biri yeşil değilse görev done değildir.\nBirleşen görevler (tm 447) cancelled durumda ve buraya işaret ediyor; onlara ayrıca dokunma.\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\n━━ BÖLÜM 1 — tm 441 RETENTION-PER-TENANT-ISOLATION · Saklama turu: kiracı başına hata yalıtımı, partili silme, adil sıralama ━━\nSORUN: Tek kiracıdaki hata (ör. 10 sn transaction zaman aşımı P2028) tüm saklama turunu durduruyor; sabit sıralama yüzünden sonraki kiracılar hiç taranmıyor.\n\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F24. Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/services/retention/retention.ts:201-205` `for (const tenant of tenants) results.push(await this.#pruneTenant(...))` try/catch yok; `:~589-591` StorageUnavailable dışını yeniden fırlatıyor; `apps/api/src/lib/tenant.ts:~50` transaction 10_000 ms.\n\nYAPILACAK: (1) Döngüde kiracı başına try/catch: hatayı log + sonuçta `error` alanı, tura devam. (2) Toplu silmeleri sabit parti boyutuyla (ör. 1000 satır) ayrı kısa transaction'larda yap. (3) Sıralama: en uzun süredir başarılı taranmamış kiracı önce (mevcut bir `last_pruned_at` yoksa tur başına dönen ofset; seçimi HANDOFF'a). Turun genel sonucu: en az bir kiracı hatası varsa job sonucu 'partial'.\n\nTUZAK: Background DB işi resetDatabase ile yarışır (memory background-db-work-races-reset-database). Yeni sütun gerekirse migration §6.3. Job sonuç sözlüğü health testlerinde pinli olabilir (new-scheduler-job-ripples).\n\nKAPSAM DIŞI: RETENTION_ENABLED varsayılanı (sahip 2026-11-06 S13: pilotta saklama kapalı kalır; panel uyarısı tm 447), skill_runs.\nDENETİM BULGULARI: F24\n\n━━ BÖLÜM 2 — tm 447 RETENTION-ENFORCED-FLAG · Saklama ayarı yanıtında enforced alanı; RETENTION_ENABLED kapalıyken panel \"silme etkin değil\" desin ━━\nSORUN: Saklama taraması varsayılan olarak kapalı (RETENTION_ENABLED=false) ama panel ve API \"30 gün sonra siliniyor\" diyor; pilotta hiçbir şey silinmiyor.\n\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F49 (low ← medium) + belge çelişkisi Ç-06. Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/routes/settings.ts:1149` `function serialiseRetention(env, licence)` (~1149-1175); `apps/api/src/config/env.ts:~1384-1387` RETENTION_ENABLED varsayılan false; `.env.production.example:~484` yorumlu; `apps/api/src/.../jobs.ts:~367-369`, `scheduler.ts:~314`.\n\nYAPILACAK: `serialiseRetention` yanıtına `enforced: env.RETENTION_ENABLED` (kontrat-first; mevcut yol, mobil parity değişmez). Panel saklama ayarında enforced=false iken uyarı bandı: \"Otomatik silme bu kurulumda etkin değil; süreler kaydedilir ama uygulanmaz\" (en+tr, i18n kaydı). Pilot env şablonundaki satır ve yorum DEĞİŞMEZ: sahip kararı 2026-11-06 S13 — pilotta saklama kapalı kalır, panel bunu bu bantla söyler.\n\nTUZAK: memory panel-copy-cannot-carry-internal-codes (env adı panel metninde yok), settings-savebar-test-traps (role=status çakışması — banda farklı rol), dark-theme-needs-content-brand-text.\n\nKAPSAM DIŞI: RETENTION_ENABLED varsayılanını değiştirmek.\nDENETİM BULGULARI: F49",
         "testStrategy": "BÖLÜM 1 (tm 441): api entegrasyon: 3 kiracı, ikincisinin prune'u hata fırlatır (enjekte) → birinci ve üçüncü yine temizlenir, sonuç partial; büyük veri partilerle silinir (parti sayısı ≥2); bir sonraki tur hata veren kiracıyı önce dener. Mutasyon: try/catch'i kaldır → kırmızı. DoD: CONVENTIONS §1.\nBÖLÜM 2 (tm 447): api entegrasyon: RETENTION_ENABLED=false → enforced:false; true → true. web birim: enforced=false iken uyarı bandı görünür, true iken yok; axe temiz. DoD: CONVENTIONS §1.\nKapanış: bütün bölümlerin hedefli testleri yeşilken tam DoD kapısı bir kez.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "417"
         ],
         "priority": "medium",
-        "updatedAt": "2026-11-07T11:03:10.748Z",
+        "updatedAt": "2026-11-10T02:01:36.533Z",
         "subtasks": []
       },
       {
@@ -17778,9 +17778,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-09T23:09:18.825Z",
+      "lastModified": "2026-11-10T02:01:36.534Z",
       "taskCount": 478,
-      "completedCount": 433,
+      "completedCount": 434,
       "tags": [
         "master"
       ]

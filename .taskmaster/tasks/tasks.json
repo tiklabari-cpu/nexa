@@ -16967,12 +16967,12 @@
         "description": "A workspace'inde refresh süresi dolunca #drop revoke göndermiyor; B'ye girildiğinde A'nın bildirimleri cihaza gelmeye devam ediyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F36. Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/mobile/src/auth/session.ts:~464` `#drop` → `onSignedOut(null)`; `apps/mobile/src/.../device-token.ts` accessToken null ise revoke yok ama `clearDeviceToken` çalışıyor.\n\nYAPILACAK (varsayılan: sunucu tarafı, istemciye bağımlı değil): api'de cihaz token'ı yeni bir lisans/hesap için kaydedilirken aynı cihaz değerinin diğer kayıtlarını iptal et (aynı push token'ı tek aktif kayıt). İstemci tarafında ek olarak: accessToken yoksa deviceId'yi silmeden önce bekleyen revoke kaydı tut ve sonraki oturumda gönder. Hangisini uyguladığını HANDOFF'a yaz.\n\nTUZAK: Push sağlayıcısı mock (memory provider-seams-mostly-have-no-real-impl). Cihaz kaydı uçları mobil parity sayısını etkilemez (yol eklenmiyorsa).\n\nKAPSAM DIŞI: gerçek push sağlayıcısı (H-09).\nDENETİM BULGULARI: F36",
         "testStrategy": "api entegrasyon: aynı push token'ı lisans A sonra B için kaydet → A kaydı iptal, A bildirimleri o cihaza gitmez. mobil jest (uygulandıysa): token yokken drop → revoke kuyruğu, sonraki oturumda gönderilir. DoD: CONVENTIONS §1.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "updatedAt": "2026-11-10T03:36:47.417Z",
         "subtasks": []
       },
       {
@@ -17778,7 +17778,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-10T03:35:43.525Z",
+      "lastModified": "2026-11-10T03:36:47.417Z",
       "taskCount": 478,
       "completedCount": 435,
       "tags": [

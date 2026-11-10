@@ -1415,6 +1415,13 @@ export interface paths {
      *     returns the original event rather than posting a duplicate. Without it, a
      *     flaky connection turns one message into several.
      *
+     *     A retry that arrives while the first request with its key is still
+     *     being written waits a moment for it: when that request finishes in
+     *     time the retry is its replay (200); otherwise the answer is
+     *     `409 idempotency_in_flight` (with `Retry-After`) and nothing is written —
+     *     send the same key again shortly. A request that failed does not use its
+     *     key up, so the next one with it is written as new.
+     *
      *     Refuses to write to a closed conversation (`chat_inactive`) — resume it
      *     first, which starts a new thread.
      *
@@ -2293,7 +2300,10 @@ export interface paths {
      *     conversation.
      *
      *     Returns 201 when the message was recorded, 200 when an `idempotency_key`
-     *     replayed an earlier one.
+     *     replayed an earlier one. A retry arriving while the first request with
+     *     its key is still being written waits a moment for it, then replays it
+     *     (200) or answers `409 idempotency_in_flight` (with `Retry-After`)
+     *     having written nothing; a request that failed does not use its key up.
      *
      *     **The member's day (ID-02).** `chat_id` is the member's conversation for
      *     the day ("Thread ID" in the panel), and each visit is a connection inside
@@ -26404,6 +26414,7 @@ export interface components {
       | 'group_topic_role_taken'
       | 'group_unavailable'
       | 'groups_offline'
+      | 'idempotency_in_flight'
       | 'impersonation_forbidden_path'
       | 'impersonation_read_only'
       | 'internal'
@@ -29122,9 +29133,10 @@ export interface operations {
       400: components['responses']['BadRequest'];
       404: components['responses']['NotFound'];
       /**
-       * @description The conversation is not active (`chat_inactive`), or a message to the
+       * @description The conversation is not active (`chat_inactive`), a message to the
        *     customer from a teammate it is not assigned to
-       *     (`reply_requires_assignment`)
+       *     (`reply_requires_assignment`), or an earlier request with the same
+       *     `idempotency_key` is still being written (`idempotency_in_flight`)
        */
       409: {
         headers: {
@@ -30302,6 +30314,19 @@ export interface operations {
         };
       };
       404: components['responses']['NotFound'];
+      /**
+       * @description `idempotency_in_flight` — an earlier request with the same
+       *     `idempotency_key` is still being written. Nothing was written; send
+       *     the same key again shortly.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
       429: components['responses']['TooManyRequests'];
     };
   };

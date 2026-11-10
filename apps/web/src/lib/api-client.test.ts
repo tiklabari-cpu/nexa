@@ -203,6 +203,31 @@ describe('ApiClient', () => {
     expect(apiError.isRetryable).toBe(false);
   });
 
+  it('offers a retry for a send whose key is still in flight (tm 448)', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      jsonResponse(
+        {
+          error: {
+            type: 'idempotency_in_flight',
+            message: 'An earlier request with this idempotency_key is still being processed.',
+            request_id: 'rq-9',
+          },
+        },
+        { status: 409, headers: { 'Retry-After': '1' } },
+      ),
+    );
+    const client = new ApiClient({ fetchImpl });
+
+    const error = (await client
+      .post('/chats/X/events', { idempotency_key: 'k' })
+      .catch((e: unknown) => e)) as ApiClientError;
+
+    expect(error.status).toBe(409);
+    expect(error.type).toBe('idempotency_in_flight');
+    // The same key again shortly replays the first request: Retry stays offered.
+    expect(error.isRetryable).toBe(true);
+  });
+
   it('reads Retry-After off a 429', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () =>
       jsonResponse(

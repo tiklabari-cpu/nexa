@@ -120,6 +120,14 @@ export const ERROR_TYPES = [
   'group_topic_role_taken',
   'group_unavailable',
   'groups_offline',
+  // SiyahTuş addition — one send per idempotency key at a time (tm 448 · audit
+  // F27). A message carrying an `idempotency_key` that an earlier request is
+  // still writing: the earlier one has not committed yet, so there is no event
+  // to replay, and writing a second would post the message twice. 409 like
+  // `knowledge_job_in_progress` — the request is fine, the key's state refused
+  // it — and retryable: the same key a moment later replays the event the
+  // first request wrote, or writes it if that request failed.
+  'idempotency_in_flight',
   // SiyahTuş additions — "enter as the customer" (FR-ADMIN-21 · tm 389.15).
   // An operator signed in as a member from the root panel asked for something
   // the session does not allow: a write in a `read_only` session, or — in any
@@ -339,6 +347,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   group_topic_role_taken: 409,
   group_unavailable: 409,
   groups_offline: 409,
+  idempotency_in_flight: 409,
   impersonation_forbidden_path: 403,
   impersonation_read_only: 403,
   internal: 500,

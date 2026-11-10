@@ -62,6 +62,13 @@ function memoryRedis() {
       return 'OK';
     },
     get: async (key: string): Promise<string | null> => values.get(key) ?? null,
+    // A send gives its key's flight back (tm 448): delete if still the holder's.
+    eval: async (_script: string, _keys: number, ...args: Array<string | number>) => {
+      const [key, token] = args.map(String) as [string, string];
+      if (values.get(key) !== token) return 0;
+      values.delete(key);
+      return 1;
+    },
   };
 }
 

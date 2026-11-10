@@ -347,6 +347,13 @@ events:
       returns the original event rather than posting a duplicate. Without it, a
       flaky connection turns one message into several.
 
+      A retry that arrives while the first request with its key is still
+      being written waits a moment for it: when that request finishes in
+      time the retry is its replay (200); otherwise the answer is
+      `409 idempotency_in_flight` (with `Retry-After`) and nothing is written —
+      send the same key again shortly. A request that failed does not use its
+      key up, so the next one with it is written as new.
+
       Refuses to write to a closed conversation (`chat_inactive`) — resume it
       first, which starts a new thread.
 
@@ -392,9 +399,10 @@ events:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "409":
         description: |
-          The conversation is not active (`chat_inactive`), or a message to the
+          The conversation is not active (`chat_inactive`), a message to the
           customer from a teammate it is not assigned to
-          (`reply_requires_assignment`)
+          (`reply_requires_assignment`), or an earlier request with the same
+          `idempotency_key` is still being written (`idempotency_in_flight`)
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }

@@ -51,7 +51,10 @@ events:
       conversation.
 
       Returns 201 when the message was recorded, 200 when an `idempotency_key`
-      replayed an earlier one.
+      replayed an earlier one. A retry arriving while the first request with
+      its key is still being written waits a moment for it, then replays it
+      (200) or answers `409 idempotency_in_flight` (with `Retry-After`)
+      having written nothing; a request that failed does not use its key up.
 
       **The member's day (ID-02).** `chat_id` is the member's conversation for
       the day ("Thread ID" in the panel), and each visit is a connection inside
@@ -198,6 +201,14 @@ events:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: |
+          `idempotency_in_flight` — an earlier request with the same
+          `idempotency_key` is still being written. Nothing was written; send
+          the same key again shortly.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
 typing:

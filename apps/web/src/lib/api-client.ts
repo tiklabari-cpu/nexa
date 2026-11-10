@@ -33,14 +33,20 @@ export class ApiClientError extends Error {
     this.retryAfterSeconds = init.retryAfterSeconds;
   }
 
-  /** Retrying only helps for transient conditions — never for a 4xx we caused. */
+  /**
+   * Retrying only helps for transient conditions — never for a 4xx we caused.
+   * `idempotency_in_flight` is the one 409 that is transient: the same key's
+   * first request is still being written, and sending the key again shortly
+   * replays it (tm 448).
+   */
   get isRetryable(): boolean {
     return (
       this.type === 'network' ||
       this.type === 'service_unavailable' ||
       this.type === 'internal' ||
       this.type === 'too_many_requests' ||
-      this.type === 'request_timeout'
+      this.type === 'request_timeout' ||
+      this.type === 'idempotency_in_flight'
     );
   }
 }

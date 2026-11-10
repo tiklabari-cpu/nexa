@@ -48,6 +48,7 @@ export const common: Messages = {
     'Bu konuya zaten başka bir ekip bakıyor — önce oradan kaldırın.',
   'common.errors.group_unavailable': 'Bu ekip şu anda bu sohbeti alamıyor.',
   'common.errors.groups_offline': 'Şu anda tüm ekipler çevrimdışı.',
+  'common.errors.idempotency_in_flight': 'Bu mesaj hâlâ gönderiliyor — birazdan yeniden deneyin.',
   'common.errors.impersonation_forbidden_path': 'Destek oturumu bu işlemi bir üye adına yapamaz.',
   'common.errors.impersonation_read_only':
     'Bu salt okunur bir destek oturumu — buradan hiçbir şey değiştirilemez.',

@@ -334,6 +334,11 @@ export function boot(
   };
 
   win.addEventListener('message', onMessage);
+  // Full screen or card rests on the viewport width, which changes with no
+  // message from the frame: a phone turned upright after the panel opened in
+  // landscape must not leave a card overhanging its 360 px (tm 449).
+  const viewportEvents = ['resize', 'orientationchange'];
+  for (const type of viewportEvents) win.addEventListener(type, applyGeometry);
   let stopWatching: (() => void) | null = null;
 
   const post = (type: string): void => {
@@ -344,6 +349,7 @@ export function boot(
 
   const destroy = (): void => {
     win.removeEventListener('message', onMessage);
+    for (const type of viewportEvents) win.removeEventListener(type, applyGeometry);
     stopWatching?.();
     frame.remove();
     delete config.open;

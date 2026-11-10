@@ -76,9 +76,16 @@ function mountWidget(search: string): void {
 }
 
 /** Simulates the loader relaying a command across the message boundary. */
-function sendCommand(command: string, payload: unknown): void {
+function sendCommand(
+  command: string,
+  payload: unknown,
+  source: MessageEventSource | null = window.parent,
+): void {
   window.dispatchEvent(
-    new MessageEvent('message', { data: { type: 'siyahtus:command', command, payload } }),
+    new MessageEvent('message', {
+      data: { type: 'siyahtus:command', command, payload },
+      source,
+    }),
   );
 }
 
@@ -93,6 +100,13 @@ async function waitFor(predicate: () => boolean, tries = 50): Promise<void> {
 /** A couple of microtask/timer turns, for asserting something did NOT happen. */
 async function settle(): Promise<void> {
   for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** Another frame on the embedding page — it can reach the widget's window too. */
+function otherFrame(): Window {
+  const frame = document.createElement('iframe');
+  document.body.append(frame);
+  return frame.contentWindow!;
 }
 
 const VALID_PAYLOAD = { external_order_id: 'order-9', amount_cents: 1999, currency: 'USD' };
@@ -167,6 +181,19 @@ describe('widget trackSale (FR-MOD-13.5)', () => {
     expect(() => sendCommand('trackSale', VALID_PAYLOAD)).not.toThrow();
     await waitFor(() => warn.mock.calls.length > 0);
     warn.mockRestore();
+  });
+
+  it('takes a sale only from the page the widget is embedded in (tm 449)', async () => {
+    mountWidget('?organization_id=org-1');
+    sendCommand('trackSale', { ...VALID_PAYLOAD, amount_cents: 99_999_999 }, otherFrame());
+    sendCommand('trackSale', VALID_PAYLOAD, null);
+    await settle();
+    expect(calls.some((c) => c.url.includes('/customer/chat/sale'))).toBe(false);
+
+    sendCommand('trackSale', VALID_PAYLOAD);
+    await waitFor(() => calls.some((c) => c.url.includes('/customer/chat/sale')));
+    const sales = calls.filter((c) => c.url.includes('/customer/chat/sale'));
+    expect(sales.map((c) => c.body)).toEqual([VALID_PAYLOAD]);
   });
 
   it('ignores an unknown command', async () => {

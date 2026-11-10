@@ -74,9 +74,16 @@ function mountWidget(search: string): void {
 }
 
 /** Simulates the loader relaying a command across the message boundary. */
-function sendCommand(command: string, payload: unknown): void {
+function sendCommand(
+  command: string,
+  payload: unknown,
+  source: MessageEventSource | null = window.parent,
+): void {
   window.dispatchEvent(
-    new MessageEvent('message', { data: { type: 'siyahtus:command', command, payload } }),
+    new MessageEvent('message', {
+      data: { type: 'siyahtus:command', command, payload },
+      source,
+    }),
   );
 }
 
@@ -91,6 +98,13 @@ async function waitFor(predicate: () => boolean, tries = 50): Promise<void> {
 /** A couple of microtask/timer turns, for asserting something did NOT happen. */
 async function settle(): Promise<void> {
   for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** Another frame on the embedding page — it can reach the widget's window too. */
+function otherFrame(): Window {
+  const frame = document.createElement('iframe');
+  document.body.append(frame);
+  return frame.contentWindow!;
 }
 
 const VALID_PAYLOAD = { name: 'registration_completed' };
@@ -114,6 +128,19 @@ afterEach(() => {
 });
 
 describe('widget trackEvent (EN-06)', () => {
+  it('takes an event only from the page the widget is embedded in (tm 449)', async () => {
+    mountWidget('?organization_id=org-1');
+    sendCommand('trackEvent', { name: 'forged_by_a_frame' }, otherFrame());
+    sendCommand('trackEvent', VALID_PAYLOAD, null);
+    await settle();
+    expect(calls.some((c) => c.url.includes('/customer/events'))).toBe(false);
+
+    sendCommand('trackEvent', VALID_PAYLOAD);
+    await waitFor(() => calls.some((c) => c.url.includes('/customer/events')));
+    const events = calls.filter((c) => c.url.includes('/customer/events'));
+    expect(events.map((c) => c.body)).toEqual([VALID_PAYLOAD]);
+  });
+
   // The one test in this file that checks call *order*: it needs a widget that has never
   // authenticated. Each test's widget is taken down after it, so none from an earlier test
   // can answer this one's command first.

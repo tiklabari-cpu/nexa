@@ -3166,6 +3166,10 @@ export function mount(doc: Document = document, win: Window = window): () => voi
   win.addEventListener(
     'message',
     (event: MessageEvent) => {
+      // Only from the page the widget is embedded in: another frame on that page
+      // can reach this one too, and must not record a sale, open the panel or
+      // sign its visitor out (tm 449).
+      if (event.source !== win.parent) return;
       // The host page is cross-origin and untrusted: accept only the known
       // commands it may issue, and ignore anything else without replying.
       const data = event.data as {
@@ -3180,9 +3184,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
         void trackSale(data.payload);
       if (data?.type === 'siyahtus:command' && data.command === 'trackEvent')
         void trackEvent(data.payload);
-      // Only from the page the widget is embedded in: another frame on that page
-      // can reach this one too, and must not sign its visitor out or open it.
-      if (data?.type === 'siyahtus:command' && event.source === win.parent && !config.chatPage) {
+      if (data?.type === 'siyahtus:command' && !config.chatPage) {
         if (data.command === 'logout') void logout();
         if (data.command === 'open') setOpen(true);
         const variables = data.payload;
@@ -3194,7 +3196,7 @@ export function mount(doc: Document = document, win: Window = window): () => voi
       }
       // The page the visitor moved to and the moment they went for the exit, as the
       // loader saw them (EN-03) — from the embedding page only, like the commands.
-      if (event.source === win.parent && !config.chatPage) {
+      if (!config.chatPage) {
         const page = data?.url;
         if (data?.type === 'siyahtus:page' && typeof page === 'string') {
           withTargeting((loaded) => loaded.page(page));

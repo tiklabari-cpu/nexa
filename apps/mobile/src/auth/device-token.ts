@@ -17,8 +17,11 @@
  *      a lift, a 500, an app killed mid-request. If a failure meant "keep it and
  *      try later", the token would stay usable by the next session on this
  *      device. It is dropped and never presented again; the next session
- *      registers a fresh one. The server-side row may outlive it, which is
- *      exactly what `13.7-d`'s cross-tenant refusal is for.
+ *      registers a fresh one. The server-side row may outlive it — always so
+ *      when a dropped session leaves no credential to revoke with. The server
+ *      closes that the moment this handset registers anywhere: registering a
+ *      token in one workspace revokes its live rows in every other (tm 443),
+ *      and `13.7-d`'s cross-tenant refusal stays the second lock.
  *   2. **Switching accounts revokes before it registers.** Not after, and not
  *      concurrently. Register-first leaves a window in which one token is
  *      registered to two workspaces at once, and the phone that receives

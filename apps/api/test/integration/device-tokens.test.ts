@@ -23,7 +23,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { withTenant } from '../../src/lib/tenant.js';
+import { withTenant, type TenantClient } from '../../src/lib/tenant.js';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
@@ -330,15 +330,185 @@ describe('device tokens', () => {
     expect((await owner.deviceToken.findUnique({ where: { id: deviceId } }))?.revokedAt).toBeNull();
   });
 
-  it('lets two workspaces hold the same token without colliding', async () => {
+  it('lets two workspaces register the same token without colliding', async () => {
     // The unique index is license-scoped on purpose: a global one would answer
     // "is this device registered elsewhere?" with a constraint violation, to a
-    // caller with no right to the answer.
+    // caller with no right to the answer. Both rows exist; since tm 443 only
+    // the newest is live (the block below).
     const a = await register(agentToken, { token: 'apns-duplicate', platform: 'ios' });
     const b = await register(otherToken, { token: 'apns-duplicate', platform: 'ios' });
     expect(a.statusCode).toBe(201);
     expect(b.statusCode).toBe(201);
     expect(await owner.deviceToken.count({ where: { token: 'apns-duplicate' } })).toBe(2);
+  });
+
+  // --- One push token, one live registration (tm 443 · F36) ------------------
+  //
+  // A dropped session (refresh expired) leaves the phone no credential to
+  // revoke with, so its row in that workspace stayed live and kept receiving
+  // pushes after the handset signed in somewhere else. Registering now releases
+  // the token's live rows in every other workspace.
+
+  describe('one live registration per token (tm 443)', () => {
+    const live = (token: string) =>
+      owner.deviceToken.findMany({
+        where: { token, revokedAt: null },
+        select: { licenseId: true, accountId: true },
+      });
+
+    it('revokes workspace A’s row when the same handset registers in workspace B (FR-MOD-13.7)', async () => {
+      const a = await register(agentToken, { token: 'apns-dropped', platform: 'ios' });
+      const aId = (a.json() as { id: string }).id;
+      const auditBefore = await owner.auditLogEntry.count({ where: { licenseId: fx.a.licenseId } });
+
+      // A's session was dropped, not signed out of: nothing revoked A's row.
+      const b = await register(otherToken, { token: 'apns-dropped', platform: 'ios' });
+
+      // B learns nothing about A — the same 201 and shape as a first-ever
+      // registration.
+      expect(b.statusCode).toBe(201);
+      expect(Object.keys(b.json() as object).sort()).toEqual(
+        ['created_at', 'id', 'last_seen_at', 'platform', 'revoked_at'].sort(),
+      );
+      expect(await live('apns-dropped')).toEqual([
+        { licenseId: fx.b.licenseId, accountId: fx.b.agentAccountId },
+      ]);
+
+      // A's row is kept as the record that the target existed, revoked.
+      const aRow = await owner.deviceToken.findUnique({ where: { id: aId } });
+      expect(aRow?.revokedAt).not.toBeNull();
+      const listed = await server.get('/notifications/devices', auth(agentToken));
+      expect((listed.json() as { items: unknown[] }).items).toHaveLength(0);
+      // Nothing is written into A's audit trail from B's request.
+      expect(await owner.auditLogEntry.count({ where: { licenseId: fx.a.licenseId } })).toBe(
+        auditBefore,
+      );
+    });
+
+    it('hands the handset back when it registers in workspace A again', async () => {
+      await register(agentToken, { token: 'apns-back-and-forth', platform: 'ios' });
+      await register(otherToken, { token: 'apns-back-and-forth', platform: 'ios' });
+      const again = await register(agentToken, { token: 'apns-back-and-forth', platform: 'ios' });
+
+      // A's own row is revived (same row, 200), B's is released.
+      expect(again.statusCode).toBe(200);
+      expect(await live('apns-back-and-forth')).toEqual([
+        { licenseId: fx.a.licenseId, accountId: fx.a.agentAccountId },
+      ]);
+    });
+
+    it('releases only that token, and leaves the workspace’s own rows alone', async () => {
+      await register(agentToken, { token: 'apns-phone', platform: 'ios' });
+      await register(agentToken, { token: 'apns-tablet', platform: 'ios' });
+      await register(colleagueToken, { token: 'apns-colleague', platform: 'android' });
+
+      await register(otherToken, { token: 'apns-phone', platform: 'ios' });
+
+      expect(await live('apns-phone')).toEqual([
+        { licenseId: fx.b.licenseId, accountId: fx.b.agentAccountId },
+      ]);
+      expect(await live('apns-tablet')).toHaveLength(1);
+      expect(await live('apns-colleague')).toHaveLength(1);
+
+      // A re-registration in B (every app launch) releases nothing further and
+      // keeps B's own row live.
+      const relaunch = await register(otherToken, { token: 'apns-phone', platform: 'ios' });
+      expect(relaunch.statusCode).toBe(200);
+      expect(await live('apns-phone')).toHaveLength(1);
+    });
+
+    it('keeps the revoke time of a row that was already signed out', async () => {
+      const a = await register(agentToken, { token: 'apns-signed-out', platform: 'ios' });
+      const aId = (a.json() as { id: string }).id;
+      await server.del(`/notifications/devices/${aId}`, auth(agentToken));
+      const signedOutAt = (await owner.deviceToken.findUnique({ where: { id: aId } }))?.revokedAt;
+      expect(signedOutAt).toBeInstanceOf(Date);
+
+      await register(otherToken, { token: 'apns-signed-out', platform: 'ios' });
+
+      const after = await owner.deviceToken.findUnique({ where: { id: aId } });
+      expect(after?.revokedAt?.getTime()).toBe(signedOutAt?.getTime());
+    });
+
+    it('leaves exactly one live row when two workspaces register the token at once', async () => {
+      // Separate connections, and A's transaction held open after its insert:
+      // B's release has to wait for A to commit and then see A's row. Without
+      // the per-token lock B's UPDATE misses A's uncommitted insert and both
+      // rows stay live (mutation-checked).
+      const clientA = new PrismaClient({ datasourceUrl: APP_URL });
+      const clientB = new PrismaClient({ datasourceUrl: APP_URL });
+      let openGate!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        openGate = resolve;
+      });
+      let markInserted!: () => void;
+      const inserted = new Promise<void>((resolve) => {
+        markInserted = resolve;
+      });
+      const registerIn = async (tx: TenantClient, licenseId: bigint, accountId: string) => {
+        await tx.$executeRaw`SELECT device_tokens_release_elsewhere(${'apns-race'})`;
+        await tx.deviceToken.create({
+          data: { licenseId, accountId, platform: 'ios', token: 'apns-race' },
+        });
+      };
+      try {
+        await clientA.$queryRaw`SELECT 1`;
+        await clientB.$queryRaw`SELECT 1`;
+
+        const txA = withTenant(
+          clientA,
+          { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId },
+          async (tx) => {
+            await registerIn(tx, fx.a.licenseId, fx.a.agentAccountId);
+            markInserted();
+            await gate;
+          },
+        );
+        await inserted;
+
+        let bDone = false;
+        const txB = withTenant(
+          clientB,
+          { licenseId: fx.b.licenseId, organizationId: fx.b.organizationId },
+          (tx) => registerIn(tx, fx.b.licenseId, fx.b.agentAccountId),
+        ).finally(() => {
+          bDone = true;
+        });
+
+        // Wait until B is blocked on the lock — or, without it, has finished.
+        for (let i = 0; i < 100 && !bDone; i += 1) {
+          const waiting = await owner.$queryRaw<{ n: bigint }[]>`
+            SELECT count(*) AS n FROM pg_stat_activity
+             WHERE datname = current_database() AND wait_event_type = 'Lock'
+               AND wait_event = 'advisory'`;
+          if (Number(waiting[0]?.n ?? 0) > 0) break;
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        openGate();
+        await Promise.all([txA, txB]);
+
+        expect(await live('apns-race')).toEqual([
+          { licenseId: fx.b.licenseId, accountId: fx.b.agentAccountId },
+        ]);
+      } finally {
+        openGate();
+        await clientA.$disconnect();
+        await clientB.$disconnect();
+      }
+    });
+
+    it('refuses to run outside a tenant transaction', async () => {
+      await register(agentToken, { token: 'apns-no-tenant', platform: 'ios' });
+      const app = new PrismaClient({ datasourceUrl: APP_URL });
+      try {
+        await expect(
+          app.$executeRaw`SELECT device_tokens_release_elsewhere(${'apns-no-tenant'})`,
+        ).rejects.toThrow(/without a tenant/);
+      } finally {
+        await app.$disconnect();
+      }
+      expect(await live('apns-no-tenant')).toHaveLength(1);
+    });
   });
 
   it('is invisible to another tenant even through the application role', async () => {

@@ -51,7 +51,7 @@
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Prisma, PrismaClient } from '@prisma/client';
+import { type Prisma, type PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { generateShortId } from '@siyahtus/types';
 import { FileMailer } from '../../src/services/mail/mailer.js';
@@ -59,7 +59,6 @@ import { startOfUtcDay } from '../../src/services/reports/scheduled-report-perio
 import type { SchedulerSnapshot } from '../../src/services/scheduler/types.js';
 import {
   grantReportsView,
-  grantToken,
   ownerClient,
   resetDatabase,
   seedDefaultBrand,
@@ -263,8 +262,6 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
   let expiredSessionId: string;
   let liveSessionId: string;
   let health: HealthBody;
-  /** `/health`'s scheduler block is admin-only (M-SEC-b2 · §D116 MEDIUM (b)). */
-  let adminAuth: { authorization: string };
 
   const ndjsonFiles = async (t: TenantFixture): Promise<string[]> => {
     try {
@@ -300,14 +297,6 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
       seedDefaultBrand(owner, fx.a.licenseId),
       seedDefaultBrand(owner, fx.b.licenseId),
     ]);
-    adminAuth = {
-      authorization: `Bearer ${await grantToken(owner, {
-        licenseId: fx.a.licenseId,
-        organizationId: fx.a.organizationId,
-        ownerId: fx.a.ownerAccountId,
-        scopes: [],
-      })}`,
-    };
 
     const now = Date.now();
 
@@ -473,7 +462,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
     // Read while the server is still up: this is the body an operator curls
     // after `make dev`, and the point is that it agrees with the four effects
     // already observed above.
-    health = (await server.get('/health', adminAuth)).json() as HealthBody;
+    health = (await server.app.opsHealth.publish())!.health as unknown as HealthBody;
   });
 
   afterAll(async () => {
@@ -722,20 +711,10 @@ describe('retention deletes only once a deployment has said so', () => {
   let fx: Fixtures;
   let expiredThreadId: string;
   let freshThreadId: string;
-  /** `/health`'s scheduler block is admin-only (M-SEC-b2 · §D116 MEDIUM (b)). */
-  let adminAuth: { authorization: string };
 
   beforeAll(async () => {
     mailDir = await mkdtemp(join(tmpdir(), 'siyahtus-sched-retention-'));
     fx = await seedFixtures(owner);
-    adminAuth = {
-      authorization: `Bearer ${await grantToken(owner, {
-        licenseId: fx.a.licenseId,
-        organizationId: fx.a.organizationId,
-        ownerId: fx.a.ownerAccountId,
-        scopes: [],
-      })}`,
-    };
 
     const now = Date.now();
     expiredThreadId = (
@@ -813,7 +792,7 @@ describe('retention deletes only once a deployment has said so', () => {
   });
 
   it('reports itself enabled and running on /health', async () => {
-    const body = (await server.get('/health', adminAuth)).json() as HealthBody;
+    const body = (await server.app.opsHealth.publish())!.health as unknown as HealthBody;
     const retention = body.scheduler.jobs.find((job) => job.name === 'retention');
     expect(retention).toMatchObject({ enabled: true, last_status: 'ok' });
     expect(retention?.last_run_at).not.toBeNull();
@@ -829,19 +808,9 @@ describe('the unverified sign-up sweep runs by itself once SIGNUP_EMAIL_VERIFICA
   let fx: Fixtures;
   let expired: SignupFixture;
   let fresh: SignupFixture;
-  /** `/health`'s scheduler block is admin-only (M-SEC-b2 · §D116 MEDIUM (b)). */
-  let adminAuth: { authorization: string };
 
   beforeAll(async () => {
     fx = await seedFixtures(owner);
-    adminAuth = {
-      authorization: `Bearer ${await grantToken(owner, {
-        licenseId: fx.a.licenseId,
-        organizationId: fx.a.organizationId,
-        ownerId: fx.a.ownerAccountId,
-        scopes: [],
-      })}`,
-    };
 
     expired = await seedUnverifiedSignup(owner, 'expired@unverified.test');
     await ageSignup(owner, expired, 73);
@@ -919,7 +888,7 @@ describe('the unverified sign-up sweep runs by itself once SIGNUP_EMAIL_VERIFICA
   });
 
   it('reports itself enabled and running on /health', async () => {
-    const body = (await server.get('/health', adminAuth)).json() as HealthBody;
+    const body = (await server.app.opsHealth.publish())!.health as unknown as HealthBody;
     const sweep = body.scheduler.jobs.find((job) => job.name === 'unverified_signups');
     expect(sweep).toMatchObject({ enabled: true, interval_ms: Number(TICK_MS), last_status: 'ok' });
     expect(sweep?.last_run_at).not.toBeNull();

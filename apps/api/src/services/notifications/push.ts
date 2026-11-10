@@ -12,10 +12,11 @@
  *   1. RLS. The read runs inside `withTenant`, so another license's device is
  *      invisible rather than merely unselected.
  *   2. An explicit `licenseId` in the WHERE clause. Redundant with RLS on
- *      purpose — the same physical handset may legitimately be registered in
- *      two workspaces (the unique index is license-scoped precisely so it can
- *      be), and "the account id matched" is not enough to tell those rows
- *      apart.
+ *      purpose — the same physical handset may have rows in two workspaces
+ *      (the unique index is license-scoped precisely so it can), and "the
+ *      account id matched" is not enough to tell those rows apart. Since tm 443
+ *      registering releases the other workspaces' rows, so at most one is
+ *      live; this layer is what holds if that ever is not so.
  *   3. The account id. RLS would not separate *colleagues*; they share a
  *      license.
  *   4. `revokedAt`, applied twice — in the query and again in the pure

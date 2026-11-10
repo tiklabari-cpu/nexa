@@ -342,6 +342,32 @@ describe('agent push notifications', () => {
     expect(await push.delivered(fx.b.licenseId)).toEqual([]);
   });
 
+  it('stops pushing A’s chats to a handset once it registers in workspace B (FR-MOD-13.7)', async () => {
+    // tm 443 · F36: A's session was dropped (refresh expired), so the phone had
+    // no credential to revoke its A row with. Signing in to B registers the same
+    // token there through the endpoint — and that alone has to end A's pushes.
+    await visitorWrites('before the switch');
+    expect((await push.delivered(fx.a.licenseId)).map((d) => d.token)).toEqual([AGENT_PHONE]);
+
+    const bAgent = await grantToken(owner, {
+      licenseId: fx.b.licenseId,
+      organizationId: fx.b.organizationId,
+      ownerId: fx.b.agentAccountId,
+      scopes: ['agents--my:rw'],
+    });
+    const registered = await server.post(
+      '/notifications/devices',
+      { token: AGENT_PHONE, platform: 'ios' },
+      auth(bAgent),
+    );
+    expect(registered.statusCode).toBe(201);
+
+    await rm(pushDir, { recursive: true, force: true });
+    await visitorWrites('after the switch');
+
+    expect(await push.delivered()).toEqual([]);
+  });
+
   it('does not push when nobody is assigned', async () => {
     // Nobody in the workspace is taking chats, so the conversation queues.
     // There is no handset to address because there is no person yet — and

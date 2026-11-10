@@ -20,9 +20,9 @@
  *
  * Workspace B is registered throughout and asserted empty after every single
  * step, not once at the end. The cross-tenant claim is the one that has to hold
- * at every moment of the lifecycle — including the moment a token exists in two
- * workspaces at once — and a check only at the end would pass on a delivery
- * that had already been made and then stopped.
+ * at every moment of the lifecycle — including the moment a token is registered
+ * in two workspaces (only the latest is live, tm 443) — and a check only at the
+ * end would pass on a delivery that had already been made and then stopped.
  *
  * Run against real Postgres with RLS on, with a real `FilePushProvider` on a
  * temp directory: the spool is partitioned by license, so "did the other tenant
@@ -272,9 +272,11 @@ describe('handset lifecycle end to end', () => {
   it('never crosses the tenant boundary, at any step of that walk', async () => {
     // The same walk, compressed, with one physical handset registered in *both*
     // workspaces — the case the license-scoped unique index exists to allow and
-    // the one where the token string stops being an identifier. Every step
-    // below asks the cross-tenant question again, because the answer has to
-    // hold while the row exists in two places at once.
+    // the one where the token string stops being an identifier. Since tm 443
+    // only the latest registration is live: the phone holds one session at a
+    // time, so registering in B ends A's delivery even when A's session was
+    // dropped and the phone had nothing to revoke with. Every step below asks
+    // the cross-tenant question again.
     const shared = 'shared-handset-lifecycle';
     const inA = await register(agentToken, shared);
     const inB = await register(otherToken, shared, 'android');
@@ -285,15 +287,25 @@ describe('handset lifecycle end to end', () => {
     expect(idInA).not.toBe(idInB);
 
     // Neither workspace can see or revoke the other's row, and both refusals
-    // are the same 404 — so the endpoint cannot be used to find out which.
+    // are the same 404 — so the endpoint cannot be used to find out which. B's
+    // registration answered exactly as a first one would, for the same reason.
     expect((await revoke(otherToken, idInA)).statusCode).toBe(404);
     expect((await revoke(agentToken, idInB)).statusCode).toBe(404);
-    expect(await listDevices(agentToken)).toEqual([expect.objectContaining({ id: idInA })]);
+    expect(await listDevices(agentToken)).toEqual([]);
     expect(await listDevices(otherToken)).toEqual([expect.objectContaining({ id: idInB })]);
 
+    // A's conversation does not reach the handset B now holds.
     const customer = await widgetToken();
-    await visitorWrites(customer, 'for workspace A only');
+    await visitorWrites(customer, 'not to the handset B now holds');
+    expect(await deliveredThenDrain()).toEqual([]);
 
+    // The handset signs back in to A: A's own row comes back, B's is released.
+    const back = await register(agentToken, shared);
+    expect(back.statusCode).toBe(200);
+    expect((back.json() as { id: string }).id).toBe(idInA);
+    expect(await listDevices(otherToken)).toEqual([]);
+
+    await visitorWrites(customer, 'for workspace A only');
     const delivered = await deliveredThenDrain();
     expect(delivered).toHaveLength(1);
     expect(delivered[0]).toMatchObject({
@@ -302,14 +314,16 @@ describe('handset lifecycle end to end', () => {
       device_id: idInA,
     });
 
-    // Now A revokes its own row. B's registration of the same address is
-    // untouched — a workspace signing out must not silence a colleague's phone
-    // in another one — and A stops being delivered to.
+    // Now A revokes its own row. That writes nothing in B — a sign-out in one
+    // workspace touches only its own row — and A stops being delivered to.
+    const inBBefore = await owner.deviceToken.findUnique({
+      where: { id: idInB },
+      select: { revokedAt: true },
+    });
     expect((await revoke(agentToken, idInA)).statusCode).toBe(204);
-    expect(await listDevices(otherToken)).toEqual([expect.objectContaining({ id: idInB })]);
     expect(
-      await owner.deviceToken.count({ where: { licenseId: fx.b.licenseId, revokedAt: null } }),
-    ).toBe(1);
+      await owner.deviceToken.findUnique({ where: { id: idInB }, select: { revokedAt: true } }),
+    ).toEqual(inBBefore);
 
     await visitorWrites(customer, 'and nothing after that');
     expect(await deliveredThenDrain()).toEqual([]);

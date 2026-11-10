@@ -155,6 +155,11 @@ export default async function notificationRoutes(app: FastifyInstance): Promise<
    * than failing, so the device follows whoever last proved they hold it.
    * Reviving `revokedAt` in the same statement is the same decision: a person
    * who signs back in on a phone they revoked is asking for it back.
+   *
+   * The same reasoning crosses workspaces (tm 443): registering here revokes
+   * this token's live rows in every other licence, so a handset is addressed by
+   * one workspace at a time. The response is the same either way — 201/200 says
+   * only whether *this* workspace had seen the token.
    */
   app.post(
     '/notifications/devices',
@@ -168,6 +173,17 @@ export default async function notificationRoutes(app: FastifyInstance): Promise<
       const now = new Date();
 
       const { device, created } = await request.withTenant(async (tx) => {
+        // One push token, one live registration (tm 443 · F36). The app holds
+        // one session at a time, so a handset registering here has stopped
+        // being any other workspace's — even when it could not say so, which
+        // is the dropped-session case: a refresh that failed leaves the phone
+        // no credential to revoke with, and the old workspace kept pushing to
+        // it. The function revokes the token's live rows in *other* licences
+        // only, returns nothing (this workspace learns nothing about the
+        // others), and takes a per-token lock so two concurrent registrations
+        // cannot both stay live. First, so the lock is held across the upsert.
+        await tx.$executeRaw`SELECT device_tokens_release_elsewhere(${body.token})`;
+
         const existing = await tx.deviceToken.findUnique({
           where: { licenseId_token: { licenseId: tenant.licenseId, token: body.token } },
           select: { id: true },

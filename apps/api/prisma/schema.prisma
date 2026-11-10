@@ -1011,6 +1011,10 @@ model DeviceToken {
   @@unique([licenseId, token])
   /// The sender's only question: which live devices does this member have?
   @@index([licenseId, accountId, revokedAt])
+  /// Registering a handset releases its rows in every *other* workspace (tm 443)
+  /// through `device_tokens_release_elsewhere()`, a SECURITY DEFINER function
+  /// that looks the token up across licences. Not unique — see `@@unique` above.
+  @@index([token])
   @@map("device_tokens")
 }
 

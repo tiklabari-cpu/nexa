@@ -47,14 +47,16 @@ describe('defaultScopesForRole', () => {
     expect(defaultScopesForRole('team_lead')).not.toBe(TEAM_LEAD_SCOPES);
   });
 
-  it('keeps every admin power off a Team Lead: billing, security, AI configuration, the whole workspace (FR-MOD-04.RBAC)', () => {
+  it('keeps every admin power off a Team Lead but configuring the AI: billing, security, the whole workspace (FR-MOD-04.RBAC)', () => {
     const lead = effectiveScopes(defaultScopesForRole('team_lead'));
+    // Owner's decision S20 (04 K49, tm 476): an Ekip Lideri configures the AI
+    // Agent by default — `ai.manage` `on`, which is `agents-bot--all:rw`.
+    // Publishing a version and compliance rules stay role-gated above them.
+    expect(lead.has('agents-bot--all:rw')).toBe(true);
     for (const scope of [
       'billing_manage',
       'access_rules:rw',
       'access_rules:ro',
-      'agents-bot--all:rw',
-      'agents-bot--all:ro',
       'agents--all:rw',
       'chats--all:ro',
       'audit_log--all:ro',
@@ -64,9 +66,11 @@ describe('defaultScopesForRole', () => {
     ]) {
       expect(lead.has(scope), scope).toBe(false);
     }
-    // Whatever leading adds later is not borrowed from the admin set.
+    // Whatever leading adds later is not borrowed from the admin set — but
+    // the one scope the owner chose to share (S20).
     for (const scope of TEAM_LEAD_SCOPES) {
-      if (!DEFAULT_AGENT_SCOPES.includes(scope)) expect(ADMIN_SCOPES).not.toContain(scope);
+      if (DEFAULT_AGENT_SCOPES.includes(scope) || scope === 'agents-bot--all:rw') continue;
+      expect(ADMIN_SCOPES, scope).not.toContain(scope);
     }
   });
 

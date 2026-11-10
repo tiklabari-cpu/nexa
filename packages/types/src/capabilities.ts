@@ -131,6 +131,8 @@ export const MEMBER_BASE_SCOPES = [
  *     Founder-only (`OWNER_SCOPES`);
  *   - only the Kurucu changes the matrix — `settings.permissions`, already
  *     Founder-only.
+ * Owner's decision S20 (tm 476) moved one more: Ekip Lideri configures the AI
+ * Agent — `ai.manage` `on`, so `agents-bot--all:rw` joined `TEAM_LEAD_SCOPES`.
  *
  * Floors, and why each one sits where it does:
  *   - a route already refuses the role (`minimumRole: 'admin'` or a handler
@@ -313,14 +315,19 @@ export const CAPABILITIES = [
   // AI
   {
     // The AI Agent's configuration: procedures, knowledge, tables, guidance,
-    // handoff rules, templates.
+    // handoff rules, templates — and what writes to the live AI directly: rule
+    // bots and the knowledge base. Owner's decision S20 (04 K49, tm 476): an
+    // Ekip Lideri has it by default, the whole scope ("Evet, hepsi" — not split
+    // into draft and live). Publishing a version stays `ai.config.publish`
+    // (Yönetici and up, RL-03 four eyes: the lead prepares, an admin
+    // publishes), and compliance rules stay `ai.guardrails.edit` (Founder).
     key: 'ai.manage',
     group: 'ai',
     labelKey: 'permissions.capability.ai.manage',
     values: ['off', 'on'],
     scopes: { on: ['agents-bot--all:rw'] },
     floorRole: 'agent',
-    defaults: { owner: 'on', admin: 'on', team_lead: 'off', agent: 'off' },
+    defaults: { owner: 'on', admin: 'on', team_lead: 'on', agent: 'off' },
   },
   {
     // Compliance rules (AI-08): the routes are `exactRole: 'owner'`.

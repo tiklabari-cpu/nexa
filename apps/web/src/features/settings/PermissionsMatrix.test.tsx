@@ -143,6 +143,28 @@ describe('PermissionsMatrix (RL-02)', () => {
     ).toHaveLength(2);
   });
 
+  it('draws Configure the AI Agent on for a Team Lead by default, and publishing locked below them (RL-03)', async () => {
+    // Owner's decision S20 (tm 476): the lead prepares, an Admin publishes.
+    api.get.mockResolvedValue(matrixWith());
+
+    renderComponent(<PermissionsMatrix canEdit />);
+    await screen.findByRole('table');
+
+    const manage = row('ai.manage');
+    expect(
+      within(manage).getByRole('switch', { name: 'Configure the AI Agent — Team Lead' }),
+    ).toBeChecked();
+    expect(
+      within(manage).getByRole('switch', { name: 'Configure the AI Agent — Agent' }),
+    ).not.toBeChecked();
+    // The Founder can still switch it off for the lead: a control, not a lock.
+    expect(manage.querySelector('[data-locked="below_floor"]')).toBeNull();
+    // Publishing a version stays Admin and up.
+    expect(row('ai.config.publish').querySelectorAll('[data-locked="below_floor"]')).toHaveLength(
+      2,
+    );
+  });
+
   it('saves a moved level through the before/after confirm, sending only that cell (GV-06-S1)', async () => {
     const user = userEvent.setup();
     api.get.mockResolvedValue(matrixWith());

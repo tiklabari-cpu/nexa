@@ -262,9 +262,8 @@ describe('AI configuration review line (AI-20 · tm 316.2)', () => {
   });
 
   it('a Team Lead prepares and submits but never publishes; the matrix can take publishing from an Administrator', async () => {
-    await owner.roleCapabilityOverride.create({
-      data: { licenseId: fx.a.licenseId, role: 'team_lead', capability: 'ai.manage', value: 'on' },
-    });
+    // `ai.manage` is on for an Ekip Lideri by default (owner's decision S20,
+    // tm 476) — no matrix row is needed for the lead to submit.
     await owner.roleCapabilityOverride.create({
       data: {
         licenseId: fx.a.licenseId,

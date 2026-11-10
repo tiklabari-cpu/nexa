@@ -424,7 +424,7 @@ describe('the Team Lead role — vocabulary and schema (RL-01 · RL-04 · K6 · 
       });
     });
 
-    it('cannot open billing, security or AI configuration — 403 (FR-MOD-04.RBAC)', async () => {
+    it('cannot open billing or security, and configures the AI but never its compliance rules — 403 (FR-MOD-04.RBAC)', async () => {
       const session = await grantToken(owner, {
         licenseId: fx.a.licenseId,
         organizationId: fx.a.organizationId,
@@ -432,10 +432,17 @@ describe('the Team Lead role — vocabulary and schema (RL-01 · RL-04 · K6 · 
         kind: 'oauth',
         scopes: defaultScopesForRole('owner'),
       });
-      for (const path of ['/billing/invoices', '/settings/security', '/ai-guardrails/platform']) {
+      for (const path of ['/billing/invoices', '/settings/security']) {
         const res = await server.get(path, auth(session));
         expect(res.statusCode, `${path}: ${res.body}`).toBe(403);
       }
+      // Owner's decision S20 (tm 476): `ai.manage` is on for an Ekip Lideri by
+      // default, so the AI configuration opens — compliance rules stay the
+      // Founder's (`exactRole: 'owner'`).
+      const guardrails = await server.get('/ai-guardrails/platform', auth(session));
+      expect(guardrails.statusCode, guardrails.body).toBe(200);
+      const compliance = await server.put('/ai-guardrails/settings', {}, auth(session));
+      expect(compliance.statusCode, compliance.body).toBe(403);
 
       // A personal access token keeps the list it was given — and the role
       // gates, which read the role fresh, refuse a Team Lead holding one.

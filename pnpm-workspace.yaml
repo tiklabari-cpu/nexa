@@ -45,6 +45,30 @@ confirmModulesPurge: false
 # `deepmergeInto`) do not touch that call.
 overrides:
   "@prisma/config>deepmerge-ts": "^8.0.2"
+  # apps/mobile (tm 444, audit F37): in-range patches for the Expo / React Native tree. The
+  # parents pin the vulnerable release (exact or a caret that resolves to it), so a normal
+  # `pnpm update` cannot reach the fix. Only same-major bumps; drop an entry when its parent
+  # ships the fixed range.
+  # shell-quote 1.8.4–1.10.0 — GHSA-pqg4-j6r4-53mv (critical; react-devtools-core).
+  "shell-quote@<1.11.0": "^1.11.0"
+  # @xmldom/xmldom <= 0.8.14 — 6 advisories, high (@expo/plist, config-plugins).
+  "@xmldom/xmldom@<0.8.15": "^0.8.15"
+  # js-yaml 3.x < 3.15.2 / 4.x < 4.3.2 — GHSA-52cp-r559-cp3m and others, high
+  # (@jest/transform via babel-jest; @expo/xcpretty).
+  "js-yaml@^3.0.0": "^3.15.2"
+  "js-yaml@^4.0.0": "^4.3.2"
+  # brace-expansion 1.x < 1.1.21 and 5.x < 5.0.12 — 4 advisories, high (minimatch in jest
+  # and in @expo/config-plugins' glob).
+  "brace-expansion@^1.0.0": "^1.1.21"
+  "brace-expansion@^5.0.0": "^5.0.12"
+  # nanoid 3.x < 3.3.18 — GHSA-2v37-7h3g-55p8, high (@react-navigation/routers).
+  "nanoid@^3.0.0": "^3.3.18"
+  # node-forge <= 1.4.0 — 6 advisories, high (@expo/code-signing-certificates).
+  "node-forge@<1.4.1": "^1.4.1"
+  # source-map-js < 1.2.2 — GHSA-68fv-2mgg-jv7q, high (postcss).
+  "source-map-js@<1.2.2": "^1.2.2"
+  # compression < 1.8.2 — GHSA-vc2v-76pw-4v95, high (@expo/cli dev server).
+  "compression@<1.8.2": "^1.8.2"
 
 # pdfjs-dist (tm 313.2, the knowledge document worker) lists `@napi-rs/canvas` as optional:
 # pdf.js loads it to render pages to a canvas. The worker only reads text — it never renders —

@@ -187,7 +187,9 @@ describe("widget siyahtus('logout') (ID-03 · K4 · tm 287.3)", () => {
     // which would otherwise try, fail and say the chat is unavailable.
     const before = calls.length;
     sendCommand('logout');
-    window.dispatchEvent(new MessageEvent('message', { data: { type: 'siyahtus:host-open' } }));
+    window.dispatchEvent(
+      new MessageEvent('message', { data: { type: 'siyahtus:host-open' }, source: window.parent }),
+    );
     window.dispatchEvent(
       new MessageEvent('message', {
         data: {
@@ -195,6 +197,7 @@ describe("widget siyahtus('logout') (ID-03 · K4 · tm 287.3)", () => {
           command: 'trackSale',
           payload: { external_order_id: 'o-1', amount_cents: 100, currency: 'USD' },
         },
+        source: window.parent,
       }),
     );
     await settle();

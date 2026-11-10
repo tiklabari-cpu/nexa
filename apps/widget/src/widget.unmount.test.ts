@@ -136,7 +136,9 @@ describe('mount teardown', () => {
     // Each of these reaches the widget only through a listener on `window`: coming back
     // online re-polls, and the host page's command opens the panel.
     window.dispatchEvent(new Event('online'));
-    window.dispatchEvent(new MessageEvent('message', { data: { type: 'siyahtus:host-open' } }));
+    window.dispatchEvent(
+      new MessageEvent('message', { data: { type: 'siyahtus:host-open' }, source: window.parent }),
+    );
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(requests.length).toBe(before);

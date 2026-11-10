@@ -104,6 +104,7 @@ function connectWithoutOpening(): void {
         command: 'trackSale',
         payload: { external_order_id: 'o-1', amount_cents: 100, currency: 'USD' },
       },
+      source: window.parent,
     }),
   );
 }

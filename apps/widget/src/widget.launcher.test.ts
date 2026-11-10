@@ -178,6 +178,29 @@ describe('widget launcher visibility (WG-10)', () => {
     expect(panel(root).hidden).toBe(true);
   });
 
+  it('opens and closes through the host bridge only for the embedding page (tm 449)', async () => {
+    stubFetch('never');
+    const root = mountWidget();
+    await waitFor(() => lastSize()?.width === 0);
+    const frame = document.createElement('iframe');
+    document.body.append(frame);
+    const bridge = (type: string, source: MessageEventSource | null): void => {
+      window.dispatchEvent(new MessageEvent('message', { data: { type }, source }));
+    };
+
+    bridge('siyahtus:host-open', frame.contentWindow);
+    bridge('siyahtus:host-open', null);
+    expect(panel(root).hidden).toBe(true);
+    bridge('siyahtus:host-open', window.parent);
+    expect(panel(root).hidden).toBe(false);
+
+    bridge('siyahtus:host-close', frame.contentWindow);
+    bridge('siyahtus:host-close', null);
+    expect(panel(root).hidden).toBe(false);
+    bridge('siyahtus:host-close', window.parent);
+    expect(panel(root).hidden).toBe(true);
+  });
+
   it('draws from what the browser learned last time, before any answer', () => {
     window.localStorage.setItem('siyahtus.launcher.org-1', 'always');
     stubFetch('never');

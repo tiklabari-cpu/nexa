@@ -115,6 +115,37 @@ describe('loader mobile fullscreen', () => {
     expect(el.style.right).toBe('0px');
   });
 
+  it('takes the full screen when a panel opened wide turns upright, and back, until destroyed (tm 449)', () => {
+    setViewportWidth(800);
+    const destroy = boot(setup({}))!;
+    dispatch('siyahtus:open');
+    const el = frame()!;
+    expect(el.style.width).not.toBe('100%');
+
+    // Turned upright: no message from the frame, only the viewport changed.
+    setViewportWidth(360);
+    window.dispatchEvent(new Event('resize'));
+    expect(el.style.width).toBe('100%');
+    expect(el.style.height).toBe('100%');
+    expect(el.style.top).toBe('0px');
+    expect(el.style.left).toBe('0px');
+
+    setViewportWidth(800);
+    window.dispatchEvent(new Event('orientationchange'));
+    expect(el.style.width).toBe('124px');
+    expect(el.style.top).toBe('');
+    setViewportWidth(360);
+    window.dispatchEvent(new Event('orientationchange'));
+    expect(el.style.width).toBe('100%');
+
+    // Taken down: the page's later resizes no longer reach the (detached) frame.
+    setViewportWidth(800);
+    destroy();
+    window.dispatchEvent(new Event('resize'));
+    window.dispatchEvent(new Event('orientationchange'));
+    expect(el.style.width).toBe('100%');
+  });
+
   it('stays a floating card on a phone when fullscreen is turned off', () => {
     boot(setup({ mobileFullscreen: false }));
     // Widget asks for its panel size; without fullscreen the loader honours it.

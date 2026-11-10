@@ -17050,12 +17050,12 @@
         "description": "(tm 449) Üçüncü taraf bir iframe sahte, çok yüksek tutarlı bir trackSale ya da host-open gönderebiliyor; hemen alttaki komutlarda kaynak şartı var, bu üçünde yok. (tm 450) Yatayda açılan mobil tam ekran panel dikeye çevrilince 360 px'lik ekrandan taşıyor; geometri yalnız mesajda yeniden hesaplanıyor.",
         "details": "BİRLEŞİK GÖREV (sahip onayı 2026-11-07): tm 449, tm 450 aynı alana dokunduğu için tek pencerede yapılır; DoD kapısı bir kez koşar.\nBölümler sırayla yapılır. Her bölüm kendi kabul ölçütüyle kapanır; biri yeşil değilse görev done değildir.\nBirleşen görevler (tm 450) cancelled durumda ve buraya işaret ediyor; onlara ayrıca dokunma.\nWidget bundle bütçesine dikkat (memory widget-bundle-budget-and-css-minify).\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\n━━ BÖLÜM 1 — tm 449 WIDGET-POSTMESSAGE-SOURCE · Widget: trackSale, trackEvent ve host-open/close yalnız gömüldüğü sayfadan (event.source === win.parent) kabul edilsin ━━\nSORUN: Üçüncü taraf bir iframe sahte, çok yüksek tutarlı bir trackSale ya da host-open gönderebiliyor; hemen alttaki komutlarda kaynak şartı var, bu üçünde yok.\n\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F28 (low ← medium). Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/widget/src/widget.ts:3133-3138` host-open, host-close, trackSale, trackEvent kaynak kontrolsüz; `:3139-` sonraki komutlar \"Only from the page the widget is embedded in\" yorumuyla `event.source === win.parent` şartlı.\n\nYAPILACAK: aynı `event.source === win.parent` şartını bu dört mesaja uygula (tek erken dönüşle tüm `siyahtus:*` komutlarına uygulamak daha küçükse onu yap; loader'dan gelen mesajların kaynağının parent olduğunu doğrula).\n\nTUZAK: widget bundle bütçesi; widget testleri postMessage'ı `source` vermeden simüle ediyor olabilir — test yardımcısını güncelle (memory widget-test-fetch-mocks-share-objects, widget-mount-returns-teardown).\n\nKAPSAM DIŞI: origin allowlist.\nDENETİM BULGULARI: F28\n\n━━ BÖLÜM 2 — tm 450 WIDGET-LOADER-RESIZE-GEOMETRY · Widget loader: resize/orientationchange'de applyGeometry yeniden çalışsın, teardown'da dinleyici kalksın ━━\nSORUN: Yatayda açılan mobil tam ekran panel dikeye çevrilince 360 px'lik ekrandan taşıyor; geometri yalnız mesajda yeniden hesaplanıyor.\n\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F29. Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/widget/src/loader.ts:240` `const applyGeometry = (): void => {` (`win.innerWidth <= MOBILE_MAX_WIDTH`); yalnız `onMessage`'dan çağrılıyor (~:333); resize/orientationchange dinleyicisi yok (~:336/449/466/467 teardown bölgesi).\n\nYAPILACAK: `win.addEventListener('resize', applyGeometry)` + `orientationchange`; mount teardown'unda `removeEventListener`. Gerekirse rAF ile tek çağrıya indir.\n\nTUZAK: loader bütçesi (memory widget-bundle-budget-and-css-minify; types-top-level-calls-bloat-widget-loader). Teardown testleri `mounted` dizisi (widget-mount-returns-teardown).\n\nKAPSAM DIŞI: masaüstü geometrisi.\nDENETİM BULGULARI: F29",
         "testStrategy": "BÖLÜM 1 (tm 449): widget birim: source=başka pencere ile trackSale → çağrılmaz; source=parent → çağrılır; host-open aynı. Mutasyon: şartı kaldır → kırmızı. bundle-size.test.ts yeşil. DoD: CONVENTIONS §1.\nBÖLÜM 2 (tm 450): widget birim (jsdom): açık panel, innerWidth 800→360 + resize olayı → tam ekran stilleri uygulanır; teardown sonrası resize stil değiştirmez. bundle-size.test.ts yeşil. DoD: CONVENTIONS §1.\nKapanış: bütün bölümlerin hedefli testleri yeşilken tam DoD kapısı bir kez.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-10T16:36:46.719Z",
+        "updatedAt": "2026-11-10T17:52:49.975Z",
         "subtasks": []
       },
       {
@@ -17778,9 +17778,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-10T16:36:46.720Z",
+      "lastModified": "2026-11-10T17:52:49.975Z",
       "taskCount": 478,
-      "completedCount": 440,
+      "completedCount": 441,
       "tags": [
         "master"
       ]

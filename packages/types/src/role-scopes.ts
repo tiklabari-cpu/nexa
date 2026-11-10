@@ -168,8 +168,21 @@ export const OWNER_SCOPES: Scope[] = ['billing_manage'];
 /**
  * A Team Lead's set (RL-01): a Team Member's, and what leading a team adds.
  *
- * One scope so far: `reports_read--groups` (RP-01 · tm 368), their teams' conversation
+ * `reports_read--groups` (RP-01 · tm 368), their teams' conversation
  * reports — the server intersects every team filter with the teams they lead.
+ *
+ * `agents-bot--all:rw` (owner's decision S20 · 04 K49 · tm 476): configuring
+ * the AI Agent, `ai.manage` `on` for Ekip Lideri. The one admin-set scope a
+ * lead holds, and knowingly workspace-wide — the AI is one per workspace, so
+ * there is no team to bound it by. It opens everything the scope opens: the
+ * AI-20 draft and its submission, and what writes to the live AI at once (rule
+ * bots, the knowledge base, knowledge tables, guidance, handoff rules) — the
+ * owner chose the whole scope over splitting draft from live. What stays
+ * above a lead is role-gated on the route, not by this list: publishing,
+ * rejecting, rolling back and pausing a version (`minimumRole: 'admin'`),
+ * creating AI agents, the help-centre switch, compliance rules
+ * (`exactRole: 'owner'`). The Founder switches it off in the matrix.
+ *
  * Nothing else, on purpose. Each thing a lead does that a member does
  * not — watching and taking over their team's chats, their team's reports
  * (RL-03) — needs a server check bounded by the teams they lead
@@ -179,7 +192,11 @@ export const OWNER_SCOPES: Scope[] = ['billing_manage'];
  * that surface. The additions arrive with those checks, and the permission
  * matrix (RL-02) makes them a workspace's choice.
  */
-export const TEAM_LEAD_SCOPES: Scope[] = [...DEFAULT_AGENT_SCOPES, 'reports_read--groups'];
+export const TEAM_LEAD_SCOPES: Scope[] = [
+  ...DEFAULT_AGENT_SCOPES,
+  'reports_read--groups',
+  'agents-bot--all:rw',
+];
 
 /**
  * The scopes a session gets when the caller asks for none.

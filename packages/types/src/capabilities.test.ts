@@ -319,6 +319,34 @@ describe('the owner’s K7 defaults (tm 325.5)', () => {
     }
     expect(at('owner')['settings.permissions']).toBe('on');
   });
+
+  it('lets an Ekip Lideri configure the AI Agent and leaves publishing and compliance above them (RL-03 · FR-MOD-04.RBAC)', () => {
+    // Owner's decision S20 (04 K49, tm 476): the lead prepares, an admin
+    // publishes. The whole `ai.manage` scope, live surfaces included.
+    expect(at('team_lead')['ai.manage']).toBe('on');
+    expect(scopesForRole('team_lead', [])).toContain('agents-bot--all:rw');
+    expect(defaultScopesForRole('team_lead')).toContain('agents-bot--all:rw');
+    expect(at('team_lead')['ai.config.publish']).toBe('off');
+    expect(capabilityLock(def('ai.config.publish'), 'team_lead')).toBe('below_floor');
+    expect(at('team_lead')['ai.guardrails.edit']).toBe('off');
+    expect(capabilityLock(def('ai.guardrails.edit'), 'team_lead')).toBe('owner_only');
+    // An Ekip Üyesi still does not, and the cell stays the Founder's to move.
+    expect(at('agent')['ai.manage']).toBe('off');
+    expect(scopesForRole('agent', [])).not.toContain('agents-bot--all:rw');
+    expect(capabilityLock(def('ai.manage'), 'team_lead')).toBeNull();
+    expect(capabilityChangeProblem(set('team_lead', 'ai.manage', 'off'))).toBeNull();
+
+    // Switched off, the lead holds neither the scope nor anything it implies.
+    const off = [set('team_lead', 'ai.manage', 'off')];
+    expect(capabilitiesForRole('team_lead', off)['ai.manage']).toBe('off');
+    const held = effectiveScopes(scopesForRole('team_lead', off));
+    expect(held.has('agents-bot--all:rw')).toBe(false);
+    expect(held.has('agents-bot--all:ro')).toBe(false);
+    // Only that row moved.
+    expect(sorted(scopesForRole('team_lead', off))).toEqual(
+      sorted(defaultScopesForRole('team_lead').filter((s) => s !== 'agents-bot--all:rw')),
+    );
+  });
 });
 
 describe('scope ownership — one row per scope', () => {

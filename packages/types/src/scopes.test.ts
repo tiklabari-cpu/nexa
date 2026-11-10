@@ -239,6 +239,9 @@ describe('error taxonomy', () => {
     // Single-use upload URLs (tm 446 · audit F43): a second PUT to a key the
     // first one already wrote.
     'upload_already_written',
+    // One send per idempotency key at a time (tm 448 · audit F27): a retry
+    // arriving while the first request is still writing the message.
+    'idempotency_in_flight',
   ];
 
   it('carries the 24 documented types, plus SiyahTuş additions', () => {

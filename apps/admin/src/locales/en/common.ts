@@ -49,6 +49,8 @@ export const common: Messages = {
     'Another team already handles this topic — clear it there first.',
   'common.errors.group_unavailable': 'That team cannot take this conversation right now.',
   'common.errors.groups_offline': 'Every team is offline right now.',
+  'common.errors.idempotency_in_flight':
+    'This message is still being sent — try again in a moment.',
   'common.errors.impersonation_forbidden_path':
     'A support session cannot do this on a member’s behalf.',
   'common.errors.impersonation_read_only':

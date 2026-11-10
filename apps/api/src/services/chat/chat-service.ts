@@ -86,6 +86,7 @@ import {
   type ThreadRating,
 } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
+import { claimFlight, flightName, type Flight } from './idempotency-flight.js';
 import { maskForWrite, sensitiveAuthorOf, type MaskedForWrite } from '../../lib/sensitive-mask.js';
 import { sanitizeTypingPreview } from '../../lib/typing-preview.js';
 import { visitedPagesOf } from '../campaigns/campaign-matching.js';
@@ -246,6 +247,12 @@ interface RedisLike {
     max: number | string,
     withScores: 'WITHSCORES',
   ): Promise<string[]>;
+  /**
+   * Gives a send's idempotency flight back ({@link claimFlight}). Optional so a
+   * service built with a minimal Redis double still constructs; without it a
+   * flight lapses with its TTL.
+   */
+  eval?(script: string, numKeys: number, ...args: Array<string | number>): Promise<unknown>;
 }
 
 /** Everything the shared close path produces that the realtime fan-out needs. */
@@ -1327,14 +1334,49 @@ export class ChatService {
     principal: Principal,
     input: ConnectionInput,
   ): Promise<ConnectionResult> {
+    // One send per key at a time (tm 448): a retry racing the first attempt
+    // waits for it, then replays it or is refused. The member's flight, not the
+    // chat's — which chat takes the message is decided in the transaction, and
+    // the transaction reads the remembered event itself (`#replayedEvent`), so
+    // there is nothing to look for before it.
+    const key = input.event.idempotencyKey;
+    let flight: Flight | null = null;
+    if (key) {
+      const claim = await claimFlight<never>(
+        this.redis,
+        flightName(tenant.licenseId, { customerId: input.customerId }, key),
+        async () => null,
+      );
+      if ('flight' in claim) flight = claim.flight;
+    }
+
     // One instant for both attempts: the retry files the same message.
     const now = this.now();
     let outcome: ConnectionOutcome;
     try {
-      outcome = await this.#connectInTransaction(tenant, principal, input, now);
-    } catch (error) {
-      if (!isConnectionRace(error)) throw error;
-      outcome = await this.#connectInTransaction(tenant, principal, input, now);
+      try {
+        outcome = await this.#connectInTransaction(tenant, principal, input, now);
+      } catch (error) {
+        if (!isConnectionRace(error)) throw error;
+        outcome = await this.#connectInTransaction(tenant, principal, input, now);
+      }
+
+      // After commit, for `#startInTransaction`'s reason: a key naming an event
+      // that was rolled back would make the retry replay something that does not
+      // exist. Keyed by the chat the message landed in — the one the next
+      // attempt, or `sendEvent`, looks it up under. Before the flight is given
+      // back, so the request waiting on it finds the event.
+      if (key && outcome.kind !== 'replayed') {
+        await this.redis.set(
+          idempotencyRedisKey(tenant, outcome.chat.id, key),
+          outcome.event.id,
+          'EX',
+          IDEMPOTENCY_TTL_SECONDS,
+          'NX',
+        );
+      }
+    } finally {
+      await flight?.release();
     }
 
     if (outcome.kind === 'replayed') {
@@ -1344,20 +1386,6 @@ export class ChatService {
         replayed: true,
         openedVia: null,
       };
-    }
-
-    // After commit, for `#startInTransaction`'s reason: a key naming an event
-    // that was rolled back would make the retry replay something that does not
-    // exist. Keyed by the chat the message landed in — the one the next
-    // attempt, or `sendEvent`, looks it up under.
-    if (input.event.idempotencyKey) {
-      await this.redis.set(
-        idempotencyRedisKey(tenant, outcome.chat.id, input.event.idempotencyKey),
-        outcome.event.id,
-        'EX',
-        IDEMPOTENCY_TTL_SECONDS,
-        'NX',
-      );
     }
 
     if (outcome.kind === 'continued') {
@@ -1743,13 +1771,30 @@ export class ChatService {
     const idempotencyKey = input.idempotencyKey
       ? idempotencyRedisKey(tenant, chatId, input.idempotencyKey)
       : null;
+    const remembered = async (): Promise<SerialisedEvent | null> => {
+      const existingId = idempotencyKey ? await this.redis.get(idempotencyKey) : null;
+      return existingId ? this.#findEventById(tenant, existingId) : null;
+    };
 
-    if (idempotencyKey) {
-      const existingId = await this.redis.get(idempotencyKey);
-      if (existingId) {
-        const replayed = await this.#findEventById(tenant, existingId);
-        if (replayed) return { event: replayed, replayed: true };
-      }
+    // One send per key at a time (tm 448): a retry racing the first attempt
+    // waits for it, then replays it or is refused. A visitor's flight is the
+    // member's, the one `openOrContinueConnection` takes, so their retry is
+    // held whichever of the two paths it comes in on.
+    let flight: Flight | null = null;
+    if (input.idempotencyKey) {
+      const replayed = await remembered();
+      if (replayed) return { event: replayed, replayed: true };
+      const claim = await claimFlight(
+        this.redis,
+        flightName(
+          tenant.licenseId,
+          principal.kind === 'customer' ? { customerId: principal.customerId } : { chatId },
+          input.idempotencyKey,
+        ),
+        remembered,
+      );
+      if ('replay' in claim) return { event: claim.replay, replayed: true };
+      flight = claim.flight;
     }
 
     const result = await withTenant(this.db, tenant, async (tx) => {
@@ -1865,11 +1910,21 @@ export class ChatService {
         chat,
         warning,
       };
+    }).catch(async (error: unknown) => {
+      // Nothing was written: the key stays unused, and the next request with
+      // it is written as new.
+      await flight?.release();
+      throw error;
     });
 
     if (idempotencyKey) {
-      // NX so a concurrent duplicate cannot overwrite the winner's id.
-      await this.redis.set(idempotencyKey, result.id, 'EX', IDEMPOTENCY_TTL_SECONDS, 'NX');
+      try {
+        // NX so an event `start` registered under the key is not overwritten.
+        await this.redis.set(idempotencyKey, result.id, 'EX', IDEMPOTENCY_TTL_SECONDS, 'NX');
+      } finally {
+        // After the event is remembered, so the request waiting on it finds it.
+        await flight?.release();
+      }
     }
 
     // After the transaction, never inside it: announcing an event a subscriber

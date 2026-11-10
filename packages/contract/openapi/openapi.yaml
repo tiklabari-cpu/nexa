@@ -17530,6 +17530,7 @@ components:
         - group_topic_role_taken
         - group_unavailable
         - groups_offline
+        - idempotency_in_flight
         - impersonation_forbidden_path
         - impersonation_read_only
         - internal

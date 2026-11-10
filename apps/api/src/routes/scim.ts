@@ -98,6 +98,7 @@ import { assertScimSeatCeiling, seatCeilingFor } from '../lib/entitlements.js';
 import type { TenantClient } from '../lib/tenant.js';
 import {
   SCIM_CONTENT_TYPE,
+  coerceScimBoolean,
   parseScimFilter,
   parseScimPage,
   readScimCreateUser,
@@ -380,7 +381,22 @@ export default async function scimRoutes(
     if (!parsed.ok) rejectFilter(parsed.reason, USER_FILTER_ATTRIBUTES, 'Users');
 
     const { attribute, value } = parsed.filter;
-    if (attribute === 'active') return { suspended: !(value as boolean) };
+    if (attribute === 'active') {
+      // `active eq "false"` arrives quoted from some connectors; the parser hands
+      // it over as a string, and `!"false"` is `false` — which answered a
+      // deprovisioning sweep with the *active* members (tm 445). Read it the way
+      // a PATCH reads `active`, and refuse anything that is not a boolean
+      // rather than guess which half of the workspace was meant.
+      const active = coerceScimBoolean(value);
+      if (active === undefined) {
+        throw scimProblem(
+          'validation',
+          'The active filter compares to true or false only.',
+          'invalidFilter',
+        );
+      }
+      return { suspended: !active };
+    }
     if (attribute === 'externalId') return { scimExternalId: String(value) };
     if (attribute === 'id') {
       return { agentId: UUID_RE.test(String(value)) ? String(value) : NO_MATCH_UUID };

@@ -17009,13 +17009,13 @@
         "description": "PUT /uploads içerik türü kontrolü query parametresini kendisiyle karşılaştırdığı için işlevsiz (PDF beyanıyla .exe yüklenebiliyor); imzalı URL TTL boyunca üzerine yazılabiliyor ve GET 1 yıl immutable önbellekle sunuluyor (ajanlar farklı dosya görebiliyor).",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgular F42 ve F43 (aynı dosya, aynı imzalı-yükleme kökü), gereksinim NY-51. Kanıt yeterlidir.\n\nXHIGH GEREKÇESİ: (1) güvenlik yüzeyi.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/routes/uploads.ts:268-277` `signer.verify({ contentType: query.content_type, ...}, { contentType: query.content_type ?? '', ... })`; `apps/api/src/lib/upload-url.ts:~246-248` mismatch dalı ölü, `:~216-218` belge başlık+bayt kontrolünü anlatıyor; `uploads.ts:307` `store.put` öncesi exists kontrolü yok; `:347` `cache-control: private, max-age=31536000, immutable`; `uploads-parity.test.ts:~379-397` \"single-key not single-use\" sabitliyor.\n\nYAPILACAK: (1) `actual.contentType` = isteğin `Content-Type` başlığı (parametreler atılmış). (2) İzin verilen türler için (png, jpeg, pdf, + allowedFileTypes'taki bilinenler) magic-byte koklaması; uyuşmazlık → 400 `content_type_mismatch`. (3) Tek kullanım: ilk başarılı PUT'ta key tüketilir (Redis `SET NX` ya da `store.exists` → 409 `upload_already_written`). `uploads-parity.test.ts` beklentisini yeni davranışa çevir (yorumla). knowledge_document yolu ve sohbet eki (ikisi de pilotta açık — sahip 2026-11-06 S9) aynı kontrollerden geçer — bilgi belgesi türlerini (docx vb.) magic-byte listesinde unutma.\n\nTUZAK: Widget/panel yükleyicisi Content-Type başlığını gönderiyor mu doğrula (fetch body Blob → tip). Yeniden deneme (ağ hatası sonrası aynı URL'ye ikinci PUT) artık 409 — istemci 409'u başarı say ya da yeni URL iste; kararı HANDOFF'a. Widget bundle bütçesi. Yeni hata türleri en+tr. Pilotta dosya paylaşımı açık ve virüs taraması yok (S9, S12): bu görevin içerik türü + tek kullanım kontrolleri pilotta ziyaretçi yüklemelerinin tek içerik kapısıdır. tm 418 (PILOT-UPLOADS-PERSIST) depolama dizinini değiştirir (bağımlılık bu yüzden); PUT handler'ına pilot reddi EKLENMEZ.\n\nKAPSAM DIŞI: virüs taraması (tm 433), kalıcı depolama/yedek (tm 418).\nDENETİM BULGULARI: F42; F43; G-02",
         "testStrategy": "api entegrasyon: PDF imzalı URL'ye MZ başlıklı bayt → 400; Content-Type başlığı query ile uyuşmaz → 400; geçerli PUT 201, ikinci PUT 409; GET ilk dosyayı döner; knowledge_document docx geçerli yüklemesi başarılı. Mutasyon: actual.contentType'ı query'ye geri çevir → kırmızı. widget/web birim: 409 davranışı. DoD: CONVENTIONS §1.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "417",
           "418"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-06T17:34:51.966Z",
+        "updatedAt": "2026-11-10T14:28:16.433Z",
         "subtasks": []
       },
       {
@@ -17778,9 +17778,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-10T10:42:15.426Z",
+      "lastModified": "2026-11-10T14:28:16.435Z",
       "taskCount": 478,
-      "completedCount": 438,
+      "completedCount": 439,
       "tags": [
         "master"
       ]

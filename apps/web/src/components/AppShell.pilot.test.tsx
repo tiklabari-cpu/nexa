@@ -21,6 +21,7 @@ import { AppShell } from './AppShell.js';
 import { useLeaveGuard } from '../lib/dirty-guard.js';
 import { useAuth } from '../lib/auth-store.js';
 import { installFakeWebSocket } from '../test/fake-socket.js';
+import { resetLocale, setLocale } from '../test/i18n.js';
 
 const ORDINARY: DeploymentConfig = {
   pilot_mode: false,
@@ -354,5 +355,75 @@ describe('the shell in the public pilot (tm 257.2)', () => {
       await user.type(within(palette).getByRole('combobox'), 'subscription');
       expect(within(palette).getByRole('option', { name: /Billing/ })).toBeInTheDocument();
     });
+  });
+});
+
+describe('Help and feedback in the account menu (tm 478)', () => {
+  afterEach(() => resetLocale());
+
+  async function openMenu() {
+    const user = userEvent.setup();
+    renderShell();
+    await user.click(screen.getByRole('button', { name: 'Account' }));
+    return user;
+  }
+
+  it('is a mailto to the support address with the fixed subject, before Sign out', async () => {
+    deployment.current = PILOT;
+    await openMenu();
+    const link = screen.getByRole('link', { name: /Help and feedback/ });
+    expect(link).toBeVisible();
+    expect(link).toHaveAttribute(
+      'href',
+      `${MAILTO}?subject=${encodeURIComponent('SiyahTuş feedback')}`,
+    );
+    expect(link).toHaveTextContent('Write to us about a problem or a suggestion.');
+    const signOut = screen.getByRole('button', { name: 'Sign out' });
+    expect(link.compareDocumentPosition(signOut) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('carries no personal data in the address — not the agent, not the workspace', async () => {
+    deployment.current = PILOT;
+    await openMenu();
+    const href = screen.getByRole('link', { name: /Help and feedback/ }).getAttribute('href')!;
+    const decoded = decodeURIComponent(href);
+    expect(decoded).not.toContain('dana@acme.localhost');
+    expect(decoded).not.toContain('Dana');
+    expect(decoded).not.toContain('Okonkwo');
+    expect(decoded).not.toContain('o-1');
+    expect(decoded).not.toContain('1000003');
+    expect(new URL(href).searchParams.get('subject')).toBe('SiyahTuş feedback');
+    expect([...new URL(href).searchParams.keys()]).toEqual(['subject']);
+  });
+
+  it('speaks Turkish with a Turkish subject', async () => {
+    deployment.current = PILOT;
+    setLocale('tr');
+    const user = userEvent.setup();
+    renderShell();
+    await user.click(screen.getByRole('button', { name: 'Hesap' }));
+    const link = screen.getByRole('link', { name: /Yardım ve geri bildirim/ });
+    expect(link).toHaveAttribute(
+      'href',
+      `${MAILTO}?subject=${encodeURIComponent('SiyahTuş geri bildirim')}`,
+    );
+    expect(link).toHaveTextContent('Sorun ya da öneriniz için bize yazın.');
+  });
+
+  it('is not drawn without a support address', async () => {
+    deployment.current = ORDINARY;
+    await openMenu();
+    expect(screen.queryByRole('link', { name: /Help and feedback/ })).toBeNull();
+    expect(screen.queryByTestId('account-feedback')).toBeNull();
+    // The rest of the menu is where it was.
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeVisible();
+  });
+
+  it('closes the menu when followed', async () => {
+    deployment.current = PILOT;
+    const user = await openMenu();
+    // A mailto navigation is not performed by jsdom; the click still dismisses.
+    await user.click(screen.getByRole('link', { name: /Help and feedback/ }));
+    expect(screen.getByRole('button', { name: 'Sign out' })).not.toBeVisible();
   });
 });

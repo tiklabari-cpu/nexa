@@ -41,6 +41,7 @@ import {
   metaSignatureMatches,
   verifyMetaSubscription,
 } from './meta-graph.js';
+import { splitText } from './split-text.js';
 
 export { GRAPH_INVALID_TOKEN, GRAPH_REENGAGEMENT_REQUIRED } from './meta-graph.js';
 
@@ -395,12 +396,8 @@ export class WhatsAppLive {
 
   /** Send free text, split at Meta's per-message limit. Answers the last message id. */
   async sendText(token: string, phoneNumberId: string, to: string, text: string): Promise<string> {
-    const parts: string[] = [];
-    for (let start = 0; start < text.length; start += WHATSAPP_TEXT_MAX) {
-      parts.push(text.slice(start, start + WHATSAPP_TEXT_MAX));
-    }
     let last = '';
-    for (const part of parts.length > 0 ? parts : [text]) {
+    for (const part of splitText(text, WHATSAPP_TEXT_MAX)) {
       const answer = (await this.#call(
         'POST',
         `/${encodeURIComponent(phoneNumberId)}/messages`,

@@ -194,9 +194,23 @@ describe('public KB sitemap.xml + robots.txt (PUBKB-f)', () => {
     expect(res.headers['content-type']).toContain('text/plain');
     expect(res.payload).toBe(
       'User-agent: *\n' +
-        `Allow: /public/kb/${A_SLUG}/\n` +
+        `Allow: /api/v1/public/kb/${A_SLUG}/\n` +
         `Sitemap: http://localhost:4000/api/v1/public/kb/${A_SLUG}/sitemap.xml\n`,
     );
+  });
+
+  it('Allow names the same path prefix as the Sitemap URL and the sitemap <loc> entries (tm 461)', async () => {
+    await enableKb(fx.a.licenseId, A_SLUG);
+    await publish(fx.a.licenseId, { slug: 'live', title: 'Live', body: 'x' });
+
+    const body = (await server.get(robots(A_SLUG))).payload;
+    const allow = /^Allow: (\S+)$/m.exec(body)![1]!;
+    const sitemapUrl = new URL(/^Sitemap: (\S+)$/m.exec(body)![1]!);
+    expect(sitemapUrl.pathname.startsWith(allow)).toBe(true);
+    const loc = new URL(
+      /<loc>([^<]+)<\/loc>/.exec((await server.get(sitemap(A_SLUG))).payload)![1]!,
+    );
+    expect(loc.pathname.startsWith(allow)).toBe(true);
   });
 
   // --- Route disambiguation ----------------------------------------------------

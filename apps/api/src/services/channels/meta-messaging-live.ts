@@ -43,6 +43,7 @@ import {
   metaSignatureMatches,
   verifyMetaSubscription,
 } from './meta-graph.js';
+import { splitText } from './split-text.js';
 
 export const META_MESSAGING_CHANNELS = ['messenger', 'instagram'] as const;
 export type MetaMessagingChannel = (typeof META_MESSAGING_CHANNELS)[number];
@@ -380,11 +381,8 @@ export class MetaMessagingLive {
     text: string,
   ): Promise<string> {
     const max = META_TEXT_MAX[type];
-    const parts: string[] = [];
-    for (let start = 0; start < text.length; start += max)
-      parts.push(text.slice(start, start + max));
     let last = '';
-    for (const part of parts.length > 0 ? parts : [text]) {
+    for (const part of splitText(text, max)) {
       const answer = (await this.graph.call(
         'POST',
         `/${encodeURIComponent(pageId)}/messages`,

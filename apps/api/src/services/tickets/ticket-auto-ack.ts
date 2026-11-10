@@ -33,7 +33,9 @@ import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { type BackgroundMail, logUnsentMail, type MailOutcomeLogger } from '../mail/delivery.js';
 import { ticketNoticeMail } from '../mail/templates/messages.js';
 import type { PendingAck } from './apply-ticket-rules.js';
+import type { MailLocale } from '../mail/templates/layout.js';
 import { renderTicketEmail, withPilotNoReplyLine } from './ticket-email.js';
+import { mailLocaleFor } from './ticket-mail-locale.js';
 import type { TicketMessageService } from './ticket-message-service.js';
 import type { TicketReplyAddresses } from './ticket-reply-address.js';
 
@@ -45,6 +47,8 @@ export interface AutoAckMail {
   subject: string;
   body: string;
   workspaceName: string;
+  /** The language of the frame and `Content-Language` — the player's (tm 462). */
+  locale: MailLocale;
   /** Without brackets; the same id the ticket's system line is stored under. */
   emailMessageId: string;
   inReplyTo: string | null;
@@ -136,7 +140,7 @@ export class TicketAutoAck {
         priority: true,
         status: true,
         mergedIntoId: true,
-        customer: { select: { name: true, email: true } },
+        customer: { select: { name: true, email: true, locale: true } },
       },
     });
     // Spam and merged tickets are history, not requests: nothing is owed.
@@ -206,6 +210,7 @@ export class TicketAutoAck {
       subject: message.subject.includes(tag) ? message.subject : `${tag} ${message.subject}`,
       body: this.#settings.pilotMode ? withPilotNoReplyLine(message.body) : message.body,
       workspaceName,
+      locale: await mailLocaleFor(tx, ticket.customer?.locale),
       emailMessageId,
       inReplyTo,
       references: inReplyTo ? [...(input.thread?.references ?? []), inReplyTo] : [],
@@ -241,10 +246,10 @@ export function deliverAutoAck(
       // RFC 3834: an automatic reply says so, so another auto-responder
       // does not answer it.
       autoSubmitted: 'auto-replied',
-      // The player's language is not known to the server — the frame's few
-      // words are English, as on the ticket notice.
+      // The player's language (tm 462): their own when the templates speak it,
+      // else the workspace's, else English.
       ...ticketNoticeMail(
-        { locale: 'en' },
+        { locale: mail.locale },
         { workspaceName: mail.workspaceName, subject: mail.subject, body: mail.body },
       ),
     },

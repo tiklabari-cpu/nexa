@@ -239,6 +239,64 @@ describe('ticket replies by e-mail (HD-01 · K23)', () => {
     expect(items.map((item) => item.delivery_status)).toEqual(['sent']);
   });
 
+  // tm 462 · F48: the frame speaks the player's language — their own, else the
+  // workspace's, else English — and `Content-Language` says so.
+  describe('the mail speaks the player’s language (tm 462)', () => {
+    async function localeOfReply(): Promise<string | undefined> {
+      const ticketId = await makeTicket();
+      await reply(ticketId, 'Merhaba, talebiniz ele alındı.');
+      const mails = await replies();
+      expect(mails).toHaveLength(1);
+      return mails[0]!.locale;
+    }
+
+    async function setWorkspaceLanguage(language: string, fallbackLanguage: string) {
+      const brand =
+        (await owner.brand.findFirst({
+          where: { licenseId: fx.a.licenseId, isDefault: true },
+          select: { id: true },
+        })) ??
+        (await owner.brand.create({
+          data: { licenseId: fx.a.licenseId, name: 'Main', slug: 'main', isDefault: true },
+          select: { id: true },
+        }));
+      await owner.widgetSettings.upsert({
+        where: { licenseId_brandId: { licenseId: fx.a.licenseId, brandId: brand.id } },
+        create: { licenseId: fx.a.licenseId, brandId: brand.id, language, fallbackLanguage },
+        update: { language, fallbackLanguage },
+      });
+    }
+
+    it('customer.locale = tr → the Turkish frame and Content-Language: tr', async () => {
+      await owner.customer.update({ where: { id: playerId }, data: { locale: 'tr' } });
+      expect(await localeOfReply()).toBe('tr');
+      const mail = (await replies())[0]!;
+      expect(mail.html).toContain('lang="tr"');
+    });
+
+    it('no customer locale and a Turkish workspace → tr (the fallback language when the widget is auto)', async () => {
+      await setWorkspaceLanguage('auto', 'tr');
+      expect(await localeOfReply()).toBe('tr');
+    });
+
+    it('no customer locale and a workspace whose language the templates lack → en', async () => {
+      await setWorkspaceLanguage('de', 'de');
+      expect(await localeOfReply()).toBe('en');
+    });
+
+    it('a customer language the templates lack falls to en, not to the workspace’s', async () => {
+      await setWorkspaceLanguage('tr', 'tr');
+      await owner.customer.update({ where: { id: playerId }, data: { locale: 'de' } });
+      expect(await localeOfReply()).toBe('en');
+    });
+
+    it('English customer on a Turkish workspace stays en', async () => {
+      await setWorkspaceLanguage('tr', 'tr');
+      await owner.customer.update({ where: { id: playerId }, data: { locale: 'en' } });
+      expect(await localeOfReply()).toBe('en');
+    });
+  });
+
   it('threads the next reply on the earlier mail, the player’s own included', async () => {
     const ticketId = await makeTicket();
     const first = await reply(ticketId, 'İlk yanıt.');

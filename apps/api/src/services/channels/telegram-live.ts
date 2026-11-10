@@ -34,6 +34,7 @@ import {
 } from '../apps/verifiers/provider-message.js';
 import type { ProviderContext, VerifyFailureReason } from '../apps/verifiers/types.js';
 import type { NormalizedInbound } from './channel-adapter.js';
+import { splitText } from './split-text.js';
 
 /**
  * What @BotFather hands out: the bot's numeric id, a colon, and a secret part.
@@ -159,12 +160,8 @@ export class TelegramLive {
 
   /** `sendMessage`, split at Telegram's per-message limit. Answers the last message id. */
   async sendMessage(token: string, chatId: string, text: string): Promise<string> {
-    const parts: string[] = [];
-    for (let start = 0; start < text.length; start += TELEGRAM_TEXT_MAX) {
-      parts.push(text.slice(start, start + TELEGRAM_TEXT_MAX));
-    }
     let last = '';
-    for (const part of parts.length > 0 ? parts : [text]) {
+    for (const part of splitText(text, TELEGRAM_TEXT_MAX)) {
       const result = (await this.#call(token, 'sendMessage', { chat_id: chatId, text: part })) as
         { message_id?: unknown } | undefined;
       last = `tg.${String(result?.message_id ?? '')}`;

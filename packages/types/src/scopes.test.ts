@@ -236,6 +236,9 @@ describe('error taxonomy', () => {
     // A transcript mailed on demand (AR-04 · tm 338): an address outside the
     // player's own and the workspace's allowed domains.
     'recipient_not_allowed',
+    // Single-use upload URLs (tm 446 · audit F43): a second PUT to a key the
+    // first one already wrote.
+    'upload_already_written',
   ];
 
   it('carries the 24 documented types, plus SiyahTuş additions', () => {

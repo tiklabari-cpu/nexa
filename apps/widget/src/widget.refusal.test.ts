@@ -42,6 +42,8 @@ interface Routes {
   send?: () => Response;
   /** The answer to `POST /uploads` (the grant). */
   grant?: () => Response;
+  /** The answer to the signed `PUT /uploads/{key}`. */
+  put?: () => Response;
   /** Events the transcript opens with. */
   events?: unknown[];
 }
@@ -73,6 +75,9 @@ function setUp(routes: Routes, language = 'en'): Harness {
       if (path === '/uploads') {
         grants += 1;
         return (routes.grant ?? (() => jsonResponse({}, 500)))();
+      }
+      if (path.startsWith('/uploads/') && method === 'PUT') {
+        return (routes.put ?? (() => jsonResponse({}, 201)))();
       }
       if (path === '/customer/chat/typing') return jsonResponse(null, 204);
       throw new Error(`unexpected request: ${method} ${path}`);
@@ -283,6 +288,71 @@ describe('a refused upload says why (D16)', () => {
     });
     await pickFile(h, big());
     await vi.waitFor(() => expect(status(h)).toBe(CATALOGS.en['error.upload']));
+  });
+});
+
+describe('a single-use upload URL (tm 446)', () => {
+  const photo = (): File => new File([new Uint8Array(8)], 'photo.png', { type: 'image/png' });
+  /** Grants k1, k2… with an absolute PUT URL under the test API. */
+  const grants = (): (() => Response) => {
+    let n = 0;
+    return () => {
+      n += 1;
+      return jsonResponse(
+        { upload_url: `${API}/uploads/k${n}?sig=${n}`, file_url: `/api/v1/uploads/k${n}` },
+        201,
+      );
+    };
+  };
+  const USED = {
+    error: { type: 'upload_already_written', message: 'This upload URL has already been used.' },
+  };
+
+  it('answers a 409 with one fresh grant and sends the file that one stored', async () => {
+    const answers = [jsonResponse(USED, 409), jsonResponse({}, 201)];
+    const h = setUp({ grant: grants(), put: () => answers.shift()! });
+    await pickFile(h, photo());
+    await vi.waitFor(() => expect(h.grants()).toBe(2));
+    await vi.waitFor(() => expect(el<HTMLElement>(h.doc, '.nx-chip').hidden).toBe(false));
+
+    el<HTMLTextAreaElement>(h.doc, '.nx-input').value = 'here it is';
+    el<HTMLFormElement>(h.doc, '.nx-form').dispatchEvent(
+      new window.Event('submit', { bubbles: true, cancelable: true }),
+    );
+    await vi.waitFor(() => expect(h.sends()).toBe(1));
+    const sent = vi
+      .mocked(fetch)
+      .mock.calls.find(([input]) => String(input).endsWith('/customer/chat/events'));
+    expect(JSON.parse(String(sent?.[1]?.body))).toMatchObject({
+      attachment_url: '/api/v1/uploads/k2',
+    });
+  });
+
+  it('gives up after a second 409 with the generic sentence', async () => {
+    const h = setUp({ grant: grants(), put: () => jsonResponse(USED, 409) });
+    await pickFile(h, photo());
+    await vi.waitFor(() => expect(status(h)).toBe(CATALOGS.en['error.upload']));
+    expect(h.grants()).toBe(2);
+  });
+
+  it('says the type is wrong when the PUT finds the bytes are not what the name claims', async () => {
+    const h = setUp({
+      grant: grants(),
+      put: () =>
+        jsonResponse(
+          {
+            error: {
+              type: 'validation',
+              message: 'The contents of this file are not the type it was granted as.',
+              details: { reason: 'content_type_mismatch' },
+            },
+          },
+          400,
+        ),
+    });
+    await pickFile(h, photo());
+    await vi.waitFor(() => expect(status(h)).toBe(CATALOGS.en['error.uploadType']));
+    expect(h.grants()).toBe(1);
   });
 });
 

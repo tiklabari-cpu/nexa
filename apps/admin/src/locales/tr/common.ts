@@ -105,6 +105,8 @@ export const common: Messages = {
   'common.errors.two_factor_required': 'Devam etmek için iki adımlı doğrulama kodunuzu girin.',
   'common.errors.unknown': 'Bir şeyler ters gitti — yeniden deneyin.',
   'common.errors.unsupported_version': 'Bu sayfa güncel değil — yenileyip tekrar deneyin.',
+  'common.errors.upload_already_written':
+    'Bu yükleme bağlantısı zaten kullanıldı — dosyayı yeniden ekleyin.',
   'common.errors.users_limit_reached': 'Paketinizde boş koltuk kalmadı.',
   'common.errors.validation': 'İşaretli alanları kontrol edip yeniden deneyin.',
   'common.errors.website_exists': 'Bu web sitesi zaten bağlı.',

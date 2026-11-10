@@ -8,7 +8,8 @@
  *   GET  /uploads-policy     just the on/off switch, for a composer deciding
  *                            whether to offer the affordance at all
  *   PUT  /uploads/:key       receives the bytes, authorised by the signature
- *                            the POST issued rather than by a session
+ *                            the POST issued rather than by a session — once,
+ *                            and only bytes of the type the grant vetted
  *   GET  /uploads/:key       serves them back, authorised by a session whose
  *                            licence has to match the one inside the key
  *
@@ -47,6 +48,7 @@ import {
 import { ApiError } from '../lib/api-error.js';
 import type { Env } from '../config/env.js';
 import { identifyKnowledgeDocument } from '../services/ai/knowledge-document-type.js';
+import { checkDeclaredType } from '../services/storage/content-sniff.js';
 import { createObjectStore, digestBytes } from '../services/storage/object-store.js';
 import {
   KnowledgeDownloadSigner,
@@ -55,8 +57,10 @@ import {
   buildKnowledgeKey,
   licenseOfKey,
   licenseOfKnowledgeKey,
+  mediaTypeOf,
 } from '../services/storage/upload-url.js';
 import { assertClean, createVirusScanner } from '../services/storage/virus-scanner.js';
+import { writeOnce } from '../services/storage/write-once.js';
 
 const MIME = /^[a-z0-9][a-z0-9!#$&^_.+-]{0,126}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}$/;
 
@@ -109,15 +113,6 @@ export default async function uploadRoutes(app: FastifyInstance, { env }: Option
    * only ever be stricter.
    */
   const HARD_CEILING = 26_214_400; // 25 MiB
-
-  // Fastify parses JSON and text out of the box and rejects everything else.
-  // Encapsulation keeps this catch-all inside this plugin: no other route
-  // starts accepting arbitrary bytes because uploads needed to.
-  app.addContentTypeParser(
-    '*',
-    { parseAs: 'buffer', bodyLimit: HARD_CEILING },
-    (_req, body, done) => done(null, body),
-  );
 
   app.post(
     '/uploads',
@@ -254,65 +249,110 @@ export default async function uploadRoutes(app: FastifyInstance, { env }: Option
     },
   );
 
-  app.put<{ Params: { key: string } }>(
-    '/uploads/:key',
-    // No principal: the signature *is* the authorisation, and it is narrower
-    // than a session — one key, one type, one length, one short window.
-    { config: { public: true }, bodyLimit: HARD_CEILING },
-    async (request, reply) => {
-      const key = request.params.key;
-      const query = request.query as Record<string, string | undefined>;
-      const bytes = Buffer.isBuffer(request.body) ? request.body : null;
-      if (!bytes) throw ApiError.validation('Expected the file as a binary body.');
+  /**
+   * The signed PUT, in a context of its own with exactly one body parser: the
+   * bytes, whatever the header names. Encapsulation keeps the catch-all here —
+   * no other route starts accepting arbitrary bytes because uploads needed to.
+   * And it is the *only* parser: Fastify parses `application/json` and
+   * `text/plain` itself, so a catch-all beside those never saw either — an
+   * allowed text file sent under its own type arrived as a string and was
+   * refused as "not a binary body". Now that the header *is* the type the
+   * grant is compared with (tm 446), every type has to arrive as bytes.
+   */
+  await app.register(async (raw) => {
+    raw.removeAllContentTypeParsers();
+    raw.addContentTypeParser(
+      '*',
+      { parseAs: 'buffer', bodyLimit: HARD_CEILING },
+      (_req, body, done) => done(null, body),
+    );
 
-      const verdict = signer.verify(
-        {
-          key,
-          contentType: query.content_type,
-          sizeBytes: Number(query.size_bytes),
-          expiresAt: Number(query.expires_at),
-          signature: query.signature,
-        },
-        { contentType: query.content_type ?? '', sizeBytes: bytes.byteLength },
-      );
+    raw.put<{ Params: { key: string } }>(
+      '/uploads/:key',
+      // No principal: the signature *is* the authorisation, and it is narrower
+      // than a session — one key, one type, one length, one short window, and
+      // one use.
+      { config: { public: true }, bodyLimit: HARD_CEILING },
+      async (request, reply) => {
+        const key = request.params.key;
+        const query = request.query as Record<string, string | undefined>;
+        const bytes = Buffer.isBuffer(request.body) ? request.body : null;
+        if (!bytes) throw ApiError.validation('Expected the file as a binary body.');
 
-      if (!verdict.ok) {
-        // One message for every rejection. Telling a caller *which* part of
-        // their forgery failed is how a forgery gets refined.
-        throw ApiError.authorization('This upload URL is not valid.');
-      }
+        const verdict = signer.verify(
+          {
+            key,
+            contentType: query.content_type,
+            sizeBytes: Number(query.size_bytes),
+            expiresAt: Number(query.expires_at),
+            signature: query.signature,
+          },
+          // What the request carries, not what its URL says: the URL's type
+          // is the grant's own field (tm 446 · audit F42).
+          {
+            contentType: mediaTypeOf(request.headers['content-type']),
+            sizeBytes: bytes.byteLength,
+          },
+        );
 
-      // Scan before a single byte lands on disk: a stored file is therefore
-      // always one that passed, so the GET can never serve an unscanned file
-      // (FR-MOD-08.9.4). Fail closed — an unreachable scanner refuses the upload.
-      await assertClean(scanner, bytes);
-
-      // A knowledge document's type is read from its bytes, and they must be
-      // the type the grant vetted: a renamed executable or a `.docm` stops
-      // here, with nothing stored (tm 313 · AI-18).
-      const document = licenseOfKnowledgeKey(verdict.grant.key) !== null;
-      if (document) {
-        const read = identifyKnowledgeDocument(bytes);
-        if (!read.ok || read.mime !== verdict.grant.contentType) {
-          request.log.info(
-            { why: read.ok ? 'type_mismatch' : read.why },
-            'knowledge document refused by type',
-          );
-          throw ApiError.validation('This file is not a PDF or a Word (.docx) document.', {
-            reason: 'unsupported_type',
-          });
+        if (!verdict.ok) {
+          // Reached only past the signature and the expiry: the caller holds
+          // a genuine, live grant and named another type under it. Saying so
+          // teaches a forger nothing, and tells a client what to fix.
+          if (verdict.reason === 'content_type_mismatch') {
+            throw typeMismatch(
+              'The Content-Type of this request is not the type the upload was granted for.',
+            );
+          }
+          // One message for every other rejection. Telling a caller *which*
+          // part of their forgery failed is how a forgery gets refined.
+          throw ApiError.authorization('This upload URL is not valid.');
         }
-      }
+        const grant = verdict.grant;
 
-      await store.put(verdict.grant.key, bytes, verdict.grant.contentType);
-      return reply.status(201).send({
-        upload_id: verdict.grant.key,
-        ...(document ? {} : { file_url: `/api/v1/uploads/${verdict.grant.key}` }),
-        size_bytes: bytes.byteLength,
-        checksum_sha256: digestBytes(bytes),
-      });
-    },
-  );
+        // Scan before a single byte lands on disk: a stored file is therefore
+        // always one that passed, so the GET can never serve an unscanned file
+        // (FR-MOD-08.9.4). Fail closed — an unreachable scanner refuses the upload.
+        await assertClean(scanner, bytes);
+
+        // The bytes must be the type the grant vetted. A knowledge document's
+        // type is read from its bytes: a renamed executable or a `.docm` stops
+        // here, with nothing stored (tm 313 · AI-18).
+        const document = licenseOfKnowledgeKey(grant.key) !== null;
+        if (document) {
+          const read = identifyKnowledgeDocument(bytes);
+          if (!read.ok || read.mime !== grant.contentType) {
+            request.log.info(
+              { why: read.ok ? 'type_mismatch' : read.why },
+              'knowledge document refused by type',
+            );
+            throw ApiError.validation('This file is not a PDF or a Word (.docx) document.', {
+              reason: 'unsupported_type',
+            });
+          }
+        } else {
+          // An attachment's by its signature — a "PDF" that opens `MZ` is a
+          // program (tm 446 · audit F42; `content-sniff.ts` has the rules).
+          const check = checkDeclaredType(bytes, grant.contentType);
+          if (!check.ok) {
+            request.log.info({ why: check.why }, 'attachment refused by type');
+            throw typeMismatch('The contents of this file are not the type it was granted as.');
+          }
+        }
+
+        // One use (tm 446 · audit F43): the first PUT that stores bytes spends
+        // the key, and a later one is a 409 that stores nothing (`write-once.ts`).
+        await writeOnce({ redis: app.redis, store, log: request.log }, grant, bytes);
+
+        return reply.status(201).send({
+          upload_id: grant.key,
+          ...(document ? {} : { file_url: `/api/v1/uploads/${grant.key}` }),
+          size_bytes: bytes.byteLength,
+          checksum_sha256: digestBytes(bytes),
+        });
+      },
+    );
+  });
 
   app.get<{ Params: { key: string } }>(
     '/uploads/:key',
@@ -344,6 +384,8 @@ export default async function uploadRoutes(app: FastifyInstance, { env }: Option
           // stored-XSS surface handed over for free.
           .header('content-disposition', 'attachment')
           .header('x-content-type-options', 'nosniff')
+          // True since tm 446: a key is written once, so what it holds never
+          // changes. (Before it, a live grant could replace the bytes.)
           .header('cache-control', 'private, max-age=31536000, immutable')
           .send(file.bytes)
       );
@@ -391,4 +433,9 @@ export default async function uploadRoutes(app: FastifyInstance, { env }: Option
 function contentDisposition(filename: string): string {
   const ascii = filename.replace(/[^\x20-\x7e]|["\\]/g, '_') || 'document';
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+}
+
+/** The 400 for bytes, or a header, that are not the type the grant vetted (tm 446). */
+function typeMismatch(message: string): ApiError {
+  return ApiError.validation(message, { reason: 'content_type_mismatch' });
 }

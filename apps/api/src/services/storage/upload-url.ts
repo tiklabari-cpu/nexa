@@ -213,9 +213,13 @@ export class UploadSigner {
   /**
    * Verifies a PUT against the grant its URL claims.
    *
-   * `actual` is what the request really carries — the header it set and the
-   * bytes it actually sent. A grant for a 2 KB PNG does not authorise a 9 MB
-   * one, so both are compared rather than trusted from the query string.
+   * `actual` is what the request really carries — the media type its own
+   * `Content-Type` header names ({@link mediaTypeOf}) and the bytes it
+   * actually sent. A grant for a 2 KB PNG does not authorise a 9 MB one, so
+   * both are compared rather than trusted from the query string. The type
+   * must come from the header, never from the URL: the URL's `content_type`
+   * is the grant's own field, and comparing it with itself is a check that
+   * cannot fail (tm 446 · audit F42 — it did exactly that).
    */
   verify(
     grant: Partial<UploadGrant> & { signature?: string },
@@ -250,6 +254,16 @@ export class UploadSigner {
 
     return { ok: true, grant: full };
   }
+}
+
+/**
+ * The media type a `Content-Type` header names: parameters (`; charset=…`)
+ * dropped, whitespace trimmed, lower-cased — `''` when the header is absent.
+ * What a PUT's type is compared with the grant's by.
+ */
+export function mediaTypeOf(header: string | string[] | undefined): string {
+  const value = Array.isArray(header) ? (header[0] ?? '') : (header ?? '');
+  return value.split(';', 1)[0]!.trim().toLowerCase();
 }
 
 function canonical(grant: UploadGrant): string {

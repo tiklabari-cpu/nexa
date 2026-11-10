@@ -343,6 +343,40 @@ describe('scim server core', () => {
       expect(active.Resources.map((u) => u.userName)).toEqual([fx.a.ownerEmail]);
     });
 
+    it('reads a quoted active value the way it reads a bare one, in any case (tm 445 · NFR-S11)', async () => {
+      // `!"false"` is `false`: before the fix a quoted `"false"` answered a
+      // deprovisioning reconciliation with the members who are still active.
+      await owner.agentMembership.update({
+        where: { licenseId_agentId: { licenseId: fx.a.licenseId, agentId: fx.a.agentAccountId } },
+        data: { suspended: true },
+      });
+      const list = async (filter: string) =>
+        asList(
+          await server.get(`/scim/v2/Users?filter=${encodeURIComponent(filter)}`, auth(scimA)),
+        ).Resources.map((u) => u.userName);
+
+      expect(await list('active eq "false"')).toEqual([fx.a.agentEmail]);
+      expect(await list('active eq "FALSE"')).toEqual([fx.a.agentEmail]);
+      expect(await list('active eq false')).toEqual([fx.a.agentEmail]);
+      expect(await list('active eq "true"')).toEqual([fx.a.ownerEmail]);
+      expect(await list('active eq "True"')).toEqual([fx.a.ownerEmail]);
+    });
+
+    it('refuses an active value that is not a boolean with invalidFilter (tm 445)', async () => {
+      for (const filter of ['active eq "maybe"', 'active eq ""', 'active eq "0"']) {
+        const res = await server.get(
+          `/scim/v2/Users?filter=${encodeURIComponent(filter)}`,
+          auth(scimA),
+        );
+        expect(res.statusCode).toBe(400);
+        expect(res.headers['content-type']).toContain(SCIM_JSON);
+        const body = asError(res);
+        expect(body.scimType).toBe('invalidFilter');
+        expect(body.schemas).toEqual(['urn:ietf:params:scim:api:messages:2.0:Error']);
+        expect(body.status).toBe('400');
+      }
+    });
+
     it('refuses a filter outside the supported subset with invalidFilter', async () => {
       const res = await server.get(
         `/scim/v2/Users?filter=${encodeURIComponent('userName co "example"')}`,

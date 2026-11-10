@@ -3882,10 +3882,12 @@
             "nullable": true,
             "enum": [
               "ok",
+              "partial",
               "skipped",
               "error",
               "disabled"
-            ]
+            ],
+            "description": "`partial` — the pass finished but skipped work it could not do (a retention pass that could not sweep one workspace and swept the rest)."
           },
           "last_error_class": {
             "type": "string",

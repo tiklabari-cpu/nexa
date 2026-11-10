@@ -1157,6 +1157,8 @@ export const settings: Messages = {
   'settings.retention.tier.unlimited': 'Keep indefinitely',
   'settings.retention.effectiveDays': 'Deleted after {days} days.',
   'settings.retention.effectiveUnlimited': 'Never deleted automatically.',
+  'settings.retention.notEnforced':
+    'Automatic deletion is not active on this installation. The periods are saved but not applied: nothing is deleted when they end.',
   'settings.retention.hipaaNote':
     'This workspace has a signed HIPAA agreement, so data cannot be kept longer than {days} days and cannot be kept indefinitely.',
   'settings.retention.auditNote':

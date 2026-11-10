@@ -1439,7 +1439,11 @@ components:
         last_status:
           type: string
           nullable: true
-          enum: [ok, skipped, error, disabled]
+          enum: [ok, partial, skipped, error, disabled]
+          description: >-
+            `partial` — the pass finished but skipped work it could not do (a
+            retention pass that could not sweep one workspace and swept the
+            rest).
         last_error_class:
           type: string
           description: The error's class, never its message — driver messages can carry connection strings.
@@ -9602,6 +9606,7 @@ components:
           max_thread_days,
           max_visit_days,
           hipaa_scope,
+          enforced,
         ]
       properties:
         thread_window:
@@ -9655,6 +9660,13 @@ components:
           description: >-
             Whether a Business Associate Agreement is in force for this
             workspace, which is what puts the ceilings above in force.
+        enforced:
+          type: boolean
+          description: >-
+            Whether this deployment runs the sweep at all (tm 447). False means
+            the windows are stored but nothing is deleted on any schedule — the
+            operator has automatic deletion switched off — so the screen must
+            not say "deleted after N days" without saying that first.
 
     RetentionSettingsInput:
       type: object

@@ -1174,6 +1174,11 @@ function serialiseRetention(
     max_thread_days: hipaaCeilingDays('threadDays', hipaaScope),
     max_visit_days: hipaaCeilingDays('visitDays', hipaaScope),
     hipaa_scope: hipaaScope,
+    // Whether anything is deleted at all (tm 447 · F49): the scheduled sweep
+    // runs only with `RETENTION_ENABLED`, and without it every window above is
+    // a promise the deployment does not keep. The same flag the scheduler
+    // reads (`services/scheduler/jobs.ts`), so the two cannot disagree.
+    enforced: env.RETENTION_ENABLED,
   };
 }
 

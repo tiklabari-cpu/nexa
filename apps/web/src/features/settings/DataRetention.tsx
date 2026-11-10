@@ -40,6 +40,8 @@ interface RetentionSettings {
   max_thread_days: number | null;
   max_visit_days: number | null;
   hipaa_scope: boolean;
+  /** Whether the deployment runs the sweep at all (tm 447). */
+  enforced: boolean;
 }
 
 /** The empty option's value — a `<select>` cannot carry `null`. */
@@ -152,6 +154,20 @@ function RetentionForm({
 
   const fields = (values: Draft, set: (key: keyof Draft, tier: RetentionTier | null) => void) => (
     <>
+      {/* First, above every "deleted after N days" on the card (tm 447): with
+          the sweep switched off on this installation each of those lines is a
+          promise nobody keeps, and the person choosing a window has to know
+          that before they choose. `role="note"`, not `status` — the save bar
+          owns the card's live region. */}
+      {!settings.enforced && (
+        <p
+          role="note"
+          data-testid="retention-not-enforced"
+          className="rounded-md border border-warning px-3 py-2 text-xs text-content"
+        >
+          {t('settings.retention.notEnforced')}
+        </p>
+      )}
       {settings.hipaa_scope && (
         <p className="text-2xs text-content-tertiary">
           {t('settings.retention.hipaaNote', { days: String(settings.max_thread_days ?? '') })}

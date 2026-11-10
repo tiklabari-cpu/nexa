@@ -430,7 +430,7 @@ export class Scheduler {
    */
   async #execute(
     state: JobState,
-  ): Promise<{ status: 'ok' | 'error'; durationMs: number; errorClass?: string }> {
+  ): Promise<{ status: 'ok' | 'partial' | 'error'; durationMs: number; errorClass?: string }> {
     const { name } = state.definition;
     const logger = this.#options.logger;
     const span = this.#options.telemetry?.tracer.startSpan(`scheduler.${name}`) ?? null;
@@ -442,13 +442,24 @@ export class Scheduler {
       });
       const durationMs = Date.now() - startedAt;
       state.lastDurationMs = durationMs;
-      this.#record(state, 'ok', null);
-      span?.setAttributes({ outcome: 'ok', duration_ms: durationMs });
-      logger.info(
-        { job: name, outcome: 'ok', duration_ms: durationMs, ...(outcome?.counts ?? {}) },
-        'scheduler job ran',
-      );
-      return { status: 'ok', durationMs };
+      // A pass that finished but skipped some of its work (tm 441) is not a
+      // failure of the job — the streak resets — but it is not clean either:
+      // `/health` says `partial` and the line is a warning.
+      const status = outcome?.status === 'partial' ? 'partial' : 'ok';
+      this.#record(state, status, null);
+      span?.setAttributes({ outcome: status, duration_ms: durationMs });
+      const line = {
+        job: name,
+        outcome: status,
+        duration_ms: durationMs,
+        ...(outcome?.counts ?? {}),
+      };
+      if (status === 'partial') {
+        logger.warn(line, 'scheduler job ran with failures it skipped');
+      } else {
+        logger.info(line, 'scheduler job ran');
+      }
+      return { status, durationMs };
     } catch (error) {
       const durationMs = Date.now() - startedAt;
       state.lastDurationMs = durationMs;
@@ -510,7 +521,7 @@ export class Scheduler {
     if (status === 'error') {
       state.consecutiveErrors += 1;
       state.lastErrorClass = errorClassOf(error);
-    } else if (status === 'ok') {
+    } else if (status === 'ok' || status === 'partial') {
       state.consecutiveErrors = 0;
       state.lastErrorClass = null;
     }

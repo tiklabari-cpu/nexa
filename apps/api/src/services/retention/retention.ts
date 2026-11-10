@@ -48,6 +48,16 @@
  *
  * Deletes are batched (bounded statement size, short transactions) and
  * idempotent: a second run finds the expired rows already gone and reports zero.
+ *
+ * **One workspace cannot stop the sweep (tm 441 · F24).** A tenant whose pass
+ * throws — a batch that outran the tenant transaction's 10 s ceiling (P2028), a
+ * store fault — is recorded on its own row of the report (`error`) and logged,
+ * and the loop moves on; the run's `outcome` is `partial`. What that tenant had
+ * already deleted is still counted: the counters are filled step by step, so a
+ * failure reports the work done before it rather than zero. Tenants are walked
+ * oldest successful sweep first (`licenses.retention_swept_at`, null first —
+ * `retention_list_tenants()`), so a tenant that failed, or that a stopped pass
+ * never reached, is the first one tried next time instead of always the last.
  */
 import { readFile, readdir, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -79,6 +89,28 @@ import {
  * builds a transaction big enough to matter.
  */
 const RETENTION_BATCH = 500;
+
+/**
+ * Threads go a fifth of a batch at a time (tm 441). A thread is one row here
+ * but takes its whole transcript with it — every event cascades — so 500
+ * threads can be hundreds of thousands of rows inside one tenant transaction,
+ * which is how a sweep meets the 10 s ceiling (P2028). The other tables are
+ * deleted row for row, so they keep the full batch.
+ */
+const THREAD_BATCH_DIVISOR = 5;
+
+/** The part of a logger the sweep uses — the scheduler's job logger, or none. */
+export interface RetentionLogger {
+  warn(fields: Record<string, unknown>, message: string): void;
+}
+
+/** Why one tenant's pass stopped: the error's class and, for Prisma, its code. */
+export interface TenantPruneError {
+  /** The constructor's name, never the message (driver messages carry SQL). */
+  class: string;
+  /** Prisma's `P2028`-style code when there is one, else null. */
+  code: string | null;
+}
 
 export interface TenantPruneResult {
   /** Stringified: a bigint cannot be JSON-serialised, and this report is JSON. */
@@ -127,6 +159,17 @@ export interface TenantPruneResult {
   /** Whether this workspace is covered by a signed BAA (NFR-C4 · C4-e). */
   hipaaScope: boolean;
   /**
+   * Delete transactions this tenant's batched steps took (tm 441) — each one
+   * short and committed on its own. Zero in a dry-run, which deletes nothing.
+   */
+  batches: number;
+  /**
+   * Null when the tenant's pass finished. Otherwise why it stopped; the
+   * counters above are what it deleted before that (tm 441), and the tenant is
+   * tried first on the next run.
+   */
+  error: TenantPruneError | null;
+  /**
    * The windows this tenant was actually swept under — the run's policy, capped
    * when `hipaaScope`. Reported rather than inferred: an operator reading a
    * dry-run should not have to re-derive the ceiling to know what will go.
@@ -136,6 +179,11 @@ export interface TenantPruneResult {
 
 export interface RetentionReport {
   dryRun: boolean;
+  /**
+   * `partial` when at least one tenant's pass threw (tm 441): the others were
+   * still swept, and the failures are the `tenants` rows whose `error` is set.
+   */
+  outcome: 'ok' | 'partial';
   /** The configured windows, before any per-tenant HIPAA ceiling is applied. */
   policy: RetentionPolicy;
   startedAt: string;
@@ -168,6 +216,8 @@ export interface RetentionReport {
      * Counted, not deleted, in a dry-run.
      */
     canceledWorkspaces: number;
+    /** Tenants whose pass threw this run (tm 441); `outcome` is `partial` above zero. */
+    failedTenants: number;
   };
 }
 
@@ -187,6 +237,16 @@ export interface RetentionRunnerOptions {
    * CLI always pass the deployment's store.
    */
   store?: ObjectStore;
+  /**
+   * Where a tenant's failure is logged (tm 441). The report carries it either
+   * way; the scheduler passes its job logger, the CLI prints the report.
+   */
+  logger?: RetentionLogger;
+  /**
+   * Rows per delete statement. Only tests lower it, to see a sweep take more
+   * than one batch without seeding thousands of rows.
+   */
+  batchSize?: number;
 }
 
 interface TenantRow {
@@ -200,6 +260,9 @@ export class RetentionRunner {
   readonly #mailDir: string;
   readonly #auditChainSecret: string;
   readonly #store: ObjectStore | null;
+  readonly #logger: RetentionLogger | null;
+  readonly #batch: number;
+  readonly #threadBatch: number;
 
   constructor(db: PrismaClient, options: RetentionRunnerOptions) {
     this.#db = db;
@@ -207,9 +270,21 @@ export class RetentionRunner {
     this.#mailDir = options.mailDir;
     this.#auditChainSecret = options.auditChainSecret;
     this.#store = options.store ?? null;
+    this.#logger = options.logger ?? null;
+    this.#batch = Math.max(1, Math.floor(options.batchSize ?? RETENTION_BATCH));
+    this.#threadBatch = Math.max(1, Math.floor(this.#batch / THREAD_BATCH_DIVISOR));
   }
 
-  async run(options: { dryRun: boolean; now?: Date }): Promise<RetentionReport> {
+  /**
+   * One pass over every tenant. `signal` (the scheduler's, on shutdown) stops
+   * the walk between tenants; the ones not reached keep their old
+   * `retention_swept_at` and so lead the next pass.
+   */
+  async run(options: {
+    dryRun: boolean;
+    now?: Date;
+    signal?: AbortSignal;
+  }): Promise<RetentionReport> {
     const dryRun = options.dryRun;
     const now = options.now ?? new Date();
     const startedAt = now.toISOString();
@@ -221,8 +296,32 @@ export class RetentionRunner {
     const tenants = await this.#listTenants();
     const results: TenantPruneResult[] = [];
     for (const tenant of tenants) {
-      results.push(await this.#pruneTenant(tenant, now, dryRun));
+      if (options.signal?.aborted) break;
+      // Filled step by step inside `#pruneTenant`, so when it throws this
+      // still holds what the tenant's pass deleted before the failure.
+      const result = emptyResult(tenant, this.#policy);
+      results.push(result);
+      try {
+        await this.#pruneTenant(tenant, now, dryRun, result);
+      } catch (error) {
+        // Contained here and nowhere deeper (tm 441 · F24): one workspace's
+        // fault — a batch past the tenant transaction's ceiling, a store that
+        // answers with something other than "unavailable" — must not leave
+        // every workspace after it unswept. Recorded, logged, and the loop
+        // moves on; its `retention_swept_at` stays put, so it leads next time.
+        result.error = describeError(error);
+        this.#logger?.warn(
+          {
+            license_id: result.licenseId,
+            error_class: result.error.class,
+            ...(result.error.code ? { error_code: result.error.code } : {}),
+            err: error,
+          },
+          'retention sweep failed for one workspace; continuing with the rest',
+        );
+      }
     }
+    const failedTenants = results.filter((r) => r.error !== null).length;
 
     // The mail spool is the one thing here that cannot be swept per tenant: the
     // files are local artifacts with no workspace on them (`#pruneMail`), so
@@ -239,6 +338,7 @@ export class RetentionRunner {
 
     return {
       dryRun,
+      outcome: failedTenants > 0 ? 'partial' : 'ok',
       policy: this.#policy,
       startedAt,
       finishedAt: new Date().toISOString(),
@@ -258,6 +358,7 @@ export class RetentionRunner {
         mailFiles,
         auditEntries,
         canceledWorkspaces,
+        failedTenants,
       },
     };
   }
@@ -297,7 +398,19 @@ export class RetentionRunner {
       SELECT license_id, organization_id FROM retention_list_tenants()`;
   }
 
-  async #pruneTenant(tenant: TenantRow, now: Date, dryRun: boolean): Promise<TenantPruneResult> {
+  /**
+   * One tenant's pass. Writes into `result` as each step finishes rather than
+   * returning at the end, so a step that throws leaves the earlier counts in
+   * the report (tm 441). Last, on a real run that got that far, the tenant's
+   * `retention_swept_at` moves to now — the order `retention_list_tenants()`
+   * walks — so a tenant whose pass threw keeps its place at the front.
+   */
+  async #pruneTenant(
+    tenant: TenantRow,
+    now: Date,
+    dryRun: boolean,
+    result: TenantPruneResult,
+  ): Promise<void> {
     const context: TenantContext = {
       licenseId: tenant.license_id,
       organizationId: tenant.organization_id,
@@ -331,6 +444,10 @@ export class RetentionRunner {
     });
     const policy = hipaaScope ? capRetentionForHipaa(chosen) : chosen;
     const cutoffs = resolveCutoffs(policy, now);
+    result.hipaaScope = hipaaScope;
+    result.policy = policy;
+    const batched = (deleteBatch: (tx: TenantClient) => Promise<number>, limit = this.#batch) =>
+      this.#deleteInBatches(context, deleteBatch, limit, result);
 
     // A null cutoff is an unlimited window: the class is skipped entirely
     // rather than swept with a very large number of days. Counting zero is the
@@ -341,18 +458,16 @@ export class RetentionRunner {
         ? 0
         : dryRun
           ? await withTenant(this.#db, context, (tx) => this.#countThreads(tx, cutoffs.threads!))
-          : await this.#deleteInBatches(context, (tx) =>
-              this.#deleteThreadBatch(tx, cutoffs.threads!),
-            );
+          : await batched((tx) => this.#deleteThreadBatch(tx, cutoffs.threads!), this.#threadBatch);
+    result.threads = threads;
 
     const visits =
       cutoffs.visits === null
         ? 0
         : dryRun
           ? await withTenant(this.#db, context, (tx) => this.#countVisits(tx, cutoffs.visits!))
-          : await this.#deleteInBatches(context, (tx) =>
-              this.#deleteVisitBatch(tx, cutoffs.visits!),
-            );
+          : await batched((tx) => this.#deleteVisitBatch(tx, cutoffs.visits!));
+    result.visits = visits;
 
     // The AI decision record is kept as long as the conversation (ID-08-S1),
     // so it runs on the thread window and is skipped with it. A record on a
@@ -365,9 +480,8 @@ export class RetentionRunner {
           ? await withTenant(this.#db, context, (tx) =>
               this.#countThreadlessDecisions(tx, cutoffs.threads!),
             )
-          : await this.#deleteInBatches(context, (tx) =>
-              this.#deleteThreadlessDecisionBatch(tx, cutoffs.threads!),
-            );
+          : await batched((tx) => this.#deleteThreadlessDecisionBatch(tx, cutoffs.threads!));
+    result.aiDecisions = aiDecisions;
 
     // The player's words on the unresolved-questions list (AI-22-S1): at most
     // 90 days, and never longer than the conversation — a thread the step
@@ -376,9 +490,8 @@ export class RetentionRunner {
     const unresolvedCutoff = cutoffFor(UNRESOLVED_TEXT_RETENTION_DAYS, now);
     const unresolvedItems = dryRun
       ? await withTenant(this.#db, context, (tx) => this.#countUnresolved(tx, unresolvedCutoff))
-      : await this.#deleteInBatches(context, (tx) =>
-          this.#deleteUnresolvedBatch(tx, unresolvedCutoff),
-        );
+      : await batched((tx) => this.#deleteUnresolvedBatch(tx, unresolvedCutoff));
+    result.unresolvedItems = unresolvedItems;
 
     // A sensitive file the player e-mailed (tm 357 · HD-02) goes when the
     // conversation window says so (04 HD-02 question 2) — the file, not the
@@ -388,6 +501,7 @@ export class RetentionRunner {
       cutoffs.threads === null || this.#store === null
         ? 0
         : await this.#purgeSensitiveFiles(context, cutoffs.threads, dryRun);
+    result.sensitiveFiles = sensitiveFiles;
 
     // What a procedure or Copilot run said about the player (tm 424): a run on
     // a connection was cleared with its thread above; one with no connection
@@ -400,14 +514,16 @@ export class RetentionRunner {
           ? await withTenant(this.#db, context, (tx) =>
               countThreadlessSkillRunLogs(tx, cutoffs.threads!),
             )
-          : await this.#deleteInBatches(context, (tx) =>
-              clearThreadlessSkillRunLogBatch(tx, cutoffs.threads!, RETENTION_BATCH),
+          : await batched((tx) =>
+              clearThreadlessSkillRunLogBatch(tx, cutoffs.threads!, this.#batch),
             );
+    result.skillRunLogs = skillRunLogs;
 
     // The files a customer erasure could not delete when it ran (tm 423).
     // Outside every window — the subject asked — so not skipped with an
     // unlimited one; only without a store to delete from.
     const erasedFiles = this.#store === null ? 0 : await this.#purgeErasedFiles(context, dryRun);
+    result.erasedFiles = erasedFiles;
 
     // The audit log is append-only to `siyahtus_app` (no DELETE grant), so its
     // window cannot be applied through `withTenant` like the tables above. A
@@ -417,6 +533,7 @@ export class RetentionRunner {
     const auditEntries = dryRun
       ? await withTenant(this.#db, context, (tx) => this.#countAudit(tx, cutoffs.audit))
       : await this.#pruneAudit(context.licenseId, cutoffs.audit);
+    result.auditEntries = auditEntries;
 
     // The AI configuration history (tm 315 · AI-21-S1) is append-only too and
     // keeps its own, much longer window; the audit prune above never touches
@@ -427,6 +544,7 @@ export class RetentionRunner {
           tx.aiConfigChange.count({ where: { at: { lt: historyCutoff } } }),
         )
       : await this.#pruneConfigHistory(context.licenseId, historyCutoff);
+    result.aiConfigChanges = aiConfigChanges;
 
     // Recording the deletion (who, when, how much) is itself part of the
     // compliance requirement — and it is metadata, not the deleted data, so it
@@ -490,21 +608,18 @@ export class RetentionRunner {
       );
     }
 
-    return {
-      licenseId: tenant.license_id.toString(),
-      organizationId: tenant.organization_id,
-      threads,
-      visits,
-      aiDecisions,
-      unresolvedItems,
-      sensitiveFiles,
-      skillRunLogs,
-      erasedFiles,
-      auditEntries,
-      aiConfigChanges,
-      hipaaScope,
-      policy,
-    };
+    // Swept: this tenant goes to the back of the next pass's queue. A dry-run
+    // swept nothing, so it leaves the order alone. Raw SQL rather than
+    // `license.update`, which would also move `updated_at` — this is the
+    // sweep's bookkeeping, not a change to the workspace.
+    if (!dryRun) {
+      await withTenant(
+        this.#db,
+        context,
+        (tx) =>
+          tx.$executeRaw`UPDATE licenses SET retention_swept_at = now() WHERE id = ${context.licenseId}`,
+      );
+    }
   }
 
   /**
@@ -515,16 +630,21 @@ export class RetentionRunner {
   async #deleteInBatches(
     context: TenantContext,
     deleteBatch: (tx: TenantClient) => Promise<number>,
+    limit: number,
+    result: TenantPruneResult,
   ): Promise<number> {
     let total = 0;
     for (;;) {
       const removed = await withTenant(this.#db, context, deleteBatch);
+      result.batches += 1;
       total += removed;
-      if (removed < RETENTION_BATCH) return total;
+      if (removed < limit) return total;
     }
   }
 
   #deleteThreadBatch(tx: TenantClient, cutoff: Date): Promise<number> {
+    // A smaller batch than the other tables: each thread carries its events
+    // (`THREAD_BATCH_DIVISOR`).
     // Closed threads only, and only past the window. Deleting the thread
     // cascades to its events and thread tags (ON DELETE CASCADE), which is how
     // the largest table is pruned without ever naming it here. RLS confines the
@@ -546,7 +666,7 @@ export class RetentionRunner {
             AND closed_at IS NOT NULL
             AND closed_at < ${cutoff}
           ORDER BY closed_at
-          LIMIT ${RETENTION_BATCH}
+          LIMIT ${this.#threadBatch}
        ), uncommented AS (
          UPDATE ratings SET comment = NULL
           WHERE thread_id IN (SELECT id FROM doomed) AND comment IS NOT NULL
@@ -564,7 +684,7 @@ export class RetentionRunner {
          SELECT id FROM visits
           WHERE started_at < ${cutoff}
           ORDER BY started_at
-          LIMIT ${RETENTION_BATCH}
+          LIMIT ${this.#batch}
        )`;
   }
 
@@ -576,7 +696,7 @@ export class RetentionRunner {
           WHERE thread_id IS NULL
             AND created_at < ${cutoff}
           ORDER BY created_at
-          LIMIT ${RETENTION_BATCH}
+          LIMIT ${this.#batch}
        )`;
   }
 
@@ -587,7 +707,7 @@ export class RetentionRunner {
          SELECT id FROM ai_unresolved_items
           WHERE created_at < ${cutoff}
           ORDER BY created_at
-          LIMIT ${RETENTION_BATCH}
+          LIMIT ${this.#batch}
        )`;
   }
 
@@ -637,7 +757,7 @@ export class RetentionRunner {
 
     let total = 0;
     for (;;) {
-      const rows = await withTenant(this.#db, context, (tx) => select(tx, RETENTION_BATCH));
+      const rows = await withTenant(this.#db, context, (tx) => select(tx, this.#batch));
       let marked = 0;
       for (const row of rows) {
         try {
@@ -662,7 +782,7 @@ export class RetentionRunner {
       }
       // Fewer than a batch, or a batch nothing could be marked in (which would
       // otherwise be selected again forever): done.
-      if (rows.length < RETENTION_BATCH || marked === 0) return total;
+      if (rows.length < this.#batch || marked === 0) return total;
     }
   }
 
@@ -683,7 +803,7 @@ export class RetentionRunner {
         tx.pendingFileDeletion.findMany({
           select: { key: true },
           orderBy: [{ createdAt: 'asc' }, { key: 'asc' }],
-          take: RETENTION_BATCH,
+          take: this.#batch,
         }),
       );
       const outcome = await deleteQueuedFiles(
@@ -702,7 +822,7 @@ export class RetentionRunner {
       }
       // Fewer than a batch, or a batch nothing could be deleted from (which
       // would otherwise be selected again forever): done.
-      if (rows.length < RETENTION_BATCH || outcome.deleted === 0) return total;
+      if (rows.length < this.#batch || outcome.deleted === 0) return total;
     }
   }
 
@@ -807,4 +927,41 @@ export class RetentionRunner {
       return null;
     }
   }
+}
+
+/** A tenant's report row before its pass has done anything. */
+function emptyResult(tenant: TenantRow, policy: RetentionPolicy): TenantPruneResult {
+  return {
+    licenseId: tenant.license_id.toString(),
+    organizationId: tenant.organization_id,
+    threads: 0,
+    visits: 0,
+    aiDecisions: 0,
+    unresolvedItems: 0,
+    sensitiveFiles: 0,
+    skillRunLogs: 0,
+    erasedFiles: 0,
+    auditEntries: 0,
+    aiConfigChanges: 0,
+    hipaaScope: false,
+    policy,
+    batches: 0,
+    error: null,
+  };
+}
+
+/**
+ * The class and Prisma code of a tenant's failure — never the message, which
+ * for a driver error quotes the statement and can carry its parameters.
+ */
+function describeError(error: unknown): TenantPruneError {
+  const name = error instanceof Error ? error.constructor?.name || error.name : typeof error;
+  const code =
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof (error as { code: unknown }).code === 'string'
+      ? (error as { code: string }).code
+      : null;
+  return { class: name, code };
 }

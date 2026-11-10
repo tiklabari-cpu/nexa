@@ -36,6 +36,7 @@ import { RetentionRunner } from '../../src/services/retention/retention.js';
 import {
   ownerClient,
   seedFixtures,
+  seedTenant,
   testEnv,
   type Fixtures,
   type TenantFixture,
@@ -314,6 +315,171 @@ describe('retention sweep (NFR-C8)', () => {
       // Each tenant's own log carries its own single entry — never the other's.
       expect((await pruneEntries(fx.a)).length).toBe(1);
       expect((await pruneEntries(fx.b)).length).toBe(1);
+    });
+  });
+
+  // ==========================================================================
+  // One workspace's failure stays its own (tm 441 · F24)
+  // ==========================================================================
+
+  describe('one workspace that cannot be swept does not stop the others (tm 441)', () => {
+    /**
+     * A real database fault for one tenant only: a trigger that refuses to
+     * delete B's visits, the way a batch past the tenant transaction's ceiling
+     * (P2028) fails in production — mid-pass, after B's threads already went.
+     */
+    async function failVisitDeletesFor(t: TenantFixture): Promise<() => Promise<void>> {
+      await owner.$executeRawUnsafe(`
+        CREATE OR REPLACE FUNCTION retention_test_refuse_visit_delete() RETURNS trigger
+        LANGUAGE plpgsql AS $$
+        BEGIN
+          IF OLD.license_id = ${t.licenseId.toString()} THEN
+            RAISE EXCEPTION 'injected retention failure';
+          END IF;
+          RETURN OLD;
+        END $$`);
+      await owner.$executeRawUnsafe(`
+        CREATE TRIGGER retention_test_refuse_visit_delete BEFORE DELETE ON visits
+        FOR EACH ROW EXECUTE FUNCTION retention_test_refuse_visit_delete()`);
+      return async () => {
+        await owner.$executeRawUnsafe(
+          'DROP TRIGGER IF EXISTS retention_test_refuse_visit_delete ON visits',
+        );
+        await owner.$executeRawUnsafe(
+          'DROP FUNCTION IF EXISTS retention_test_refuse_visit_delete()',
+        );
+      };
+    }
+
+    const sweptAt = async (t: TenantFixture): Promise<Date | null> =>
+      (
+        await owner.license.findUniqueOrThrow({
+          where: { id: t.licenseId },
+          select: { retentionSweptAt: true },
+        })
+      ).retentionSweptAt;
+
+    it('sweeps the first and the third, records the second, and reports partial (NFR-C8)', async () => {
+      const c = await seedTenant(owner, 'c', 3);
+      const tenants = [fx.a, fx.b, c];
+      const threads = [];
+      const visits = [];
+      for (const t of tenants) {
+        threads.push(await seedClosedThread(t, daysAgo(400)));
+        visits.push(await seedVisit(t, daysAgo(200)));
+      }
+      const warnings: Array<Record<string, unknown>> = [];
+      const restore = await failVisitDeletesFor(fx.b);
+      let report;
+      try {
+        report = await new RetentionRunner(appRole, {
+          policy: POLICY,
+          mailDir,
+          auditChainSecret: testEnv().AUDIT_CHAIN_SECRET,
+          logger: { warn: (fields) => warnings.push(fields) },
+        }).run({ dryRun: false });
+      } finally {
+        await restore();
+      }
+
+      expect(report.outcome).toBe('partial');
+      expect(report.totals.failedTenants).toBe(1);
+      const row = (t: TenantFixture) =>
+        report.tenants.find((r) => r.licenseId === t.licenseId.toString())!;
+
+      // A and C, before and after the failure, were swept whole.
+      for (const t of [fx.a, c]) {
+        expect(row(t).error).toBeNull();
+        expect(row(t)).toMatchObject({ threads: 1, visits: 1 });
+        expect(await visitCount(t)).toBe(0);
+        expect(await threadCount(t)).toBe(0);
+        expect(await sweptAt(t)).not.toBeNull();
+      }
+
+      // B: its visit is still there, the error is on its row — class and code,
+      // never the message — and what it deleted before failing is still counted.
+      expect(row(fx.b).error).toMatchObject({ class: expect.any(String) });
+      expect(JSON.stringify(row(fx.b).error)).not.toContain('injected');
+      expect(row(fx.b).threads).toBe(1);
+      expect(await threadExists(threads[1]!.threadId)).toBe(false);
+      expect(await visitCount(fx.b)).toBe(1);
+      expect(await sweptAt(fx.b)).toBeNull();
+      // No audit entry for a pass that did not finish; the next one writes it.
+      expect(await pruneEntries(fx.b)).toHaveLength(0);
+      expect(await pruneEntries(c)).toHaveLength(1);
+
+      // Logged once, keyed by the workspace.
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toMatchObject({ license_id: fx.b.licenseId.toString() });
+    });
+
+    it('tries the workspace that failed first on the next run, and then sweeps it', async () => {
+      const c = await seedTenant(owner, 'c', 3);
+      for (const t of [fx.a, fx.b, c]) await seedVisit(t, daysAgo(200));
+      const restore = await failVisitDeletesFor(fx.b);
+      let first;
+      try {
+        first = await runner().run({ dryRun: false });
+      } finally {
+        await restore();
+      }
+      const order = (report: typeof first) =>
+        report.tenants
+          .map((r) => r.licenseId)
+          .filter((id) => [fx.a, fx.b, c].some((t) => t.licenseId.toString() === id));
+      // Never swept: id order.
+      expect(order(first)).toEqual([fx.a, fx.b, c].map((t) => t.licenseId.toString()));
+
+      const second = await runner().run({ dryRun: false });
+      expect(second.outcome).toBe('ok');
+      // B never finished, so it leads; A and C follow in the order they finished.
+      expect(order(second)).toEqual([fx.b, fx.a, c].map((t) => t.licenseId.toString()));
+      expect(await visitCount(fx.b)).toBe(0);
+      expect(await sweptAt(fx.b)).not.toBeNull();
+
+      // All three finished the second pass, in that order — which is the
+      // order of the third: the queue is "longest since a finished sweep".
+      const third = await runner().run({ dryRun: false });
+      expect(order(third)).toEqual([fx.b, fx.a, c].map((t) => t.licenseId.toString()));
+    });
+
+    it('a dry-run leaves the order alone', async () => {
+      await runner().run({ dryRun: true });
+      expect(await sweptAt(fx.a)).toBeNull();
+      expect(await sweptAt(fx.b)).toBeNull();
+    });
+
+    it('deletes in several short transactions, never one (batches ≥ 2)', async () => {
+      for (let i = 0; i < 5; i += 1) await seedVisit(fx.a, daysAgo(200 + i));
+      for (let i = 0; i < 3; i += 1) await seedClosedThread(fx.a, daysAgo(400 + i), 2);
+
+      const report = await new RetentionRunner(appRole, {
+        policy: POLICY,
+        mailDir,
+        auditChainSecret: testEnv().AUDIT_CHAIN_SECRET,
+        batchSize: 2,
+      }).run({ dryRun: false });
+
+      const row = report.tenants.find((r) => r.licenseId === fx.a.licenseId.toString())!;
+      expect(row).toMatchObject({ visits: 5, threads: 3, error: null });
+      expect(await visitCount(fx.a)).toBe(0);
+      expect(await threadCount(fx.a)).toBe(0);
+      expect(await eventCount(fx.a)).toBe(0);
+      // Visits 2+2+1 (three passes); threads one at a time under a batch of
+      // two — a fifth, floored at one, because each carries its events — so
+      // 1+1+1+0 (four). Every other step at least one more.
+      expect(row.batches).toBeGreaterThanOrEqual(3 + 4);
+    });
+
+    it('stops between workspaces when the scheduler is stopping', async () => {
+      const controller = new AbortController();
+      controller.abort();
+      await seedVisit(fx.a, daysAgo(200));
+
+      const report = await runner().run({ dryRun: false, signal: controller.signal });
+
+      expect(report.tenants).toHaveLength(0);
+      expect(await visitCount(fx.a)).toBe(1);
     });
   });
 

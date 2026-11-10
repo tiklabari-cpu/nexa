@@ -352,7 +352,10 @@ describe('buildSchedulerJobs', () => {
         mailFiles: 0,
         auditEntries: 0,
         canceledWorkspaces: 0,
+        failedTenants: 0,
       });
+      // Nothing failed, so the pass is plain `ok` (tm 441).
+      expect(outcome?.status).toBeUndefined();
     });
 
     it('webhook_redelivery finds nothing owed and reports zero tenants', async () => {

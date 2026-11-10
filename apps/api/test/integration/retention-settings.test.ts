@@ -54,6 +54,7 @@ interface RetentionBody {
   max_thread_days: number | null;
   max_visit_days: number | null;
   hipaa_scope: boolean;
+  enforced: boolean;
 }
 
 describe('per-workspace retention windows (NFR-C8)', () => {
@@ -596,6 +597,57 @@ describe('per-workspace retention windows (NFR-C8)', () => {
   // ==========================================================================
   // Isolation (NFR-S4 / NFR-S5) and authority
   // ==========================================================================
+
+  describe('whether the deployment deletes anything at all (tm 447)', () => {
+    /** The same build with the scheduled sweep switched on. */
+    let enforcing: TestServer;
+
+    beforeAll(async () => {
+      enforcing = await startTestServer({ RETENTION_ENABLED: 'true' });
+    });
+
+    afterAll(async () => {
+      await enforcing.close();
+    });
+
+    it('says enforced: false where the sweep is switched off, which is the default (NFR-C8)', async () => {
+      const token = await adminToken(fx.a);
+
+      const body = await read(token);
+
+      expect(body.enforced).toBe(false);
+      // The windows are still reported — they are stored and will apply the
+      // moment the sweep is switched on.
+      expect(body.effective_thread_days).toBe(POLICY.threadDays);
+    });
+
+    it('says enforced: true where it runs, on read and on save (NFR-C8)', async () => {
+      await clearRateLimits(enforcing.app);
+      const token = await adminToken(fx.a);
+
+      expect((await read(token, enforcing)).enforced).toBe(true);
+
+      const saved = await enforcing.patch(
+        '/settings/retention',
+        { thread_window: '30d', reason: 'Legal asked for a month' },
+        { authorization: `Bearer ${token}` },
+      );
+      expect(saved.statusCode).toBe(200);
+      expect((saved.json() as RetentionBody).enforced).toBe(true);
+    });
+
+    it('answers the save with the same flag where the sweep is off', async () => {
+      const token = await adminToken(fx.a);
+
+      const saved = await server.patch(
+        '/settings/retention',
+        { thread_window: '30d', reason: 'Legal asked for a month' },
+        { authorization: `Bearer ${token}` },
+      );
+      expect(saved.statusCode).toBe(200);
+      expect((saved.json() as RetentionBody).enforced).toBe(false);
+    });
+  });
 
   describe('one workspace cannot see or set another’s window', () => {
     it('a token for B reads B’s own setting, never A’s', async () => {

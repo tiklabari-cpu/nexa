@@ -57,6 +57,16 @@ async function main(): Promise<void> {
         `${totals.auditEntries} audit entr${totals.auditEntries === 1 ? 'y' : 'ies'} ` +
         `across ${totals.tenants} tenant(s)\n`,
     );
+    // One workspace that threw does not stop the others (tm 441); its row in
+    // the report says why. Still a non-zero exit, so whoever drives this by
+    // hand — or from CI — sees that the pass was not whole.
+    if (report.outcome === 'partial') {
+      process.stderr.write(
+        `retention partial: ${totals.failedTenants} tenant(s) failed and were skipped ` +
+          `(see "error" in the report); they lead the next pass\n`,
+      );
+      process.exitCode = 1;
+    }
   } finally {
     await db.$disconnect();
   }

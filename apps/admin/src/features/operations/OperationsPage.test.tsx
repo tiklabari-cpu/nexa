@@ -149,6 +149,38 @@ describe('the scheduler table', () => {
     expect(await rowOf('siem')).toBeVisible();
   });
 
+  it('marks a pass that skipped some of its work as partial, scheduled or manual (tm 441)', async () => {
+    const fake = installFakePlatform();
+    fake.override('GET', '/operations/scheduler', () =>
+      json(200, {
+        ...OPERATIONS_SCHEDULER,
+        jobs: OPERATIONS_SCHEDULER.jobs.map((job) =>
+          job.name === 'retention'
+            ? {
+                ...job,
+                enabled: true,
+                last_status: 'partial',
+                last_run_at: '2026-10-25T09:00:00.000Z',
+                last_duration_ms: 900,
+                last_manual: {
+                  at: '2026-10-25T09:30:00.000Z',
+                  result: 'finished',
+                  status: 'partial',
+                  duration_ms: 77,
+                  error_class: null,
+                },
+              }
+            : job,
+        ),
+      }),
+    );
+    await openOperations(fake);
+
+    const retention = await rowOf('retention');
+    expect(within(retention).getByText('Ran, with some work skipped')).toBeVisible();
+    expect(within(retention).getByText(/^Ran .* \(77 ms\), with some work skipped$/)).toBeVisible();
+  });
+
   it('says so when the publishing process has its scheduler switched off', async () => {
     const fake = installFakePlatform();
     fake.override('GET', '/operations/scheduler', () =>

@@ -113,6 +113,11 @@ model License {
   /// The same, for visitor telemetry (`visits`) — null inherits
   /// `RETENTION_VISIT_DAYS`.
   retentionVisitWindow  String?   @map("retention_visit_window")
+  /// When the retention sweep last finished this workspace (tm 441), or null
+  /// before it ever has. `retention_list_tenants()` walks oldest first, nulls
+  /// first, so a workspace whose pass failed — or that a stopped pass never
+  /// reached — is the first one tried next time. Written only by the sweep.
+  retentionSweptAt      DateTime? @map("retention_swept_at") @db.Timestamptz(6)
   /// When the onboarding sample data was laid down, so the seed never runs twice.
   demoSeededAt          DateTime? @map("demo_seeded_at") @db.Timestamptz(6)
   /// The "What are you tracking?" survey popover's answer (FR-MOD-07.2), or

@@ -63,6 +63,11 @@ test.describe('data retention (NFR-C8)', () => {
     // to Playwright, so `toBeVisible` on one is a guaranteed red.
     await expect(conversations).toContainText('Use the default (365 days)');
     await expect(section.getByText('Deleted after 365 days.')).toBeVisible();
+    // The e2e stack runs without the scheduled sweep (`RETENTION_ENABLED`
+    // unset, as in the pilot), so the screen says that first (tm 447).
+    await expect(section.getByRole('note')).toContainText(
+      'Automatic deletion is not active on this installation.',
+    );
 
     try {
       const saved = agentPage.waitForResponse(

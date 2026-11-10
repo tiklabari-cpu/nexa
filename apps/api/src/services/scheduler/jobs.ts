@@ -370,17 +370,21 @@ export function buildSchedulerJobs({
       name: 'retention',
       intervalMs: intervals.retention,
       enabled: env.RETENTION_ENABLED,
-      async run() {
+      async run(context) {
         const runner = new RetentionRunner(db, {
           policy: resolveRetentionPolicy(env),
           mailDir: env.MAIL_DIR,
           auditChainSecret: env.AUDIT_CHAIN_SECRET,
           store: createObjectStore(env.STORAGE_PROVIDER, env.storage),
+          logger: context.logger,
         });
         // Not a preview: `enabled` above is the confirmation the CLI's
         // `--apply` flag stands for, so a pass that runs at all commits.
-        const report = await runner.run({ dryRun: false });
+        const report = await runner.run({ dryRun: false, signal: context.signal });
         return {
+          // One workspace that could not be swept does not fail the job
+          // (tm 441): the rest were swept, and `/health` says `partial`.
+          ...(report.outcome === 'partial' ? { status: 'partial' as const } : {}),
           counts: {
             tenants: report.totals.tenants,
             threads: report.totals.threads,
@@ -393,6 +397,7 @@ export function buildSchedulerJobs({
             mailFiles: report.totals.mailFiles,
             auditEntries: report.totals.auditEntries,
             canceledWorkspaces: report.totals.canceledWorkspaces,
+            failedTenants: report.totals.failedTenants,
           },
         };
       },

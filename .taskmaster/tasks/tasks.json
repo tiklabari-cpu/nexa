@@ -17036,12 +17036,12 @@
         "description": "İlk istek uçuştayken aynı anahtarla tekrar deneme iki event yazıyor (ve iki AI turu tetikleyebiliyor): GET transaction'dan önce, SET NX commit'ten sonra.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F27 (chat-ai-engine). Kanıt yeterlidir.\n\nXHIGH GEREKÇESİ: (3) teslim güvencesi — çift gönderim.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/services/chat/chat-service.ts:1672-1677` `redis.get(idempotencyKey)` transaction öncesi; `:~1780-1782` `SET NX` commit sonrası; ziyaretçi yolu `:~1291-1298`, `:~1401`, `:~1424`; DB'de unique kısıt yok.\n\nYAPILACAK (varsayılan: Redis rezervasyonu): transaction öncesi `SET key \"pending:<reqId>\" NX PX <ttl>`; alınamazsa: değer event id ise replay; `pending` ise kısa bekleme/yeniden okuma (ör. 3×100 ms) sonra 409 `idempotency_in_flight`; commit sonrası değeri event id ile değiştir; hata yolunda rezervasyonu sil. Agent ve ziyaretçi yollarının ikisi de. Alternatif (events tablosuna unique sütun) ölçülmüş gerekçeyle seçilebilir — HANDOFF'a yaz.\n\nTUZAK: Race testleri ayrı bağlantı/eşzamanlı istek ister (memory race-tests-need-separate-connections). AI turu birleştirme (memory ai-turns-merge-unanswered-visitor-messages). ChatService services/ai'yi import edemez (chat-service-must-not-import-ai). Redis yokken davranış: mevcut fail-open/closed kararını koru.\n\nKAPSAM DIŞI: mobil istemci (MOBILE-COMPOSER-NO-LOSS).\nDENETİM BULGULARI: F27",
         "testStrategy": "api entegrasyon: aynı idempotency_key ile iki eşzamanlı POST → tek event, ikinci yanıt replay ya da 409; sıralı tekrar → replay (değişmez); ilk istek hata verirse rezervasyon kalkar ve tekrar başarılı. Ziyaretçi yolu için aynı. Mutasyon: NX rezervasyonunu kaldır → çift event testi kırmızı. DoD: CONVENTIONS §1.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "updatedAt": "2026-11-10T16:35:37.791Z",
         "subtasks": []
       },
       {
@@ -17778,9 +17778,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-10T14:28:16.435Z",
+      "lastModified": "2026-11-10T16:35:37.792Z",
       "taskCount": 478,
-      "completedCount": 439,
+      "completedCount": 440,
       "tags": [
         "master"
       ]

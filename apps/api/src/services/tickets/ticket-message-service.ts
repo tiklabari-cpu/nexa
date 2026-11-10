@@ -71,6 +71,8 @@ import {
   writeTicketChangeAudit,
   type TicketStatus,
 } from './ticket-service.js';
+import type { MailLocale } from '../mail/templates/layout.js';
+import { ticketMailLocale } from './ticket-mail-locale.js';
 import { refreshFirstResponseDue } from './ticket-sla.js';
 import { answerTicketEvent, type TicketSignals } from './ticket-events.js';
 
@@ -169,6 +171,8 @@ export interface TicketReplyOutbound {
   body: string;
   agentName: string | null;
   workspaceName: string;
+  /** The language of the mail's frame and `Content-Language` — the player's (tm 462). */
+  locale: MailLocale;
   emailMessageId: string;
   inReplyTo: string | null;
   references: string[];
@@ -466,6 +470,7 @@ export class TicketMessageService {
             body: text,
             agentName: message.author_name,
             workspaceName: await workspaceName(tx, tenant),
+            locale: await ticketMailLocale(tx, ticket.id),
             emailMessageId,
             inReplyTo,
             references: referencesOf(thread),
@@ -554,6 +559,7 @@ export class TicketMessageService {
         body: row.bodyText,
         agentName: message.author_name,
         workspaceName: await workspaceName(tx, tenant),
+        locale: await ticketMailLocale(tx, ticket.id),
         emailMessageId,
         inReplyTo: row.inReplyTo,
         references: referencesOf(thread),

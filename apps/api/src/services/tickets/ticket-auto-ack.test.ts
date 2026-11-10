@@ -47,7 +47,10 @@ describe('TicketAutoAck.prepare (stubbed transaction)', () => {
   const tenant = { licenseId: 1n, organizationId: 'org-1' };
   const template = { id: 't1', name: 'Alındı', subject: 'Aldık', body: 'Merhaba', enabled: true };
 
-  function harness(ticket: { customer: { name: string; email: string | null } | null }) {
+  function harness(
+    ticket: { customer: { name: string; email: string | null; locale?: string | null } | null },
+    workspace: { language: string; fallbackLanguage: string } | null = null,
+  ) {
     const notes: string[] = [];
     const tx = {
       ticket: {
@@ -62,6 +65,8 @@ describe('TicketAutoAck.prepare (stubbed transaction)', () => {
       },
       ticketEmailTemplate: { findFirst: async () => template },
       organization: { findUnique: async () => ({ name: 'Acme' }) },
+      brand: { findFirst: async () => (workspace ? { id: 'brand-1' } : null) },
+      widgetSettings: { findFirst: async () => workspace },
     } as unknown as TenantClient;
     const messages = {
       recordSystemNote: async (_tx: unknown, _tenant: unknown, _id: string, text: string) => {
@@ -104,5 +109,39 @@ describe('TicketAutoAck.prepare (stubbed transaction)', () => {
     expect(mail!.replyTo).toMatch(/^org-1\+t-tck1-[a-z0-9]+@inbound\.example\.com$/);
     expect(mail!.emailMessageId).toMatch(/@mail\.example\.com$/);
     expect(notes).toEqual(['Automatic acknowledgement sent: Alındı']);
+  });
+
+  // tm 462 · F48: the frame's language is the player's, else the workspace's, else English.
+  describe('the language of the acknowledgement (tm 462)', () => {
+    const localeOf = async (
+      customerLocale: string | null,
+      workspace: { language: string; fallbackLanguage: string } | null,
+    ) => {
+      const { tx, ack } = harness(
+        { customer: { name: 'Ayşe', email: 'a@example.test', locale: customerLocale } },
+        workspace,
+      );
+      const mail = await ack.prepare(tx, tenant, {
+        ticketId: 'TCK1',
+        ack: { templateId: 't1', ruleName: 'r' },
+      });
+      return mail!.locale;
+    };
+
+    it('takes the player’s own language when the templates are written in it', async () => {
+      expect(await localeOf('tr', null)).toBe('tr');
+      expect(await localeOf('en', { language: 'tr', fallbackLanguage: 'tr' })).toBe('en');
+    });
+
+    it('falls back to the workspace’s language only for a player with none on file', async () => {
+      expect(await localeOf(null, { language: 'tr', fallbackLanguage: 'en' })).toBe('tr');
+      expect(await localeOf(null, { language: 'auto', fallbackLanguage: 'tr' })).toBe('tr');
+    });
+
+    it('answers English for an unsupported language, the workspace’s included', async () => {
+      expect(await localeOf('de', { language: 'tr', fallbackLanguage: 'tr' })).toBe('en');
+      expect(await localeOf(null, { language: 'de', fallbackLanguage: 'de' })).toBe('en');
+      expect(await localeOf(null, null)).toBe('en');
+    });
   });
 });

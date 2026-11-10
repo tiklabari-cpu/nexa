@@ -906,6 +906,7 @@ function AccountMenu(): ReactElement {
   const t = useTranslate();
   const { locale, setLocale } = useLocale();
   const { theme, setTheme } = useTheme();
+  const { contact_email: contactEmail } = useDeployment();
 
   const initials = (agent?.name ?? agent?.email ?? '?')
     .split(/[\s@.]+/)
@@ -980,6 +981,24 @@ function AccountMenu(): ReactElement {
 
           {/* Panel font (owner, 2026-10-13), under the theme it sits beside. */}
           <FontPicker />
+
+          {/* Pilot feedback channel (owner decision 2026-11-06 · tm 478): a plain
+              `mailto:` to the deployment's support address, nothing sent through
+              us. Only the fixed subject goes in the address — no name, workspace
+              or e-mail of the person (GV-05). No address configured → no item. */}
+          {contactEmail ? (
+            <a
+              href={`mailto:${contactEmail}?subject=${encodeURIComponent(t('shell.account.feedback.subject'))}`}
+              onClick={() => close(false)}
+              data-testid="account-feedback"
+              className="mt-3 block w-full rounded-md border border-border px-2 py-1.5 text-sm hover:bg-surface-2"
+            >
+              <span className="block text-center">{t('shell.account.feedback')}</span>
+              <span className="mt-0.5 block text-center text-2xs text-content-secondary">
+                {t('shell.account.feedback.hint')}
+              </span>
+            </a>
+          ) : null}
 
           <button
             type="button"

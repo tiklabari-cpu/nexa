@@ -180,6 +180,28 @@ describe('ticket e-mail templates — the consuming half (FR-MOD-08.7.5)', () =>
     expect(message.subject + message.body).not.toContain('}}');
   });
 
+  it('writes the frame in the customer’s language: tr customer → Content-Language tr; none → en; unsupported → en (tm 462)', async () => {
+    const templateId = await createTemplate();
+    const localeOfNotice = async (): Promise<string | undefined> => {
+      const ticketId = await createTicket();
+      const patched = await server.patch(
+        `/tickets/${ticketId}`,
+        { status: 'solved', email_template_id: templateId },
+        auth(adminToken),
+      );
+      expect(patched.statusCode).toBe(200);
+      const sent = (await outbox()).filter((m) => m.subject.includes(ticketId));
+      expect(sent).toHaveLength(1);
+      return (sent[0] as unknown as { locale?: string }).locale;
+    };
+
+    expect(await localeOfNotice()).toBe('en');
+    await owner.customer.update({ where: { id: customerId }, data: { locale: 'tr' } });
+    expect(await localeOfNotice()).toBe('tr');
+    await owner.customer.update({ where: { id: customerId }, data: { locale: 'de' } });
+    expect(await localeOfNotice()).toBe('en');
+  });
+
   it('lets the role that actually works the inbox send one', async () => {
     // `DEFAULT_AGENT_SCOPES` carries `tickets--access:rw` and nothing
     // tenant-wide. Before tm 227 the template list was gated on

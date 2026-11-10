@@ -739,6 +739,24 @@ service. Their texts are not in this repository; only the three keys are.
       are not asked again. The record is
       `SELECT id, terms_version, terms_accepted_at FROM licenses ORDER BY id DESC`.
 
+### Public help centre: robots.txt and sitemap (tm 461)
+
+A workspace's public help centre is served by the **api** host, under the API prefix:
+`https://<api host>/api/v1/public/kb/<workspace>/…`. Its `robots.txt` and `sitemap.xml` sit beside
+it, at `…/public/kb/<workspace>/robots.txt` and `…/sitemap.xml`; the `Allow:` line and the
+`Sitemap:` line both carry the full `/api/v1/…` path. A crawler only reads `robots.txt` at the
+**root** of a host (`https://<api host>/robots.txt`), and the api serves nothing there: a route
+outside `/api/v1` would be a public path the OpenAPI contract does not list. Two consequences:
+
+- [ ] The sitemap is **submitted** (Google Search Console, Bing Webmaster Tools: add the
+      `https://<api host>/api/v1/public/kb/<workspace>/sitemap.xml` address); it is not
+      discovered through a root `robots.txt`. A search engine that fetches the pages directly
+      finds no root file and treats the host as open to crawling.
+- [ ] If the help centre must be kept out of search results altogether, switch it off in
+      Settings → Knowledge base (the pages then answer 404 and the workspace `robots.txt`
+      answers `Disallow: /`). To serve a root file anyway, the edge (Caddy `respond /robots.txt`
+      on the api name) can answer it; it is not part of this repository's Caddyfile.
+
 ### Measuring `RETRIEVAL_THRESHOLD` (`measure:knowledge-recall`)
 
 The retrieval threshold was chosen in the stub's embedding space (tm 255.8, PLAN §D183 (5)); in

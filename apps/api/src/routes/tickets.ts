@@ -46,6 +46,7 @@ import { selfAccountId } from '../services/auth/principal.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { ticketArrivalPush } from '../services/tickets/ticket-arrival.js';
+import { ticketMailLocale } from '../services/tickets/ticket-mail-locale.js';
 import { createObjectStore } from '../services/storage/object-store.js';
 import { licenseOfStoredKey } from '../services/storage/upload-url.js';
 import {
@@ -261,10 +262,10 @@ export default async function ticketRoutes(
         references: mail.references,
         ...replyToFor(tenant, mail.ticketId),
         fromName: mail.workspaceName,
-        // The player's language is not known to the server — the frame's few
-        // words are English, as on the ticket notice.
+        // The player's language (tm 462): their own when the templates speak it,
+        // else the workspace's, else English.
         ...ticketReplyMail(
-          { locale: 'en' },
+          { locale: mail.locale },
           {
             workspaceName: mail.workspaceName,
             ticketId: mail.ticketId,
@@ -518,7 +519,13 @@ export default async function ticketRoutes(
           body.assignee_id != null && heldBy !== undefined && heldBy !== body.assignee_id;
         return {
           ticket: updated,
-          notice: mail ? { ...mail, workspaceName: organization?.name ?? 'SiyahTuş' } : null,
+          notice: mail
+            ? {
+                ...mail,
+                workspaceName: organization?.name ?? 'SiyahTuş',
+                locale: await ticketMailLocale(tx, ticketId),
+              }
+            : null,
           arrival: handedOver
             ? await ticketArrivalPush(tx, ticketId, {
                 reason: 'assigned',
@@ -549,10 +556,10 @@ export default async function ticketRoutes(
             kind: 'ticket_notice',
             ...replyToFor(tenant, ticketId),
             // The workspace's subject and text, untouched, in the shared frame
-            // (tm 265). The customer's language is not known to the server, so
-            // the frame's few words are English.
+            // (tm 265); the frame's few words speak the player's language
+            // (tm 462): their own, else the workspace's, else English.
             ...ticketNoticeMail(
-              { locale: 'en' },
+              { locale: notice.locale },
               {
                 workspaceName: notice.workspaceName,
                 subject: notice.subject,

@@ -179,6 +179,28 @@ describe('an automatic acknowledgement on a new ticket (FR-MOD-13.6)', () => {
     expect(messages[1]!.body_text).toBe('Automatic acknowledgement sent: Talebiniz alındı');
   });
 
+  it('writes the acknowledgement in the player’s language: tr → tr, none → en, unsupported → en (tm 462)', async () => {
+    const templateId = await template();
+    await ackRule(templateId);
+    const localeOfAck = async (): Promise<string | undefined> => {
+      await rm(mailDir, { recursive: true, force: true });
+      const answer = await inbound();
+      expect(answer.status).toBe('created');
+      const [mail] = await mails();
+      return (mail as unknown as { locale?: string }).locale;
+    };
+
+    const player = await owner.customer.create({
+      data: { organizationId: fx.a.organizationId, name: 'Ayşe Oyuncu', email: PLAYER },
+      select: { id: true },
+    });
+    expect(await localeOfAck()).toBe('en');
+    await owner.customer.update({ where: { id: player.id }, data: { locale: 'tr' } });
+    expect(await localeOfAck()).toBe('tr');
+    await owner.customer.update({ where: { id: player.id }, data: { locale: 'de' } });
+    expect(await localeOfAck()).toBe('en');
+  });
+
   it('threads the player’s answer to the acknowledgement onto the same ticket (FR-MOD-13.6)', async () => {
     await ackRule(await template());
     const answer = await inbound();

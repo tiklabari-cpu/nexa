@@ -82,6 +82,16 @@ export default async function publicKbSitemapRoutes(
     return `${options.canonicalBase}/public/kb/${workspaceSlug}`;
   }
 
+  /**
+   * The path half of `kbHomeUrl`, API prefix included: that is where the pages
+   * really are (`/api/v1/public/kb/<slug>/…`). `Allow` is matched against the
+   * path a crawler fetches, so it carries the same prefix the sitemap's `<loc>`
+   * entries do (tm 461 · F47).
+   */
+  function kbHomePath(workspaceSlug: string): string {
+    return new URL(kbHomeUrl(workspaceSlug)).pathname.replace(/\/+$/, '');
+  }
+
   function articleUrl(workspaceSlug: string, articleSlug: string): string {
     return `${kbHomeUrl(workspaceSlug)}/${articleSlug}`;
   }
@@ -142,7 +152,7 @@ export default async function publicKbSitemapRoutes(
 
       const body =
         'User-agent: *\n' +
-        `Allow: /public/kb/${workspaceSlug}/\n` +
+        `Allow: ${kbHomePath(workspaceSlug)}/\n` +
         `Sitemap: ${kbHomeUrl(workspaceSlug)}/sitemap.xml\n`;
       return reply.type(TEXT_TYPE).send(body);
     },

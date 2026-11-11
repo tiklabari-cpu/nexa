@@ -17233,7 +17233,7 @@
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-11T06:45:23.927Z",
+        "updatedAt": "2026-11-11T09:15:15.476Z",
         "subtasks": [
           {
             "id": 1,
@@ -17241,11 +17241,11 @@
             "description": "(463.1) TOTP pencere sınırı / auth kovası hipotezleri; --repeat-each=20. (463.2) Mock embedding / dil algılama zamanlaması hipotezleri. (463.3) Sıra bağımlılığı / paged query hipotezleri.",
             "details": "BİRLEŞİK ALT GÖREV (sahip onayı 2026-11-07): 463.1, 463.2, 463.3 tek pencerede yapılır; DoD kapısı bir kez koşar.\nBölümler sırayla yapılır, her biri kendi kabul ölçütüyle kapanır; biri yeşil değilse alt görev done değildir.\n463.2, 463.3 cancelled durumda ve buraya işaret ediyor; metinlerde onlara yapılan atıflar bu alt görevi kasteder.\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\n━━ BÖLÜM 1 — 463.1 FLAKE-TWO-FACTOR · two-factor.spec.ts:314 kök nedeni ━━\nSORUN: TOTP pencere sınırı / auth kovası hipotezleri; --repeat-each=20.\n\nÜst görev ORTAK YÖNTEM. Önce/sonra oran HANDOFF'a.\n\n━━ BÖLÜM 2 — 463.2 FLAKE-AI-MULTILINGUAL · ai-multilingual.spec.ts:28 kök nedeni ━━\nSORUN: Mock embedding / dil algılama zamanlaması hipotezleri.\n\nÜst görev ORTAK YÖNTEM. memory ai-question-text-is-load-bearing.\n\n━━ BÖLÜM 3 — 463.3 FLAKE-CUSTOMERS · customers.spec.ts:53 kök nedeni ━━\nSORUN: Sıra bağımlılığı / paged query hipotezleri.\n\nÜst görev ORTAK YÖNTEM. memory paged-query-drops-fetchnext-during-refresh.",
             "testStrategy": "BÖLÜM 1 (463.1): two-factor.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez.\nBÖLÜM 2 (463.2): ai-multilingual.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez.\nBÖLÜM 3 (463.3): customers.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "463",
             "priority": "low",
-            "updatedAt": "2026-11-11T06:45:23.927Z"
+            "updatedAt": "2026-11-11T09:15:15.476Z"
           },
           {
             "id": 2,
@@ -17778,7 +17778,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-11T06:45:23.928Z",
+      "lastModified": "2026-11-11T09:15:15.476Z",
       "taskCount": 478,
       "completedCount": 445,
       "tags": [

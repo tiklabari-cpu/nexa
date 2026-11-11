@@ -17228,12 +17228,12 @@
         "description": "NY-41 (kesintisiz/hatasız çalışma) kısmen karşılanıyor: HANDOFF tm 411–414'te tekrar eden flaky e2e'ler kök nedeni bilinmeden rerun ile geçiyor.",
         "details": "ALT GÖREV BİRLEŞTİRMESİ (2026-11-07, sahip onayı; her alt görev ayrı pencere ve tam kapı demek): 463.1 + 463.2 + 463.3 → 463.1; 463.4 + 463.5 → 463.4. Cancelled alt görevlere metinde yapılan atıflar birleşik alt görevi kasteder.\n\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-04 / NY-41 (partial). Kanıt: HANDOFF tm 411–414 blokları (eski kayıt gerekirse `docs/archive/` altında grep).\n\nKODDA BUGÜN: `apps/e2e/.../two-factor.spec.ts:314`, `ai-multilingual.spec.ts:28`, `customers.spec.ts:53`, `ai-guardrails.spec.ts:130`, `offline-form.spec.ts` (satırları HEAD'de doğrula).\n\nORTAK YÖNTEM (her alt görev): spec'i tek başına `--repeat-each=20` (ilgili shard stack'iyle, run_in_background) koş; başarısızlık oranını ve trace'i topla; kök nedeni (zamanlama, sıra bağımlılığı, 30/dk auth kovası, TOTP pencere sınırı, mock embedding) belirle ve düzelt. Düzeltilemeyen için kanıtlı not — `test.fixme` DEĞİL; HANDOFF'a önce/sonra oran ve hipotez.\n\nTUZAK: memory hub-e2e-traps, browser-ux-probe-traps (30/dk), ai-question-text-is-load-bearing, guardrails-check-every-ai-reply, dod-gate-wall-clock-and-e2e-png-churn. Uzun koşular run_in_background (10 dk komut tavanı).\n\nKAPSAM DIŞI: yeni e2e.\nDENETİM BULGULARI: G-04",
         "testStrategy": "Alt görevlerde. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` son alt görevin kapanışında bir kez.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-11T09:20:14.107Z",
+        "updatedAt": "2026-11-11T11:17:01.881Z",
         "subtasks": [
           {
             "id": 1,
@@ -17277,13 +17277,13 @@
             "description": "(463.4) Guardrail fixture'ları / AI turu birleştirme hipotezleri. (463.5) Çevrimdışı form zamanlaması; son alt görev tüm spec'lerin sonuç tablosunu HANDOFF'a yazar.",
             "details": "BİRLEŞİK ALT GÖREV (sahip onayı 2026-11-07): 463.4, 463.5 tek pencerede yapılır; DoD kapısı bir kez koşar.\nBölümler sırayla yapılır, her biri kendi kabul ölçütüyle kapanır; biri yeşil değilse alt görev done değildir.\n463.5 cancelled durumda ve buraya işaret ediyor; metinlerde onlara yapılan atıflar bu alt görevi kasteder.\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\n━━ BÖLÜM 1 — 463.4 FLAKE-AI-GUARDRAILS · ai-guardrails.spec.ts:130 kök nedeni ━━\nSORUN: Guardrail fixture'ları / AI turu birleştirme hipotezleri.\n\nÜst görev ORTAK YÖNTEM. memory guardrails-check-every-ai-reply, ai-turns-merge-unanswered-visitor-messages.\n\n━━ BÖLÜM 2 — 463.5 FLAKE-OFFLINE-FORM · offline-form.spec.ts kök nedeni + spec tablosu ━━\nSORUN: Çevrimdışı form zamanlaması; son alt görev tüm spec'lerin sonuç tablosunu HANDOFF'a yazar.\n\nÜst görev ORTAK YÖNTEM. Kapanışta `pnpm test:gate --e2e` bir kez.",
             "testStrategy": "BÖLÜM 1 (463.4): ai-guardrails.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez.\nBÖLÜM 2 (463.5): offline-form.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez; HANDOFF'ta 5 satırlık tablo.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "463.1"
             ],
             "parentId": "463",
             "priority": "low",
-            "updatedAt": "2026-11-11T09:20:14.107Z"
+            "updatedAt": "2026-11-11T11:16:57.342Z"
           },
           {
             "id": 5,
@@ -17778,9 +17778,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-11T09:20:14.108Z",
+      "lastModified": "2026-11-11T11:17:01.881Z",
       "taskCount": 478,
-      "completedCount": 445,
+      "completedCount": 446,
       "tags": [
         "master"
       ]

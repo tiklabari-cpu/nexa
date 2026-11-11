@@ -17310,7 +17310,7 @@
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-11T12:52:51.969Z",
+        "updatedAt": "2026-11-11T16:14:08.390Z",
         "subtasks": [
           {
             "id": 1,
@@ -17330,13 +17330,13 @@
             "description": "Transcript, ticket bildirimi/yanıt/auto-ack, davet, şifre sıfırlama, zamanlanmış rapor vb. gönderimler enqueueMail üzerinden (mümkünse aynı transaction'da).",
             "details": "`rg \"deliver\\(\" apps/api/src` ile liste HANDOFF'a. Pilot MAIL_PROVIDER=smtp davranışı korunur; senkron sonuç bekleyen akış (ör. şifre sıfırlama yanıtı) varsa yanıt sözleşmesi değişmez. Mail testleri outbox işini tetikleyerek doğrular.",
             "testStrategy": "api entegrasyon: her taşınan akış outbox'a satır yazar ve iş tetiklenince gönderir; mevcut mail testleri yeşil. Mutasyon: bir çağıranı doğrudan deliver'a geri çevir → outbox satır testi kırmızı. `pnpm test:gate`.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "464.1"
             ],
             "parentId": "464",
             "priority": "low",
-            "updatedAt": "2026-11-06T16:24:47.953Z"
+            "updatedAt": "2026-11-11T16:14:08.390Z"
           },
           {
             "id": 3,
@@ -17778,7 +17778,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-11T12:52:51.970Z",
+      "lastModified": "2026-11-11T16:14:08.391Z",
       "taskCount": 478,
       "completedCount": 446,
       "tags": [

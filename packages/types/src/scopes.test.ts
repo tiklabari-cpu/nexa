@@ -242,6 +242,9 @@ describe('error taxonomy', () => {
     // One send per idempotency key at a time (tm 448 · audit F27): a retry
     // arriving while the first request is still writing the message.
     'idempotency_in_flight',
+    // An empty report window (tm 459 · audit F45): `from` and `to` are the same
+    // instant.
+    'range_empty',
   ];
 
   it('carries the 24 documented types, plus SiyahTuş additions', () => {

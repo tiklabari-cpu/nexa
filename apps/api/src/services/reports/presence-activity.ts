@@ -31,13 +31,14 @@ import {
   normalizeWorkSchedule,
   shiftDayKey,
   type ActivityState,
+  type DayBoundary,
   type WorkScheduleSlot,
 } from '@siyahtus/types';
 import { z } from 'zod';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
-import { readDayBoundary } from '../chat/day-boundary.js';
+import { localDayWindow, readDayBoundary } from '../chat/day-boundary.js';
 import { ledGroupIds } from '../team/led-groups.js';
 import {
   activitySegments,
@@ -159,24 +160,46 @@ function toPersonFilter(data: { agent_id?: string[]; group_id?: string[] }): Per
   return out;
 }
 
+/**
+ * One end of the window: a date-time with an offset, or a calendar day
+ * (`YYYY-MM-DD`) — the workspace's conversation day, the same reading every
+ * other report gives a day (tm 459 · F45).
+ */
+const availabilityBound = z.union([
+  z.string().datetime({ offset: true }),
+  z.string().refine(isDayKey, 'Must be a date-time or a calendar day (YYYY-MM-DD).'),
+]);
+
 const availabilityQuery = z.object({
-  from: z.string().datetime({ offset: true }),
-  to: z.string().datetime({ offset: true }),
+  from: availabilityBound,
+  to: availabilityBound,
   ...personFilter,
 });
 
-/** `GET /reports/availability`'s query: a window of at most {@link AVAILABILITY_MAX_DAYS} days. */
-export function parseAvailabilityQuery(query: unknown): {
+/**
+ * `GET /reports/availability`'s query: a window of at most
+ * {@link AVAILABILITY_MAX_DAYS} days. A day-only `from` starts when that
+ * workspace day starts; a day-only `to` runs to its end ({@link localDayWindow}).
+ * The boundary is read only when a day was sent.
+ */
+export async function parseAvailabilityQuery(
+  query: unknown,
+  readBoundary: () => Promise<DayBoundary>,
+): Promise<{
   from: Date;
   to: Date;
   filter: PersonFilter;
-} {
+}> {
   const raw = (query ?? {}) as Record<string, unknown>;
   refuseConversationKeys(raw);
   const parsed = availabilityQuery.safeParse(raw);
   if (!parsed.success) firstIssue(parsed.error, 'Invalid availability query.');
-  const from = new Date(parsed.data.from);
-  const to = new Date(parsed.data.to);
+  const days = isDayKey(parsed.data.from) || isDayKey(parsed.data.to);
+  const boundary = days ? await readBoundary() : null;
+  const place = (bound: string, end: 'from' | 'to'): Date =>
+    isDayKey(bound) ? localDayWindow(bound, bound, boundary!)[end] : new Date(bound);
+  const from = place(parsed.data.from, 'from');
+  const to = place(parsed.data.to, 'to');
   if (!(from < to)) throw ApiError.validation('`from` must be before `to`.');
   if (to.getTime() - from.getTime() > AVAILABILITY_MAX_DAYS * 86_400_000) {
     throw ApiError.validation(

@@ -82,6 +82,8 @@ export const common: Messages = {
     'Bu işlemi onaylamak için doğrulama uygulamanızdan yeni bir kod girin.',
   'common.errors.platform_totp_required': 'Önce doğrulama uygulamanızdaki kodla girişi tamamlayın.',
   'common.errors.platform_workspace_state': 'Çalışma alanının şu anki durumu buna izin vermiyor.',
+  'common.errors.range_empty':
+    'Bu aralığın başlangıcı ve bitişi aynı an — bir gün ya da daha uzun bir aralık seçin.',
   'common.errors.rate_limit_unavailable':
     'Denemeler şu an sayılamadığı için giriş kısa bir süre durduruldu — yarım dakika sonra yeniden deneyin.',
   'common.errors.recipient_not_allowed':

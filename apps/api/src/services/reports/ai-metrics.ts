@@ -50,7 +50,7 @@ import {
 } from '@siyahtus/types';
 import { withTenant, type TenantClient, type TenantContext } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
-import { readDayBoundary } from '../chat/day-boundary.js';
+import { localDaySql, readDayBoundary } from '../chat/day-boundary.js';
 import { requireQaReach } from '../qa/qa-service.js';
 import { nextOpenAt, type BusinessWeek } from '../sla/business-hours.js';
 import { readBusinessWeek } from '../sla/sla-service.js';
@@ -704,8 +704,7 @@ export async function rollupAiMetrics(
   licenseId: bigint,
 ): Promise<{ days: number; rows: number }> {
   const boundary = await readDayBoundary(tx);
-  const day = Prisma.sql`((o.ended_at AT TIME ZONE ${boundary.timezone})
-    - make_interval(hours => ${boundary.hour}::int))::date`;
+  const day = localDaySql(Prisma.sql`o.ended_at`, boundary);
   const [last] = await tx.$queryRaw<{ at: Date | null }[]>`
     SELECT max(computed_at) AS at FROM ai_metrics_daily`;
   const since = last?.at

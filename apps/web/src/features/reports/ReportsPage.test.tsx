@@ -2338,6 +2338,26 @@ describe('ReportsPage — Save view (KK-derived from 07.7-h)', () => {
     expect(screen.getByLabelText('End date')).toHaveValue('2026-01-31');
   });
 
+  it('sends a custom range as the two calendar days, for the API to place on the workspace clock (tm 459)', async () => {
+    mockGroupsExport();
+    const user = userEvent.setup();
+    renderReports(<ReportsPage />);
+    await screen.findByText('Conversations', { exact: true });
+
+    await user.click(screen.getByRole('button', { name: 'Custom' }));
+    fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-11-05' } });
+    fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-11-05' } });
+
+    // One day on both ends is the whole workspace day — not two UTC instants
+    // that would file a 00:30 Istanbul chat under the day before.
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith(
+        expect.stringMatching(/^\/reports\/overview\?from=2026-11-05&to=2026-11-05(&|$)/),
+      ),
+    );
+    expect(api.get).not.toHaveBeenCalledWith(expect.stringContaining('T00%3A00%3A00'));
+  });
+
   it('restores a saved baseline into the report request, even with no control to set one yet', async () => {
     // A view carrying a non-null baseline can only exist today via storage
     // written some other way (a future build with a baseline selector, or —

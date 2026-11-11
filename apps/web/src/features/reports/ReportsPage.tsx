@@ -537,9 +537,15 @@ function TopicsPromoBanner({ onSeeTopics }: { onSeeTopics: () => void }): ReactE
 }
 
 /**
- * The selected window as ISO strings, or null when a custom range is incomplete
- * or backwards. Preset modes resolve against "now" at call time, so the query
- * key stays the stable mode rather than a timestamp that changes every render.
+ * The selected window, or null when a custom range is incomplete or backwards.
+ * Preset modes resolve against "now" at call time, so the query key stays the
+ * stable mode rather than a timestamp that changes every render.
+ *
+ * A custom range is sent as the two calendar days the user picked
+ * (`2026-11-05`), not as instants: the API reads a day as the workspace's
+ * conversation day — its zone and day start, the day the chat list files a chat
+ * under — and runs `to` to that day's end (tm 459 · F45). Turning the days into
+ * UTC midnights here filed a 00:30 Istanbul chat under the day before.
  */
 function resolveRange(
   mode: RangeMode,
@@ -547,15 +553,20 @@ function resolveRange(
   customTo: string,
 ): { from: string; to: string } | null {
   if (mode === 'custom') {
-    if (!customFrom || !customTo) return null;
-    const from = new Date(`${customFrom}T00:00:00.000Z`);
-    const to = new Date(`${customTo}T23:59:59.999Z`);
-    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from > to) return null;
-    return { from: from.toISOString(), to: to.toISOString() };
+    if (!isCalendarDay(customFrom) || !isCalendarDay(customTo)) return null;
+    // `YYYY-MM-DD` orders as text.
+    if (customFrom > customTo) return null;
+    return { from: customFrom, to: customTo };
   }
   const to = new Date();
   const from = new Date(to.getTime() - mode * 86_400_000);
   return { from: from.toISOString(), to: to.toISOString() };
+}
+
+function isCalendarDay(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
 function rangeQuery(range: { from: string; to: string }): string {

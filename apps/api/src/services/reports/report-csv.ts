@@ -56,6 +56,7 @@ import {
   queueFigures,
 } from './queue-reports.js';
 import { aiResolvedSql } from '../billing/ai-resolution.js';
+import { localDayKeySql, localHourSql, readDayBoundary } from '../chat/day-boundary.js';
 import {
   accessTeamSql,
   assertFilterable,
@@ -381,13 +382,13 @@ interface CaseDaySplit {
 }
 
 /**
- * Tickets created per UTC day (FR-MOD-07.7 Cases, v2 payload), split into
+ * Tickets created per workspace day (FR-MOD-07.7 Cases, v2 payload), split into
  * `open` vs `closed` by *current* status — `solved`/`closed` count as closed
  * (the same terminal pair the 'solved' {@link TicketView} filters to in
  * ticket-service.ts), `open`/`pending`/`spam` as open. There is no per-day
  * status history to bucket against instead, the same non-historical
- * convention {@link breakdownByDay}'s `closed` count follows. `AT TIME ZONE
- * 'UTC'` pins the bucket boundary regardless of server timezone, same as the
+ * convention {@link breakdownByDay}'s `closed` count follows. The day is the
+ * workspace's conversation day ({@link localDayKeySql}, tm 458), same as the
  * other by-day reports. A merged ticket (`merged_into_id` set) is excluded so
  * a merge never double-counts toward both the primary and the ticket merged
  * into it (open question in PLAN §5.2.4, resolved this way for 07.7-a).
@@ -398,10 +399,11 @@ export async function casesByDay(
   from: Date,
   to: Date,
 ): Promise<CaseDaySplit[]> {
+  const boundary = await readDayBoundary(tx);
   const rows = await tx.$queryRaw<
     Array<{ date: string; open: bigint; closed: bigint; total: bigint }>
   >`
-    SELECT to_char((created_at AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS date,
+    SELECT ${localDayKeySql(Prisma.sql`created_at`, boundary)} AS date,
       count(*) FILTER (WHERE status NOT IN ('solved', 'closed')) AS open,
       count(*) FILTER (WHERE status IN ('solved', 'closed'))     AS closed,
       count(*)                                                   AS total
@@ -573,10 +575,10 @@ function leadFirstTouch(licenseId: bigint) {
 }
 
 /**
- * New leads per UTC day (FR-MOD-07.7 Leads, v2 payload): a lead counted once, on
- * the day of its first touch on this license (see {@link leadFirstTouch}), for
- * days inside the window. `AT TIME ZONE 'UTC'` pins the bucket boundary
- * regardless of server timezone, like every other by-day report. A lead first
+ * New leads per workspace day (FR-MOD-07.7 Leads, v2 payload): a lead counted
+ * once, on the day of its first touch on this license (see {@link leadFirstTouch}),
+ * for days inside the window. The day is the workspace's conversation day
+ * ({@link localDayKeySql}, tm 458), like every other by-day report. A lead first
  * seen before the window does not reappear inside it, so this is a true
  * "new leads acquired" series whose counts sum to {@link leadTotals}.
  */
@@ -586,9 +588,10 @@ export async function leadsByDay(
   from: Date,
   to: Date,
 ): Promise<LeadDayCount[]> {
+  const boundary = await readDayBoundary(tx);
   const rows = await tx.$queryRaw<Array<{ date: string; count: bigint }>>`
     WITH ${leadFirstTouch(licenseId)}
-    SELECT to_char((first_touch AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS date,
+    SELECT ${localDayKeySql(Prisma.sql`first_touch`, boundary)} AS date,
       count(*) AS count
     FROM lead_first_touch
     WHERE first_touch >= ${from} AND first_touch <= ${to}
@@ -671,9 +674,9 @@ export function csatSummary(counts: { good: number; bad: number }): CsatSummary 
 }
 
 /**
- * Ratings tallied per UTC day for the daily bar (FR-MOD-07.8). `AT TIME ZONE
- * 'UTC'` pins the bucket boundary regardless of server timezone, exactly as the
- * breakdown's by-day split does, so a rating never lands on the wrong day. Only
+ * Ratings tallied per workspace day for the daily bar (FR-MOD-07.8). The day is
+ * the workspace's conversation day ({@link localDayKeySql}, tm 458), exactly as
+ * the breakdown's by-day split does, so a rating never lands on the wrong day. Only
  * days with a rating appear; an empty window yields an empty series.
  */
 export async function satisfactionByDay(
@@ -683,8 +686,9 @@ export async function satisfactionByDay(
   to: Date,
   filter: ThreadFilter | null = null,
 ): Promise<Array<{ date: string; good: number; bad: number }>> {
+  const boundary = await readDayBoundary(tx);
   const rows = await tx.$queryRaw<Array<{ date: string; good: bigint; bad: bigint }>>`
-    SELECT to_char((created_at AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS date,
+    SELECT ${localDayKeySql(Prisma.sql`created_at`, boundary)} AS date,
       count(*) FILTER (WHERE value = 'good') AS good,
       count(*) FILTER (WHERE value = 'bad')  AS bad
     FROM ratings
@@ -798,11 +802,13 @@ interface DaySplit {
 }
 
 /**
- * The resolution split (manual / assisted / automated) per UTC day. Feeds both
+ * The resolution split (manual / assisted / automated) per workspace day. Feeds both
  * the Breakdown tab's time series and the CSV export's `breakdown` group, so the
  * two can never quote a different split for the same day — the same reason the
- * split itself lives in one SQL fragment. `AT TIME ZONE 'UTC'` pins the bucket
- * boundary regardless of server timezone.
+ * split itself lives in one SQL fragment. The day is the workspace's
+ * conversation day ({@link localDayKeySql}, tm 458 · F44): a chat opened at
+ * 21:30Z on 4 November is a 5 November chat in Istanbul, in the chat list and
+ * here alike.
  */
 export async function breakdownByDay(
   tx: TenantClient,
@@ -811,6 +817,7 @@ export async function breakdownByDay(
   to: Date,
   filter: ThreadFilter | null = null,
 ): Promise<DaySplit[]> {
+  const boundary = await readDayBoundary(tx);
   const rows = await tx.$queryRaw<
     Array<{
       date: string;
@@ -821,7 +828,7 @@ export async function breakdownByDay(
       manual: bigint;
     }>
   >`
-    SELECT to_char((t.created_at AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS date,
+    SELECT ${localDayKeySql(Prisma.sql`t.created_at`, boundary)} AS date,
       ${SPLIT_COUNTS}
     FROM threads t
     WHERE t.license_id = ${licenseId}
@@ -850,8 +857,9 @@ interface HourSplit {
 }
 
 /**
- * The resolution split (manual / assisted / automated) per UTC hour of day,
- * for the Breakdown tab's hour dimension (FR-MOD-07.5). Reuses the same
+ * The resolution split (manual / assisted / automated) per workspace wall-clock
+ * hour of day ({@link localHourSql}, tm 458), for the Breakdown tab's hour
+ * dimension (FR-MOD-07.5). Reuses the same
  * `SPLIT_COUNTS` fragment as {@link breakdownByDay} — the only difference is
  * the `GROUP BY` expression — so the two dimensions can never disagree on
  * what counts as automated/assisted/manual. Dense: hours 0-23 are always
@@ -866,6 +874,7 @@ export async function breakdownByHour(
   to: Date,
   filter: ThreadFilter | null = null,
 ): Promise<HourSplit[]> {
+  const boundary = await readDayBoundary(tx);
   const rows = await tx.$queryRaw<
     Array<{
       hour: number;
@@ -876,7 +885,7 @@ export async function breakdownByHour(
       manual: bigint;
     }>
   >`
-    SELECT EXTRACT(HOUR FROM t.created_at AT TIME ZONE 'UTC')::int AS hour,
+    SELECT ${localHourSql(Prisma.sql`t.created_at`, boundary)} AS hour,
       ${SPLIT_COUNTS}
     FROM threads t
     WHERE t.license_id = ${licenseId}
@@ -1514,7 +1523,7 @@ function centroidOf(vectors: number[][]): number[] {
 
 /**
  * One report group rendered as a CSV table — a header row and its data rows —
- * for {@link toCsv}. `reviews` serialises one row per UTC day, then its
+ * for {@link toCsv}. `reviews` serialises one row per workspace day, then its
  * insights as a trailing `insight_*` key/value block ({@link insightCsvRows});
  * `breakdown`
  * serialises the Breakdown tab's four dimensions (day, hour, team, channel) in

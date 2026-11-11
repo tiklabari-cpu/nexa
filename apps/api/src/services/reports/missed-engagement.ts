@@ -25,12 +25,13 @@
 import { Prisma } from '@prisma/client';
 import {
   ENGAGEMENT_INITIATORS,
+  type DayBoundary,
   type EngagementInitiator,
   type MissedReason,
 } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 import { BOT_WROTE, HANDED_OFF } from '../billing/ai-resolution.js';
-import { readDayBoundary } from '../chat/day-boundary.js';
+import { localDayKeySql, readDayBoundary } from '../chat/day-boundary.js';
 import { threadFilterSql, type ThreadFilter } from './report-filter.js';
 
 // ===========================================================================
@@ -187,11 +188,11 @@ export async function missedByDay(
   licenseId: bigint,
   from: Date,
   to: Date,
-  timezone: string,
+  boundary: DayBoundary,
   filter: ThreadFilter | null = null,
 ): Promise<Array<MissedCounts & { date: string }>> {
   const rows = await tx.$queryRaw<Array<MissedCountRow & { date: string }>>`
-    SELECT to_char((t.created_at AT TIME ZONE ${timezone})::date, 'YYYY-MM-DD') AS date,
+    SELECT ${localDayKeySql(Prisma.sql`t.created_at`, boundary)} AS date,
       ${MISSED_COUNTS}
     FROM threads t
     WHERE ${inWindow(licenseId, from, to, filter)} AND t.missed_reason IS NOT NULL
@@ -351,9 +352,10 @@ export async function missedFigures(
   to: Date,
   filter: ThreadFilter | null = null,
 ): Promise<MissedFigures> {
-  const { timezone } = await readDayBoundary(tx);
+  const boundary = await readDayBoundary(tx);
+  const { timezone } = boundary;
   const totals = await missedTotals(tx, licenseId, from, to, filter);
-  const byDay = await missedByDay(tx, licenseId, from, to, timezone, filter);
+  const byDay = await missedByDay(tx, licenseId, from, to, boundary, filter);
   const heatmap = await missedHeatmap(tx, licenseId, from, to, timezone, filter);
   const byTeam = await missedByTeam(tx, licenseId, from, to, filter);
   const byAgent = await missedByAgent(tx, licenseId, from, to, filter);
@@ -488,11 +490,11 @@ export async function engagementByDay(
   licenseId: bigint,
   from: Date,
   to: Date,
-  timezone: string,
+  boundary: DayBoundary,
   filter: ThreadFilter | null = null,
 ): Promise<Array<EngagementRow & { date: string }>> {
   const rows = await tx.$queryRaw<Array<EngagementCountRow & { date: string }>>`
-    SELECT to_char((t.created_at AT TIME ZONE ${timezone})::date, 'YYYY-MM-DD') AS date,
+    SELECT ${localDayKeySql(Prisma.sql`t.created_at`, boundary)} AS date,
       t.initiated_by, ${ENGAGEMENT_COUNTS}
     FROM threads t
     WHERE ${inWindow(licenseId, from, to, filter)}
@@ -537,9 +539,10 @@ export async function engagementFigures(
   to: Date,
   filter: ThreadFilter | null = null,
 ): Promise<EngagementFigures> {
-  const { timezone } = await readDayBoundary(tx);
+  const boundary = await readDayBoundary(tx);
+  const { timezone } = boundary;
   const byInitiator = await engagementByInitiator(tx, licenseId, from, to, filter);
-  const byDay = await engagementByDay(tx, licenseId, from, to, timezone, filter);
+  const byDay = await engagementByDay(tx, licenseId, from, to, boundary, filter);
   return {
     timezone,
     totals: { chats: byInitiator.reduce((total, row) => total + row.chats, 0) },

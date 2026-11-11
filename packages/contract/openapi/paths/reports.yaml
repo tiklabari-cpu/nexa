@@ -1241,13 +1241,15 @@ shareLinks:
                 type: string
                 description: "Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `missed`, `engagement`, `queue`, `queue-abandonment`."
               from:
-                type: string
-                format: date-time
-                description: Start of the window to pin. Defaults to 30 days before `to`.
+                anyOf:
+                  - { type: string, format: date }
+                  - { type: string, format: date-time }
+                description: Start of the window to pin, a workspace day or an instant (as the report query's `from`). Defaults to 30 days before `to`.
               to:
-                type: string
-                format: date-time
-                description: End of the window to pin. Defaults to now.
+                anyOf:
+                  - { type: string, format: date }
+                  - { type: string, format: date-time }
+                description: End of the window to pin; a day runs to the end of that workspace day. Defaults to now.
               expires_in_days:
                 type: integer
                 minimum: 1

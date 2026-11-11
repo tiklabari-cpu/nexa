@@ -17305,12 +17305,12 @@
         "description": "NY-44 kısmen: SMTP yeniden denemesi yalnız bellek içinde; süreç yeniden başlarsa bekleyen mail kayboluyor. Panelde operatörün SMTP'yi doğrulayacağı test e-postası yok.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-05 / NY-44 (partial). Kanıt yeterlidir. Pilot kapsamı: sahip kararı 2026-11-06 S15 — pilot kapsamında, low öncelik.\n\nXHIGH GEREKÇESİ: (3) teslim güvencesi — mail kaybı ve çift gönderim.\n\nKODDA BUGÜN: `apps/api/src/services/.../smtp-mailer.ts:8-16`, `:~53` bellek içi retry; schema.prisma'da outbox modeli yok.\n\nYAPILACAK: alt görevlere bak. Kontrat-first; yeni yol mobil parity sayısını bump eder (memory openapi-path-breaks-mobile-parity-count); yeni scheduler işi iki pinli suite'i ripple eder (new-scheduler-job-ripples).\n\nTUZAK: log-keys audit (alıcı maskeli). brand_id sütunu eklenirse brand-isolation matrisi (brand-id-column-joins-brand-isolation-matrix).\n\nKAPSAM DIŞI: gelen e-posta (H-10), DNS/SPF (H-04).\nDENETİM BULGULARI: G-05",
         "testStrategy": "Alt görevlerde. DoD: CONVENTIONS §1.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-11T18:15:05.038Z",
+        "updatedAt": "2026-11-11T19:41:17.406Z",
         "subtasks": [
           {
             "id": 1,
@@ -17344,13 +17344,13 @@
             "description": "Admin kendi adresine test maili gönderip SMTP yapılandırmasını doğrular; sonuç (gönderildi/hata kodu) panelde.",
             "details": "Kontrat-first yeni yol (mobil parity bump yorumla; mutating yol impersonation sınıflandırması — memory openapi-path-breaks-mobile-parity-count); admin+ rolü; hız sınırı (ör. 5/saat); yalnız oturumdaki admin'in kendi adresi (başka alıcı yok). Web: Ayarlar e-posta bölümüne düğme + sonuç (en+tr, i18n kaydı). Ayrıntı: üst görev details.",
             "testStrategy": "api entegrasyon: admin → 202 ve outbox'ta kind=smtp_test; agent → 403; 6. istek 429. web birim: düğme → başarı/hata mesajı. `pnpm test:gate`.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "464.1"
             ],
             "parentId": "464",
             "priority": "low",
-            "updatedAt": "2026-11-11T18:15:05.038Z"
+            "updatedAt": "2026-11-11T19:41:17.406Z"
           }
         ]
       },
@@ -17778,9 +17778,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-11T18:15:05.039Z",
+      "lastModified": "2026-11-11T19:41:17.406Z",
       "taskCount": 478,
-      "completedCount": 446,
+      "completedCount": 447,
       "tags": [
         "master"
       ]

@@ -34,7 +34,9 @@ import type { Env } from '../../config/env.js';
  * seventeenth drafts the suggestions agents made to the AI (tm 318.1), and the
  * eighteenth puts the previous day's AI connections in the QA queue (tm 319.1).
  * `billing_dunning`, beside the statement freeze, renews a card-paid
- * subscription and runs its retry plan (tm 382 · BL-01).
+ * subscription and runs its retry plan (tm 382 · BL-01). `mail_outbox`, last,
+ * sends the queued mail and retries what the carrier could not take (tm 464.1 ·
+ * G-05).
  */
 export const SCHEDULER_JOB_NAMES = [
   'chat_timeout',
@@ -60,6 +62,7 @@ export const SCHEDULER_JOB_NAMES = [
   'qa_consistency',
   'ai_outcomes_finalize',
   'ai_metrics_rollup',
+  'mail_outbox',
 ] as const;
 
 export type SchedulerJobName = (typeof SCHEDULER_JOB_NAMES)[number];
@@ -95,6 +98,7 @@ export type SchedulerIntervalEnv = Pick<
   | 'SCHEDULE_QA_CONSISTENCY_MS'
   | 'SCHEDULE_AI_OUTCOMES_FINALIZE_MS'
   | 'SCHEDULE_AI_METRICS_ROLLUP_MS'
+  | 'SCHEDULE_MAIL_OUTBOX_MS'
 >;
 
 /**
@@ -129,6 +133,7 @@ export function jobIntervals(env: SchedulerIntervalEnv): Record<SchedulerJobName
     qa_consistency: env.SCHEDULE_QA_CONSISTENCY_MS,
     ai_outcomes_finalize: env.SCHEDULE_AI_OUTCOMES_FINALIZE_MS,
     ai_metrics_rollup: env.SCHEDULE_AI_METRICS_ROLLUP_MS,
+    mail_outbox: env.SCHEDULE_MAIL_OUTBOX_MS,
   };
 }
 

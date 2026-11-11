@@ -384,6 +384,7 @@ enabled flag, and last run's time/status.
 | `qa_consistency`       | 6 h              | Queues last week's AI connections answered two ways, as pairs (tm 319.2)           |
 | `ai_outcomes_finalize` | 1 h              | Settles AI outcome rows 72 h after the close: repeat contact (tm 320.2)            |
 | `ai_metrics_rollup`    | 1 h              | Rebuilds the AI metrics' daily rollup from changed outcome rows (tm 320.2)         |
+| `mail_outbox`          | 10 s             | Sends queued mail; retries what the carrier refused, 5 tries in all (tm 464.1)     |
 
 Override an interval with `SCHEDULE_<JOB>_MS`, and spread instances from one deploy so
 they don't all tick together with `SCHEDULE_JITTER_PCT` (default 10%) — see
@@ -394,7 +395,8 @@ what that outside trigger calls. Webhook redelivery has no CLI equivalent — it
 an operator would ever want to force, and a hand-run one would race the scheduled one for the
 same rows. Nor has `unverified_signups`: it only matters on a deployment that verifies
 sign-ups, which is one with the scheduler on. Nor has `ai_stall`: it is a watchdog measured in
-seconds, which no outside trigger driven by hand could stand in for.
+seconds, which no outside trigger driven by hand could stand in for. Nor has `mail_outbox`
+(tm 464.1): with the scheduler off on every instance, queued mail waits until one turns it on.
 
 `unverified_signups` (tm 257.19) runs only while `SIGNUP_EMAIL_VERIFICATION=true` — off, an
 unverified account signs in like any other, and `/health` lists the job as `disabled`. On, it

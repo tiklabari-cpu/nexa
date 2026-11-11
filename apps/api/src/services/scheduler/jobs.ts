@@ -87,6 +87,12 @@
  * `assumed_resolved` or `false_resolved`; `ai_metrics_rollup` rebuilds the
  * `ai_metrics_daily` days a changed row ended on
  * (`services/reports/ai-metrics.ts`). No CLI scripts.
+ *
+ * `mail_outbox` (tm 464.1 · G-05) hands the queued mail to the server's
+ * mailer — the capped one, so a queued mail counts against the daily caps when
+ * it is sent, like any other — and retries what the carrier could not take
+ * (`services/mail/outbox.ts`). No CLI script: a pass is cheap and the queue is
+ * the scheduler's to drain.
  */
 import type { PrismaClient } from '@prisma/client';
 import type { Env } from '../../config/env.js';
@@ -129,6 +135,7 @@ import { ChatService } from '../chat/chat-service.js';
 import type { WorkspaceEventDispatcher } from '../webhooks/workspace-events.js';
 import { ChatTimeoutSweeper } from '../chat/chat-timeout.js';
 import type { Mailer } from '../mail/mailer.js';
+import { MailOutboxWorker } from '../mail/outbox.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
 import { AiMetricsRollup, AiOutcomeFinalizer } from '../reports/ai-metrics.js';
 import { DigestSweeper } from '../notifications/digest-sweeper.js';
@@ -892,6 +899,18 @@ export function buildSchedulerJobs({
             rows: report.totals.rows,
           },
         };
+      },
+    },
+    {
+      // The mail outbox's sender (tm 464.1 · G-05).
+      name: 'mail_outbox',
+      intervalMs: intervals.mail_outbox,
+      async run(context) {
+        const report = await new MailOutboxWorker(db, {
+          mailer,
+          logger: context.logger,
+        }).run({ signal: context.signal });
+        return { counts: { ...report } };
       },
     },
   ];

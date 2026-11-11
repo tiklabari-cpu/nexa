@@ -126,6 +126,7 @@ const UNCONDITIONAL = [
   'qa_consistency',
   'ai_outcomes_finalize',
   'ai_metrics_rollup',
+  'mail_outbox',
 ];
 
 /**
@@ -431,6 +432,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
         SCHEDULE_QA_CONSISTENCY_MS: TICK_MS,
         SCHEDULE_AI_OUTCOMES_FINALIZE_MS: TICK_MS,
         SCHEDULE_AI_METRICS_ROLLUP_MS: TICK_MS,
+        SCHEDULE_MAIL_OUTBOX_MS: TICK_MS,
         SIEM_DIR: siemDir,
         // The retention sweep prunes the mail spool by path, so even a pass
         // that is not supposed to happen is pointed at a temporary directory
@@ -585,6 +587,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
       'qa_consistency',
       'ai_outcomes_finalize',
       'ai_metrics_rollup',
+      'mail_outbox',
     ]);
 
     for (const name of UNCONDITIONAL) {
@@ -652,6 +655,7 @@ describe('two API instances sharing one Redis', () => {
       SCHEDULE_QA_CONSISTENCY_MS: '1500',
       SCHEDULE_AI_OUTCOMES_FINALIZE_MS: '1500',
       SCHEDULE_AI_METRICS_ROLLUP_MS: '1500',
+      SCHEDULE_MAIL_OUTBOX_MS: '1500',
     };
     // Booted together so the gap between the two `scheduler.start()` calls is
     // as small as two concurrent boots allow — it has to be under the lock's
@@ -762,6 +766,7 @@ describe('retention deletes only once a deployment has said so', () => {
       SCHEDULE_QA_CONSISTENCY_MS: NEVER_MS,
       SCHEDULE_AI_OUTCOMES_FINALIZE_MS: NEVER_MS,
       SCHEDULE_AI_METRICS_ROLLUP_MS: NEVER_MS,
+      SCHEDULE_MAIL_OUTBOX_MS: NEVER_MS,
       MAIL_DIR: mailDir,
     });
 
@@ -845,6 +850,7 @@ describe('the unverified sign-up sweep runs by itself once SIGNUP_EMAIL_VERIFICA
       SCHEDULE_QA_CONSISTENCY_MS: NEVER_MS,
       SCHEDULE_AI_OUTCOMES_FINALIZE_MS: NEVER_MS,
       SCHEDULE_AI_METRICS_ROLLUP_MS: NEVER_MS,
+      SCHEDULE_MAIL_OUTBOX_MS: NEVER_MS,
     });
 
     await waitForAll({

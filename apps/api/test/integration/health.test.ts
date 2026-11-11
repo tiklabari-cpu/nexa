@@ -132,6 +132,7 @@ describe('the published health snapshot — scheduler (what the root panel reads
         'qa_consistency',
         'ai_outcomes_finalize',
         'ai_metrics_rollup',
+        'mail_outbox',
       ]);
       // Registered but never ticked — `SCHEDULER_ENABLED` defaults to off
       // under `NODE_ENV=test` (env.ts), same as every other suite's server.
@@ -176,6 +177,7 @@ describe('the published health snapshot — scheduler (what the root panel reads
         'qa_consistency',
         'ai_outcomes_finalize',
         'ai_metrics_rollup',
+        'mail_outbox',
       ]) {
         expect(byName[name]).toMatchObject({ enabled: true, last_status: null });
       }

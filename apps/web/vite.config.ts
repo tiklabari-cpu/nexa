@@ -1,4 +1,5 @@
 import { createWriteStream } from 'node:fs';
+import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import react from '@vitejs/plugin-react';
 import type { Plugin } from 'vite';
@@ -99,8 +100,47 @@ function e2eRequestLog(): Plugin[] {
   ];
 }
 
+/**
+ * On a private e2e stack only (tm 463.4): the dev server also takes connections on
+ * `127.0.0.1:<port>` and hands them to the same HTTP server, so Chromium's IPv4 fallback has
+ * somewhere to land.
+ *
+ * Measured with Chromium's net-log (`SIYAHTUS_E2E_NETLOG_DIR`, customers ×20, 2/140 red): every
+ * "request that never came back" was a TCP connect to `[::1]:<port>` that never completed. The
+ * connect job's own fallback to `127.0.0.1` at +300 ms was refused (Vite listens on `::1` only),
+ * the pool's 250 ms backup socket went to another queued request, and the stalled one waited on
+ * the hung connect until the test gave up. With an IPv4 listener the fallback connects and the
+ * request goes out ~300 ms late. A second `net.Server` on loopback, not `host: '::'`: the dev
+ * server stays off the LAN. Unset — every other run — the plugin is not installed.
+ */
+function e2eIpv4Listener(): Plugin[] {
+  if (process.env['SIYAHTUS_E2E_SHARD'] === undefined) return [];
+  return [
+    {
+      name: 'siyahtus-e2e-ipv4-listener',
+      configureServer(server) {
+        const http = server.httpServer;
+        if (!http) return;
+        http.once('listening', () => {
+          const address = http.address();
+          // Already on IPv4 (a machine whose `localhost` resolves there first): nothing to add.
+          if (!address || typeof address === 'string' || !String(address.family).includes('6')) {
+            return;
+          }
+          const ipv4 = createServer((socket) => http.emit('connection', socket));
+          ipv4.on('error', (error) =>
+            server.config.logger.warn(`e2e IPv4 listener on ${address.port}: ${error.message}`),
+          );
+          ipv4.listen(address.port, '127.0.0.1');
+          http.once('close', () => ipv4.close());
+        });
+      },
+    },
+  ];
+}
+
 export default defineConfig({
-  plugins: [react(), docsTrailingSlash(), ...e2eRequestLog()],
+  plugins: [react(), docsTrailingSlash(), ...e2eRequestLog(), ...e2eIpv4Listener()],
   // A second dev server beside the usual one (the pilot e2e stack,
   // `apps/e2e/playwright.pilot.config.ts`) needs its own dependency cache, or
   // its optimizer rewrites `.vite/deps` under the running one. Unset, Vite's

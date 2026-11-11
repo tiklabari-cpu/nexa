@@ -17233,7 +17233,7 @@
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-11T09:15:15.476Z",
+        "updatedAt": "2026-11-11T09:20:14.107Z",
         "subtasks": [
           {
             "id": 1,
@@ -17277,13 +17277,13 @@
             "description": "(463.4) Guardrail fixture'ları / AI turu birleştirme hipotezleri. (463.5) Çevrimdışı form zamanlaması; son alt görev tüm spec'lerin sonuç tablosunu HANDOFF'a yazar.",
             "details": "BİRLEŞİK ALT GÖREV (sahip onayı 2026-11-07): 463.4, 463.5 tek pencerede yapılır; DoD kapısı bir kez koşar.\nBölümler sırayla yapılır, her biri kendi kabul ölçütüyle kapanır; biri yeşil değilse alt görev done değildir.\n463.5 cancelled durumda ve buraya işaret ediyor; metinlerde onlara yapılan atıflar bu alt görevi kasteder.\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\n━━ BÖLÜM 1 — 463.4 FLAKE-AI-GUARDRAILS · ai-guardrails.spec.ts:130 kök nedeni ━━\nSORUN: Guardrail fixture'ları / AI turu birleştirme hipotezleri.\n\nÜst görev ORTAK YÖNTEM. memory guardrails-check-every-ai-reply, ai-turns-merge-unanswered-visitor-messages.\n\n━━ BÖLÜM 2 — 463.5 FLAKE-OFFLINE-FORM · offline-form.spec.ts kök nedeni + spec tablosu ━━\nSORUN: Çevrimdışı form zamanlaması; son alt görev tüm spec'lerin sonuç tablosunu HANDOFF'a yazar.\n\nÜst görev ORTAK YÖNTEM. Kapanışta `pnpm test:gate --e2e` bir kez.",
             "testStrategy": "BÖLÜM 1 (463.4): ai-guardrails.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez.\nBÖLÜM 2 (463.5): offline-form.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez; HANDOFF'ta 5 satırlık tablo.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "463.1"
             ],
             "parentId": "463",
             "priority": "low",
-            "updatedAt": "2026-11-07T11:50:37.837Z"
+            "updatedAt": "2026-11-11T09:20:14.107Z"
           },
           {
             "id": 5,
@@ -17778,7 +17778,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-11T09:15:15.476Z",
+      "lastModified": "2026-11-11T09:20:14.108Z",
       "taskCount": 478,
       "completedCount": 445,
       "tags": [

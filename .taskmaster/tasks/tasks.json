@@ -17310,7 +17310,7 @@
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-11T11:18:13.696Z",
+        "updatedAt": "2026-11-11T12:52:51.969Z",
         "subtasks": [
           {
             "id": 1,
@@ -17318,11 +17318,11 @@
             "description": "Tablo, enqueue API'si ve SKIP LOCKED gönderici işi; henüz hiçbir mevcut çağıran taşınmaz (yalnız test çağıranı).",
             "details": "Migration: mail_outbox (license_id, kind, to (şifresiz ama loglanmaz), payload json, status pending|sent|failed, attempts, next_attempt_at, last_error, idempotency key unique). `enqueueMail(tx, ...)` yardımcısı. İş `FOR UPDATE SKIP LOCKED` ile partiler hâlinde gönderir; üstel geri çekilme; 5 deneme sonrası failed. Yeni scheduler işi health.test + scheduler-e2e pinli listelerine eklenir (new-scheduler-job-ripples). Ayrıntı: üst görev details.",
             "testStrategy": "api entegrasyon: SMTP mock ilk iki denemede hata → üçüncüde sent; süreç yeniden başlarsa pending satır gönderilir; iki eşzamanlı iş aynı satırı iki kez göndermez. Mutasyon: SKIP LOCKED'ı kaldır → çift gönderim testi kırmızı. `pnpm test:gate`.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "464",
             "priority": "low",
-            "updatedAt": "2026-11-11T11:18:13.696Z"
+            "updatedAt": "2026-11-11T12:52:51.969Z"
           },
           {
             "id": 2,
@@ -17778,7 +17778,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-11T11:18:13.697Z",
+      "lastModified": "2026-11-11T12:52:51.970Z",
       "taskCount": 478,
       "completedCount": 446,
       "tags": [

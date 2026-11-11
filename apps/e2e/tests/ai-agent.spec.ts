@@ -84,7 +84,10 @@ test.describe('AI Agent (MOD-06)', () => {
     // Change a free-text persona field the widget header does not key on, to a
     // value unique per run — so the test is robust to the idempotent seed and
     // never collides with widget.spec's persona-name assertion.
-    const marker = `professional-${Date.now()}`;
+    // Base 36, not the 13 decimal digits of `Date.now()`: a Luhn-valid digit run
+    // is masked as a card number where it is written (`cc-mask.ts`), and one
+    // timestamp in ten is one (tm 463).
+    const marker = `professional-${Date.now().toString(36)}`;
     const tone = agentPage.getByLabel('Tone');
     const seededTone = await readTone(agentPage);
     try {
@@ -109,7 +112,9 @@ test.describe('AI Agent (MOD-06)', () => {
   }) => {
     await agentPage.goto('/app/playbook?view=general');
     const tabs = agentPage.getByRole('tablist', { name: 'AI Agent' });
-    const marker = `calm-${Date.now()}`;
+    // Base 36 for the same reason as above: `calm-1794383953111` came back as
+    // `calm-**** **** **** 3111` (tm 449, tm 463).
+    const marker = `calm-${Date.now().toString(36)}`;
     const seededTone = await readTone(agentPage);
     try {
       await agentPage.getByLabel('Tone').fill(marker);

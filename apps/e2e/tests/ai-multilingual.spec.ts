@@ -14,6 +14,14 @@
  * The knowledge source carries a marker unique to this run (retrieval is
  * lexical), and the persona is put back afterwards so the shared seed agent
  * reads as it did for the specs after this one.
+ *
+ * The friendly Tone the opener comes from is set here, not assumed from the
+ * seed (tm 463). The persona is shared state, and a spec that ran earlier on the
+ * same stack and left another Tone — `persona-answer.spec` empties it and keeps
+ * it so, `ai-config-versions.spec` writes "formal …" and only puts it back if
+ * its own steps reach `finally` — took the opener away: the Russian answer came
+ * back without «С удовольствием помогу!» (red in tm 379, 388 and 392; with
+ * `persona-answer` before it, 0 of 1). Order no longer decides it.
  */
 import {
   expect,
@@ -23,6 +31,9 @@ import {
   visitorSends,
   widgetFrame,
 } from './fixtures.js';
+
+/** The seeded agent's tone, the one with a Russian opener ("С удовольствием помогу!"). */
+const FRIENDLY = 'friendly';
 
 test.describe('the AI in the player’s language (AI-30)', () => {
   test('Russian turned on in the profile: a Russian visitor reads Russian', async ({
@@ -55,6 +66,13 @@ test.describe('the AI in the player’s language (AI-30)', () => {
 
     // --- Russian on, and what it brings with it --------------------------------
     await tabs.getByRole('tab', { name: 'General settings' }).click();
+    // The form is filled once the agent has loaded — the name is never empty then,
+    // where the Tone may be.
+    await expect(agentPage.getByLabel('Name', { exact: true })).not.toHaveValue('');
+    const tone = agentPage.getByLabel('Tone');
+    const toneBefore = await tone.inputValue();
+    const toneChanged = toneBefore.trim().toLowerCase() !== FRIENDLY;
+    if (toneChanged) await tone.fill(FRIENDLY);
     const russian = agentPage.getByRole('switch', { name: 'Русский', exact: true });
     const save = agentPage.getByRole('button', { name: 'Save profile' });
     const wasOn = (await russian.getAttribute('aria-checked')) === 'true';
@@ -96,13 +114,14 @@ test.describe('the AI in the player’s language (AI-30)', () => {
       }
     } finally {
       // --- Put the persona back for the specs after this one ----------------------
+      if (toneChanged) await tone.fill(toneBefore);
       if (!wasOn) {
         await russian.click();
         await expect(russian).toHaveAttribute('aria-checked', 'false');
-        if (await save.isEnabled()) {
-          await save.click();
-          await expect(save).toBeDisabled();
-        }
+      }
+      if (await save.isEnabled()) {
+        await save.click();
+        await expect(save).toBeDisabled();
       }
     }
   });

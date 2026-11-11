@@ -17228,12 +17228,12 @@
         "description": "NY-41 (kesintisiz/hatasız çalışma) kısmen karşılanıyor: HANDOFF tm 411–414'te tekrar eden flaky e2e'ler kök nedeni bilinmeden rerun ile geçiyor.",
         "details": "ALT GÖREV BİRLEŞTİRMESİ (2026-11-07, sahip onayı; her alt görev ayrı pencere ve tam kapı demek): 463.1 + 463.2 + 463.3 → 463.1; 463.4 + 463.5 → 463.4. Cancelled alt görevlere metinde yapılan atıflar birleşik alt görevi kasteder.\n\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-04 / NY-41 (partial). Kanıt: HANDOFF tm 411–414 blokları (eski kayıt gerekirse `docs/archive/` altında grep).\n\nKODDA BUGÜN: `apps/e2e/.../two-factor.spec.ts:314`, `ai-multilingual.spec.ts:28`, `customers.spec.ts:53`, `ai-guardrails.spec.ts:130`, `offline-form.spec.ts` (satırları HEAD'de doğrula).\n\nORTAK YÖNTEM (her alt görev): spec'i tek başına `--repeat-each=20` (ilgili shard stack'iyle, run_in_background) koş; başarısızlık oranını ve trace'i topla; kök nedeni (zamanlama, sıra bağımlılığı, 30/dk auth kovası, TOTP pencere sınırı, mock embedding) belirle ve düzelt. Düzeltilemeyen için kanıtlı not — `test.fixme` DEĞİL; HANDOFF'a önce/sonra oran ve hipotez.\n\nTUZAK: memory hub-e2e-traps, browser-ux-probe-traps (30/dk), ai-question-text-is-load-bearing, guardrails-check-every-ai-reply, dod-gate-wall-clock-and-e2e-png-churn. Uzun koşular run_in_background (10 dk komut tavanı).\n\nKAPSAM DIŞI: yeni e2e.\nDENETİM BULGULARI: G-04",
         "testStrategy": "Alt görevlerde. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` son alt görevin kapanışında bir kez.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-07T11:50:37.837Z",
+        "updatedAt": "2026-11-11T06:45:23.927Z",
         "subtasks": [
           {
             "id": 1,
@@ -17241,11 +17241,11 @@
             "description": "(463.1) TOTP pencere sınırı / auth kovası hipotezleri; --repeat-each=20. (463.2) Mock embedding / dil algılama zamanlaması hipotezleri. (463.3) Sıra bağımlılığı / paged query hipotezleri.",
             "details": "BİRLEŞİK ALT GÖREV (sahip onayı 2026-11-07): 463.1, 463.2, 463.3 tek pencerede yapılır; DoD kapısı bir kez koşar.\nBölümler sırayla yapılır, her biri kendi kabul ölçütüyle kapanır; biri yeşil değilse alt görev done değildir.\n463.2, 463.3 cancelled durumda ve buraya işaret ediyor; metinlerde onlara yapılan atıflar bu alt görevi kasteder.\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\n━━ BÖLÜM 1 — 463.1 FLAKE-TWO-FACTOR · two-factor.spec.ts:314 kök nedeni ━━\nSORUN: TOTP pencere sınırı / auth kovası hipotezleri; --repeat-each=20.\n\nÜst görev ORTAK YÖNTEM. Önce/sonra oran HANDOFF'a.\n\n━━ BÖLÜM 2 — 463.2 FLAKE-AI-MULTILINGUAL · ai-multilingual.spec.ts:28 kök nedeni ━━\nSORUN: Mock embedding / dil algılama zamanlaması hipotezleri.\n\nÜst görev ORTAK YÖNTEM. memory ai-question-text-is-load-bearing.\n\n━━ BÖLÜM 3 — 463.3 FLAKE-CUSTOMERS · customers.spec.ts:53 kök nedeni ━━\nSORUN: Sıra bağımlılığı / paged query hipotezleri.\n\nÜst görev ORTAK YÖNTEM. memory paged-query-drops-fetchnext-during-refresh.",
             "testStrategy": "BÖLÜM 1 (463.1): two-factor.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez.\nBÖLÜM 2 (463.2): ai-multilingual.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez.\nBÖLÜM 3 (463.3): customers.spec.ts --repeat-each=20 → 20/20 yeşil ya da kanıtlı hipotez.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "463",
             "priority": "low",
-            "updatedAt": "2026-11-07T11:50:37.837Z"
+            "updatedAt": "2026-11-11T06:45:23.927Z"
           },
           {
             "id": 2,
@@ -17778,7 +17778,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-11T06:44:29.950Z",
+      "lastModified": "2026-11-11T06:45:23.928Z",
       "taskCount": 478,
       "completedCount": 445,
       "tags": [

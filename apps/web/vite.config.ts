@@ -1,4 +1,5 @@
-import { resolve } from 'node:path';
+import { createWriteStream } from 'node:fs';
+import { join, resolve } from 'node:path';
 import react from '@vitejs/plugin-react';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
@@ -49,8 +50,57 @@ function docsTrailingSlash(): Plugin {
   };
 }
 
+/**
+ * On a private e2e stack only (tm 463): one line per `/api` request as this
+ * server receives it and one as it answers, into `web-shard-<i>.log` beside the
+ * shard's API log. The suite's rarest red is a panel request that never comes
+ * back while the API log shows it never arrived (`customers.spec` search,
+ * `two-factor.spec` roster); this is the hop in between, so the next one says
+ * whether the dev server's proxy ever had it. Unset — every other run — the
+ * plugin is not installed.
+ */
+function e2eRequestLog(): Plugin[] {
+  const dir = process.env['SIYAHTUS_E2E_SERVER_LOG_DIR'];
+  const shard = process.env['SIYAHTUS_E2E_SHARD'];
+  if (!dir || shard === undefined) return [];
+  return [
+    {
+      name: 'siyahtus-e2e-request-log',
+      configureServer(server) {
+        const log = createWriteStream(join(dir, `web-shard-${shard}.log`), { flags: 'a' });
+        let next = 0;
+        server.middlewares.use((request, response, proceed) => {
+          if (!request.url?.startsWith('/api/')) return proceed();
+          const id = (next += 1);
+          const started = Date.now();
+          const write = (event: string, extra: Record<string, unknown> = {}): void => {
+            const line = {
+              time: Date.now(),
+              id,
+              event,
+              method: request.method,
+              url: request.url?.split('?')[0],
+              ...extra,
+            };
+            log.write(`${JSON.stringify(line)}\n`);
+          };
+          write('received', { port: request.socket.remotePort });
+          response.on('finish', () =>
+            write('answered', { status: response.statusCode, ms: Date.now() - started }),
+          );
+          response.on('close', () => {
+            if (!response.writableFinished)
+              write('closed unanswered', { ms: Date.now() - started });
+          });
+          proceed();
+        });
+      },
+    },
+  ];
+}
+
 export default defineConfig({
-  plugins: [react(), docsTrailingSlash()],
+  plugins: [react(), docsTrailingSlash(), ...e2eRequestLog()],
   // A second dev server beside the usual one (the pilot e2e stack,
   // `apps/e2e/playwright.pilot.config.ts`) needs its own dependency cache, or
   // its optimizer rewrites `.vite/deps` under the running one. Unset, Vite's

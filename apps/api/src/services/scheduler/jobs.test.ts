@@ -69,6 +69,7 @@ describe('buildSchedulerJobs', () => {
       'qa_consistency',
       'ai_outcomes_finalize',
       'ai_metrics_rollup',
+      'mail_outbox',
     ]);
     // A name declared but never registered is a job somebody forgot to wire,
     // and `/health` would simply not mention it.
@@ -100,6 +101,7 @@ describe('buildSchedulerJobs', () => {
       SCHEDULE_QA_CONSISTENCY_MS: '23000',
       SCHEDULE_AI_OUTCOMES_FINALIZE_MS: '24000',
       SCHEDULE_AI_METRICS_ROLLUP_MS: '25000',
+      SCHEDULE_MAIL_OUTBOX_MS: '26000',
     });
     const jobs = buildSchedulerJobs({ db, env, mailer: new NullMailer() });
     const intervalOf = (name: string): number | undefined =>
@@ -128,6 +130,7 @@ describe('buildSchedulerJobs', () => {
     expect(intervalOf('qa_consistency')).toBe(23_000);
     expect(intervalOf('ai_outcomes_finalize')).toBe(24_000);
     expect(intervalOf('ai_metrics_rollup')).toBe(25_000);
+    expect(intervalOf('mail_outbox')).toBe(26_000);
   });
 
   it('registers retention and the unverified sign-up sweep disabled unless their switches are set — no other job is gated', () => {
@@ -271,6 +274,23 @@ describe('buildSchedulerJobs', () => {
       expect(finalize?.counts).toEqual({ tenants: 0, finalized: 0, repeated: 0, unmeasured: 0 });
       const rollup = await jobs.find((j) => j.name === 'ai_metrics_rollup')?.run(context());
       expect(rollup?.counts).toEqual({ tenants: 0, days: 0, rows: 0 });
+    });
+
+    it('mail_outbox finds nothing queued and sends nothing (tm 464.1)', async () => {
+      const job = buildSchedulerJobs({ db, env: testEnv(), mailer: new NullMailer() }).find(
+        (j) => j.name === 'mail_outbox',
+      );
+      const outcome = await job?.run(context());
+      expect(outcome?.counts).toEqual({
+        claimed: 0,
+        sent: 0,
+        unconfirmed: 0,
+        retried: 0,
+        failed: 0,
+        lost: 0,
+        released: 0,
+        pruned: 0,
+      });
     });
 
     it('ai_sandbox_sessions finds nothing expired and deletes nothing (tm 314.2)', async () => {

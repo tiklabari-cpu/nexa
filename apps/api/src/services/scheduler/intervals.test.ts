@@ -58,6 +58,7 @@ describe('the job list', () => {
       'qa_consistency',
       'ai_outcomes_finalize',
       'ai_metrics_rollup',
+      'mail_outbox',
     ]);
   });
 
@@ -94,6 +95,7 @@ describe('intervals', () => {
       qa_consistency: 21_600_000,
       ai_outcomes_finalize: 3_600_000,
       ai_metrics_rollup: 3_600_000,
+      mail_outbox: 10_000,
     });
   });
 

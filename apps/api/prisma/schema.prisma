@@ -260,6 +260,7 @@ model License {
   aiConversationOutcomes AiConversationOutcome[]
   aiMetricsDaily         AiMetricsDaily[]
   mailDailyUsage         MailDailyUsage[]
+  mailOutbox             MailOutbox[]
   apiPackagePurchases    ApiPackagePurchase[]
   aiPackagePurchases     AiPackagePurchase[]
   invoices               Invoice[]
@@ -4605,6 +4606,46 @@ model MailDailyUsage {
 
   @@unique([licenseId, day, meter, recipientHash])
   @@map("mail_daily_usage")
+}
+
+/// The durable outgoing-mail queue (tm 464.1 · G-05 / NY-44): one row per mail,
+/// written by `enqueueMail(tx, …)` in the transaction that decided to send it and
+/// sent by the `mail_outbox` scheduler job (`services/mail/outbox.ts`). With
+/// `licenseId` null: account mail (a password reset, a sign-up link), which no
+/// workspace sees.
+///
+/// The application role reads its workspace's rows and inserts; every state
+/// change is a `mail_outbox_*` SECURITY DEFINER function (migration
+/// 20270102090000), so "who may send this row now" is answered in one place.
+/// `payload` (the message minus recipient, licence and kind) is emptied when the
+/// row settles. Unique with NULLS NOT DISTINCT, which Prisma cannot say — the
+/// index Prisma sees is the same two columns. CHECKs live in the migration.
+model MailOutbox {
+  id             String    @id @default(uuid()) @db.Uuid
+  licenseId      BigInt?   @map("license_id")
+  /// `Message['kind']`.
+  kind           String
+  /// Stored as typed for the carrier; never logged.
+  recipient      String
+  payload        Json
+  /// `pending`, `sent`, `unconfirmed` or `failed`.
+  status         String    @default("pending")
+  /// How many times a sender took the row — counted at the claim.
+  attempts       Int       @default(0)
+  /// When the row is due: new, a retry's backoff, or a claim's lease end.
+  nextAttemptAt  DateTime  @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  /// A code (`MailErrorCode`, `unexpected`, `attempts_exhausted`), never text.
+  lastError      String?   @map("last_error")
+  idempotencyKey String    @map("idempotency_key")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  settledAt      DateTime? @map("settled_at") @db.Timestamptz(6)
+
+  license License? @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@unique([licenseId, idempotencyKey])
+  @@index([status, nextAttemptAt])
+  @@index([settledAt])
+  @@map("mail_outbox")
 }
 
 /// One purchased API request package (FR-MOD-09.3).

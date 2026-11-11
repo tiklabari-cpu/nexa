@@ -1433,6 +1433,13 @@ export const envSchema = z.object({
    */
   SCHEDULE_AI_METRICS_ROLLUP_MS: z.coerce.number().int().positive().default(3_600_000),
   /**
+   * The mail outbox's sender (tm 464.1 · G-05): queued mail handed to the
+   * carrier, and a retry whose backoff has passed. Every 10 seconds — a
+   * password reset waits at most this long for its first try — and a pass with
+   * nothing due is one indexed lookup.
+   */
+  SCHEDULE_MAIL_OUTBOX_MS: z.coerce.number().int().positive().default(10_000),
+  /**
    * Lets the retention job actually run its scheduled pass (M-SCHED-b ·
    * `services/scheduler/types.ts`'s `JobDefinition.enabled`). Off by default:
    * this is the one sweep that hard-deletes data, and there is no operator

@@ -1328,6 +1328,46 @@ export function ssoDomainChallengeMail(
   });
 }
 
+/**
+ * The test message an administrator sends to their own address from Settings
+ * (tm 464.3 · G-05). No action and no link to follow: arriving is the whole
+ * message.
+ */
+export function smtpTestMail(ctx: MailContext, input: { workspaceName: string }): RenderedEmail {
+  const t = tr(ctx.locale);
+  const w = input.workspaceName;
+  return renderEmail({
+    locale: ctx.locale,
+    homeUrl: ctx.appUrl ?? '',
+    subject: t ? 'SiyahTuş test e-postası' : 'SiyahTuş test email',
+    preheader: t
+      ? 'Bunu okuyorsanız e-posta gönderimi çalışıyor.'
+      : 'If you are reading this, mail delivery works.',
+    icon: ICON.verify,
+    heading: t ? 'E-posta gönderimi çalışıyor' : 'Mail delivery works',
+    blocks: [
+      {
+        type: 'paragraph',
+        text: t
+          ? `Bu ileti, ${w} çalışma alanının Ayarlar ekranından e-posta gönderimini denemek için istendi. Size ulaştıysa sunucunun e-posta ayarları doğru çalışıyor.`
+          : `You asked for this message from the Settings of ${w} to check that mail goes out. If it reached you, the server's mail settings work.`,
+      },
+      {
+        type: 'note',
+        text: t
+          ? 'Yapmanız gereken bir şey yok. Bu iletiyi siz istemediyseniz çalışma alanınızın bir yöneticisine haber verin.'
+          : 'There is nothing to do. If you did not ask for it, tell an administrator of your workspace.',
+      },
+    ],
+    footer: [
+      t
+        ? 'Bu e-postayı, SiyahTuş panelinden kendinize bir test e-postası istediğiniz için aldınız.'
+        : 'You received this email because a test message to yourself was requested from the SiyahTuş panel.',
+      signature(ctx),
+    ],
+  });
+}
+
 export function visitorMessageMail(
   ctx: MailContext,
   input: { agentName: string | null; workspaceName: string; inboxUrl: string; settingsUrl: string },

@@ -26,6 +26,7 @@ import {
   platformInvitationMail,
   scheduledReportMail,
   slaBreachMail,
+  smtpTestMail,
   ssoDomainChallengeMail,
   teamTranscriptMail,
   ticketNoticeMail,
@@ -84,6 +85,7 @@ function everyMail(locale: MailLocale): Record<string, RenderedEmail> {
       resetUrl: `${APP}/forgot-password`,
     }),
     sso: ssoDomainChallengeMail(ctx, { domain: 'acme.test', code: '7f3a9c21', hours: 72 }),
+    smtpTest: smtpTestMail(ctx, { workspaceName: 'Acme' }),
     visitor: visitorMessageMail(ctx, {
       agentName: 'Mehmet',
       workspaceName: 'Acme',
@@ -282,9 +284,9 @@ function everyMail(locale: MailLocale): Record<string, RenderedEmail> {
 
 describe('every message, in both languages (tm 265)', () => {
   for (const locale of ['en', 'tr'] as const) {
-    it(`renders all thirty-three in ${locale}: subject, text and HTML, in that language`, () => {
+    it(`renders all thirty-four in ${locale}: subject, text and HTML, in that language`, () => {
       const mails = everyMail(locale);
-      expect(Object.keys(mails)).toHaveLength(33);
+      expect(Object.keys(mails)).toHaveLength(34);
       for (const [name, mail] of Object.entries(mails)) {
         expect(mail.subject, name).toBeTruthy();
         expect(mail.body, name).toBeTruthy();

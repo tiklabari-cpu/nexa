@@ -1681,6 +1681,32 @@ export const settings: Messages = {
   'settings.ticketEmailTemplates.namePlaceholder': 'Ticket received',
   'settings.ticketEmailTemplates.subjectPlaceholder': 'We received your ticket {{ticket.id}}',
   'settings.ticketEmailTemplates.bodyPlaceholder': 'Hi {{customer.name}}, thanks for reaching out.',
+  'settings.smtpTest.title': 'Test email',
+  'settings.smtpTest.description':
+    'Send yourself a test message to check that this server delivers email. It goes to your own address only.',
+  'settings.smtpTest.button': 'Send test email',
+  'settings.smtpTest.sending': 'Sending…',
+  'settings.smtpTest.sent':
+    'Test email sent to {to}. Check your inbox, and the spam folder if it is not there.',
+  'settings.smtpTest.notSmtp':
+    'The message was accepted, but this server is not set up to send real email, so nothing will reach {to}.',
+  'settings.smtpTest.queued': 'The first try failed: {reason}. It will be retried automatically.',
+  'settings.smtpTest.queuedNoReason':
+    'The message is waiting to be sent and will be retried automatically.',
+  'settings.smtpTest.unconfirmed':
+    'The message was handed to the mail server for {to}, but the server never confirmed it. It may still arrive.',
+  'settings.smtpTest.failed': 'Not sent: {reason}.',
+  'settings.smtpTest.withSmtpCode': '{reason} (SMTP {code})',
+  'settings.smtpTest.reason.timeout': 'the mail server did not answer in time',
+  'settings.smtpTest.reason.connection': 'could not connect to the mail server',
+  'settings.smtpTest.reason.tls': 'the secure connection to the mail server failed',
+  'settings.smtpTest.reason.auth': 'the mail server rejected the username or password',
+  'settings.smtpTest.reason.rejected': 'the mail server refused the message',
+  'settings.smtpTest.reason.protocol': 'the mail server answered in an unexpected way',
+  'settings.smtpTest.reason.unconfirmed': 'the mail server never confirmed the message',
+  'settings.smtpTest.reason.invalid_message': 'your address cannot be used to send mail',
+  'settings.smtpTest.reason.cap_reached': 'this workspace has reached its email limit for today',
+  'settings.smtpTest.reason.unexpected': 'an unexpected error; the server log has the details',
   'settings.ticketRules.namePlaceholder': 'Refunds',
   'settings.ticketRules.subjectPlaceholder': 'refund',
 

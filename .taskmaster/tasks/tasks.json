@@ -17310,7 +17310,7 @@
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-11T16:14:08.390Z",
+        "updatedAt": "2026-11-11T18:15:05.038Z",
         "subtasks": [
           {
             "id": 1,
@@ -17344,13 +17344,13 @@
             "description": "Admin kendi adresine test maili gönderip SMTP yapılandırmasını doğrular; sonuç (gönderildi/hata kodu) panelde.",
             "details": "Kontrat-first yeni yol (mobil parity bump yorumla; mutating yol impersonation sınıflandırması — memory openapi-path-breaks-mobile-parity-count); admin+ rolü; hız sınırı (ör. 5/saat); yalnız oturumdaki admin'in kendi adresi (başka alıcı yok). Web: Ayarlar e-posta bölümüne düğme + sonuç (en+tr, i18n kaydı). Ayrıntı: üst görev details.",
             "testStrategy": "api entegrasyon: admin → 202 ve outbox'ta kind=smtp_test; agent → 403; 6. istek 429. web birim: düğme → başarı/hata mesajı. `pnpm test:gate`.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "464.1"
             ],
             "parentId": "464",
             "priority": "low",
-            "updatedAt": "2026-11-06T16:24:47.953Z"
+            "updatedAt": "2026-11-11T18:15:05.038Z"
           }
         ]
       },
@@ -17778,7 +17778,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-11T16:14:08.391Z",
+      "lastModified": "2026-11-11T18:15:05.039Z",
       "taskCount": 478,
       "completedCount": 446,
       "tags": [

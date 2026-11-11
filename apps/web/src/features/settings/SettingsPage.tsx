@@ -61,6 +61,7 @@ import { TwoFactor } from './TwoFactor.js';
 import { PersonalAccessTokens } from './PersonalAccessTokens.js';
 import { Tags } from './Tags.js';
 import { TicketEmailTemplates } from './TicketEmailTemplates.js';
+import { SmtpTestMail } from './email/SmtpTestMail.js';
 import { CustomFieldsSettings } from './CustomFieldsSettings.js';
 import { ChatFormsSettings } from './ChatFormsSettings.js';
 import { BannedCustomerIps } from './BannedCustomerIps.js';
@@ -107,6 +108,8 @@ interface SectionPermissions {
   isOwner: boolean;
   /** The AI quality settings and rubric: the AI's write scope and an administrator (`routes/qa.ts`). */
   canManageAiQuality: boolean;
+  /** The test e-mail (tm 464.3): `POST /settings/email/test` is `access_rules:rw` and admin+. */
+  canSendTestMail: boolean;
 }
 
 function permissionsFrom(scopes: readonly string[], role: string | undefined): SectionPermissions {
@@ -124,6 +127,7 @@ function permissionsFrom(scopes: readonly string[], role: string | undefined): S
     canManageCompany: scopes.includes('organization--my:rw'),
     isOwner: role === 'owner',
     canManageAiQuality: scopes.includes('agents-bot--all:rw') && roleAtLeast(role ?? null, 'admin'),
+    canSendTestMail: scopes.includes('access_rules:rw') && roleAtLeast(role ?? null, 'admin'),
   };
 }
 
@@ -165,7 +169,12 @@ export const SECTION_ELEMENTS: Record<string, (p: SectionPermissions) => ReactEl
   ),
   tags: (p) => <Tags canEdit={p.canManageTags} />,
   'chat-timeout': (p) => <ChatTimeout canEdit={p.canManageAccess} />,
-  'ticket-email-templates': (p) => <TicketEmailTemplates canEdit={p.canManageTicketRules} />,
+  'ticket-email-templates': (p) => (
+    <>
+      <TicketEmailTemplates canEdit={p.canManageTicketRules} />
+      {p.canSendTestMail && <SmtpTestMail />}
+    </>
+  ),
   'custom-fields': (p) => <CustomFieldsSettings canEdit={p.canManageAccess} />,
   'chat-forms': (p) => <ChatFormsSettings canEdit={p.canManageAccess} />,
   integrations: () => <Integrations />,

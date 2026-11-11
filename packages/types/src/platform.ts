@@ -442,6 +442,10 @@ export const IMPERSONATION_ALLOWED_WRITES: readonly RegExp[] = [
   /^\/onboarding\//,
   /^\/uploads(\/.*)?$/,
   /^\/settings\/(appearance|bots|canned-responses|canned-response-fallback|chat-timeout|company|custom-fields|expertise|prechat|routing-rules|sales-tracker|sla|tags|ticket-email-templates|ticket-rules|trusted-domains|widget)(\/.*)?$/,
+  // The test e-mail (tm 464.3): it goes to the member the session is and to
+  // nobody else — checking a workspace's mail is support work, and it leaves
+  // no door open after the session.
+  /^\/settings\/email\/test$/,
 ];
 
 /**

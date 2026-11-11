@@ -100,6 +100,7 @@ import { resolvePaymentProvider } from './services/billing/payment-provider.js';
 import scheduledReportRoutes from './routes/scheduled-reports.js';
 import homeRoutes from './routes/home.js';
 import settingsRoutes from './routes/settings.js';
+import settingsEmailRoutes from './routes/settings-email.js';
 import permissionRoutes from './routes/permissions.js';
 import onboardingRoutes from './routes/onboarding.js';
 import websiteRoutes from './routes/websites.js';
@@ -756,6 +757,7 @@ export async function buildServer({
       await api.register(scheduledReportRoutes);
       await api.register(homeRoutes);
       await api.register(settingsRoutes, { env, mailer });
+      await api.register(settingsEmailRoutes, { env });
       await api.register(permissionRoutes, { env });
       await api.register(onboardingRoutes);
       await api.register(websiteRoutes, { env });

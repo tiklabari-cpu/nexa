@@ -127,7 +127,10 @@ export interface Message {
     | 'impersonation_notice'
     // An operator alert from the platform scan (tm 389.20 · FR-ADMIN-24) — to the
     // SiyahTuş team, never to a workspace; the platform carrier has no daily caps.
-    | 'platform_alert';
+    | 'platform_alert'
+    // An administrator's test of the deployment's carrier (tm 464.3), to their
+    // own address — workspace mail, but never external (`EXTERNAL_KINDS`).
+    | 'smtp_test';
 }
 
 /**

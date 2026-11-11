@@ -1181,7 +1181,10 @@ describe('module parity matrix — what is still owed', () => {
       // operator-signed identity's secret (ID-03 · K28), issued once in web Settings →
       // Security → Member recognition. The handset has no Security settings, and its
       // player view reads the same customer record, so nothing here re-scopes.
-      contractEndpoints: 401,
+      // 401 -> 402 with `POST /settings/email/test` (tm 464.3) — an administrator mails
+      // themselves a test message from web Settings → Ticket e-mails to check the
+      // deployment's carrier. The handset has no mail settings, and nothing here re-scopes.
+      contractEndpoints: 402,
       scopeBoundaries: 1,
     });
   });

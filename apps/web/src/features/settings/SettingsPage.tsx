@@ -20,6 +20,7 @@
 import type { ReactElement, ReactNode } from 'react';
 import { Navigate, useLocation, useParams } from 'react-router-dom';
 import { hasAnyScope } from '@siyahtus/types';
+import { EmptyState } from '../../components/EmptyState.js';
 import { Page } from '../../components/Page.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { useDeployment } from '../../lib/deployment.js';
@@ -242,13 +243,21 @@ export function SettingsPage(): ReactElement {
   const entry = findSection(section);
   const render = entry ? SECTION_ELEMENTS[entry.slug] : undefined;
 
-  if (
-    !entry ||
-    !render ||
-    !hasAnyScope(scopes, entry.scope ?? []) ||
-    isPilotHiddenSection(entry, deployment.pilot_mode, liveDataApps(deployment).length > 0)
-  ) {
+  if (!entry || !render || !hasAnyScope(scopes, entry.scope ?? [])) {
     return <Navigate to="/app/settings" replace />;
+  }
+  if (isPilotHiddenSection(entry, deployment.pilot_mode, liveDataApps(deployment).length > 0)) {
+    // A section the pilot has no equivalent for says so (tm 466); the door to a
+    // module that is simply absent still leaves for the index.
+    if (!entry.pilotUnavailableState) return <Navigate to="/app/settings" replace />;
+    return (
+      <Page title={t(entry.labelKey)}>
+        <EmptyState
+          title={t('settings.pilot.sectionUnavailableTitle')}
+          description={t('settings.pilot.sectionUnavailableBody', { section: t(entry.labelKey) })}
+        />
+      </Page>
+    );
   }
 
   return (

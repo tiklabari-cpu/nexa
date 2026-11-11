@@ -66,12 +66,15 @@ describe('Settings navigation in the public pilot (tm 257.2)', () => {
     });
     expect(within(nav).queryByText('Billing')).not.toBeInTheDocument();
     expect(within(nav).queryByRole('link', { name: 'Subscription and invoices' })).toBeNull();
-    // Billing (257.2) and Integrations (257.18) are the two pilot-hidden doors.
+    // Billing (257.2), Integrations (257.18) and the two certification-flavoured
+    // screens, Compliance and SIEM export (466), are the pilot-hidden entries.
     expect(within(nav).getAllByRole('link')).toHaveLength(
       SETTINGS_SECTIONS.filter((s) => !s.pilotHidden).length,
     );
     expect(SETTINGS_SECTIONS.filter((s) => s.pilotHidden).map((s) => s.slug)).toStrictEqual([
       'integrations',
+      'compliance',
+      'siem',
       'billing',
     ]);
     expect(within(nav).getByText('Security')).toBeInTheDocument();
@@ -124,6 +127,46 @@ describe('Settings navigation in the public pilot (tm 257.2)', () => {
   it('leaves the Billing group out of the grouped navigation in the pilot', () => {
     expect(visibleGroups(OWNER, true).map((g) => g.key)).not.toContain('billing');
     expect(visibleGroups(OWNER).map((g) => g.key)).toContain('billing');
+  });
+});
+
+describe('Compliance and SIEM export in the public pilot (tm 466)', () => {
+  const PILOT: DeploymentConfig = {
+    pilot_mode: true,
+    contact_email: null,
+    signup_enabled: true,
+    email_verification_required: false,
+    privacy_policy_url: null,
+    terms_url: null,
+    terms_version: null,
+  };
+
+  it('leaves both out of the navigation, but not the data-retention neighbour', () => {
+    const nav = renderNav(PILOT);
+    expect(within(nav).queryByRole('link', { name: /HIPAA/i })).toBeNull();
+    expect(within(nav).queryByRole('link', { name: /SIEM/i })).toBeNull();
+    expect(within(nav).getByRole('link', { name: /Data retention/i })).toBeInTheDocument();
+  });
+
+  it('finds neither by search, and finds both on an ordinary deployment', () => {
+    for (const [query, slug] of [
+      ['hipaa', 'compliance'],
+      ['baa', 'compliance'],
+      ['splunk', 'siem'],
+      ['soc 2', 'siem'],
+    ] as const) {
+      expect(searchSections(OWNER, query, englishLabel, true).map((s) => s.slug)).not.toContain(
+        slug,
+      );
+      expect(searchSections(OWNER, query, englishLabel).map((s) => s.slug)).toContain(slug);
+    }
+    // Live Apps cards bring back the Integrations door only.
+    expect(visibleSections(OWNER, true, true).map((s) => s.slug)).not.toContain('compliance');
+    expect(visibleSections(OWNER, true, true).map((s) => s.slug)).not.toContain('siem');
+  });
+
+  it('keeps the SIEM description free of a certification claim', () => {
+    expect(EN_SETTINGS['settings.siemExport.description']).not.toMatch(/SOC ?2|ISO ?27001/);
   });
 });
 

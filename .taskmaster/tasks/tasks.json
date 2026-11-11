@@ -17372,12 +17372,12 @@
         "description": "NY-40 kısmen: pilot panelinde HIPAA BAA ve SOC2/ISO atıflı SIEM ekranları görünüyor; kurumsal sertifika izlenimi veriyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-08 / NY-40 (partial). Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/web/src/features/settings/settings-sections.ts:484-490` (compliance/SIEM bölümleri), `apps/web/src/features/settings/Compliance.tsx:13`. Pilot bayrağının web'e nasıl ulaştığını bul (`rg -n \"pilot\" apps/web/src/lib` — tm 257 deseni).\n\nYAPILACAK: pilotta (ve plan yetkisi yoksa) bu bölümleri settings listesinden ve komut paletinden çıkar; doğrudan URL → \"bu kurulumda kullanılamaz\" boş durumu. Metinlerde sertifika iddiası varsa (\"SOC 2 uyumlu\" gibi) yalnız özellik adı kalsın (en+tr).\n\nTUZAK: settings-sections pinli testler; komut paleti testleri; memory panel-copy-cannot-carry-internal-codes.\n\nKAPSAM DIŞI: SIEM export özelliği.\nDENETİM BULGULARI: G-08",
         "testStrategy": "web birim: pilot bayrağı açıkken settings listesi ve komut paleti HIPAA/SIEM içermez, doğrudan URL boş durum; kapalıyken mevcut. DoD: CONVENTIONS §1.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "updatedAt": "2026-11-11T19:54:13.278Z",
         "subtasks": []
       },
       {
@@ -17778,7 +17778,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-11T19:41:17.406Z",
+      "lastModified": "2026-11-11T19:54:13.278Z",
       "taskCount": 478,
       "completedCount": 447,
       "tags": [

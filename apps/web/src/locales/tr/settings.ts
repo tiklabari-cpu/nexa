@@ -1164,7 +1164,7 @@ export const settings: Messages = {
   // SIEM dışa aktarımı — SiemExport.tsx
   'settings.siemExport.title': 'SIEM dışa aktarımı',
   'settings.siemExport.description':
-    'Bu çalışma alanının denetim izini bir zamanlamayla bir SIEM hedefine gönderin (SOC 2 / ISO 27001).',
+    'Bu çalışma alanının denetim izini bir zamanlamayla bir SIEM hedefine gönderin.',
   'settings.siemExport.loadError': 'SIEM dışa aktarım yapılandırması yüklenemedi.',
   'settings.siemExport.gapTitle': 'Denetim izinde bir boşluk bulundu.',
   'settings.siemExport.gapBody':
@@ -1364,6 +1364,8 @@ export const settings: Messages = {
     'Sandbox bir Enterprise özelliğidir. Bir tane oluşturmak için planı yükseltin.',
   'settings.pilot.unavailable': 'Bu özellik pilotta kapalı — {email} ile iletişime geçin.',
   'settings.pilot.unavailableNoContact': 'Bu özellik pilotta kapalı.',
+  'settings.pilot.sectionUnavailableTitle': 'Bu kurulumda kullanılamaz',
+  'settings.pilot.sectionUnavailableBody': '{section} bu kurulumda sunulmuyor.',
   'settings.sandbox.createdLabel': 'Sandbox oluşturuldu',
   'settings.sandbox.createdSummary': '{created} tarihinde oluşturuldu. Son sıfırlama: {reset}.',
   'settings.sandbox.createdUnknown': 'bilinmiyor',

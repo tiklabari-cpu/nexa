@@ -63,6 +63,26 @@ beforeEach(() => {
   });
 });
 
+describe('/app/settings/compliance and /siem (tm 466)', () => {
+  it.each(['compliance', 'siem'])(
+    'says %s is not available on this installation in the public pilot',
+    (slug) => {
+      deployment.current = config(true);
+      renderAt(`/app/settings/${slug}`);
+      expect(screen.getByText('Not available on this installation')).toBeInTheDocument();
+      expect(screen.queryByText('Settings index')).toBeNull();
+      expect(screen.getByTestId('location')).toHaveTextContent(`/app/settings/${slug}`);
+    },
+  );
+
+  it.each(['compliance', 'siem'])('opens %s on an ordinary deployment', (slug) => {
+    deployment.current = config(false);
+    renderAt(`/app/settings/${slug}`);
+    expect(screen.queryByText('Not available on this installation')).toBeNull();
+    expect(screen.getByTestId('location')).toHaveTextContent(`/app/settings/${slug}`);
+  });
+});
+
 describe('/app/settings/integrations (tm 257.18)', () => {
   it('leaves for the settings index in the public pilot', () => {
     deployment.current = config(true);

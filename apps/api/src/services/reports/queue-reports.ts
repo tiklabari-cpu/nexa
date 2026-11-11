@@ -35,9 +35,13 @@
  * (ID-04, `readDayBoundary`), never UTC: a shift is planned in local hours.
  */
 import { Prisma } from '@prisma/client';
-import { QUEUE_ABANDON_WAIT_BANDS, type QueueAbandonWaitBand } from '@siyahtus/types';
+import {
+  QUEUE_ABANDON_WAIT_BANDS,
+  type DayBoundary,
+  type QueueAbandonWaitBand,
+} from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
-import { readDayBoundary } from '../chat/day-boundary.js';
+import { localDayKeySql, readDayBoundary } from '../chat/day-boundary.js';
 import { threadFilterSql, type ThreadFilter } from './report-filter.js';
 
 /** One stay's wait in seconds, over a `queue_entries` row aliased `q`. */
@@ -169,11 +173,11 @@ export async function queueByDay(
   licenseId: bigint,
   from: Date,
   to: Date,
-  timezone: string,
+  boundary: DayBoundary,
   filter: ThreadFilter | null = null,
 ): Promise<Array<QueueCounts & { date: string }>> {
   const rows = await tx.$queryRaw<Array<QueueCountRow & { date: string }>>`
-    SELECT to_char((q.entered_at AT TIME ZONE ${timezone})::date, 'YYYY-MM-DD') AS date,
+    SELECT ${localDayKeySql(Prisma.sql`q.entered_at`, boundary)} AS date,
       ${QUEUE_COUNTS}
     FROM ${FROM_STAYS}
     WHERE ${inWindow(licenseId, from, to, filter)}
@@ -346,9 +350,10 @@ export async function queueFigures(
   to: Date,
   filter: ThreadFilter | null = null,
 ): Promise<QueueFigures> {
-  const { timezone } = await readDayBoundary(tx);
+  const boundary = await readDayBoundary(tx);
+  const { timezone } = boundary;
   const totals = await queueTotals(tx, licenseId, from, to, filter);
-  const byDay = await queueByDay(tx, licenseId, from, to, timezone, filter);
+  const byDay = await queueByDay(tx, licenseId, from, to, boundary, filter);
   const heatmap = await queueHeatmap(tx, licenseId, from, to, timezone, filter);
   const byTeam = await queueByTeam(tx, licenseId, from, to, filter);
   return { timezone, totals, by_day: byDay, heatmap, by_team: byTeam };

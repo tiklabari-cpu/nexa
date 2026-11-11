@@ -16,10 +16,12 @@ import {
   AI_PACKAGE_MAX_PACKS,
   API_PACKAGE_CATALOG,
   hasAnyScope,
+  isDayKey,
   isWorkScheduleProblem,
   normalizeWorkSchedule,
   isReportFilterableGroup,
   RATING_VALUES,
+  type DayBoundary,
   type GoalFunnel,
   type ReportFilter,
   type Scope,
@@ -27,6 +29,7 @@ import {
 import { ApiError } from '../lib/api-error.js';
 import { visibilitySql } from '../services/archive/archive-service.js';
 import { resolveVisibility } from '../services/chat/access.js';
+import { localDayWindow, readDayBoundary } from '../services/chat/day-boundary.js';
 import { resolveRatingReach } from '../services/ratings/rating-reach.js';
 import { listReviewComments } from '../services/ratings/rating-service.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
@@ -282,9 +285,33 @@ const campaignIdsParam = z
   .transform((value) => (typeof value === 'string' ? [value] : value))
   .optional();
 
+const DAY_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * One end of a report window (tm 459 · F45): a calendar day `YYYY-MM-DD`, kept
+ * as text so {@link resolveRangeBounds} can place it on the workspace's own day
+ * boundary, or a date-time, which is an instant and used as it is. A day-shaped
+ * value that is not a real day (`2026-02-30`) is refused rather than handed to
+ * `Date`, which would roll it into March.
+ */
+const rangeBound = z.union([z.string(), z.date()]).transform((value, ctx) => {
+  if (value instanceof Date) return value;
+  if (DAY_ONLY.test(value)) {
+    if (isDayKey(value)) return value;
+  } else {
+    const at = new Date(value);
+    if (!Number.isNaN(at.getTime())) return at;
+  }
+  ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Not a date or date-time.' });
+  return z.NEVER;
+});
+
+/** What {@link resolveRange} takes: instants, or days still to be placed. */
+type RangeBound = z.infer<typeof rangeBound>;
+
 const rangeQuery = z.object({
-  from: z.coerce.date().optional(),
-  to: z.coerce.date().optional(),
+  from: rangeBound.optional(),
+  to: rangeBound.optional(),
   /**
    * Which of *this license's* own past windows the report is benchmarked
    * against (FR-MOD-07.7, 07.7-e). A closed enum, not a free string: the two
@@ -323,8 +350,8 @@ const exportQuery = rangeQuery.extend({
 const shareLinkBody = z
   .object({
     group: z.string().trim().min(1).max(64),
-    from: z.coerce.date().optional(),
-    to: z.coerce.date().optional(),
+    from: rangeBound.optional(),
+    to: rangeBound.optional(),
     expires_in_days: z.coerce.number().int().min(1).max(SHARE_LINK_MAX_DAYS).optional(),
     // The report filter the link is frozen to (RP-01); ids only.
     filters: reportFilterBody.optional(),
@@ -410,12 +437,49 @@ const DAY_MS = 86_400_000;
  * Default window: the last 30 days, the span every dashboard opens on. Exported
  * so the `get_report` MCP tool (08.8.3-e) resolves a range the exact same way —
  * same 30-day default, same `from > to` rejection — as every REST report route.
+ *
+ * A window whose two ends are the same instant is refused with `range_empty`
+ * (tm 459 · F45): every report filters `>= from AND <= to`, so it would count
+ * only rows written in that very millisecond and answer a well-formed request
+ * with zeros. A caller who meant "that day" sends the day (`2026-11-05`), which
+ * {@link resolveRangeBounds} widens to the whole day.
  */
-export function resolveRange(query: z.infer<typeof rangeQuery>): { from: Date; to: Date } {
+export function resolveRange(query: { from?: Date; to?: Date }): { from: Date; to: Date } {
   const to = query.to ?? new Date();
   const from = query.from ?? new Date(to.getTime() - 30 * DAY_MS);
   if (from > to) throw ApiError.validation('`from` must be before `to`.');
+  if (from.getTime() === to.getTime()) {
+    throw new ApiError('range_empty', '`from` and `to` are the same instant; the window is empty.');
+  }
   return { from, to };
+}
+
+/**
+ * {@link resolveRange} for a parsed query whose ends may be calendar days
+ * (tm 459 · F45). A day is the workspace's conversation day (tm 458 · F44,
+ * {@link localDayWindow}): `from=2026-11-05` starts when 5 November starts on
+ * the workspace's clock, `to=2026-11-05` runs to the last millisecond before 6
+ * November starts there — so `from=to=<day>` is that whole day, the same day
+ * the chat list files a chat under. A date-time end is an instant, unchanged.
+ * The boundary is read only when a day was sent: an all-instant query (the
+ * panel's presets) costs no extra read.
+ */
+async function resolveRangeBounds(
+  query: { from?: RangeBound; to?: RangeBound },
+  readBoundary: () => Promise<DayBoundary>,
+): Promise<{ from: Date; to: Date }> {
+  const boundary =
+    typeof query.from === 'string' || typeof query.to === 'string' ? await readBoundary() : null;
+  const place = (bound: RangeBound | undefined, end: 'from' | 'to'): Date | undefined => {
+    if (typeof bound !== 'string') return bound;
+    return localDayWindow(bound, bound, boundary!)[end];
+  };
+  return resolveRange({ from: place(query.from, 'from'), to: place(query.to, 'to') });
+}
+
+/** The current workspace's day boundary, read for this request's tenant. */
+function boundaryOf(request: FastifyRequest): () => Promise<DayBoundary> {
+  return () => request.withTenantRead((tx) => readDayBoundary(tx));
 }
 
 /**
@@ -471,20 +535,20 @@ function assertReportRange(from: Date, to: Date): void {
  * that never asked for a benchmark, while the JSON reports carry the default
  * comparison for everyone.
  */
-function resolveReportQuery(
-  query: unknown,
+async function resolveReportQuery(
+  request: FastifyRequest,
   report: string,
-): {
+): Promise<{
   from: Date;
   to: Date;
   baseline: BenchmarkBaseline;
   requested: BenchmarkBaseline | undefined;
-} {
+}> {
   // A report counted from something other than conversations refuses the
   // report filter rather than ignoring it (RP-01): unfiltered figures under a
   // filtered heading would be the wrong number shown as the right one.
-  if (queryNamesReportFilter(query)) refuseReportFilter(report);
-  return resolveReportWindow(query);
+  if (queryNamesReportFilter(request.query)) refuseReportFilter(report);
+  return resolveReportWindow(request);
 }
 
 /**
@@ -499,23 +563,24 @@ const CONVERSATION_REPORT_SCOPES: Scope[] = ['reports_read', 'reports_read--grou
  * filter as the caller asked for it — before {@link resolveReportReach} bounds
  * it to what they may see.
  */
-function resolveFilteredReportQuery(query: unknown): {
+async function resolveFilteredReportQuery(request: FastifyRequest): Promise<{
   from: Date;
   to: Date;
   baseline: BenchmarkBaseline;
   requested: BenchmarkBaseline | undefined;
   filter: ReportFilter;
-} {
-  return { ...resolveReportWindow(query), filter: parseReportFilterQuery(query) };
+}> {
+  const filter = parseReportFilterQuery(request.query);
+  return { ...(await resolveReportWindow(request)), filter };
 }
 
-function resolveReportWindow(query: unknown): {
+async function resolveReportWindow(request: FastifyRequest): Promise<{
   from: Date;
   to: Date;
   baseline: BenchmarkBaseline;
   requested: BenchmarkBaseline | undefined;
-} {
-  const parsed = rangeQuery.safeParse(query);
+}> {
+  const parsed = rangeQuery.safeParse(request.query);
   if (!parsed.success) {
     // Name the parameter that was wrong: `baseline=industry` is a different
     // mistake from a malformed date, and "Invalid date range." would send the
@@ -526,7 +591,7 @@ function resolveReportWindow(query: unknown): {
     }
     throw ApiError.validation('Invalid date range.');
   }
-  const { from, to } = resolveRange(parsed.data);
+  const { from, to } = await resolveRangeBounds(parsed.data, boundaryOf(request));
   assertReportRange(from, to);
   return {
     from,
@@ -1820,7 +1885,7 @@ export default async function reportRoutes(
     '/reports/overview',
     { config: { scopes: CONVERSATION_REPORT_SCOPES } },
     async (request, reply) => {
-      const { from, to, baseline, filter } = resolveFilteredReportQuery(request.query);
+      const { from, to, baseline, filter } = await resolveFilteredReportQuery(request);
       const tenant = request.tenant();
       const principal = request.requirePrincipal();
 
@@ -1842,7 +1907,7 @@ export default async function reportRoutes(
     '/reports/breakdown',
     { config: { scopes: CONVERSATION_REPORT_SCOPES } },
     async (request, reply) => {
-      const { from, to, baseline, filter } = resolveFilteredReportQuery(request.query);
+      const { from, to, baseline, filter } = await resolveFilteredReportQuery(request);
       const tenant = request.tenant();
       const principal = request.requirePrincipal();
 
@@ -1861,7 +1926,7 @@ export default async function reportRoutes(
   );
 
   app.get('/reports/ai-agent', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
-    const { from, to, baseline } = resolveReportQuery(request.query, 'ai-agent');
+    const { from, to, baseline } = await resolveReportQuery(request, 'ai-agent');
     const tenant = request.tenant();
 
     const body = await request.withTenantRead((tx) =>
@@ -1876,7 +1941,7 @@ export default async function reportRoutes(
   // (`aiMetricsReachOf`) — `reports_read` reads every team, a Team Lead the
   // teams they lead (RL-02).
   app.get('/reports/ai-agent/breakdown', async (request, reply) => {
-    const { from, to } = resolveReportQuery(request.query, 'ai-agent breakdown');
+    const { from, to } = await resolveReportQuery(request, 'ai-agent breakdown');
     const query = parse(aiMetricsBreakdownQuery, request.query);
     const tenant = request.tenant();
     const principal = request.requirePrincipal();
@@ -1898,7 +1963,7 @@ export default async function reportRoutes(
   });
 
   app.get('/reports/ai-agent/conversations', async (request, reply) => {
-    const { from, to } = resolveReportQuery(request.query, 'ai-agent conversations');
+    const { from, to } = await resolveReportQuery(request, 'ai-agent conversations');
     const query = parse(aiMetricsConversationsQuery, request.query);
     const cursor = query.cursor === undefined ? null : decodeAiMetricsCursor(query.cursor);
     if (query.cursor !== undefined && cursor === null) {
@@ -1927,7 +1992,7 @@ export default async function reportRoutes(
     '/reports/reviews',
     { config: { scopes: CONVERSATION_REPORT_SCOPES } },
     async (request, reply) => {
-      const { from, to, baseline, filter } = resolveFilteredReportQuery(request.query);
+      const { from, to, baseline, filter } = await resolveFilteredReportQuery(request);
       const tenant = request.tenant();
       const principal = request.requirePrincipal();
 
@@ -1952,7 +2017,7 @@ export default async function reportRoutes(
     '/reports/reviews/comments',
     { config: { scopes: ['reports_read'] } },
     async (request, reply) => {
-      const { from, to } = resolveReportQuery(request.query, 'reviews comments');
+      const { from, to } = await resolveReportQuery(request, 'reviews comments');
       const query = parse(reviewCommentsQuery, request.query);
       const tenant = request.tenant();
       const principal = request.requirePrincipal();
@@ -1977,7 +2042,7 @@ export default async function reportRoutes(
   // — a 200 state, not an error, so no new ApiError type. Same reports_read +
   // withTenantRead surface as the other tabs.
   app.get('/reports/topics', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
-    const { from, to, baseline } = resolveReportQuery(request.query, 'topics');
+    const { from, to, baseline } = await resolveReportQuery(request, 'topics');
     const tenant = request.tenant();
 
     // The baseline window is where each topic's previous volume — and so its
@@ -2013,7 +2078,7 @@ export default async function reportRoutes(
   // (tickets, FR-MOD-02.6) counted by day, current status and queue priority.
   // Same reports_read + withTenantRead surface as the other tabs.
   app.get('/reports/cases', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
-    const { from, to, baseline } = resolveReportQuery(request.query, 'cases');
+    const { from, to, baseline } = await resolveReportQuery(request, 'cases');
     const tenant = request.tenant();
 
     const body = await request.withTenantRead((tx) =>
@@ -2028,7 +2093,7 @@ export default async function reportRoutes(
   // buildLeadsReport / leadFirstTouch) — the isolation core of this report.
   // Same reports_read + withTenantRead surface as the other tabs.
   app.get('/reports/leads', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
-    const { from, to, baseline } = resolveReportQuery(request.query, 'leads');
+    const { from, to, baseline } = await resolveReportQuery(request, 'leads');
     const tenant = request.tenant();
 
     const body = await request.withTenantRead((tx) =>
@@ -2045,7 +2110,7 @@ export default async function reportRoutes(
     '/reports/team-performance',
     { config: { scopes: CONVERSATION_REPORT_SCOPES } },
     async (request, reply) => {
-      const { from, to, baseline, filter } = resolveFilteredReportQuery(request.query);
+      const { from, to, baseline, filter } = await resolveFilteredReportQuery(request);
       const tenant = request.tenant();
       const principal = request.requirePrincipal();
 
@@ -2070,7 +2135,7 @@ export default async function reportRoutes(
     '/reports/missed',
     { config: { scopes: CONVERSATION_REPORT_SCOPES } },
     async (request, reply) => {
-      const { from, to, baseline, filter } = resolveFilteredReportQuery(request.query);
+      const { from, to, baseline, filter } = await resolveFilteredReportQuery(request);
       const tenant = request.tenant();
       const principal = request.requirePrincipal();
       const body = await request.withTenantRead(async (tx) =>
@@ -2091,7 +2156,7 @@ export default async function reportRoutes(
     '/reports/engagement',
     { config: { scopes: CONVERSATION_REPORT_SCOPES } },
     async (request, reply) => {
-      const { from, to, baseline, filter } = resolveFilteredReportQuery(request.query);
+      const { from, to, baseline, filter } = await resolveFilteredReportQuery(request);
       const tenant = request.tenant();
       const principal = request.requirePrincipal();
       const body = await request.withTenantRead(async (tx) =>
@@ -2115,7 +2180,7 @@ export default async function reportRoutes(
   // So no route scope: the reach is decided per request by
   // `resolveAgentReach`, and naming someone outside it is a 403.
   app.get('/reports/availability', async (request, reply) => {
-    const { from, to, filter } = parseAvailabilityQuery(request.query);
+    const { from, to, filter } = await parseAvailabilityQuery(request.query, boundaryOf(request));
     const tenant = request.tenant();
     const principal = request.requirePrincipal();
     const body = await request.withTenantRead(async (tx) =>
@@ -2154,7 +2219,7 @@ export default async function reportRoutes(
     '/reports/queue',
     { config: { scopes: CONVERSATION_REPORT_SCOPES } },
     async (request, reply) => {
-      const { from, to, baseline, filter } = resolveFilteredReportQuery(request.query);
+      const { from, to, baseline, filter } = await resolveFilteredReportQuery(request);
       const tenant = request.tenant();
       const principal = request.requirePrincipal();
       const body = await request.withTenantRead(async (tx) =>
@@ -2175,7 +2240,7 @@ export default async function reportRoutes(
     '/reports/queue-abandonment',
     { config: { scopes: CONVERSATION_REPORT_SCOPES } },
     async (request, reply) => {
-      const { from, to, baseline, filter } = resolveFilteredReportQuery(request.query);
+      const { from, to, baseline, filter } = await resolveFilteredReportQuery(request);
       const tenant = request.tenant();
       const principal = request.requirePrincipal();
       const body = await request.withTenantRead(async (tx) =>
@@ -2198,7 +2263,7 @@ export default async function reportRoutes(
   // tabs, so the endpoint's permission and range handling never need to change
   // once 13.5 fills the figures in.
   app.get('/reports/sales', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
-    const { from, to, baseline } = resolveReportQuery(request.query, 'sales');
+    const { from, to, baseline } = await resolveReportQuery(request, 'sales');
     const tenant = request.tenant();
 
     const body = await request.withTenantRead((tx) =>
@@ -2215,7 +2280,7 @@ export default async function reportRoutes(
   // every stage is measured against. Defining the goals themselves is a
   // different permission (`customers:rw`, see routes/goals.ts).
   app.get('/reports/goals', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
-    const { from, to, baseline } = resolveReportQuery(request.query, 'goals');
+    const { from, to, baseline } = await resolveReportQuery(request, 'goals');
     const tenant = request.tenant();
 
     const body = await request.withTenantRead((tx) =>
@@ -2233,7 +2298,7 @@ export default async function reportRoutes(
     '/reports/campaigns',
     { config: { scopes: ['reports_read'] } },
     async (request, reply) => {
-      const { from, to, baseline } = resolveReportQuery(request.query, 'campaigns');
+      const { from, to, baseline } = await resolveReportQuery(request, 'campaigns');
       const filter = parse(z.object({ campaign_id: campaignIdsParam }), request.query);
       const tenant = request.tenant();
 
@@ -2270,7 +2335,7 @@ export default async function reportRoutes(
       if (queryNamesReportFilter(request.query)) refuseReportFilter('staffing-forecast');
       const parsed = rangeQuery.safeParse(request.query);
       if (!parsed.success) throw ApiError.validation('Invalid date range.');
-      const { from, to } = resolveRange(parsed.data);
+      const { from, to } = await resolveRangeBounds(parsed.data, boundaryOf(request));
       assertForecastRange(from, to);
       const tenant = request.tenant();
 
@@ -2316,7 +2381,7 @@ export default async function reportRoutes(
       }
       throw ApiError.validation('Invalid export request.');
     }
-    const { from, to } = resolveRange(parsed.data);
+    const { from, to } = await resolveRangeBounds(parsed.data, boundaryOf(request));
     // Same NFR-P7 bound as the JSON groups: an export runs the very same
     // aggregation, and this is the surface most likely to be pointed at "all of
     // it" by someone reaching for a spreadsheet of the whole history.
@@ -2425,7 +2490,10 @@ export default async function reportRoutes(
     { config: { scopes: ['reports_manage'], minimumRole: 'admin' } },
     async (request, reply) => {
       const body = parse(shareLinkBody, request.body);
-      const { from, to } = resolveRange({ from: body.from, to: body.to });
+      const { from, to } = await resolveRangeBounds(
+        { from: body.from, to: body.to },
+        boundaryOf(request),
+      );
       // The same NFR-P7 bound the JSON groups and the export are held to: a
       // share link is read by running the very same aggregation, and this is
       // the one surface where the person who *runs* it is not the person who

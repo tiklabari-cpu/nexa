@@ -1029,14 +1029,16 @@ describe('reports and billing', () => {
       expect(owner.automated).toBe(1);
     });
 
-    it('buckets by UTC hour of day, dense across all 24 hours', async () => {
+    it("buckets by the workspace's wall-clock hour, dense across all 24 hours", async () => {
       const chatId = await conversation({ agentReplies: false }); // automated
       // Land it in a known hour, clear of "now" (backdated three days), so the
       // bucket it lands in is unambiguous — every other hour must read zero.
-      const knownHour = 3;
+      // 03:15Z is 06:15 in Istanbul (UTC+3 all year), the zone a workspace with
+      // no day-boundary setting reads (tm 458 · F44).
+      const knownHour = 6;
       const openedAt = new Date();
       openedAt.setUTCDate(openedAt.getUTCDate() - 3);
-      openedAt.setUTCHours(knownHour, 15, 0, 0);
+      openedAt.setUTCHours(3, 15, 0, 0);
       await backdateChat(chatId, openedAt);
 
       const breakdown = (await server.get('/reports/breakdown', auth)).json();

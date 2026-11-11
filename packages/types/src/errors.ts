@@ -213,6 +213,13 @@ export const ERROR_TYPES = [
   // transfer's or the member's state refused it, and each screen answers it
   // differently from a generic `validation`.
   'ownership_transfer_state',
+  // SiyahTuş addition — an empty report window (tm 459 · audit F45): `from`
+  // and `to` name the same instant, so a report filtering `>= from AND <= to`
+  // would answer zeros for a well-formed request. 400: the request is the
+  // thing to fix — send the day (`2026-11-05`), which covers the whole day, or
+  // two different instants. Not `validation`: the values parse, the window
+  // they make is what is refused, and a client can say so in words.
+  'range_empty',
   // SiyahTuş addition — a transcript mailed on demand (AR-04 · tm 338): an
   // address that is neither the player's own nor at one of the workspace's
   // allowed domains (AR-04-S3). 403 like `message_rejected`: the caller may
@@ -373,6 +380,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   platform_recent_totp_required: 403,
   platform_totp_required: 403,
   platform_workspace_state: 409,
+  range_empty: 400,
   rate_limit_unavailable: 503,
   recipient_not_allowed: 403,
   reply_requires_assignment: 409,

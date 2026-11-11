@@ -25,6 +25,7 @@ import type {
 } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 import type { CsvCell } from '../../routes/reports-export.js';
+import { localDayKeySql, readDayBoundary } from '../chat/day-boundary.js';
 
 /** Most campaigns one request may name. */
 export const CAMPAIGN_REPORT_FILTER_MAX = 50;
@@ -61,7 +62,10 @@ function zero(): CampaignReportCounts {
   return { displayed: 0, clicks: 0, chats: 0, conversion: 0, suppressed: 0 };
 }
 
-/** The sends in the window grouped by day and campaign, oldest day first. */
+/**
+ * The sends in the window grouped by workspace day ({@link localDayKeySql},
+ * tm 458) and campaign, oldest day first.
+ */
 async function sendsByDay(
   tx: TenantClient,
   licenseId: bigint,
@@ -76,8 +80,9 @@ async function sendsByDay(
     campaignIds && campaignIds.length > 0
       ? Prisma.sql`AND s.campaign_id = ANY(${[...campaignIds]}::uuid[])`
       : Prisma.empty;
+  const boundary = await readDayBoundary(tx);
   return tx.$queryRaw<DayRaw[]>`
-    SELECT to_char(s.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date,
+    SELECT ${localDayKeySql(Prisma.sql`s.created_at`, boundary)} AS date,
            s.campaign_id::text AS campaign_id,
            count(*) FILTER (WHERE s.delivered_at IS NOT NULL) AS displayed,
            count(*) FILTER (WHERE s.delivered_at IS NOT NULL AND s.clicked_at IS NOT NULL) AS clicks,

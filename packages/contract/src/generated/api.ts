@@ -26253,6 +26253,7 @@ export interface components {
       | 'not_found'
       | 'ownership_transfer_state'
       | 'pending_requests_limit_reached'
+      | 'range_empty'
       | 'recipient_not_allowed'
       | 'reply_requires_assignment'
       | 'request_timeout'
@@ -26707,9 +26708,16 @@ export interface components {
     AiMetricsVersion: string;
     /** @description Only the connections in this language. */
     AiMetricsLanguage: string;
-    /** @description Window start (inclusive), ISO 8601 with offset. */
+    /**
+     * @description Window start (inclusive): ISO 8601 with offset, or a calendar day
+     *     (`2026-11-05`) — the workspace's conversation day, starting when that
+     *     day starts on the workspace's clock (as the report range's `from`).
+     */
     PresenceRangeFrom: string;
-    /** @description Window end (exclusive), at most 31 days after `from`; clipped to now. */
+    /**
+     * @description Window end, at most 31 days after `from`; clipped to now. A date-time is
+     *     exclusive; a calendar day runs to the end of that workspace day.
+     */
     PresenceRangeTo: string;
     /**
      * @description Only these agents (RP-03). Each must be within the caller's reach, else
@@ -26742,6 +26750,16 @@ export interface components {
     /**
      * @description Start of the reporting window. Defaults to 30 days before `to`.
      *
+     *     **A day or an instant.** A date-time is used as it is. A calendar day
+     *     (`2026-11-05`) is the workspace's conversation day — the day the chat
+     *     list files a chat under, on the workspace's time zone and day-start hour
+     *     (Settings → Inbox, default Europe/Istanbul 00:00) — so `from=<day>`
+     *     starts when that day starts there. Report days (`by_day`, `date`) and
+     *     hours (`by_hour`, heat maps) are bucketed on the same clock.
+     *
+     *     `from` and `to` naming the same instant is a 400 `range_empty`: the
+     *     window would hold nothing. For one day, send the day as both ends.
+     *
      *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
      *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
      *     a read replica or a column-store analytics warehouse, neither of which
@@ -26754,8 +26772,11 @@ export interface components {
      */
     ReportRangeFrom: string;
     /**
-     * @description End of the reporting window. Defaults to now. The 366-day span limit
-     *     described on `from` is measured across this pair.
+     * @description End of the reporting window. Defaults to now. A calendar day
+     *     (`2026-11-05`) runs to the end of that workspace day, so
+     *     `from=2026-11-05&to=2026-11-05` is the whole of 5 November; a date-time
+     *     is used as it is. The 366-day span limit described on `from` is
+     *     measured across this pair.
      */
     ReportRangeTo: string;
   };
@@ -43526,6 +43547,16 @@ export interface operations {
         /**
          * @description Start of the reporting window. Defaults to 30 days before `to`.
          *
+         *     **A day or an instant.** A date-time is used as it is. A calendar day
+         *     (`2026-11-05`) is the workspace's conversation day — the day the chat
+         *     list files a chat under, on the workspace's time zone and day-start hour
+         *     (Settings → Inbox, default Europe/Istanbul 00:00) — so `from=<day>`
+         *     starts when that day starts there. Report days (`by_day`, `date`) and
+         *     hours (`by_hour`, heat maps) are bucketed on the same clock.
+         *
+         *     `from` and `to` naming the same instant is a 400 `range_empty`: the
+         *     window would hold nothing. For one day, send the day as both ends.
+         *
          *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
          *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
          *     a read replica or a column-store analytics warehouse, neither of which
@@ -43538,8 +43569,11 @@ export interface operations {
          */
         from?: components['parameters']['ReportRangeFrom'];
         /**
-         * @description End of the reporting window. Defaults to now. The 366-day span limit
-         *     described on `from` is measured across this pair.
+         * @description End of the reporting window. Defaults to now. A calendar day
+         *     (`2026-11-05`) runs to the end of that workspace day, so
+         *     `from=2026-11-05&to=2026-11-05` is the whole of 5 November; a date-time
+         *     is used as it is. The 366-day span limit described on `from` is
+         *     measured across this pair.
          */
         to?: components['parameters']['ReportRangeTo'];
         /**
@@ -43612,6 +43646,16 @@ export interface operations {
         /**
          * @description Start of the reporting window. Defaults to 30 days before `to`.
          *
+         *     **A day or an instant.** A date-time is used as it is. A calendar day
+         *     (`2026-11-05`) is the workspace's conversation day — the day the chat
+         *     list files a chat under, on the workspace's time zone and day-start hour
+         *     (Settings → Inbox, default Europe/Istanbul 00:00) — so `from=<day>`
+         *     starts when that day starts there. Report days (`by_day`, `date`) and
+         *     hours (`by_hour`, heat maps) are bucketed on the same clock.
+         *
+         *     `from` and `to` naming the same instant is a 400 `range_empty`: the
+         *     window would hold nothing. For one day, send the day as both ends.
+         *
          *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
          *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
          *     a read replica or a column-store analytics warehouse, neither of which
@@ -43624,8 +43668,11 @@ export interface operations {
          */
         from?: components['parameters']['ReportRangeFrom'];
         /**
-         * @description End of the reporting window. Defaults to now. The 366-day span limit
-         *     described on `from` is measured across this pair.
+         * @description End of the reporting window. Defaults to now. A calendar day
+         *     (`2026-11-05`) runs to the end of that workspace day, so
+         *     `from=2026-11-05&to=2026-11-05` is the whole of 5 November; a date-time
+         *     is used as it is. The 366-day span limit described on `from` is
+         *     measured across this pair.
          */
         to?: components['parameters']['ReportRangeTo'];
         /**
@@ -43698,6 +43745,16 @@ export interface operations {
         /**
          * @description Start of the reporting window. Defaults to 30 days before `to`.
          *
+         *     **A day or an instant.** A date-time is used as it is. A calendar day
+         *     (`2026-11-05`) is the workspace's conversation day — the day the chat
+         *     list files a chat under, on the workspace's time zone and day-start hour
+         *     (Settings → Inbox, default Europe/Istanbul 00:00) — so `from=<day>`
+         *     starts when that day starts there. Report days (`by_day`, `date`) and
+         *     hours (`by_hour`, heat maps) are bucketed on the same clock.
+         *
+         *     `from` and `to` naming the same instant is a 400 `range_empty`: the
+         *     window would hold nothing. For one day, send the day as both ends.
+         *
          *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
          *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
          *     a read replica or a column-store analytics warehouse, neither of which
@@ -43710,8 +43767,11 @@ export interface operations {
          */
         from?: components['parameters']['ReportRangeFrom'];
         /**
-         * @description End of the reporting window. Defaults to now. The 366-day span limit
-         *     described on `from` is measured across this pair.
+         * @description End of the reporting window. Defaults to now. A calendar day
+         *     (`2026-11-05`) runs to the end of that workspace day, so
+         *     `from=2026-11-05&to=2026-11-05` is the whole of 5 November; a date-time
+         *     is used as it is. The 366-day span limit described on `from` is
+         *     measured across this pair.
          */
         to?: components['parameters']['ReportRangeTo'];
         /**
@@ -43766,6 +43826,16 @@ export interface operations {
         /**
          * @description Start of the reporting window. Defaults to 30 days before `to`.
          *
+         *     **A day or an instant.** A date-time is used as it is. A calendar day
+         *     (`2026-11-05`) is the workspace's conversation day — the day the chat
+         *     list files a chat under, on the workspace's time zone and day-start hour
+         *     (Settings → Inbox, default Europe/Istanbul 00:00) — so `from=<day>`
+         *     starts when that day starts there. Report days (`by_day`, `date`) and
+         *     hours (`by_hour`, heat maps) are bucketed on the same clock.
+         *
+         *     `from` and `to` naming the same instant is a 400 `range_empty`: the
+         *     window would hold nothing. For one day, send the day as both ends.
+         *
          *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
          *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
          *     a read replica or a column-store analytics warehouse, neither of which
@@ -43778,8 +43848,11 @@ export interface operations {
          */
         from?: components['parameters']['ReportRangeFrom'];
         /**
-         * @description End of the reporting window. Defaults to now. The 366-day span limit
-         *     described on `from` is measured across this pair.
+         * @description End of the reporting window. Defaults to now. A calendar day
+         *     (`2026-11-05`) runs to the end of that workspace day, so
+         *     `from=2026-11-05&to=2026-11-05` is the whole of 5 November; a date-time
+         *     is used as it is. The 366-day span limit described on `from` is
+         *     measured across this pair.
          */
         to?: components['parameters']['ReportRangeTo'];
         by: 'intent' | 'reason' | 'version' | 'language' | 'brand' | 'team';
@@ -43821,6 +43894,16 @@ export interface operations {
         /**
          * @description Start of the reporting window. Defaults to 30 days before `to`.
          *
+         *     **A day or an instant.** A date-time is used as it is. A calendar day
+         *     (`2026-11-05`) is the workspace's conversation day — the day the chat
+         *     list files a chat under, on the workspace's time zone and day-start hour
+         *     (Settings → Inbox, default Europe/Istanbul 00:00) — so `from=<day>`
+         *     starts when that day starts there. Report days (`by_day`, `date`) and
+         *     hours (`by_hour`, heat maps) are bucketed on the same clock.
+         *
+         *     `from` and `to` naming the same instant is a 400 `range_empty`: the
+         *     window would hold nothing. For one day, send the day as both ends.
+         *
          *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
          *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
          *     a read replica or a column-store analytics warehouse, neither of which
@@ -43833,8 +43916,11 @@ export interface operations {
          */
         from?: components['parameters']['ReportRangeFrom'];
         /**
-         * @description End of the reporting window. Defaults to now. The 366-day span limit
-         *     described on `from` is measured across this pair.
+         * @description End of the reporting window. Defaults to now. A calendar day
+         *     (`2026-11-05`) runs to the end of that workspace day, so
+         *     `from=2026-11-05&to=2026-11-05` is the whole of 5 November; a date-time
+         *     is used as it is. The 366-day span limit described on `from` is
+         *     measured across this pair.
          */
         to?: components['parameters']['ReportRangeTo'];
         metric:
@@ -43890,6 +43976,16 @@ export interface operations {
         /**
          * @description Start of the reporting window. Defaults to 30 days before `to`.
          *
+         *     **A day or an instant.** A date-time is used as it is. A calendar day
+         *     (`2026-11-05`) is the workspace's conversation day — the day the chat
+         *     list files a chat under, on the workspace's time zone and day-start hour
+         *     (Settings → Inbox, default Europe/Istanbul 00:00) — so `from=<day>`
+         *     starts when that day starts there. Report days (`by_day`, `date`) and
+         *     hours (`by_hour`, heat maps) are bucketed on the same clock.
+         *
+         *     `from` and `to` naming the same instant is a 400 `range_empty`: the
+         *     window would hold nothing. For one day, send the day as both ends.
+         *
          *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
          *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
          *     a read replica or a column-store analytics warehouse, neither of which
@@ -43902,8 +43998,11 @@ export interface operations {
          */
         from?: components['parameters']['ReportRangeFrom'];
         /**
-         * @description End of the reporting window. Defaults to now. The 366-day span limit
-         *     described on `from` is measured across this pair.
+         * @description End of the reporting window. Defaults to now. A calendar day
+         *     (`2026-11-05`) runs to the end of that workspace day, so
+         *     `from=2026-11-05&to=2026-11-05` is the whole of 5 November; a date-time
+         *     is used as it is. The 366-day span limit described on `from` is
+         *     measured across this pair.
          */
         to?: components['parameters']['ReportRangeTo'];
         /**
@@ -43976,6 +44075,16 @@ export interface operations {
         /**
          * @description Start of the reporting window. Defaults to 30 days before `to`.
          *
+         *     **A day or an instant.** A date-time is used as it is. A calendar day
+         *     (`2026-11-05`) is the workspace's conversation day — the day the chat
+         *     list files a chat under, on the workspace's time zone and day-start hour
+         *     (Settings → Inbox, default Europe/Istanbul 00:00) — so `from=<day>`
+         *     starts when that day starts there. Report days (`by_day`, `date`) and
+         *     hours (`by_hour`, heat maps) are bucketed on the same clock.
+         *
+         *     `from` and `to` naming the same instant is a 400 `range_empty`: the
+         *     window would hold nothing. For one day, send the day as both ends.
+         *
          *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
          *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
          *     a read replica or a column-store analytics warehouse, neither of which
@@ -43988,8 +44097,11 @@ export interface operations {
          */
         from?: components['parameters']['ReportRangeFrom'];
         /**
-         * @description End of the reporting window. Defaults to now. The 366-day span limit
-         *     described on `from` is measured across this pair.
+         * @description End of the reporting window. Defaults to now. A calendar day
+         *     (`2026-11-05`) runs to the end of that workspace day, so
+         *     `from=2026-11-05&to=2026-11-05` is the whole of 5 November; a date-time
+         *     is used as it is. The 366-day span limit described on `from` is
+         *     measured across this pair.
          */
         to?: components['parameters']['ReportRangeTo'];
         value?: 'good' | 'bad';
@@ -44023,6 +44135,16 @@ export interface operations {
         /**
          * @description Start of the reporting window. Defaults to 30 days before `to`.
          *
+         *     **A day or an instant.** A date-time is used as it is. A calendar day
+         *     (`2026-11-05`) is the workspace's conversation day — the day the chat
+         *     list files a chat under, on the workspace's time zone and day-start hour
+         *     (Settings → Inbox, default Europe/Istanbul 00:00) — so `from=<day>`
+         *     starts when that day starts there. Report days (`by_day`, `date`) and
+         *     hours (`by_hour`, heat maps) are bucketed on the same clock.
+         *
+         *     `from` and `to` naming the same instant is a 400 `range_empty`: the
+         *     window would hold nothing. For one day, send the day as both ends.
+         *
          *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
          *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
          *     a read replica or a column-store analytics warehouse, neither of which
@@ -44035,8 +44157,11 @@ export interface operations {
          */
         from?: components['parameters']['ReportRangeFrom'];
         /**
-         * @description End of the reporting window. Defaults to now. The 366-day span limit
-         *     described on `from` is measured across this pair.
+         * @description End of the reporting window. Defaults to now. A calendar day
+         *     (`2026-11-05`) runs to the end of that workspace day, so
+         *     `from=2026-11-05&to=2026-11-05` is the whole of 5 November; a date-time
+         *     is used as it is. The 366-day span limit described on `from` is
+         *     measured across this pair.
          */
         to?: components['parameters']['ReportRangeTo'];
         /**
@@ -44091,6 +44216,16 @@ export interface operations {
         /**
          * @description Start of the reporting window. Defaults to 30 days before `to`.
          *
+         *     **A day or an instant.** A date-time is used as it is. A calendar day
+         *     (`2026-11-05`) is the workspace's conversation day — the day the chat
+         *     list files a chat under, on the workspace's time zone and day-start hour
+         *     (Settings → Inbox, default Europe/Istanbul 00:00) — so `from=<day>`
+         *     starts when that day starts there. Report days (`by_day`, `date`) and
+         *     hours (`by_hour`, heat maps) are bucketed on the same clock.
+         *
+         *     `from` and `to` naming the same instant is a 400 `range_empty`: the
+         *     window would hold nothing. For one day, send the day as both ends.
+         *
          *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
          *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
          *     a read replica or a column-store analytics warehouse, neither of which
@@ -44103,8 +44238,11 @@ export interface operations {
          */
         from?: components['parameters']['ReportRangeFrom'];
         /**
-         * @description End of the reporting window. Defaults to now. The 366-day span limit
-         *     described on `from` is measured across this pair.
+         * @description End of the reporting window. Defaults to now. A calendar day
+         *     (`2026-11-05`) runs to the end of that workspace day, so
+         *     `from=2026-11-05&to=2026-11-05` is the whole of 5 November; a date-time
+         *     is used as it is. The 366-day span limit described on `from` is
+         *     measured across this pair.
          */
         to?: components['parameters']['ReportRangeTo'];
         /**
@@ -44159,6 +44297,16 @@ export interface operations {
         /**
          * @description Start of the reporting window. Defaults to 30 days before `to`.
          *
+         *     **A day or an instant.** A date-time is used as it is. A calendar day
+         *     (`2026-11-05`) is the workspace's conversation day — the day the chat
+         *     list files a chat under, on the workspace's time zone and day-start hour
+         *     (Settings → Inbox, default Europe/Istanbul 00:00) — so `from=<day>`
+         *     starts when that day starts there. Report days (`by_day`, `date`) and
+         *     hours (`by_hour`, heat maps) are bucketed on the same clock.
+         *
+         *     `from` and `to` naming the same instant is a 400 `range_empty`: the
+         *     window would hold nothing. For one day, send the day as both ends.
+         *
          *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
          *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
          *     a read replica or a column-store analytics warehouse, neither of which
@@ -44171,8 +44319,11 @@ export interface operations {
          */
         from?: components['parameters']['ReportRangeFrom'];
         /**
-         * @description End of the reporting window. Defaults to now. The 366-day span limit
-         *     described on `from` is measured across this pair.
+         * @description End of the reporting window. Defaults to now. A calendar day
+         *     (`2026-11-05`) runs to the end of that workspace day, so
+         *     `from=2026-11-05&to=2026-11-05` is the whole of 5 November; a date-time
+         *     is used as it is. The 366-day span limit described on `from` is
+         *     measured across this pair.
          */
         to?: components['parameters']['ReportRangeTo'];
         /**
@@ -44227,6 +44378,16 @@ export interface operations {
         /**
          * @description Start of the reporting window. Defaults to 30 days before `to`.
          *
+         *     **A day or an instant.** A date-time is used as it is. A calendar day
+         *     (`2026-11-05`) is the workspace's conversation day — the day the chat
+         *     list files a chat under, on the workspace's time zone and day-start hour
+         *     (Settings → Inbox, default Europe/Istanbul 00:00) — so `from=<day>`
+         *     starts when that day starts there. Report days (`by_day`, `date`) and
+         *     hours (`by_hour`, heat maps) are bucketed on the same clock.
+         *
+         *     `from` and `to` naming the same instant is a 400 `range_empty`: the
+         *     window would hold nothing. For one day, send the day as both ends.
+         *
          *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
          *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
          *     a read replica or a column-store analytics warehouse, neither of which
@@ -44239,8 +44400,11 @@ export interface operations {
          */
         from?: components['parameters']['ReportRangeFrom'];
         /**
-         * @description End of the reporting window. Defaults to now. The 366-day span limit
-         *     described on `from` is measured across this pair.
+         * @description End of the reporting window. Defaults to now. A calendar day
+         *     (`2026-11-05`) runs to the end of that workspace day, so
+         *     `from=2026-11-05&to=2026-11-05` is the whole of 5 November; a date-time
+         *     is used as it is. The 366-day span limit described on `from` is
+         *     measured across this pair.
          */
         to?: components['parameters']['ReportRangeTo'];
         /**
@@ -44313,6 +44477,16 @@ export interface operations {
         /**
          * @description Start of the reporting window. Defaults to 30 days before `to`.
          *
+         *     **A day or an instant.** A date-time is used as it is. A calendar day
+         *     (`2026-11-05`) is the workspace's conversation day — the day the chat
+         *     list files a chat under, on the workspace's time zone and day-start hour
+         *     (Settings → Inbox, default Europe/Istanbul 00:00) — so `from=<day>`
+         *     starts when that day starts there. Report days (`by_day`, `date`) and
+         *     hours (`by_hour`, heat maps) are bucketed on the same clock.
+         *
+         *     `from` and `to` naming the same instant is a 400 `range_empty`: the
+         *     window would hold nothing. For one day, send the day as both ends.
+         *
          *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
          *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
          *     a read replica or a column-store analytics warehouse, neither of which
@@ -44325,8 +44499,11 @@ export interface operations {
          */
         from?: components['parameters']['ReportRangeFrom'];
         /**
-         * @description End of the reporting window. Defaults to now. The 366-day span limit
-         *     described on `from` is measured across this pair.
+         * @description End of the reporting window. Defaults to now. A calendar day
+         *     (`2026-11-05`) runs to the end of that workspace day, so
+         *     `from=2026-11-05&to=2026-11-05` is the whole of 5 November; a date-time
+         *     is used as it is. The 366-day span limit described on `from` is
+         *     measured across this pair.
          */
         to?: components['parameters']['ReportRangeTo'];
         /**
@@ -44399,6 +44576,16 @@ export interface operations {
         /**
          * @description Start of the reporting window. Defaults to 30 days before `to`.
          *
+         *     **A day or an instant.** A date-time is used as it is. A calendar day
+         *     (`2026-11-05`) is the workspace's conversation day — the day the chat
+         *     list files a chat under, on the workspace's time zone and day-start hour
+         *     (Settings → Inbox, default Europe/Istanbul 00:00) — so `from=<day>`
+         *     starts when that day starts there. Report days (`by_day`, `date`) and
+         *     hours (`by_hour`, heat maps) are bucketed on the same clock.
+         *
+         *     `from` and `to` naming the same instant is a 400 `range_empty`: the
+         *     window would hold nothing. For one day, send the day as both ends.
+         *
          *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
          *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
          *     a read replica or a column-store analytics warehouse, neither of which
@@ -44411,8 +44598,11 @@ export interface operations {
          */
         from?: components['parameters']['ReportRangeFrom'];
         /**
-         * @description End of the reporting window. Defaults to now. The 366-day span limit
-         *     described on `from` is measured across this pair.
+         * @description End of the reporting window. Defaults to now. A calendar day
+         *     (`2026-11-05`) runs to the end of that workspace day, so
+         *     `from=2026-11-05&to=2026-11-05` is the whole of 5 November; a date-time
+         *     is used as it is. The 366-day span limit described on `from` is
+         *     measured across this pair.
          */
         to?: components['parameters']['ReportRangeTo'];
         /**
@@ -44485,6 +44675,16 @@ export interface operations {
         /**
          * @description Start of the reporting window. Defaults to 30 days before `to`.
          *
+         *     **A day or an instant.** A date-time is used as it is. A calendar day
+         *     (`2026-11-05`) is the workspace's conversation day — the day the chat
+         *     list files a chat under, on the workspace's time zone and day-start hour
+         *     (Settings → Inbox, default Europe/Istanbul 00:00) — so `from=<day>`
+         *     starts when that day starts there. Report days (`by_day`, `date`) and
+         *     hours (`by_hour`, heat maps) are bucketed on the same clock.
+         *
+         *     `from` and `to` naming the same instant is a 400 `range_empty`: the
+         *     window would hold nothing. For one day, send the day as both ends.
+         *
          *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
          *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
          *     a read replica or a column-store analytics warehouse, neither of which
@@ -44497,8 +44697,11 @@ export interface operations {
          */
         from?: components['parameters']['ReportRangeFrom'];
         /**
-         * @description End of the reporting window. Defaults to now. The 366-day span limit
-         *     described on `from` is measured across this pair.
+         * @description End of the reporting window. Defaults to now. A calendar day
+         *     (`2026-11-05`) runs to the end of that workspace day, so
+         *     `from=2026-11-05&to=2026-11-05` is the whole of 5 November; a date-time
+         *     is used as it is. The 366-day span limit described on `from` is
+         *     measured across this pair.
          */
         to?: components['parameters']['ReportRangeTo'];
         /**
@@ -44571,6 +44774,16 @@ export interface operations {
         /**
          * @description Start of the reporting window. Defaults to 30 days before `to`.
          *
+         *     **A day or an instant.** A date-time is used as it is. A calendar day
+         *     (`2026-11-05`) is the workspace's conversation day — the day the chat
+         *     list files a chat under, on the workspace's time zone and day-start hour
+         *     (Settings → Inbox, default Europe/Istanbul 00:00) — so `from=<day>`
+         *     starts when that day starts there. Report days (`by_day`, `date`) and
+         *     hours (`by_hour`, heat maps) are bucketed on the same clock.
+         *
+         *     `from` and `to` naming the same instant is a 400 `range_empty`: the
+         *     window would hold nothing. For one day, send the day as both ends.
+         *
          *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
          *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
          *     a read replica or a column-store analytics warehouse, neither of which
@@ -44583,8 +44796,11 @@ export interface operations {
          */
         from?: components['parameters']['ReportRangeFrom'];
         /**
-         * @description End of the reporting window. Defaults to now. The 366-day span limit
-         *     described on `from` is measured across this pair.
+         * @description End of the reporting window. Defaults to now. A calendar day
+         *     (`2026-11-05`) runs to the end of that workspace day, so
+         *     `from=2026-11-05&to=2026-11-05` is the whole of 5 November; a date-time
+         *     is used as it is. The 366-day span limit described on `from` is
+         *     measured across this pair.
          */
         to?: components['parameters']['ReportRangeTo'];
         /**
@@ -44654,9 +44870,16 @@ export interface operations {
   getReportsAvailability: {
     parameters: {
       query: {
-        /** @description Window start (inclusive), ISO 8601 with offset. */
+        /**
+         * @description Window start (inclusive): ISO 8601 with offset, or a calendar day
+         *     (`2026-11-05`) — the workspace's conversation day, starting when that
+         *     day starts on the workspace's clock (as the report range's `from`).
+         */
         from: components['parameters']['PresenceRangeFrom'];
-        /** @description Window end (exclusive), at most 31 days after `from`; clipped to now. */
+        /**
+         * @description Window end, at most 31 days after `from`; clipped to now. A date-time is
+         *     exclusive; a calendar day runs to the end of that workspace day.
+         */
         to: components['parameters']['PresenceRangeTo'];
         /**
          * @description Only these agents (RP-03). Each must be within the caller's reach, else
@@ -44736,6 +44959,16 @@ export interface operations {
         /**
          * @description Start of the reporting window. Defaults to 30 days before `to`.
          *
+         *     **A day or an instant.** A date-time is used as it is. A calendar day
+         *     (`2026-11-05`) is the workspace's conversation day — the day the chat
+         *     list files a chat under, on the workspace's time zone and day-start hour
+         *     (Settings → Inbox, default Europe/Istanbul 00:00) — so `from=<day>`
+         *     starts when that day starts there. Report days (`by_day`, `date`) and
+         *     hours (`by_hour`, heat maps) are bucketed on the same clock.
+         *
+         *     `from` and `to` naming the same instant is a 400 `range_empty`: the
+         *     window would hold nothing. For one day, send the day as both ends.
+         *
          *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
          *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
          *     a read replica or a column-store analytics warehouse, neither of which
@@ -44748,8 +44981,11 @@ export interface operations {
          */
         from?: components['parameters']['ReportRangeFrom'];
         /**
-         * @description End of the reporting window. Defaults to now. The 366-day span limit
-         *     described on `from` is measured across this pair.
+         * @description End of the reporting window. Defaults to now. A calendar day
+         *     (`2026-11-05`) runs to the end of that workspace day, so
+         *     `from=2026-11-05&to=2026-11-05` is the whole of 5 November; a date-time
+         *     is used as it is. The 366-day span limit described on `from` is
+         *     measured across this pair.
          */
         to?: components['parameters']['ReportRangeTo'];
         /**
@@ -44808,6 +45044,16 @@ export interface operations {
         /**
          * @description Start of the reporting window. Defaults to 30 days before `to`.
          *
+         *     **A day or an instant.** A date-time is used as it is. A calendar day
+         *     (`2026-11-05`) is the workspace's conversation day — the day the chat
+         *     list files a chat under, on the workspace's time zone and day-start hour
+         *     (Settings → Inbox, default Europe/Istanbul 00:00) — so `from=<day>`
+         *     starts when that day starts there. Report days (`by_day`, `date`) and
+         *     hours (`by_hour`, heat maps) are bucketed on the same clock.
+         *
+         *     `from` and `to` naming the same instant is a 400 `range_empty`: the
+         *     window would hold nothing. For one day, send the day as both ends.
+         *
          *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
          *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
          *     a read replica or a column-store analytics warehouse, neither of which
@@ -44820,8 +45066,11 @@ export interface operations {
          */
         from?: components['parameters']['ReportRangeFrom'];
         /**
-         * @description End of the reporting window. Defaults to now. The 366-day span limit
-         *     described on `from` is measured across this pair.
+         * @description End of the reporting window. Defaults to now. A calendar day
+         *     (`2026-11-05`) runs to the end of that workspace day, so
+         *     `from=2026-11-05&to=2026-11-05` is the whole of 5 November; a date-time
+         *     is used as it is. The 366-day span limit described on `from` is
+         *     measured across this pair.
          */
         to?: components['parameters']['ReportRangeTo'];
         /**
@@ -44876,6 +45125,16 @@ export interface operations {
         /**
          * @description Start of the reporting window. Defaults to 30 days before `to`.
          *
+         *     **A day or an instant.** A date-time is used as it is. A calendar day
+         *     (`2026-11-05`) is the workspace's conversation day — the day the chat
+         *     list files a chat under, on the workspace's time zone and day-start hour
+         *     (Settings → Inbox, default Europe/Istanbul 00:00) — so `from=<day>`
+         *     starts when that day starts there. Report days (`by_day`, `date`) and
+         *     hours (`by_hour`, heat maps) are bucketed on the same clock.
+         *
+         *     `from` and `to` naming the same instant is a 400 `range_empty`: the
+         *     window would hold nothing. For one day, send the day as both ends.
+         *
          *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
          *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
          *     a read replica or a column-store analytics warehouse, neither of which
@@ -44888,8 +45147,11 @@ export interface operations {
          */
         from?: components['parameters']['ReportRangeFrom'];
         /**
-         * @description End of the reporting window. Defaults to now. The 366-day span limit
-         *     described on `from` is measured across this pair.
+         * @description End of the reporting window. Defaults to now. A calendar day
+         *     (`2026-11-05`) runs to the end of that workspace day, so
+         *     `from=2026-11-05&to=2026-11-05` is the whole of 5 November; a date-time
+         *     is used as it is. The 366-day span limit described on `from` is
+         *     measured across this pair.
          */
         to?: components['parameters']['ReportRangeTo'];
         /**
@@ -44946,6 +45208,16 @@ export interface operations {
         /**
          * @description Start of the reporting window. Defaults to 30 days before `to`.
          *
+         *     **A day or an instant.** A date-time is used as it is. A calendar day
+         *     (`2026-11-05`) is the workspace's conversation day — the day the chat
+         *     list files a chat under, on the workspace's time zone and day-start hour
+         *     (Settings → Inbox, default Europe/Istanbul 00:00) — so `from=<day>`
+         *     starts when that day starts there. Report days (`by_day`, `date`) and
+         *     hours (`by_hour`, heat maps) are bucketed on the same clock.
+         *
+         *     `from` and `to` naming the same instant is a 400 `range_empty`: the
+         *     window would hold nothing. For one day, send the day as both ends.
+         *
          *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
          *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
          *     a read replica or a column-store analytics warehouse, neither of which
@@ -44958,8 +45230,11 @@ export interface operations {
          */
         from?: components['parameters']['ReportRangeFrom'];
         /**
-         * @description End of the reporting window. Defaults to now. The 366-day span limit
-         *     described on `from` is measured across this pair.
+         * @description End of the reporting window. Defaults to now. A calendar day
+         *     (`2026-11-05`) runs to the end of that workspace day, so
+         *     `from=2026-11-05&to=2026-11-05` is the whole of 5 November; a date-time
+         *     is used as it is. The 366-day span limit described on `from` is
+         *     measured across this pair.
          */
         to?: components['parameters']['ReportRangeTo'];
       };
@@ -45020,6 +45295,16 @@ export interface operations {
         /**
          * @description Start of the reporting window. Defaults to 30 days before `to`.
          *
+         *     **A day or an instant.** A date-time is used as it is. A calendar day
+         *     (`2026-11-05`) is the workspace's conversation day — the day the chat
+         *     list files a chat under, on the workspace's time zone and day-start hour
+         *     (Settings → Inbox, default Europe/Istanbul 00:00) — so `from=<day>`
+         *     starts when that day starts there. Report days (`by_day`, `date`) and
+         *     hours (`by_hour`, heat maps) are bucketed on the same clock.
+         *
+         *     `from` and `to` naming the same instant is a 400 `range_empty`: the
+         *     window would hold nothing. For one day, send the day as both ends.
+         *
          *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
          *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
          *     a read replica or a column-store analytics warehouse, neither of which
@@ -45032,8 +45317,11 @@ export interface operations {
          */
         from?: components['parameters']['ReportRangeFrom'];
         /**
-         * @description End of the reporting window. Defaults to now. The 366-day span limit
-         *     described on `from` is measured across this pair.
+         * @description End of the reporting window. Defaults to now. A calendar day
+         *     (`2026-11-05`) runs to the end of that workspace day, so
+         *     `from=2026-11-05&to=2026-11-05` is the whole of 5 November; a date-time
+         *     is used as it is. The 366-day span limit described on `from` is
+         *     measured across this pair.
          */
         to?: components['parameters']['ReportRangeTo'];
         /**
@@ -45176,15 +45464,9 @@ export interface operations {
         'application/json': {
           /** @description Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`, `missed`, `engagement`, `queue`, `queue-abandonment`. */
           group: string;
-          /**
-           * Format: date-time
-           * @description Start of the window to pin. Defaults to 30 days before `to`.
-           */
+          /** @description Start of the window to pin, a workspace day or an instant (as the report query's `from`). Defaults to 30 days before `to`. */
           from?: string;
-          /**
-           * Format: date-time
-           * @description End of the window to pin. Defaults to now.
-           */
+          /** @description End of the window to pin; a day runs to the end of that workspace day. Defaults to now. */
           to?: string;
           /**
            * @description How long the link resolves for, from now.

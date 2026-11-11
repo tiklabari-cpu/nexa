@@ -69,6 +69,17 @@ interface ReportsAgentActivity {
 }
 
 /** The agent and team keys of the report filter, as query parameters. */
+/**
+ * How long a report window is, in ms. A calendar-day end (`2026-11-05`, what
+ * a custom range sends) counts its whole day, as the API reads it — so a
+ * 31-day pick is 31 days here too, not 30.
+ */
+function rangeSpanMs(range: { from: string; to: string }): number {
+  const dayOnly = /^\d{4}-\d{2}-\d{2}$/;
+  const to = Date.parse(range.to) + (dayOnly.test(range.to) ? 86_400_000 : 0);
+  return to - Date.parse(range.from);
+}
+
 function personParams(filter: ReportFilterState): URLSearchParams {
   const params = new URLSearchParams();
   for (const id of filter.agent_id) params.append('agent_id', id);
@@ -109,8 +120,7 @@ export function AvailabilityTab({
 }): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
-  const tooLong =
-    Date.parse(range.to) - Date.parse(range.from) > AVAILABILITY_MAX_DAYS * 86_400_000;
+  const tooLong = rangeSpanMs(range) > AVAILABILITY_MAX_DAYS * 86_400_000;
   const params = personParams(filter);
   params.set('from', range.from);
   params.set('to', range.to);

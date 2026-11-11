@@ -17313,6 +17313,7 @@ components:
         - not_found
         - ownership_transfer_state
         - pending_requests_limit_reached
+        - range_empty
         - recipient_not_allowed
         - reply_requires_assignment
         - request_timeout
@@ -17651,14 +17652,25 @@ components:
       name: from
       in: query
       required: true
-      description: Window start (inclusive), ISO 8601 with offset.
-      schema: { type: string, format: date-time }
+      description: |
+        Window start (inclusive): ISO 8601 with offset, or a calendar day
+        (`2026-11-05`) — the workspace's conversation day, starting when that
+        day starts on the workspace's clock (as the report range's `from`).
+      schema:
+        anyOf:
+          - { type: string, format: date }
+          - { type: string, format: date-time }
     PresenceRangeTo:
       name: to
       in: query
       required: true
-      description: Window end (exclusive), at most 31 days after `from`; clipped to now.
-      schema: { type: string, format: date-time }
+      description: |
+        Window end, at most 31 days after `from`; clipped to now. A date-time is
+        exclusive; a calendar day runs to the end of that workspace day.
+      schema:
+        anyOf:
+          - { type: string, format: date }
+          - { type: string, format: date-time }
     PresenceAgent:
       name: agent_id
       in: query
@@ -17743,6 +17755,16 @@ components:
       description: |
         Start of the reporting window. Defaults to 30 days before `to`.
 
+        **A day or an instant.** A date-time is used as it is. A calendar day
+        (`2026-11-05`) is the workspace's conversation day — the day the chat
+        list files a chat under, on the workspace's time zone and day-start hour
+        (Settings → Inbox, default Europe/Istanbul 00:00) — so `from=<day>`
+        starts when that day starts there. Report days (`by_day`, `date`) and
+        hours (`by_hour`, heat maps) are bucketed on the same clock.
+
+        `from` and `to` naming the same instant is a 400 `range_empty`: the
+        window would hold nothing. For one day, send the day as both ends.
+
         **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
         not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
         a read replica or a column-store analytics warehouse, neither of which
@@ -17752,15 +17774,24 @@ components:
         and to `/reports/export` alike — both run the same aggregation, so
         capping only the download would leave the identical scan one query
         string away.
-      schema: { type: string, format: date-time }
+      schema:
+        anyOf:
+          - { type: string, format: date }
+          - { type: string, format: date-time }
     ReportRangeTo:
       name: to
       in: query
       required: false
       description: |
-        End of the reporting window. Defaults to now. The 366-day span limit
-        described on `from` is measured across this pair.
-      schema: { type: string, format: date-time }
+        End of the reporting window. Defaults to now. A calendar day
+        (`2026-11-05`) runs to the end of that workspace day, so
+        `from=2026-11-05&to=2026-11-05` is the whole of 5 November; a date-time
+        is used as it is. The 366-day span limit described on `from` is
+        measured across this pair.
+      schema:
+        anyOf:
+          - { type: string, format: date }
+          - { type: string, format: date-time }
 
 security:
   - bearerAuth: []

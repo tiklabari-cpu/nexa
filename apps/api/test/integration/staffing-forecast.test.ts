@@ -25,6 +25,7 @@ import { generateShortId } from '@siyahtus/types';
 import {
   grantToken,
   ownerClient,
+  seedDefaultBrand,
   seedFixtures,
   type Fixtures,
   type TenantFixture,
@@ -507,6 +508,14 @@ describe('staffing forecast (PRD §5.3-Vardiya)', () => {
   // ==========================================================================
 
   it('quotes the same hourly volume as /reports/breakdown', async () => {
+    // The forecast's grid is UTC weekday × hour (its presence and roster walks
+    // are UTC); the Breakdown's hours are the workspace's wall clock since
+    // tm 458. The two hour axes coincide when the workspace keeps UTC, which is
+    // where "one definition of a chat in a window" is checkable cell for cell.
+    const brandId = await seedDefaultBrand(owner, fx.a.licenseId);
+    await owner.inboxSettings.create({
+      data: { licenseId: fx.a.licenseId, brandId, dayBoundaryTz: 'UTC' },
+    });
     await seedWeek(fx.a);
     // A second cell in the same hour of a different day, so the check is a real
     // fold across the week rather than one cell compared to itself.

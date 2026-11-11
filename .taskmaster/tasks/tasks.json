@@ -17114,12 +17114,12 @@
         "description": "(tm 454) rtm'nin public health uçlarında hız sınırı yok, her istek SELECT 1 + PING atıyor (havuz tükenmesi). (tm 455) Self-servis kaydolan her workspace admin'i /health ayrıntısında sürüm, scheduler ve diğer kiracıların AI kuyruk derinliğini görüyor.",
         "details": "BİRLEŞİK GÖREV (sahip onayı 2026-11-07): tm 454, tm 455 aynı alana dokunduğu için tek pencerede yapılır; DoD kapısı bir kez koşar.\nBölümler sırayla yapılır. Her bölüm kendi kabul ölçütüyle kapanır; biri yeşil değilse görev done değildir.\nBirleşen görevler (tm 455) cancelled durumda ve buraya işaret ediyor; onlara ayrıca dokunma.\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\n━━ BÖLÜM 1 — tm 454 HEALTH-RTM-PROBE-CACHE · rtm /health ve /health/ready: probe sonucu kısa TTL önbellek, eşzamanlı istekler tek probe ━━\nSORUN: rtm'nin public health uçlarında hız sınırı yok, her istek SELECT 1 + PING atıyor (havuz tükenmesi).\n\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F34 (low ← medium). Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/rtm/src/server.ts:~342-358` `/health/ready`, `:~800-803` `/health`; rtm HTTP yolunda limiter yok; api'de `healthRateLimit` (`apps/api/src/plugins/rate-limit.ts:~335`).\n\nYAPILACAK: probe sonucunu 1-2 sn TTL ile önbelleğe al; uçuştaki probe promise'i paylaşılır (single-flight). Draining kısa devresi önbellekten ÖNCE kalır (draining hemen 503). Gerekirse api'deki health limiter desenine benzer basit IP kovası (yeni env yoksa sabit) — ölç ve HANDOFF'a.\n\nTUZAK: compose/k8s healthcheck aralığı TTL'den uzun olmalı (doğrula). Sahte saat.\n\nKAPSAM DIŞI: health ayrıntı yetkisi (HEALTH-DETAIL-PLATFORM-ONLY), metrics uçları.\nDENETİM BULGULARI: F34\n\n━━ BÖLÜM 2 — tm 455 HEALTH-DETAIL-PLATFORM-ONLY · api/rtm /health ayrıntısı kiracı admin'ine değil yalnız platform principal'ına; kiracı yalnız {status, service} ━━\nSORUN: Self-servis kaydolan her workspace admin'i /health ayrıntısında sürüm, scheduler ve diğer kiracıların AI kuyruk derinliğini görüyor.\n\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F35 (low). Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/routes/health.ts:116` `isAdmin = principal?.kind === 'agent' && roleAtLeast(principal.role, 'admin')` → ayrıntı; `health-snapshot.ts:~142-170`; `ai_jobs_health()` SECURITY DEFINER (deployment geneli). Repoda ops/health token mekanizması YOK (env.ts'de OPS/HEALTH token yok). Admin SPA yalnız `/dashboard/health` kullanıyor; kiracı web'de `/health` tüketicisi yok (`rg \"/health\" apps/web/src` ile yeniden doğrula).\n\nYAPILACAK: (1) Ayrıntılı gövde önce mevcut platform principal'ıyla (platform-api oturumu / impersonation değil) koşullanır; kiracı agent admin dahil herkes yalnız `{status, service}`. (2) Platform principal'ı api /health'e ulaşamıyorsa (ayrı süreç) admin SPA'nın `/dashboard/health`'i zaten ayrıntıyı veriyorsa api /health ayrıntısı tamamen kaldırılır; yeni token/env alanı ancak ölçülmüş ihtiyaçla (deployment-config-field-ripples) — kararı HANDOFF'a. (3) rtm aynı kural. (4) Compose/Helm healthcheck'lerinin yalnız status okuduğunu testle sabitle.\n\nTUZAK: memory new-scheduler-job-ripples (health.test job listesini pinliyor — ayrıntı testleri platform principal'ına taşınır), platform-integration-test-traps. Draining kısa devresi korunmalı.\n\nKAPSAM DIŞI: metrics uçları, probe önbelleği (HEALTH-RTM-PROBE-CACHE).\nDENETİM BULGULARI: F35",
         "testStrategy": "BÖLÜM 1 (tm 454): rtm birim: 100 eşzamanlı /health/ready → tek DB probe; TTL sonrası yeni probe; draining 503 değişmez ve önbellekten bağımsız. Mutasyon: single-flight'ı kaldır → probe sayısı testi kırmızı. DoD: CONVENTIONS §1.\nBÖLÜM 2 (tm 455): api entegrasyon: kiracı admin token → yalnız status/service; platform principal (ya da /dashboard/health) → ayrıntı; anonim → status. rtm aynı. Compose healthcheck komutları status alanını okur (metin testi). Mutasyon: isAdmin dalını geri koy → kırmızı. DoD: CONVENTIONS §1.\nKapanış: bütün bölümlerin hedefli testleri yeşilken tam DoD kapısı bir kez.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-07T11:03:10.748Z",
+        "updatedAt": "2026-11-11T02:02:33.566Z",
         "subtasks": []
       },
       {
@@ -17778,9 +17778,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-10T21:43:16.833Z",
+      "lastModified": "2026-11-11T02:02:33.567Z",
       "taskCount": 478,
-      "completedCount": 442,
+      "completedCount": 443,
       "tags": [
         "master"
       ]

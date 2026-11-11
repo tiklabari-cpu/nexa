@@ -172,6 +172,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/settings/ChatFormsSettings.tsx',
   'src/features/settings/Tags.tsx',
   'src/features/settings/TicketEmailTemplates.tsx',
+  'src/features/settings/email/SmtpTestMail.tsx',
   'src/features/settings/TrustedDomains.tsx',
   'src/features/settings/CustomPanels.tsx',
   'src/features/settings/WebsiteWidgets.tsx',

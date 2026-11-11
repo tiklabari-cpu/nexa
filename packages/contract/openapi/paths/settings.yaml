@@ -2860,3 +2860,33 @@ memberRecognitionRevokeAll:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+emailTest:
+  post:
+    tags: [Settings]
+    operationId: sendSmtpTestEmail
+    summary: Send yourself a test e-mail
+    description: |
+      Sends a short test message to the caller's own address — never to any
+      other — so an administrator can check that the deployment's mail
+      carrier delivers (tm 464.3 · G-05). There is no body: the recipient is
+      not a choice.
+
+      The message goes through the durable outbox (`kind: smtp_test`) and
+      its first try is made before the answer, so the response says how that
+      try went; a try that failed in a way worth retrying stays queued and
+      the outbox retries it on its own. A failure is a result, not an error:
+      it is still `202`, with `status` and `error` saying what happened.
+
+      `access_rules:rw` plus `minimumRole: admin`. Five per member per hour;
+      the sixth is `429` with `Retry-After`. The message counts against the
+      workspace's daily mail cap like any other.
+    responses:
+      "202":
+        description: The test e-mail was queued and its first try made
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SmtpTestResult" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

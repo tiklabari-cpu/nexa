@@ -1804,6 +1804,33 @@ export const settings: Messages = {
   'settings.ticketEmailTemplates.subjectPlaceholder': '{{ticket.id}} numaralı talebinizi aldık',
   'settings.ticketEmailTemplates.bodyPlaceholder':
     'Merhaba {{customer.name}}, bize ulaştığınız için teşekkürler.',
+  'settings.smtpTest.title': 'Test e-postası',
+  'settings.smtpTest.description':
+    'Bu sunucunun e-posta gönderebildiğini denemek için kendinize bir test iletisi gönderin. İleti yalnızca sizin adresinize gider.',
+  'settings.smtpTest.button': 'Test e-postası gönder',
+  'settings.smtpTest.sending': 'Gönderiliyor…',
+  'settings.smtpTest.sent':
+    'Test e-postası {to} adresine gönderildi. Gelen kutunuza, orada yoksa istenmeyen klasörüne bakın.',
+  'settings.smtpTest.notSmtp':
+    'İleti kabul edildi, ancak bu sunucu gerçek e-posta gönderecek şekilde ayarlanmamış; {to} adresine hiçbir şey ulaşmayacak.',
+  'settings.smtpTest.queued':
+    'İlk deneme başarısız oldu: {reason}. Otomatik olarak yeniden denenecek.',
+  'settings.smtpTest.queuedNoReason':
+    'İleti gönderilmeyi bekliyor ve otomatik olarak yeniden denenecek.',
+  'settings.smtpTest.unconfirmed':
+    'İleti {to} için e-posta sunucusuna teslim edildi, ancak sunucu onaylamadı. Yine de ulaşabilir.',
+  'settings.smtpTest.failed': 'Gönderilmedi: {reason}.',
+  'settings.smtpTest.withSmtpCode': '{reason} (SMTP {code})',
+  'settings.smtpTest.reason.timeout': 'e-posta sunucusu zamanında yanıt vermedi',
+  'settings.smtpTest.reason.connection': 'e-posta sunucusuna bağlanılamadı',
+  'settings.smtpTest.reason.tls': 'e-posta sunucusuyla güvenli bağlantı kurulamadı',
+  'settings.smtpTest.reason.auth': 'e-posta sunucusu kullanıcı adını veya şifreyi reddetti',
+  'settings.smtpTest.reason.rejected': 'e-posta sunucusu iletiyi reddetti',
+  'settings.smtpTest.reason.protocol': 'e-posta sunucusu beklenmeyen bir yanıt verdi',
+  'settings.smtpTest.reason.unconfirmed': 'e-posta sunucusu iletiyi onaylamadı',
+  'settings.smtpTest.reason.invalid_message': 'adresiniz e-posta göndermek için kullanılamıyor',
+  'settings.smtpTest.reason.cap_reached': 'bu çalışma alanı bugünkü e-posta sınırına ulaştı',
+  'settings.smtpTest.reason.unexpected': 'beklenmeyen bir hata oluştu; ayrıntılar sunucu kaydında',
   'settings.ticketRules.namePlaceholder': 'İadeler',
   'settings.ticketRules.subjectPlaceholder': 'iade',
 

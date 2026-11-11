@@ -722,6 +722,8 @@ paths:
     $ref: "./paths/settings.yaml#/salesTracker"
   /settings/appearance:
     $ref: "./paths/settings.yaml#/appearance"
+  /settings/email/test:
+    $ref: "./paths/settings.yaml#/emailTest"
 
   /settings/apps:
     $ref: "./paths/apps.yaml#/apps"
@@ -9301,6 +9303,70 @@ components:
         email: { type: string, maxLength: 254 }
         ts: { type: integer }
         user_hash: { type: string, minLength: 64, maxLength: 64 }
+
+    SmtpTestResult:
+      type: object
+      description: |
+        How the test e-mail went (tm 464.3 · G-05). It is queued in the
+        durable outbox like every other mail and its first try is made at
+        once, so this is that try's result.
+      required: [status, to, provider, error]
+      properties:
+        status:
+          type: string
+          enum: [sent, queued, unconfirmed, failed]
+          description: |
+            `sent` — the mail server accepted it. `queued` — the first try
+            failed in a way worth retrying; the outbox tries again on its own
+            (up to five times), and `error` says why the first try failed.
+            `unconfirmed` — handed over, but the server never confirmed it; it
+            may still arrive and is not sent again. `failed` — it will not be
+            sent: the server refused it, the credentials were rejected, or the
+            workspace's daily mail cap is reached.
+        to:
+          type: string
+          description: The address it went to — always the caller's own.
+        provider:
+          type: string
+          enum: [file, "null", smtp]
+          description: |
+            The deployment's mail carrier (`MAIL_PROVIDER`). Only `smtp` really
+            sends; `file` writes the message to the server's spool folder and
+            `null` drops it, so `sent` there proves nothing about SMTP.
+        error:
+          description: Why the first try did not go out; null when it did.
+          oneOf:
+            - $ref: "#/components/schemas/SmtpTestError"
+            - type: "null"
+
+    SmtpTestError:
+      type: object
+      required: [code, phase, smtp_code]
+      properties:
+        code:
+          type: string
+          enum:
+            [
+              timeout,
+              connection,
+              tls,
+              auth,
+              rejected,
+              protocol,
+              unconfirmed,
+              invalid_message,
+              cap_reached,
+              unexpected,
+            ]
+          description: |
+            The carrier's classification. `unexpected` is a failure that was
+            not the mail server's — the server's own log has it.
+        phase:
+          type: [string, "null"]
+          description: The SMTP step it failed in (`connect`, `auth`, `rcpt_to` …).
+        smtp_code:
+          type: [integer, "null"]
+          description: The server's three-digit reply code, when a reply caused it.
 
     MemberKeyRotationInput:
       type: object

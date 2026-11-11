@@ -52,8 +52,11 @@ declare module 'fastify' {
  * How a dispatched mail stands once its first try is over: the carrier's
  * outcome, or `queued` — the outbox holds it for a retry (or another sender
  * is sending it), and its end is told to the settle hook, not to this caller.
+ * A `queued` whose first try was this caller's carries that try's failure as
+ * `error` — what the panel's test e-mail shows (tm 464.3); no other caller
+ * reads it.
  */
-export type MailDispatchOutcome = MailOutcome | { status: 'queued' };
+export type MailDispatchOutcome = MailOutcome | { status: 'queued'; error?: unknown };
 
 export interface OutboxMailerOptions {
   logger?: MailOutboxLogger;
@@ -129,8 +132,11 @@ export class OutboxMailer implements Mailer {
 function outcomeOf(result: MailOutboxSendResult): MailDispatchOutcome {
   switch (result.status) {
     case 'taken':
-    case 'queued':
       return { status: 'queued' };
+    case 'queued':
+      return result.outcome && result.outcome.status !== 'sent'
+        ? { status: 'queued', error: result.outcome.error }
+        : { status: 'queued' };
     case 'sent':
       return { status: 'sent' };
     case 'unconfirmed':

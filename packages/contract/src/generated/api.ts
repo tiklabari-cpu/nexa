@@ -9617,6 +9617,39 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/settings/email/test': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send yourself a test e-mail
+     * @description Sends a short test message to the caller's own address — never to any
+     *     other — so an administrator can check that the deployment's mail
+     *     carrier delivers (tm 464.3 · G-05). There is no body: the recipient is
+     *     not a choice.
+     *
+     *     The message goes through the durable outbox (`kind: smtp_test`) and
+     *     its first try is made before the answer, so the response says how that
+     *     try went; a try that failed in a way worth retrying stays queued and
+     *     the outbox retries it on its own. A failure is a result, not an error:
+     *     it is still `202`, with `status` and `error` saying what happened.
+     *
+     *     `access_rules:rw` plus `minimumRole: admin`. Five per member per hour;
+     *     the sixth is `429` with `Retry-After`. The message counts against the
+     *     workspace's daily mail cap like any other.
+     */
+    post: operations['sendSmtpTestEmail'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/settings/apps': {
     parameters: {
       query?: never;
@@ -20296,6 +20329,57 @@ export interface components {
       email?: string;
       ts?: number;
       user_hash?: string;
+    };
+    /**
+     * @description How the test e-mail went (tm 464.3 · G-05). It is queued in the
+     *     durable outbox like every other mail and its first try is made at
+     *     once, so this is that try's result.
+     */
+    SmtpTestResult: {
+      /**
+       * @description `sent` — the mail server accepted it. `queued` — the first try
+       *     failed in a way worth retrying; the outbox tries again on its own
+       *     (up to five times), and `error` says why the first try failed.
+       *     `unconfirmed` — handed over, but the server never confirmed it; it
+       *     may still arrive and is not sent again. `failed` — it will not be
+       *     sent: the server refused it, the credentials were rejected, or the
+       *     workspace's daily mail cap is reached.
+       * @enum {string}
+       */
+      status: 'sent' | 'queued' | 'unconfirmed' | 'failed';
+      /** @description The address it went to — always the caller's own. */
+      to: string;
+      /**
+       * @description The deployment's mail carrier (`MAIL_PROVIDER`). Only `smtp` really
+       *     sends; `file` writes the message to the server's spool folder and
+       *     `null` drops it, so `sent` there proves nothing about SMTP.
+       * @enum {string}
+       */
+      provider: 'file' | 'null' | 'smtp';
+      /** @description Why the first try did not go out; null when it did. */
+      error: components['schemas']['SmtpTestError'] | null;
+    };
+    SmtpTestError: {
+      /**
+       * @description The carrier's classification. `unexpected` is a failure that was
+       *     not the mail server's — the server's own log has it.
+       * @enum {string}
+       */
+      code:
+        | 'timeout'
+        | 'connection'
+        | 'tls'
+        | 'auth'
+        | 'rejected'
+        | 'protocol'
+        | 'unconfirmed'
+        | 'invalid_message'
+        | 'cap_reached'
+        | 'unexpected';
+      /** @description The SMTP step it failed in (`connect`, `auth`, `rcpt_to` …). */
+      phase: string | null;
+      /** @description The server's three-digit reply code, when a reply caused it. */
+      smtp_code: number | null;
     };
     MemberKeyRotationInput: {
       /**
@@ -41145,6 +41229,29 @@ export interface operations {
         };
       };
       400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  sendSmtpTestEmail: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The test e-mail was queued and its first try made */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SmtpTestResult'];
+        };
+      };
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];

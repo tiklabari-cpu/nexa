@@ -287,7 +287,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.ticketEmailTemplates',
     scope: ['tickets--all:ro', 'tickets--access:ro', 'tickets--all:rw'],
     file: 'TicketEmailTemplates',
-    keywords: ['branded email'],
+    keywords: ['branded email', 'smtp', 'test email'],
   },
   {
     slug: 'custom-fields',

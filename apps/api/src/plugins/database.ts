@@ -17,7 +17,7 @@ declare module 'fastify' {
     db: PrismaClient;
     /**
      * `events` partition maintenance (SEMA-MIMARI.8.4c · tm 255.14). Its last
-     * pass is the `event_partitions` block of the admin `/health` body.
+     * pass is the `event_partitions` block of the published health snapshot.
      */
     eventPartitions: EventPartitionMaintenance;
     /**

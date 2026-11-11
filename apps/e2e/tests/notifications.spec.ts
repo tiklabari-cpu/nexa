@@ -21,10 +21,6 @@ import {
   test,
   visitorSends,
 } from './fixtures.js';
-import { STACK_RTM } from './stack-ports.js';
-
-/** The RTM gateway's admin `/health`, where open connections are counted. */
-const RTM_BASE = STACK_RTM;
 
 const PREFERENCES_PATH = '/agents/me/notification-preferences';
 
@@ -178,11 +174,13 @@ test.describe('notifications away from the inbox (FR-MOD-13.8)', () => {
    * nothing until they navigated back. Two halves are proven here, because
    * either one alone would pass for the wrong reason.
    *
-   * **The connection survives the route change** — counted at the gateway
-   * (`GET /health`, admin-only, reports `registry.size`), not inferred from the
-   * app. Before this change the count dropped by one the moment the agent left
-   * the inbox; that is the measurement, and nothing about focus or preferences
-   * can flatter it.
+   * **The connection survives the route change** — counted on the wire: every
+   * agent RTM WebSocket the page opens and every one that closes (Playwright's
+   * `websocket` / `close` events), not inferred from the app. Before this
+   * change the socket closed the moment the agent left the inbox; that is the
+   * measurement, and nothing about focus or preferences can flatter it. (Until
+   * tm 454 this read the gateway's socket count off `/health` with the owner's
+   * token; that body is `{status, service}` for every tenant caller now.)
    *
    * **A message that arrives while the agent is elsewhere still notifies.** The
    * tab title is the channel a browser test can observe: the chime needs an
@@ -201,15 +199,22 @@ test.describe('notifications away from the inbox (FR-MOD-13.8)', () => {
     request,
   }) => {
     const adminToken = await ownerAccessTokenFor(request, ACME_OWNER);
-    const gatewayConnections = async (): Promise<number> => {
-      const response = await request.get(`${RTM_BASE}/health`, {
-        headers: { authorization: `Bearer ${adminToken}` },
+    // Registered before `goto`: the load below opens this page's socket, and a
+    // socket opened before the listener would be invisible to it.
+    const agentSockets: Array<{ closed: boolean }> = [];
+    agentPage.on('websocket', (socket) => {
+      if (!socket.url().includes('/v1/agent/rtm/ws')) return;
+      const entry = { closed: false };
+      agentSockets.push(entry);
+      socket.on('close', () => {
+        entry.closed = true;
       });
-      expect(response.ok(), `rtm health: ${response.status()}`).toBe(true);
-      const body = (await response.json()) as { connections?: number };
-      expect(body.connections, 'admin /health must report the connection count').toBeDefined();
-      return body.connections!;
-    };
+    });
+    /** Opened so far, and still open — a reconnect loop moves the first, an unmount the second. */
+    const socketCounts = () => ({
+      opened: agentSockets.length,
+      open: agentSockets.filter((entry) => !entry.closed).length,
+    });
 
     // The badge only rises for an account with notifications on, and the test
     // above turns them off and back on for this same account. State that here
@@ -241,9 +246,10 @@ test.describe('notifications away from the inbox (FR-MOD-13.8)', () => {
         timeout: 20_000,
       });
 
-      // Both sockets — this agent and that visitor — are established and idle,
-      // so the count is stable and any change from here is the navigation's.
-      const before = await gatewayConnections();
+      // The agent's socket is established and idle, so the count is stable and
+      // any change from here is the navigation's.
+      const before = socketCounts();
+      expect(before.open, 'the inbox holds its RTM socket').toBe(1);
 
       // Walk away from the inbox the way an agent does: through the rail, not a
       // reload, so the shell stays mounted and this exercises the lifetime that
@@ -257,7 +263,7 @@ test.describe('notifications away from the inbox (FR-MOD-13.8)', () => {
       // client that reconnected in a loop would show up as a number that moves.
       for (let i = 0; i < 4; i += 1) {
         await agentPage.waitForTimeout(500);
-        expect(await gatewayConnections(), 'the gateway lost a connection on navigation').toBe(
+        expect(socketCounts(), 'the page closed or reopened its socket on navigation').toEqual(
           before,
         );
       }

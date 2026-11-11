@@ -63,17 +63,6 @@ export const CONFIG = Object.freeze({
   /** The agent RTM socket. `?organization_id=` is appended by the caller. */
   rtmUrl: `${rtmOrigin}${RTM_AGENT_PATH}`,
   /**
-   * The gateway's own health route, over HTTP rather than the socket.
-   *
-   * Presented with an admin credential it answers with `connections` — how many
-   * sockets *the pod* is holding — which is the only honest reading of NFR-P8
-   * (`lib/metrics.js#rtmConnectionsObserved`). Derived from the socket origin
-   * rather than configured separately so the two can never point at different
-   * processes, which is precisely the mistake that would make the number a lie.
-   */
-  rtmHealthUrl: `${rtmOrigin.replace(/^ws/, 'http')}/health`,
-
-  /**
    * The seeded owner the suite signs in as. `prisma/seed.ts` writes
    * `owner@<slug>.localhost` for every tenant and gives them all the same demo
    * password; `apps/e2e/tests/fixtures.ts` uses exactly these credentials.

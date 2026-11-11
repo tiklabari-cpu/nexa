@@ -19,7 +19,7 @@
  *
  * A warning, never a refusal: nothing here may join `productionProblems` and
  * stop the boot (owner 2026-10-10 and 2026-11-06 S18). The same list is logged
- * once at boot (`server.ts`) and shown in the admin `/health` body
+ * once at boot (`server.ts`) and shown in the published health snapshot
  * (`provider_warnings`), so an operator who never reads the boot log can still
  * see it.
  */

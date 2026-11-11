@@ -405,7 +405,14 @@ describe('the visitor follow-up runs as a durable AI job (GV-02 · ADR-11a)', ()
     }
   });
 
-  describe('GET /health — the queue at a glance', () => {
+  describe('the published health snapshot — the queue at a glance (the platform reads it, tm 454)', () => {
+    /** One publication by the health leader — what the root panel's dashboard serves. */
+    async function published(): Promise<Record<string, unknown>> {
+      const stored = await server.app.opsHealth.publish();
+      expect(stored).not.toBeNull();
+      return stored!.health as unknown as Record<string, unknown>;
+    }
+
     async function health(authorization?: string) {
       const response = await server.app.inject({
         method: 'GET',
@@ -474,11 +481,11 @@ describe('the visitor follow-up runs as a durable AI job (GV-02 · ADR-11a)', ()
       };
     }
 
-    it('shows an admin how many jobs wait and run, across every workspace, and how old the oldest is', async () => {
+    it('shows the platform how many jobs wait and run, across every workspace, and how old the oldest is', async () => {
       const inA = await connectionIn(fx.a);
       const inB = await connectionIn(fx.b);
       // The two visitor jobs above ran: an empty queue has no age.
-      expect((await health(await adminAuth()))['ai_jobs']).toEqual({
+      expect((await published())['ai_jobs']).toEqual({
         pending: 0,
         running: 0,
         oldest_age_s: null,
@@ -490,14 +497,14 @@ describe('the visitor follow-up runs as a durable AI job (GV-02 · ADR-11a)', ()
       // Finished jobs are history, not queue — however old.
       await seedJob(inA, 'done', 600);
 
-      const body = await health(await adminAuth());
+      const body = await published();
       const aiJobs = body['ai_jobs'] as { pending: number; running: number; oldest_age_s: number };
       expect(aiJobs).toMatchObject({ pending: 2, running: 1 });
       expect(aiJobs.oldest_age_s).toBeGreaterThanOrEqual(30);
       expect(aiJobs.oldest_age_s).toBeLessThan(60);
     });
 
-    it('shows nobody else the queue', async () => {
+    it('shows no tenant the queue — a workspace owner included (tm 454 · F35)', async () => {
       const inA = await connectionIn(fx.a);
       await seedJob(inA, 'pending', 30);
       const agent = await grantToken(owner, {
@@ -509,6 +516,7 @@ describe('the visitor follow-up runs as a durable AI job (GV-02 · ADR-11a)', ()
 
       expect(await health()).toEqual({ status: 'ok', service: 'api' });
       expect(await health(`Bearer ${agent}`)).toEqual({ status: 'ok', service: 'api' });
+      expect(await health(await adminAuth())).toEqual({ status: 'ok', service: 'api' });
     });
   });
 });

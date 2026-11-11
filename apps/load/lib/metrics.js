@@ -69,16 +69,6 @@ export const rtmSocketDropped = new Counter(METRIC_NAMES.rtmSocketDropped);
 export const rtmSyncRecovered = new Rate(METRIC_NAMES.rtmSyncRecovered);
 
 /**
- * How many sockets the gateway says it is holding, sampled from its own
- * `/health` during the plateau.
- *
- * The load generator knows how many it *asked* for; only the pod knows how many
- * it has. NFR-P8 is a statement about the pod, so this is the number that
- * answers it — and a gap between the two is itself the finding.
- */
-export const rtmConnectionsObserved = new Trend(METRIC_NAMES.rtmConnectionsObserved);
-
-/**
  * The publishing write, on its own, so the REST share of a fan-out figure can
  * be subtracted rather than guessed at.
  */

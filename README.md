@@ -449,7 +449,9 @@ leader, because opening a month twice is a no-op. It runs as the runtime role `s
 through `SECURITY DEFINER` functions that can open and secure an `events` partition and
 nothing else (migration `20260925100000_events_partition_definer`). A failed pass never stops
 the process — an event whose month has no partition lands in `events_default` instead — but
-it is reported: the admin `GET /health` body's `event_partitions` block names each month
+it is reported: the published health snapshot's `event_partitions` block (root panel
+`GET /platform/v1/dashboard/health`, or `redis-cli GET siyahtus:ops:health`; the tenant
+`/health` answers only `{status, service}` since tm 454) names each month
 that failed and its SQLSTATE, and the log carries one `event partition maintenance failed`
 line per failed pass. What each code means and what to do:
 [`docs/runbooks/event-partitions.md`](docs/runbooks/event-partitions.md).

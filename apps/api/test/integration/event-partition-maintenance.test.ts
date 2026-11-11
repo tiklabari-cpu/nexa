@@ -591,7 +591,20 @@ describe('a month whose rows already sit in events_default (SEMA-MIMARI.8.4c)', 
   });
 });
 
-describe('GET /health — the maintenance pass is visible (SEMA-MIMARI.8.4c)', () => {
+/**
+ * The detailed health body as the root panel's dashboard gets it — one
+ * publication by the server's health leader. No tenant caller reads it from
+ * `/health` since tm 454 (F35).
+ */
+async function publishedHealth(
+  server: Awaited<ReturnType<typeof startTestServer>>,
+): Promise<HealthBody> {
+  const stored = await server.app.opsHealth.publish();
+  expect(stored).not.toBeNull();
+  return stored!.health as unknown as HealthBody;
+}
+
+describe('the published health snapshot — the maintenance pass is visible (SEMA-MIMARI.8.4c)', () => {
   let adminAuth: { authorization: string };
 
   beforeEach(async () => {
@@ -604,12 +617,10 @@ describe('GET /health — the maintenance pass is visible (SEMA-MIMARI.8.4c)', (
     adminAuth = { authorization: `Bearer ${token}` };
   });
 
-  it('reports the boot pass to an admin — the window, when it ran, that every month opened — and none of it to anyone else', async () => {
+  it('reports the boot pass to the platform — the window, when it ran, that every month opened — and none of it to a tenant', async () => {
     const server = await startTestServer();
     try {
-      const response = await server.get('/health', adminAuth);
-      expect(response.statusCode).toBe(200);
-      const body = response.json() as HealthBody;
+      const body = await publishedHealth(server);
 
       expect(body.event_partitions).toEqual({
         interval_ms: 6 * 60 * 60 * 1000,
@@ -625,6 +636,11 @@ describe('GET /health — the maintenance pass is visible (SEMA-MIMARI.8.4c)', (
       );
 
       expect((await server.get('/health')).json()).toEqual({ status: 'ok', service: 'api' });
+      // A workspace owner's token reads no more than that (tm 454 · F35).
+      expect((await server.get('/health', adminAuth)).json()).toEqual({
+        status: 'ok',
+        service: 'api',
+      });
     } finally {
       await server.close();
     }
@@ -649,11 +665,10 @@ describe('GET /health — the maintenance pass is visible (SEMA-MIMARI.8.4c)', (
 
         // Not a readiness matter: the process serves, the orchestrator keeps
         // routing, and a restart would not fix a missing privilege.
-        const health = await server.get('/health', adminAuth);
-        expect(health.statusCode).toBe(200);
+        expect((await server.get('/health')).statusCode).toBe(200);
         expect((await server.get('/health/ready')).statusCode).toBe(200);
 
-        const body = health.json() as HealthBody;
+        const body = await publishedHealth(server);
         expect(body.status).toBe('ok');
         expect(body.event_partitions).toMatchObject({
           last_status: 'error',
@@ -695,7 +710,7 @@ describe('GET /health — the maintenance pass is visible (SEMA-MIMARI.8.4c)', (
       { logStream: sink as unknown as NodeJS.WritableStream },
     );
     try {
-      const failing = (await server.get('/health', adminAuth)).json() as HealthBody;
+      const failing = await publishedHealth(server);
       expect(failing.event_partitions).toMatchObject({
         last_status: 'error',
         consecutive_errors: 1,
@@ -705,7 +720,7 @@ describe('GET /health — the maintenance pass is visible (SEMA-MIMARI.8.4c)', (
       await owner.$queryRaw`SELECT events_release_default_month(${blocked}::timestamptz)`;
       await server.app.eventPartitions.run();
 
-      const cleared = (await server.get('/health', adminAuth)).json() as HealthBody;
+      const cleared = await publishedHealth(server);
       expect(cleared.event_partitions).toMatchObject({
         last_status: 'ok',
         consecutive_errors: 0,

@@ -1,6 +1,7 @@
 /**
- * `buildHealthSnapshot` and the probes (tm 389.8) — the admin `/health` body as a value. The
- * route's own behaviour (admin-gated body, 503s, draining) stays pinned by
+ * `buildHealthSnapshot` and the probes (tm 389.8) — the detailed health body as a value (what
+ * the leader publishes; no route serves it since tm 454). The route's own behaviour (narrow
+ * body, 503s, draining) stays pinned by
  * `test/integration/health.test.ts`.
  */
 import { describe, expect, it, vi } from 'vitest';

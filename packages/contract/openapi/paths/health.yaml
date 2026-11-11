@@ -26,11 +26,9 @@ ready:
     summary: Readiness probe
     description: |
       Probes Postgres and Redis for real and returns 503 when either is
-      unreachable, so an orchestrator takes the instance out of rotation. This
-      is the same dependency probe `/health` runs, but always answers the
-      narrow `{status, service}` body — an orchestrator probe never carries a
-      bearer token, so the admin-only detail `/health` can return would never
-      be reachable here anyway.
+      unreachable, so an orchestrator takes the instance out of rotation. The
+      same dependency probe and the same `{status, service}` body as
+      `/health`.
     security: []
     responses:
       "200":

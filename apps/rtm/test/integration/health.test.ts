@@ -12,27 +12,22 @@
  * without ever bringing Redis down, so the failure is attributable to the
  * dependency the test broke.
  *
- * Since M-SEC-b2 (§D116 MEDIUM (b)) the `/health` body has two shapes, the
- * same split as `apps/api/src/routes/health.ts`: region/connection-count/
- * dependency detail is infrastructure fingerprinting, admin-role bearer token
- * only. `/health/live` never touches a dependency and `/health/ready` never
- * splits by identity — both are meant for an orchestrator, not a person.
+ * Since tm 454 (F35) every body is the narrow one, whoever asks — a
+ * workspace owner's token included: region, version and the socket count are
+ * the deployment's, and a workspace admin is a tenant (until then an admin
+ * token got them, M-SEC-b2). `/health` and `/health/ready` share one
+ * dependency probe, one in flight at a time and reused for a second
+ * (tm 454 · F34) — a burst of health requests is one `SELECT 1`.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { HEALTH_PROBE_TTL_MS } from '../../src/health-probe.js';
 import { grantToken, ownerClient, seedRtmFixtures } from '../helpers/fixtures.js';
 import { startRtm } from '../helpers/rtm-harness.js';
 
 interface HealthBody {
-  status: 'ok' | 'degraded';
+  status: 'ok' | 'degraded' | 'draining';
   service: string;
-  region?: string;
-  connections?: number;
-  max_connections?: number | null;
   uptime_s?: number;
-  dependencies?: {
-    database: { status: 'up' | 'down'; error?: string };
-    redis: { status: 'up' | 'down'; error?: string };
-  };
 }
 
 async function getHealth(
@@ -85,61 +80,24 @@ afterAll(async () => {
 });
 
 describe('GET /health', () => {
-  it('reports ok with both dependencies up for an admin caller', async () => {
+  it('reports ok with both dependencies up', async () => {
     const rtm = await startRtm();
     try {
-      const { statusCode, body } = await getHealth(rtm.port, adminAuth);
+      const { statusCode, body } = await getHealth(rtm.port);
 
       expect(statusCode).toBe(200);
-      expect(body.status).toBe('ok');
-      expect(body.service).toBe('rtm');
-      expect(body.dependencies?.database).toEqual({ status: 'up' });
-      expect(body.dependencies?.redis).toEqual({ status: 'up' });
+      expect(body).toEqual({ status: 'ok', service: 'rtm' });
     } finally {
       await rtm.close();
     }
   });
 
-  it('reports the connection ceiling next to the count it bounds (M-LOAD-CAP)', async () => {
-    // A count of open sockets means nothing on its own: 4000 is healthy under
-    // one ceiling and a page under another. Reported together, from one read,
-    // so the two cannot be compared across two different moments.
-    const withCeiling = await startRtm({ RTM_MAX_CONNECTIONS: '4096' });
-    try {
-      const { body } = await getHealth(withCeiling.port, adminAuth);
-      expect(body.connections).toBe(0);
-      expect(body.max_connections).toBe(4096);
-    } finally {
-      await withCeiling.close();
-    }
-
-    // Unset is unlimited, and says so — an absent field would read as "this
-    // build does not report it", which is the wrong thing to conclude while
-    // deciding whether a pod is near its limit.
-    const unlimited = await startRtm();
-    try {
-      const { body } = await getHealth(unlimited.port, adminAuth);
-      expect(body).toHaveProperty('max_connections', null);
-    } finally {
-      await unlimited.close();
-    }
-  });
-
   it('reports degraded + 503 when Postgres is unreachable, without taking Redis down', async () => {
     // Nothing listens on this port. `connect_timeout=1` keeps Prisma's own
-    // failure comfortably under the probe's 2s timeout — without it, the two
-    // race close enough (~2.0-2.1s either way) to flip which error surfaces.
-    // `runtimeDatabaseUrl` prefers `DATABASE_APP_URL` when set (test isolation
-    // gives every run its own), so both must be overridden or the probe would
-    // still reach the real one.
-    //
-    // Anonymous on purpose (M-SEC-b2): resolving *any* bearer token — admin's
-    // included — is itself a query against this same Postgres, so a token
-    // presented here cannot be verified either. The dependency detail
-    // (including the redacted error class this test used to assert on
-    // directly) is consequently unreachable through this endpoint in exactly
-    // the scenario where Postgres is what is down; see the next `describe`
-    // for that fail-closed property proved with a bearer token attached.
+    // failure comfortably under the probe's 2s timeout. `runtimeDatabaseUrl`
+    // prefers `DATABASE_APP_URL` when set (test isolation gives every run its
+    // own), so both must be overridden or the probe would still reach the
+    // real one.
     const brokenUrl = 'postgresql://baduser:badpass@127.0.0.1:1/nonexistent_db?connect_timeout=1';
     const rtm = await startRtm({ DATABASE_URL: brokenUrl, DATABASE_APP_URL: brokenUrl });
     try {
@@ -153,11 +111,13 @@ describe('GET /health', () => {
   });
 });
 
-describe('GET /health — anonymous and non-admin bodies are narrowed (M-SEC-b2 · §D116 MEDIUM (b))', () => {
-  it('gives an anonymous caller only status + service', async () => {
-    const rtm = await startRtm();
+describe('GET /health — the narrow body for every caller, a workspace admin included (tm 454 · F35)', () => {
+  it('gives an owner-role caller only status + service — no region, version or socket count', async () => {
+    // The owner is the highest tenant role; before tm 454 this token read the
+    // region, the version, the connection count and its ceiling.
+    const rtm = await startRtm({ RTM_MAX_CONNECTIONS: '4096' });
     try {
-      const { statusCode, body } = await getHealth(rtm.port);
+      const { statusCode, body } = await getHealth(rtm.port, adminAuth);
 
       expect(statusCode).toBe(200);
       expect(body).toEqual({ status: 'ok', service: 'rtm' });
@@ -166,24 +126,25 @@ describe('GET /health — anonymous and non-admin bodies are narrowed (M-SEC-b2 
     }
   });
 
-  it('gives an agent-role caller (below admin) only status + service too', async () => {
+  it('gives an agent-role caller and an anonymous one the same body', async () => {
     const rtm = await startRtm();
     try {
-      const { statusCode, body } = await getHealth(rtm.port, agentAuth);
-
-      expect(statusCode).toBe(200);
-      expect(body).toEqual({ status: 'ok', service: 'rtm' });
+      expect(await getHealth(rtm.port, agentAuth)).toEqual({
+        statusCode: 200,
+        body: { status: 'ok', service: 'rtm' },
+      });
+      expect(await getHealth(rtm.port)).toEqual({
+        statusCode: 200,
+        body: { status: 'ok', service: 'rtm' },
+      });
     } finally {
       await rtm.close();
     }
   });
 
-  it('fails closed to the narrow body even with a valid admin token, when Postgres — what verifies it — is itself down', async () => {
-    // The interesting case: `adminAuth` resolves to the owner role against a
-    // healthy database (proved above). Pointed at a database nothing is
-    // listening on, that same token cannot be verified — `wantsHealthDetail`
-    // (server.ts) fails closed rather than hanging or throwing — so the
-    // response is exactly what an anonymous caller would get, not a 500.
+  it('answers an admin token while Postgres is down without looking it up — 503 degraded, same as anyone', async () => {
+    // The token is never resolved any more, so a database that cannot verify
+    // it cannot slow the answer down either.
     const brokenUrl = 'postgresql://baduser:badpass@127.0.0.1:1/nonexistent_db?connect_timeout=1';
     const rtm = await startRtm({ DATABASE_URL: brokenUrl, DATABASE_APP_URL: brokenUrl });
     try {
@@ -193,6 +154,66 @@ describe('GET /health — anonymous and non-admin bodies are narrowed (M-SEC-b2 
       expect(body).toEqual({ status: 'degraded', service: 'rtm' });
     } finally {
       await rtm.close();
+    }
+  });
+});
+
+describe('/health and /health/ready share one probe (tm 454 · F34)', () => {
+  it('answers 100 concurrent requests from a single dependency probe', async () => {
+    const rtm = await startRtm();
+    try {
+      const answers = await Promise.all(
+        Array.from({ length: 100 }, (_, i) =>
+          getHealthAt(rtm.port, i % 2 === 0 ? '/health/ready' : '/health'),
+        ),
+      );
+
+      for (const answer of answers) {
+        expect(answer).toEqual({ statusCode: 200, body: { status: 'ok', service: 'rtm' } });
+      }
+      expect(rtm.server.healthProbe.runs).toBe(1);
+    } finally {
+      await rtm.close();
+    }
+  });
+
+  it('probes again once the result is older than the TTL', async () => {
+    const rtm = await startRtm();
+    try {
+      await getHealthAt(rtm.port, '/health/ready');
+      await getHealthAt(rtm.port, '/health/ready');
+      expect(rtm.server.healthProbe.runs).toBe(1);
+
+      await new Promise((resolve) => setTimeout(resolve, HEALTH_PROBE_TTL_MS + 50));
+      expect(await getHealthAt(rtm.port, '/health/ready')).toEqual({
+        statusCode: 200,
+        body: { status: 'ok', service: 'rtm' },
+      });
+      expect(rtm.server.healthProbe.runs).toBe(2);
+    } finally {
+      await rtm.close();
+    }
+  });
+
+  it('answers 503 draining the moment the drain starts, ahead of a cached ok', async () => {
+    const rtm = await startRtm({ SHUTDOWN_DRAIN_MS: '1000' });
+    let closing: Promise<void> | null = null;
+    try {
+      expect((await getHealthAt(rtm.port, '/health/ready')).statusCode).toBe(200);
+
+      // Inside the TTL: an `ok` is cached, and must not be what answers.
+      closing = rtm.close();
+      expect(await getHealthAt(rtm.port, '/health/ready')).toEqual({
+        statusCode: 503,
+        body: { status: 'draining', service: 'rtm' },
+      });
+      expect(await getHealthAt(rtm.port, '/health')).toEqual({
+        statusCode: 503,
+        body: { status: 'draining', service: 'rtm' },
+      });
+      expect(rtm.server.healthProbe.runs).toBe(1);
+    } finally {
+      await (closing ?? rtm.close());
     }
   });
 });

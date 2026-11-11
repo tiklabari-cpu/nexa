@@ -76,14 +76,16 @@ describe('the gateway reads one client address, in client-address.ts (tm 405)', 
     );
   });
 
-  it('reads one request header itself, authorization — the address is read by the library', () => {
+  // Until tm 454 the one header was `authorization`, for `/health`'s admin
+  // detail; that body is the same for every caller now, so none is read.
+  it('reads no request header itself — the address is read by the library', () => {
     const read = new Set<string>();
     for (const file of FILES) {
       for (const match of file.text.matchAll(/headers(?:\.([\w-]+)|\[\s*['"]([^'"]+)['"]\s*\])/g)) {
         read.add((match[1] ?? match[2])!.toLowerCase());
       }
     }
-    expect([...read]).toEqual(['authorization']);
+    expect([...read]).toEqual([]);
   });
 
   it('derives it once, on the upgrade path, under TRUST_PROXY_HOPS — for the two caps that count by network only', () => {

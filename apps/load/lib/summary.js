@@ -14,7 +14,7 @@
  * and §D122's whole lesson is that undocumented claims outlive their evidence.
  */
 import { CONFIG } from './config.js';
-import { METRIC_NAMES, SUMMARY_TREND_STATS } from './thresholds.js';
+import { SUMMARY_TREND_STATS } from './thresholds.js';
 
 /** Every threshold k6 evaluated, flattened out of the per-metric nesting. */
 function thresholdResults(metrics) {
@@ -53,11 +53,12 @@ function formatCount(value) {
  * Trends that are not durations, named rather than guessed at.
  *
  * Every trend k6 makes for itself is a time, and so is every one this suite
- * adds — except this: `siyahtus_rtm_connections_observed` counts sockets. Printing
- * "5000.0 ms" beside the one number NFR-P8 is about would be a lie told by the
- * formatter, and the reader has no way to catch it.
+ * adds today. The one count it had — the gateway's socket count read off
+ * `/health` — went with tm 454 (that body no longer carries it). A count
+ * added later goes here: printing "5000.0 ms" beside a number of sockets
+ * would be a lie told by the formatter.
  */
-const COUNT_TRENDS = new Set([METRIC_NAMES.rtmConnectionsObserved]);
+const COUNT_TRENDS = new Set([]);
 
 function isDuration(name) {
   return !COUNT_TRENDS.has(name);
@@ -114,8 +115,7 @@ function renderText(report) {
 
   // The suite's own counters and rates. Not decoration: on a capacity run these
   // are what say *which* kind of degradation was hit — a refused connection, a
-  // lost one, or neither — and how many sockets the pod said it was holding
-  // while the numbers above were being taken.
+  // lost one, or neither.
   for (const [name, values] of Object.entries(report.metrics)) {
     if (!name.startsWith('siyahtus_') || values.type === 'trend') continue;
     const value = values.count ?? values.rate;

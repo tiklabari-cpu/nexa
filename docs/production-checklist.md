@@ -83,7 +83,10 @@ failing.
       per source and atomic, resumable (`--limit N`, or just run it again) and reversible (run
       it with the previous provider configured). Evidence:
       `apps/api/test/integration/knowledge-reembed.test.ts`, PLAN §D182.
-- [ ] After the first boot, the admin `GET /api/v1/health` body shows
+- [ ] After the first boot, the health snapshot the API publishes every 30 s shows
+      (the root panel's `GET /platform/v1/dashboard/health` → `snapshot`, or
+      `redis-cli GET siyahtus:ops:health` on the host; the tenant `/health` answers only
+      `{status, service}` since tm 454)
       `event_partitions.last_status: "ok"` and `failed_months: []` — the API opened the
       `events` partitions from last month to three months ahead as the runtime role. Anything
       else is on a quarter's runway, not an outage: follow
@@ -652,7 +655,8 @@ the api's next start (`docker compose -f docker-compose.pilot.yml up -d`).
 - [ ] Unverified sign-ups are swept. A scheduled job deletes an account nobody verified, with
       the empty workspace it signed up with, once `UNVERIFIED_SIGNUP_TTL_HOURS` has passed and
       its latest link has lapsed. It keeps anything with a chat, a ticket, a second member or
-      an open invitation. It runs only while verification is on: the admin `/health` shows
+      an open invitation. It runs only while verification is on: the published health snapshot
+      (root panel `GET /platform/v1/dashboard/health`) shows
       `unverified_signups` with `enabled: true`, and each deletion logs `signup.unverified_purged`
       with a count only.
 
@@ -828,8 +832,11 @@ re-embed.
       mail arrives, the link and a password open it, and the first sign-in works. Then run the smoke
       test once more with `SMOKE_ORGANIZATION_ID=<its id>` and
       `SMOKE_ADMIN_TOKEN=<the owner's access token>`: it mints a visitor token from the widget
-      origin, cross-origin, and reads the admin `/health` — scheduler enabled and
-      `event_partitions.last_status: ok` (tm 255.14). `scripts/pilot-owner-token.mjs` prints both
+      origin, cross-origin, and proves `/health` tells the owner's token no more than
+      `{status, service}` (tm 454). Scheduler enabled and `event_partitions.last_status: ok`
+      (tm 255.14) are read from the published snapshot instead:
+      `docker compose exec redis redis-cli GET siyahtus:ops:health`, or the root panel's
+      dashboard. `scripts/pilot-owner-token.mjs` prints both
       (the token, or the id with `--organization-id`) from `PILOT_OWNER_EMAIL` /
       `PILOT_OWNER_PASSWORD` in the environment and `--api=` / `--web=` set to the public
       addresses; it writes nothing to disk. The pilot profile also requires pilot mode
@@ -896,7 +903,7 @@ Without the back office, the by-hand path is a footnote.[^psql-activation]
       and a reboot, it goes into the daily backup (`COMPOSE_FILE=docker-compose.pilot.yml`, next
       item), and `docker compose down -v` deletes the files too. Virus scanning is not in the
       pilot: `VIRUS_SCANNER=mock` passes every file but the EICAR test file. The boot log says so
-      at `warn` (`event: uploads.virus_scanner_mock`), the admin `GET /health` body lists it under
+      at `warn` (`event: uploads.virus_scanner_mock`), the published health snapshot lists it under
       `provider_warnings`, and the panel labels every chat attachment "Not checked for viruses" /
       "Virüs taraması yapılmadı" (tm 433) — a warning, not a boot refusal. A visitor's erasure deletes their files from the volume too
       (tm 423): the receipt's `files_deleted`. A file the volume refused at that moment is
@@ -1049,7 +1056,8 @@ Open, not fixed by this checklist (tm 255.16, re-checked at the tm 256 closing g
   job for the next process. One answer per message, whoever runs it. A job older than 120 s
   when it starts is not answered: the conversation gets an internal note for a person. A chat
   20 messages behind leaves the next one for a human and logs `warn`
-  `visitor follow-ups backed up; leaving this message for a human`. The admin `/health` body's
+  `visitor follow-ups backed up; leaving this message for a human`. The published health
+  snapshot's (root panel `GET /platform/v1/dashboard/health`)
   `ai_jobs` block shows the queue: `pending`, `running` and `oldest_age_s` — an age that keeps
   growing means no worker is taking jobs.
 - Courtesy mail is sent after the answer, and is not persisted. The assignee's new-message

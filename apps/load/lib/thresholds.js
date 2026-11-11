@@ -37,8 +37,8 @@ export const NFR_BUDGETS = Object.freeze({
    * NFR-P8 — the *target* number of concurrent WebSocket connections per pod.
    *
    * Not a threshold and not something a run either meets or crosses: it is the
-   * figure `scenarios/rtm.js` climbs towards, and what a rung actually held is
-   * `siyahtus_rtm_connections_observed`. Kept here because `budgets.test.ts` pins it
+   * figure `scenarios/rtm.js` climbs towards; what a rung actually held is the
+   * gateway's `rtm.connections.active` gauge (telemetry). Kept here because `budgets.test.ts` pins it
    * against the PRD row, so a revised target cannot silently stop being the one
    * the ladder is measured against.
    */
@@ -79,15 +79,6 @@ export const METRIC_NAMES = Object.freeze({
   /** Rate — reconnects whose `sync` replayed what the gap missed. NFR-R2. */
   rtmSyncRecovered: 'siyahtus_rtm_sync_recovered',
   /**
-   * Trend — sockets the gateway itself reports holding, sampled from its own
-   * `/health` while the plateau is up. NFR-P8's number, read from the pod
-   * rather than from the load generator's intent: "we asked for 5000" and "the
-   * pod is holding 5000" are different claims, and only the second one is the
-   * requirement. `max` is the one that matters, which is why it is in
-   * {@link SUMMARY_TREND_STATS}.
-   */
-  rtmConnectionsObserved: 'siyahtus_rtm_connections_observed',
-  /**
    * Trend, ms — the publishing `POST /chats/:id/events` itself.
    *
    * The fan-out measurement starts when the publisher sends that request, so
@@ -113,14 +104,6 @@ export const OP_TAGS = Object.freeze({
   write: 'write',
   fanout: 'fanout',
   setup: 'setup',
-  /**
-   * An observation *about* the run rather than part of it — today the RTM
-   * `/health` poll that reads how many sockets the pod is holding. Kept out of
-   * `read` for the same reason `setup` is: it is the suite's own traffic, and
-   * folding it into a budget would let the harness flatter or spoil a number
-   * that is supposed to describe the product's endpoints.
-   */
-  probe: 'probe',
 });
 
 /** `p(99)<N`, in the one place the expression is spelled. */

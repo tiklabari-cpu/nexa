@@ -291,12 +291,12 @@ describe('a four-process fleet sharing one Postgres and one Redis', () => {
   // -------------------------------------------------------------------------
 
   describe('fan-out', () => {
-    it('is genuinely two gateways — each registry holds only its own socket', async () => {
-      // Without this the rest of the block would be a construction argument:
-      // "they must be separate, we spawned two". `connections` is
-      // `registry.size`, and the registry is process-local by definition, so
-      // one apiece is the fleet saying so itself. Two sockets on one gateway —
-      // the shape an accidentally-shared pod would have — reads 2 and 0.
+    it('tells a workspace owner nothing about either gateway beyond status + service (tm 454 · F35)', async () => {
+      // Until tm 454 this test read each gateway's `connections` off `/health`
+      // with the owner's token to prove the registries were separate (one
+      // socket apiece). That count is the deployment's, not a workspace's, and
+      // no tenant token reads it any more; that fan-out crosses the boundary is
+      // what the next test proves, and it needs the two gateways to be two.
       await login(rtmA, fx.a, agentToken);
       await login(rtmB, fx.a, ownerToken);
 
@@ -304,14 +304,11 @@ describe('a four-process fleet sharing one Postgres and one Redis', () => {
         podGet(rtmA, '/health', { token: ownerToken }),
         podGet(rtmB, '/health', { token: ownerToken }),
       ]);
-
       for (const [pod, health] of [
         [rtmA, healthA],
         [rtmB, healthB],
       ] as const) {
-        const body = health.body as { service?: string; connections?: number };
-        expect(body.service, `${pod.name}: ${JSON.stringify(body)}`).toBe('rtm');
-        expect(body.connections, pod.name).toBe(1);
+        expect(health.body, pod.name).toEqual({ status: 'ok', service: 'rtm' });
       }
     });
 
@@ -519,55 +516,58 @@ describe('two API processes sharing one Redis leader lock', () => {
   /** The jobs both processes race for — all three read-only on empty fixtures. */
   const RACED = ['chat_timeout', 'sla', 'webhook_redelivery'];
 
-  interface JobRow {
-    name: string;
-    enabled: boolean;
-    last_run_at: string | null;
-    last_status: string | null;
-    last_error_class?: string;
-  }
-  interface HealthBody {
-    status: string;
-    scheduler?: { enabled: boolean; jobs: JobRow[] };
-  }
-
   let db: PrismaClient;
   let pods: Pod[] = [];
-  let adminToken: string;
-  let snapshots: Array<{ enabled: boolean; jobs: JobRow[] }>;
+  /**
+   * Each process's FIRST outcome per raced job, read off its own log lines.
+   *
+   * Until tm 454 this came from each process's `/health` scheduler block with
+   * an owner's token; that body is `{status, service}` for every tenant
+   * caller now (F35), and the published snapshot is one leader's, not one per
+   * process. The scheduler logs every pass itself — `scheduler job ran`
+   * (info) or `scheduler job held by another instance` (debug) — so the
+   * processes run at `LOG_LEVEL=debug` and each one's own account is read.
+   * Recorded as soon as seen: the pod keeps only the tail of its output.
+   */
+  const firstOutcomes = new Map<string, Map<string, string>>();
 
-  async function schedulerOf(pod: Pod): Promise<{ enabled: boolean; jobs: JobRow[] }> {
-    const response = await podRequest(pod, 'GET', '/health', { token: adminToken });
-    const body = response.body as HealthBody;
-    if (!body.scheduler) {
-      throw new Error(`${pod.name} gave no scheduler body: ${JSON.stringify(body)}`);
+  function readOutcomes(pod: Pod): Map<string, string> {
+    const seen = firstOutcomes.get(pod.name) ?? new Map<string, string>();
+    firstOutcomes.set(pod.name, seen);
+    for (const raw of pod.output().split('\n')) {
+      if (!raw.startsWith('{')) continue;
+      let line: { job?: unknown; msg?: unknown };
+      try {
+        line = JSON.parse(raw) as { job?: unknown; msg?: unknown };
+      } catch {
+        continue; // a line still being written; the next read has it whole
+      }
+      const job = typeof line.job === 'string' ? line.job : null;
+      if (job === null || !RACED.includes(job) || seen.has(job)) continue;
+      if (line.msg === 'scheduler job ran') seen.set(job, 'ok');
+      else if (line.msg === 'scheduler job held by another instance') seen.set(job, 'skipped');
+      else if (typeof line.msg === 'string' && line.msg.startsWith('scheduler job '))
+        seen.set(job, `other: ${line.msg}`);
     }
-    return body.scheduler;
+    return seen;
   }
 
-  const tickedEverything = async (pod: Pod): Promise<boolean> => {
-    const scheduler = await schedulerOf(pod);
-    return scheduler.jobs
-      .filter((job) => RACED.includes(job.name))
-      .every((job) => job.last_status !== null);
+  const tickedEverything = (pod: Pod): boolean => {
+    const seen = readOutcomes(pod);
+    return RACED.every((name) => seen.has(name));
   };
 
   beforeAll(async () => {
     db = ownerClient();
     // No conversations and no targets: a pass then costs one enumerator query,
     // which keeps this about who was allowed to run rather than how long a
-    // sweep takes. The tenants themselves are only here for the admin
-    // credential `/health` wants before it will report the scheduler at all.
-    const fx = await seedFixtures(db);
-    adminToken = await grantToken(db, {
-      licenseId: fx.a.licenseId,
-      organizationId: fx.a.organizationId,
-      ownerId: fx.a.ownerAccountId,
-      scopes: ['agents--all:ro'],
-    });
+    // sweep takes.
+    await seedFixtures(db);
 
     const schedulerEnv: NodeJS.ProcessEnv = {
       SCHEDULER_ENABLED: 'true',
+      // The "held by another instance" line is debug (see `firstOutcomes`).
+      LOG_LEVEL: 'debug',
       // Jitter off so each process ticks a fixed interval after its own boot.
       // With a lock that outlives 90% of the interval, the second process's
       // first tick then lands squarely inside the first one's lock, and "did
@@ -597,12 +597,10 @@ describe('two API processes sharing one Redis leader lock', () => {
 
     const deadline = Date.now() + 60_000;
     for (;;) {
-      const ticked = await Promise.all(pods.map(tickedEverything));
-      if (ticked.every(Boolean)) break;
+      if (pods.map(tickedEverything).every(Boolean)) break;
       if (Date.now() > deadline) throw new Error('a scheduler process never ticked');
       await sleep(100);
     }
-    snapshots = await Promise.all(pods.map(schedulerOf));
   }, BOOT_TIMEOUT_MS);
 
   afterAll(async () => {
@@ -612,9 +610,7 @@ describe('two API processes sharing one Redis leader lock', () => {
 
   it('runs each interval once for the fleet, not once per process', () => {
     for (const name of RACED) {
-      const statuses = snapshots
-        .map((snapshot) => snapshot.jobs.find((job) => job.name === name)?.last_status)
-        .sort();
+      const statuses = pods.map((pod) => firstOutcomes.get(pod.name)?.get(name)).sort();
       // One process did the work, the other was told the interval was taken.
       // Two `ok`s would mean the fleet sweeps once per pod — two retention
       // passes over the same rows, two copies of the same report in a
@@ -624,13 +620,14 @@ describe('two API processes sharing one Redis leader lock', () => {
   });
 
   it('keeps both processes scheduled and healthy, whichever one won', () => {
-    for (const snapshot of snapshots) {
-      expect(snapshot.enabled).toBe(true);
+    // Every raced job has an outcome on both processes, and neither is a
+    // failure: the loser of an interval is still scheduled and still ticking.
+    for (const pod of pods) {
+      const seen = firstOutcomes.get(pod.name);
       for (const name of RACED) {
-        const job = snapshot.jobs.find((row) => row.name === name);
-        expect(job?.last_run_at, name).not.toBeNull();
-        expect(job?.last_error_class, name).toBeUndefined();
+        expect(['ok', 'skipped'], `${pod.name} ${name}`).toContain(seen?.get(name));
       }
+      expect(pod.output()).not.toMatch(/"msg":"scheduler job (failed|keeps failing)"/);
     }
   });
 });

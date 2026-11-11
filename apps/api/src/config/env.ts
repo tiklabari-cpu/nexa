@@ -1278,7 +1278,7 @@ export const envSchema = z.object({
    * passes the rest; `unavailable` is always-down, for exercising the fail-closed
    * path in tests and drills. A real ClamAV provider slots in here later.
    * Production on `mock` — the pilot included — is warned at boot and in the
-   * admin `/health` body, never refused (`mockProviderWarnings`, tm 433 · S18);
+   * the published health snapshot, never refused (`mockProviderWarnings`, tm 433 · S18);
    * the panel labels each attachment "Not checked for viruses".
    */
   VIRUS_SCANNER: z.enum(VIRUS_SCANNERS).default('mock'),

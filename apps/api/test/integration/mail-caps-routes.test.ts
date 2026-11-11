@@ -415,6 +415,10 @@ describe('the global cap and the security reserve, through the routes (tm 257.14
 
     const reset = await h.server.post('/auth/password-reset', { email: fx.a.agentEmail });
     expect(reset.statusCode).toBe(202);
+    // The reserve is first come, first served; since tm 464.2 each send is
+    // queued before the carrier is asked, so two sends started together may
+    // reach the cap in either order. Let the first one finish.
+    await h.server.app.backgroundMail.settled();
     const refused = await h.server.post('/auth/password-reset', { email: fx.b.agentEmail });
     expect(refused.statusCode).toBe(202);
     expect(refused.body).toBe(reset.body);

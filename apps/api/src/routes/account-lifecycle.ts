@@ -37,7 +37,9 @@ import {
 } from '@siyahtus/types';
 import { roleAtLeast } from '../services/auth/principal.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
-import type { Mailer } from '../services/mail/mailer.js';
+import type { Mailer, Message } from '../services/mail/mailer.js';
+import { enqueueMail, type EnqueuedMail } from '../services/mail/outbox.js';
+import { isOutboxMailer, type MailDispatchOutcome } from '../services/mail/outbox-mailer.js';
 import { deliver, isCapRefusal, mailFailureFields } from '../services/mail/delivery.js';
 import { clientNetworkKey } from '../lib/ip-allowlist.js';
 import { requestLocale } from '../lib/request-locale.js';
@@ -181,6 +183,9 @@ export default async function accountLifecycleRoutes(
   options: { env: Env; mailer: Mailer },
 ): Promise<void> {
   const { env, mailer } = options;
+  // The server's mailer is the outbox (tm 464.2); a test that hands in a bare
+  // carrier keeps the direct send.
+  const outbox = isOutboxMailer(mailer) ? mailer : null;
   const lifecycle = new LifecycleService(
     app.db,
     env.WEB_APP_URL,
@@ -1130,10 +1135,27 @@ export default async function accountLifecycleRoutes(
       });
     }
 
+    // The invitee's language is unknown until they open the panel; the
+    // inviter's is the best guess — the same team (tm 265).
+    const invitationMessage = (
+      invite: { email: string; accept_url?: string | null },
+      workspaceName: string,
+      inviterName: string | null,
+    ): Message => ({
+      to: invite.email,
+      licenseId: tenant.licenseId,
+      kind: 'invitation',
+      ...invitationMail(
+        { locale: requestLocale(request), appUrl: env.WEB_APP_URL },
+        { url: invite.accept_url ?? '', workspaceName, inviterName, days: 7 },
+      ),
+    });
+
     const {
       records: created,
       workspaceName,
       inviterName,
+      queued,
     } = await withTenant(app.db, tenant, async (tx) => {
       const records = await lifecycle.createInvitations(
         tx,
@@ -1172,11 +1194,22 @@ export default async function accountLifecycleRoutes(
         }),
         tx.account.findUnique({ where: { id: principal.accountId }, select: { name: true } }),
       ]);
-      return {
-        records,
-        workspaceName: organization?.name ?? 'SiyahTuş',
-        inviterName: inviter?.name ?? null,
-      };
+      const workspaceName = organization?.name ?? 'SiyahTuş';
+      const inviterName = inviter?.name ?? null;
+      // Each invitation's mail, queued with it (tm 464.2): a committed
+      // invitation has its mail even if this process stops before sending it.
+      // Keyed by the invitation, so nothing can queue it twice.
+      const queued: Array<EnqueuedMail | null> = [];
+      for (const invite of records) {
+        queued.push(
+          outbox
+            ? await enqueueMail(tx, invitationMessage(invite, workspaceName, inviterName), {
+                idempotencyKey: `invitation:${invite.id}`,
+              })
+            : null,
+        );
+      }
+      return { records, workspaceName, inviterName, queued };
     });
 
     // After the commit, and never able to undo it (tm 255.4). The invitations
@@ -1186,24 +1219,22 @@ export default async function accountLifecycleRoutes(
     // live. Awaited, unlike the reset's mail, because this caller is the one
     // person who can act on the answer — `undelivered` names each address the
     // modal should offer "Copy invite link" for instead.
+    //
+    // Through the outbox (tm 464.2) the first try is this send, awaited as
+    // before; a first try that failed retryably stays queued for the
+    // `mail_outbox` job and is not `undelivered` — it will still arrive.
     const outcomes = await Promise.all(
-      created.map((invite) =>
-        deliver(mailer, {
-          to: invite.email,
-          licenseId: tenant.licenseId,
-          kind: 'invitation',
-          // The invitee's language is unknown until they open the panel; the
-          // inviter's is the best guess — the same team (tm 265).
-          ...invitationMail(
-            { locale: requestLocale(request), appUrl: env.WEB_APP_URL },
-            { url: invite.accept_url ?? '', workspaceName, inviterName, days: 7 },
-          ),
-        }),
-      ),
+      created.map((invite, index): Promise<MailDispatchOutcome> => {
+        const row = queued[index];
+        if (outbox && row) {
+          return row.enqueued ? outbox.dispatch(row.id) : Promise.resolve({ status: 'queued' });
+        }
+        return deliver(mailer, invitationMessage(invite, workspaceName, inviterName));
+      }),
     );
     const undelivered = created.flatMap((invite, index): UndeliveredInvitation[] => {
       const outcome = outcomes[index];
-      if (!outcome || outcome.status === 'sent') return [];
+      if (!outcome || outcome.status === 'sent' || outcome.status === 'queued') return [];
       // The workspace's (or the deployment's) daily mail cap (tm 257.14):
       // the invitation exists and its link works, it just was not mailed —
       // `cap_reached` tells the modal to say why, and "Copy invite link" is

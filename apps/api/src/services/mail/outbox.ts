@@ -101,29 +101,35 @@ export async function enqueueMail(
   message: Message,
   options: EnqueueMailOptions,
 ): Promise<EnqueuedMail> {
-  const key = options.idempotencyKey;
-  if (key.length < 1 || key.length > IDEMPOTENCY_KEY_MAX) {
+  const row = mailOutboxRow(message, options.idempotencyKey);
+  const { count } = await tx.mailOutbox.createMany({ data: [row], skipDuplicates: true });
+  return count === 1 ? { enqueued: true, id: row.id } : { enqueued: false };
+}
+
+/**
+ * The row {@link enqueueMail} writes — named for a caller that has to issue
+ * the INSERT itself (`OutboxMailer`, in a batch rather than an interactive
+ * transaction, tm 464.2).
+ */
+export function mailOutboxRow(
+  message: Message,
+  idempotencyKey: string,
+): Prisma.MailOutboxCreateManyInput & { id: string } {
+  if (idempotencyKey.length < 1 || idempotencyKey.length > IDEMPOTENCY_KEY_MAX) {
     throw new RangeError(`enqueueMail: idempotencyKey must be 1 … ${IDEMPOTENCY_KEY_MAX} chars`);
   }
   const { to, licenseId, kind, ...payload } = message;
-  const id = randomUUID();
-  const { count } = await tx.mailOutbox.createMany({
-    data: [
-      {
-        id,
-        licenseId,
-        kind,
-        recipient: to,
-        // Strings, string arrays and `{ filename, contentType, content }` all
-        // the way down; JSON drops the `undefined` optionals. The interfaces
-        // only lack the index signature Prisma's JSON type asks for.
-        payload: payload as unknown as Prisma.InputJsonObject,
-        idempotencyKey: key,
-      },
-    ],
-    skipDuplicates: true,
-  });
-  return count === 1 ? { enqueued: true, id } : { enqueued: false };
+  return {
+    id: randomUUID(),
+    licenseId,
+    kind,
+    recipient: to,
+    // Strings, string arrays and `{ filename, contentType, content }` all
+    // the way down; JSON drops the `undefined` optionals. The interfaces
+    // only lack the index signature Prisma's JSON type asks for.
+    payload: payload as unknown as Prisma.InputJsonObject,
+    idempotencyKey,
+  };
 }
 
 /** A row as `mail_outbox_claim` hands it out. */
@@ -168,6 +174,34 @@ export async function claimMailOutbox(
       createdAt: row.created_at,
     }))
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
+}
+
+/**
+ * Take the one row `id` names, if it is due — the send straight after the
+ * enqueue (tm 464.2). Null when it is not: another sender holds it, it has
+ * settled, or it is backing off.
+ */
+export async function claimMailOutboxRow(
+  db: PrismaClient,
+  id: string,
+  options: { leaseSeconds: number; maxAttempts: number },
+): Promise<MailOutboxClaim | null> {
+  const rows = await db.$queryRaw<ClaimRow[]>`
+    SELECT id::text AS id, license_id, kind, recipient, payload, attempts, created_at
+      FROM mail_outbox_claim_one(${id}::uuid, ${options.leaseSeconds}::int,
+                                 ${options.maxAttempts}::int)`;
+  const row = rows[0];
+  return row
+    ? {
+        id: row.id,
+        licenseId: row.license_id,
+        kind: row.kind,
+        recipient: row.recipient,
+        payload: row.payload,
+        attempts: row.attempts,
+        createdAt: row.created_at,
+      }
+    : null;
 }
 
 /** How a claim ends, as `mail_outbox_settle` records it. */
@@ -232,10 +266,41 @@ export interface MailOutboxLogger {
 
 const SILENT: MailOutboxLogger = { warn: () => undefined, error: () => undefined };
 
+/**
+ * A row that has reached its end — `sent`, `unconfirmed` or `failed` — as the
+ * sender recorded it (tm 464.2). Told to {@link MailOutboxWorkerOptions.onSettled}
+ * whichever path sent it: the request's own send straight after its commit or
+ * the scheduler's retry an hour later, so a caller that writes an outcome back
+ * (a ticket reply's `delivery_status`) hears the last word, not the first try.
+ */
+export interface MailOutboxSettledEvent {
+  outboxId: string;
+  licenseId: bigint | null;
+  kind: string;
+  /** The message as it was sent; null when its payload was not one. */
+  message: Message | null;
+  status: 'sent' | 'unconfirmed' | 'failed';
+  /** The carrier's outcome, when the carrier was reached. */
+  outcome: MailOutcome | null;
+}
+
+/** How one claimed row went, for the caller that sent it now. */
+export type MailOutboxSendResult =
+  /** Another sender holds or has settled it — it is theirs to send. */
+  | { status: 'taken' }
+  /** This try failed and the row waits for a retry (the scheduler's job). */
+  | { status: 'queued'; outcome: MailOutcome | null }
+  | { status: 'sent' | 'unconfirmed' | 'failed'; outcome: MailOutcome | null };
+
 export interface MailOutboxWorkerOptions {
   /** The server's mailer — the capped one, over the configured carrier. */
   mailer: Mailer;
   logger?: MailOutboxLogger;
+  /**
+   * Called once a row reaches its end and that end is recorded. Awaited; a
+   * throw is logged and does not undo the settlement.
+   */
+  onSettled?: (event: MailOutboxSettledEvent) => Promise<void>;
   maxAttempts?: number;
   batchSize?: number;
   maxPerPass?: number;
@@ -267,11 +332,13 @@ export class MailOutboxWorker {
   readonly #maxPerPass: number;
   readonly #leaseSeconds: number;
   readonly #keepDays: number;
+  readonly #onSettled: MailOutboxWorkerOptions['onSettled'];
 
   constructor(db: PrismaClient, options: MailOutboxWorkerOptions) {
     this.#db = db;
     this.#mailer = options.mailer;
     this.#log = options.logger ?? SILENT;
+    this.#onSettled = options.onSettled;
     this.#policy = {
       maxAttempts: options.maxAttempts ?? MAIL_OUTBOX_MAX_ATTEMPTS,
       backoffMs: options.backoffMs ?? mailOutboxBackoffMs,
@@ -329,7 +396,32 @@ export class MailOutboxWorker {
     return report;
   }
 
-  async #sendOne(claim: MailOutboxClaim, report: MailOutboxReport): Promise<void> {
+  /**
+   * Send the one row `id` names now, if it is due (tm 464.2) — what a caller
+   * does straight after committing its enqueue, so the mail leaves as fast as
+   * it did before the outbox. A first try that fails retryably leaves the row
+   * to the scheduler's job, exactly as a row of a pass would be.
+   */
+  async sendNow(id: string): Promise<MailOutboxSendResult> {
+    const claim = await claimMailOutboxRow(this.#db, id, {
+      leaseSeconds: this.#leaseSeconds,
+      maxAttempts: this.#policy.maxAttempts,
+    });
+    if (!claim) return { status: 'taken' };
+    const report: MailOutboxReport = {
+      claimed: 1,
+      sent: 0,
+      unconfirmed: 0,
+      retried: 0,
+      failed: 0,
+      lost: 0,
+      released: 0,
+      pruned: 0,
+    };
+    return this.#sendOne(claim, report);
+  }
+
+  async #sendOne(claim: MailOutboxClaim, report: MailOutboxReport): Promise<MailOutboxSendResult> {
     const fields = {
       event: 'mail.outbox',
       outbox_id: claim.id,
@@ -349,7 +441,7 @@ export class MailOutboxWorker {
         { ...fields, outcome: 'lease_lost' },
         'mail outbox row taken by another sender',
       );
-      return;
+      return { status: 'taken' };
     }
 
     const message = messageFromClaim(claim);
@@ -374,20 +466,31 @@ export class MailOutboxWorker {
         { ...fields, outcome: settlement.status, recorded: false },
         'mail outbox row taken by another sender before its outcome was recorded',
       );
-      return;
+      return { status: 'taken' };
+    }
+
+    if (settlement.status !== 'pending') {
+      await this.#tellSettled({
+        outboxId: claim.id,
+        licenseId: claim.licenseId,
+        kind: claim.kind,
+        message,
+        status: settlement.status,
+        outcome,
+      });
     }
 
     switch (settlement.status) {
       case 'sent':
         report.sent += 1;
-        return;
+        return { status: 'sent', outcome };
       case 'unconfirmed':
         report.unconfirmed += 1;
         this.#log.warn(
           { ...fields, outcome: 'unconfirmed', ...carrier },
           'mail handed over but not confirmed; not sent again',
         );
-        return;
+        return { status: 'unconfirmed', outcome };
       case 'pending':
         report.retried += 1;
         this.#log.warn(
@@ -400,16 +503,35 @@ export class MailOutboxWorker {
           },
           'mail not sent; will retry',
         );
-        return;
+        return { status: 'queued', outcome };
       case 'failed':
         report.failed += 1;
         // A daily cap's refusal was logged where it was decided (`mail-caps.ts`).
-        if (outcome && isCapRefusal(outcome)) return;
-        this.#log.error(
-          { ...fields, outcome: 'failed', code: settlement.error, ...carrier },
-          'mail not sent; giving up',
-        );
-        return;
+        if (!(outcome && isCapRefusal(outcome))) {
+          this.#log.error(
+            { ...fields, outcome: 'failed', code: settlement.error, ...carrier },
+            'mail not sent; giving up',
+          );
+        }
+        return { status: 'failed', outcome };
+    }
+  }
+
+  async #tellSettled(event: MailOutboxSettledEvent): Promise<void> {
+    if (!this.#onSettled) return;
+    try {
+      await this.#onSettled(event);
+    } catch (error) {
+      this.#log.error(
+        {
+          event: 'mail.outbox',
+          outbox_id: event.outboxId,
+          kind: event.kind,
+          outcome: 'settled_hook_failed',
+          ...mailFailureFields(error),
+        },
+        'mail outbox settlement not passed on',
+      );
     }
   }
 

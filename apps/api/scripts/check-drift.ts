@@ -38,6 +38,18 @@ const prismaBin = createRequire(import.meta.url).resolve('prisma/build/index.js'
  */
 const KNOWN_UNMODELLABLE = [
   {
+    // Created as `DEFAULT CURRENT_TIMESTAMP` in 20270102090000_mail_outbox. The
+    // schema says `dbgenerated("CURRENT_TIMESTAMP")` (tm 464.2) because
+    // `now()` is filled in by the client from the app host's clock, and a host
+    // ahead of the database wrote rows not yet due for their immediate send;
+    // Prisma reads the database's default back as `now()` and reports the
+    // difference in spelling, not in the column.
+    pattern:
+      /^ALTER TABLE "public"\."mail_outbox" ALTER COLUMN "next_attempt_at" SET DEFAULT CURRENT_TIMESTAMP, ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP$/,
+    reason:
+      'database-clock default — Prisma fills now() in the client and cannot tell dbgenerated("CURRENT_TIMESTAMP") from it',
+  },
+  {
     // Created as `USING hnsw (embedding vector_cosine_ops) WITH (m = 16,
     // ef_construction = 64)` in 20260913120100_knowledge_chunks_hnsw_index. It
     // replaced the ivfflat `idx_chunks_embedding` (20260722154008_domain_model),

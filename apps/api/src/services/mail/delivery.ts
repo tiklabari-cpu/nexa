@@ -149,6 +149,23 @@ export function logUnsentMail(
 }
 
 /**
+ * The outbox surface {@link BackgroundMail} uses when its mailer has one —
+ * `OutboxMailer` (tm 464.2), named structurally so this module does not import
+ * it back.
+ */
+interface OutboxDispatcher {
+  post(message: Message, idempotencyKey?: string): Promise<MailOutcome | { status: 'queued' }>;
+  dispatch(id: string): Promise<MailOutcome | { status: 'queued' }>;
+}
+
+function outboxOf(mailer: Mailer): OutboxDispatcher | null {
+  const candidate = mailer as Partial<OutboxDispatcher>;
+  return typeof candidate.post === 'function' && typeof candidate.dispatch === 'function'
+    ? (candidate as OutboxDispatcher)
+    : null;
+}
+
+/**
  * Mail a request does not wait for.
  *
  * For a response that must not depend on how the mail went — the password
@@ -171,23 +188,63 @@ export function logUnsentMail(
  */
 export class BackgroundMail {
   readonly #mailer: Mailer;
+  readonly #outbox: OutboxDispatcher | null;
   readonly #pending = new Set<Promise<void>>();
 
   constructor(mailer: Mailer) {
     this.#mailer = mailer;
+    this.#outbox = outboxOf(mailer);
   }
 
   /**
    * `onSettled` may return a promise (tm 356.3 — a ticket reply writes its
    * delivery status back); the send counts as in flight until it resolves, so
    * {@link BackgroundMail.settled} covers that write too.
+   *
+   * Over the outbox (tm 464.2) the message is queued first — after the
+   * response, in a transaction of its own — and then sent. `onSettled` hears
+   * the first try's outcome only when it is an end; a mail queued for a retry
+   * is the `mail_outbox` job's, which logs it and tells the outbox's settle
+   * hook how it ended.
    */
-  send(message: Message, onSettled: (outcome: MailOutcome) => void): void {
+  send(
+    message: Message,
+    onSettled: (outcome: MailOutcome) => unknown,
+    options: { idempotencyKey?: string } = {},
+  ): void {
+    const outbox = this.#outbox;
+    this.#track(
+      outbox
+        ? () => outbox.post(message, options.idempotencyKey)
+        : () => deliver(this.#mailer, message),
+      onSettled,
+    );
+  }
+
+  /**
+   * Send a row the caller queued in its own transaction ({@link enqueueMail},
+   * tm 464.2), once that transaction has committed. Same contract as
+   * {@link BackgroundMail.send}; only a server whose mailer is the outbox can.
+   */
+  dispatch(id: string, onSettled: (outcome: MailOutcome) => unknown = () => {}): void {
+    const outbox = this.#outbox;
+    if (!outbox) throw new TypeError('BackgroundMail.dispatch needs an outbox mailer');
+    this.#track(() => outbox.dispatch(id), onSettled);
+  }
+
+  #track(
+    attempt: () => Promise<MailOutcome | { status: 'queued' }>,
+    onSettled: (outcome: MailOutcome) => unknown,
+  ): void {
     const job: Promise<void> = new Promise<void>((resolve) => setImmediate(resolve))
-      .then(() => deliver(this.#mailer, message))
-      .then(onSettled)
-      // `deliver` cannot reject; only the callback can. A logging failure must
-      // not become an unhandled rejection that takes the process down.
+      // `deliver` cannot reject; the outbox's queries can — a mail that could
+      // not be queued is a `failed` the caller logs like any other.
+      .then(() => attempt().catch((error: unknown): MailOutcome => ({ status: 'failed', error })))
+      .then(async (outcome) => {
+        if (outcome.status !== 'queued') await onSettled(outcome);
+      })
+      // Only the callback can still throw. A logging failure must not become
+      // an unhandled rejection that takes the process down.
       .catch(() => undefined)
       .finally(() => this.#pending.delete(job));
     this.#pending.add(job);

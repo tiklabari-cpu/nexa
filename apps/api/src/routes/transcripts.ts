@@ -5,6 +5,7 @@
  * here they are put in order: the row, the budget, the reach, the audit entry,
  * then the bytes.
  */
+import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -26,6 +27,7 @@ import {
   transcriptRecipient,
 } from '../services/chat/transcript-export.js';
 import { logUnsentMail } from '../services/mail/delivery.js';
+import { enqueueMail } from '../services/mail/outbox.js';
 import { isMailLocale } from '../services/mail/templates/layout.js';
 import {
   renderTranscript,
@@ -180,8 +182,11 @@ export default async function transcriptRoutes(app: FastifyInstance): Promise<vo
         });
       }
 
-      await request.withTenant((tx) =>
-        writeAuditEntry(tx, request.auditContext(), {
+      // The entry and the mail in one transaction (tm 464.2): a transcript the
+      // trail says was e-mailed is queued in the outbox, and sent after the
+      // commit without the answer waiting for the carrier.
+      const queued = await request.withTenant(async (tx) => {
+        await writeAuditEntry(tx, request.auditContext(), {
           action: 'chat.transcript_emailed',
           target: `chat:${scope.chatId}`,
           metadata: {
@@ -190,12 +195,18 @@ export default async function transcriptRoutes(app: FastifyInstance): Promise<vo
             recipient_domain: recipient.domain,
             to_player: recipient.toPlayer,
           },
-        }),
-      );
-      app.backgroundMail.send(
-        { to: recipient.to, licenseId: tenant.licenseId, kind: 'chat_transcript', ...content },
-        (outcome) => logUnsentMail(app.log, 'chat.transcript_mail', outcome),
-      );
+        });
+        return enqueueMail(
+          tx,
+          { to: recipient.to, licenseId: tenant.licenseId, kind: 'chat_transcript', ...content },
+          { idempotencyKey: `chat_transcript:${scope.chatId}:${randomUUID()}` },
+        );
+      });
+      if (queued.enqueued) {
+        app.backgroundMail.dispatch(queued.id, (outcome) =>
+          logUnsentMail(app.log, 'chat.transcript_mail', outcome),
+        );
+      }
       return reply.code(202).send({ accepted: true });
     },
   );

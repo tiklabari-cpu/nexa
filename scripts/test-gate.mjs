@@ -11,7 +11,7 @@
  * Headings and what runs in each:
  *
  *   build        turbo run build
- *   statik       turbo run typecheck lint  ·  prettier --check  ·  node --test scripts/loop/block.test.mjs scripts/loop/gate-hints.test.mjs scripts/edge-rehearsal/log-lines.test.mjs   (side by side)
+ *   statik       turbo run typecheck lint  ·  prettier --check  ·  node --test scripts/loop/block.test.mjs scripts/loop/gate-hints.test.mjs scripts/edge-rehearsal/log-lines.test.mjs scripts/audit/dependency-audit.test.mjs   (side by side)
  *   birim        turbo run test:unit        (every package's unit suite; api/rtm on isolated stores)
  *   entegrasyon  turbo run test:integration --concurrency=1
  *                (the api suite runs as parallel shards — `apps/api/scripts/run-sharded.ts`)
@@ -112,7 +112,7 @@ const STEPS = {
     {
       name: 'loop-tools',
       command:
-        'node --test scripts/loop/block.test.mjs scripts/loop/gate-hints.test.mjs scripts/edge-rehearsal/log-lines.test.mjs',
+        'node --test scripts/loop/block.test.mjs scripts/loop/gate-hints.test.mjs scripts/edge-rehearsal/log-lines.test.mjs scripts/audit/dependency-audit.test.mjs',
     },
   ],
   birim: [{ name: 'test:unit', command: `npx turbo run test:unit${only}${force}` }],

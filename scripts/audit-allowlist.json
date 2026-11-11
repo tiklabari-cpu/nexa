@@ -1,0 +1,9 @@
+{
+  "entries": [
+    {
+      "ghsa": "GHSA-mrhx-c7xc-m3w5",
+      "reason": "zod <4.6.6 on api/rtm: interim mitigation from tm 419; the real fix is the zod 4.x epic (tm 477, deferred). Update `expires` when that epic opens.",
+      "expires": "2026-12-31"
+    }
+  ]
+}

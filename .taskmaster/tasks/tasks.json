@@ -17140,12 +17140,12 @@
         "description": "(tm 456) CI'da bağımlılık açığı taraması yok, dependabot/renovate yapılandırılmamış; yeni high advisory çıkınca CI yeşil kalıyor. (tm 457) packages/ai-mock vitest ^2.1.8'de kalmış; dev zincirinde critical vitest 2.1.9 GHSA-5xrq-8626-4rwp, tinypool, esbuild 0.21.5.",
         "details": "BİRLEŞİK GÖREV (sahip onayı 2026-11-07): tm 456, tm 457 aynı alana dokunduğu için tek pencerede yapılır; DoD kapısı bir kez koşar.\nBölümler sırayla yapılır. Her bölüm kendi kabul ölçütüyle kapanır; biri yeşil değilse görev done değildir.\nBirleşen görevler (tm 457) cancelled durumda ve buraya işaret ediyor; onlara ayrıca dokunma.\nLockfile elle düzenlenir (memory pnpm-add-churns-the-lockfile); --frozen-lockfile ile doğrula.\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\n━━ BÖLÜM 1 — tm 456 CI-DEPENDENCY-AUDIT · CI'a sunucu yolları için pnpm audit --prod adımı (uyarı modu + izin listesi) ve .github/dependabot.yml ━━\nSORUN: CI'da bağımlılık açığı taraması yok, dependabot/renovate yapılandırılmamış; yeni high advisory çıkınca CI yeşil kalıyor.\n\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F38. Kanıt yeterlidir.\n\nKODDA BUGÜN: `.github/workflows/ci.yml` yalnız `audit:req-coverage` (~:121), `log-keys` (~:126), `url-pii` (~:131); `.github/` altında yalnız `workflows/`.\n\nYAPILACAK: (1) `scripts/` altında küçük betik: `pnpm audit --prod --json` çıktısından api, rtm, web, widget, admin köklerine ulaşan high/critical'ları süz; izin listesi dosyası (ör. `scripts/audit-allowlist.json`: GHSA id + gerekçe + son tarih — zod GHSA-mrhx-c7xc-m3w5: gerekçe tm 419 ara önlemi + tm 477 (zod 4.x epiği, deferred); son tarih epik açılınca güncellenir). İlk sürüm uyarı modu (exit 0 + özet); `--strict` bayrağıyla izin listesi dışı → exit 1. (2) ci.yml'e adım (ağ gerektirir; CI'da). (3) `.github/dependabot.yml` (npm haftalık, github-actions aylık, PR sınırı küçük). CONVENTIONS §1 ve ci.yml senkron (memory ci-gates-beyond-the-dod-list) — DoD listesine eklenmeyecekse bunu yaz.\n\nTUZAK: Yerelde ağ yoksa betik testi örnek JSON fixture ile (memory network-tests-without-egress). Scratch dosyaları format:check'i bozar. `test:loop-tools` kapsamına girer mi kontrol et.\n\nKAPSAM DIŞI: açıkların kendisini kapatmak.\nDENETİM BULGULARI: F38\n\n━━ BÖLÜM 2 — tm 457 AI-MOCK-VITEST-ALIGN · packages/ai-mock vitest ^2.1.8 → ^3.2.4 (diğer paketlerle hizalı), lockfile elle ━━\nSORUN: packages/ai-mock vitest ^2.1.8'de kalmış; dev zincirinde critical vitest 2.1.9 GHSA-5xrq-8626-4rwp, tinypool, esbuild 0.21.5.\n\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F39. Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `packages/ai-mock/package.json:20` `\"vitest\": \"^2.1.8\"`; diğer paketlerin sürümü `rg '\"vitest\"' --glob package.json`.\n\nYAPILACAK: ai-mock'u depodaki diğer paketlerin vitest aralığına hizala; lockfile'ı elle uygula, `pnpm install --frozen-lockfile` exit 0 (memory pnpm-add-churns-the-lockfile). tinypool (admin, api) için kalan yolları audit ile doğrula ve HANDOFF'a yaz.\n\nTUZAK: vitest 3 config farkları (ai-mock'un config'i varsa). Vitest shard membership hash tabanlı (memory vitest-shard-membership-is-hash-based) — etkilenmez ama not.\n\nKAPSAM DIŞI: mobil ağacı.\nDENETİM BULGULARI: F39",
         "testStrategy": "BÖLÜM 1 (tm 456): Betik birim testi (fixture JSON): sunucu yolunda izinsiz high → strict exit 1, uyarı modunda exit 0 + özet; izin listesindeki → yok sayılır; süresi geçmiş izin → uyarı. ci.yml'de adım var (yaml testi varsa). DoD: CONVENTIONS §1.\nBÖLÜM 2 (tm 457): `pnpm --filter @siyahtus/ai-mock test` yeşil; `pnpm install --frozen-lockfile` exit 0; `pnpm audit` çıktısında vitest 2.x critical yok (önce/sonra HANDOFF'a). DoD: CONVENTIONS §1.\nKapanış: bütün bölümlerin hedefli testleri yeşilken tam DoD kapısı bir kez.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-07T11:03:10.748Z",
+        "updatedAt": "2026-11-11T05:12:04.580Z",
         "subtasks": []
       },
       {
@@ -17778,9 +17778,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-11T02:02:33.567Z",
+      "lastModified": "2026-11-11T05:12:04.580Z",
       "taskCount": 478,
-      "completedCount": 443,
+      "completedCount": 444,
       "tags": [
         "master"
       ]

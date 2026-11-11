@@ -14,7 +14,7 @@
     "lint": "turbo run lint",
     "test": "turbo run test --filter=!@siyahtus/e2e",
     "test:unit": "turbo run test:unit",
-    "test:loop-tools": "node --test \"scripts/loop/*.test.mjs\" \"scripts/edge-rehearsal/*.test.mjs\"",
+    "test:loop-tools": "node --test \"scripts/loop/*.test.mjs\" \"scripts/edge-rehearsal/*.test.mjs\" \"scripts/audit/*.test.mjs\"",
     "test:integration": "turbo run test:integration --concurrency=1",
     "test:e2e": "node apps/e2e/scripts/run-e2e-sharded.mjs",
     "test:e2e:private": "node apps/e2e/scripts/run-e2e-sharded.mjs --shards=1",
@@ -37,7 +37,8 @@
     "audit:unpaged-lists": "node scripts/audit/unpaged-lists.cjs",
     "audit:req-coverage": "node scripts/audit/req-coverage.cjs",
     "audit:log-keys": "node scripts/audit/log-keys.mjs",
-    "audit:url-pii": "node scripts/audit/url-pii.mjs"
+    "audit:url-pii": "node scripts/audit/url-pii.mjs",
+    "audit:dependencies": "node scripts/audit/dependency-audit.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

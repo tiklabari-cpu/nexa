@@ -115,7 +115,7 @@ jobs:
         run: pnpm format:check
 
       - name: Loop tools
-        run: node --test scripts/loop/block.test.mjs scripts/loop/gate-hints.test.mjs scripts/edge-rehearsal/log-lines.test.mjs
+        run: node --test scripts/loop/block.test.mjs scripts/loop/gate-hints.test.mjs scripts/edge-rehearsal/log-lines.test.mjs scripts/audit/dependency-audit.test.mjs
 
       - name: Requirement coverage
         run: pnpm audit:req-coverage
@@ -129,6 +129,14 @@ jobs:
       # written into a URL lands in history, access logs and the next site's Referer.
       - name: URL personal data
         run: pnpm audit:url-pii
+
+      # High/critical advisories reachable from api, rtm, web, widget or admin (tm 456 ·
+      # F38). Needs the registry, so it only runs here. Warn mode for now: it prints the
+      # list and exits 0; switching to `--strict` (exit 1 outside
+      # scripts/audit-allowlist.json) is a one-word change once the list is clean.
+      # Deliberately not in the local DoD gate (CONVENTIONS §1).
+      - name: Dependency advisories
+        run: pnpm audit:dependencies
 
       - name: Build
         run: pnpm build

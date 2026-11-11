@@ -33,6 +33,10 @@ doğrulanır; "gözle baktım oldu" geçersizdir.
 - [ ] **Adreste kişisel veri yok** — `pnpm audit:url-pii` (exit 0; CI'da "URL personal data" adımı,
       tm 386 · GV-05). `apps/*/src` + `packages/*/src`'de adrese `email`/`name`/`username`/`phone`/
       `query`/`q`/`search` yazan satır kırmızı verir; API isteği `// url-pii-ok: <neden>` ile geçer.
+- _(CI'a özgü, DoD'ye girmez)_ **Bağımlılık açığı taraması** — `pnpm audit:dependencies` (tm 456 · F38;
+  CI "Dependency advisories" adımı). Ağ ister, bu yüzden yerel kapıda koşmaz; uyarı modunda exit 0,
+  `--strict` izin listesi (`scripts/audit-allowlist.json`) dışı high/critical'da exit 1. Betiğin birimi
+  (`scripts/audit/dependency-audit.test.mjs`) `statik › loop-tools`ta koşar.
 - [ ] **PLAN.md gereksinim satırı güncellendi** — task'ın PRD kodundaki satır(lar) `⬜`/`◐` → `✅`.
       Doğrulama: `grep -n '| <PRD kodu>' PLAN.md` çıktısındaki **durum damgalı** satırlarda `⬜`
       kalmamalı. Bir task birden çok satır kapatıyorsa hepsi. Kısmen karşılandıysa `◐` + eksik

@@ -596,6 +596,25 @@ export class TicketMessageService {
   }
 
   /**
+   * {@link TicketMessageService.recordDelivery} for the reply sent under
+   * `emailMessageId` — the `Message-ID` the outbox's row carries, which is all
+   * its settle hook knows of the reply (tm 464.2). Same rule: only `queued`
+   * moves, so a reply a resend already queued again is left to that send.
+   */
+  async recordDeliveryOf(
+    tx: TenantClient,
+    emailMessageId: string,
+    status: 'sent' | 'failed',
+  ): Promise<TicketDeliveryPush | null> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id::text AS id FROM ticket_messages
+      WHERE email_message_id = ${emailMessageId} AND delivery_status = 'queued'
+    `;
+    const id = rows[0]?.id;
+    return id ? this.recordDelivery(tx, id, status) : null;
+  }
+
+  /**
    * What the player wrote, on the ticket it belongs to (the inbound e-mail
    * path, HD-03 · tm 358). No principal: like `createFromEmail`, the licence is
    * the surrounding `withTenant`'s and the author is the ticket's customer.

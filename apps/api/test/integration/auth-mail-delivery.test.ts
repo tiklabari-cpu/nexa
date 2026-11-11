@@ -167,6 +167,11 @@ describe('auth mail over the real carrier (tm 255.4)', () => {
       respond: (step: FakeStep) => FakeReply | undefined;
       /** Sessions the carrier opens for the one existing account. */
       attempts: number;
+      /**
+       * Left in the outbox for the `mail_outbox` job's retry rather than given
+       * up on (tm 464.2) — the first try's failure was one worth retrying.
+       */
+      queued?: true;
     }> = [
       {
         name: 'a permanent refusal (550 on RCPT)',
@@ -177,6 +182,7 @@ describe('auth mail over the real carrier (tm 255.4)', () => {
         name: 'a transient failure that outlasts every retry (451 on RCPT)',
         respond: (step) => (step.verb === 'RCPT' ? '451 4.3.0 Try again later' : undefined),
         attempts: 3,
+        queued: true,
       },
       {
         name: 'a message whose acceptance never comes back (dropped after the dot)',
@@ -204,7 +210,19 @@ describe('auth mail over the real carrier (tm 255.4)', () => {
 
         // Logged, by classification — and nowhere with the address that would
         // tell a log reader this account exists.
-        expect(log.text).toContain('password_reset.mail');
+        if (failure.queued) {
+          // Not lost (tm 464.2): the outbox holds it for the job's retry, and
+          // says so by row id and kind.
+          expect(log.text).toContain('"event":"mail.outbox"');
+          expect(log.text).toContain('"outcome":"retry"');
+          const waiting = await owner.mailOutbox.findMany({
+            where: { kind: 'password_reset', status: 'pending', recipient: fx.a.ownerEmail },
+            select: { attempts: true, lastError: true },
+          });
+          expect(waiting).toEqual([{ attempts: 1, lastError: 'rejected' }]);
+        } else {
+          expect(log.text).toContain('password_reset.mail');
+        }
         expect(log.text.toLowerCase()).not.toContain(fx.a.ownerEmail.toLowerCase());
       });
     }

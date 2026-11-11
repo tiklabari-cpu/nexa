@@ -136,6 +136,7 @@ import type { WorkspaceEventDispatcher } from '../webhooks/workspace-events.js';
 import { ChatTimeoutSweeper } from '../chat/chat-timeout.js';
 import type { Mailer } from '../mail/mailer.js';
 import { MailOutboxWorker } from '../mail/outbox.js';
+import { isOutboxMailer } from '../mail/outbox-mailer.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
 import { AiMetricsRollup, AiOutcomeFinalizer } from '../reports/ai-metrics.js';
 import { DigestSweeper } from '../notifications/digest-sweeper.js';
@@ -906,10 +907,12 @@ export function buildSchedulerJobs({
       name: 'mail_outbox',
       intervalMs: intervals.mail_outbox,
       async run(context) {
-        const report = await new MailOutboxWorker(db, {
-          mailer,
-          logger: context.logger,
-        }).run({ signal: context.signal });
+        // The server's mailer is the outbox (tm 464.2): its worker sends through
+        // the capped carrier underneath and tells the same settle hook.
+        const worker = isOutboxMailer(mailer)
+          ? mailer.createWorker(context.logger)
+          : new MailOutboxWorker(db, { mailer, logger: context.logger });
+        const report = await worker.run({ signal: context.signal });
         return { counts: { ...report } };
       },
     },

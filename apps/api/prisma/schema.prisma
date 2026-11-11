@@ -4633,11 +4633,14 @@ model MailOutbox {
   /// How many times a sender took the row — counted at the claim.
   attempts       Int       @default(0)
   /// When the row is due: new, a retry's backoff, or a claim's lease end.
-  nextAttemptAt  DateTime  @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  /// The database's clock, never the app's (tm 464.2): Prisma fills `now()` in
+  /// itself, and a host a little ahead of the database wrote rows that were not
+  /// yet "due" for the send straight after their enqueue.
+  nextAttemptAt  DateTime  @default(dbgenerated("CURRENT_TIMESTAMP")) @map("next_attempt_at") @db.Timestamptz(6)
   /// A code (`MailErrorCode`, `unexpected`, `attempts_exhausted`), never text.
   lastError      String?   @map("last_error")
   idempotencyKey String    @map("idempotency_key")
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.Timestamptz(6)
   settledAt      DateTime? @map("settled_at") @db.Timestamptz(6)
 
   license License? @relation(fields: [licenseId], references: [id], onDelete: Cascade)

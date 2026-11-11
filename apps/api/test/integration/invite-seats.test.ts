@@ -78,6 +78,8 @@ describe('invited seats reach the bill (FR-MOD-04.4)', () => {
     // "subscribed" are the two answers the seat rule differs on.
     fx = await seedFixtures(owner);
     await clearRateLimits(server.app);
+    // Nothing from the previous test lands in this one.
+    await server.app.backgroundMail.settled();
     mailer.clear();
     addressOf.clear();
     ownerToken = await grantToken(owner, {

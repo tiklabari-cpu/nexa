@@ -63,6 +63,8 @@ describe('a verified account joins only once it signs in (tm 421 · F04)', () =>
   beforeEach(async () => {
     fx = await seedFixtures(owner);
     await clearRateLimits(server.app);
+    // Nothing from the previous test lands in this one.
+    await server.app.backgroundMail.settled();
     mailer.clear();
     adminToken = await grantToken(owner, {
       licenseId: fx.a.licenseId,

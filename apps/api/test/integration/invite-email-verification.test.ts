@@ -60,6 +60,8 @@ describe('an invitation link does not prove the address (GV-03)', () => {
   beforeEach(async () => {
     fx = await seedFixtures(owner);
     await clearRateLimits(server.app);
+    // Nothing from the previous test lands in this one.
+    await server.app.backgroundMail.settled();
     mailer.clear();
     adminToken = await grantToken(owner, {
       licenseId: fx.a.licenseId,
@@ -230,6 +232,9 @@ describe('an invitation link does not prove the address (GV-03)', () => {
     it('gets the invitation’s wording on a resent link too', async () => {
       const { token } = await invite();
       expect((await accept(token, INVITEE_CHOSEN)).statusCode).toBe(202);
+      // The accept's own link first: left in flight, it can land after the
+      // resent one and pass for the newest (tm 464.2 — each send is queued first).
+      await server.app.backgroundMail.settled();
       mailer.clear();
 
       expect((await server.post('/auth/verify-email/resend', { email: INVITEE })).statusCode).toBe(

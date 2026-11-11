@@ -64,6 +64,8 @@ import { AbuseGuard } from './services/security/abuse-guard.js';
 import { resolveCaptcha } from './services/security/captcha.js';
 import { createMailer, type Mailer } from './services/mail/mailer.js';
 import { CappedMailer, mailDailyCaps } from './services/mail/mail-caps.js';
+import { OutboxMailer } from './services/mail/outbox-mailer.js';
+import { ticketReplySettledHook } from './services/tickets/ticket-reply-settled.js';
 import type { LlmProvider } from './services/ai/provider/llm-provider.js';
 import {
   AiProviderRegistry,
@@ -508,9 +510,24 @@ export async function buildServer({
   // background mail, sweeps — goes through this one wrapper, around whatever
   // carrier was built or injected, so an injected test spool is capped exactly
   // like `smtp`. Over the primary, like the AI budget, once `database` exists.
-  const mailer = new CappedMailer(carrier, app.db, mailDailyCaps(env), {
-    logger: app.log.child({ component: 'mailer' }),
-  });
+  //
+  // Around that, the durable outbox (tm 464.2 · G-05): every caller's `send`
+  // queues the mail in `mail_outbox` and sends that row at once through the
+  // capped carrier; a first try that fails retryably waits for the
+  // `mail_outbox` job instead of dying with this process. A ticket reply's
+  // delivery status is written from the outbox's settle hook, so a retry that
+  // lands an hour later still reaches it.
+  const mailer = new OutboxMailer(
+    app.db,
+    new CappedMailer(carrier, app.db, mailDailyCaps(env), {
+      logger: app.log.child({ component: 'mailer' }),
+    }),
+    {
+      logger: app.log.child({ component: 'mail-outbox' }),
+      onSettled: ticketReplySettledHook(app.db, new RealtimePublisher(app.redis, app.log)),
+    },
+  );
+  app.decorate('mailOutbox', mailer);
   // The 80%/100% notices of a workspace's AI allowance (tm 283.3): told by
   // the budget after every settle and every refusal, beside the call and never
   // in its way. Built here because it mails; drained on close so a notice that

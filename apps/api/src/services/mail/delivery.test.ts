@@ -165,6 +165,70 @@ describe('BackgroundMail', () => {
   });
 });
 
+describe('BackgroundMail over the outbox (tm 464.2)', () => {
+  /** An `OutboxMailer`-shaped mailer whose post/dispatch answer what the test says. */
+  function outboxAnswering(answer: () => Promise<MailOutcome | { status: 'queued' }>) {
+    const calls: string[] = [];
+    const mailer = {
+      send: async () => {
+        calls.push('send');
+      },
+      post: async (_message: Message, key?: string) => {
+        calls.push(`post:${key ?? '-'}`);
+        return answer();
+      },
+      dispatch: async (id: string) => {
+        calls.push(`dispatch:${id}`);
+        return answer();
+      },
+    };
+    return { mailer, calls };
+  }
+
+  it('queues through post, passing the key, and reports an end', async () => {
+    const { mailer, calls } = outboxAnswering(async () => ({ status: 'sent' }));
+    const background = new BackgroundMail(mailer);
+    const outcomes: MailOutcome[] = [];
+    background.send(MESSAGE, (outcome) => outcomes.push(outcome), { idempotencyKey: 'k:1' });
+    await background.settled();
+    expect(calls).toEqual(['post:k:1']);
+    expect(outcomes).toEqual([{ status: 'sent' }]);
+  });
+
+  it('does not report a mail left queued for the retry — the outbox owns it', async () => {
+    const { mailer } = outboxAnswering(async () => ({ status: 'queued' }));
+    const background = new BackgroundMail(mailer);
+    const outcomes: MailOutcome[] = [];
+    background.send(MESSAGE, (outcome) => outcomes.push(outcome));
+    background.dispatch('row-1', (outcome) => outcomes.push(outcome));
+    await background.settled();
+    expect(outcomes).toEqual([]);
+  });
+
+  it('reports a mail the outbox could not queue as failed', async () => {
+    const broken = new Error('database unreachable');
+    const { mailer } = outboxAnswering(async () => {
+      throw broken;
+    });
+    const background = new BackgroundMail(mailer);
+    const outcomes: MailOutcome[] = [];
+    background.send(MESSAGE, (outcome) => outcomes.push(outcome));
+    await background.settled();
+    expect(outcomes).toEqual([{ status: 'failed', error: broken }]);
+  });
+
+  it('sends a row queued in the caller transaction through dispatch, and refuses without an outbox', async () => {
+    const { mailer, calls } = outboxAnswering(async () => ({ status: 'sent' }));
+    const background = new BackgroundMail(mailer);
+    background.dispatch('row-2');
+    await background.settled();
+    expect(calls).toEqual(['dispatch:row-2']);
+    expect(() => new BackgroundMail({ send: async () => undefined }).dispatch('row-3')).toThrow(
+      TypeError,
+    );
+  });
+});
+
 describe('BackgroundMail.asMailer (tm 256.4)', () => {
   it('resolves before the mailer is touched, and reports the message with its outcome', async () => {
     let release!: () => void;

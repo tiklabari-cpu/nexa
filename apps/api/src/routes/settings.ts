@@ -124,6 +124,7 @@ import { dayBoundaryFromRow, type DayBoundaryRow } from '../services/chat/day-bo
 import { readVerifiedMailDomains } from '../services/chat/transcript-request.js';
 import type { Mailer } from '../services/mail/mailer.js';
 import { deliver, isCapRefusal, mailFailureFields } from '../services/mail/delivery.js';
+import { isOutboxMailer } from '../services/mail/outbox-mailer.js';
 import { normalisePageUrls } from '../services/routing/page-url.js';
 import { secondsUntilUtcMidnight } from '../services/ai/ai-daily-budget.js';
 import {
@@ -1953,7 +1954,11 @@ export default async function settingsRoutes(
       // exception used to become. `unconfirmed` is answered as sent — the
       // message may be in the mailbox already, and "not sent" would invite a
       // second token for the same domain on the owner's say-so.
-      const outcome = await deliver(mailer, {
+      //
+      // Straight through the carrier, not the outbox (tm 464.2): the owner is
+      // this mail's retry — a "try again" mints a new code, so an outbox retry
+      // landing later would mail a code that no longer works.
+      const outcome = await deliver(isOutboxMailer(mailer) ? mailer.carrier : mailer, {
         to: mailbox,
         licenseId: request.tenant().licenseId,
         kind: 'notification',

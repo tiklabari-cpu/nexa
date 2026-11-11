@@ -8,6 +8,7 @@
  * Writes are covered by the licence gate hook, so an expired trial refuses to
  * create or edit a ticket (402, ADR-10) without this file having to know.
  */
+import { randomUUID } from 'node:crypto';
 import { ticketNoticeMail, ticketReplyMail } from '../services/mail/templates/messages.js';
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -26,7 +27,7 @@ import {
 } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
-import { withTenant, type TenantContext } from '../lib/tenant.js';
+import type { TenantClient, TenantContext } from '../lib/tenant.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
 import {
   TICKET_STATUSES,
@@ -41,6 +42,7 @@ import {
   type RenderedTicketEmail,
 } from '../services/tickets/ticket-email.js';
 import { logUnsentMail } from '../services/mail/delivery.js';
+import { enqueueMail, type EnqueuedMail } from '../services/mail/outbox.js';
 import { messageIdDomainOf } from '../services/tickets/ticket-auto-ack.js';
 import { selfAccountId } from '../services/auth/principal.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
@@ -240,19 +242,23 @@ export default async function ticketRoutes(
     pilotMode ? {} : { replyTo: replyAddresses.addressFor(tenant, ticketId) };
 
   /**
-   * A queued reply's e-mail, sent after the commit (tm 356.3 · HD-01) — like
-   * the ticket notice, handed to `app.backgroundMail` rather than awaited, so
+   * A queued reply's e-mail (tm 356.3 · HD-01), queued in the outbox in the
+   * transaction that stored the reply (tm 464.2) — a committed reply always
+   * has its mail — and sent after the commit through `app.backgroundMail`, so
    * the agent's answer depends on neither the carrier's latency nor its
-   * failure. How it went is written back to the reply in a transaction of its
-   * own and announced to the people working the ticket; the log line carries
-   * the ids and the carrier's classification, never the address or the text.
-   *
-   * `unconfirmed` — handed over, acceptance never confirmed — is written
-   * `sent`: the message may well have arrived, and "try again" on it would
-   * mail the player the same answer twice.
+   * failure. How it went is written back to the reply by the outbox's settle
+   * hook (`ticket-reply-settled.ts`), which hears the end of a retry too, and
+   * announced to the people working the ticket; the log line carries the ids
+   * and the carrier's classification, never the address or the text.
    */
-  const mailReply = (log: FastifyBaseLogger, tenant: TenantContext, mail: TicketReplyOutbound) => {
-    app.backgroundMail.send(
+  const queueReply = (
+    tx: TenantClient,
+    tenant: TenantContext,
+    mail: TicketReplyOutbound,
+    idempotencyKey: string,
+  ): Promise<EnqueuedMail> =>
+    enqueueMail(
+      tx,
       {
         to: mail.to,
         licenseId: tenant.licenseId,
@@ -275,35 +281,15 @@ export default async function ticketRoutes(
           },
         ),
       },
-      async (outcome) => {
-        logUnsentMail(log, 'ticket.reply_mail', outcome, {
-          ticket_id: mail.ticketId,
-          message_id: mail.messageId,
-        });
-        try {
-          const push = await withTenant(app.db, tenant, (tx) =>
-            messages.recordDelivery(
-              tx,
-              mail.messageId,
-              outcome.status === 'failed' ? 'failed' : 'sent',
-            ),
-          );
-          if (push) {
-            await publisher.publish(
-              tenant,
-              'ticket_message_delivery_changed',
-              push.audience,
-              push.payload,
-            );
-          }
-        } catch (error) {
-          // The reply stays `queued`; nothing a log reader could act on is lost.
-          log.error(
-            { err: error, ticket_id: mail.ticketId, message_id: mail.messageId },
-            'ticket reply delivery status not recorded',
-          );
-        }
-      },
+      { idempotencyKey },
+    );
+  const sendReply = (log: FastifyBaseLogger, mail: TicketReplyOutbound, queued: EnqueuedMail) => {
+    if (!queued.enqueued) return;
+    app.backgroundMail.dispatch(queued.id, (outcome) =>
+      logUnsentMail(log, 'ticket.reply_mail', outcome, {
+        ticket_id: mail.ticketId,
+        message_id: mail.messageId,
+      }),
     );
   };
   const customFields = new CustomFieldService();
@@ -439,7 +425,7 @@ export default async function ticketRoutes(
       const templateId = body.email_template_id;
       const signals = new TicketSignals();
 
-      const { ticket, notice, arrival } = await request.withTenant(async (tx) => {
+      const { ticket, notice, arrival, queued } = await request.withTenant(async (tx) => {
         // Handing a ticket to somebody is news to them (IN-10): note who held it.
         const heldBy =
           body.assignee_id !== undefined
@@ -517,15 +503,45 @@ export default async function ticketRoutes(
           : null;
         const handedOver =
           body.assignee_id != null && heldBy !== undefined && heldBy !== body.assignee_id;
+        const notice = mail
+          ? {
+              ...mail,
+              workspaceName: organization?.name ?? 'SiyahTuş',
+              locale: await ticketMailLocale(tx, ticketId),
+            }
+          : null;
+        // Queued with the transition it is about (tm 464.2): a committed status
+        // change has its notice, a rolled-back one has none.
+        const queued = notice
+          ? await enqueueMail(
+              tx,
+              {
+                to: notice.to,
+                licenseId: tenant.licenseId,
+                kind: 'ticket_notice',
+                ...replyToFor(tenant, ticketId),
+                // The workspace's subject and text, untouched, in the shared
+                // frame (tm 265); the frame's few words speak the player's
+                // language (tm 462): their own, else the workspace's, else English.
+                ...ticketNoticeMail(
+                  { locale: notice.locale },
+                  {
+                    workspaceName: notice.workspaceName,
+                    subject: notice.subject,
+                    // Added here, at the send, rather than by the renderer: the
+                    // line is the deployment's statement, not part of the
+                    // workspace's template.
+                    body: pilotMode ? withPilotNoReplyLine(notice.body) : notice.body,
+                  },
+                ),
+              },
+              { idempotencyKey: `ticket_notice:${ticketId}:${randomUUID()}` },
+            )
+          : null;
         return {
           ticket: updated,
-          notice: mail
-            ? {
-                ...mail,
-                workspaceName: organization?.name ?? 'SiyahTuş',
-                locale: await ticketMailLocale(tx, ticketId),
-              }
-            : null,
+          notice,
+          queued,
           arrival: handedOver
             ? await ticketArrivalPush(tx, ticketId, {
                 reason: 'assigned',
@@ -548,33 +564,12 @@ export default async function ticketRoutes(
       // ~33 s to learn that it had. A failure is logged with the template id and
       // the carrier's classification, never the message: this line goes to the
       // same log the body is deliberately kept out of.
-      if (notice) {
-        app.backgroundMail.send(
-          {
-            to: notice.to,
-            licenseId: tenant.licenseId,
-            kind: 'ticket_notice',
-            ...replyToFor(tenant, ticketId),
-            // The workspace's subject and text, untouched, in the shared frame
-            // (tm 265); the frame's few words speak the player's language
-            // (tm 462): their own, else the workspace's, else English.
-            ...ticketNoticeMail(
-              { locale: notice.locale },
-              {
-                workspaceName: notice.workspaceName,
-                subject: notice.subject,
-                // Added here, at the send, rather than by the renderer: the line
-                // is the deployment's statement, not part of the workspace's
-                // template.
-                body: pilotMode ? withPilotNoReplyLine(notice.body) : notice.body,
-              },
-            ),
-          },
-          (outcome) =>
-            logUnsentMail(request.log, 'ticket.notice_mail', outcome, {
-              template_id: notice.templateId,
-              ticket_id: ticketId,
-            }),
+      if (notice && queued?.enqueued) {
+        app.backgroundMail.dispatch(queued.id, (outcome) =>
+          logUnsentMail(request.log, 'ticket.notice_mail', outcome, {
+            template_id: notice.templateId,
+            ticket_id: ticketId,
+          }),
         );
       }
 
@@ -716,8 +711,8 @@ export default async function ticketRoutes(
       const attachments = await resolveAttachments(store, tenant.licenseId, body.attachment_keys);
       const signals = new TicketSignals();
 
-      const written = await request.withTenant((tx) =>
-        messages.createFromComposer(
+      const { written, queued } = await request.withTenant(async (tx) => {
+        const written = await messages.createFromComposer(
           tx,
           tenant,
           principal,
@@ -731,8 +726,17 @@ export default async function ticketRoutes(
             ...(body.set_status !== undefined ? { setStatus: body.set_status } : {}),
           },
           signals,
-        ),
-      );
+        );
+        const queued = written.outbound
+          ? await queueReply(
+              tx,
+              tenant,
+              written.outbound,
+              `ticket_reply:${written.outbound.messageId}`,
+            )
+          : null;
+        return { written, queued };
+      });
 
       // After the commit (see `RealtimePublisher`): announced inside the
       // transaction, a listener could fetch the thread before the message is
@@ -747,7 +751,7 @@ export default async function ticketRoutes(
       }
       // Only a reply just stored `queued` carries one — never a note, a replay
       // or a reply this deployment does not mail (K23).
-      if (written.outbound) mailReply(request.log, tenant, written.outbound);
+      if (written.outbound && queued) sendReply(request.log, written.outbound, queued);
       // The message (and a status it moved) to subscribers (AU-03 · tm 374). A
       // replay collected nothing: the first attempt already said it.
       await signals.emit(automations, tenant);
@@ -765,9 +769,19 @@ export default async function ticketRoutes(
       const tenant = request.tenant();
       const principal = request.requirePrincipal();
 
-      const resent = await request.withTenant((tx) =>
-        messages.resend(tx, tenant, principal, ticketId, messageId),
-      );
+      const { resent, queued } = await request.withTenant(async (tx) => {
+        const resent = await messages.resend(tx, tenant, principal, ticketId, messageId);
+        // Each resend is its own row: the same `Message-ID`, a new send.
+        const queued = resent.outbound
+          ? await queueReply(
+              tx,
+              tenant,
+              resent.outbound,
+              `ticket_reply:${messageId}:${randomUUID()}`,
+            )
+          : null;
+        return { resent, queued };
+      });
 
       if (resent.push) {
         await publisher.publish(
@@ -777,7 +791,7 @@ export default async function ticketRoutes(
           resent.push.payload,
         );
       }
-      if (resent.outbound) mailReply(request.log, tenant, resent.outbound);
+      if (resent.outbound && queued) sendReply(request.log, resent.outbound, queued);
 
       return reply.send(resent.message);
     },

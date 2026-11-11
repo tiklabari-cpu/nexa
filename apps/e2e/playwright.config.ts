@@ -129,10 +129,24 @@ const STACK_LAUNCH = PRIVATE
               `MAP localhost:${USUAL_PORTS.widget} localhost:${PORTS.widget}`,
               `MAP *.localhost:${USUAL_PORTS.widget} localhost:${PORTS.widget}`,
             ].join(', '),
+          ...netLog(),
         ],
       },
     }
   : {};
+
+/**
+ * Chromium's own network log, on request (tm 463.4): `SIYAHTUS_E2E_NETLOG_DIR=<dir>` writes
+ * `netlog-<shard>-<worker pid>.json` there — open it in https://netlog-viewer.appspot.com or grep
+ * its events. For a request that never came back (`e2e-request-stall`): Vite's log says whether it
+ * left the browser, this says where inside the browser it waited. One file per worker process: a
+ * failed test restarts the worker, whose new browser would otherwise overwrite the failure's log.
+ * Off by default; a run of ~140 tests writes a few hundred MB.
+ */
+function netLog(): string[] {
+  const dir = process.env['SIYAHTUS_E2E_NETLOG_DIR'];
+  return dir ? [`--log-net-log=${join(dir, `netlog-${SHARD_DIR}-${process.pid}.json`)}`] : [];
+}
 
 /**
  * Specs that need a stack of their own (`playwright.pilot.config.ts`, `playwright.session.config.ts`),

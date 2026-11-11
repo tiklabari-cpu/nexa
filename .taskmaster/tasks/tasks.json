@@ -17166,12 +17166,12 @@
         "description": "(tm 458) 21:30Z'de açılan sohbet listede 5 Kasım'da, raporda 4 Kasım'da görünüyor: rapor kovaları UTC, workspace gün sınırı yerel. Sahip kararı 2026-11-06 S14 (04 K43): rapor günleri workspace saat dilimine göre hesaplanır (K3 gün sınırıyla aynı kaynak). (tm 459) `?from=2026-11-05&to=2026-11-05` 200 ve sıfırlar dönüyor: z.coerce.date gece yarısına çeviriyor, yalnız from > to reddediliyor.",
         "details": "BİRLEŞİK GÖREV (sahip onayı 2026-11-07): tm 458, tm 459 aynı alana dokunduğu için tek pencerede yapılır; DoD kapısı bir kez koşar.\nBölümler sırayla yapılır. Her bölüm kendi kabul ölçütüyle kapanır; biri yeşil değilse görev done değildir.\nBirleşen görevler (tm 459) cancelled durumda ve buraya işaret ediyor; onlara ayrıca dokunma.\nBölüm 2'nin gün sonu genişletmesi Bölüm 1'in workspace saat dilimini kullanır.\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\n━━ BÖLÜM 1 — tm 458 REPORT-DAY-BUCKET-TIMEZONE · Rapor gün/saat kovaları workspace saat dilimiyle (varsayılan Europe/Istanbul) hesaplansın ━━\nSORUN: 21:30Z'de açılan sohbet listede 5 Kasım'da, raporda 4 Kasım'da görünüyor: rapor kovaları UTC, workspace gün sınırı yerel. Sahip kararı 2026-11-06 S14 (04 K43): rapor günleri workspace saat dilimine göre hesaplanır (K3 gün sınırıyla aynı kaynak).\n\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F44 (low ← medium) + belge çelişkisi Ç-05; tur 2 bulgu 11 (görevsiz kalmıştı). Kanıt yeterlidir.\n\nDURUM: sahip 'evet' dedi (2026-11-06 S14) → pending. `day-boundary.ts` başlığı bu görevle doğru hâle gelir; REPORT-SINGLE-DAY-RANGE (tm 459) bu görevin export ettiği yardımcıyı kullanır.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/services/reports/report-csv.ts:404` `to_char((created_at AT TIME ZONE 'UTC')::date, ...)`, `:~879` aynı; `day-boundary.ts` başlığı rapor ile sohbet gününün çelişemeyeceğini iddia ediyor.\n\nYAPILACAK: tüm rapor gün/saat kovaları `AT TIME ZONE <workspace tz>` (day-boundary.ts'in kullandığı kaynaktan; parametre olarak, string birleştirme YOK) ya da mevcut `local_day` sütunu varsa o. Aralık filtresi (from/to) aynı dilimde. `day-boundary.ts` başlığı doğru hâle gelir. Varsayımı HANDOFF'a yaz. Gün sınırı yardımcısını export et (REPORT-SINGLE-DAY-RANGE kullanacak).\n\nTUZAK: memory data-model-explain-plan-flakes-under-load (indeks kullanımı değişebilir — EXPLAIN testi), integration-reds-between-00-and-01-utc (tam bu sorun; test sahte saat/sabit tarihlerle). Raw SQL parametre tipi (hub-prisma-postgres-traps).\n\nKAPSAM DIŞI: kullanıcı başına saat dilimi.\nDENETİM BULGULARI: F44\n\n━━ BÖLÜM 2 — tm 459 REPORT-SINGLE-DAY-RANGE · Rapor API: yalnız tarih içeren to günün sonuna genişlesin, sıfır genişlikli aralık 400 ━━\nSORUN: `?from=2026-11-05&to=2026-11-05` 200 ve sıfırlar dönüyor: z.coerce.date gece yarısına çeviriyor, yalnız from > to reddediliyor.\n\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), bulgu F45. Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı): `apps/api/src/routes/reports.ts:278-280` `rangeQuery = z.object({ from: z.coerce.date().optional(), to: z.coerce.date().optional(), ...`; `:~410` yalnız `from > to`; `report-csv.ts:~158` kapalı aralık.\n\nYAPILACAK: `to` yalnız tarih (`/^\\d{4}-\\d{2}-\\d{2}$/`) ise günün sonuna (ertesi gün 00:00, yarı açık aralık — mevcut kapalı aralıkla tutarlı olanı seç) genişlet; tam date-time ise olduğu gibi; `from === to` (date-time) → 400 `range_empty`. Gün sınırı REPORT-DAY-BUCKET-TIMEZONE'un export ettiği yardımcıyla hesaplanır (bağımlılık).\n\nTUZAK: Web rapor ekranının gönderdiği biçimi kontrol et (yalnız tarih mi). Yeni hata türü en+tr.\n\nKAPSAM DIŞI: saat dilimi kovaları.\nDURUM: pending — tm 458 sahip kararıyla (2026-11-06 S14) pending oldu; bu görev 458'e bağlı kalır ve gün sınırını 458'in export ettiği yardımcıyla hesaplar.\nDENETİM BULGULARI: F45",
         "testStrategy": "BÖLÜM 1 (tm 458): api entegrasyon: tz=Europe/Istanbul, 2026-11-04T21:30Z sohbet → raporda 2026-11-05; tz=UTC → 2026-11-04; CSV ve JSON rapor aynı. Mutasyon: 'UTC'ye geri dön → kırmızı. DoD: CONVENTIONS §1.\nBÖLÜM 2 (tm 459): api entegrasyon: from=to=2026-11-05 (tarih) → o günün verisi; from=to tam date-time → 400; from>to → mevcut 400. DoD: CONVENTIONS §1.\nKapanış: bütün bölümlerin hedefli testleri yeşilken tam DoD kapısı bir kez.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-07T11:03:10.748Z",
+        "updatedAt": "2026-11-11T06:44:29.949Z",
         "subtasks": []
       },
       {
@@ -17778,9 +17778,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-11T05:12:04.580Z",
+      "lastModified": "2026-11-11T06:44:29.950Z",
       "taskCount": 478,
-      "completedCount": 444,
+      "completedCount": 445,
       "tags": [
         "master"
       ]

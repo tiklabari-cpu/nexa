@@ -7,6 +7,8 @@
  *     pnpm test:e2e --legacy            # the old single stack on the usual ports
  *     pnpm test:e2e widget inbox-tabs   # only spec files whose name contains a word
  *     pnpm test:e2e --plan              # print the split and stop
+ *     pnpm test:e2e --shards=1 --repeat-each=20 two-factor
+ *                                       # each test N times, for a flake's rate (tm 463)
  *
  * Why. The suite runs one file after another (`workers: 1`) because its specs
  * share one seeded workspace; 321 tests took 23.5 minutes that way, and every
@@ -92,10 +94,20 @@ const flag = (name) => argv.find((arg) => arg === name || arg.startsWith(`${name
 const flagValue = (name) => flag(name)?.split('=')[1];
 const words = argv.filter((arg) => !arg.startsWith('--'));
 const unknown = argv.filter(
-  (arg) => arg.startsWith('--') && !/^--(shards=\d+|legacy|plan)$/.test(arg),
+  (arg) => arg.startsWith('--') && !/^--(shards=\d+|repeat-each=\d+|legacy|plan)$/.test(arg),
 );
 if (unknown.length > 0) {
   console.error(`run-e2e-sharded: unknown option ${unknown.join(' ')}`);
+  process.exit(2);
+}
+
+// `--repeat-each=N` (tm 463): Playwright's own flag, passed through, so a flake's
+// rate can be measured on the same private stack the gate uses. Every count the
+// summary checks is multiplied by N, and the timings are left alone — a
+// repeated file's duration is N runs, not one.
+const repeatEach = Number(flagValue('--repeat-each') ?? 1);
+if (!Number.isInteger(repeatEach) || repeatEach < 1) {
+  console.error(`run-e2e-sharded: --repeat-each must be a whole number from 1`);
   process.exit(2);
 }
 
@@ -177,7 +189,7 @@ const results = await Promise.all(
 clearInterval(memoryWatch);
 const wall = Math.round((Date.now() - started) / 1000);
 
-updateTimings(results);
+if (repeatEach === 1) updateTimings(results);
 process.exitCode = summarize(results, wall, await pgWatch.stop());
 
 // --- helpers --------------------------------------------------------------------
@@ -274,6 +286,7 @@ function runShard(i, shard) {
     `node ${API_TSX} ../api/scripts/with-test-datastores.ts`,
     `node ${PLAYWRIGHT_CLI} test`,
     ...filters,
+    ...(repeatEach > 1 ? [`--repeat-each=${repeatEach}`] : []),
   ].join(' ');
   const shardStarted = Date.now();
   console.log(`[e2e:${i}] starting (${shard.files.length} files, ${shard.tests} tests)`);
@@ -434,13 +447,14 @@ function summarize(all, wallSeconds, pg) {
   for (const r of all) {
     const s = r.stats;
     const ran = s ? s.passed + s.failed + s.flaky + s.skipped : 0;
-    const short = s && ran < r.shard.tests;
+    const given = r.shard.tests * repeatEach;
+    const short = s && ran < given;
     if (r.code !== 0 || !s || s.failed > 0 || short) red = true;
     if (s) for (const key of Object.keys(total)) total[key] += s[key];
     const verdict = !s
       ? `RED (exit ${r.code}, no report — see the log)`
       : `${s.passed} passed, ${s.failed} failed, ${s.flaky} flaky, ${s.skipped} skipped` +
-        (short ? ` — ONLY ${ran} OF ${r.shard.tests} RAN` : '') +
+        (short ? ` — ONLY ${ran} OF ${given} RAN` : '') +
         (r.code !== 0 ? ` (exit ${r.code})` : '');
     console.log(`  shard ${r.i}  ${formatDuration(r.seconds).padStart(7)}  ${verdict}`);
     console.log(`           log: ${r.log}`);
@@ -450,7 +464,7 @@ function summarize(all, wallSeconds, pg) {
   const sentinelTests = listed.get(SENTINEL) ?? 0;
   console.log(
     `  Tests: ${total.passed} passed, ${total.failed} failed, ${total.flaky} flaky, ${total.skipped} skipped` +
-      ` (${listedTotal} listed${sentinels > 1 ? ` + ${(sentinels - 1) * sentinelTests} from the sentinel in every shard` : ''})`,
+      ` (${listedTotal} listed${repeatEach > 1 ? ` × ${repeatEach}` : ''}${sentinels > 1 ? ` + ${(sentinels - 1) * sentinelTests * repeatEach} from the sentinel in every shard` : ''})`,
   );
   console.log(
     `  wall clock ${formatDuration(wallSeconds)} · ${all.length} shard(s) · lowest free memory ${lowestFreeGb.toFixed(1)} GB`,
@@ -483,7 +497,7 @@ function summarize(all, wallSeconds, pg) {
 }
 
 /**
- * The API and RTM logs of all but the newest {@link SERVER_LOG_RUNS} runs. They run to tens of
+ * The API, RTM and web (dev-server proxy) logs of all but the newest {@link SERVER_LOG_RUNS} runs. They run to tens of
  * megabytes a full suite, and a gate runs several a task; the shard logs beside them are small
  * and stay.
  */
@@ -492,7 +506,8 @@ function pruneServerLogs(root) {
     const runs = readdirSync(root).sort().slice(0, -SERVER_LOG_RUNS);
     for (const run of runs) {
       for (const file of readdirSync(join(root, run))) {
-        if (/^(api|rtm)-shard-\d+\.log$/.test(file)) rmSync(join(root, run, file), { force: true });
+        if (/^(api|rtm|web)-shard-\d+\.log$/.test(file))
+          rmSync(join(root, run, file), { force: true });
       }
     }
   } catch {

@@ -39,7 +39,10 @@ test.describe('customers', () => {
     const search = agentPage.getByRole('searchbox', { name: 'Search customers' });
     const table = agentPage.getByRole('table', { name: 'Customers' });
 
-    await search.fill('mira');
+    // Her surname, not "mira": the ID-03 test below adds "Mira Laptop …" / "Mira
+    // Phone …" each time it runs, and once a stack holds enough of them the
+    // seeded Mira, the oldest, falls below the rows the table draws (tm 463).
+    await search.fill('haddad');
     await expect(table.getByRole('row').filter({ hasText: 'Mira Haddad' })).toBeVisible();
     await expect(table.getByRole('row').filter({ hasText: 'Alex Moreau' })).toHaveCount(0);
 
@@ -87,7 +90,12 @@ test.describe('customers', () => {
     await expect(table.getByRole('row').filter({ hasText: leadName })).toBeVisible();
 
     // The seeded Mira is a customer, not a lead: the segment keeps her out.
-    await search.fill('mira');
+    // Her full name, not "mira": the ID-03 test below makes leads called
+    // "Mira Laptop …" / "Mira Phone …" (username `mira_…`), and any of them still
+    // in the workspace — a retry, `--repeat-each`, a later run of this file on
+    // the same stack — matched "mira" and filled the Leads list (tm 463: with
+    // `--repeat-each`, red in every run after the first).
+    await search.fill('Mira Haddad');
     await expect(agentPage.getByText('Nobody matches that search')).toBeVisible();
     await expect(table.getByRole('row').filter({ hasText: 'Mira Haddad' })).toHaveCount(0);
   });
@@ -103,7 +111,18 @@ test.describe('customers', () => {
     await expect(phone).toBeVisible();
     const newPhone = `+4477${Date.now().toString().slice(-6)}`;
     await phone.fill(newPhone);
-    await agentPage.getByRole('button', { name: 'Save changes' }).click();
+    // The PATCH is awaited before the reload: the form validates and sends
+    // asynchronously after the click, and a reload that lands before the
+    // request leaves would cancel it and read the old phone back (tm 463).
+    await Promise.all([
+      agentPage.waitForResponse(
+        (response) =>
+          response.request().method() === 'PATCH' &&
+          /\/customers\/[^/?]+$/.test(new URL(response.url()).pathname) &&
+          response.ok(),
+      ),
+      agentPage.getByRole('button', { name: 'Save changes' }).click(),
+    ]);
 
     await agentPage.reload();
     await search.fill('Robin Fields');
@@ -118,8 +137,10 @@ test.describe('customers', () => {
     // Searched for, not expected on the first page: the list opens newest activity first, and
     // every spec before this one in the shard adds visitors to the shared workspace, so the
     // seeded Mira can sit past the first fifty rows (red in tm 336.2 and 339.2). The search
-    // survives the segment tabs below, so it holds her on screen for the whole journey.
-    await agentPage.getByRole('searchbox', { name: 'Search customers' }).fill('mira');
+    // survives the segment tabs below, so it holds her on screen for the whole journey. Her
+    // full name, because "mira" also finds every "Mira Laptop/Phone …" the ID-03 test leaves
+    // behind, and enough of those push her off the drawn rows (tm 463).
+    await agentPage.getByRole('searchbox', { name: 'Search customers' }).fill('Mira Haddad');
     await agentPage.getByRole('button', { name: /Mira Haddad/ }).click();
 
     // Banning asks first (tm 259.8): Cancel leaves her unbanned, the confirmed

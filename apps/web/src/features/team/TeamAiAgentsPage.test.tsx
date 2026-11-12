@@ -13,6 +13,7 @@ import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { TeamAiAgentsPage } from './TeamAiAgentsPage.js';
+import { defaultScopesForRole } from '@siyahtus/types';
 import { useAuth } from '../../lib/auth-store.js';
 
 function jsonResponse(body: unknown): Response {
@@ -92,5 +93,39 @@ describe('Team module navigation (FR-MOD-04.1)', () => {
     const table = await screen.findByRole('table', { name: 'Bot accounts on this licence' });
     expect(screen.getByText('Nova')).toBeInTheDocument();
     expect(table).toBeInTheDocument();
+  });
+});
+
+describe('an empty chatbot list in a new workspace (tm 473)', () => {
+  function noBots(scopes: string[]): void {
+    useAuth.setState((state) => ({ ...state, agent: { ...state.agent!, scopes } }));
+    // Only the bot list answers (empty); every other section's read is the
+    // file's usual 404, so their own empty/error states stay out of the way.
+    const notFound = fetch as unknown as (url: string) => Promise<Response>;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        /\/ai-agents$/.test(url) ? jsonResponse({ items: [] }) : notFound(url),
+      ),
+    );
+  }
+
+  it('offers an owner the way to create the AI agent it names', async () => {
+    noBots(defaultScopesForRole('owner'));
+    renderPage();
+
+    expect(await screen.findByText('No chatbots yet')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Create an AI agent' })).toHaveAttribute(
+      'href',
+      '/app/playbook?view=general',
+    );
+  });
+
+  it('offers no Playbook link to someone who cannot open the Playbook', async () => {
+    noBots([]);
+    renderPage();
+
+    expect(await screen.findByText('No chatbots yet')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Create an AI agent' })).toBeNull();
   });
 });

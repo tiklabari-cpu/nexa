@@ -11,6 +11,7 @@ import { useMemo, type ReactElement } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, Page, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
+import { CreateAiAgentAction } from '../../components/EmptyStateActions.js';
 import { LoadError } from '../../components/LoadError.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { StatusDot } from '../../components/StatusDot.js';
@@ -64,6 +65,7 @@ export function TeamAiAgentsPage(): ReactElement {
             <EmptyState
               title={t('team.page.empty.noChatbotsTitle')}
               description={t('team.page.empty.noChatbotsDescription')}
+              action={<CreateAiAgentAction />}
             />
           ) : (
             <table className="w-full text-sm">

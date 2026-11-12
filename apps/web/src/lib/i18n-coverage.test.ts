@@ -48,6 +48,7 @@ const SCREEN_ROOTS = ['src/features', 'src/components'];
 const TRANSLATED_FILES: readonly string[] = [
   'src/components/AppShell.tsx',
   'src/components/CopyId.tsx',
+  'src/components/EmptyStateActions.tsx',
   'src/components/InstallSnippet.tsx',
   'src/components/RatingBadge.tsx',
   'src/features/reports/ReviewComments.tsx',

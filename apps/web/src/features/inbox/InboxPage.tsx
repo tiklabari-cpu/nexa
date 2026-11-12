@@ -20,6 +20,7 @@ import { useTranslate } from '../../lib/i18n.js';
 import { eventText } from './systemEventText.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { EmptyState } from '../../components/EmptyState.js';
+import { InstallWidgetAction } from '../../components/EmptyStateActions.js';
 import { Banner, Modal } from '../../components/ui/index.js';
 import { useViewportLayout } from '../../lib/viewport.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
@@ -1106,6 +1107,13 @@ export function InboxPage(): ReactElement {
                                       : view === 'ai_solved'
                                         ? t('inbox.list.empty.aiSolved')
                                         : t('inbox.list.empty.description')
+                        }
+                        // A workspace nobody can write in to yet (NY-11 · tm 473):
+                        // the empty list names the step that fills it. Drawn only
+                        // while no website has the widget, so a quiet hour in a
+                        // live workspace is not answered with a setup step.
+                        action={
+                          chats.length === 0 && !activeChannel ? <InstallWidgetAction /> : undefined
                         }
                       />
                     ) : (

@@ -626,3 +626,26 @@ describe('possible matches on the profile (ID-03)', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('an empty customer list in a new workspace (tm 473)', () => {
+  it('offers a next step, and drops it once the emptiness is a search that found nobody', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string) => Promise.resolve(customerPage([], 0))),
+    );
+
+    renderPage('/app/customers');
+    await screen.findByText('No customers yet');
+    // This signed-in teammate cannot install the widget, so the step is the inbox.
+    expect(await screen.findByRole('link', { name: 'Go to inbox' })).toHaveAttribute(
+      'href',
+      '/app/inbox',
+    );
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search customers' }), {
+      target: { value: 'mira' },
+    });
+    await screen.findByText('Nobody matches that search');
+    expect(screen.queryByRole('link', { name: 'Go to inbox' })).toBeNull();
+  });
+});

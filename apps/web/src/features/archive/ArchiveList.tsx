@@ -10,6 +10,7 @@
 import type { ReactElement } from 'react';
 import type { ArchiveConversation } from '@siyahtus/types';
 import { EmptyState } from '../../components/EmptyState.js';
+import { InstallWidgetAction } from '../../components/EmptyStateActions.js';
 import { LoadError } from '../../components/LoadError.js';
 import { RatingBadge } from '../../components/RatingBadge.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
@@ -84,7 +85,11 @@ export function ArchiveList({
           }
         />
       ) : list.items.length === 0 ? (
-        <EmptyState title={t('archive.empty.title')} description={t('archive.empty.description')} />
+        <EmptyState
+          title={t('archive.empty.title')}
+          description={t('archive.empty.description')}
+          action={<InstallWidgetAction fallback="inbox" />}
+        />
       ) : (
         <>
           <p

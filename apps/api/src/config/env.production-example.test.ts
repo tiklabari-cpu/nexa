@@ -57,6 +57,17 @@ describe('.env.production.example documents what parseEnv requires in production
     expect(uncommentedValueOf('OTEL_EXPORTER')).toBe('none');
   });
 
+  it('chooses the real website crawler and explains its SSRF guard and egress (tm 470.1)', () => {
+    expect(uncommentedValueOf('CRAWLER_PROVIDER')).toBe('http');
+    const comment = source.slice(
+      source.indexOf('# Who fetches a website knowledge source'),
+      source.indexOf('CRAWLER_PROVIDER=http'),
+    );
+    expect(comment).toMatch(/SSRF/);
+    expect(comment).toMatch(/Egress/);
+    expect(comment).toMatch(/169\.254\.169\.254/);
+  });
+
   it('turns the pilot switch on, with the contact address left to fill in (tm 257.13)', () => {
     // The template is the pilot's: `PILOT_MODE=true` is what makes boot refuse
     // the stub providers above, and its contact address is the deployer's own.

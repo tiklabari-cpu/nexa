@@ -308,6 +308,16 @@ describe('the pilot configuration passes the production gate (tm 255.15)', () =>
     expect(mockProviderWarnings(env).map((warning) => warning.provider)).not.toContain('payment');
   });
 
+  it('ships CRAWLER_PROVIDER=http, so the pilot crawls websites for real and has no crawler warning (tm 470.1)', () => {
+    expect(TEMPLATE_ENTRIES['CRAWLER_PROVIDER']).toBe('http');
+    const env = parseEnv(PILOT_ENV);
+    expect(env.CRAWLER_PROVIDER).toBe('http');
+    expect(mockProviderWarnings(env).map((warning) => warning.provider)).not.toContain('crawler');
+    // The same file with the mock back in is the case the warning exists for.
+    const mocked = parseEnv({ ...PILOT_ENV, CRAWLER_PROVIDER: 'mock' });
+    expect(mockProviderWarnings(mocked).map((warning) => warning.provider)).toContain('crawler');
+  });
+
   it('boots the same file with PILOT_MODE=false and warns of the mock card processor (tm 433)', () => {
     let env: ReturnType<typeof parseEnv> | undefined;
     expect(() => {

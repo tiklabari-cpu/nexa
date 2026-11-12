@@ -57,12 +57,14 @@ export function archiveLookupUrl(query: string): string {
   // url-pii-ok: API request, not the address bar; the server log masks `query`
   const params = new URLSearchParams({ query });
   params.set('types', ARCHIVE_LOOKUP_KINDS.join(','));
+  // paging-exempt: a type-ahead lookup — the top hits are the whole answer, like ⌘K.
   params.set('limit', String(ARCHIVE_LOOKUP_LIMIT));
   return `/search?${params.toString()}`;
 }
 
 /** One player's newest connections, the Archive list's own read (ids only in it). */
 export function playerConversationsUrl(customerId: string): string {
+  // paging-exempt: the newest few connections of one player are the point; the full list is the Archive.
   const params = new URLSearchParams({
     status: 'all',
     customer_id: customerId,

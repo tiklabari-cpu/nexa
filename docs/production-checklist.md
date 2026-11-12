@@ -912,6 +912,15 @@ Without the back office, the by-hand path is a footnote.[^psql-activation]
       only runs by hand (`pnpm --filter @siyahtus/api retention:run --apply`, which also
       applies the retention windows). Check the table after an erasure that reported a pending
       file. The backup retention below still ages the files out of the archives.
+- [ ] Website crawler: the pilot template sets `CRAWLER_PROVIDER=http` (owner decision 2026-11-06
+      S11; tm 470.1), so a "Website" knowledge source reads the real site and the boot log has no
+      `crawler.mock_in_pilot` warning. The api server fetches whatever address a workspace names, so
+      every hop is SSRF-checked in the app (private, loopback, link-local and unique-local
+      addresses refused after DNS resolution, the socket pinned to the checked address, every
+      redirect re-checked) — a unit suite holds that. Confirm the host allows direct outbound
+      http/https (80/443), that `HTTP_PROXY`/`HTTPS_PROXY` are not relied on (the crawler ignores
+      them), and, as a second layer, that the api container cannot reach the LAN or
+      `169.254.169.254` at the firewall.
 - [ ] Backups use the same scripts as §6, pointed at this file: `make pilot-backup`
       (`COMPOSE_FILE=docker-compose.pilot.yml ./scripts/backup.sh`) writes
       `backups/db-<UTC>.dump` and, under the same timestamp, `backups/uploads-<UTC>.tar.gz`: the

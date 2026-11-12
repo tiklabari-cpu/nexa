@@ -17425,12 +17425,12 @@
         "description": "AI-17 kısmen: gerçek crawler sağlayıcısı var ama pilot şablonu `.env.production.example` CRAWLER_PROVIDER=mock; pilotta site taraması uydurma içerik üretiyor. Sahip kararı 2026-11-06 S11: pilotta gerçek tarama 470.1 (SSRF doğrulaması) yeşil olduktan sonra açılır.",
         "details": "ALT GÖREV BİRLEŞTİRMESİ (2026-11-07, sahip onayı; her alt görev ayrı pencere ve tam kapı demek): 470.1 + 470.2 → 470.1. Cancelled alt görevlere metinde yapılan atıflar birleşik alt görevi kasteder.\n\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-13 / AI-17 (partial). Kanıt yeterlidir.\n\nKODDA BUGÜN: `.env.production.example:~426` `CRAWLER_PROVIDER=mock`; `apps/api/src/services/ai/crawler/*`; `apps/api/src/config/env.ts:1219` `CRAWLER_PROVIDER: z.enum(CRAWLER_PROVIDERS).default('mock')`; `job-runner.ts:~590-591`, `jobs.ts:~104`; mock uyarısı `server.ts:~318-319`.\n\nYAPILACAK: alt görevler sırayla. 470.1 karardan bağımsız güvenlik kapısıdır; 470.2 yalnız 470.1 done olduktan sonra yapılır (sahip onayı verildi, S11).\n\nTUZAK: memory network-tests-without-egress (dns.lookup stub), pilot-rehearsal-with-fake-env, deployment-config-field-ripples (değer değişimi testleri ripple edebilir).\n\nKAPSAM DIŞI: crawler kalitesi.\nDENETİM BULGULARI: G-13",
         "testStrategy": "Alt görevlerde. DoD: CONVENTIONS §1.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-07T11:50:37.837Z",
+        "updatedAt": "2026-11-12T03:10:53.913Z",
         "subtasks": [
           {
             "id": 1,
@@ -17438,11 +17438,11 @@
             "description": "(470.1) Mevcut http sağlayıcısının SSRF korumasını testle sabitle; eksikse ekle. (470.2) Sahip pilotta gerçek taramayı onayladı (2026-11-06 S11); yalnız 470.1 kapanınca: şablon değeri, egress notu ve checklist.",
             "details": "BİRLEŞİK ALT GÖREV (sahip onayı 2026-11-07): 470.1, 470.2 tek pencerede yapılır; DoD kapısı bir kez koşar.\nBölümler sırayla yapılır, her biri kendi kabul ölçütüyle kapanır; biri yeşil değilse alt görev done değildir.\n470.2 cancelled durumda ve buraya işaret ediyor; metinlerde onlara yapılan atıflar bu alt görevi kasteder.\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\n━━ BÖLÜM 1 — 470.1 CRAWLER-SSRF-VERIFY · http crawler özel/loopback/link-local IP'lere ve yönlendirme sonrası özel IP'lere istek yapmasın ━━\nSORUN: Mevcut http sağlayıcısının SSRF korumasını testle sabitle; eksikse ekle.\n\nDNS çözümü sonrası IP kontrolü (10/8, 172.16/12, 192.168/16, 127/8, 169.254/16, ::1, fc00::/7, fe80::/10), yönlendirme her adımda yeniden kontrol; DNS rebinding için bağlantı çözülen IP'ye yapılır. Mevcutsa yalnız test.\n\n━━ BÖLÜM 2 — 470.2 CRAWLER-PILOT-TEMPLATE · 470.1 yeşil olduktan sonra: pilot şablonunda CRAWLER_PROVIDER=http + SSRF/egress notu + checklist satırı ━━\nSORUN: Sahip pilotta gerçek taramayı onayladı (2026-11-06 S11); yalnız 470.1 kapanınca: şablon değeri, egress notu ve checklist.\n\n`.env.production.example:~426` http + SSRF/egress açıklaması; pilot config/şablon testleri; checklist crawler satırı.",
             "testStrategy": "BÖLÜM 1 (470.1): api birim (dns.lookup stub): özel IP'ye çözülen host → istek yapılmaz; public → yapılır; public'ten özel IP'ye 302 → durur. Mutasyon: IP kontrolünü kaldır → kırmızı.\nBÖLÜM 2 (470.2): Şablon testi: CRAWLER_PROVIDER=http; pilot-config testleri yeşil.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "470",
             "priority": "low",
-            "updatedAt": "2026-11-07T11:50:37.837Z"
+            "updatedAt": "2026-11-12T03:10:53.913Z"
           },
           {
             "id": 2,
@@ -17778,7 +17778,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-12T01:53:46.568Z",
+      "lastModified": "2026-11-12T03:10:53.914Z",
       "taskCount": 478,
       "completedCount": 449,
       "tags": [

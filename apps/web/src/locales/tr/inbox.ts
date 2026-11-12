@@ -115,7 +115,7 @@ export const inbox: Messages = {
   // Arşivde mesaj metni arama (ID-07 · tm 333.4)
   'inbox.archiveSearch.ariaLabel': 'Arşivlenmiş mesajlarda ara',
   'inbox.archiveSearch.inputLabel': 'Mesaj metninde ara',
-  'inbox.archiveSearch.placeholder': 'Mesajlarda ara…',
+  'inbox.archiveSearch.placeholder': 'Mesaj, ID, ad ya da e-posta ara…',
   'inbox.archiveSearch.submit': 'Ara',
   'inbox.archiveSearch.clear': 'Temizle',
   'inbox.archiveSearch.fromLabel': 'Başlangıç tarihi',

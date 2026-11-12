@@ -395,3 +395,45 @@ describe('archive message search (ID-07)', () => {
     expect(screen.getByRole('searchbox', { name: 'Search message text' })).toHaveValue('');
   });
 });
+
+describe('archive search by number (ID-06 · tm 468)', () => {
+  it('puts the message a pasted number names first, and opens the day at it', async () => {
+    serve(() => Promise.resolve({ items: [], total: 0 }));
+    const fallback = api.get.getMockImplementation()!;
+    api.get.mockImplementation((url: string) =>
+      url.startsWith('/search?')
+        ? Promise.resolve({
+            items: [
+              {
+                kind: 'event',
+                chat_id: 'day-1',
+                thread_id: MATCHED_THREAD,
+                event_id: MATCHED_EVENT,
+                title: 'Customer day-1',
+                subtitle: null,
+                at: '2026-09-04T09:00:00.000Z',
+                matched_on: 'event_id',
+              },
+            ],
+          })
+        : fallback(url),
+    );
+    const user = userEvent.setup();
+    renderInbox();
+    await openArchive(user);
+    await ask(user, MATCHED_EVENT);
+
+    const direct = await screen.findByTestId('archive-lookup');
+    const row = within(direct).getByRole('button', { name: /Customer day-1/ });
+    expect(within(row).getByText('Message ID')).toBeInTheDocument();
+    await user.click(row);
+
+    await screen.findByText('merhaba');
+    await waitFor(() =>
+      expect(document.querySelector('[data-highlighted="true"]')?.textContent).toContain(
+        'Papara ile 5000 TL',
+      ),
+    );
+    expect(search).not.toContain(MATCHED_EVENT);
+  });
+});

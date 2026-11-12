@@ -7,8 +7,12 @@
  * The searched words are component state and nothing else: they are not written
  * to the address bar, the history or storage (GV-05). A snippet is conversation
  * content, so — like the transcript — it is shown as written and not translated.
+ *
+ * Where the view also looks the value up (tm 468, `archive/archive-lookup.ts`),
+ * a number or an address is asked for even when the text search's own rules
+ * would refuse it, and the direct matches stand above the text hits.
  */
-import { useState, type FormEvent, type ReactElement } from 'react';
+import { useState, type FormEvent, type ReactElement, type ReactNode } from 'react';
 import {
   MESSAGE_SEARCH_MAX_DAYS,
   MESSAGE_SEARCH_MAX_WORDS,
@@ -22,6 +26,7 @@ import { ListSkeleton } from '../../components/Skeleton.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { formatDateTime } from '../../lib/format.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
+import { isDirectLookup } from '../archive/archive-lookup.js';
 import type { PagedQueryResult } from '../../lib/paged-query.js';
 import {
   archiveSearchReason,
@@ -54,11 +59,14 @@ export function ArchiveSearchBar({
   active,
   onSearch,
   onClear,
+  lookup = false,
 }: {
   /** The search in force, or null while the view shows its ordinary list. */
   active: ArchiveSearchRequest | null;
   onSearch: (request: ArchiveSearchRequest) => void;
   onClear: () => void;
+  /** The view also looks the value up by number, address and name (tm 468). */
+  lookup?: boolean;
 }): ReactElement {
   const t = useTranslate();
   const [query, setQuery] = useState(active?.query ?? '');
@@ -76,8 +84,14 @@ export function ArchiveSearchBar({
       return;
     }
     const broken = checkArchiveSearch(request);
-    setRefusal(broken);
-    if (!broken) onSearch(request);
+    // A number or an address is looked up whatever the text search's rules say;
+    // the text search then simply does not run (tm 468).
+    const refused =
+      broken && !(lookup && broken !== 'range_order' && isDirectLookup(request.query))
+        ? broken
+        : null;
+    setRefusal(refused);
+    if (!refused) onSearch(request);
   };
 
   const clear = (): void => {
@@ -193,6 +207,8 @@ export function ArchiveSearchResults({
   selectedId,
   onOpen,
   onGoToMessage,
+  lookup,
+  textSearched = true,
 }: {
   search: PagedQueryResult<ArchiveSearchHit>;
   selectedId: string | null;
@@ -200,10 +216,32 @@ export function ArchiveSearchResults({
   onOpen: (hit: ArchiveSearchHit) => void;
   /** Opens it at the message that matched ("Bu mesaja git"). */
   onGoToMessage: (hit: ArchiveSearchHit) => void;
+  /**
+   * The direct matches (tm 468), drawn above the text hits: whether it found
+   * anything and whether it has answered decide the empty state.
+   */
+  lookup?: { node: ReactNode; found: boolean; settled: boolean };
+  /** False when the text search's rules refused the value and only the lookup ran. */
+  textSearched?: boolean;
 }): ReactElement {
   const t = useTranslate();
   const loaded = search.pages.length > 0;
   const reason = search.isError ? archiveSearchReason(search.error) : null;
+  const lookupWaiting = lookup !== undefined && !lookup.settled;
+  // Nothing found by the text search: the direct matches are the answer if
+  // there are any, and the empty state waits for the lookup to have answered.
+  const nothingByText = lookup?.found ? (
+    textSearched ? (
+      <p className="px-4 py-2 text-2xs text-content-tertiary">{t('archive.lookup.noText')}</p>
+    ) : null
+  ) : lookupWaiting ? (
+    <ListSkeleton />
+  ) : (
+    <EmptyState
+      title={t('inbox.archiveSearch.empty.title')}
+      description={t('inbox.archiveSearch.empty.description')}
+    />
+  );
 
   return (
     <div
@@ -213,7 +251,10 @@ export function ArchiveSearchResults({
         if (el.scrollHeight - el.scrollTop - el.clientHeight < END_OF_LIST_PX) search.fetchNext();
       }}
     >
-      {search.isError && !loaded ? (
+      {lookup?.node}
+      {!textSearched ? (
+        nothingByText
+      ) : search.isError && !loaded ? (
         reason ? (
           // A refusal the agent can act on: say which rule, not "something went wrong".
           <div role="alert" className="flex flex-col gap-1 p-6 text-center">
@@ -230,10 +271,7 @@ export function ArchiveSearchResults({
       ) : search.isPending ? (
         <ListSkeleton />
       ) : search.items.length === 0 ? (
-        <EmptyState
-          title={t('inbox.archiveSearch.empty.title')}
-          description={t('inbox.archiveSearch.empty.description')}
-        />
+        nothingByText
       ) : (
         <>
           <p

@@ -208,4 +208,13 @@ export const archive: Messages = {
   'archive.facts.tags': 'Tags',
   'archive.facts.risk': 'Risk flags',
   'archive.facts.messages': 'Messages',
+
+  // The archive bar's direct lookup (ID-06 · tm 468)
+  'archive.lookup.title': 'Direct matches',
+  'archive.lookup.error':
+    "Couldn't look the number or player up. The message search below still ran.",
+  'archive.lookup.playerConversations': "{name}'s conversations",
+  'archive.lookup.playerNone': 'No conversations you can open.',
+  'archive.lookup.playerError': "This player's conversations couldn't be loaded.",
+  'archive.lookup.noText': 'No message contains these words.',
 };

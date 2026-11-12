@@ -430,3 +430,152 @@ describe('Archive actions', () => {
     expect(screen.queryByRole('button', { name: 'Reopen' })).toBeNull();
   });
 });
+
+describe('Archive search by number, address and name (ID-06 · tm 468)', () => {
+  /** The lookup's answer for one query, and the text search's for any. */
+  function serveLookup(items: Array<Record<string, unknown>>, textHits: unknown[] = []): void {
+    const fallback = api.get.getMockImplementation()!;
+    api.get.mockImplementation((url: string) => {
+      if (url.startsWith('/search?')) return Promise.resolve({ items });
+      if (url.startsWith('/chats?'))
+        return Promise.resolve({ items: textHits, total: textHits.length });
+      if (url === '/chats/CHATDAYAAA') return Promise.resolve({ thread: { id: 'THREADONE1' } });
+      return fallback(url);
+    });
+  }
+
+  async function searchFor(query: string): Promise<HTMLElement> {
+    const user = userEvent.setup();
+    renderArchive();
+    const bar = screen.getByRole('search', { name: 'Search archived messages' });
+    await user.type(within(bar).getByRole('searchbox', { name: 'Search message text' }), query);
+    await user.click(within(bar).getByRole('button', { name: 'Search' }));
+    return bar;
+  }
+
+  function urls(prefix: string): string[] {
+    return api.get.mock.calls.map(([url]) => url as string).filter((url) => url.startsWith(prefix));
+  }
+
+  it('puts the connection a pasted Chat ID names first, and opens it in place', async () => {
+    serveLookup(
+      [
+        {
+          kind: 'connection',
+          chat_id: 'CHATDAYBBB',
+          thread_id: 'THREADTWO2',
+          title: 'Mira Kaya',
+          subtitle: null,
+          at: '2026-10-21T09:00:00.000Z',
+          matched_on: 'thread_id',
+        },
+      ],
+      [
+        {
+          id: 'CHATDAYCCC',
+          customer_name: 'Someone Else',
+          match: {
+            thread_id: 'THREADCCC3',
+            event_id: 'THREADCCC3_1',
+            snippet: 'about THREADTWO2',
+            highlights: [{ start: 6, end: 16 }],
+            created_at: '2026-10-22T09:00:00.000Z',
+            internal: false,
+            match_count: 1,
+          },
+        },
+      ],
+    );
+    await searchFor('THREADTWO2');
+
+    const direct = await screen.findByTestId('archive-lookup');
+    expect(within(direct).getByText('Direct matches')).toBeInTheDocument();
+    const hit = within(direct).getByRole('button', { name: /Mira Kaya/ });
+    expect(within(hit).getByText('Chat ID')).toBeInTheDocument();
+    expect(within(hit).getByText('THREADTWO2')).toBeInTheDocument();
+    // The direct match stands above the text search's hit, which still ran.
+    const textHit = await screen.findByRole('button', { name: /Someone Else/ });
+    expect(hit.compareDocumentPosition(textHit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(urls('/search?')).toEqual([
+      '/search?query=THREADTWO2&types=chat%2Cconnection%2Cevent%2Ccustomer&limit=10',
+    ]);
+    expect(urls('/chats?')).toHaveLength(1);
+
+    await userEvent.setup().click(hit);
+    expect(location.search).toBe('?c=THREADTWO2');
+    expect(await screen.findByText('hello from THREADTWO2')).toBeInTheDocument();
+  });
+
+  it('opens a day found by its Thread ID at the day’s newest connection', async () => {
+    serveLookup([
+      {
+        kind: 'chat',
+        chat_id: 'CHATDAYAAA',
+        title: 'Mira Kaya',
+        subtitle: null,
+        at: '2026-10-20T09:00:00.000Z',
+        matched_on: 'chat_id',
+      },
+    ]);
+    await searchFor('CHATDAYAAA');
+
+    const direct = await screen.findByTestId('archive-lookup');
+    const hit = within(direct).getByRole('button', { name: /Mira Kaya/ });
+    expect(within(hit).getByText('Thread ID')).toBeInTheDocument();
+    // No text hit: the direct match is the answer, not "nothing found".
+    expect(await screen.findByText('No message contains these words.')).toBeInTheDocument();
+
+    await userEvent.setup().click(hit);
+    await waitFor(() => expect(location.search).toBe('?c=THREADONE1'));
+    expect(api.get).toHaveBeenCalledWith('/chats/CHATDAYAAA');
+  });
+
+  it('finds a player by address and lists their conversations, each opening in place', async () => {
+    serveLookup([
+      {
+        kind: 'customer',
+        customer_id: 'cust-1',
+        title: 'Mira Kaya',
+        subtitle: 'mira@example.com',
+        at: '2026-10-22T09:00:00.000Z',
+        matched_on: 'email',
+      },
+    ]);
+    await searchFor('mira@example.com');
+
+    const theirs = await screen.findByRole('list', { name: "Mira Kaya's conversations" });
+    expect(within(theirs).getAllByRole('button')).toHaveLength(3);
+    expect(within(theirs).getByText('first words of THREADTHR3')).toBeInTheDocument();
+    expect(urls('/archive/conversations?status=all&customer_id=')).toEqual([
+      '/archive/conversations?status=all&customer_id=cust-1&limit=5',
+    ]);
+
+    await userEvent.setup().click(within(theirs).getByRole('button', { name: /THREADTHR3/ }));
+    expect(location.search).toBe('?c=THREADTHR3');
+    // GV-05: the address holds the connection's number, never the address searched for.
+    expect(location.search).not.toContain('mira');
+  });
+
+  it('looks an address up even when the text search’s rules refuse it, and asks the text search nothing', async () => {
+    serveLookup([]);
+    const bar = await searchFor('a@b.co');
+    expect(within(bar).queryByRole('alert')).toBeNull();
+    await waitFor(() => expect(urls('/search?')).toHaveLength(1));
+    expect(urls('/chats?')).toEqual([]);
+    expect(await screen.findByText('No messages match')).toBeInTheDocument();
+  });
+
+  it('still refuses a word the text search would refuse, asking nothing', async () => {
+    const bar = await searchFor('ab');
+    expect(within(bar).getByRole('alert')).toHaveTextContent('Type at least 3 characters.');
+    expect(urls('/search?')).toEqual([]);
+    expect(urls('/chats?')).toEqual([]);
+  });
+
+  it('says only what the text search found when the lookup names nothing', async () => {
+    serveLookup([]);
+    await searchFor('withdrawal');
+    expect(await screen.findByText('No messages match')).toBeInTheDocument();
+    expect(screen.queryByTestId('archive-lookup')).toBeNull();
+  });
+});

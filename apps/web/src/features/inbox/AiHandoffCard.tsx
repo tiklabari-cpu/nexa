@@ -10,6 +10,10 @@
  * flags and the mood, the files, and the step it suggests. "Copy" puts the
  * card's own text on the clipboard, for a ticket or a colleague.
  *
+ * Under the priority it carries the conversation's two numbers — the day's
+ * (`ids.thread`) and the connection's (`ids.chat`) — each with its copy button
+ * (`CopyId`, ID-05 · tm 468).
+ *
  * The same component wherever a card is shown: at the top of the Details
  * panel (the newest), on the card's line in the transcript, and in the
  * archive, which is the same two panes.
@@ -31,6 +35,7 @@ import {
   type AiHandoffCardView,
   type AiHandoffFeedback,
 } from '@siyahtus/types';
+import { CopyId } from '../../components/CopyId.js';
 import { Banner, PanelSection } from '../../components/ui/index.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useAuth } from '../../lib/auth-store.js';
@@ -161,6 +166,14 @@ export function AiHandoffCard({
           {t(`inbox.priority.${card.priority}`)}
         </span>
         <span className="text-2xs text-content-tertiary">{formatDateTime(card.created_at)}</span>
+      </div>
+
+      {/* Both numbers, as the thread header draws them (ID-05 · tm 468): the
+          member's day and the connection the AI handed over — read off the card
+          or copied into a ticket without opening the conversation's header. */}
+      <div data-testid="ai-handoff-ids" className="flex flex-col gap-0.5 text-2xs leading-none">
+        <CopyId kind="thread" value={card.chat_id} />
+        <CopyId kind="chat" value={card.thread_id} />
       </div>
 
       <p className="font-medium text-content" data-testid="ai-handoff-summary">

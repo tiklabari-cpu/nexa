@@ -27,7 +27,10 @@ import { DetailsPanel } from './DetailsPanel.js';
 import { CopilotPanel } from './CopilotPanel.js';
 import { Transcript } from './Transcript.js';
 import { ArchiveSearchBar, ArchiveSearchResults } from './ArchiveSearch.js';
+import { useArchiveLookupSection } from '../archive/ArchiveLookup.js';
+import type { LookupTarget } from '../archive/archive-lookup.js';
 import {
+  textSearchRequest,
   useArchiveSearch,
   type ArchiveSearchHit,
   type ArchiveSearchRequest,
@@ -421,7 +424,7 @@ export function InboxPage(): ReactElement {
   // The Archive's search replaces the list while it is asked for; leaving the
   // view leaves the list alone and the words in the bar for the way back.
   const searchActive = view === 'archived' && archiveSearch !== null;
-  const search = useArchiveSearch(searchActive ? archiveSearch : null);
+  const search = useArchiveSearch(textSearchRequest(searchActive ? archiveSearch : null));
   const openFound = (hit: ArchiveSearchHit, atMessage: boolean): void => {
     openChat(hit.id);
     setFocus(
@@ -435,6 +438,21 @@ export function InboxPage(): ReactElement {
         : null,
     );
   };
+  // A direct match (tm 468) opens its day, at the message when it named one.
+  const openLookup = (target: LookupTarget): void => {
+    openChat(target.chatId);
+    setFocus(
+      target.threadId && target.eventId
+        ? {
+            chatId: target.chatId,
+            threadId: target.threadId,
+            eventId: target.eventId,
+            nonce: Date.now(),
+          }
+        : null,
+    );
+  };
+  const lookup = useArchiveLookupSection(searchActive ? archiveSearch : null, null, openLookup);
   const chat = useChat(selectedId);
   // The day's earlier connections join the transcript only while the chat read
   // is the selected one's — a stale detail from the chat before would walk the
@@ -970,6 +988,7 @@ export function InboxPage(): ReactElement {
                   active={archiveSearch}
                   onSearch={setArchiveSearch}
                   onClear={() => setArchiveSearch(null)}
+                  lookup
                 />
               )}
 
@@ -990,6 +1009,8 @@ export function InboxPage(): ReactElement {
                   selectedId={selectedId}
                   onOpen={(hit) => openFound(hit, false)}
                   onGoToMessage={(hit) => openFound(hit, true)}
+                  lookup={lookup}
+                  textSearched={textSearchRequest(archiveSearch) !== null}
                 />
               ) : (
                 <>

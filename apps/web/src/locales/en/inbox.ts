@@ -132,7 +132,7 @@ export const inbox: Messages = {
   // Message text search in the Archive (ID-07 · tm 333.4)
   'inbox.archiveSearch.ariaLabel': 'Search archived messages',
   'inbox.archiveSearch.inputLabel': 'Search message text',
-  'inbox.archiveSearch.placeholder': 'Search messages…',
+  'inbox.archiveSearch.placeholder': 'Search messages, an ID, a name or an email…',
   'inbox.archiveSearch.submit': 'Search',
   'inbox.archiveSearch.clear': 'Clear',
   'inbox.archiveSearch.fromLabel': 'From date',

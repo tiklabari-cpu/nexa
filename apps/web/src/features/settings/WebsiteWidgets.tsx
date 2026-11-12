@@ -201,9 +201,13 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
             <ul className="divide-y divide-border">
               {list.data.items.map((site) => (
                 <li key={site.id} className="flex flex-col gap-2 px-4 py-3">
-                  <div className="flex items-center gap-3">
+                  {/* Wraps on a phone: the buttons drop under the address
+                      rather than being cut off by the card (tm 472.1). */}
+                  <div className="flex flex-wrap items-center gap-3">
                     <PlatformIcon setup={site.setup} />
-                    <span className="flex-1 font-mono text-sm">{site.domain}</span>
+                    <span className="min-w-0 flex-1 break-all font-mono text-sm">
+                      {site.domain}
+                    </span>
 
                     <span className="flex flex-col items-end">
                       <StatusDot

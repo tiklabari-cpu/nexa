@@ -22,6 +22,11 @@
  * `localStorage`. The toggle flips only once the server has answered: an
  * optimistic flip would let a reload that races the write bring the old layout
  * back (the trap tm 250 measured in e2e).
+ *
+ * Below 1024 px there is no room beside a section (GV-04 · tm 472.1): the same
+ * list is a page of its own (`variant="page"`, `/app/settings`) and a section
+ * opens in its place, with a way back (`SettingsLayout`). No pin there — there
+ * is no side to pin it to — and every link is a finger-sized target.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState, type KeyboardEvent, type ReactElement } from 'react';
@@ -73,7 +78,16 @@ function useSettingsNavPin(): {
 const SEARCH_INPUT_ID = 'settings-nav-search';
 const SEARCH_RESULTS_ID = 'settings-nav-search-results';
 
-export function SettingsNav(): ReactElement {
+export function SettingsNav({
+  variant = 'side',
+}: {
+  /** `page`: the whole screen on a narrow window, rather than a column beside a section. */
+  variant?: 'side' | 'page';
+} = {}): ReactElement {
+  const page = variant === 'page';
+  // A finger-sized row on the narrow page (≥ 44 px) whose long names wrap rather
+  // than clip; the desktop column keeps its density and its ellipsis.
+  const linkBox = page ? 'flex min-h-11 items-center px-3 py-2' : 'block truncate px-2 py-1.5';
   const t = useTranslate();
   const navigate = useNavigate();
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
@@ -155,7 +169,9 @@ export function SettingsNav(): ReactElement {
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         onKeyDown={onSearchKeyDown}
-        className="w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
+        className={`w-full rounded-md border border-border bg-inset px-2 text-sm outline-none ${
+          page ? 'min-h-11' : 'py-1.5'
+        }`}
       />
       {/* Announced rather than read from the visible list itself, so a screen
           reader hears the count once rather than walking every result row. */}
@@ -194,7 +210,7 @@ export function SettingsNav(): ReactElement {
                   }
                   setQuery('');
                 }}
-                className={`block truncate rounded-md px-2 py-1.5 text-sm transition-colors ${
+                className={`${linkBox} rounded-md text-sm transition-colors ${
                   index === activeIndex
                     ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
                     : 'text-content-secondary hover:bg-surface-2 hover:text-content'
@@ -232,7 +248,7 @@ export function SettingsNav(): ReactElement {
                       if (!confirmLeave()) event.preventDefault();
                     }}
                     className={({ isActive }) =>
-                      `block truncate rounded-md px-2 py-1.5 text-sm transition-colors ${
+                      `${linkBox} rounded-md text-sm transition-colors ${
                         isActive
                           ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
                           : 'text-content-secondary hover:bg-surface-2 hover:text-content'
@@ -256,6 +272,18 @@ export function SettingsNav(): ReactElement {
       {searching ? searchResults : groupList}
     </nav>
   );
+
+  if (page) {
+    return (
+      <div
+        data-testid="settings-nav"
+        data-variant="page"
+        className="rounded-lg border border-border bg-surface"
+      >
+        {list}
+      </div>
+    );
+  }
 
   if (pinned) {
     return (

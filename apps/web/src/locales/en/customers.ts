@@ -56,6 +56,12 @@ export const customers: Messages = {
   'customers.page.lead': 'lead',
   'customers.page.banned': 'Banned',
   'customers.page.never': 'Never',
+  // Below 1024 px the table is a list of cards and a record fills the screen
+  // (GV-04 · tm 472.1): the cards have no column headers to sort by.
+  'customers.page.sortBy': 'Sort by',
+  'customers.page.sortOption.asc': '{column}, ascending',
+  'customers.page.sortOption.desc': '{column}, descending',
+  'customers.page.backToList': 'All customers',
 
   // Contacts filter panel — CustomersFilters.tsx (customers-filters.ts holds the
   // catalogue keys, this file the words — tm 259.18)

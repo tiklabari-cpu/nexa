@@ -47,7 +47,7 @@ function resize(next: number): void {
   });
 }
 
-function renderShell(path = '/app/customers') {
+function renderShell(path = '/app/team') {
   return render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
@@ -58,6 +58,8 @@ function renderShell(path = '/app/customers') {
             <Route path="inbox" element={<p>Inbox module</p>} />
             <Route path="inbox/timeline" element={<p>Timeline module</p>} />
             <Route path="customers" element={<p>Customers module</p>} />
+            <Route path="team" element={<p>Team module</p>} />
+            <Route path="settings/:section" element={<p>Settings section</p>} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -117,8 +119,16 @@ describe('width classes', () => {
     expect(isResponsiveRoute('/app/inbox')).toBe(true);
     expect(isResponsiveRoute('/app/inbox/')).toBe(true);
     expect(isResponsiveRoute('/app/inbox/timeline')).toBe(true);
-    expect(isResponsiveRoute('/app/customers')).toBe(false);
-    expect(isResponsiveRoute('/app/settings/widget')).toBe(false);
+    // Settings and Customers since tm 472.1: the menu, every section one level
+    // under it, and the contacts list — but not Customers' other pages.
+    expect(isResponsiveRoute('/app/settings')).toBe(true);
+    expect(isResponsiveRoute('/app/settings/widget')).toBe(true);
+    expect(isResponsiveRoute('/app/settings/audit-log/')).toBe(true);
+    expect(isResponsiveRoute('/app/settings/widget/extra')).toBe(false);
+    expect(isResponsiveRoute('/app/settingsx')).toBe(false);
+    expect(isResponsiveRoute('/app/customers')).toBe(true);
+    expect(isResponsiveRoute('/app/customers/goals')).toBe(false);
+    expect(isResponsiveRoute('/app/team')).toBe(false);
   });
 });
 
@@ -126,7 +136,7 @@ describe('narrow screen band', () => {
   it('is not shown at a desktop width (1024 px and up)', () => {
     stubWidth(1024);
     renderShell();
-    expect(screen.getByText('Customers module')).toBeInTheDocument();
+    expect(screen.getByText('Team module')).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: BAND })).not.toBeInTheDocument();
   });
 
@@ -137,7 +147,7 @@ describe('narrow screen band', () => {
     expect(band).toHaveTextContent(/mobile app/);
     expect(screen.getByRole('button', { name: 'Continue anyway' })).toBeInTheDocument();
     // A band, not a stand-in: the module and the rail are on screen with it.
-    expect(screen.getByText('Customers module')).toBeInTheDocument();
+    expect(screen.getByText('Team module')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Inbox' })).toBeInTheDocument();
     expect(screen.getAllByRole('main')).toHaveLength(1);
   });
@@ -149,13 +159,27 @@ describe('narrow screen band', () => {
     expect(screen.queryByRole('region', { name: BAND })).not.toBeInTheDocument();
   });
 
+  it('is not shown over Settings or Customers at a phone width (tm 472.1)', () => {
+    stubWidth(375);
+    renderShell('/app/settings/widget');
+    expect(screen.getByText('Settings section')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: BAND })).not.toBeInTheDocument();
+  });
+
+  it('is not shown over the contacts list at a tablet width (tm 472.1)', () => {
+    stubWidth(768);
+    renderShell('/app/customers');
+    expect(screen.getByText('Customers module')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: BAND })).not.toBeInTheDocument();
+  });
+
   it('follows the route: leaving the inbox for an unadapted screen brings it', async () => {
     stubWidth(768);
     const user = userEvent.setup();
     renderShell('/app/inbox');
     expect(screen.queryByRole('region', { name: BAND })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('link', { name: 'Customers' }));
-    expect(await screen.findByText('Customers module')).toBeInTheDocument();
+    await user.click(screen.getByRole('link', { name: 'Team' }));
+    expect(await screen.findByText('Team module')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: BAND })).toBeInTheDocument();
   });
 
@@ -193,15 +217,15 @@ describe('narrow screen band', () => {
   it('decides again on resize, the module staying the same mounted tree', () => {
     stubWidth(1280);
     renderShell();
-    const module = screen.getByText('Customers module');
+    const module = screen.getByText('Team module');
 
     resize(800);
     expect(screen.getByRole('region', { name: BAND })).toBeInTheDocument();
-    expect(screen.getByText('Customers module')).toBe(module);
+    expect(screen.getByText('Team module')).toBe(module);
 
     resize(1280);
     expect(screen.queryByRole('region', { name: BAND })).not.toBeInTheDocument();
-    expect(screen.getByText('Customers module')).toBe(module);
+    expect(screen.getByText('Team module')).toBe(module);
   });
 
   it('keeps the rail to its icon column below 1024 px, whatever was pinned', () => {

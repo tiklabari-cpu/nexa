@@ -60,6 +60,13 @@ export interface NavDestination {
    * been measured at 375 and 768 px — `narrow-inbox.spec.ts` holds the inbox to it.
    */
   responsive?: true;
+  /**
+   * Every address one level under the module is laid out for a narrow window
+   * too (Settings' sections, tm 472.1): `/app/settings/tags` is, but
+   * `/app/settings/a/b` is not. Measured section by section at 375 and 768 px
+   * by `narrow-settings-customers.spec.ts`.
+   */
+  responsiveChildren?: true;
 }
 
 /**
@@ -123,6 +130,9 @@ export const MODULES: NavDestination[] = [
     // `GET /customers` (routes/customers.ts) — `customers:ro` is in
     // `DEFAULT_AGENT_SCOPES` directly, so every role reaches this one.
     scope: ['customers:ro', 'customers:rw'],
+    // Cards and a full-screen record below 1024 px (tm 472.1); Real-time,
+    // Campaigns and Goals under it are not adapted yet.
+    responsive: true,
   },
   {
     to: '/app/team',
@@ -187,6 +197,9 @@ export const FOOTER: NavDestination[] = [
     // set loses it, which is the "sees nothing in the module" case this gate
     // exists for.
     scope: ['tags--all:ro', 'tags--groups:ro'],
+    // Below 1024 px the menu is a list and a section opens over it (tm 472.1).
+    responsive: true,
+    responsiveChildren: true,
   },
   {
     to: '/app/developers',
@@ -205,16 +218,26 @@ export const NAV_DESTINATIONS: NavDestination[] = [...MODULES, ...FOOTER];
  */
 const RESPONSIVE_SUBPATHS: readonly string[] = ['/app/inbox/timeline'];
 
+/** `path` is exactly one segment under `parent` (`/app/settings/tags` under `/app/settings`). */
+function isChildOf(path: string, parent: string): boolean {
+  const rest = path.startsWith(`${parent}/`) ? path.slice(parent.length + 1) : '';
+  return rest.length > 0 && !rest.includes('/');
+}
+
 /**
  * Whether the screen at `pathname` works below 1024 px (GV-04 · tm 385). Exact
  * paths only: a module's other pages (`/app/customers/goals` under Customers)
- * are adapted one by one, not inherited.
+ * are adapted one by one, not inherited — unless the module says every page one
+ * level under it is (`responsiveChildren`, Settings' sections).
  */
 export function isResponsiveRoute(pathname: string): boolean {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
   return (
-    NAV_DESTINATIONS.some((dest) => dest.responsive && dest.to === path) ||
-    RESPONSIVE_SUBPATHS.includes(path)
+    NAV_DESTINATIONS.some(
+      (dest) =>
+        (dest.responsive && dest.to === path) ||
+        (dest.responsiveChildren && isChildOf(path, dest.to)),
+    ) || RESPONSIVE_SUBPATHS.includes(path)
   );
 }
 

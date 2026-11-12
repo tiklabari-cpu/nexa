@@ -351,54 +351,57 @@ function SlaPolicyForm({
             t('settings.sla.sameAsChatsPlaceholder'),
           )}
         </div>
-        <table className="w-fit text-sm">
-          <caption className="pb-2 text-left text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-            {t('settings.sla.byPriorityCaption')}
-          </caption>
-          <thead>
-            <tr className="text-left text-2xs text-content-tertiary">
-              <th scope="col" className="pr-4 font-medium">
-                {t('settings.sla.byPriority.priority')}
-              </th>
-              <th scope="col" className="pr-4 font-medium">
-                {t('settings.sla.byPriority.firstResponse')}
-              </th>
-              <th scope="col" className="font-medium">
-                {t('settings.sla.byPriority.resolution')}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {SLA_PRIORITY_KEYS.map((key) => {
-              const level = t(PRIORITY_LABEL_KEY[key]);
-              return (
-                <tr key={key}>
-                  <th scope="row" className="pr-4 text-left font-normal">
-                    {level}
-                  </th>
-                  <td className="py-1 pr-4">
-                    {minutesInput(
-                      `${key}_first_response`,
-                      `sla-${key}-first-response`,
-                      t('settings.sla.byPriority.firstResponseFor', { priority: level }),
-                      t('settings.sla.ticketDefaultPlaceholder'),
-                      true,
-                    )}
-                  </td>
-                  <td className="py-1">
-                    {minutesInput(
-                      `${key}_resolution`,
-                      `sla-${key}-resolution`,
-                      t('settings.sla.byPriority.resolutionFor', { priority: level }),
-                      t('settings.sla.ticketDefaultPlaceholder'),
-                      true,
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        {/* Three columns of fields do not fit a phone: the table scrolls in place (tm 472.1). */}
+        <div className="relative max-w-full overflow-x-auto">
+          <table className="w-fit text-sm">
+            <caption className="pb-2 text-left text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+              {t('settings.sla.byPriorityCaption')}
+            </caption>
+            <thead>
+              <tr className="text-left text-2xs text-content-tertiary">
+                <th scope="col" className="pr-4 font-medium">
+                  {t('settings.sla.byPriority.priority')}
+                </th>
+                <th scope="col" className="pr-4 font-medium">
+                  {t('settings.sla.byPriority.firstResponse')}
+                </th>
+                <th scope="col" className="font-medium">
+                  {t('settings.sla.byPriority.resolution')}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {SLA_PRIORITY_KEYS.map((key) => {
+                const level = t(PRIORITY_LABEL_KEY[key]);
+                return (
+                  <tr key={key}>
+                    <th scope="row" className="pr-4 text-left font-normal">
+                      {level}
+                    </th>
+                    <td className="py-1 pr-4">
+                      {minutesInput(
+                        `${key}_first_response`,
+                        `sla-${key}-first-response`,
+                        t('settings.sla.byPriority.firstResponseFor', { priority: level }),
+                        t('settings.sla.ticketDefaultPlaceholder'),
+                        true,
+                      )}
+                    </td>
+                    <td className="py-1">
+                      {minutesInput(
+                        `${key}_resolution`,
+                        `sla-${key}-resolution`,
+                        t('settings.sla.byPriority.resolutionFor', { priority: level }),
+                        t('settings.sla.ticketDefaultPlaceholder'),
+                        true,
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
         <label className="flex items-start gap-3">
           <input

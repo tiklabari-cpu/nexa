@@ -843,13 +843,15 @@ function AuditFilters({
 }): ReactElement {
   const t = useTranslate();
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      <label className="flex items-center gap-2 text-xs text-content-secondary">
+    // `min-w-0 max-w-full`: a flex item of the page header, this row would
+    // otherwise take its widest option's width and run past a phone's edge.
+    <div className="flex min-w-0 max-w-full flex-wrap items-center gap-3">
+      <label className="flex min-w-0 max-w-full items-center gap-2 text-xs text-content-secondary">
         <span className="sr-only">{t('audit.filterByActionAriaLabel')}</span>
         <select
           value={action}
           onChange={(event: ChangeEvent<HTMLSelectElement>) => onAction(event.target.value)}
-          className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm text-content outline-none"
+          className="max-w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm text-content outline-none"
         >
           <option value="">{t('audit.allActions')}</option>
           {ACTION_GROUPS.map((group) => (
@@ -863,7 +865,8 @@ function AuditFilters({
           ))}
         </select>
       </label>
-      <div className="flex items-center gap-1 text-xs text-content-secondary">
+      {/* The two dates wrap on a phone rather than run past the edge (tm 472.1). */}
+      <div className="flex flex-wrap items-center gap-1 text-xs text-content-secondary">
         <label className="flex items-center gap-1">
           <span className="sr-only">{t('audit.fromDateAriaLabel')}</span>
           <input

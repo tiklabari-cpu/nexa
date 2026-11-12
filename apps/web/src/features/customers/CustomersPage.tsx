@@ -5,23 +5,28 @@
  * usually comparing them against the list they came from, and a modal takes
  * that away every time they open a record.
  *
+ * Below 1024 px there is no room for two panes or seven columns (GV-04 ·
+ * tm 472.1): the table is a list of cards, sorted from a menu since cards have
+ * no headers, and an opened record fills the screen with a way back.
+ *
  * Counts shown here are computed by the API from actual conversations. The
  * stored `chats_count` column has never been maintained and would read 0 for
  * everyone — see the note in the customer service.
  */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { customFieldDisplayValue } from '@siyahtus/types';
 import { Card, ErrorNotice, Page } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
-import { VirtualTable } from '../../components/VirtualList.js';
+import { VirtualList, VirtualTable } from '../../components/VirtualList.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { countryFlag, formatCount, formatDate } from '../../lib/format.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { usePagedQuery } from '../../lib/paged-query.js';
+import { isNarrowLayout, useViewportLayout } from '../../lib/viewport.js';
 import { roleAtLeast } from '../team/RoleMenu.js';
 import { CustomerDetailPanel } from './CustomerDetailPanel.js';
 import { CustomersFilters } from './CustomersFilters.js';
@@ -30,6 +35,7 @@ import {
   CUSTOMER_COLUMNS,
   isSortableColumn,
   parseCustomerSort,
+  CUSTOMER_SORT_OPTIONS,
   toggleCustomerSort,
   writeCustomerSort,
   type CustomerColumn,
@@ -55,6 +61,9 @@ const SEGMENTS: Array<{ id: Segment; labelKey: string }> = [
 
 /** Rows per request. The table chains pages from here, so it is a page, not a cap. */
 const CUSTOMERS_PAGE_SIZE = 50;
+
+/** One card in the narrow list, in px — uniform, as the virtual list needs. */
+const CARD_HEIGHT = 84;
 
 function customersUrl(
   segment: Segment,
@@ -89,6 +98,8 @@ export function CustomersPage(): ReactElement {
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const narrow = isNarrowLayout(useViewportLayout());
+  const backRef = useRef<HTMLButtonElement>(null);
 
   // The filter panel (FR-MOD-03.2.1) is uncontrolled once mounted (see
   // `ConditionFilters`); this only seeds it from a reload/shared link and
@@ -104,11 +115,10 @@ export function CustomersPage(): ReactElement {
   // key below is what restarts the page chain on a header click rather than
   // re-ordering the rows already loaded.
   const sort = useMemo(() => parseCustomerSort(searchParams), [searchParams]);
-  const changeSort = (key: CustomerSortKey): void => {
-    setSearchParams(writeCustomerSort(searchParams, toggleCustomerSort(sort, key)), {
-      replace: true,
-    });
+  const changeSortTo = (next: CustomerSort): void => {
+    setSearchParams(writeCustomerSort(searchParams, next), { replace: true });
   };
+  const changeSort = (key: CustomerSortKey): void => changeSortTo(toggleCustomerSort(sort, key));
 
   // Two deep links land here: `?customer=` (command palette, a bookmark, a
   // colleague) names one person — switch to the segment that contains
@@ -201,6 +211,46 @@ export function CustomersPage(): ReactElement {
     onSuccess: invalidate,
   });
 
+  // On a narrow window the record replaces the list wherever the page had been
+  // scrolled to: bring its top — the way back — into view.
+  const showRecordAlone = narrow && selectedId !== null;
+  useEffect(() => {
+    if (showRecordAlone) backRef.current?.scrollIntoView?.({ block: 'start' });
+  }, [showRecordAlone, selectedId]);
+
+  const detailPanel = (
+    <CustomerDetailPanel
+      customerId={selectedId}
+      canEdit={canEdit}
+      canBan={canBan}
+      canErase={canErase}
+      canLink={canLink}
+      onOpen={(id) => {
+        // Everyone's segment and no search, so the record is on the list
+        // the selection is validated against (a match rarely shares the
+        // name being searched for).
+        setSegment('all');
+        setSearch('');
+        setDebounced('');
+        setSelectedId(id);
+      }}
+      onChanged={invalidate}
+      // The promise keeps the ban confirmation pending until the answer; a
+      // refusal is held by the mutation and shown in the panel (`banError`).
+      onBanToggle={(id, banned) => banMutation.mutateAsync({ id, banned }).catch(() => undefined)}
+      banPending={banMutation.isPending}
+      banError={banMutation.isError ? banMutation.error : null}
+      banAttempt={banMutation.variables}
+      onErased={() => {
+        // Drop the selection before refetching: the panel is showing a
+        // record that no longer exists, and leaving it selected would send
+        // the detail query straight into a 404 the moment it reruns.
+        setSelectedId(null);
+        invalidate();
+      }}
+    />
+  );
+
   return (
     <Page
       title={t('customers.page.title')}
@@ -224,210 +274,207 @@ export function CustomersPage(): ReactElement {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder={t('customers.page.searchPlaceholder')}
-              className="w-64 max-w-full rounded-md border border-border bg-inset px-3 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
+              className="w-64 max-w-full rounded-md border border-border bg-inset px-3 py-1.5 text-sm outline-none placeholder:text-content-tertiary max-lg:min-h-11"
             />
           </label>
         </div>
       }
     >
-      <div
-        role="tablist"
-        aria-label={t('customers.page.segmentsAriaLabel')}
-        className="flex gap-1 border-b border-border pb-2"
-      >
-        {SEGMENTS.map((item) => (
+      {showRecordAlone ? (
+        <div className="flex flex-col gap-3">
           <button
-            key={item.id}
+            ref={backRef}
             type="button"
-            role="tab"
-            aria-selected={segment === item.id}
-            onClick={() => setSegment(item.id)}
-            className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
-              segment === item.id
-                ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
-                : 'text-content-secondary hover:bg-surface-2'
-            }`}
+            onClick={() => setSelectedId(null)}
+            className="inline-flex min-h-11 items-center gap-1.5 self-start rounded-md px-2 text-sm font-medium text-content-secondary hover:bg-surface-2 hover:text-content"
           >
-            {t(item.labelKey)}
+            <span aria-hidden="true">‹</span>
+            {t('customers.page.backToList')}
           </button>
-        ))}
-      </div>
-
-      <CustomersFilters initialConditions={conditions} onChange={handleFiltersChange} />
-
-      {list.error ? (
-        <ErrorNotice message={t('customers.page.loadError')} />
-      ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
-          <Card>
-            {!list.isPending && items.length > 0 && (
-              <div className="flex items-center justify-between border-b border-border px-4 py-2 text-2xs text-content-tertiary">
-                <span>
-                  {t('customers.page.shown', {
-                    shown: formatCount(items.length) ?? String(items.length),
-                    total: formatCount(list.total ?? items.length) ?? String(items.length),
-                  })}
-                </span>
-              </div>
-            )}
-            {list.isPending ? (
-              <ListSkeleton />
-            ) : items.length === 0 ? (
-              <EmptyState
-                title={t(
-                  debounced || conditions.length > 0
-                    ? 'customers.page.empty.searchTitle'
-                    : 'customers.page.empty.title',
-                )}
-                description={t(
-                  debounced || conditions.length > 0
-                    ? 'customers.page.empty.searchDescription'
-                    : 'customers.page.empty.description',
-                )}
-              />
-            ) : (
-              <VirtualTable
-                items={items}
-                rowHeight={56}
-                caption={t('customers.page.table.caption')}
-                colSpan={CUSTOMER_COLUMNS.length + customColumns.length}
-                onEndReached={list.fetchNext}
-                head={
-                  <thead>
-                    <tr className="border-b border-border">
-                      {CUSTOMER_COLUMNS.map((column) => (
-                        <ColumnHeader
-                          key={column.key}
-                          column={column}
-                          sort={sort}
-                          onSort={changeSort}
-                          t={t}
-                        />
-                      ))}
-                      {customColumns.map((field) => (
-                        // Never sortable (matches Email/Phone): the server has
-                        // no index over an arbitrary workspace-defined value,
-                        // so a header here carries no button and no aria-sort —
-                        // the same honesty `chats`/`tickets` observe.
-                        <th
-                          key={field.definition_id}
-                          scope="col"
-                          className="px-4 py-2 text-left text-xs font-medium text-content-secondary"
-                        >
-                          {field.label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                }
-                renderRow={(customer) => {
-                  const flag = countryFlag(customer.country_code);
-                  return (
-                    <tr
-                      key={customer.id}
-                      aria-selected={selectedId === customer.id}
-                      className={`cursor-pointer border-b border-border last:border-0 transition-colors ${
-                        selectedId === customer.id
-                          ? 'bg-brand-100 dark:bg-brand-950'
-                          : 'hover:bg-surface-2'
-                      }`}
-                      onClick={() => setSelectedId(customer.id)}
-                    >
-                      <td className="px-4 py-2.5">
-                        <button
-                          type="button"
-                          // The row is clickable for the mouse; this keeps it
-                          // reachable by keyboard without an interactive <tr>.
-                          onClick={() => setSelectedId(customer.id)}
-                          className="text-left"
-                        >
-                          <span className="flex items-center gap-2 font-medium">
-                            {customer.name ?? (
-                              <span className="italic text-content-tertiary">
-                                {t('customers.page.unnamedVisitor')}
-                              </span>
-                            )}
-                            {customer.is_lead && (
-                              <span className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs font-normal text-content-secondary">
-                                {t('customers.page.lead')}
-                              </span>
-                            )}
-                            {customer.banned && (
-                              <StatusDot tone="danger" label={t('customers.page.banned')} />
-                            )}
-                          </span>
-                        </button>
-                      </td>
-                      <td className="px-4 py-2.5 text-content-secondary">
-                        <span className="block truncate">{customer.email ?? '—'}</span>
-                      </td>
-                      <td className="px-4 py-2.5 text-content-secondary">
-                        {customer.phone ?? '—'}
-                      </td>
-                      <td className="px-4 py-2.5 text-content-secondary">
-                        <span className="inline-flex items-center gap-1.5">
-                          {flag && <span aria-hidden="true">{flag}</span>}
-                          <span>{customer.country ?? customer.country_code ?? '—'}</span>
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-content-secondary">
-                        {formatDate(customer.last_activity_at) ?? t('customers.page.never')}
-                      </td>
-                      <td className="tabular px-4 py-2.5 text-right">{customer.chats_count}</td>
-                      <td className="tabular px-4 py-2.5 text-right">{customer.tickets_count}</td>
-                      {customColumns.map((column) => (
-                        <td
-                          key={column.definition_id}
-                          className="px-4 py-2.5 text-content-secondary"
-                        >
-                          {customFieldDisplayValue(
-                            column,
-                            customer.table_custom_fields.find(
-                              (field) => field.definition_id === column.definition_id,
-                            )?.value ?? null,
-                          ) ?? '—'}
-                        </td>
-                      ))}
-                    </tr>
-                  );
-                }}
-              />
-            )}
-          </Card>
-
-          <CustomerDetailPanel
-            customerId={selectedId}
-            canEdit={canEdit}
-            canBan={canBan}
-            canErase={canErase}
-            canLink={canLink}
-            onOpen={(id) => {
-              // Everyone's segment and no search, so the record is on the list
-              // the selection is validated against (a match rarely shares the
-              // name being searched for).
-              setSegment('all');
-              setSearch('');
-              setDebounced('');
-              setSelectedId(id);
-            }}
-            onChanged={invalidate}
-            // The promise keeps the ban confirmation pending until the answer; a
-            // refusal is held by the mutation and shown in the panel (`banError`).
-            onBanToggle={(id, banned) =>
-              banMutation.mutateAsync({ id, banned }).catch(() => undefined)
-            }
-            banPending={banMutation.isPending}
-            banError={banMutation.isError ? banMutation.error : null}
-            banAttempt={banMutation.variables}
-            onErased={() => {
-              // Drop the selection before refetching: the panel is showing a
-              // record that no longer exists, and leaving it selected would send
-              // the detail query straight into a 404 the moment it reruns.
-              setSelectedId(null);
-              invalidate();
-            }}
-          />
+          {detailPanel}
         </div>
+      ) : (
+        <>
+          <div
+            role="tablist"
+            aria-label={t('customers.page.segmentsAriaLabel')}
+            className="flex flex-wrap gap-1 border-b border-border pb-2"
+          >
+            {SEGMENTS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={segment === item.id}
+                onClick={() => setSegment(item.id)}
+                className={`rounded-md px-3 py-1.5 text-sm transition-colors max-lg:min-h-11 ${
+                  segment === item.id
+                    ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
+                    : 'text-content-secondary hover:bg-surface-2'
+                }`}
+              >
+                {t(item.labelKey)}
+              </button>
+            ))}
+          </div>
+
+          <CustomersFilters initialConditions={conditions} onChange={handleFiltersChange} />
+
+          {list.error ? (
+            <ErrorNotice message={t('customers.page.loadError')} />
+          ) : (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
+              <Card>
+                {!list.isPending && items.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2 text-2xs text-content-tertiary">
+                    <span>
+                      {t('customers.page.shown', {
+                        shown: formatCount(items.length) ?? String(items.length),
+                        total: formatCount(list.total ?? items.length) ?? String(items.length),
+                      })}
+                    </span>
+                    {narrow && <SortMenu sort={sort} onChange={changeSortTo} t={t} />}
+                  </div>
+                )}
+                {list.isPending ? (
+                  <ListSkeleton />
+                ) : items.length === 0 ? (
+                  <EmptyState
+                    title={t(
+                      debounced || conditions.length > 0
+                        ? 'customers.page.empty.searchTitle'
+                        : 'customers.page.empty.title',
+                    )}
+                    description={t(
+                      debounced || conditions.length > 0
+                        ? 'customers.page.empty.searchDescription'
+                        : 'customers.page.empty.description',
+                    )}
+                  />
+                ) : narrow ? (
+                  <CustomerCards
+                    items={items}
+                    selectedId={selectedId}
+                    onSelect={setSelectedId}
+                    onEndReached={list.fetchNext}
+                    t={t}
+                  />
+                ) : (
+                  <VirtualTable
+                    items={items}
+                    rowHeight={56}
+                    caption={t('customers.page.table.caption')}
+                    colSpan={CUSTOMER_COLUMNS.length + customColumns.length}
+                    onEndReached={list.fetchNext}
+                    head={
+                      <thead>
+                        <tr className="border-b border-border">
+                          {CUSTOMER_COLUMNS.map((column) => (
+                            <ColumnHeader
+                              key={column.key}
+                              column={column}
+                              sort={sort}
+                              onSort={changeSort}
+                              t={t}
+                            />
+                          ))}
+                          {customColumns.map((field) => (
+                            // Never sortable (matches Email/Phone): the server has
+                            // no index over an arbitrary workspace-defined value,
+                            // so a header here carries no button and no aria-sort —
+                            // the same honesty `chats`/`tickets` observe.
+                            <th
+                              key={field.definition_id}
+                              scope="col"
+                              className="px-4 py-2 text-left text-xs font-medium text-content-secondary"
+                            >
+                              {field.label}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                    }
+                    renderRow={(customer) => {
+                      const flag = countryFlag(customer.country_code);
+                      return (
+                        <tr
+                          key={customer.id}
+                          aria-selected={selectedId === customer.id}
+                          className={`cursor-pointer border-b border-border last:border-0 transition-colors ${
+                            selectedId === customer.id
+                              ? 'bg-brand-100 dark:bg-brand-950'
+                              : 'hover:bg-surface-2'
+                          }`}
+                          onClick={() => setSelectedId(customer.id)}
+                        >
+                          <td className="px-4 py-2.5">
+                            <button
+                              type="button"
+                              // The row is clickable for the mouse; this keeps it
+                              // reachable by keyboard without an interactive <tr>.
+                              onClick={() => setSelectedId(customer.id)}
+                              className="text-left"
+                            >
+                              <span className="flex items-center gap-2 font-medium">
+                                {customer.name ?? (
+                                  <span className="italic text-content-tertiary">
+                                    {t('customers.page.unnamedVisitor')}
+                                  </span>
+                                )}
+                                {customer.is_lead && (
+                                  <span className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs font-normal text-content-secondary">
+                                    {t('customers.page.lead')}
+                                  </span>
+                                )}
+                                {customer.banned && (
+                                  <StatusDot tone="danger" label={t('customers.page.banned')} />
+                                )}
+                              </span>
+                            </button>
+                          </td>
+                          <td className="px-4 py-2.5 text-content-secondary">
+                            <span className="block truncate">{customer.email ?? '—'}</span>
+                          </td>
+                          <td className="px-4 py-2.5 text-content-secondary">
+                            {customer.phone ?? '—'}
+                          </td>
+                          <td className="px-4 py-2.5 text-content-secondary">
+                            <span className="inline-flex items-center gap-1.5">
+                              {flag && <span aria-hidden="true">{flag}</span>}
+                              <span>{customer.country ?? customer.country_code ?? '—'}</span>
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-content-secondary">
+                            {formatDate(customer.last_activity_at) ?? t('customers.page.never')}
+                          </td>
+                          <td className="tabular px-4 py-2.5 text-right">{customer.chats_count}</td>
+                          <td className="tabular px-4 py-2.5 text-right">
+                            {customer.tickets_count}
+                          </td>
+                          {customColumns.map((column) => (
+                            <td
+                              key={column.definition_id}
+                              className="px-4 py-2.5 text-content-secondary"
+                            >
+                              {customFieldDisplayValue(
+                                column,
+                                customer.table_custom_fields.find(
+                                  (field) => field.definition_id === column.definition_id,
+                                )?.value ?? null,
+                              ) ?? '—'}
+                            </td>
+                          ))}
+                        </tr>
+                      );
+                    }}
+                  />
+                )}
+              </Card>
+
+              {!narrow && detailPanel}
+            </div>
+          )}
+        </>
       )}
     </Page>
   );
@@ -491,5 +538,115 @@ function ColumnHeader({
         </span>
       </button>
     </th>
+  );
+}
+
+/**
+ * The narrow window's list (tm 472.1): one card per person — name and marks,
+ * how to reach them, when they were last here and what they have opened. The
+ * workspace's own table columns stay with the record, where a card has no room
+ * for them.
+ */
+function CustomerCards({
+  items,
+  selectedId,
+  onSelect,
+  onEndReached,
+  t,
+}: {
+  items: CustomerSummary[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onEndReached: () => void;
+  t: TFunction;
+}): ReactElement {
+  return (
+    <VirtualList
+      items={items}
+      rowHeight={CARD_HEIGHT}
+      label={t('customers.page.table.caption')}
+      onEndReached={onEndReached}
+      renderRow={(customer) => (
+        <div
+          key={customer.id}
+          role="listitem"
+          style={{ height: CARD_HEIGHT }}
+          className="border-b border-border last:border-0"
+        >
+          <button
+            type="button"
+            aria-current={selectedId === customer.id ? 'true' : undefined}
+            onClick={() => onSelect(customer.id)}
+            className="flex h-full w-full min-w-0 flex-col justify-center gap-0.5 px-4 text-left text-sm transition-colors hover:bg-surface-2"
+          >
+            <span className="flex w-full min-w-0 items-center gap-2 font-medium">
+              <span className="truncate">
+                {customer.name ?? (
+                  <span className="italic text-content-tertiary">
+                    {t('customers.page.unnamedVisitor')}
+                  </span>
+                )}
+              </span>
+              {customer.is_lead && (
+                <span className="shrink-0 rounded-sm bg-inset px-1.5 py-0.5 text-2xs font-normal text-content-secondary">
+                  {t('customers.page.lead')}
+                </span>
+              )}
+              {customer.banned && <StatusDot tone="danger" label={t('customers.page.banned')} />}
+            </span>
+            <span className="w-full truncate text-xs text-content-secondary">
+              {customer.email ?? customer.phone ?? '—'}
+            </span>
+            <span className="flex w-full min-w-0 gap-3 text-2xs text-content-secondary">
+              <span className="truncate">
+                {t('customers.page.table.lastActive')}:{' '}
+                {formatDate(customer.last_activity_at) ?? t('customers.page.never')}
+              </span>
+              <span className="tabular shrink-0">
+                {t('customers.page.table.chats')} {customer.chats_count}
+              </span>
+              <span className="tabular shrink-0">
+                {t('customers.page.table.tickets')} {customer.tickets_count}
+              </span>
+            </span>
+          </button>
+        </div>
+      )}
+    />
+  );
+}
+
+/** The cards' sort: the table's sortable columns, each way round, as one menu. */
+function SortMenu({
+  sort,
+  onChange,
+  t,
+}: {
+  sort: CustomerSort;
+  onChange: (next: CustomerSort) => void;
+  t: TFunction;
+}): ReactElement {
+  return (
+    <label className="flex items-center gap-2 text-xs text-content-secondary">
+      {t('customers.page.sortBy')}
+      <select
+        value={`${sort.key}:${sort.order}`}
+        onChange={(event) => {
+          const next = CUSTOMER_SORT_OPTIONS.find(
+            (option) => `${option.key}:${option.order}` === event.target.value,
+          );
+          if (next) onChange(next);
+        }}
+        className="min-h-11 max-w-full rounded-md border border-border bg-inset px-2 text-sm text-content"
+      >
+        {CUSTOMER_SORT_OPTIONS.map((option) => (
+          <option key={`${option.key}:${option.order}`} value={`${option.key}:${option.order}`}>
+            {t(`customers.page.sortOption.${option.order}`, {
+              column: t(COLUMN_LABEL_KEY[option.key]),
+            })}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

@@ -45,6 +45,10 @@ export const customers: Messages = {
   'customers.page.lead': 'aday',
   'customers.page.banned': 'Engellendi',
   'customers.page.never': 'Hiç',
+  'customers.page.sortBy': 'Sırala',
+  'customers.page.sortOption.asc': '{column}, artan',
+  'customers.page.sortOption.desc': '{column}, azalan',
+  'customers.page.backToList': 'Tüm müşteriler',
 
   // Contacts filter panel — CustomersFilters.tsx (customers-filters.ts holds the
   // catalogue keys, this file the words — tm 259.18)

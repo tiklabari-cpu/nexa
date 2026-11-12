@@ -18,15 +18,17 @@
  * `<Page>` shell itself, which I18N-j (tm 133.10) finally translates too.
  */
 import type { ReactElement, ReactNode } from 'react';
-import { Navigate, useLocation, useParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 import { hasAnyScope } from '@siyahtus/types';
 import { EmptyState } from '../../components/EmptyState.js';
 import { Page } from '../../components/Page.js';
 import { useAuth } from '../../lib/auth-store.js';
+import { confirmLeave } from '../../lib/dirty-guard.js';
 import { useDeployment } from '../../lib/deployment.js';
 import { liveDataApps } from '../../lib/live-apps.js';
 import { roleAtLeast } from '../team/RoleMenu.js';
 import { useTranslate } from '../../lib/i18n.js';
+import { isNarrowLayout, useViewportLayout } from '../../lib/viewport.js';
 import { Brands } from './Brands.js';
 import { CompanyDetails } from './CompanyDetails.js';
 import { OwnershipTransferZone } from '../ownership/OwnershipTransferZone.js';
@@ -205,13 +207,45 @@ export const SECTION_ELEMENTS: Record<string, (p: SectionPermissions) => ReactEl
   'ai-quality': (p) => <AiQuality canEdit={p.canManageAiQuality} />,
 };
 
-/** `/app/settings/*` — the navigation beside whichever section is open. */
+/**
+ * `/app/settings/*` — the navigation beside whichever section is open.
+ *
+ * Below 1024 px (GV-04 · tm 472.1) there is no room beside a section — squeezed
+ * next to the fixed menu one was ~90 px wide at 390 px (tm 259.25 · O6) — so
+ * the navigation is a list → detail pair instead: `/app/settings` is the list
+ * (`SettingsIndex`), and a section fills the screen under a link back to it.
+ */
 export function SettingsLayout({ children }: { children: ReactNode }): ReactElement {
+  const t = useTranslate();
+  const narrow = isNarrowLayout(useViewportLayout());
+  const { pathname } = useLocation();
+
+  if (narrow) {
+    const atList = pathname.replace(/\/+$/, '') === '/app/settings';
+    return (
+      <div className="flex min-w-0 flex-1 flex-col">
+        {!atList && (
+          <div className="shrink-0 border-b border-border bg-surface px-2">
+            <Link
+              to="/app/settings"
+              // The same question every other way out of a dirty section asks (GV-06).
+              onClick={(event) => {
+                if (!confirmLeave()) event.preventDefault();
+              }}
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-content-secondary hover:text-content"
+            >
+              <span aria-hidden="true">‹</span>
+              {t('settings.nav.back')}
+            </Link>
+          </div>
+        )}
+        {children}
+      </div>
+    );
+  }
+
   return (
-    // Below the desktop breakpoint the menu and the section keep their desktop
-    // width and the shell's <main> scrolls sideways: squeezed beside the fixed
-    // menu, a section was ~90 px wide at 390 px (tm 259.25 · O6).
-    <div className="flex min-w-0 flex-1 max-lg:min-w-[calc(1024px-theme(spacing.rail))]">
+    <div className="flex min-w-0 flex-1">
       <SettingsNav />
       {children}
     </div>
@@ -220,12 +254,22 @@ export function SettingsLayout({ children }: { children: ReactNode }): ReactElem
 
 /**
  * `/app/settings` — lands on the caller's first section, or on the section an
- * old single-page anchor (`/app/settings#section-channels`) named.
+ * old single-page anchor (`/app/settings#section-channels`) named. Below
+ * 1024 px it is the navigation itself, the list a section is chosen from.
  */
 export function SettingsIndex(): ReactElement {
+  const t = useTranslate();
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
+  const narrow = isNarrowLayout(useViewportLayout());
   const { hash } = useLocation();
   const slug = defaultSectionSlug(scopes, hash);
+  if (narrow && !hash && slug) {
+    return (
+      <Page title={t('nav.settings')}>
+        <SettingsNav variant="page" />
+      </Page>
+    );
+  }
   return <Navigate to={slug ? `/app/settings/${slug}` : '/app/inbox'} replace />;
 }
 

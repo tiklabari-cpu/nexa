@@ -786,7 +786,7 @@ function IdentityDeveloperNotes(): ReactElement {
         <li>{t('settings.memberRecognition.identity.dev.server')}</li>
         <li>
           {t('settings.memberRecognition.identity.dev.message')}{' '}
-          <code className="rounded-sm bg-inset px-1">{MESSAGE_FORMAT}</code>
+          <code className="break-all rounded-sm bg-inset px-1">{MESSAGE_FORMAT}</code>
         </li>
         <li>
           {t('settings.memberRecognition.identity.dev.clock', {

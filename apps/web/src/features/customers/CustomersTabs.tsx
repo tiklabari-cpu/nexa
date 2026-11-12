@@ -20,14 +20,16 @@ const TABS = [
 export function CustomersTabs(): ReactElement {
   const t = useTranslate();
   return (
-    <nav aria-label={t('customers.tabs.ariaLabel')} className="flex gap-1">
+    // Wraps on a phone rather than running past the edge, and each tab is a
+    // finger-sized target below 1024 px (GV-04 · tm 472.1).
+    <nav aria-label={t('customers.tabs.ariaLabel')} className="flex flex-wrap gap-1">
       {TABS.map((tab) => (
         <NavLink
           key={tab.to}
           to={tab.to}
           end={tab.end}
           className={({ isActive }) =>
-            `rounded-md px-3 py-1.5 text-sm transition-colors ${
+            `inline-flex items-center rounded-md px-3 py-1.5 text-sm transition-colors max-lg:min-h-11 ${
               isActive
                 ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
                 : 'text-content-secondary hover:bg-surface-2'

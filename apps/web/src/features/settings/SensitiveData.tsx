@@ -30,7 +30,7 @@ export function SensitiveData(): ReactElement {
       description={t('settings.sensitiveData.description')}
     >
       <Card>
-        <div className="overflow-x-auto p-4">
+        <div className="relative overflow-x-auto p-4">
           <table className="w-full text-left text-sm">
             <caption className="sr-only">{t('settings.sensitiveData.tableCaption')}</caption>
             <thead>

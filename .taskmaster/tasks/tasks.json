@@ -17479,12 +17479,12 @@
         "description": "GV-04 kısmen: yalnız Inbox responsive; diğer sayfalar dar ekranda uyarı bandıyla açılıyor. Büyük iş — sayfa başına alt görev.",
         "details": "ALT GÖREV BİRLEŞTİRMESİ (2026-11-07, sahip onayı; her alt görev ayrı pencere ve tam kapı demek): 472.1 + 472.2 → 472.1; 472.3 + 472.4 → 472.3. Cancelled alt görevlere metinde yapılan atıflar birleşik alt görevi kasteder.\n\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-15 / GV-04 (partial). Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/web/src/.../navigation.ts:~106` responsive sayfa listesi (yalnız inbox); `NarrowScreenNotice.tsx:2`; `apps/e2e/.../narrow-screen.spec.ts:5-9`.\n\nYAPILACAK: her alt görev bir sayfayı 375 px'te yatay kaydırmasız (tablolar kart/yığın görünümüne), dokunma hedefleri ≥ 44 px yapar ve sayfayı responsive listesine ekler; narrow-screen.spec beklentisi güncellenir. Inbox desenini kopyala.\n\nTUZAK: memory hub-e2e-traps, dod-gate-wall-clock-and-e2e-png-churn (ekran görüntüsü churn'ü), dark-theme-needs-content-brand-text.\n\nKAPSAM DIŞI: mobil uygulama.\nDENETİM BULGULARI: G-15",
         "testStrategy": "Alt görevlerde. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-07T11:50:37.837Z",
+        "updatedAt": "2026-11-12T04:10:14.174Z",
         "subtasks": [
           {
             "id": 1,
@@ -17492,11 +17492,11 @@
             "description": "(472.1) Ayarlar gezinmesi dar ekranda liste→detay; formlar tek sütun. (472.2) Müşteri tablosu dar ekranda kart listesi; detay paneli tam ekran.",
             "details": "BİRLEŞİK ALT GÖREV (sahip onayı 2026-11-07): 472.1, 472.2 tek pencerede yapılır; DoD kapısı bir kez koşar.\nBölümler sırayla yapılır, her biri kendi kabul ölçütüyle kapanır; biri yeşil değilse alt görev done değildir.\n472.2 cancelled durumda ve buraya işaret ediyor; metinlerde onlara yapılan atıflar bu alt görevi kasteder.\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\n━━ BÖLÜM 1 — 472.1 NARROW-SETTINGS · Ayarlar sayfası dar ekran düzeni ━━\nSORUN: Ayarlar gezinmesi dar ekranda liste→detay; formlar tek sütun.\n\nÜst görev details (tek kaynak). navigation.ts responsive listesine settings.\n\n━━ BÖLÜM 2 — 472.2 NARROW-CUSTOMERS · Müşteriler sayfası dar ekran düzeni ━━\nSORUN: Müşteri tablosu dar ekranda kart listesi; detay paneli tam ekran.\n\nÜst görev details (tek kaynak).",
             "testStrategy": "BÖLÜM 1 (472.1): e2e narrow-screen: 375 px'te ayarlar bandsız, scrollWidth <= clientWidth. `pnpm test:gate --e2e`.\nBÖLÜM 2 (472.2): e2e narrow-screen: 375 px'te müşteriler bandsız, yatay kaydırma yok. `pnpm test:gate --e2e`.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "472",
             "priority": "low",
-            "updatedAt": "2026-11-07T11:50:37.837Z"
+            "updatedAt": "2026-11-12T04:10:14.174Z"
           },
           {
             "id": 2,
@@ -17778,7 +17778,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-12T04:09:24.595Z",
+      "lastModified": "2026-11-12T04:10:14.174Z",
       "taskCount": 478,
       "completedCount": 450,
       "tags": [

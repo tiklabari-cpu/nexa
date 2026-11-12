@@ -111,3 +111,45 @@ test.describe('archive message search', () => {
     expect(page.url()).not.toContain('query');
   });
 });
+
+test.describe('archive search by number (ID-06 · tm 468)', () => {
+  test('finds a connection by its pasted Chat ID above the text hits, and opens it', async ({
+    page,
+  }) => {
+    await signInAs(page, PAGING_OWNER.email, PAGING_OWNER.password);
+    await page.goto('/app/archive');
+    const search = page.getByRole('search', { name: 'Search archived messages' });
+    const box = search.getByRole('searchbox', { name: 'Search message text' });
+
+    // The connection's number, as the text search finds it.
+    await box.fill(WORDS);
+    await search.getByRole('button', { name: 'Search' }).click();
+    await page
+      .getByRole('button', { name: /Paging Visitor 01/ })
+      .first()
+      .click();
+    await expect(page).toHaveURL(/[?&]c=[^&]+/);
+    const threadId = new URL(page.url()).searchParams.get('c') ?? '';
+    expect(threadId).toHaveLength(10);
+
+    const looked = page.waitForResponse(
+      (response) => response.url().includes('/search?') && response.request().method() === 'GET',
+    );
+    await box.fill(threadId);
+    await search.getByRole('button', { name: 'Search' }).click();
+    expect((await looked).status()).toBe(200);
+
+    const direct = page.getByTestId('archive-lookup');
+    const row = direct.getByRole('button', { name: /Paging Visitor 01/ });
+    await expect(row).toBeVisible();
+    await expect(row).toContainText('Chat ID');
+    await expect(row).toContainText(threadId);
+    await page.screenshot({ path: 'kanit/ID-06-archive-lookup.png', fullPage: true });
+
+    await row.click();
+    await expect(row).toHaveAttribute('aria-current', 'true');
+    expect(new URL(page.url()).searchParams.get('c')).toBe(threadId);
+    // GV-05: the address holds the opened number, never the search's own parameters.
+    expect(page.url()).not.toContain('query');
+  });
+});

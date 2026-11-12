@@ -97,6 +97,17 @@ export function checkArchiveSearch(input: ArchiveSearchRequest): ArchiveSearchRe
   return null;
 }
 
+/**
+ * The request the text search runs, or null when its rules refuse it — a
+ * number or an address the bar let through for the direct lookup alone
+ * (tm 468) is never sent to the text search, which would answer 400.
+ */
+export function textSearchRequest(
+  request: ArchiveSearchRequest | null,
+): ArchiveSearchRequest | null {
+  return request && checkArchiveSearch(request) === null ? request : null;
+}
+
 /** The refusals the server names in `details.reason` that this build has a sentence for. */
 const ARCHIVE_SEARCH_REASONS: readonly string[] = [
   'too_short',

@@ -9,17 +9,19 @@
  * searched words never go in it (GV-05).
  */
 import { useMemo, useState, type ReactElement } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { hasAnyScope } from '@siyahtus/types';
 import type { ArchiveConversation } from '@siyahtus/types';
-import { useAuth } from '../../lib/auth-store.js';
+import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { usePageTitle } from '../../lib/document-title.js';
 import { useTranslate } from '../../lib/i18n.js';
 import {
+  textSearchRequest,
   useArchiveSearch,
   type ArchiveSearchHit,
   type ArchiveSearchRequest,
 } from '../inbox/archive-search.js';
+import type { ChatDetail } from '../inbox/types.js';
 import { ArchiveSearchBar, ArchiveSearchResults } from '../inbox/ArchiveSearch.js';
 import { CONNECTION_PARAM, readGrouped, readScope, writeFlag } from './archive.js';
 import {
@@ -33,6 +35,8 @@ import {
 import { ArchiveFilters } from './ArchiveFilters.js';
 import { ArchivePlayer, ArchiveTranscript } from './ArchiveDetail.js';
 import { ArchiveList } from './ArchiveList.js';
+import { useArchiveLookupSection } from './ArchiveLookup.js';
+import type { LookupTarget } from './archive-lookup.js';
 import { useArchiveDetail, useArchiveList, useTeamNames } from './useArchive.js';
 
 /** Scopes under which "Reopen" is not refused outright (`routes/chats.ts` resume). */
@@ -60,7 +64,9 @@ export function ArchivePage(): ReactElement {
 
   // The message search (ID-07): component state only, never the address.
   const [searchRequest, setSearchRequest] = useState<ArchiveSearchRequest | null>(null);
-  const found = useArchiveSearch(searchRequest);
+  const found = useArchiveSearch(textSearchRequest(searchRequest));
+  const api = useApiClient();
+  const navigate = useNavigate();
   const [focus, setFocus] = useState<{ threadId: string; eventId: string; nonce: number } | null>(
     null,
   );
@@ -80,6 +86,23 @@ export function ArchivePage(): ReactElement {
   const openRow = (row: ArchiveConversation): void => open(row.thread_id, null);
   const openHit = (hit: ArchiveSearchHit, atMessage: boolean): void =>
     open(hit.match.thread_id, atMessage ? { eventId: hit.match.event_id } : null);
+
+  // A direct match (tm 468): a connection opens here; a day found by its
+  // number (`ids.thread`) opens at its newest connection, which the day's own read names.
+  const openTarget = (target: LookupTarget): void => {
+    if (target.threadId) {
+      open(target.threadId, target.eventId ? { eventId: target.eventId } : null);
+      return;
+    }
+    // The day is still reachable where every day opens: the inbox.
+    const inInbox = (): void => {
+      void navigate(`/app/inbox?chat=${encodeURIComponent(target.chatId)}`);
+    };
+    api
+      .get<ChatDetail>(`/chats/${encodeURIComponent(target.chatId)}`)
+      .then((chat) => (chat.thread ? open(chat.thread.id, null) : inInbox()), inInbox);
+  };
+  const lookup = useArchiveLookupSection(searchRequest, threadId, openTarget);
 
   const searching = searchRequest !== null;
 
@@ -124,6 +147,7 @@ export function ArchivePage(): ReactElement {
             active={searchRequest}
             onSearch={setSearchRequest}
             onClear={() => setSearchRequest(null)}
+            lookup
           />
 
           {searching ? (
@@ -132,6 +156,8 @@ export function ArchivePage(): ReactElement {
               selectedId={detail.data?.chat_id ?? null}
               onOpen={(hit) => openHit(hit, false)}
               onGoToMessage={(hit) => openHit(hit, true)}
+              lookup={lookup}
+              textSearched={textSearchRequest(searchRequest) !== null}
             />
           ) : (
             <>

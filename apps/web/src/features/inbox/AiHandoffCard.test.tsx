@@ -232,6 +232,29 @@ describe('the card, short and in full (AI-10)', () => {
     expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
   });
 
+  it('shows the Thread ID and the Chat ID, and copies each number alone (ID-05 · tm 468)', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const card = depositCard({ chat_id: 'TJ1H8CFKRV', thread_id: 'TK2J9DGLSW' });
+    mount(<AiHandoffCard card={card} chatId={card.chat_id} canJudge />);
+
+    const ids = screen.getByTestId('ai-handoff-ids');
+    expect(within(ids).getByText('Thread ID')).toBeInTheDocument();
+    expect(within(ids).getByText('Chat ID')).toBeInTheDocument();
+    expect(within(ids).getByText('TJ1H8CFKRV')).toBeInTheDocument();
+    expect(within(ids).getByText('TK2J9DGLSW')).toBeInTheDocument();
+
+    fireEvent.click(within(ids).getByRole('button', { name: 'Copy Thread ID' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('TJ1H8CFKRV'));
+    fireEvent.click(within(ids).getByRole('button', { name: 'Copy Chat ID' }));
+    await waitFor(() => expect(writeText).toHaveBeenLastCalledWith('TK2J9DGLSW'));
+    expect(writeText).toHaveBeenCalledTimes(2);
+    // The card's own "Copy" still copies the card's text, not a number.
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    expect(writeText).toHaveBeenLastCalledWith(card.card_text);
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
+  });
+
   it('speaks Turkish to a Turkish console', () => {
     renderWithLocale(
       <QueryClientProvider client={client()}>

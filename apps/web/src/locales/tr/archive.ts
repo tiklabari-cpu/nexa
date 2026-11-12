@@ -202,4 +202,12 @@ export const archive: Messages = {
   'archive.facts.tags': 'Etiketler',
   'archive.facts.risk': 'Risk bayrakları',
   'archive.facts.messages': 'Mesajlar',
+
+  // Arşiv çubuğunun doğrudan araması (ID-06 · tm 468)
+  'archive.lookup.title': 'Doğrudan eşleşmeler',
+  'archive.lookup.error': 'Numara ya da oyuncu aranamadı. Aşağıdaki mesaj araması yine de yapıldı.',
+  'archive.lookup.playerConversations': '{name} adlı oyuncunun konuşmaları',
+  'archive.lookup.playerNone': 'Açabileceğiniz bir konuşma yok.',
+  'archive.lookup.playerError': 'Bu oyuncunun konuşmaları yüklenemedi.',
+  'archive.lookup.noText': 'Bu sözcükleri içeren bir mesaj yok.',
 };

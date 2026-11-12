@@ -85,6 +85,13 @@ export interface SettingsSectionEntry {
    */
   pilotLiveApps?: true;
   /**
+   * With `pilotHidden`: the address does not leave for the settings index in
+   * the pilot but answers "not available on this installation" (tm 466) — for
+   * a section a bookmark or an old link can still reach, where a silent
+   * redirect would read as a bug.
+   */
+  pilotUnavailableState?: true;
+  /**
    * Terms from `keywords` that stop matching in the public pilot (tm 257.3):
    * the section stays, but searching for what it no longer offers ("whatsapp"
    * on a Channels page that shows two cards) must not point at it.
@@ -488,6 +495,11 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     scope: ACCESS_RULES,
     file: 'Compliance',
     keywords: ['hipaa', 'baa', 'gdpr'],
+    // The pilot signs no HIPAA agreement and holds no certification (tm 466,
+    // audit G-08): the screen would read as a compliance claim. Dropped from
+    // the navigation and the search; the address says it is unavailable.
+    pilotHidden: true,
+    pilotUnavailableState: true,
   },
   {
     slug: 'data-retention',
@@ -529,6 +541,9 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     scope: ACCESS_RULES,
     file: 'SiemExport',
     keywords: ['splunk', 'log export', 'soc 2'],
+    // Same as Compliance (tm 466): the words that found it go with it.
+    pilotHidden: true,
+    pilotUnavailableState: true,
   },
 
   // Usage and quotas (tm 283.4 · AI-16) — no PRD 08.x number of its own. What a

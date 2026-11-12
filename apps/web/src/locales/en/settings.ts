@@ -1167,7 +1167,7 @@ export const settings: Messages = {
   // SIEM export — SiemExport.tsx
   'settings.siemExport.title': 'SIEM export',
   'settings.siemExport.description':
-    "Ship this workspace's audit trail to a SIEM destination on a schedule (SOC 2 / ISO 27001).",
+    "Ship this workspace's audit trail to a SIEM destination on a schedule.",
   'settings.siemExport.loadError': 'Could not load the SIEM export configuration.',
   'settings.siemExport.gapTitle': 'A gap was found in the audit trail.',
   'settings.siemExport.gapBody':
@@ -1243,6 +1243,8 @@ export const settings: Messages = {
   // note says the feature is off and who to ask. Chosen by `useEntitlementNote`.
   'settings.pilot.unavailable': 'This feature is not available in the pilot — contact {email}.',
   'settings.pilot.unavailableNoContact': 'This feature is not available in the pilot.',
+  'settings.pilot.sectionUnavailableTitle': 'Not available on this installation',
+  'settings.pilot.sectionUnavailableBody': '{section} is not offered on this installation.',
   'settings.sandbox.createdLabel': 'Sandbox created',
   'settings.sandbox.createdSummary': 'Created {created}. Last reset: {reset}.',
   'settings.sandbox.createdUnknown': 'unknown',

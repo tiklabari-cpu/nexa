@@ -17484,7 +17484,7 @@
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-12T05:21:43.626Z",
+        "updatedAt": "2026-11-12T05:22:24.816Z",
         "subtasks": [
           {
             "id": 1,
@@ -17516,13 +17516,13 @@
             "description": "(472.3) Arşiv listesi ve detayı dar ekranda liste→detay. (472.4) Rapor grafikleri ve tablolar dar ekranda tek sütun, tablolar yatay kaydırma kabında değil kart görünümünde.",
             "details": "BİRLEŞİK ALT GÖREV (sahip onayı 2026-11-07): 472.3, 472.4 tek pencerede yapılır; DoD kapısı bir kez koşar.\nBölümler sırayla yapılır, her biri kendi kabul ölçütüyle kapanır; biri yeşil değilse alt görev done değildir.\n472.4 cancelled durumda ve buraya işaret ediyor; metinlerde onlara yapılan atıflar bu alt görevi kasteder.\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\n━━ BÖLÜM 1 — 472.3 NARROW-ARCHIVE · Arşiv sayfası dar ekran düzeni ━━\nSORUN: Arşiv listesi ve detayı dar ekranda liste→detay.\n\nÜst görev details (tek kaynak).\n\n━━ BÖLÜM 2 — 472.4 NARROW-REPORTS · Raporlar sayfası dar ekran düzeni ━━\nSORUN: Rapor grafikleri ve tablolar dar ekranda tek sütun, tablolar yatay kaydırma kabında değil kart görünümünde.\n\nÜst görev details (tek kaynak). Son alt görev NarrowScreenNotice'ın artık hangi sayfada kaldığını HANDOFF'a yazar.",
             "testStrategy": "BÖLÜM 1 (472.3): e2e narrow-screen: 375 px'te arşiv bandsız. `pnpm test:gate --e2e`.\nBÖLÜM 2 (472.4): e2e narrow-screen: 375 px'te raporlar bandsız. `pnpm test:gate --e2e`.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "472.1"
             ],
             "parentId": "472",
             "priority": "low",
-            "updatedAt": "2026-11-07T11:50:37.837Z"
+            "updatedAt": "2026-11-12T05:22:24.816Z"
           },
           {
             "id": 4,
@@ -17778,7 +17778,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-12T05:21:43.626Z",
+      "lastModified": "2026-11-12T05:22:24.817Z",
       "taskCount": 478,
       "completedCount": 450,
       "tags": [

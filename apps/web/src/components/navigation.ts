@@ -121,6 +121,8 @@ export const MODULES: NavDestination[] = [
     // same pair as the inbox: tenant-wide or the caller's own teams, the
     // server narrows the rows to what the caller may see.
     scope: ['chats--all:ro', 'chats--access:ro'],
+    // Below 1024 px the list fills the screen and a connection opens over it (tm 472.3).
+    responsive: true,
   },
   {
     to: '/app/customers',
@@ -166,6 +168,9 @@ export const MODULES: NavDestination[] = [
     scope: ['reports_read', 'reports_read--groups'],
     // A Team Lead reaches the AI quality queue here (AI-24 · tm 319.3).
     orRole: 'team_lead',
+    // Below 1024 px a report picker and tables as cards (tm 472.3); the AI
+    // quality pages under it are not adapted yet.
+    responsive: true,
   },
 ];
 

@@ -13,7 +13,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ArchiveConversation, ArchiveConversationDetail } from '@siyahtus/types';
 import { ApiClientError } from '../../lib/api-client.js';
 import type * as AuthStore from '../../lib/auth-store.js';
@@ -577,5 +577,91 @@ describe('Archive search by number, address and name (ID-06 · tm 468)', () => {
     await searchFor('withdrawal');
     expect(await screen.findByText('No messages match')).toBeInTheDocument();
     expect(screen.queryByTestId('archive-lookup')).toBeNull();
+  });
+});
+
+/** jsdom has no `matchMedia`: answer it as a window `width` px wide would. */
+function stubWidth(width: number): void {
+  vi.stubGlobal('matchMedia', (query: string) => {
+    const min = Number(/min-width:\s*(\d+)px/.exec(query)?.[1] ?? 0);
+    return {
+      matches: width >= min,
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    };
+  });
+}
+
+// GV-04 · tm 472.3: below 1024 px the list fills the screen and an opened
+// connection replaces it under a way back. Whether that fits 375 px is a layout
+// fact; `narrow-archive-reports.spec.ts` measures it.
+describe('Archive on a narrow window', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('shows the list alone, with no empty conversation pane beside it', async () => {
+    stubWidth(375);
+    renderArchive();
+    expect(await screen.findByRole('list', { name: 'Conversations' })).toBeInTheDocument();
+    expect(screen.queryByText('Pick a conversation')).toBeNull();
+    expect(screen.queryByLabelText('Player and conversation details')).toBeNull();
+    expect(screen.queryByRole('tablist')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'All conversations' })).toBeNull();
+  });
+
+  it('opens a connection in place of the list; Player swaps the transcript; the way back returns', async () => {
+    stubWidth(375);
+    const user = userEvent.setup();
+    renderArchive();
+    const list = await screen.findByRole('list', { name: 'Conversations' });
+    await user.click(within(list).getByText('first words of THREADTWO2'));
+
+    expect(await screen.findByText('hello from THREADTWO2')).toBeInTheDocument();
+    expect(location.search).toContain('c=THREADTWO2');
+    expect(screen.queryByRole('list', { name: 'Conversations' })).toBeNull();
+    const tabs = screen.getByRole('tablist', { name: 'Archive panes' });
+    expect(within(tabs).getByRole('tab', { name: 'Conversation' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.queryByLabelText('Player and conversation details')).toBeNull();
+
+    await user.click(within(tabs).getByRole('tab', { name: 'Player' }));
+    expect(screen.getByLabelText('Player and conversation details')).toBeInTheDocument();
+    expect(screen.queryByText('hello from THREADTWO2')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'All conversations' }));
+    expect(await screen.findByRole('list', { name: 'Conversations' })).toBeInTheDocument();
+    expect(location.search).not.toContain('c=');
+    expect(screen.queryByRole('tablist')).toBeNull();
+  });
+
+  it('opens a pasted link on the transcript at a tablet width, and a new pick starts there again', async () => {
+    stubWidth(768);
+    const user = userEvent.setup();
+    renderArchive('/app/archive?c=THREADONE1');
+    expect(await screen.findByText('hello from THREADONE1')).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Conversations' })).toBeNull();
+
+    await user.click(screen.getByRole('tab', { name: 'Player' }));
+    await user.click(screen.getByRole('button', { name: 'All conversations' }));
+    const list = await screen.findByRole('list', { name: 'Conversations' });
+    await user.click(within(list).getByText('first words of THREADTHR3'));
+    expect(await screen.findByText('hello from THREADTHR3')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Conversation' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+
+  it('keeps the three panes side by side at a desktop width', async () => {
+    stubWidth(1024);
+    renderArchive();
+    expect(await screen.findByRole('list', { name: 'Conversations' })).toBeInTheDocument();
+    expect(screen.getByText('Pick a conversation')).toBeInTheDocument();
+    expect(screen.getByLabelText('Player and conversation details')).toBeInTheDocument();
+    expect(screen.queryByRole('tablist')).toBeNull();
   });
 });

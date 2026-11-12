@@ -20,6 +20,7 @@ export const reports: Messages = {
   'reports.page.title': 'Reports',
   'reports.page.description': 'Conversation volume, responsiveness and satisfaction.',
   'reports.page.tabsAriaLabel': 'Report categories',
+  'reports.page.picker': 'Report',
 
   // Tabs
   'reports.tabs.overview': 'Overview',

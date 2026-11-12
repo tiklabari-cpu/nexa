@@ -159,7 +159,11 @@ const SPECS_ON_OTHER_STACKS = [
 ];
 
 /** Specs written for the narrow projects, run at 375 and 768 px instead of the desktop. */
-const NARROW_SPECS = ['**/narrow-inbox.spec.ts', '**/narrow-settings-customers.spec.ts'];
+const NARROW_SPECS = [
+  '**/narrow-inbox.spec.ts',
+  '**/narrow-settings-customers.spec.ts',
+  '**/narrow-archive-reports.spec.ts',
+];
 
 /**
  * Inbox specs that already drive the list, the transcript and the composer only

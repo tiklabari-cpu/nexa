@@ -8,9 +8,10 @@ import type { Messages } from '../merge.js';
 export const archive: Messages = {
   'archive.title': 'Archive',
 
-  // Below the desktop breakpoint the three panes are tabs (GV-04)
+  // Below the desktop breakpoint an opened connection replaces the list, with a
+  // way back; its transcript and player panel are two tabs (GV-04 · tm 472.3)
+  'archive.back': 'All conversations',
   'archive.panes.ariaLabel': 'Archive panes',
-  'archive.panes.list': 'List',
   'archive.panes.transcript': 'Conversation',
   'archive.panes.player': 'Player',
 

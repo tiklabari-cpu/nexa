@@ -128,6 +128,9 @@ describe('width classes', () => {
     expect(isResponsiveRoute('/app/settingsx')).toBe(false);
     expect(isResponsiveRoute('/app/customers')).toBe(true);
     expect(isResponsiveRoute('/app/customers/goals')).toBe(false);
+    expect(isResponsiveRoute('/app/archive')).toBe(true);
+    expect(isResponsiveRoute('/app/reports')).toBe(true);
+    expect(isResponsiveRoute('/app/reports/ai-quality')).toBe(false);
     expect(isResponsiveRoute('/app/team')).toBe(false);
   });
 });

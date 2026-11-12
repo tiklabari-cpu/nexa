@@ -24,6 +24,7 @@ import {
   Page,
   Section,
 } from '../../components/Page.js';
+import { CardTable } from '../../components/CardTable.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { Banner, Dropdown, bannerDismissKey } from '../../components/ui/index.js';
@@ -40,6 +41,7 @@ import {
 } from '../../lib/format.js';
 import { enumLabel } from '../../lib/enum-label.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
+import { isNarrowLayout, useViewportLayout } from '../../lib/viewport.js';
 import { nearestPriority } from '../inbox/ticket-priority.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import {
@@ -683,10 +685,17 @@ function ReportsPageBody({
   };
 
   const activeCategory = categoryOfTab(tab);
+  // Below 1024 px the sidebar is a picker (GV-04 · tm 472.3): sixteen tabs in
+  // a column would push the report itself a screen and a half down a phone.
+  const narrow = isNarrowLayout(useViewportLayout());
   /** Is the open tab's own button on screen? (Its category could be collapsed,
-   * and a gated tab could still be waiting on the catalogue.) */
+   * a gated tab could still be waiting on the catalogue, and a narrow window
+   * has a picker instead of tabs.) */
   const activeTabRendered =
-    visibleTabs.has(tab) && activeCategory !== undefined && openCategories.includes(activeCategory);
+    !narrow &&
+    visibleTabs.has(tab) &&
+    activeCategory !== undefined &&
+    openCategories.includes(activeCategory);
 
   const range = resolveRange(mode, customFrom, customTo);
   // Stable across renders (unlike `range`, which re-derives "now"), so it is the
@@ -778,70 +787,74 @@ function ReportsPageBody({
           aria-label={t('reports.page.tabsAriaLabel')}
           className="flex shrink-0 flex-col gap-4 border-border pb-4 lg:w-56 lg:border-r lg:pb-0 lg:pr-4"
         >
-          {TAB_CATEGORIES.map((category) => {
-            // Ordered by the category, not by `TABS`: the sidebar's sequence is
-            // this table's to state, and reading it off the old flat strip
-            // would make the two silently disagree.
-            const tabs = category.tabs.filter((id) => visibleTabs.has(id));
-            // A category the catalogue withheld every tab of is not rendered at
-            // all. An expander over an empty list would still name a report
-            // group the caller may not open — the same leak the hidden tab was
-            // avoiding, one level up.
-            if (tabs.length === 0) return null;
-            const open = openCategories.includes(category.id);
-            const headingId = `reports-category-${category.id}`;
-            const listId = `reports-group-${category.id}`;
-            return (
-              <div key={category.id} className="flex flex-col gap-1">
-                <button
-                  type="button"
-                  id={headingId}
-                  aria-expanded={open}
-                  // Only while the list exists: an `aria-controls` pointing at
-                  // nothing is an assertion the DOM does not support, and axe
-                  // rightly flags it (the precedent is AuditLogPage's row
-                  // expander).
-                  {...(open ? { 'aria-controls': listId } : {})}
-                  onClick={() => toggleCategory(category.id)}
-                  className="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-2xs font-semibold uppercase tracking-wide text-content-tertiary transition-colors hover:bg-inset hover:text-content-secondary"
-                >
-                  <span>{t(CATEGORY_LABEL_KEYS[category.id])}</span>
-                  <span aria-hidden="true">{open ? '▾' : '▸'}</span>
-                </button>
-                {open && (
-                  <div
-                    role="tablist"
-                    aria-orientation="vertical"
-                    aria-labelledby={headingId}
-                    id={listId}
-                    className="flex flex-col gap-0.5"
+          {narrow && (
+            <ReportPicker tab={tab} visibleTabs={visibleTabs} onSelect={selectTab} t={t} />
+          )}
+          {!narrow &&
+            TAB_CATEGORIES.map((category) => {
+              // Ordered by the category, not by `TABS`: the sidebar's sequence is
+              // this table's to state, and reading it off the old flat strip
+              // would make the two silently disagree.
+              const tabs = category.tabs.filter((id) => visibleTabs.has(id));
+              // A category the catalogue withheld every tab of is not rendered at
+              // all. An expander over an empty list would still name a report
+              // group the caller may not open — the same leak the hidden tab was
+              // avoiding, one level up.
+              if (tabs.length === 0) return null;
+              const open = openCategories.includes(category.id);
+              const headingId = `reports-category-${category.id}`;
+              const listId = `reports-group-${category.id}`;
+              return (
+                <div key={category.id} className="flex flex-col gap-1">
+                  <button
+                    type="button"
+                    id={headingId}
+                    aria-expanded={open}
+                    // Only while the list exists: an `aria-controls` pointing at
+                    // nothing is an assertion the DOM does not support, and axe
+                    // rightly flags it (the precedent is AuditLogPage's row
+                    // expander).
+                    {...(open ? { 'aria-controls': listId } : {})}
+                    onClick={() => toggleCategory(category.id)}
+                    className="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-2xs font-semibold uppercase tracking-wide text-content-tertiary transition-colors hover:bg-inset hover:text-content-secondary"
                   >
-                    {tabs.map((tabId) => {
-                      const selected = tab === tabId;
-                      return (
-                        <button
-                          key={tabId}
-                          type="button"
-                          role="tab"
-                          id={`reports-tab-${tabId}`}
-                          aria-selected={selected}
-                          aria-controls={`reports-panel-${tabId}`}
-                          onClick={() => selectTab(tabId)}
-                          className={`rounded-md border-l-2 px-2.5 py-1.5 text-left text-sm font-medium transition-colors ${
-                            selected
-                              ? 'border-brand-500 bg-inset text-content'
-                              : 'border-transparent text-content-secondary hover:bg-inset hover:text-content'
-                          }`}
-                        >
-                          {t(TAB_LABEL_KEYS[tabId])}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                    <span>{t(CATEGORY_LABEL_KEYS[category.id])}</span>
+                    <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+                  </button>
+                  {open && (
+                    <div
+                      role="tablist"
+                      aria-orientation="vertical"
+                      aria-labelledby={headingId}
+                      id={listId}
+                      className="flex flex-col gap-0.5"
+                    >
+                      {tabs.map((tabId) => {
+                        const selected = tab === tabId;
+                        return (
+                          <button
+                            key={tabId}
+                            type="button"
+                            role="tab"
+                            id={`reports-tab-${tabId}`}
+                            aria-selected={selected}
+                            aria-controls={`reports-panel-${tabId}`}
+                            onClick={() => selectTab(tabId)}
+                            className={`rounded-md border-l-2 px-2.5 py-1.5 text-left text-sm font-medium transition-colors ${
+                              selected
+                                ? 'border-brand-500 bg-inset text-content'
+                                : 'border-transparent text-content-secondary hover:bg-inset hover:text-content'
+                            }`}
+                          >
+                            {t(TAB_LABEL_KEYS[tabId])}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
 
           {/* Raporlar › AI Kalite (AI-24 · tm 319.3) is a page of its own — a
               queue and a calibration round, not a report over the range — so
@@ -849,7 +862,7 @@ function ReportsPageBody({
           {reviewsQa && (
             <Link
               to={QA_PATH}
-              className="rounded-md px-2.5 py-1.5 text-sm font-medium text-content-secondary transition-colors hover:bg-inset hover:text-content"
+              className="rounded-md px-2.5 py-1.5 text-sm font-medium text-content-secondary transition-colors hover:bg-inset hover:text-content max-lg:flex max-lg:min-h-11 max-lg:items-center"
             >
               {t('reports.qa.page.title')}
             </Link>
@@ -954,6 +967,48 @@ function ReportsPageBody({
         </div>
       </div>
     </Page>
+  );
+}
+
+/**
+ * The report chooser on a narrow window (GV-04 · tm 472.3): the sidebar's
+ * categories as groups of one list, the same tabs the catalogue lets the
+ * caller open. Choosing one is the same `selectTab` a tab click is.
+ */
+function ReportPicker({
+  tab,
+  visibleTabs,
+  onSelect,
+  t,
+}: {
+  tab: TabId;
+  visibleTabs: ReadonlySet<TabId>;
+  onSelect: (next: TabId) => void;
+  t: TFunction;
+}): ReactElement {
+  return (
+    <label className="flex flex-col gap-1 text-xs font-medium text-content-secondary">
+      {t('reports.page.picker')}
+      <select
+        value={tab}
+        onChange={(event) => onSelect(event.target.value as TabId)}
+        className="min-h-11 w-full rounded-md border border-border bg-inset px-2 text-sm text-content"
+      >
+        {TAB_CATEGORIES.map((category) => {
+          const tabs = category.tabs.filter((id) => visibleTabs.has(id));
+          if (tabs.length === 0) return null;
+          return (
+            <optgroup key={category.id} label={t(CATEGORY_LABEL_KEYS[category.id])}>
+              {tabs.map((id) => (
+                <option key={id} value={id}>
+                  {t(TAB_LABEL_KEYS[id])}
+                </option>
+              ))}
+            </optgroup>
+          );
+        })}
+      </select>
+    </label>
   );
 }
 
@@ -1232,7 +1287,7 @@ function OverviewTab(props: TabProps): ReactElement {
               description={t('reports.overview.byAgent.emptyDescription')}
             />
           ) : (
-            <table className="w-full text-sm">
+            <CardTable className="w-full text-sm">
               <caption className="sr-only">{t('reports.overview.byAgent.caption')}</caption>
               <thead>
                 <tr className="border-b border-border text-left">
@@ -1266,7 +1321,7 @@ function OverviewTab(props: TabProps): ReactElement {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </CardTable>
           )}
         </Card>
       </Section>
@@ -1682,7 +1737,7 @@ function DailyBar({ rows }: { rows: Array<CsatSummary & { date: string }> }): Re
   const max = Math.max(1, ...rows.map((row) => row.responses));
   const numeric = 'w-20 px-4 py-2 text-right text-xs font-medium text-content-secondary';
   return (
-    <table className="w-full text-sm">
+    <CardTable className="w-full text-sm">
       <caption className="sr-only">{t('reports.reviews.byDay.caption')}</caption>
       <thead>
         <tr className="border-b border-border text-left">
@@ -1716,7 +1771,7 @@ function DailyBar({ rows }: { rows: Array<CsatSummary & { date: string }> }): Re
           </tr>
         ))}
       </tbody>
-    </table>
+    </CardTable>
   );
 }
 
@@ -1894,7 +1949,7 @@ function SplitTable({
   const t = useTranslate();
   const numeric = 'w-24 px-4 py-2 text-right text-xs font-medium text-content-secondary';
   return (
-    <table className="w-full text-sm">
+    <CardTable className="w-full text-sm">
       <caption className="sr-only">{caption}</caption>
       <thead>
         <tr className="border-b border-border text-left">
@@ -1930,7 +1985,7 @@ function SplitTable({
           </tr>
         ))}
       </tbody>
-    </table>
+    </CardTable>
   );
 }
 
@@ -2114,7 +2169,7 @@ function TopicsTable({ topics }: { topics: TopicRow[] }): ReactElement {
   const t = useTranslate();
   const numeric = 'w-28 px-4 py-2 text-right text-xs font-medium text-content-secondary';
   return (
-    <table className="w-full text-sm">
+    <CardTable className="w-full text-sm">
       <caption className="sr-only">{t('reports.topics.caption')}</caption>
       <thead>
         <tr className="border-b border-border text-left">
@@ -2144,7 +2199,7 @@ function TopicsTable({ topics }: { topics: TopicRow[] }): ReactElement {
           </tr>
         ))}
       </tbody>
-    </table>
+    </CardTable>
   );
 }
 
@@ -2320,7 +2375,7 @@ function CasesDailyTable({ rows }: { rows: ReportsCases['by_day'] }): ReactEleme
   const t = useTranslate();
   const numeric = 'w-24 px-4 py-2 text-right text-xs font-medium text-content-secondary';
   return (
-    <table className="w-full text-sm">
+    <CardTable className="w-full text-sm">
       <caption className="sr-only">{t('reports.cases.byDay.caption')}</caption>
       <thead>
         <tr className="border-b border-border text-left">
@@ -2348,14 +2403,14 @@ function CasesDailyTable({ rows }: { rows: ReportsCases['by_day'] }): ReactEleme
           </tr>
         ))}
       </tbody>
-    </table>
+    </CardTable>
   );
 }
 
 function CasesStatusTable({ rows }: { rows: ReportsCases['by_status'] }): ReactElement {
   const t = useTranslate();
   return (
-    <table className="w-full text-sm">
+    <CardTable className="w-full text-sm">
       <caption className="sr-only">{t('reports.cases.byStatus.caption')}</caption>
       <thead>
         <tr className="border-b border-border text-left">
@@ -2378,7 +2433,7 @@ function CasesStatusTable({ rows }: { rows: ReportsCases['by_status'] }): ReactE
           </tr>
         ))}
       </tbody>
-    </table>
+    </CardTable>
   );
 }
 
@@ -2399,7 +2454,7 @@ function priorityLabel(t: TFunction, value: number): string {
 function CasesPriorityTable({ rows }: { rows: ReportsCases['by_priority'] }): ReactElement {
   const t = useTranslate();
   return (
-    <table className="w-full text-sm">
+    <CardTable className="w-full text-sm">
       <caption className="sr-only">{t('reports.cases.byPriority.caption')}</caption>
       <thead>
         <tr className="border-b border-border text-left">
@@ -2422,7 +2477,7 @@ function CasesPriorityTable({ rows }: { rows: ReportsCases['by_priority'] }): Re
           </tr>
         ))}
       </tbody>
-    </table>
+    </CardTable>
   );
 }
 
@@ -2485,7 +2540,7 @@ function LeadsTab(props: TabProps): ReactElement {
 function LeadsDailyTable({ rows }: { rows: ReportsLeads['by_day'] }): ReactElement {
   const t = useTranslate();
   return (
-    <table className="w-full text-sm">
+    <CardTable className="w-full text-sm">
       <caption className="sr-only">{t('reports.leads.byDay.caption')}</caption>
       <thead>
         <tr className="border-b border-border text-left">
@@ -2508,7 +2563,7 @@ function LeadsDailyTable({ rows }: { rows: ReportsLeads['by_day'] }): ReactEleme
           </tr>
         ))}
       </tbody>
-    </table>
+    </CardTable>
   );
 }
 
@@ -2672,7 +2727,7 @@ export function TeamPerformanceTable({ rows }: { rows: AgentPerformanceRow[] }):
   const t = useTranslate();
   const numeric = 'w-24 px-4 py-2 text-right text-xs font-medium text-content-secondary';
   return (
-    <table className="w-full text-sm">
+    <CardTable className="w-full text-sm">
       <caption className="sr-only">{t('reports.teamPerformance.caption')}</caption>
       <thead>
         <tr className="border-b border-border text-left">
@@ -2724,7 +2779,7 @@ export function TeamPerformanceTable({ rows }: { rows: AgentPerformanceRow[] }):
           </tr>
         ))}
       </tbody>
-    </table>
+    </CardTable>
   );
 }
 
@@ -3307,7 +3362,7 @@ function MissedTable({
   const t = useTranslate();
   const numeric = 'w-28 px-4 py-2 text-right text-xs font-medium text-content-secondary';
   return (
-    <table className="w-full text-sm">
+    <CardTable className="w-full text-sm">
       <caption className="sr-only">{caption}</caption>
       <thead>
         <tr className="border-b border-border text-left">
@@ -3339,7 +3394,7 @@ function MissedTable({
           </tr>
         ))}
       </tbody>
-    </table>
+    </CardTable>
   );
 }
 
@@ -3398,7 +3453,7 @@ function EngagementTab(props: TabProps): ReactElement {
               description={t('reports.engagement.emptyDescription')}
             />
           ) : (
-            <table className="w-full text-sm">
+            <CardTable className="w-full text-sm">
               <caption className="sr-only">{t('reports.engagement.byInitiator.caption')}</caption>
               <thead>
                 <tr className="border-b border-border text-left">
@@ -3438,7 +3493,7 @@ function EngagementTab(props: TabProps): ReactElement {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </CardTable>
           )}
         </Card>
       </Section>
@@ -3449,7 +3504,7 @@ function EngagementTab(props: TabProps): ReactElement {
           description={t('reports.engagement.byDay.description', { timezone: data.timezone })}
         >
           <Card>
-            <table className="w-full text-sm">
+            <CardTable className="w-full text-sm">
               <caption className="sr-only">{t('reports.engagement.byDay.caption')}</caption>
               <thead>
                 <tr className="border-b border-border text-left">
@@ -3475,7 +3530,7 @@ function EngagementTab(props: TabProps): ReactElement {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </CardTable>
           </Card>
         </Section>
       )}

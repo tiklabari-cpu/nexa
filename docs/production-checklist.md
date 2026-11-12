@@ -865,8 +865,9 @@ on closed features show. A workspace's way back is the owner.
       the owner's verification mail, a sandbox reset, a forced ownership transfer and a scheduled
       deletion (superadmin, fresh code, the workspace's name typed; deleted 14 days later by the
       platform process's purge job unless cancelled — **Workspaces** lists what is due).
-- [ ] Or set `TRIAL_DAYS` in `.env` long enough that no trial ends inside the pilot, before the
-      workspaces sign up.
+- [ ] `.env.production.example` ships `TRIAL_DAYS=90` (owner decision 2026-11-06), so no trial
+      ends inside the pilot; the code default stays 14. Keep that line in your `.env` before the
+      workspaces sign up. A trial length set in the root panel (Settings) overrides it.
 
 [^psql-activation]:
     Only when the back office is not deployed: as the database owner role,
@@ -1098,9 +1099,12 @@ Open, not fixed by this checklist (tm 255.16, re-checked at the tm 256 closing g
   remains: an admin can trigger up to five verification mails a day to that address, and with
   `SIGNUP_EMAIL_VERIFICATION` off the unverified invitee account is not swept (it holds the
   address and a name, no workspace). Invitations are capped at 50 per workspace per UTC day.
-- `pnpm audit --prod` on 2026-10-01 reported 27 advisories (7 moderate, 20 high). Every path
-  starts at `apps/mobile` (the Expo tool chain); none reaches the api, rtm, web or widget
-  images, and mobile is outside the pilot. New advisories arrive weekly (51 became 59 within
+- `pnpm audit --prod` on 2026-11-12 reported 19 advisories (4 high, 9 moderate, 6 low; the
+  2026-10-01 run said 27, every path from `apps/mobile`). That reassurance no longer holds: most
+  still start at `apps/mobile` (outside the pilot), but three reach the server images — `zod`
+  (high) in api and rtm, `fastify` (low) and `fast-uri` (moderate and low) in the api. The `zod`
+  one has an interim measure from tm 419; the fix is the zod 4.x migration, tm 477 (deferred,
+  and it replaces the deferred tm 415). New advisories arrive weekly (51 became 59 within
   tm 256.2), so run it again before go-live and read the paths, not the count.
 - The e2e suite is order-dependent (independent audit finding G9-GATE-a): full runs have
   failed on different single tests that each pass alone. That is test fixture state, not

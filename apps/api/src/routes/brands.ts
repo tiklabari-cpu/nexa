@@ -18,6 +18,7 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
+import { brandLogoUrl, WIDGET_LOGO_URL_MAX } from '@siyahtus/types';
 import { z } from 'zod';
 import { ApiError } from '../lib/api-error.js';
 import { withTenant, type TenantClient, type TenantContext } from '../lib/tenant.js';
@@ -27,7 +28,30 @@ const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 const name = z.string().trim().min(1).max(120);
 const slug = z.string().trim().min(1).max(120).regex(SLUG_RE, 'slug must be lowercase, hyphenated');
-const logoUrl = z.string().trim().max(2048).nullable();
+/**
+ * The brand's logo (WG-10): only an address the widget will actually draw —
+ * the same `brandLogoUrl` rule the widget mint applies (https, no user name or
+ * password). Anything else used to be stored and then silently never shown;
+ * now it is refused here, and the panel's form checks the same rule first.
+ * An empty value or null clears the logo. Stored as the parsed `href`.
+ */
+const logoUrl = z
+  .string()
+  .trim()
+  .max(WIDGET_LOGO_URL_MAX)
+  .nullable()
+  .transform((value, ctx) => {
+    if (value === null || value === '') return null;
+    const href = brandLogoUrl(value);
+    if (href === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'must be an https address without a user name or password',
+      });
+      return z.NEVER;
+    }
+    return href;
+  });
 
 const createBody = z.object({
   name,

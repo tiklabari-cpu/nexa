@@ -834,6 +834,14 @@ export const settings: Messages = {
   'settings.brands.removeConfirmDescription':
     'Marka aboneliğinizden kaldırılır. Bu işlem geri alınamaz.',
   'settings.brands.nameFieldAriaLabel': '{name} adı',
+  'settings.brands.logoLabel': 'Logo adresi',
+  'settings.brands.logoHint':
+    'İsteğe bağlı. Logo görselinin bağlantısı (https). “Marka logosunu göster” açıkken widget bunu gösterir.',
+  'settings.brands.logoError':
+    'Görselin https:// ile başlayan güvenli bağlantısını girin; kullanıcı adı ya da parola içermesin.',
+  'settings.brands.logoFieldAriaLabel': '{name} logo adresi',
+  'settings.brands.logoRowPlaceholder': 'Logo adresi (https://…)',
+  'settings.brands.logoPreviewAlt': '{name} logosu',
 
   // Widget görünümü (white-label) — WidgetCustomization.tsx
   'settings.widgetCustomization.title': 'Widget görünümü',
@@ -904,7 +912,7 @@ export const settings: Messages = {
     'Risk: balon yokken oyuncular desteğe yalnızca sizin düğmenizden ulaşır. Bu düğme bozulur ya da kaldırılırsa sohbet hiç açılamaz.',
   'settings.widgetCustomization.showLogoLabel': 'Marka logosunu göster',
   'settings.widgetCustomization.showLogoHint':
-    'Ayarlar › Markalar’daki logoyu sohbet penceresinin başında gösterir. Yalnızca güvenli (https) adresteki logo gösterilir.',
+    'Markanın logosunu sohbet penceresinin başında gösterir. Logoyu Ayarlar › Markalar’da, markanın “Logo adresi” alanına girin (görselin https bağlantısı).',
   'settings.widgetCustomization.previewLogo': 'LOGO',
   'settings.widgetCustomization.helpEnabledLabel': 'Yardım sekmesini göster',
   'settings.widgetCustomization.helpEnabledHint':

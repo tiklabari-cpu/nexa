@@ -841,6 +841,14 @@ export const settings: Messages = {
   'settings.brands.removeConfirmDescription':
     'The brand is removed from your subscription. This cannot be undone.',
   'settings.brands.nameFieldAriaLabel': '{name} name',
+  'settings.brands.logoLabel': 'Logo address',
+  'settings.brands.logoHint':
+    'Optional. A link to the logo image (https). The widget shows it when “Show the brand logo” is on.',
+  'settings.brands.logoError':
+    'Enter a secure link to the image, starting with https://, without a user name or password.',
+  'settings.brands.logoFieldAriaLabel': '{name} logo address',
+  'settings.brands.logoRowPlaceholder': 'Logo address (https://…)',
+  'settings.brands.logoPreviewAlt': '{name} logo',
 
   // Widget appearance / white-label — WidgetCustomization.tsx
   'settings.widgetCustomization.title': 'Widget appearance',
@@ -910,7 +918,7 @@ export const settings: Messages = {
     'Risk: with no bubble, players can reach support only through your own button. If that button breaks or is removed, they cannot open a chat at all.',
   'settings.widgetCustomization.showLogoLabel': 'Show the brand logo',
   'settings.widgetCustomization.showLogoHint':
-    'Shows the logo from Settings › Brands at the top of the chat window. Only a logo on a secure (https) address is shown.',
+    'Shows the brand’s logo at the top of the chat window. Set it in Settings › Brands, in the brand’s “Logo address” field (an https link to the image).',
   'settings.widgetCustomization.previewLogo': 'LOGO',
   'settings.widgetCustomization.helpEnabledLabel': 'Show the Help tab',
   'settings.widgetCustomization.helpEnabledHint':

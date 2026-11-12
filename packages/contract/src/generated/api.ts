@@ -19485,7 +19485,7 @@ export interface components {
       name: string;
       /** @description URL-safe identifier, unique within the license. */
       slug: string;
-      /** @description Brand logo reference, or null when none is set. */
+      /** @description The brand logo's `https` address (what the widget draws), or null when none is set. */
       logo_url: string | null;
       /**
        * @description The license's default brand — the one a request with no
@@ -41819,6 +41819,7 @@ export interface operations {
           name: string;
           /** @description URL-safe identifier; derived from the name when omitted. */
           slug?: string;
+          /** @description The brand logo the widget draws (WG-10): an `https` address without a user name or password, anything else is a 400. Empty or null clears it. */
           logo_url?: string | null;
         };
       };
@@ -41939,6 +41940,7 @@ export interface operations {
         'application/json': {
           name?: string;
           slug?: string;
+          /** @description The brand logo the widget draws (WG-10): an `https` address without a user name or password, anything else is a 400. Empty or null clears it. */
           logo_url?: string | null;
         };
       };

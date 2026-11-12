@@ -17558,14 +17558,14 @@
         "description": "production-checklist ve docker-compose.pilot.yml yorumu pilotta dosya paylaşımının kapalı olduğunu söylüyordu; sahip kararıyla pilotta açık (S9) ve tm 418 bu satırları yazar — bu görev yalnız tutarlılığı doğrular. Checklist'in pnpm audit satırı (27 açık, sunucuya ulaşmıyor) eskimiş; task_374.md pending yazıyor, tasks.json'da done. Pilot şablonu TRIAL_DAYS'i yorumda 14 bırakıyor; sahip kararı S19: pilot şablonu 90 gün, kod varsayılanı değişmez.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), belge çelişkileri Ç-01, Ç-02, Ç-03 (+ compose yorumu). Kanıt yeterlidir.\n\nKODDA BUGÜN (HEAD'de doğrulandı):\n- `docs/production-checklist.md:895-896` \"Uploads: the pilot keeps file sharing off (tm 255.13)...\"; `:~1002-1004` uploads \"Outside the pilot\".\n- `docker-compose.pilot.yml:146-148` \"file sharing stays off (tm 255.13) — a workspace that turns it on keeps its uploads only until the next `up --build`\".\n- `docs/production-checklist.md:992-995` \"`pnpm audit --prod` on 2026-10-01 reported 27 advisories (7 moderate, 20 high). Every path starts at `apps/mobile` ... none reaches the api, rtm ...\"; bugün 56 (1 critical, 30 high, 16 moderate, 9 low), zod high api+rtm'ye, fastify/fast-uri sunucu tarafında.\n- `.taskmaster/tasks/task_374.md:5` `**Status:** pending`; tasks.json'da 374 done (commit 76d2170d, 44dcb841).\n- `.env.production.example:316` `# TRIAL_DAYS=14  # trial length of workspaces signed up from now on ...` (yorumlu); `apps/api/src/config/env.ts:842` varsayılan 14 (DEĞİŞMEZ); `docs/production-checklist.md:810-811` \"Or set `TRIAL_DAYS` in `.env` long enough...\"; `apps/api/src/config/env.production-example.test.ts:28-53` `uncommentedValueOf` deseni; root panel deneme süresi ayarı env'in önüne geçer (`apps/api/src/routes/account-lifecycle.ts:172`, tm 389.13).\n\nYAPILACAK:\n(1) Dosya paylaşımı satırları tm 418 (PILOT-UPLOADS-PERSIST) tarafından yazıldı (pilotta açık, kalıcı volume, yedekte, taranmıyor). Burada yalnız tutarlılık: checklist ve compose'da \"file sharing stays off\" / \"keeps file sharing off\" kalmadı; `:~1002-1004` \"Outside the pilot\" uploads satırı pilot gerçeğiyle çelişmiyor; çelişirse düzelt. Pilot dışı varsayılan (S10) K39 ile cevaplandı (2026-11-06, \"Açık başlasın\"): yeni workspace'lerde dosya paylaşımı açık başlar, bugünkü davranış; belgede bunun tersini söyleyen cümle varsa düzelt.\n(2) Audit satırını bugünkü sayılar + sunucu yolundaki açıklar (zod: tm 419 ara önlemi + tm 477 zod 4.x epiği, deferred; tm 415 deferred, yerine 477) + \"yolları oku\" uyarısıyla güncelle; tarih 2026-11-06 (pencere tekrar ölçerse kendi tarihini yazar).\n(3) task_374.md: `task_*.md` dosyaları task-master tarafından üretilir; elle düzeltme sonraki generate'te ezilebilir. Önce son üretilen dosyayı ölç (`ls .taskmaster/tasks/task_*.md | sort -V | tail -1`; 2026-11-06'da task_388.md). Seçenekler (birini seç, HANDOFF'a yaz): (a) task-master generate yolu (tüm dosyaları yeniden üretir — churn'ü ölç), (b) yalnız README ya da CONVENTIONS'ta 'task_NNN.md dosyaları güncel tutulmaz; durum kaynağı tasks.json' notu, task_374.md'ye dokunmadan. Referans .md dosyalarını TAŞIMA (CLAUDE.md).\n(4) TRIAL_DAYS (sahip kararı 2026-11-06 S19, 04 K48): `.env.production.example:316` yorumdan çıkar → `TRIAL_DAYS=90` + kısa yorum (pilot süresince hiçbir deneme bitmesin diye; kod varsayılanı 14 kalır; root panel Genel › deneme süresi ayarı doluysa onun önüne geçer). Checklist pilot bölümündeki `:810-811` maddesi \"şablon 90 gün ile gelir\" diye güncellenir. `env.production-example.test.ts`'e `expect(uncommentedValueOf('TRIAL_DAYS')).toBe('90')`. env.ts'e DOKUNULMAZ.\n\nTUZAK: compose dosyası pilot config testlerinde okunuyorsa yorum değişikliği güvenli; anahtarlara dokunma. format:check (.taskmaster prettierignore'da). Türkçe metin Write/Edit ile.\n\nKAPSAM DIŞI: tm 415/477 durumları (sahip kararı S7/S8 Task Master'da uygulandı), SiyahTus-Analiz masaüstü kopyası (Ç-09), tur 2 raporları (Ç-10), rapor içi tutarsızlık (Ç-11), kod varsayılanı TRIAL_DAYS (S19: değişmez).\nDENETİM BULGULARI: Ç-01; Ç-02; Ç-03",
         "testStrategy": "grep: checklist ve compose'da \"file sharing stays off\" / \"keeps file sharing off\" yok ve uploads satırı tm 418 davranışıyla uyumlu; audit satırında 2026-10-01/27 yok; task_374.md seçilen yolla tutarlı (generate ise Status done; not ise README/CONVENTIONS'ta not). env.production-example.test: TRIAL_DAYS uncommented ve '90'; env.ts varsayılanı 14 (değişmedi). format:check ve test:loop-tools yeşil. DoD: CONVENTIONS §1.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "417",
           "418",
           "419"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-12T07:19:59.021Z",
+        "updatedAt": "2026-11-12T08:35:07.826Z",
         "subtasks": []
       },
       {
@@ -17778,9 +17778,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-12T07:19:59.021Z",
+      "lastModified": "2026-11-12T08:35:07.826Z",
       "taskCount": 478,
-      "completedCount": 453,
+      "completedCount": 454,
       "tags": [
         "master"
       ]

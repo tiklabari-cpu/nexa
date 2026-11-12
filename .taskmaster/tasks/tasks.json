@@ -17484,7 +17484,7 @@
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-12T04:10:14.174Z",
+        "updatedAt": "2026-11-12T05:21:43.626Z",
         "subtasks": [
           {
             "id": 1,
@@ -17492,11 +17492,11 @@
             "description": "(472.1) Ayarlar gezinmesi dar ekranda liste→detay; formlar tek sütun. (472.2) Müşteri tablosu dar ekranda kart listesi; detay paneli tam ekran.",
             "details": "BİRLEŞİK ALT GÖREV (sahip onayı 2026-11-07): 472.1, 472.2 tek pencerede yapılır; DoD kapısı bir kez koşar.\nBölümler sırayla yapılır, her biri kendi kabul ölçütüyle kapanır; biri yeşil değilse alt görev done değildir.\n472.2 cancelled durumda ve buraya işaret ediyor; metinlerde onlara yapılan atıflar bu alt görevi kasteder.\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\n━━ BÖLÜM 1 — 472.1 NARROW-SETTINGS · Ayarlar sayfası dar ekran düzeni ━━\nSORUN: Ayarlar gezinmesi dar ekranda liste→detay; formlar tek sütun.\n\nÜst görev details (tek kaynak). navigation.ts responsive listesine settings.\n\n━━ BÖLÜM 2 — 472.2 NARROW-CUSTOMERS · Müşteriler sayfası dar ekran düzeni ━━\nSORUN: Müşteri tablosu dar ekranda kart listesi; detay paneli tam ekran.\n\nÜst görev details (tek kaynak).",
             "testStrategy": "BÖLÜM 1 (472.1): e2e narrow-screen: 375 px'te ayarlar bandsız, scrollWidth <= clientWidth. `pnpm test:gate --e2e`.\nBÖLÜM 2 (472.2): e2e narrow-screen: 375 px'te müşteriler bandsız, yatay kaydırma yok. `pnpm test:gate --e2e`.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "472",
             "priority": "low",
-            "updatedAt": "2026-11-12T04:10:14.174Z"
+            "updatedAt": "2026-11-12T05:21:29.745Z"
           },
           {
             "id": 2,
@@ -17778,7 +17778,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-12T04:10:14.174Z",
+      "lastModified": "2026-11-12T05:21:43.626Z",
       "taskCount": 478,
       "completedCount": 450,
       "tags": [

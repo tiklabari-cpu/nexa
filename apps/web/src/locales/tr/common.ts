@@ -173,4 +173,7 @@ export const common: Messages = {
   // hangi numarayı kopyaladığını duyar. Etiket ids katalogundan gelir.
   'common.copyId.copy': '{label} numarasını kopyala',
   'common.copyId.copied': 'Kopyalandı',
+  'common.emptyState.installWidget': 'Sohbet widget’ını kurun',
+  'common.emptyState.goToInbox': 'Gelen kutusuna git',
+  'common.emptyState.createAiAgent': 'AI ajanı oluşturun',
 };

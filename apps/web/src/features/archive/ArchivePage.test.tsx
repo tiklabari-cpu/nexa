@@ -247,6 +247,27 @@ describe('Archive list', () => {
     expect(screen.queryByRole('list', { name: 'Conversations' })).toBeNull();
   });
 
+  it('points an empty archive at the next step (tm 473)', async () => {
+    serve({ list: () => Promise.resolve({ items: [], total: 0, total_capped: false }) });
+    // An agent cannot install the widget: the archive sends them to the inbox.
+    const view = renderArchive();
+    expect(await screen.findByText('No archive yet')).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'Go to inbox' })).toHaveAttribute(
+      'href',
+      '/app/inbox',
+    );
+    view.unmount();
+
+    // An admin of a workspace with no website yet is sent to install the widget.
+    auth.scopes = ['chats--access:rw', 'access_rules:rw'];
+    renderArchive();
+    expect(await screen.findByRole('link', { name: 'Install the chat widget' })).toHaveAttribute(
+      'href',
+      '/app/settings/website-widgets',
+    );
+    expect(api.get).toHaveBeenCalledWith('/websites');
+  });
+
   it('says the read failed, with a retry, rather than showing an empty archive', async () => {
     serve({
       list: () =>

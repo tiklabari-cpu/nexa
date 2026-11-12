@@ -182,6 +182,8 @@ export const reports: Messages = {
   'reports.overview.error':
     'Could not load reports. Check that the API is reachable and try again.',
   'reports.overview.volume.description': 'Conversations and tickets in the selected window.',
+  'reports.overview.noConversationsYet':
+    'No conversations yet — these figures fill in once visitors start writing in.',
   'reports.overview.kpi.conversations': 'Conversations',
   'reports.overview.kpi.totalCases': 'Total cases',
   'reports.overview.kpi.totalCasesHint': '{chats} chats + {tickets} tickets',

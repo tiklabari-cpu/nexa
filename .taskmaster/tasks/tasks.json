@@ -17544,12 +17544,12 @@
         "description": "NY-11'in kodla kapatılabilecek kısmı: yeni kayıt olan KOBİ workspace'inde her ana ekranın boş durumu bir sonraki adıma (oluştur/bağla/davet) götürmeli.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-16 / NY-11 (partial; \"az personel\" ölçülemez kısmı kapsam dışı). Kanıt: `apps/api/src/routes/account-lifecycle.ts:288` (signup), `OnboardingWizard.tsx`, tm 400.\n\nYAPILACAK: yeni kayıt → Inbox, Arşiv, Müşteriler, Raporlar, Playbook › AI Agent, Bilgi, Ayarlar › Ekip, Kanallar boş durumlarını gez; eylem düğmesi olmayanlara uygun eylem ekle (en+tr); tek e2e `empty-states.spec.ts` her ekranda bir eylem düğmesi/bağlantısı olduğunu doğrular. Bulunanları HANDOFF'a tablo.\n\nTUZAK: memory browser-ux-probe-traps (30/dk signup/auth), dark-theme-needs-content-brand-text (h4 under h1 heading-order), new-web-component-must-be-registered-for-i18n.\n\nKAPSAM DIŞI: onboarding sihirbazını yeniden tasarlamak.\nDENETİM BULGULARI: G-16",
         "testStrategy": "e2e empty-states.spec.ts: yeni workspace'te listelenen her ekranda en az bir eylem; axe temiz. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-06T16:24:47.953Z",
+        "updatedAt": "2026-11-12T06:24:30.880Z",
         "subtasks": []
       },
       {
@@ -17778,7 +17778,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-12T06:23:53.185Z",
+      "lastModified": "2026-11-12T06:24:30.881Z",
       "taskCount": 478,
       "completedCount": 452,
       "tags": [

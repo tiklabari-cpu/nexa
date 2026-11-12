@@ -201,4 +201,8 @@ export const common: Messages = {
   // reader hears which number it copies; the label is the ids catalogue's.
   'common.copyId.copy': 'Copy {label}',
   'common.copyId.copied': 'Copied',
+  // EmptyStateActions.tsx (NY-11 · tm 473): the next step an empty screen offers.
+  'common.emptyState.installWidget': 'Install the chat widget',
+  'common.emptyState.goToInbox': 'Go to inbox',
+  'common.emptyState.createAiAgent': 'Create an AI agent',
 };

@@ -26,6 +26,7 @@ import {
 } from '../../components/Page.js';
 import { CardTable } from '../../components/CardTable.js';
 import { EmptyState } from '../../components/EmptyState.js';
+import { InstallWidgetHint } from '../../components/EmptyStateActions.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { Banner, Dropdown, bannerDismissKey } from '../../components/ui/index.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
@@ -1121,6 +1122,12 @@ function OverviewTab(props: TabProps): ReactElement {
             }
           />
         </KpiGrid>
+        {/* All zeroes in a workspace no visitor can reach yet (NY-11 · tm 473):
+            the hint names the step that fills them, and is gone once a website
+            has the widget. */}
+        {data.totals.total_cases === 0 && prev.total_cases === 0 && (
+          <InstallWidgetHint text={t('reports.overview.noConversationsYet')} />
+        )}
       </Section>
 
       <Section

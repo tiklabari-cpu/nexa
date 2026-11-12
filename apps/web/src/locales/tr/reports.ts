@@ -170,6 +170,8 @@ export const reports: Messages = {
   'reports.overview.error':
     'Raporlar yüklenemedi. API’ye erişilebildiğinden emin olun ve yeniden deneyin.',
   'reports.overview.volume.description': 'Seçilen aralıktaki sohbetler ve talepler.',
+  'reports.overview.noConversationsYet':
+    'Henüz sohbet yok — bu rakamlar ziyaretçiler yazmaya başlayınca dolar.',
   'reports.overview.kpi.conversations': 'Sohbetler',
   'reports.overview.kpi.totalCases': 'Toplam vaka',
   'reports.overview.kpi.totalCasesHint': '{chats} sohbet + {tickets} talep',

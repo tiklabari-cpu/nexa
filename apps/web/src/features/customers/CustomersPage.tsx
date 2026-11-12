@@ -19,6 +19,7 @@ import { useSearchParams } from 'react-router-dom';
 import { customFieldDisplayValue } from '@siyahtus/types';
 import { Card, ErrorNotice, Page } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
+import { InstallWidgetAction } from '../../components/EmptyStateActions.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { VirtualList, VirtualTable } from '../../components/VirtualList.js';
 import { StatusDot } from '../../components/StatusDot.js';
@@ -350,6 +351,12 @@ export function CustomersPage(): ReactElement {
                         ? 'customers.page.empty.searchDescription'
                         : 'customers.page.empty.description',
                     )}
+                    // Customers arrive through the widget (NY-11 · tm 473).
+                    action={
+                      debounced || conditions.length > 0 ? undefined : (
+                        <InstallWidgetAction fallback="inbox" />
+                      )
+                    }
                   />
                 ) : narrow ? (
                   <CustomerCards

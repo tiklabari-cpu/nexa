@@ -8,6 +8,25 @@
 
 ## Task log (newest-first)
 
+## tm 473 — EMPTY-STATES-WALKTHROUGH: yeni çalışma alanında boş ekranlar ekran ekran gezildi; eylemsiz dördü (Inbox, Arşiv, Müşteriler, Takım › AI ajanları) + Raporlar sıfır görünümü artık bir sonraki adımı sunar — done — 2026-11-12 UTC
+
+- **Yapıldı (dal `feat/empty-states-walkthrough`; yalnız web + e2e; kontrat/migration/env YOK):** yeni `components/EmptyStateActions.tsx` — `InstallWidgetAction` ("Install the chat widget" → Ayarlar › Website widgets) yalnız bölümü açabilene ve henüz web sitesi yokken (`GET /websites`, Website widgets'ın sorgu anahtarı; site eklenince kalkar), yoksa `fallback` "Go to inbox"; `InstallWidgetHint` Raporlar › Genel bakış'ta vaka 0/0 iken; `CreateAiAgentAction` (Playbook'u görebilene). en+tr. §D491 / K473. Gezinti (gerçek kayıt + "Skip setup"):
+
+  | Ekran | Önce | Şimdi |
+  |---|---|---|
+  | Ana sayfa | "Set up" (kontrol listesi) | aynı |
+  | Inbox | "Nothing here yet" — eylemsiz | + Install the chat widget |
+  | Arşiv | "No archive yet" — eylemsiz | + Install the chat widget / Go to inbox |
+  | Müşteriler | "No customers yet" — eylemsiz | + Install the chat widget / Go to inbox |
+  | Raporlar | düğmeler var, sıfırlarda sonraki adım yok | + "No conversations yet — …" + bağlantı |
+  | Playbook › Genel / Bilgi / KB / Beceriler | Add AI agent / Add an AI agent / New article / Try this | aynı |
+  | Takım / Takımlar | Invite teammates / New team | aynı |
+  | Takım › AI ajanları | "No chatbots yet" Playbook'u anıyor, bağlantı yok | + Create an AI agent |
+  | Ayarlar › Kanallar | Connect | aynı |
+- **Doğrulama:** e2e `empty-states.spec.ts` 3/3 (yeni kayıt + "Skip setup" → 10 ekranın her birinde boş durum + eylem görünür/etkin/doğru adres + axe 0 engel, koyu tam set + açık tema kuralları; widget adımı: bağlantıdan Website widgets'a → site ekle → Inbox'ta bağlantı yok, Arşiv/Müşteriler "Go to inbox", Raporlar ipucu yok). Web `EmptyStateActions.test.tsx` 9, `ArchivePage.test.tsx` (+1), `CustomersPage.test.tsx` (+1), `TeamAiAgentsPage.test.tsx` (+2). Kapı: ön kontrol `build statik birim` exit 0 (4m13); `pnpm test:gate --e2e` exit 0 — entegrasyon 16m00, e2e 591 geçti / 0 kırmızı / 1 flaky `sensitive-data.spec.ts:22` (defterde 9 kez, ilgisiz) (21m54). `audit:url-pii`/`req-coverage`/`log-keys` exit 0. PNG churn geri alındı.
+- **Varsayımlar:** kurulum adımı yalnız kurulmamışken (canlı çalışma alanında gece boş Inbox'a "widget kur" denmez); `/websites` okuması başarısızsa bağlantı yok; arama/filtre sonucu boş listelere eylem eklenmedi. Ekip ekranı Ayarlar'da değil `/app/team`.
+- **Sonraki pencere:** yok. HANDOFF'tan tm 468 bloğu arşive taşındı.
+
 ## tm 472.3 — NARROW-ARCHIVE-REPORTS (472.4 birleşik): Arşiv dar ekranda liste → tam ekran bağlantı + geri; Raporlar'da sekmeler yerine rapor seçici, her tablo kart — ikisi de 375/768 px'te bantsız ve yana kaymasız — done — 2026-11-12 UTC
 
 - **Yapıldı (dal `feat/narrow-archive-reports`; yalnız web + e2e; kontrat/migration/env YOK):** `ArchivePage` 1024 px altında liste tüm ekran, açılan bağlantı onun yerine + `DetailBar` ("‹ Tüm konuşmalar" `?c=`'yi siler; Konuşma/Oyuncu sekmesi, ≥ 44 px). `ReportsPage` dar ekranda `ReportPicker` (`<select>` "Rapor", kategoriler optgroup). Yeni `components/CardTable.tsx` + `.card-table` CSS: dar ekranda her satır kart, değerler sütun adıyla (`data-label` başlıktan, açık ARIA rolleri); Raporlar'ın 23 tablosu çevrildi. Ölçümle bulunan taşmalar: AI metrik ipucu (+144 px), Ajan etkinliği şeridi (~190 px), `sr-only` tablo. `navigation.ts` Arşiv + Raporlar `responsive`. §D490 / KA11Y (◐ kalır).
@@ -35,10 +54,3 @@
 - **Doğrulama:** `crawler/http-fetcher.test.ts` 29 (+3: her aralık için çözülen adres reddi, public adres tam o adrese bağlanır + 172.15/172.32 public, public→public→özel yönlendirme üçüncü istekten önce durur); `env.pilot.test.ts` (+1), `env.production-example.test.ts` (+1). Mutasyon: `resolvePublicHttpTarget`'te `isBlockedHost(answer)` kapatıldı → 4 test kırmızı, geri alındı.
 - **Varsayımlar:** egress filtresi uygulamada değil sunucuda (belge notu); gerçek ağ erişimi testlerde yok. Yan düzeltme: tm 468'in `archive-lookup.ts` iki `limit` çağrısı `unpaged-lists` denetimini kırıyordu (main'de kırmızı) → `paging-exempt:` gerekçeleri eklendi.
 - **Sonraki pencere:** yok. HANDOFF'tan tm 464.1 bloğu arşive taşındı.
-
-## tm 468 — CHAT-IDS-VISIBLE-AND-SEARCHABLE (tm 469 birleşik): AI devir kartında Thread ID + Chat ID (kopyala); arşiv arama çubuğu numara, oyuncu adı ve e-postayla da bulur — done — 2026-11-12 UTC
-
-- **Yapıldı (dal `feat/chat-ids-visible-searchable`; yalnız web; kontrat/migration/env YOK):** `AiHandoffCard.tsx` öncelik satırının altında `CopyId` Thread ID + Chat ID. Arşiv çubuğu (Arşiv ekranı + Inbox Arşiv görünümü) mesaj aramasına ek olarak ⌘K'nın `GET /search`'ünü sorar (`features/archive/archive-lookup.ts`, `ArchiveLookup.tsx`): "Doğrudan eşleşmeler" mesaj sonuçlarının üstünde; gün eşleşmesi `GET /chats/{id}` ile en yeni bağlantıya; oyuncu eşleşmesi son 5 bağlantısını (`/archive/conversations?customer_id=`) listeler. Sayı/e-posta biçimli değer mesaj aramasının kuralına takılsa da yalnız aramayla sorulur. §D487 / K468.
-- **Doğrulama:** web `AiHandoffCard.test.tsx` 23 (+1: iki numara görünür, her biri yalnız kendini panoya yazar), `ArchivePage.test.tsx` 24 (+6: Chat ID ilk sırada + yerinde açılır, Thread ID → günün en yeni bağlantısı, e-posta → oyuncunun bağlantıları, `a@b.co` yalnız arama, `ab` hâlâ red, boş arama), `InboxPage.archiveSearch.test.tsx` 13 (+1: mesaj numarası → gün açılır, mesaj vurgulu); e2e `archive-search.spec.ts` 3/3 (+1: gerçek sunucuda Chat ID yapıştır → üstte satır → açılır). Kapı: ön kontrol tek kırmızı `ids-glossary.test` (yorumda düz "Thread ID"/"Chat ID" yasak — yeniden yazıldı); ilk `--e2e` koşusunda yalnız bilinen 00–01 UTC iki entegrasyon kırmızısı (`customer-context`, `ai-unresolved-report`; 01:00 UTC sonrası 27/27); yeniden `pnpm test:gate --e2e` exit 0 — entegrasyon 17m24, e2e 577 geçti / 0 kırmızı / 1 flaky `rule-bot.spec.ts:57` (bilinen açık konu, ilgisiz) (51m34). PNG churn geri alındı.
-- **Varsayımlar:** sunucu birleşimi yerine istemci (kontrat değişmesin; görünürlük/maske `lookup.ts`'te zaten). Tarih aralığı numara aramasını daraltmaz. Görünmeyen sohbetin dönmemesi `GET /search`'ün mevcut entegrasyon testlerinde (tm 332), yeni api testi yok.
-- **Sonraki pencere:** yok. HANDOFF'tan tm 463.4 bloğu arşive taşındı.

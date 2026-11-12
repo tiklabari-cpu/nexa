@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
+import { translate } from '../../lib/i18n.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({
@@ -191,6 +192,162 @@ describe('Brands', () => {
       'Check the highlighted fields and try again.',
     );
   });
+});
+
+/**
+ * The logo address (WG-10, tm 471): the only way to give a brand the logo the
+ * widget heads its panel with. The form uses the API's own rule
+ * (`brandLogoUrl`: https, no user name or password), so what it sends is what
+ * the server keeps and what the widget draws.
+ */
+describe('Brands logo address', () => {
+  const LOGO = 'https://cdn.example.com/acme.png';
+  const LOGO_ERROR =
+    'Enter a secure link to the image, starting with https://, without a user name or password.';
+
+  it('saves a logo by PATCHing logo_url on blur, and previews the stored one', async () => {
+    api.patch.mockResolvedValue({ ...SECOND_BRAND, logo_url: LOGO });
+    renderComponent(<Brands canEdit />);
+    const field = await screen.findByLabelText('Acme EU logo address');
+    expect(screen.queryByRole('img', { name: 'Acme EU logo' })).not.toBeInTheDocument();
+
+    await userEvent.type(field, `  ${LOGO} `);
+    await userEvent.tab();
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith('/brands/brand-2', { logo_url: LOGO }),
+    );
+    expect(api.patch).toHaveBeenCalledTimes(1);
+    expect(field).toHaveValue(LOGO);
+  });
+
+  it('shows the stored logo as a thumbnail with the brand name as its text', async () => {
+    api.get.mockResolvedValue({ items: [DEFAULT_BRAND, { ...SECOND_BRAND, logo_url: LOGO }] });
+    renderComponent(<Brands canEdit />);
+
+    const thumbnail = await screen.findByRole('img', { name: 'Acme EU logo' });
+    expect(thumbnail).toHaveAttribute('src', LOGO);
+    expect(screen.getByLabelText('Acme EU logo address')).toHaveValue(LOGO);
+  });
+
+  it.each([
+    'http://cdn.example.com/acme.png',
+    'javascript:alert(1)',
+    'data:image/png;base64,AAAA',
+    'https://user:pw@cdn.example.com/acme.png',
+  ])('refuses %s with the reason under the field and never PATCHes it', async (bad) => {
+    renderComponent(<Brands canEdit />);
+    const field = await screen.findByLabelText('Acme EU logo address');
+
+    await userEvent.type(field, bad);
+    await userEvent.tab();
+
+    expect(await screen.findByText(LOGO_ERROR)).toHaveAttribute('role', 'alert');
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field).toHaveAccessibleDescription(LOGO_ERROR);
+    expect(api.patch).not.toHaveBeenCalled();
+    // The thumbnail never points at a refused address.
+    expect(screen.queryByRole('img', { name: 'Acme EU logo' })).not.toBeInTheDocument();
+  });
+
+  it('clears the logo by PATCHing null when the field is emptied', async () => {
+    api.get.mockResolvedValue({ items: [DEFAULT_BRAND, { ...SECOND_BRAND, logo_url: LOGO }] });
+    renderComponent(<Brands canEdit />);
+    const field = await screen.findByLabelText('Acme EU logo address');
+    await screen.findByDisplayValue(LOGO);
+
+    await userEvent.clear(field);
+    await userEvent.tab();
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith('/brands/brand-2', { logo_url: null }),
+    );
+  });
+
+  it('does not PATCH a logo blurred unchanged', async () => {
+    renderComponent(<Brands canEdit />);
+    const field = await screen.findByLabelText('Acme EU logo address');
+    await userEvent.click(field);
+    await userEvent.tab();
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+
+  it('shows a server rejection on the row and puts the stored logo back', async () => {
+    api.patch.mockRejectedValue(
+      new ApiClientError({
+        type: 'validation',
+        status: 400,
+        message: 'logo_url: must be an https address without a user name or password',
+        requestId: '-',
+      }),
+    );
+    renderComponent(<Brands canEdit />);
+    const field = await screen.findByLabelText('Acme EU logo address');
+
+    await userEvent.type(field, LOGO);
+    await userEvent.tab();
+
+    const row = field.closest('li')!;
+    expect(await within(row).findByRole('alert')).toHaveTextContent(
+      'Check the highlighted fields and try again.',
+    );
+    expect(field).toHaveValue('');
+  });
+
+  it('adds a brand with a logo, and keeps Add disabled with the reason for an http one', async () => {
+    renderComponent(<Brands canEdit />);
+    await screen.findByDisplayValue('Default');
+
+    await userEvent.type(screen.getByLabelText('Brand name'), 'Acme US');
+    const logo = screen.getByLabelText('Logo address');
+    expect(logo).toHaveAccessibleDescription(
+      'Optional. A link to the logo image (https). The widget shows it when “Show the brand logo” is on.',
+    );
+
+    await userEvent.type(logo, 'http://cdn.example.com/us.png');
+    await userEvent.tab();
+    expect(await screen.findByText(LOGO_ERROR)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add brand' })).toBeDisabled();
+
+    await userEvent.clear(logo);
+    await userEvent.type(logo, 'https://cdn.example.com/us.png');
+    await userEvent.click(screen.getByRole('button', { name: 'Add brand' }));
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith('/brands', {
+        name: 'Acme US',
+        logo_url: 'https://cdn.example.com/us.png',
+      }),
+    );
+  });
+
+  it('adds a brand without a logo when the field is left empty', async () => {
+    renderComponent(<Brands canEdit />);
+    await screen.findByDisplayValue('Default');
+    await userEvent.type(screen.getByLabelText('Brand name'), 'Acme US');
+    await userEvent.click(screen.getByRole('button', { name: 'Add brand' }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/brands', { name: 'Acme US' }));
+  });
+
+  it('keeps the logo fields inactive for a read-only viewer', async () => {
+    renderComponent(<Brands canEdit={false} />);
+    expect(await screen.findByLabelText('Acme EU logo address')).toBeDisabled();
+    expect(screen.getByLabelText('Default logo address')).toBeDisabled();
+    expect(screen.queryByLabelText('Logo address')).not.toBeInTheDocument();
+  });
+
+  it.each(['en', 'tr'] as const)(
+    'points the widget’s “Show the brand logo” hint at this field by its label (%s)',
+    (locale) => {
+      const hint = translate(locale, 'settings.widgetCustomization.showLogoHint');
+      expect(hint).toContain(translate(locale, 'settings.brands.logoLabel'));
+      expect(hint).toContain(translate(locale, 'settings.brands.title'));
+      // The Brands hint names the widget toggle by its own label in turn.
+      expect(translate(locale, 'settings.brands.logoHint')).toContain(
+        translate(locale, 'settings.widgetCustomization.showLogoLabel'),
+      );
+    },
+  );
 });
 
 /** One sentinel for this file's DoD claim of being translated (I18N-j, tm 133.10). */

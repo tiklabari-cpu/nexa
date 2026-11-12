@@ -58,7 +58,14 @@ brands:
                 maxLength: 120
                 pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$"
                 description: URL-safe identifier; derived from the name when omitted.
-              logo_url: { type: string, maxLength: 2048, nullable: true }
+              logo_url:
+                type: string
+                maxLength: 2048
+                nullable: true
+                description: >-
+                  The brand logo the widget draws (WG-10): an `https` address
+                  without a user name or password, anything else is a 400.
+                  Empty or null clears it.
     responses:
       "201":
         description: Created
@@ -123,7 +130,14 @@ brand:
                 minLength: 1
                 maxLength: 120
                 pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$"
-              logo_url: { type: string, maxLength: 2048, nullable: true }
+              logo_url:
+                type: string
+                maxLength: 2048
+                nullable: true
+                description: >-
+                  The brand logo the widget draws (WG-10): an `https` address
+                  without a user name or password, anything else is a 400.
+                  Empty or null clears it.
     responses:
       "200":
         description: Updated

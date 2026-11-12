@@ -5189,7 +5189,7 @@
           "logo_url": {
             "type": "string",
             "nullable": true,
-            "description": "Brand logo reference, or null when none is set."
+            "description": "The brand logo's `https` address (what the widget draws), or null when none is set."
           },
           "is_default": {
             "type": "boolean",

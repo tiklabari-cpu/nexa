@@ -238,6 +238,45 @@ describe('brands', () => {
     expect((await create('Acme EU', adminTokenB, { slug: 'shared' })).statusCode).toBe(201);
   });
 
+  it('keeps only a logo the widget will draw (https, no credentials) and clears it on empty', async () => {
+    const brand = (await create('Acme EU')).json() as Brand;
+    const patchLogo = (value: unknown) =>
+      server.patch(`/brands/${brand.id}`, { logo_url: value }, auth(adminToken));
+
+    const saved = await patchLogo('  https://cdn.example.com/acme.png ');
+    expect(saved.statusCode).toBe(200);
+    expect((saved.json() as Brand).logo_url).toBe('https://cdn.example.com/acme.png');
+
+    for (const bad of [
+      'http://cdn.example.com/acme.png',
+      'javascript:alert(1)',
+      'data:image/png;base64,AAAA',
+      '//cdn.example.com/acme.png',
+      '/uploads/acme.png',
+      'https://user:pw@cdn.example.com/acme.png',
+    ]) {
+      const refused = await patchLogo(bad);
+      expect(refused.statusCode, bad).toBe(400);
+      expect((refused.json() as ErrorBody).error.message).toContain('logo_url');
+    }
+    // A refused value never replaced the stored one.
+    const kept = (await server.get(`/brands/${brand.id}`, auth(readToken))).json() as Brand;
+    expect(kept.logo_url).toBe('https://cdn.example.com/acme.png');
+
+    expect(
+      (await create('Acme US', adminToken, { logo_url: 'http://cdn.example.com/us.png' }))
+        .statusCode,
+    ).toBe(400);
+    const withLogo = await create('Acme US', adminToken, {
+      logo_url: 'https://cdn.example.com/us.png',
+    });
+    expect((withLogo.json() as Brand).logo_url).toBe('https://cdn.example.com/us.png');
+
+    expect(((await patchLogo('')).json() as Brand).logo_url).toBeNull();
+    await patchLogo('https://cdn.example.com/acme.png');
+    expect(((await patchLogo(null)).json() as Brand).logo_url).toBeNull();
+  });
+
   it('validates a bad slug and an empty patch', async () => {
     expect((await create('Acme', adminToken, { slug: 'Not Valid' })).statusCode).toBe(400);
     const brand = (await create('Acme EU')).json() as Brand;

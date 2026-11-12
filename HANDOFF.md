@@ -11,7 +11,7 @@
 ## tm 466 — PILOT-HIDE-CERT-SCREENS: pilotta Ayarlar → Compliance (HIPAA/BAA) ve SIEM export bölümleri gizli; doğrudan adres "Bu kurulumda kullanılamaz" boş durumu — done — 2026-11-11 UTC
 
 - **Yapıldı (dal `feat/pilot-hide-cert-screens`; yalnız web; kontrat/migration/env YOK):** `settings-sections.ts` `compliance` + `siem` → `pilotHidden` (+ yeni `pilotUnavailableState`): navigasyon, grup, arama ve komut paleti (aynı `searchSections`) pilotta bulmaz; `SettingsPage.tsx` bu ikisi için dizine yönlendirmez, `EmptyState` çizer (`settings.pilot.sectionUnavailable*` en+tr). SIEM açıklamasından "SOC 2 / ISO 27001" atfı kalktı (en+tr).
-- **Doğrulama:** web `SettingsNav.pilot.test.tsx` (+3: navigasyon, arama, açıklama), `SettingsPage.pilot.test.tsx` (+4: pilotta boş durum, kapalıyken bölüm açık); pinli `pilotHidden` listesi güncellendi; kapı sonucu aşağıda.
+- **Doğrulama:** web `SettingsNav.pilot.test.tsx` (+3: navigasyon, arama, açıklama), `SettingsPage.pilot.test.tsx` (+4: pilotta boş durum, kapalıyken bölüm açık); pinli `pilotHidden` listesi güncellendi; kapı: ön kontrol `build statik birim` exit 0 (4m49); `--e2e` ilk koşuda `reports-billing` entegrasyonu kırmızı (web-dışı, 3 UTC-gün kovası testi; yeniden koşuda 366/366 yeşil), ikinci koşuda e2e 565 geçti / 1 kırmızı `platform-admin.spec.ts:114` (tek başına 2×12/12 yeşil, ilgisiz).
 - **Varsayımlar:** "plan yetkisi yoksa" kolu yapılmadı (iki bölüm pilot bayrağına bağlı, plana değil). Integrations/Billing eski yönlendirmeyi korur (testleri pinli); yalnız yeni iki bölüm boş durum gösterir. Denetim ekranındaki "SOC 2 CC6.1" metni (`audit.ts`) bu görevin ekranı değil, dokunulmadı. §D486 / K466.
 - **Sonraki pencere:** yok. HANDOFF'tan tm 463.1 bloğu arşive taşındı.
 

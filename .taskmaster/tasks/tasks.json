@@ -17464,13 +17464,13 @@
         "description": "WG-10 kısmen: API logo_url'i kabul ediyor ama panel Markalar formu yalnız name gönderiyor; ipucu metni olmayan bir alandan söz ediyor.",
         "details": "PENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-14 / WG-10 + belge çelişkisi Ç-08. Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/web/src/features/settings/Brands.tsx:25` (yalnız tip), `:44`, `:152` yalnız name; `apps/api/src/routes/settings.ts:~826-830`, `~3379-3382`, `~4289-4290`; `WidgetCustomization.tsx:~197-198` ipucu.\n\nYAPILACAK: Markalar formuna https logo URL alanı (doğrulama API ile aynı — memory form-validator-must-match-its-own-endpoint), önizleme küçük resim; ipucu metni gerçek alana işaret eder (en+tr). Logo için dosya yükleme ucu YOK (logo URL ile; sohbet eki yüklemesi bu görevin konusu değil).\n\nTUZAK: memory label-text-leaks-into-the-fields-name, inline-link-in-a-screen-has-two-traps, settings-savebar-test-traps, dark-theme-needs-content-brand-text. VISITOR-URL-SCHEME'deki safeHref ile tutarlı şema (o görev önce kapanır).\n\nKAPSAM DIŞI: logo yükleme ucu.\nDENETİM BULGULARI: G-14",
         "testStrategy": "web birim: logo URL girilip kaydedilince PATCH gövdesinde logo_url; http:// ya da javascript: → API ile aynı hata; ipucu metni alana işaret eder. e2e (varsa brands spec): logo widget'ta görünür. DoD: CONVENTIONS §1; `pnpm test:gate --e2e` kapanışta bir kez.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "417",
           "419"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-12T03:11:45.773Z",
+        "updatedAt": "2026-11-12T04:09:24.595Z",
         "subtasks": []
       },
       {
@@ -17778,9 +17778,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-12T03:11:45.773Z",
+      "lastModified": "2026-11-12T04:09:24.595Z",
       "taskCount": 478,
-      "completedCount": 449,
+      "completedCount": 450,
       "tags": [
         "master"
       ]

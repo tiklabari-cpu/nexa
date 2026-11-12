@@ -8,6 +8,13 @@
 
 ## Task log (newest-first)
 
+## tm 474 — DOCS-AUDIT-CONTRADICTIONS: denetimin dört belge çelişkisi kapatıldı — done — 2026-11-12 UTC
+
+- **Yapıldı (dal `docs/audit-contradictions`; yalnız belge + bir şablon testi):** (1) checklist ve `docker-compose.pilot.yml`'de "file sharing stays off" kalmadı (tm 418 zaten yazmıştı); "Outside the pilot" satırı pilot gerçeğiyle çelişmiyor, değişiklik gerekmedi. (2) `production-checklist.md` audit satırı 2026-11-12 ölçümüyle: 19 advisory (4 high, 9 moderate, 6 low), çoğu `apps/mobile`, ama zod (api+rtm), fastify, fast-uri (api) sunucu yolunda; tm 419 ara önlem, tm 477 zod 4.x (deferred, tm 415'in yerine) + "yolları oku". (3) `task_374.md`: seçenek (b) — CONVENTIONS §4'e "durum kaynağı tasks.json, `task_NNN.md` güncel tutulmaz" notu (son üretilen task_388.md, 378 dosya ≠ 474 görev); `generate` koşulmadı. (4) `.env.production.example` `TRIAL_DAYS=90` (yorum üstte; kod varsayılanı 14, env.ts değişmedi, root panel ayarı öne geçer) + checklist maddesi.
+- **Doğrulama:** `env.production-example.test.ts` 30 (+1: `TRIAL_DAYS`=90 + yorum), `env.pilot.test.ts` 113 yeşil; prettier temiz. Kapı: ön kontrol `build statik birim` exit 0 (3m51); `pnpm test:gate --e2e` exit 0 (entegrasyon 14m43, e2e 22m13) — önceki iki koşu ilgisiz entegrasyon kırmızısıyla düştü (`push-notifications.test.ts`, `ai-jobs.test.ts` settle; ikisi tek başına yeşil), üçüncü koşu tam yeşil.
+- **Varsayımlar:** audit sayısı `pnpm audit --prod` advisory sayısıdır (görev metnindeki 56 yol sayısıydı). Kapıda e2e koşusu belge/şablon değişikliği için de DoD gereği koşuldu.
+- **Sonraki pencere:** yok. HANDOFF'tan tm 470.1 bloğu arşive taşındı.
+
 ## tm 473 — EMPTY-STATES-WALKTHROUGH: yeni çalışma alanında boş ekranlar ekran ekran gezildi; eylemsiz dördü (Inbox, Arşiv, Müşteriler, Takım › AI ajanları) + Raporlar sıfır görünümü artık bir sonraki adımı sunar — done — 2026-11-12 UTC
 
 - **Yapıldı (dal `feat/empty-states-walkthrough`; yalnız web + e2e; kontrat/migration/env YOK):** yeni `components/EmptyStateActions.tsx` — `InstallWidgetAction` ("Install the chat widget" → Ayarlar › Website widgets) yalnız bölümü açabilene ve henüz web sitesi yokken (`GET /websites`, Website widgets'ın sorgu anahtarı; site eklenince kalkar), yoksa `fallback` "Go to inbox"; `InstallWidgetHint` Raporlar › Genel bakış'ta vaka 0/0 iken; `CreateAiAgentAction` (Playbook'u görebilene). en+tr. §D491 / K473. Gezinti (gerçek kayıt + "Skip setup"):
@@ -47,10 +54,3 @@
 - **Doğrulama:** int `brands.test.ts` 12 (+1: https saklanır/kırpılır, http/javascript/data/`//`/`/uploads`/kimlik bilgili 400 ve eskiyi bozmaz, oluştururken aynı kural, boş ve null temizler); web `Brands.test.tsx` 25 (+14; satır kuralı kapatılınca 4 red); e2e `brand-logo.spec.ts` (Markalar'da http reddi → https kaydı → Widget görünümünde anahtar → ziyaretçi widget'ında `alt=Default` logo; CDN adresi Playwright route ile 1 px PNG). Kapı: ön kontrol `build statik birim` exit 0 (6m15); `pnpm test:gate --e2e` exit 0 — entegrasyon 16m10, e2e 579 geçti / 0 kırmızı / 0 flaky (23m23). PNG churn geri alındı.
 - **Varsayımlar:** API'yi sıkılaştırmak (form sunucudan sıkı olmasın diye) — önceden saklanmış https-dışı değerlere dokunulmadı, widget zaten göstermiyordu. Logo yükleme ucu kapsam dışı. Görev metnindeki `settings.ts` satırları eskiydi; uç `routes/brands.ts`'te.
 - **Sonraki pencere:** yok. HANDOFF'tan tm 464.2 bloğu arşive taşındı.
-
-## tm 470.1 — CRAWLER-SSRF-AND-PILOT-TEMPLATE (470.2 birleşik): http crawler SSRF koruması testle sabitlendi; pilot şablonu `CRAWLER_PROVIDER=http` + SSRF/egress notu + checklist satırı — done — 2026-11-12 UTC
-
-- **Yapıldı (dal `feat/crawler-pilot-http`; kontrat/migration YOK; uygulama kodu değişmedi):** koruma zaten vardı (`lib/ssrf.ts` `resolvePublicHttpTarget` + `pinnedConnection`, `http-fetcher.ts` her atlamada yeniden kontrol) — eksik değildi, yalnız test. `.env.production.example` `CRAWLER_PROVIDER=http` + SSRF/egress açıklaması; `docs/production-checklist.md` pilot bölümüne "Website crawler" satırı (80/443 doğrudan çıkış, `HTTP_PROXY` yok sayılır, api konteynerini LAN + 169.254.169.254'ten güvenlik duvarıyla ayırma).
-- **Doğrulama:** `crawler/http-fetcher.test.ts` 29 (+3: her aralık için çözülen adres reddi, public adres tam o adrese bağlanır + 172.15/172.32 public, public→public→özel yönlendirme üçüncü istekten önce durur); `env.pilot.test.ts` (+1), `env.production-example.test.ts` (+1). Mutasyon: `resolvePublicHttpTarget`'te `isBlockedHost(answer)` kapatıldı → 4 test kırmızı, geri alındı.
-- **Varsayımlar:** egress filtresi uygulamada değil sunucuda (belge notu); gerçek ağ erişimi testlerde yok. Yan düzeltme: tm 468'in `archive-lookup.ts` iki `limit` çağrısı `unpaged-lists` denetimini kırıyordu (main'de kırmızı) → `paging-exempt:` gerekçeleri eklendi.
-- **Sonraki pencere:** yok. HANDOFF'tan tm 464.1 bloğu arşive taşındı.

@@ -57,6 +57,17 @@ describe('.env.production.example documents what parseEnv requires in production
     expect(uncommentedValueOf('OTEL_EXPORTER')).toBe('none');
   });
 
+  it('gives the pilot a 90-day trial, uncommented, and explains the override (tm 474)', () => {
+    // No trial may end while the pilot runs (owner decision 2026-11-06); the
+    // code default (env.ts) stays 14.
+    expect(uncommentedValueOf('TRIAL_DAYS')).toBe('90');
+    const comment = source.slice(
+      source.indexOf('# Trial length, in days'),
+      source.indexOf('TRIAL_DAYS=90'),
+    );
+    expect(comment).toMatch(/root\s+# panel/);
+  });
+
   it('chooses the real website crawler and explains its SSRF guard and egress (tm 470.1)', () => {
     expect(uncommentedValueOf('CRAWLER_PROVIDER')).toBe('http');
     const comment = source.slice(

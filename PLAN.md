@@ -7670,3 +7670,7 @@ _Önceki maddeler: `docs/archive/plan-kanit/PLAN-kanit-arsiv-2026-10-14.md` (`##
 #### K473 — EMPTY-STATES-WALKTHROUGH · Yeni çalışma alanında her boş ekran bir sonraki adımı sunar (PRD satırı yok, damga değişmedi)
 
 - ✅ tm 473 · yeni kayıtta 10 ekran gezildi; eylemsiz 4 boş durum (Inbox, Arşiv, Müşteriler, Takım › AI ajanları) + Raporlar sıfır görünümü artık widget kurulumuna / gelen kutusuna / AI ajanı oluşturmaya götürür, widget adımı site eklenince kalkar · `components/EmptyStateActions.tsx` · web `EmptyStateActions.test.tsx` (9) + `ArchivePage.test.tsx` (+1) + `CustomersPage.test.tsx` (+1) + `TeamAiAgentsPage.test.tsx` (+2) · e2e `empty-states.spec.ts` (3, axe iki tema) · feat/empty-states-walkthrough · §D491
+
+#### K474 — DOCS-AUDIT-CONTRADICTIONS · Denetim belge çelişkileri kapatıldı: dosya paylaşımı satırları tutarlı, audit satırı güncel, task_*.md notu, pilot şablonunda TRIAL_DAYS=90 (PRD satırı yok, damga değişmedi)
+
+- ✅ tm 474 · checklist + compose'ta "file sharing stays off" kalmadı (tm 418 yazmıştı, doğrulandı); `pnpm audit --prod` satırı 2026-11-12 ölçümüyle (19 advisory; zod/fastify/fast-uri sunucu yolunda, tm 419 + tm 477) yenilendi; `task_NNN.md` dosyaları güncel tutulmaz notu CONVENTIONS §4'e (seçenek b, churn'süz); `.env.production.example` `TRIAL_DAYS=90` (kod varsayılanı 14 kalır) + checklist maddesi · `.env.production.example`, `docs/production-checklist.md`, `CONVENTIONS.md` · `env.production-example.test.ts` (+1) · docs/audit-contradictions

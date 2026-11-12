@@ -226,6 +226,10 @@ kayıt: `grep -rn 'tm <id>' docs/archive/handoff` — arşivi baştan okuma.
 - Görev SİLİNMEZ (bağımlılıklar eski görevlere işaret eder). Eski done görevlerin `details` /
   `testStrategy` alanları tek satır özete indirilmiş olabilir; tam metin
   `docs/archive/tasks/tasks-<tarih>.json` yedeğindedir.
+- **Durum kaynağı `.taskmaster/tasks/tasks.json`'dır.** `.taskmaster/tasks/task_NNN.md` dosyaları
+  task-master'ın `generate` çıktısıdır, güncel tutulmaz (son üretilen `task_388.md`; ör.
+  `task_374.md` `pending` yazar, tasks.json'da `done`). Durum için onlara bakma, elle düzeltme;
+  sonraki `generate` ezer ve tüm dosyaları yeniden üretmek gereksiz churn'dür (tm 474).
 
 ### 4.1 Öncelik seviyeleri — `critical` rezervedir
 

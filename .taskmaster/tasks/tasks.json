@@ -17425,12 +17425,12 @@
         "description": "AI-17 kısmen: gerçek crawler sağlayıcısı var ama pilot şablonu `.env.production.example` CRAWLER_PROVIDER=mock; pilotta site taraması uydurma içerik üretiyor. Sahip kararı 2026-11-06 S11: pilotta gerçek tarama 470.1 (SSRF doğrulaması) yeşil olduktan sonra açılır.",
         "details": "ALT GÖREV BİRLEŞTİRMESİ (2026-11-07, sahip onayı; her alt görev ayrı pencere ve tam kapı demek): 470.1 + 470.2 → 470.1. Cancelled alt görevlere metinde yapılan atıflar birleşik alt görevi kasteder.\n\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-13 / AI-17 (partial). Kanıt yeterlidir.\n\nKODDA BUGÜN: `.env.production.example:~426` `CRAWLER_PROVIDER=mock`; `apps/api/src/services/ai/crawler/*`; `apps/api/src/config/env.ts:1219` `CRAWLER_PROVIDER: z.enum(CRAWLER_PROVIDERS).default('mock')`; `job-runner.ts:~590-591`, `jobs.ts:~104`; mock uyarısı `server.ts:~318-319`.\n\nYAPILACAK: alt görevler sırayla. 470.1 karardan bağımsız güvenlik kapısıdır; 470.2 yalnız 470.1 done olduktan sonra yapılır (sahip onayı verildi, S11).\n\nTUZAK: memory network-tests-without-egress (dns.lookup stub), pilot-rehearsal-with-fake-env, deployment-config-field-ripples (değer değişimi testleri ripple edebilir).\n\nKAPSAM DIŞI: crawler kalitesi.\nDENETİM BULGULARI: G-13",
         "testStrategy": "Alt görevlerde. DoD: CONVENTIONS §1.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "417"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-12T03:10:53.913Z",
+        "updatedAt": "2026-11-12T06:23:53.185Z",
         "subtasks": [
           {
             "id": 1,
@@ -17778,9 +17778,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-12T06:23:00.142Z",
+      "lastModified": "2026-11-12T06:23:53.185Z",
       "taskCount": 478,
-      "completedCount": 451,
+      "completedCount": 452,
       "tags": [
         "master"
       ]

@@ -322,6 +322,70 @@ describe('http crawl fetcher — never connects inward (NFR-S7 · FR-MOD-06.3.2)
     expect(internal.requests).toEqual([]);
   });
 
+  it('refuses every private, loopback and link-local range the pilot names, by resolved address (tm 470.1)', async () => {
+    // One address per range: 10/8, 172.16/12 (both ends), 192.168/16, 127/8,
+    // 169.254/16, ::1, fc00::/7 (fc and fd), fe80::/10.
+    const inward: Record<string, () => string[]> = {
+      'a10.example': () => ['10.255.255.254'],
+      'a172lo.example': () => ['172.16.0.1'],
+      'a172hi.example': () => ['172.31.255.254'],
+      'a192.example': () => ['192.168.0.1'],
+      'a127.example': () => ['127.8.9.10'],
+      'a169.example': () => ['169.254.0.1'],
+      'a6loop.example': () => ['::1'],
+      'ula-fc.example': () => ['fc00::1'],
+      'ula-fd.example': () => ['fd12:3456::1'],
+      'll6.example': () => ['fe80::1'],
+    };
+    const { fetch } = harness({ answers: inward });
+    for (const host of Object.keys(inward)) {
+      expectFailed(await fetch({ url: `http://${host}:${internal.port}/` }), 'ssrf_refused');
+    }
+    expect(dials).toEqual([]);
+    expect(internal.requests).toEqual([]);
+  });
+
+  it('asks a public name once, then connects to exactly the address it answered (tm 470.1)', async () => {
+    // The counterpart of the refusals: a public answer is dialled — at the
+    // checked address, with no second name lookup — and 172.15/172.32 (just
+    // outside 172.16/12) are public, not swept up with it.
+    for (const address of [PUBLIC_IP, '172.15.255.254', '172.32.0.1']) {
+      dials = [];
+      const result = await harness({ answers: { 'open.example': () => [address] } }).fetch({
+        url: `http://open.example:${internal.port}/`,
+      });
+      // The guard cuts the dial to a non-loopback address; reaching it is the point.
+      expectFailed(result, 'network');
+      expect(dials).toEqual([address]);
+      expect(processLookups).toEqual([]);
+    }
+    expect(internal.requests).toEqual([]);
+  });
+
+  it('checks every redirect hop again: public → public → internal stops before the third request (tm 470.1)', async () => {
+    const second = await listen((_request, response) => {
+      response.writeHead(302, { location: `http://hidden.example:${internal.port}/admin` });
+      response.end();
+    });
+    const first = await listen((_request, response) => {
+      response.writeHead(302, { location: second.url('/next') });
+      response.end();
+    });
+    for (const [address, name] of [
+      ['172.20.1.1', 'a172'],
+      ['fd00::5', 'ula'],
+      ['fe80::5', 'll'],
+      ['127.0.0.1', 'loop'],
+    ] as const) {
+      const { fetch, hops } = harness({ answers: { 'hidden.example': () => [address] } });
+      const result = await fetch({ url: first.url('/'), allowRedirect: () => true });
+      expect(result, name).toMatchObject({ kind: 'failed', error: 'ssrf_refused' });
+      expect(hops).toHaveLength(3);
+    }
+    expect(second.requests).toHaveLength(4);
+    expect(internal.requests).toEqual([]);
+  });
+
   it('refuses a literal internal address however it is spelled', async () => {
     const { fetch } = harness();
     for (const url of [

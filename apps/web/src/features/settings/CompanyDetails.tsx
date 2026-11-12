@@ -215,7 +215,7 @@ function CompanyDetailsForm({
   return (
     <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-5 p-4">
       <div className="flex flex-wrap gap-4">
-        <div className="flex w-72 flex-col gap-1">
+        <div className="flex w-72 max-w-full flex-col gap-1">
           <label
             htmlFor="company-name"
             className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
@@ -236,7 +236,7 @@ function CompanyDetailsForm({
           <FieldError id="company-name-error" message={nameError} />
         </div>
 
-        <div className="flex w-72 flex-col gap-1">
+        <div className="flex w-72 max-w-full flex-col gap-1">
           <label
             htmlFor="company-sector"
             className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
@@ -259,7 +259,7 @@ function CompanyDetailsForm({
           <p className="text-2xs text-content-tertiary">{t('settings.company.sectorHint')}</p>
         </div>
 
-        <div className="flex w-72 flex-col gap-1">
+        <div className="flex w-72 max-w-full flex-col gap-1">
           <label
             htmlFor="company-size"
             className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
@@ -305,7 +305,7 @@ function CompanyDetailsForm({
         <FieldError id="company-address-error" message={addressError} />
       </div>
 
-      <div className="flex w-72 flex-col gap-1">
+      <div className="flex w-72 max-w-full flex-col gap-1">
         <label
           htmlFor="company-timezone"
           className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"

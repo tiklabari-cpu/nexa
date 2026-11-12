@@ -369,30 +369,33 @@ function RiskFlagLegend(): ReactElement {
       <p className="mb-3 text-2xs text-content-tertiary">
         {t('settings.riskFlags.legend.description')}
       </p>
-      <table className="w-full text-left text-xs">
-        <caption className="sr-only">{t('settings.riskFlags.legend.title')}</caption>
-        <thead>
-          <tr className="text-2xs uppercase tracking-wide text-content-tertiary">
-            <th scope="col" className="py-1 pr-3 font-medium">
-              {t('settings.riskFlags.legend.type')}
-            </th>
-            <th scope="col" className="py-1 pr-3 font-medium">
-              {t('settings.riskFlags.legend.severity')}
-            </th>
-            <th scope="col" className="py-1 pr-3 font-medium">
-              {t('settings.riskFlags.legend.clearedBy')}
-            </th>
-            <th scope="col" className="py-1 font-medium">
-              {t('settings.riskFlags.legend.effect')}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {RISK_FLAG_TYPES.map((type) => (
-            <LegendRow key={type} type={type} />
-          ))}
-        </tbody>
-      </table>
+      {/* Five columns do not fit a phone: the table scrolls in place (tm 472.1). */}
+      <div className="relative overflow-x-auto">
+        <table className="w-full text-left text-xs">
+          <caption className="sr-only">{t('settings.riskFlags.legend.title')}</caption>
+          <thead>
+            <tr className="text-2xs uppercase tracking-wide text-content-tertiary">
+              <th scope="col" className="py-1 pr-3 font-medium">
+                {t('settings.riskFlags.legend.type')}
+              </th>
+              <th scope="col" className="py-1 pr-3 font-medium">
+                {t('settings.riskFlags.legend.severity')}
+              </th>
+              <th scope="col" className="py-1 pr-3 font-medium">
+                {t('settings.riskFlags.legend.clearedBy')}
+              </th>
+              <th scope="col" className="py-1 font-medium">
+                {t('settings.riskFlags.legend.effect')}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {RISK_FLAG_TYPES.map((type) => (
+              <LegendRow key={type} type={type} />
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

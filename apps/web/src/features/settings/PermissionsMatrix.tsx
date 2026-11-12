@@ -257,8 +257,11 @@ function MatrixTable({
   const t = useTranslate();
   const groups = [...new Set(matrix.capabilities.map((c) => c.group))];
 
+  // `relative`: the table's `sr-only` caption is placed against the nearest
+  // positioned box; without one here it sat at the table's far edge, past the
+  // scroller, and widened the page by 18 px at 375 px (tm 472.1).
   return (
-    <div className="overflow-x-auto">
+    <div className="relative overflow-x-auto">
       <table className="w-full text-left text-sm">
         <caption className="sr-only">{t('settings.permissions.tableCaption')}</caption>
         <thead>

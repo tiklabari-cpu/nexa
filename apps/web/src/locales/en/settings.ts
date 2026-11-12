@@ -42,6 +42,9 @@ export const settings: Messages = {
   'settings.nav.label': 'Settings navigation',
   'settings.nav.pin': 'Pin side navigation',
   'settings.nav.unpin': 'Unpin side navigation',
+  // Below 1024 px the navigation is a page of its own and a section opens over
+  // it (GV-04 · tm 472.1); this is the way back to the list.
+  'settings.nav.back': 'All settings',
   'settings.nav.group.general': 'General',
   'settings.nav.group.channels': 'Channels',
   'settings.nav.group.routing': 'Routing',

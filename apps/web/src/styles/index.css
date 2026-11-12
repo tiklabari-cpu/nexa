@@ -5,6 +5,14 @@
 @tailwind utilities;
 
 @layer base {
+  /* A browser gives a fieldset `min-width: min-content`, so the widest thing
+     in it (a long label, a row of fields) sets its width and it will not
+     shrink to its column — at 375 px Settings' SLA and timeout forms ran past
+     their card's edge (GV-04 · tm 472.1). Every other block shrinks; so does this. */
+  fieldset {
+    min-inline-size: 0;
+  }
+
   /* Hover and selection states ease in rather than snapping. In `base`, so any
      component that sets its own `transition-*` utility still wins. */
   a,

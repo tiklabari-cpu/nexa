@@ -9,7 +9,7 @@
  * here is awaited on its response before anything navigates, and the pin is put
  * back through the API in `finally`, whatever the test did.
  */
-import { expect, test, API_BASE, continuePastNarrowNotice, ownerAccessToken } from './fixtures.js';
+import { expect, test, API_BASE, ownerAccessToken } from './fixtures.js';
 
 const PREFS = `${API_BASE}/agents/me/ui-preferences`;
 
@@ -166,8 +166,9 @@ test.describe('Settings navigation search (FR-MOD-08.1 · tm 255.11)', () => {
 
   test('stays usable at a phone width', async ({ agentPage }) => {
     await agentPage.setViewportSize({ width: 390, height: 844 });
-    await agentPage.goto('/app/settings/notifications');
-    await continuePastNarrowNotice(agentPage);
+    // Below 1024 px the navigation is a page of its own (tm 472.1): no band.
+    await agentPage.goto('/app/settings');
+    await expect(agentPage.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
     const search = agentPage.getByRole('combobox', { name: 'Search settings' });
     await expect(search).toBeVisible();
     await search.fill('trusted');
@@ -178,5 +179,7 @@ test.describe('Settings navigation search (FR-MOD-08.1 · tm 255.11)', () => {
     await expect(agentPage).toHaveURL(/\/app\/settings\/trusted-domains$/);
     await expect(agentPage.getByRole('region', { name: 'Trusted domains' })).toBeVisible();
     await agentPage.screenshot({ path: 'kanit/08.1-settings-search-mobile.png', fullPage: true });
+    await agentPage.getByRole('link', { name: 'All settings' }).click();
+    await expect(agentPage).toHaveURL(/\/app\/settings$/);
   });
 });

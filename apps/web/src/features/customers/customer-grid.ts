@@ -118,3 +118,16 @@ export function ariaSortFor(
   if (sort.key !== key) return 'none';
   return sort.order === 'asc' ? 'ascending' : 'descending';
 }
+
+/**
+ * Every sort the server accepts, as the narrow window's menu lists it (tm 472.1):
+ * each sortable column, its natural order first.
+ */
+export const CUSTOMER_SORT_OPTIONS: readonly CustomerSort[] = CUSTOMER_COLUMNS.flatMap((column) =>
+  column.defaultOrder && isSortableColumn(column.key)
+    ? [
+        { key: column.key, order: column.defaultOrder },
+        { key: column.key, order: column.defaultOrder === 'asc' ? 'desc' : 'asc' },
+      ]
+    : [],
+);

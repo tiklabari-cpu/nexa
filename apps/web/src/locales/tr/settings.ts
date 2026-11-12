@@ -30,6 +30,7 @@ export const settings: Messages = {
   'settings.nav.label': 'Ayarlar gezinmesi',
   'settings.nav.pin': 'Yan gezinmeyi sabitle',
   'settings.nav.unpin': 'Yan gezinmenin sabitlemesini kaldır',
+  'settings.nav.back': 'Tüm ayarlar',
   'settings.nav.group.general': 'Genel',
   'settings.nav.group.channels': 'Kanallar',
   'settings.nav.group.routing': 'Yönlendirme',

@@ -79,7 +79,7 @@ export function Page({
       {/* Wraps rather than overflows: on a narrow window the actions (tabs, a
           search box) drop under the title instead of pushing the page sideways
           (tm 259.25 · O6). The title keeps a readable basis before they do. */}
-      <header className="flex min-h-topbar shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-surface px-6 py-3">
+      <header className="flex min-h-topbar shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-surface px-6 py-3 max-md:px-4">
         <div className="min-w-0 flex-1 basis-48">
           <h1 className="truncate text-lg font-semibold">{title}</h1>
           {description && <p className="truncate text-xs text-content-secondary">{description}</p>}
@@ -87,7 +87,10 @@ export function Page({
         {actions}
       </header>
 
-      <div className="flex flex-col gap-6 p-6">{children}</div>
+      {/* A phone keeps 16 px of gutter rather than 24: at 375 px the rail leaves
+          the page 319 px, and every pixel the gutter takes a form field loses
+          (GV-04 · tm 472.1). */}
+      <div className="flex flex-col gap-6 p-6 max-md:p-4">{children}</div>
     </div>
   );
 }

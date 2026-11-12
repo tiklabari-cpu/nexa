@@ -492,11 +492,15 @@ export function CannedResponses({
               )}
               {visibleItems.map((item) => (
                 <li key={item.id} className="flex flex-col gap-2 px-4 py-2.5">
-                  <div className="flex items-start gap-3">
+                  {/* Wraps on a phone: the buttons drop under the reply rather
+                      than being cut off by the card (tm 472.1). */}
+                  <div className="flex flex-wrap items-start gap-3">
                     <code className="mt-0.5 shrink-0 rounded-sm bg-inset px-1.5 py-0.5 font-mono text-2xs">
                       #{item.shortcut}
                     </code>
-                    <span className="flex-1 text-sm text-content-secondary">{item.text}</span>
+                    <span className="min-w-0 flex-1 basis-48 break-words text-sm text-content-secondary">
+                      {item.text}
+                    </span>
                     <span className="mt-0.5 shrink-0 text-2xs text-content-tertiary">
                       {item.visibility === 'private'
                         ? t('settings.cannedResponses.personal')

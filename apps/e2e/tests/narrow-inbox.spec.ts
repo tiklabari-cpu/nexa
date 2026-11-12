@@ -257,8 +257,8 @@ test.describe('the inbox on a narrow window (GV-04)', () => {
   test('an unadapted screen still shows the band; the inbox beside it does not', async ({
     agentPage,
   }) => {
-    await agentPage.goto('/app/customers');
-    await expect(agentPage.getByRole('heading', { name: 'Customers', level: 1 })).toBeVisible();
+    await agentPage.goto('/app/team');
+    await expect(agentPage.getByRole('heading', { name: 'Team', level: 1 })).toBeVisible();
     await expect(agentPage.getByRole('region', { name: BAND })).toBeVisible();
     expect(await sidewaysOverflow(agentPage)).toBe(0);
 

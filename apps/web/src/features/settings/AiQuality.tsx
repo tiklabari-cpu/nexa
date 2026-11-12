@@ -298,7 +298,7 @@ function RubricEditor({ rubric, canEdit }: { rubric: QaRubric; canEdit: boolean 
         }}
       >
         <p className="text-2xs text-content-tertiary">{t('settings.aiQuality.rubric.hint')}</p>
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
           <table className="w-full text-left text-xs">
             <caption className="sr-only">{t('settings.aiQuality.rubric.title')}</caption>
             <thead className="text-2xs uppercase tracking-wide text-content-tertiary">

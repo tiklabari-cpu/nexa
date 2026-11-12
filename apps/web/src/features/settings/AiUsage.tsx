@@ -306,7 +306,7 @@ function SurfaceTable({ usage }: { usage: AiUsageData }): ReactElement {
         {usage.surfaces.length === 0 ? (
           <p className="text-sm text-content-secondary">{t('settings.aiUsage.surfaceEmpty')}</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="text-2xs uppercase tracking-wide text-content-tertiary">

@@ -644,7 +644,7 @@ function ChatTimeoutForm({
         </div>
 
         <div className="flex flex-wrap items-start gap-4">
-          <div className="flex w-72 flex-col gap-1">
+          <div className="flex w-72 max-w-full flex-col gap-1">
             <label
               htmlFor="day-boundary-zone-search"
               className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
@@ -738,7 +738,7 @@ function ChatTimeoutForm({
           onBlur={() => form.blur('domains')}
           placeholder="sirket.com"
           aria-describedby="transcript-domains-error"
-          className="w-80 rounded-md border border-border bg-inset px-2 py-1.5 font-mono text-sm outline-none disabled:opacity-50"
+          className="w-80 max-w-full rounded-md border border-border bg-inset px-2 py-1.5 font-mono text-sm outline-none disabled:opacity-50"
         />
         <FieldError id="transcript-domains-error" message={form.errorFor('domains')} />
       </fieldset>
@@ -770,7 +770,7 @@ function ChatTimeoutForm({
           onBlur={() => form.blur('forwardTo')}
           placeholder={t('settings.transcriptForward.placeholder')}
           aria-describedby="transcript-forward-error"
-          className="w-80 rounded-md border border-border bg-inset px-2 py-1.5 font-mono text-sm outline-none disabled:opacity-50"
+          className="w-80 max-w-full rounded-md border border-border bg-inset px-2 py-1.5 font-mono text-sm outline-none disabled:opacity-50"
         />
         <FieldError id="transcript-forward-error" message={form.errorFor('forwardTo')} />
         <label className="flex items-start gap-3">

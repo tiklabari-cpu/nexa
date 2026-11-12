@@ -7,7 +7,8 @@
  * tab's session, and the page body never scrolls sideways — fixed-width columns
  * scroll inside the module instead. The inbox is adapted and shows no band:
  * `narrow-inbox.spec.ts` drives it at 375 and 768 px; so are Settings and
- * Customers (tm 472.1), `narrow-settings-customers.spec.ts`.
+ * Customers (tm 472.1), `narrow-settings-customers.spec.ts`, and Archive and
+ * Reports (tm 472.3), `narrow-archive-reports.spec.ts`.
  *
  * A screenshot proves nothing here: every claim is a measurement
  * (`scrollWidth <= clientWidth`, a box's width), the PNGs are only evidence.

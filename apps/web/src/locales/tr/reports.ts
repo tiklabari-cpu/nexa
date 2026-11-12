@@ -6,6 +6,7 @@ export const reports: Messages = {
   'reports.page.title': 'Raporlar',
   'reports.page.description': 'Sohbet hacmi, yanıt verme hızı ve memnuniyet.',
   'reports.page.tabsAriaLabel': 'Rapor kategorileri',
+  'reports.page.picker': 'Rapor',
 
   // Tabs
   'reports.tabs.overview': 'Genel Bakış',

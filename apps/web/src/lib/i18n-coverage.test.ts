@@ -317,6 +317,7 @@ const TRANSLATED_FILES: readonly string[] = [
  */
 const TEXT_FREE_FILES: readonly string[] = [
   'src/components/EmptyState.tsx',
+  'src/components/CardTable.tsx',
   'src/components/Page.tsx',
   'src/components/Skeleton.tsx',
   'src/components/StatusDot.tsx',

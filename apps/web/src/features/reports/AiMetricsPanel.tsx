@@ -30,6 +30,7 @@ import {
 import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useId, useState, type ReactElement, type ReactNode } from 'react';
 import { Card, CardSkeleton, ErrorNotice, KpiGrid, Section } from '../../components/Page.js';
+import { CardTable } from '../../components/CardTable.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { enumLabel } from '../../lib/enum-label.js';
@@ -221,11 +222,13 @@ function MetricKpi({
   return (
     <div
       data-metric={metric}
-      className="flex flex-col gap-1 rounded-lg border border-border bg-surface p-4 shadow-xs"
+      // The card anchors the definition below 1024 px (tm 472.3): hung off the
+      // "?" at the end of a long label it ran 144 px past a phone's edge.
+      className="relative flex flex-col gap-1 rounded-lg border border-border bg-surface p-4 shadow-xs"
     >
       <span className="flex items-center gap-1 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
         <span>{label}</span>
-        <span className="group relative inline-flex">
+        <span className="group relative inline-flex max-lg:static">
           <button
             type="button"
             aria-label={t('reports.aiMetrics.definitionOf', { metric: label })}
@@ -237,7 +240,7 @@ function MetricKpi({
           <span
             role="tooltip"
             id={tipId}
-            className="pointer-events-none invisible absolute left-0 top-5 z-10 w-64 rounded-md border border-border bg-surface p-2 text-2xs font-normal normal-case tracking-normal text-content shadow-md group-focus-within:visible group-hover:visible"
+            className="pointer-events-none invisible absolute left-0 top-5 z-10 w-64 rounded-md max-lg:inset-x-2 max-lg:top-10 max-lg:w-auto border border-border bg-surface p-2 text-2xs font-normal normal-case tracking-normal text-content shadow-md group-focus-within:visible group-hover:visible"
           >
             {metricHint(metric, locale)}
           </span>
@@ -395,7 +398,7 @@ function HandoffSection({
       <Card>
         <h3 className="mb-2 text-xs font-semibold">{metricLabel('handoff_wait', locale)}</h3>
         <p className="mb-2 text-2xs text-content-tertiary">{metricHint('handoff_wait', locale)}</p>
-        <table className="w-full text-sm">
+        <CardTable className="w-full text-sm">
           <caption className="sr-only">{metricLabel('handoff_wait', locale)}</caption>
           <thead>
             <tr className="border-b border-border text-left">
@@ -433,7 +436,7 @@ function HandoffSection({
               wait={quality.handoff_wait.out_of_hours}
             />
           </tbody>
-        </table>
+        </CardTable>
         {quality.handoff_wait.in_hours === null && (
           <p className="mt-2 text-2xs text-content-tertiary">
             {t('reports.aiMetrics.wait.noSchedule')}
@@ -474,7 +477,7 @@ function HandoffSection({
             {t('reports.aiMetrics.pendingChecks.empty')}
           </p>
         ) : (
-          <table className="w-full text-sm">
+          <CardTable className="w-full text-sm">
             <caption className="sr-only">{t('reports.aiMetrics.pendingChecks.title')}</caption>
             <thead>
               <tr className="border-b border-border text-left">
@@ -501,7 +504,7 @@ function HandoffSection({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </CardTable>
         )}
         <p className="mt-2 text-2xs text-content-tertiary">
           {t('reports.aiMetrics.pendingChecks.note')}
@@ -515,7 +518,7 @@ function HandoffSection({
             {t('reports.aiMetrics.violations.empty')}
           </p>
         ) : (
-          <table className="w-full text-sm">
+          <CardTable className="w-full text-sm">
             <caption className="sr-only">{t('reports.aiMetrics.violations.title')}</caption>
             <thead>
               <tr className="border-b border-border text-left">
@@ -549,7 +552,7 @@ function HandoffSection({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </CardTable>
         )}
       </Card>
     </Section>
@@ -709,7 +712,7 @@ function BreakdownTable({
         />
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <CardTable className="w-full text-sm">
             <caption className="sr-only">
               {t('reports.aiMetrics.breakdown.caption', {
                 dimension: t(`reports.aiMetrics.dimension.${by}`),
@@ -783,7 +786,7 @@ function BreakdownTable({
                 );
               })}
             </tbody>
-          </table>
+          </CardTable>
         </div>
       )}
     </Card>
@@ -848,7 +851,7 @@ function ConversationList({
         />
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <CardTable className="w-full text-sm">
             <caption className="sr-only">{t(`reports.aiMetrics.list.${metric}`)}</caption>
             <thead>
               <tr className="border-b border-border text-left">
@@ -892,7 +895,7 @@ function ConversationList({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </CardTable>
         </div>
       )}
       {pages.hasNextPage && (

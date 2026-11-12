@@ -100,6 +100,75 @@
   .brand-mark:hover {
     filter: brightness(1.08);
   }
+
+  /**
+   * `CardTable` below the desktop layout (GV-04 · tm 472.3): every body row is a
+   * card — its first cell the title, every other cell a line that names its
+   * column (`data-label`, written from the header) before the value. The header
+   * row stays for assistive technology only. Selectors are two levels deep so
+   * they outweigh the cells' own `text-right` / `truncate` / `w-*` utilities.
+   */
+  @media (max-width: 1023.98px) {
+    .card-table,
+    .card-table > tbody,
+    .card-table > tfoot,
+    .card-table > tbody > tr,
+    .card-table > tfoot > tr {
+      display: block;
+      width: 100%;
+    }
+
+    .card-table > thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+    }
+
+    .card-table > :is(tbody, tfoot) > tr {
+      padding-block: 0.5rem;
+    }
+
+    .card-table > :is(tbody, tfoot) > tr > :is(td, th) {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      width: auto;
+      padding: 0.125rem 1rem;
+      text-align: right;
+      overflow: visible;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .card-table > :is(tbody, tfoot) > tr > :is(td, th) > * {
+      min-width: 0;
+    }
+
+    .card-table > :is(tbody, tfoot) > tr > :is(td, th)::before {
+      content: attr(data-label);
+      flex: none;
+      max-width: 60%;
+      text-align: left;
+      font-size: 0.75rem;
+      font-weight: 400;
+      color: var(--text-secondary);
+    }
+
+    .card-table > :is(tbody, tfoot) > tr > :is(td, th):first-child {
+      justify-content: flex-start;
+      padding-block: 0.25rem;
+      text-align: left;
+      font-weight: 500;
+    }
+
+    .card-table > :is(tbody, tfoot) > tr > :is(td, th):first-child::before {
+      content: none;
+    }
+  }
 }
 
 @layer utilities {

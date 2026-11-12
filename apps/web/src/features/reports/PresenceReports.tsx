@@ -12,6 +12,7 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { Card, CardSkeleton, ErrorNotice, Kpi, KpiGrid, Section } from '../../components/Page.js';
+import { CardTable } from '../../components/CardTable.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
@@ -194,7 +195,7 @@ export function AvailabilityTab({
           >
             <Card>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <CardTable className="w-full text-sm">
                   <caption className="sr-only">{t('reports.availability.byAgent.caption')}</caption>
                   <thead>
                     <tr className="border-b border-border text-left">
@@ -247,7 +248,7 @@ export function AvailabilityTab({
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </CardTable>
               </div>
             </Card>
           </Section>
@@ -260,7 +261,7 @@ export function AvailabilityTab({
           >
             <Card>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <CardTable className="w-full text-sm">
                   <caption className="sr-only">
                     {t('reports.availability.byHour.caption', { timezone: data.timezone })}
                   </caption>
@@ -302,7 +303,7 @@ export function AvailabilityTab({
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </CardTable>
               </div>
             </Card>
           </Section>
@@ -341,7 +342,9 @@ function AgentDayRow({
   const t = useTranslate();
   const name = row.name ?? t('reports.common.unknownAgent');
   return (
-    <li className="grid grid-cols-[minmax(8rem,12rem)_1fr] items-start gap-3 py-2">
+    // A phone puts the name over the strip (tm 472.3): beside it, the strip's
+    // hour marks ran ~190 px past a 375 px window.
+    <li className="grid grid-cols-1 items-start gap-1 py-2 md:grid-cols-[minmax(8rem,12rem)_minmax(0,1fr)] md:gap-3">
       <div className="min-w-0">
         <p className="truncate text-sm font-medium">{name}</p>
         <p className="text-xs text-content-secondary">

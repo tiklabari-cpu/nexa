@@ -8,8 +8,8 @@ import type { Messages } from '../merge.js';
 export const archive: Messages = {
   'archive.title': 'Arşiv',
 
+  'archive.back': 'Tüm konuşmalar',
   'archive.panes.ariaLabel': 'Arşiv bölmeleri',
-  'archive.panes.list': 'Liste',
   'archive.panes.transcript': 'Konuşma',
   'archive.panes.player': 'Oyuncu',
 

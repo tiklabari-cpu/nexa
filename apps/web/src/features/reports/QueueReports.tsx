@@ -13,6 +13,7 @@
  */
 import type { ReactElement } from 'react';
 import { Card, CardSkeleton, ErrorNotice, Kpi, KpiGrid, Section } from '../../components/Page.js';
+import { CardTable } from '../../components/CardTable.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { formatCount, formatDay, formatDuration, formatRate } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
@@ -240,7 +241,7 @@ export function QueueTab({ data, isPending, error }: ViewProps<ReportsQueue>): R
             description={t('reports.queue.byDay.description', { timezone: data.timezone })}
           >
             <Card>
-              <table className="w-full text-sm">
+              <CardTable className="w-full text-sm">
                 <caption className="sr-only">{t('reports.queue.byDay.caption')}</caption>
                 <thead>
                   <tr className="border-b border-border text-left">
@@ -275,7 +276,7 @@ export function QueueTab({ data, isPending, error }: ViewProps<ReportsQueue>): R
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </CardTable>
             </Card>
           </Section>
 
@@ -284,7 +285,7 @@ export function QueueTab({ data, isPending, error }: ViewProps<ReportsQueue>): R
             description={t('reports.queue.byTeam.description')}
           >
             <Card>
-              <table className="w-full text-sm">
+              <CardTable className="w-full text-sm">
                 <caption className="sr-only">{t('reports.queue.byTeam.caption')}</caption>
                 <thead>
                   <tr className="border-b border-border text-left">
@@ -332,7 +333,7 @@ export function QueueTab({ data, isPending, error }: ViewProps<ReportsQueue>): R
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </CardTable>
             </Card>
           </Section>
         </>
@@ -406,7 +407,7 @@ export function QueueAbandonmentTab({
             description={t('reports.queueAbandonment.byWait.description')}
           >
             <Card>
-              <table className="w-full text-sm">
+              <CardTable className="w-full text-sm">
                 <caption className="sr-only">
                   {t('reports.queueAbandonment.byWait.caption')}
                 </caption>
@@ -442,7 +443,7 @@ export function QueueAbandonmentTab({
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </CardTable>
             </Card>
           </Section>
 
@@ -524,7 +525,7 @@ function AbandonmentTable({
   const t = useTranslate();
   const showRate = rows.some((row) => row.rate !== null);
   return (
-    <table className="w-full text-sm">
+    <CardTable className="w-full text-sm">
       <caption className="sr-only">{caption}</caption>
       <thead>
         <tr className="border-b border-border text-left">
@@ -558,6 +559,6 @@ function AbandonmentTable({
           </tr>
         ))}
       </tbody>
-    </table>
+    </CardTable>
   );
 }

@@ -167,39 +167,44 @@ export function ActivityStrip({
           </span>
         ))}
       </div>
-      <table className="sr-only">
-        <caption>{t('reports.activity.stripCaption', { name: label, timezone })}</caption>
-        <thead>
-          <tr>
-            <th scope="col">{t('reports.activity.column.state')}</th>
-            <th scope="col">{t('reports.activity.column.from')}</th>
-            <th scope="col">{t('reports.activity.column.to')}</th>
-            <th scope="col">{t('reports.activity.column.duration')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {segments.map((segment) => (
-            <tr key={`${segment.from}-${segment.state}`}>
-              <td>{t(ACTIVITY_STATE_LABEL_KEYS[segment.state])}</td>
-              <td>{at(segment.from)}</td>
-              <td>{at(segment.to)}</td>
-              <td>
-                {formatDuration((Date.parse(segment.to) - Date.parse(segment.from)) / 1000) ?? ''}
-              </td>
+      {/* Hidden by a wrapper, not on the table: a table is never narrower than
+          its content, so a `sr-only` table still widened a phone's page (tm 472.3). */}
+      <div className="sr-only">
+        <table>
+          <caption>{t('reports.activity.stripCaption', { name: label, timezone })}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{t('reports.activity.column.state')}</th>
+              <th scope="col">{t('reports.activity.column.from')}</th>
+              <th scope="col">{t('reports.activity.column.to')}</th>
+              <th scope="col">{t('reports.activity.column.duration')}</th>
             </tr>
-          ))}
-          {(planned ?? []).map((interval) => (
-            <tr key={`plan-${interval.from}`}>
-              <td>{t('reports.activity.planned')}</td>
-              <td>{at(interval.from)}</td>
-              <td>{at(interval.to)}</td>
-              <td>
-                {formatDuration((Date.parse(interval.to) - Date.parse(interval.from)) / 1000) ?? ''}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {segments.map((segment) => (
+              <tr key={`${segment.from}-${segment.state}`}>
+                <td>{t(ACTIVITY_STATE_LABEL_KEYS[segment.state])}</td>
+                <td>{at(segment.from)}</td>
+                <td>{at(segment.to)}</td>
+                <td>
+                  {formatDuration((Date.parse(segment.to) - Date.parse(segment.from)) / 1000) ?? ''}
+                </td>
+              </tr>
+            ))}
+            {(planned ?? []).map((interval) => (
+              <tr key={`plan-${interval.from}`}>
+                <td>{t('reports.activity.planned')}</td>
+                <td>{at(interval.from)}</td>
+                <td>{at(interval.to)}</td>
+                <td>
+                  {formatDuration((Date.parse(interval.to) - Date.parse(interval.from)) / 1000) ??
+                    ''}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

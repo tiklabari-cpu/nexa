@@ -17398,13 +17398,13 @@
         "description": "(tm 468) ID-05 kısmen: thread başlığı, arşiv ve müşteri panelinde CopyId var; AI devir kartında (AiHandoffCard) ID gösterimi/kopyalaması yok. (tm 469) ID-06 kısmen: arşiv arama çubuğu yalnız mesaj metnini arıyor; ID, ad ve e-posta araması yalnız Ctrl+K'da.",
         "details": "BİRLEŞİK GÖREV (sahip onayı 2026-11-07): tm 468, tm 469 aynı alana dokunduğu için tek pencerede yapılır; DoD kapısı bir kez koşar.\nBölümler sırayla yapılır. Her bölüm kendi kabul ölçütüyle kapanır; biri yeşil değilse görev done değildir.\nBirleşen görevler (tm 469) cancelled durumda ve buraya işaret ediyor; onlara ayrıca dokunma.\nPENCERE PROTOKOLÜ: TASK-RUNNER-PROMPT.md. DoD CONVENTIONS.md §1.\n\n━━ BÖLÜM 1 — tm 468 HANDOFF-CARD-IDS · AI devir kartında Thread ID / Chat ID gösterimi ve kopyalama (CopyId) ━━\nSORUN: ID-05 kısmen: thread başlığı, arşiv ve müşteri panelinde CopyId var; AI devir kartında (AiHandoffCard) ID gösterimi/kopyalaması yok.\n\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-11 / ID-05 (partial). Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/web/src/.../CopyId.tsx`; kullanım örnekleri `ThreadHeader.tsx:102-103`, `159-160`, `ArchiveDetail.tsx:183-184`, `CustomerDetailPanel.tsx:320`, `335`; `AiHandoffCard.tsx` (memory case-only-filename-clash: `aiHandoffCard.ts` yanında).\n\nYAPILACAK: AiHandoffCard'a ThreadHeader'daki desenle Chat ID + Thread ID satırı (CopyId). Etiketler mevcut i18n anahtarlarını kullanır.\n\nTUZAK: memory case-only-filename-clash, label-text-leaks-into-the-fields-name (erişilebilir ad), new-web-component-must-be-registered-for-i18n.\n\nKAPSAM DIŞI: ID arama.\nDENETİM BULGULARI: G-11\n\n━━ BÖLÜM 2 — tm 469 ARCHIVE-SEARCH-BY-ID · Arşiv arama çubuğu ID (chat/thread), müşteri adı ve e-posta ile de bulsun ━━\nSORUN: ID-06 kısmen: arşiv arama çubuğu yalnız mesaj metnini arıyor; ID, ad ve e-posta araması yalnız Ctrl+K'da.\n\nKAYNAK: 2026-11-06 denetimi (main @ 0329e66c), gereksinim G-12 / ID-06 (partial). Kanıt yeterlidir.\n\nKODDA BUGÜN: `apps/api/src/routes/search.ts:75-100`; `apps/api/src/services/search/lookup.ts:1-40` (Ctrl+K'nın kullandığı ID/ad/e-posta araması).\n\nYAPILACAK: arşiv arama sorgusu ID biçimine (chat/thread id deseni) uyuyorsa ya da e-posta biçimindeyse önce `lookup` ile tam eşleşme; sonuç varsa listenin başında; metin araması devam eder. Sunucu tarafında mı (search route'una `lookup` birleşimi) istemcide mi yapılacağını kontrat etkisine göre seç (yol eklemeden). Görünürlük kuralı aynı (CHAT-APPS-VISIBILITY deseni).\n\nTUZAK: Paged query fetchNext (memory paged-query-drops-fetchnext-during-refresh); test-data-digits-near-code-words-get-masked (ID'ler maskelenebilir).\n\nKAPSAM DIŞI: tam metin indeksi.\nDENETİM BULGULARI: G-12",
         "testStrategy": "BÖLÜM 1 (tm 468): web birim: AiHandoffCard chat ve thread id'lerini gösterir, kopyala düğmesi panoya yazar (mock). DoD: CONVENTIONS §1.\nBÖLÜM 2 (tm 469): api entegrasyon (sunucu tarafıysa): chat id ile arama → o sohbet ilk sırada; e-posta → müşterinin sohbetleri; görünmeyen sohbet dönmez. web birim/e2e: arşiv çubuğuna id yaz → sonuç. DoD: CONVENTIONS §1.\nKapanış: bütün bölümlerin hedefli testleri yeşilken tam DoD kapısı bir kez.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "417",
           "420"
         ],
         "priority": "low",
-        "updatedAt": "2026-11-12T00:20:37.892Z",
+        "updatedAt": "2026-11-12T01:53:46.568Z",
         "subtasks": []
       },
       {
@@ -17778,9 +17778,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-11-12T00:20:37.892Z",
+      "lastModified": "2026-11-12T01:53:46.568Z",
       "taskCount": 478,
-      "completedCount": 448,
+      "completedCount": 449,
       "tags": [
         "master"
       ]

@@ -157,6 +157,53 @@ conversations:
 - [ ] The owner can pick who else is warned at 80% and 100%. Save, reload, the choice stays.
 - [ ] The AI performance tab shows the same token and cost figures for an owner or admin.
 
+## Moving the model to Claude (Anthropic)
+
+Added in tm 479 (K51, ADR §13). Claude replaces only the **chat** model: Anthropic has no
+embedding endpoint, so `EMBEDDING_PROVIDER` stays `openai` (or `mock` — and on `mock` the
+knowledge base answers much worse: it matches words, not meaning). Nothing in steps 1–2 changes
+when only the chat model moves; the embedding space is the same.
+
+- [ ] An Anthropic account with a key and a **spend limit** on its workspace (the provider-side
+      ceiling, as in step 0). The key goes in the pilot's `.env` only.
+- [ ] The region. Anthropic pins inference per request with `inference_geo`, and only to the
+      US: `LLM_PROVIDER_REGION=us` sends `inference_geo: us` on every call (priced at 1.1× the
+      list rate — put that in `AI_PRICE_LLM_*`). There is **no EU pin**: production refuses
+      `LLM_PROVIDER_REGION=eu` with `LLM_PROVIDER=anthropic`, and under `PILOT_MODE=true` the
+      region must equal `SIYAHTUS_REGION`, so an EU pilot cannot use Claude.
+- [ ] The env lines (names only; the owner picks the models):
+
+  ```
+  LLM_PROVIDER=anthropic
+  LLM_PROVIDER_REGION=us
+  LLM_MODEL=claude-opus-5-5          # example — the owner chooses
+  LLM_MODEL_FAST=claude-haiku-5-5    # example — classifying and summarising calls
+  LLM_API_KEY=<from Anthropic>
+  # LLM_API_BASE_URL unset → https://api.anthropic.com (the only host production accepts;
+  #   a value ending in /v1 is refused — the SDK adds /v1/messages itself)
+  # LLM_EFFORT=low                   # low | medium | high — how hard Claude thinks; unset = low
+  # LLM_ANTHROPIC_FALLBACK=true      # a request Claude's safety classifier declines is re-run
+  #                                  #   on Anthropic's recommended fallback model; unset = true
+  ```
+
+- [ ] `LLM_MAX_OUTPUT_TOKENS`. Current Claude models always think before they answer, and the
+      thinking counts against this limit. The default (400) can run out before any text on a
+      hard question; the api then logs `llm.failed` / `no_answer` / `length` with a hint that
+      names `LLM_MAX_OUTPUT_TOKENS` and `LLM_EFFORT`. Start at 1024 and watch for that line.
+      Calls with their own small ceiling (question kind: 20 tokens, cluster titles: 120) are
+      the first to show it.
+- [ ] Restart the api as in step 3. A refusal to boot names the key. Four refusals only Claude
+      has: an `LLM_EFFORT` that is not low, medium or high; an `LLM_ANTHROPIC_FALLBACK` that is
+      not true or false; a base URL that is not Anthropic's API host; and region `eu`.
+- [ ] Or from the root panel (Settings › AI › Model): provider "Anthropic (Claude)", leave the
+      base URL empty, model, region US, key. "Test the connection" sends one small request.
+- [ ] Watch the log: `llm.completed` per call; `llm.fallback_served` with `servedModel` when a
+      declined request was answered by the fallback model; `llm.inference_geo_mismatch` if a
+      reply does not report `us` — that one is a residency question, raise it with Anthropic.
+
+Rolling back from Claude is a provider switch like any other: the previous `LLM_*` lines (or
+the panel's previous row) and a restart. Nothing stored depends on the chat model.
+
 ## Rolling back
 
 - **The AI is wrong or too expensive:** the pilot cannot fall back to the mock — `PILOT_MODE=true`

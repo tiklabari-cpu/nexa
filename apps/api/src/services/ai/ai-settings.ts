@@ -40,10 +40,15 @@ import {
 } from './provider/embedding-provider.js';
 import {
   LLM_PROVIDERS,
+  readAnthropicTuning,
   type LlmProviderId,
   type LlmProviderOptions,
 } from './provider/llm-provider.js';
-import { embeddingEndpointProblem, llmEndpointProblem } from './provider/provider-hosts.js';
+import {
+  defaultLlmBaseUrl,
+  embeddingEndpointProblem,
+  llmEndpointProblem,
+} from './provider/provider-hosts.js';
 
 /** The `platform_settings` keys this module reads and writes. */
 export const AI_LLM_SETTING_KEY = 'ai.llm';
@@ -271,6 +276,8 @@ export type AiEnv = Pick<
   | 'LLM_MODEL'
   | 'LLM_TIMEOUT_MS'
   | 'LLM_MAX_OUTPUT_TOKENS'
+  | 'LLM_EFFORT'
+  | 'LLM_ANTHROPIC_FALLBACK'
   | 'EMBEDDING_PROVIDER'
   | 'EMBEDDING_PROVIDER_REGION'
   | 'EMBEDDING_API_KEY'
@@ -323,7 +330,7 @@ function envLlm(env: AiEnv): ResolvedLlmConfig {
     provider: env.LLM_PROVIDER,
     options: env.llm,
     region: env.LLM_PROVIDER_REGION ?? env.SIYAHTUS_REGION,
-    model: env.llm.openai?.model ?? env.LLM_MODEL ?? null,
+    model: env.llm.openai?.model ?? env.llm.anthropic?.model ?? env.LLM_MODEL ?? null,
     timeoutMs: env.LLM_TIMEOUT_MS,
     maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
   };
@@ -385,19 +392,39 @@ export function resolveAiConfig(
       timeoutMs: row.timeout_ms ?? env.LLM_TIMEOUT_MS,
       maxOutputTokens: row.max_output_tokens ?? env.LLM_MAX_OUTPUT_TOKENS,
     };
+    // A provider with a default host (anthropic, tm 479) needs only a model.
+    const baseUrl =
+      row.provider === 'mock' ? null : (row.base_url ?? defaultLlmBaseUrl(row.provider));
     if (row.provider === 'mock') {
       llm = { ...base, options: { openai: null } };
-    } else if (!row.base_url || !row.model) {
+    } else if (!baseUrl || !row.model) {
       warnings.push(`${AI_LLM_SETTING_KEY} names ${row.provider} without a base URL and model`);
     } else {
       const opened = keyFor(row.api_key_ciphertext, env.LLM_API_KEY, root, AI_LLM_SETTING_KEY);
       if ('problem' in opened) warnings.push(opened.problem);
-      else {
+      else if (row.provider === 'anthropic') {
+        const { effort, fallback } = readAnthropicTuning(env);
+        llm = {
+          ...base,
+          options: {
+            openai: null,
+            anthropic: {
+              baseUrl,
+              model: row.model,
+              fastModel: row.model_fast,
+              apiKey: opened.key,
+              region: base.region,
+              effort,
+              fallback,
+            },
+          },
+        };
+      } else {
         llm = {
           ...base,
           options: {
             openai: {
-              baseUrl: row.base_url,
+              baseUrl,
               model: row.model,
               fastModel: row.model_fast,
               apiKey: opened.key,
@@ -468,9 +495,11 @@ export type AiRuleEnv = Pick<Env, 'isProduction' | 'PILOT_MODE' | 'SIYAHTUS_REGI
  * settings to at boot, applied at the moment of saving instead, so a value the
  * tenant API would refuse in its environment cannot arrive through the panel:
  *
- * - a remote provider names a base URL, a model and a region;
+ * - a remote provider names a base URL, a model and a region — `anthropic`
+ *   may leave the base URL out: Anthropic's API host (tm 479);
  * - in production the base URL is https and the OpenAI regional host of that
- *   region — never `api.openai.com` (`provider-hosts.ts`);
+ *   region — never `api.openai.com` — or Anthropic's API host with a region
+ *   it can pin (`us`) (`provider-hosts.ts`);
  * - in production under `PILOT_MODE=true`, never `mock`, and the region is
  *   `SIYAHTUS_REGION`.
  *
@@ -483,11 +512,28 @@ export function aiSettingsProblems(
 ): string[] {
   const problems: string[] = [];
   const pilot = env.isProduction && env.PILOT_MODE;
+  const { llm, embedding } = next;
+  // Per part: the base URL it falls back to when none is stored (anthropic's
+  // API host, tm 479) and the production host rule for its provider.
   const parts = [
-    { name: 'llm', row: next.llm, check: llmEndpointProblem },
-    { name: 'embedding', row: next.embedding, check: embeddingEndpointProblem },
+    {
+      name: 'llm',
+      row: llm,
+      defaultBaseUrl: llm && llm.provider !== 'mock' ? defaultLlmBaseUrl(llm.provider) : null,
+      check: (baseUrl: string, region: Region) =>
+        llm && llm.provider !== 'mock' ? llmEndpointProblem(llm.provider, baseUrl, region) : null,
+    },
+    {
+      name: 'embedding',
+      row: embedding,
+      defaultBaseUrl: null,
+      check: (baseUrl: string, region: Region) =>
+        embedding && embedding.provider !== 'mock'
+          ? embeddingEndpointProblem(embedding.provider, baseUrl, region)
+          : null,
+    },
   ] as const;
-  for (const { name, row, check } of parts) {
+  for (const { name, row, defaultBaseUrl, check } of parts) {
     if (!row) continue;
     if (row.provider === 'mock') {
       if (pilot) {
@@ -497,15 +543,18 @@ export function aiSettingsProblems(
       }
       continue;
     }
-    const missing = (['base_url', 'model', 'region'] as const).filter((field) => !row[field]);
+    const missing = (['base_url', 'model', 'region'] as const).filter(
+      (field) => !row[field] && !(field === 'base_url' && defaultBaseUrl),
+    );
     if (missing.length > 0) {
       problems.push(`${name}: ${missing.join(', ')} required for provider ${row.provider}.`);
       continue;
     }
+    const baseUrl = row.base_url ?? defaultBaseUrl!;
     if (env.isProduction) {
-      const problem = check(row.provider, row.base_url!, row.region!);
+      const problem = check(baseUrl, row.region!);
       if (problem) problems.push(`${name}: ${problem}`);
-    } else if (!isUrl(row.base_url!)) {
+    } else if (!isUrl(baseUrl)) {
       problems.push(`${name}.base_url is not a URL.`);
     }
     if (pilot && row.region !== env.SIYAHTUS_REGION) {

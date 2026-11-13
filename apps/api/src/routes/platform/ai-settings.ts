@@ -28,6 +28,7 @@ import {
 } from '../../services/ai/ai-settings.js';
 import { publishAiCapsChanged } from '../../services/ai/ai-caps-events.js';
 import { EMBEDDING_DIMENSIONS } from '../../services/ai/provider/embedding-provider.js';
+import { LLM_PROVIDERS } from '../../services/ai/provider/llm-provider.js';
 import {
   AI_TEST_TARGETS,
   type PlatformAiOperations,
@@ -43,7 +44,7 @@ const apiKey = z.string().trim().min(8).max(500).nullable().optional();
 
 const llmInput = z
   .object({
-    provider: z.enum(['mock', 'openai']),
+    provider: z.enum(LLM_PROVIDERS),
     base_url: optionalText(500),
     model: optionalText(200),
     model_fast: optionalText(200),

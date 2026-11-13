@@ -98,7 +98,7 @@ describe('writeEnhancedText', () => {
   });
 
   it('fails loudly on a provider id nobody handled', async () => {
-    const { provider } = recorder('anthropic' as LlmProviderId);
+    const { provider } = recorder('deepseek' as LlmProviderId);
     await expect(writeEnhancedText(provider, 'hello', 'formal', LIMITS)).rejects.toThrow();
   });
 });

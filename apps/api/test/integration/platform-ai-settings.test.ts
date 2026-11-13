@@ -28,6 +28,7 @@ import {
   openAiProblem,
   type OpenAiHandler,
 } from '../helpers/fake-openai.js';
+import { anthropicMessage } from '../helpers/fake-anthropic.js';
 import {
   grantToken,
   ownerClient,
@@ -73,6 +74,16 @@ class LineSink {
   }
 }
 
+/** A Messages API answer, as the fake server sends it (`test/helpers/fake-anthropic.ts`). */
+function claudeAnswer(text: string): OpenAiHandler {
+  const reply = anthropicMessage(text);
+  return () =>
+    new Response(JSON.stringify(reply.body), {
+      status: reply.status,
+      headers: { 'content-type': 'application/json', 'request-id': 'req_011CTest' },
+    });
+}
+
 /** A recorder that routes by path: chat completions and embeddings, each with its own answer. */
 function providerNet() {
   const calls: Array<{ url: string; init: RequestInit }> = [];
@@ -80,9 +91,12 @@ function providerNet() {
     calls,
     chat: openAiCompletion('OK') as OpenAiHandler,
     embeddings: openAiEmbeddings(() => Array.from({ length: 1536 }, (_, i) => (i === 0 ? 1 : 0))),
+    /** Anthropic's Messages API (tm 479). */
+    messages: claudeAnswer('OK'),
     impl: (async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       calls.push({ url, init: init ?? {} });
+      if (url.endsWith('/v1/messages')) return net.messages(init ?? {});
       return url.endsWith('/embeddings') ? net.embeddings(init ?? {}) : net.chat(init ?? {});
     }) as typeof fetch,
   };
@@ -295,6 +309,43 @@ describe('platform AI settings (tm 389.17)', () => {
     expect(tenant.app.aiProviders.llm('visitor').id).toBe('mock');
   });
 
+  it('switches a running tenant API to Claude from the panel: no base URL needed, the stored key on the Messages API, pinned to us (tm 479)', async () => {
+    const saved = await ok(
+      put({
+        llm: { provider: 'anthropic', model: 'claude-opus-5-5', region: 'us', api_key: KEY_ONE },
+      }),
+    );
+    expect(saved['llm']).toMatchObject({
+      provider: 'anthropic',
+      base_url: null,
+      model: 'claude-opus-5-5',
+      region: 'us',
+      api_key_last4: KEY_ONE.slice(-4),
+    });
+
+    const started = Date.now();
+    while (
+      tenant.app.aiProviders.config().llm.provider !== 'anthropic' &&
+      Date.now() - started < 5_000
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    expect(tenant.app.aiProviders.llm('visitor').id).toBe('anthropic');
+    expect(tenant.app.aiProviders.inference().llm).toEqual({ id: 'anthropic', region: 'us' });
+
+    const before = tenantNet.calls.length;
+    await expect(tenantCall()).resolves.toMatchObject({ text: 'OK' });
+    const [sent] = tenantNet.calls.slice(before);
+    expect(sent!.url).toBe('https://api.anthropic.com/v1/messages');
+    expect(authorization(sent!.init)).toBe(`Bearer ${KEY_ONE}`);
+    expect(JSON.parse(String(sent!.init.body))).toMatchObject({
+      model: 'claude-opus-5-5',
+      inference_geo: 'us',
+      fallbacks: 'default',
+    });
+    for (const trace of traces(KEY_ONE)) expect(tenantLog.text).not.toContain(trace);
+  });
+
   it('refuses a remote provider without base URL, model or region, any width but 1536, and an unknown field', async () => {
     const missing = await put({ llm: { provider: 'openai', api_key: KEY_ONE } });
     expect(missing.statusCode).toBe(400);
@@ -456,6 +507,27 @@ describe('platform AI settings (tm 389.17)', () => {
       });
       expect(entries).toHaveLength(1);
       expect(entries[0]!.payload).toMatchObject({ target: 'llm', ok: true, error: null });
+    });
+
+    it('tests a stored Claude model with room for its thinking (tm 479)', async () => {
+      await ok(
+        put({
+          llm: { provider: 'anthropic', model: 'claude-haiku-5-5', region: 'us', api_key: KEY_ONE },
+        }),
+      );
+      const result = await ok(test('llm'));
+      expect(result).toMatchObject({
+        provider: 'anthropic',
+        source: 'db',
+        model: 'claude-haiku-5-5',
+        ok: true,
+        error: null,
+      });
+      expect(platformNet.calls).toHaveLength(1);
+      expect(platformNet.calls[0]!.url).toBe('https://api.anthropic.com/v1/messages');
+      expect(JSON.parse(String(platformNet.calls[0]!.init.body))).toMatchObject({
+        max_tokens: 256,
+      });
     });
 
     it('reports a failure by its kind, never the provider’s message', async () => {

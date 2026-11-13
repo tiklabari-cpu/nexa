@@ -1394,6 +1394,131 @@ describe('production configuration', () => {
     });
   });
 
+  /**
+   * `LLM_PROVIDER=anthropic` (tm 479 · K51 · NFR-C4 · ADR §13). The rules
+   * `openai` answers to, with Anthropic's facts: one API host (so the base URL
+   * may be left out), the region pinned per request with `inference_geo` —
+   * which exists for the US only, so production refuses `eu` rather than let
+   * the residency gate trust a claim the requests do not keep. Every new
+   * refusal here holds only while `anthropic` is the provider.
+   */
+  describe('LLM_PROVIDER=anthropic', () => {
+    const ANTHROPIC: NodeJS.ProcessEnv = {
+      LLM_PROVIDER: 'anthropic',
+      LLM_PROVIDER_REGION: 'us',
+      LLM_MODEL: 'claude-opus-5-5',
+      LLM_API_KEY: realSecret('anthropic'),
+    };
+
+    const problemsOf = (source: NodeJS.ProcessEnv): string => {
+      try {
+        parseEnv(source);
+        return '';
+      } catch (error) {
+        return (error as Error).message;
+      }
+    };
+
+    it('boots in production on the default host with region us, low effort and the fallback on', () => {
+      const env = parseEnv({ ...PROD_BASE, ...ANTHROPIC });
+      expect(env.LLM_PROVIDER).toBe('anthropic');
+      expect(env.llm.openai).toBeNull();
+      expect(env.llm.anthropic).toEqual({
+        baseUrl: 'https://api.anthropic.com',
+        model: 'claude-opus-5-5',
+        fastModel: null,
+        apiKey: ANTHROPIC.LLM_API_KEY,
+        region: 'us',
+        effort: 'low',
+        fallback: true,
+      });
+    });
+
+    it('carries the explicit host, the fast model, LLM_EFFORT and LLM_ANTHROPIC_FALLBACK', () => {
+      const env = parseEnv({
+        ...PROD_BASE,
+        ...ANTHROPIC,
+        LLM_API_BASE_URL: 'https://api.anthropic.com',
+        LLM_MODEL_FAST: 'claude-haiku-5-5',
+        LLM_EFFORT: 'medium',
+        LLM_ANTHROPIC_FALLBACK: 'false',
+      });
+      expect(env.llm.anthropic).toMatchObject({
+        fastModel: 'claude-haiku-5-5',
+        effort: 'medium',
+        fallback: false,
+      });
+    });
+
+    it.each(['LLM_MODEL', 'LLM_API_KEY', 'LLM_PROVIDER_REGION'])(
+      'refuses to boot in production without %s, naming the key',
+      (missing) => {
+        const { [missing]: _omitted, ...incomplete } = ANTHROPIC;
+        expect(problemsOf({ ...PROD_BASE, ...incomplete })).toContain(
+          `${missing} is required in production when LLM_PROVIDER=anthropic.`,
+        );
+      },
+    );
+
+    it('does not ask for LLM_API_BASE_URL — the default is checked like a set one', () => {
+      expect(problemsOf({ ...PROD_BASE, ...ANTHROPIC })).toBe('');
+    });
+
+    it('refuses eu in production: Anthropic has no EU pin', () => {
+      expect(problemsOf({ ...PROD_BASE, ...ANTHROPIC, LLM_PROVIDER_REGION: 'eu' })).toContain(
+        'LLM_PROVIDER_REGION=eu cannot be kept with LLM_PROVIDER=anthropic',
+      );
+    });
+
+    it('refuses another host, plain http and the development placeholder key', () => {
+      expect(
+        problemsOf({ ...PROD_BASE, ...ANTHROPIC, LLM_API_BASE_URL: 'https://llm.example.test' }),
+      ).toMatch(/not Anthropic's API host/);
+      expect(
+        problemsOf({ ...PROD_BASE, ...ANTHROPIC, LLM_API_BASE_URL: 'http://api.anthropic.com' }),
+      ).toMatch(/must use https/);
+      const placeholder = 'dev-only-llm-0123456789abcdef';
+      const message = problemsOf({ ...PROD_BASE, ...ANTHROPIC, LLM_API_KEY: placeholder });
+      expect(message).toMatch(/LLM_API_KEY still holds its development placeholder value/);
+      expect(message).not.toContain(placeholder);
+    });
+
+    it('refuses an LLM_EFFORT or LLM_ANTHROPIC_FALLBACK it cannot send — in every environment', () => {
+      expect(problemsOf({ ...BASE, ...ANTHROPIC, LLM_EFFORT: 'max' })).toContain(
+        'LLM_EFFORT must be one of low, medium, high.',
+      );
+      expect(problemsOf({ ...PROD_BASE, ...ANTHROPIC, LLM_ANTHROPIC_FALLBACK: 'yes' })).toContain(
+        'LLM_ANTHROPIC_FALLBACK must be true or false.',
+      );
+    });
+
+    it('leaves every other provider booting as before, whatever the two new keys hold', () => {
+      // never-add-boot-blocking-rules-unasked: the keys are anthropic's alone.
+      const stray = { LLM_EFFORT: 'max', LLM_ANTHROPIC_FALLBACK: 'yes' };
+      expect(problemsOf({ ...BASE, ...stray })).toBe('');
+      expect(problemsOf({ ...PROD_BASE, ...stray })).toBe('');
+      expect(
+        problemsOf({
+          ...PROD_BASE,
+          ...stray,
+          LLM_PROVIDER: 'openai',
+          LLM_PROVIDER_REGION: 'eu',
+          LLM_API_BASE_URL: 'https://eu.api.openai.com/v1',
+          LLM_MODEL: 'a-model-id',
+          LLM_API_KEY: realSecret('llm'),
+        }),
+      ).toBe('');
+      expect(parseEnv({ ...BASE, ...stray }).llm).toEqual({ openai: null });
+    });
+
+    it('outside production: unpinned eu boots, and a half configuration is left to the factory', () => {
+      const env = parseEnv({ ...BASE, ...ANTHROPIC, LLM_PROVIDER_REGION: 'eu' });
+      expect(env.llm.anthropic?.region).toBe('eu');
+      const half = parseEnv({ ...BASE, LLM_PROVIDER: 'anthropic', LLM_MODEL: 'claude-opus-5-5' });
+      expect(half.llm).toEqual({ openai: null, anthropic: null });
+    });
+  });
+
   describe('the conversation memory keys (tm 292.5 · AI-01)', () => {
     it('default to a three-second window and twenty messages / 12,000 characters of history', () => {
       const env = parseEnv(BASE);

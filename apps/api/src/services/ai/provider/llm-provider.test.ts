@@ -21,17 +21,34 @@ import {
 import { envSchema } from '../../../config/env.js';
 import { ANSWER_RETRIEVAL_LIMIT } from '../knowledge-service.js';
 import { LlmProviderError } from './llm-error.js';
+import { AnthropicLlmProvider } from './anthropic-llm-provider.js';
 import {
   LLM_PROVIDERS,
   createLlmProvider,
   promptLength,
+  readAnthropicTuning,
   refuseOverlongPrompt,
   unhandledLlmProvider,
+  type AnthropicSettings,
   type LlmProviderId,
 } from './llm-provider.js';
 import { MockLlmProvider } from './mock-llm-provider.js';
 import { OpenAiLlmProvider } from './openai-llm-provider.js';
-import { OPENAI_REGIONAL_HOSTS, llmEndpointProblem } from './provider-hosts.js';
+import {
+  ANTHROPIC_API_HOST,
+  OPENAI_REGIONAL_HOSTS,
+  defaultLlmBaseUrl,
+  llmEndpointProblem,
+} from './provider-hosts.js';
+
+const ANTHROPIC: AnthropicSettings = {
+  baseUrl: 'https://api.anthropic.com',
+  model: 'claude-opus-5-5',
+  apiKey: 'sk-ant-test-only-not-a-credential',
+  region: 'us',
+  effort: 'low',
+  fallback: true,
+};
 
 const LIMITS = { maxOutputTokens: 400, timeoutMs: 20_000 };
 
@@ -78,12 +95,47 @@ describe('createLlmProvider', () => {
     expect(message).not.toContain(apiKey);
   });
 
-  it('is closed to exactly mock and openai', () => {
-    expect(LLM_PROVIDERS).toEqual(['mock', 'openai']);
+  it("refuses 'anthropic' without its model and key (tm 479)", () => {
+    expect(() => createLlmProvider('anthropic', { openai: null })).toThrow(
+      'LLM_PROVIDER=anthropic needs LLM_MODEL and LLM_API_KEY.',
+    );
+    expect(() => createLlmProvider('anthropic', { openai: null, anthropic: null })).toThrow(
+      'LLM_PROVIDER=anthropic needs LLM_MODEL and LLM_API_KEY.',
+    );
+  });
+
+  it("builds the Claude adapter for 'anthropic' with its settings (tm 479)", () => {
+    const provider = createLlmProvider('anthropic', { openai: null, anthropic: ANTHROPIC });
+    expect(provider).toBeInstanceOf(AnthropicLlmProvider);
+    expect(provider.id).toBe('anthropic');
+  });
+
+  it("refuses an 'anthropic' base URL ending in /v1 or carrying the key, without echoing it", () => {
+    expect(() =>
+      createLlmProvider('anthropic', {
+        openai: null,
+        anthropic: { ...ANTHROPIC, baseUrl: 'https://api.anthropic.com/v1' },
+      }),
+    ).toThrow('the SDK adds /v1/messages itself');
+    let message = '';
+    try {
+      createLlmProvider('anthropic', {
+        openai: null,
+        anthropic: { ...ANTHROPIC, baseUrl: `https://u:${ANTHROPIC.apiKey}@api.anthropic.com` },
+      });
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toMatch(/must not carry credentials/);
+    expect(message).not.toContain(ANTHROPIC.apiKey);
+  });
+
+  it('is closed to exactly mock, openai and anthropic', () => {
+    expect(LLM_PROVIDERS).toEqual(['mock', 'openai', 'anthropic']);
     // Checked by `pnpm typecheck`, not at run time: the list and the type are
     // one vocabulary, and a vendor with no adapter is not in it.
-    expectTypeOf<LlmProviderId>().toEqualTypeOf<'mock' | 'openai'>();
-    expectTypeOf<'anthropic'>().not.toMatchTypeOf<LlmProviderId>();
+    expectTypeOf<LlmProviderId>().toEqualTypeOf<'mock' | 'openai' | 'anthropic'>();
+    expectTypeOf<'deepseek'>().not.toMatchTypeOf<LlmProviderId>();
   });
 
   it('turns a missing switch branch into a compile error', () => {
@@ -91,15 +143,16 @@ describe('createLlmProvider', () => {
     // `llmEndpointProblem`): their `default` hands the remaining id to a
     // parameter typed `never`. A switch that handled only `mock` would be left
     // holding `openai` there — not `never` — and would not compile. Measured
-    // once by hand (tm 255.5): adding `'anthropic'` to `LLM_PROVIDERS` fails
-    // typecheck at exactly those two `default` branches.
+    // by hand (tm 255.5), and for real by tm 479: adding `'anthropic'` to
+    // `LLM_PROVIDERS` failed typecheck at every such `default` branch (the
+    // factory, the host rule, Copilot's two writers) until each had a case.
     expectTypeOf(unhandledLlmProvider).parameter(0).toEqualTypeOf<never>();
     expectTypeOf<Exclude<LlmProviderId, 'mock'>>().not.toEqualTypeOf<never>();
-    expectTypeOf<Exclude<LlmProviderId, 'mock' | 'openai'>>().toEqualTypeOf<never>();
+    expectTypeOf<Exclude<LlmProviderId, 'mock' | 'openai' | 'anthropic'>>().toEqualTypeOf<never>();
 
     // And at run time, for an id that reached it through an unchecked cast.
-    expect(() => unhandledLlmProvider('anthropic' as never)).toThrow(
-      'Unknown LLM_PROVIDER: anthropic',
+    expect(() => unhandledLlmProvider('deepseek' as never)).toThrow(
+      'Unknown LLM_PROVIDER: deepseek',
     );
   });
 });
@@ -239,6 +292,62 @@ describe('llmEndpointProblem (NFR-C4)', () => {
 
   it('compares hosts case-insensitively', () => {
     expect(llmEndpointProblem('openai', 'https://EU.API.OPENAI.COM/v1', 'eu')).toBeNull();
+  });
+
+  describe('anthropic (tm 479 · inference_geo)', () => {
+    it('accepts the API host for us, the one region the API can pin', () => {
+      expect(ANTHROPIC_API_HOST).toBe('api.anthropic.com');
+      expect(llmEndpointProblem('anthropic', 'https://api.anthropic.com', 'us')).toBeNull();
+      expect(llmEndpointProblem('anthropic', 'https://API.ANTHROPIC.COM/', 'us')).toBeNull();
+    });
+
+    it('refuses eu: there is no EU pin, so the region claim would be false', () => {
+      expect(llmEndpointProblem('anthropic', 'https://api.anthropic.com', 'eu')).toBe(
+        'LLM_PROVIDER_REGION=eu cannot be kept with LLM_PROVIDER=anthropic: Anthropic pins inference to the US (inference_geo us) or runs it globally, and has no eu pin.',
+      );
+    });
+
+    it('refuses another host and plain http', () => {
+      expect(llmEndpointProblem('anthropic', 'https://proxy.example.test', 'us')).toBe(
+        "LLM_API_BASE_URL host proxy.example.test is not Anthropic's API host (api.anthropic.com), so no region can be claimed for it.",
+      );
+      expect(llmEndpointProblem('anthropic', 'https://us.api.openai.com/v1', 'us')).toMatch(
+        /not Anthropic's API host/,
+      );
+      expect(llmEndpointProblem('anthropic', 'http://api.anthropic.com', 'us')).toMatch(
+        /must use https/,
+      );
+    });
+
+    it('has a default base URL; openai has none', () => {
+      expect(defaultLlmBaseUrl('anthropic')).toBe('https://api.anthropic.com');
+      expect(defaultLlmBaseUrl('openai')).toBeNull();
+    });
+  });
+});
+
+describe('readAnthropicTuning (LLM_EFFORT, LLM_ANTHROPIC_FALLBACK · tm 479)', () => {
+  it('defaults to low effort with the fallback on', () => {
+    expect(readAnthropicTuning({})).toEqual({ effort: 'low', fallback: true, problems: [] });
+  });
+
+  it('reads every effort and both switch values', () => {
+    for (const effort of ['low', 'medium', 'high'] as const) {
+      expect(readAnthropicTuning({ LLM_EFFORT: effort }).effort).toBe(effort);
+    }
+    expect(readAnthropicTuning({ LLM_ANTHROPIC_FALLBACK: 'false' }).fallback).toBe(false);
+    expect(readAnthropicTuning({ LLM_ANTHROPIC_FALLBACK: 'true' }).fallback).toBe(true);
+  });
+
+  it('names a value it cannot send and keeps the default in its place', () => {
+    expect(readAnthropicTuning({ LLM_EFFORT: 'max', LLM_ANTHROPIC_FALLBACK: 'yes' })).toEqual({
+      effort: 'low',
+      fallback: true,
+      problems: [
+        'LLM_EFFORT must be one of low, medium, high.',
+        'LLM_ANTHROPIC_FALLBACK must be true or false.',
+      ],
+    });
   });
 });
 

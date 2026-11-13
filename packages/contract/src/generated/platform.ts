@@ -5118,11 +5118,13 @@ export interface components {
      * @description The model settings as stored. `null` in a field is "not set here" —
      *     for `timeout_ms` and `max_output_tokens` the environment's value
      *     (`LLM_TIMEOUT_MS`, `LLM_MAX_OUTPUT_TOKENS`) applies. The key itself is
-     *     never returned.
+     *     never returned. `anthropic` (Claude, tm 479) may leave `base_url`
+     *     `null` — Anthropic's API host, the only one production accepts — and
+     *     pins inference per request, which it can do for `us` only.
      */
     PlatformAiLlmSettings: {
       /** @enum {string} */
-      provider: 'mock' | 'openai';
+      provider: 'mock' | 'openai' | 'anthropic';
       base_url: string | null;
       model: string | null;
       /** @description The model a `fast` call uses (classifying, summarising); `null` — `model`. */
@@ -5220,7 +5222,7 @@ export interface components {
     };
     PlatformAiLlmInput: {
       /** @enum {string} */
-      provider: 'mock' | 'openai';
+      provider: 'mock' | 'openai' | 'anthropic';
       base_url?: string | null;
       model?: string | null;
       model_fast?: string | null;
@@ -5259,7 +5261,7 @@ export interface components {
       /** @enum {string} */
       target: 'llm' | 'embedding';
       /** @enum {string} */
-      provider: 'mock' | 'openai';
+      provider: 'mock' | 'openai' | 'anthropic';
       /** @enum {string} */
       source: 'db' | 'env';
       model: string | null;

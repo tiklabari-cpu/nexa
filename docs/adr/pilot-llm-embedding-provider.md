@@ -4,6 +4,7 @@
 - **Tarih:** 2026-09-22
 - **Durum:** Kabul edildi (pencere kararı). Kod ve testler (255.5–255.9) bu karara göre hemen ilerleyebilir; **pilotun canlıya çıkması** için §11'deki iki sahip kararı 2026-10-02'de verildi (OpenAI, bölge `us`); kalan iş hesap ve anahtardır.
 - **Ek (2026-10-14, tm 270, sahip kararı K17):** §6a — yapılandırılmış JSON çıktı EVET (yalnız §6a.1'deki çağrılarda), araç çağırma HAYIR. §0 satır 6 ve §6 metni değişmedi; §6'nın `response_format` cümlesinin yerini §6a alır.
+- **Ek (2026-11-13, tm 479, sahip talebi K51):** §13 — ikinci sohbet sağlayıcısı `anthropic` (Claude), §0 satır 2'nin kuralıyla: kendi enum değeri + resmi SDK üzerinden native Messages API adaptörü. Embedding'e dokunulmadı; bölge = istek başına `inference_geo`.
 - **Yöntem:** Yalnız resmi dokümantasyon okundu (URL'ler her satırda ve §12'de). Hiçbir sağlayıcıya istek atılmadı, hesap açılmadı, anahtar edinilmedi ya da girilmedi. Bu dosyada hiçbir sır değeri yoktur; yalnız anahtar ADLARI vardır.
 - **PRD:** NFR-C4 (bölge/HIPAA kapısı korunur) · FR-MOD-06.3.2 (embedding + index sözleşmesi) · FR-05-06.EK1 (skill motoru çalışma zamanı).
 
@@ -268,3 +269,36 @@ Aşağıdakiler pencerenin veremeyeceği kararlardı (hesap, sözleşme, veri i�
 - Voyage AI — https://docs.voyageai.com/docs/embeddings
 - pgvector — https://github.com/pgvector/pgvector
 - Namecheap PrivateEmail — https://www.namecheap.com/support/knowledgebase/article.aspx/1179/2175/general-private-email-configuration-for-mail-clients-and-mobile-devices/
+
+## 13. 2026-11 eki — Claude (Anthropic) sohbet sağlayıcısı (tm 479 · K51)
+
+Sahip talebi (2026-11-13): "Claude, Kimi, DeepSeek gibi API'lerin de çalışır olmasını istiyorum." §3.2 Anthropic'in OpenAI uyumluluk katmanını production için dışlamıştı; §0 satır 2'nin kuralı geçerli: **yeni satıcı = yeni enum değeri + kendi adaptörü.** API ayrıntıları 2026-11-13'te `claude-api` skill'inden ve kurulu SDK'nın (`@anthropic-ai/sdk` 1.8.0) tip dosyalarından alındı.
+
+### 13.1 Karar
+
+| #   | Konu                   | Karar                                                                                                                                                                                                                                                                                                                                             |
+| --- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Değer                  | `LLM_PROVIDER=anthropic` (`LLM_PROVIDERS = ['mock','openai','anthropic']`). Adaptör `apps/api/src/services/ai/provider/anthropic-llm-provider.ts`, resmi SDK ile (`messages.create`, akışsız, araçsız — §5, §6 aynen).                                                                                                                            |
+| 2   | Embedding              | **Yok.** Anthropic'in embedding ucu yok (§4). `EMBEDDING_PROVIDER` `openai` ya da `mock` kalır; sohbet sağlayıcısından bağımsızdır. `LLM_PROVIDER=anthropic` iken `EMBEDDING_PROVIDER=openai` geçerli bir yapılandırmadır. `mock` embedding bilgi bankası kalitesini düşürür.                                                                     |
+| 3   | Bölge (NFR-C4)         | Bölge host'ta değil istektedir: `LLM_PROVIDER_REGION=us` → her istekte `inference_geo: 'us'`. API yalnız `us` ya da `global` alır; **AB sabitlemesi yok**, bu yüzden production `eu`'yu açılışta reddeder (`llmEndpointProblem`). Yanıttaki `usage.inference_geo` farklıysa uyarı log'u. `us` fiyatı ×1,1.                                        |
+| 4   | Host                   | Yalnız `api.anthropic.com` (https). `LLM_API_BASE_URL` boş bırakılabilir (varsayılan `https://api.anthropic.com`); değer host köküdür, `/v1` ile biten değer reddedilir (SDK `/v1/messages`'ı kendisi ekler).                                                                                                                                     |
+| 5   | Yapılandırılmış çıktı  | `output_config.format` (`json_schema`). Katı alt kümenin tip birlikleri `anyOf`'a çevrilir, API'nin kısıtlamadığı anahtarlar (`minimum`, `maximum`, `maxItems`, 1'den büyük `minItems`) SDK'nın `transformJSONSchema`'sıyla açıklamaya taşınır; sunucu doğrulaması `completeStructured`'da değişmeden.                                            |
+| 6   | Düşünme / effort       | Güncel modellerde düşünme kapatılamaz; denetim `output_config.effort` = `LLM_EFFORT` (low · medium · high, varsayılan low). Düşünme `max_tokens`'a sayılır: yanıtsız `max_tokens` → `no_answer`/`length` + Claude'a özgü ipucu (`LLM_ANTHROPIC_EMPTY_LENGTH_HINT`).                                                                               |
+| 7   | Ret ve fallback        | `stop_reason: 'refusal'` → mevcut `no_answer`/`refusal` (kategori `code`'da); yeni hata türü yok. `LLM_ANTHROPIC_FALLBACK` (varsayılan açık) → `client.beta.messages.create` + `server-side-fallback-2026-07-01` + `fallbacks: 'default'`; yanıtı yazan model log'da (`servedModel`). Haiku 5.5'te sunucu tarafı fallback yoktur — ret ret kalır. |
+| 8   | Ücret sayımı           | Girdi = `input_tokens + cache_creation_input_tokens + cache_read_input_tokens`, çıktı = `output_tokens` (düşünme dahil). Fallback çalıştıysa `usage.iterations`'taki her deneme toplanır (üst düzey `usage` yalnız yanıtlayan denemedir).                                                                                                         |
+| 9   | Gönderilmeyenler       | `temperature`/`top_p`/`top_k` (SDK'nın API sürümü 2026-10-21'de 400), `thinking`, `stream`, `tools`, asistan prefill'i (son tur müşterinin değilse istek atılmaz: `bad_request`/`prompt_invalid`). Baştaki asistan turları sistem istemine taşınır.                                                                                               |
+| 10  | Önbellek               | İstek düzeyinde `cache_control: { type: 'ephemeral' }`.                                                                                                                                                                                                                                                                                           |
+| 11  | Hata ve yeniden deneme | §10 255.6 politikası aynen; SDK'nın yeniden denemesi kapalı (`maxRetries: 0`). Sınıflama SDK'nın tipli hata sınıflarıyla: 401 `auth`, 403 `forbidden`, 404 `not_found`, diğer 4xx `bad_request`, 402/`billing_error` `quota_exhausted` (kalıcı), 429 `rate_limited`, 529/5xx/408 `unavailable` (geçici, `retry-after` alt sınır).                 |
+| 12  | Sızıntı                | SDK log'u kapalı (`logLevel: 'off'`), OpenTelemetry span'leri `metadata_only` ve iz yayılımı kapalı — ortam değişkeni bunları açamaz. Yönlendirme izlenmez, yanıt gövdesi 1 MiB'de kesilir. Anahtar, istem, yanıt, sağlayıcı mesajı log'a yazılmaz.                                                                                               |
+
+### 13.2 Env adları (yalnız ADLAR)
+
+`LLM_PROVIDER=anthropic` · `LLM_PROVIDER_REGION` (`us`) · `LLM_MODEL` · `LLM_MODEL_FAST` (isteğe bağlı) · `LLM_API_KEY` · `LLM_API_BASE_URL` (isteğe bağlı) · `LLM_EFFORT` (isteğe bağlı) · `LLM_ANTHROPIC_FALLBACK` (isteğe bağlı). Yeni açılış reddi **yalnız `LLM_PROVIDER=anthropic` seçiliyken**: eksik model/anahtar, geçersiz `LLM_EFFORT`/`LLM_ANTHROPIC_FALLBACK` (her ortamda), production'da başka host, http ya da `eu`. Diğer sağlayıcılar bu iki yeni anahtarı okumaz; içerikleri onların açılışını durduramaz.
+
+### 13.3 Kök panel
+
+AI ayarlarında Model sağlayıcı listesine "Anthropic (Claude)" eklendi (embedding listesine eklenmedi). Seçilince taban URL boş kalabilir, ipuçları host'u ve AB sabitlemesinin olmadığını söyler; sunucu kaydı `aiSettingsProblems` ile aynı kurallarla süzer. Bağlantı testi Claude için 256 token tavanıyla gider (düşünme için yer).
+
+### 13.4 Kapsam dışı
+
+Akış, araç çağırma (§5, §6), embedding, Bedrock/Vertex/Foundry, DeepSeek/Kimi (tm 480), canlı anahtarla deneme (tm 481, sahibin anahtarıyla).

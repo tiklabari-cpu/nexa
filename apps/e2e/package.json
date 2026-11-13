@@ -14,10 +14,10 @@
     "lint": "eslint tests"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.12.1",
-    "@playwright/test": "^1.56.0",
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "^1.65.0",
     "@types/node": "^22.10.2",
-    "axe-core": "~4.12.1",
+    "axe-core": "~4.14.0",
     "typescript": "^5.7.2"
   }
 }

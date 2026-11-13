@@ -607,6 +607,25 @@ Region and base URL change together, never one alone; the global `api.openai.com
 - [ ] `EMBEDDING_MODEL` stays `text-embedding-3-small`: the column is `vector(1536)`, and
       `EMBEDDING_DIMENSIONS` is an assertion, not a setting.
 
+### Chat provider chosen, smoked and capped (tm 481)
+
+The chat model may be OpenAI, Anthropic (Claude), DeepSeek or Kimi (Moonshot); the table in
+`docs/runbooks/ai-pilot-llm-cutover.md` (Choosing the chat provider) has each one's variables,
+region rule and BAA effect. The embedding provider is chosen separately and stays `openai`
+(or `mock`) whichever chat provider is picked.
+
+- [ ] The provider is chosen and written down: `LLM_PROVIDER` is one of `openai`, `anthropic`,
+      `deepseek`, `moonshot`, and for the last two the owner has accepted that the vendor
+      processes outside the US and EU (workspaces under a BAA get no AI) and the privacy
+      policy's sub-processor list names the vendor and the country.
+- [ ] `llm:smoke` returned 0 with the production key, on the host:
+      `docker compose -f docker-compose.pilot.yml run --rm --no-deps api node dist/scripts/llm-smoke.js`
+      printed `llm:smoke PASSED 3/3`. A 1 or a 2 is not a pass; the runbook says what each
+      `state` means.
+- [ ] A budget limit stands on the provider's side (the vendor console's spend limit, or the
+      prepaid balance for DeepSeek and Kimi), and the application's `AI_DAILY_*` caps sit
+      under it.
+
 ### Mail authentication (SPF, DKIM, DMARC) — a gate before sign-up opens
 
 Sign-up verification sends its link from `SMTP_FROM`. If mail from that domain is not

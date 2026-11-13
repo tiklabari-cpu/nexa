@@ -263,8 +263,92 @@ The checklist:
 
 Rolling back is a provider switch like any other; nothing stored depends on the chat model.
 
+## Choosing the chat provider
+
+Added in tm 481 (K51). Four providers can write the AI's text; one is chosen per deployment by
+`LLM_PROVIDER`, or from the root panel. The embedding provider is a separate choice and does not
+follow it (see the last column).
+
+| `LLM_PROVIDER` | Env the owner sets                                                                               | Base URL when `LLM_API_BASE_URL` is unset             | Region rule                                                                                               | BAA-covered workspaces                        | Embedding                                                     |
+| -------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------- |
+| `openai`       | `LLM_API_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`, `LLM_PROVIDER_REGION`, optional `LLM_MODEL_FAST` | none: the base URL is required                        | `us` or `eu` with the matching regional host (`https://us.api.openai.com/v1`); the global host is refused | allowed when the region matches the workspace | `EMBEDDING_PROVIDER=openai` (or `mock`)                       |
+| `anthropic`    | `LLM_MODEL`, `LLM_API_KEY`, `LLM_PROVIDER_REGION`, optional `LLM_MODEL_FAST`, `LLM_EFFORT`       | `https://api.anthropic.com`                           | `us` only (`inference_geo: us`, 1.1× the list price); `eu` is refused in production                       | allowed in `us`                               | stays `openai` or `mock`: Anthropic has no embedding endpoint |
+| `deepseek`     | `LLM_MODEL`, `LLM_API_KEY`, optional `LLM_MODEL_FAST`                                            | `https://api.deepseek.com` (no `/v1`)                 | none: processed outside the US and EU; `LLM_PROVIDER_REGION` is refused in production                     | refused: 403 `not_allowed`, `provider_region` | stays `openai` or `mock`                                      |
+| `moonshot`     | `LLM_MODEL`, `LLM_API_KEY`, optional `LLM_MODEL_FAST`                                            | `https://api.moonshot.ai/v1` (international platform) | none: processed outside the US and EU (Singapore); `LLM_PROVIDER_REGION` is refused in production         | refused: 403 `not_allowed`, `provider_region` | stays `openai` or `mock`                                      |
+
+The model ids are the owner's to choose in the vendor's console; none is written in code or in
+this table. The sections above say what to look for in each (reasoning, output ceiling,
+structured output). `LLM_MODEL_FAST` is optional on all four: unset, every call uses `LLM_MODEL`.
+A chat provider other than `openai` with `EMBEDDING_PROVIDER=openai` is a supported pair: two
+accounts, two keys (`LLM_API_KEY` and `EMBEDDING_API_KEY`), and the knowledge base keeps its
+vectors.
+
+**BAA.** A workspace covered by a BAA (HIPAA scope) is served only when the model's region is the
+workspace's own. `deepseek` and `moonshot` have no region to match, so with either selected those
+workspaces get no AI at all (the audit entry is `compliance.ai_region_blocked`); everyone else
+keeps theirs. Look at which workspaces are covered before switching.
+
+### Changing the provider
+
+- **From the env** (the pilot's `.env`, then `docker compose -f docker-compose.pilot.yml up -d api`):
+  edit `LLM_*` as in the table. A refusal to boot names the variable, never its value.
+- **From the root panel** (Settings › AI › Model): pick the provider, model and key and save. The
+  provider is rebuilt in the running api — no restart. "Test the connection" sends one small
+  request. The panel's values win over the env while they are set; to go back to the env's,
+  choose "env" in the panel.
+- Either way, run the smoke below **before** pointing customers at it. The smoke reads the
+  **env**, not the panel's stored settings; to try what the panel holds, use its "Test the
+  connection".
+
+### Checking a provider with your own key: `llm:smoke`
+
+The code was tested against fake servers only. A real key is the owner's, so this is the one
+command that finds out whether the vendor accepts what the adapter sends. It builds the provider
+from the environment exactly as the api does and makes three small calls: a short Turkish
+question (plain text), a small schema through the structured-output path every AI feature uses,
+and the plain question again on the `fast` tier. It costs a few hundred tokens.
+
+On the pilot host (the api image has the script; the key comes from the pilot's `.env`, nothing is
+typed on the command line and nothing is written to a file):
+
+```
+docker compose -f docker-compose.pilot.yml run --rm --no-deps api node dist/scripts/llm-smoke.js
+```
+
+In a checkout, with the root `.env` holding the `LLM_*` lines (the compiled `node dist/scripts/llm-smoke.js` works only inside the image, where the workspace packages are built too):
+
+```
+pnpm --filter @siyahtus/api llm:smoke
+```
+
+It prints one JSON line per call (provider, model, tier, `ms`, `inputTokens`, `outputTokens`,
+`chars`, `state`; a failure adds `status`, vendor `code`, `requestId`, `hint`) and a last line
+`llm:smoke PASSED 3/3` or `FAILED n/3`. It never prints the key, the prompt or the reply — only
+the reply's length — and it replaces the value of any variable named `*KEY`, `*SECRET`, `*TOKEN`
+or `*PASSWORD` in whatever it prints. Pasting the output into a ticket is safe.
+
+| Exit | Meaning                                                                                                                                                                               |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0    | All three calls answered.                                                                                                                                                             |
+| 1    | At least one failed. Read its `state`: `auth` (wrong key or platform), `quota_exhausted`, `no_answer:length` (see the hint), `no_answer:refusal`, `no_answer:schema`, `rate_limited`. |
+| 2    | Not configured; nothing was sent: the env is invalid, `LLM_PROVIDER` is `mock`, or the model or key is missing.                                                                       |
+
+What to look at on the first real run:
+
+- `no_answer:length` on Kimi or Claude: raise `LLM_MAX_OUTPUT_TOKENS` (start at 1024), run again.
+- DeepSeek: that `thinking: disabled` is accepted (the call passes and `outputTokens` is small).
+- Kimi: the line `events: llm.json_schema_unsupported` means the model does not take
+  `json_schema`; the adapter moved to JSON mode and the structured call still passes.
+- `inputTokens` and `outputTokens` against the vendor's usage page: they should match to within
+  the cached-input difference.
+
 ## Rolling back
 
+- **A provider switch is the rollback.** Nothing stored depends on the chat model: put the
+  previous `LLM_*` lines back (or the panel's previous row) and restart the api (env) or save
+  (panel). No rebuild, no migration. `LLM_PROVIDER=mock` is the rollback for a deployment that
+  is not in pilot mode (development, staging); under `PILOT_MODE=true` in production the api
+  will not boot on it, so there the way back is the previous real provider.
 - **The AI is wrong or too expensive:** the pilot cannot fall back to the mock — `PILOT_MODE=true`
   in production will not boot on `LLM_PROVIDER=mock`. Lower a cap (step 4), or switch the
   workspace's AI agent off in its own settings, and fix the cause before turning it back on.

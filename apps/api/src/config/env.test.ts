@@ -780,6 +780,16 @@ describe('production configuration', () => {
       expect(env.PILOT_CONTACT_EMAIL).toBe('pilot-desk@siyahtus.test');
     });
 
+    it.each(['deepseek', 'moonshot'] as const)(
+      'boots with %s and no LLM_PROVIDER_REGION: the owner allowed it outside the region (tm 480)',
+      (id) => {
+        const { LLM_PROVIDER_REGION: _region, LLM_API_BASE_URL: _base, ...rest } = PILOT;
+        const env = parseEnv({ ...rest, LLM_PROVIDER: id });
+        expect(env.LLM_PROVIDER).toBe(id);
+        expect(env.llm[id]?.model).toBe('a-model-id');
+      },
+    );
+
     it('refuses to boot without PILOT_CONTACT_EMAIL, naming it', () => {
       const { PILOT_CONTACT_EMAIL: _omitted, ...withoutContact } = PILOT;
       const message = problemsOf(withoutContact);
@@ -1516,6 +1526,138 @@ describe('production configuration', () => {
       expect(env.llm.anthropic?.region).toBe('eu');
       const half = parseEnv({ ...BASE, LLM_PROVIDER: 'anthropic', LLM_MODEL: 'claude-opus-5-5' });
       expect(half.llm).toEqual({ openai: null, anthropic: null });
+    });
+  });
+
+  /**
+   * DeepSeek and Kimi (tm 480 · K51 · ADR §14). Their processing location is
+   * the vendor's fact — outside every region this build serves — so no
+   * `LLM_PROVIDER_REGION` is asked for, and one written down is refused in
+   * production (it would be the one thing the residency gate trusts). Only
+   * while one of the two is the provider: every other configuration boots as
+   * before (never-add-boot-blocking-rules-unasked).
+   */
+  describe.each([
+    {
+      id: 'deepseek',
+      base: 'https://api.deepseek.com',
+      model: 'deepseek-flash',
+      name: 'DeepSeek',
+      host: 'api.deepseek.com',
+    },
+    {
+      id: 'moonshot',
+      base: 'https://api.moonshot.ai/v1',
+      model: 'kimi-k3',
+      name: 'Kimi (Moonshot)',
+      host: 'api.moonshot.ai',
+    },
+  ] as const)('LLM_PROVIDER=$id (tm 480)', ({ id, base, model, name, host }) => {
+    const VENDOR: NodeJS.ProcessEnv = {
+      LLM_PROVIDER: id,
+      LLM_MODEL: model,
+      LLM_API_KEY: realSecret(id),
+    };
+
+    const problemsOf = (source: NodeJS.ProcessEnv): string => {
+      try {
+        parseEnv(source);
+        return '';
+      } catch (error) {
+        return (error as Error).message;
+      }
+    };
+
+    it('boots in production on the default host with no region, and carries the fast model', () => {
+      const env = parseEnv({ ...PROD_BASE, ...VENDOR, LLM_MODEL_FAST: `${model}-fast` });
+      expect(env.LLM_PROVIDER).toBe(id);
+      expect(env.LLM_PROVIDER_REGION).toBeUndefined();
+      expect(env.llm.openai).toBeNull();
+      expect(env.llm[id]).toEqual({
+        baseUrl: base,
+        model,
+        fastModel: `${model}-fast`,
+        apiKey: VENDOR.LLM_API_KEY,
+      });
+    });
+
+    it.each(['LLM_MODEL', 'LLM_API_KEY'])(
+      'refuses to boot in production without %s, naming the key',
+      (missing) => {
+        const { [missing]: _omitted, ...incomplete } = VENDOR;
+        expect(problemsOf({ ...PROD_BASE, ...incomplete })).toContain(
+          `${missing} is required in production when LLM_PROVIDER=${id}.`,
+        );
+      },
+    );
+
+    it('asks for neither LLM_API_BASE_URL nor LLM_PROVIDER_REGION', () => {
+      expect(problemsOf({ ...PROD_BASE, ...VENDOR })).toBe('');
+      expect(problemsOf({ ...PROD_BASE, ...VENDOR, LLM_API_BASE_URL: base })).toBe('');
+    });
+
+    it.each(['us', 'eu'])(
+      'refuses LLM_PROVIDER_REGION=%s in production: a declared region would be false',
+      (region) => {
+        const message = problemsOf({ ...PROD_BASE, ...VENDOR, LLM_PROVIDER_REGION: region });
+        expect(message).toContain(
+          `LLM_PROVIDER_REGION must be left unset with LLM_PROVIDER=${id}: ${name} processes requests`,
+        );
+        expect(message).toMatch(/outside every region this deployment serves/);
+        // That one sentence, nothing else.
+        expect(message.trim().split('\n')).toHaveLength(2);
+      },
+    );
+
+    it('refuses another host, plain http and the development placeholder key', () => {
+      expect(
+        problemsOf({ ...PROD_BASE, ...VENDOR, LLM_API_BASE_URL: 'https://llm.example.test/v1' }),
+      ).toContain(`is not ${name}'s API host (${host})`);
+      expect(
+        problemsOf({ ...PROD_BASE, ...VENDOR, LLM_API_BASE_URL: base.replace('https', 'http') }),
+      ).toMatch(/must use https/);
+      const placeholder = 'dev-only-llm-0123456789abcdef';
+      const message = problemsOf({ ...PROD_BASE, ...VENDOR, LLM_API_KEY: placeholder });
+      expect(message).toMatch(/LLM_API_KEY still holds its development placeholder value/);
+      expect(message).not.toContain(placeholder);
+    });
+
+    it('outside production: a declared region boots (the gate ignores it), half a configuration is the factory’s', () => {
+      expect(problemsOf({ ...BASE, ...VENDOR, LLM_PROVIDER_REGION: 'us' })).toBe('');
+      const half = parseEnv({ ...BASE, LLM_PROVIDER: id, LLM_MODEL: model });
+      expect(half.llm).toEqual({ openai: null, [id]: null });
+    });
+
+    it('leaves mock, openai and anthropic booting exactly as before', () => {
+      expect(problemsOf({ ...PROD_BASE })).toBe('');
+      expect(
+        problemsOf({
+          ...PROD_BASE,
+          LLM_PROVIDER: 'openai',
+          LLM_PROVIDER_REGION: 'eu',
+          LLM_API_BASE_URL: 'https://eu.api.openai.com/v1',
+          LLM_MODEL: 'a-model-id',
+          LLM_API_KEY: realSecret('llm'),
+        }),
+      ).toBe('');
+      expect(
+        problemsOf({
+          ...PROD_BASE,
+          LLM_PROVIDER: 'anthropic',
+          LLM_PROVIDER_REGION: 'us',
+          LLM_MODEL: 'claude-opus-5-5',
+          LLM_API_KEY: realSecret('anthropic'),
+        }),
+      ).toBe('');
+      // openai and anthropic still need their region.
+      expect(
+        problemsOf({
+          ...PROD_BASE,
+          LLM_PROVIDER: 'anthropic',
+          LLM_MODEL: 'claude-opus-5-5',
+          LLM_API_KEY: realSecret('anthropic'),
+        }),
+      ).toContain('LLM_PROVIDER_REGION is required in production when LLM_PROVIDER=anthropic.');
     });
   });
 

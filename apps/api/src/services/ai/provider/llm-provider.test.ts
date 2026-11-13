@@ -22,6 +22,7 @@ import { envSchema } from '../../../config/env.js';
 import { ANSWER_RETRIEVAL_LIMIT } from '../knowledge-service.js';
 import { LlmProviderError } from './llm-error.js';
 import { AnthropicLlmProvider } from './anthropic-llm-provider.js';
+import { DeepSeekLlmProvider } from './deepseek-llm-provider.js';
 import {
   LLM_PROVIDERS,
   createLlmProvider,
@@ -33,11 +34,16 @@ import {
   type LlmProviderId,
 } from './llm-provider.js';
 import { MockLlmProvider } from './mock-llm-provider.js';
+import { MoonshotLlmProvider } from './moonshot-llm-provider.js';
 import { OpenAiLlmProvider } from './openai-llm-provider.js';
 import {
   ANTHROPIC_API_HOST,
+  DEEPSEEK_API_HOST,
+  MOONSHOT_API_HOST,
   OPENAI_REGIONAL_HOSTS,
+  OUTSIDE_REGIONS,
   defaultLlmBaseUrl,
+  fixedLlmProcessingRegion,
   llmEndpointProblem,
 } from './provider-hosts.js';
 
@@ -130,12 +136,56 @@ describe('createLlmProvider', () => {
     expect(message).not.toContain(ANTHROPIC.apiKey);
   });
 
-  it('is closed to exactly mock, openai and anthropic', () => {
-    expect(LLM_PROVIDERS).toEqual(['mock', 'openai', 'anthropic']);
+  it.each(['deepseek', 'moonshot'] as const)(
+    "refuses '%s' without its model and key (tm 480)",
+    (id) => {
+      const message = `LLM_PROVIDER=${id} needs LLM_MODEL and LLM_API_KEY.`;
+      expect(() => createLlmProvider(id, { openai: null })).toThrow(message);
+      expect(() => createLlmProvider(id, { openai: null, [id]: null })).toThrow(message);
+    },
+  );
+
+  it("builds the DeepSeek and Kimi adapters for 'deepseek' and 'moonshot' (tm 480)", () => {
+    const settings = { model: 'm', apiKey: 'sk-test-only-not-a-credential' };
+    const deepseek = createLlmProvider('deepseek', {
+      openai: null,
+      deepseek: { ...settings, baseUrl: 'https://api.deepseek.com' },
+    });
+    expect(deepseek).toBeInstanceOf(DeepSeekLlmProvider);
+    expect(deepseek.id).toBe('deepseek');
+    const moonshot = createLlmProvider('moonshot', {
+      openai: null,
+      moonshot: { ...settings, baseUrl: 'https://api.moonshot.ai/v1' },
+    });
+    expect(moonshot).toBeInstanceOf(MoonshotLlmProvider);
+    expect(moonshot.id).toBe('moonshot');
+  });
+
+  it("refuses a 'deepseek' / 'moonshot' base URL carrying the key, without echoing it", () => {
+    const apiKey = 'sk-test-never-printed-0123456789';
+    for (const id of ['deepseek', 'moonshot'] as const) {
+      let message = '';
+      try {
+        createLlmProvider(id, {
+          openai: null,
+          [id]: { baseUrl: `https://u:${apiKey}@api.example.test`, model: 'm', apiKey },
+        });
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).toMatch(/must not carry credentials/);
+      expect(message).not.toContain(apiKey);
+    }
+  });
+
+  it('is closed to exactly mock, openai, anthropic, deepseek and moonshot', () => {
+    expect(LLM_PROVIDERS).toEqual(['mock', 'openai', 'anthropic', 'deepseek', 'moonshot']);
     // Checked by `pnpm typecheck`, not at run time: the list and the type are
     // one vocabulary, and a vendor with no adapter is not in it.
-    expectTypeOf<LlmProviderId>().toEqualTypeOf<'mock' | 'openai' | 'anthropic'>();
-    expectTypeOf<'deepseek'>().not.toMatchTypeOf<LlmProviderId>();
+    expectTypeOf<LlmProviderId>().toEqualTypeOf<
+      'mock' | 'openai' | 'anthropic' | 'deepseek' | 'moonshot'
+    >();
+    expectTypeOf<'gemini'>().not.toMatchTypeOf<LlmProviderId>();
   });
 
   it('turns a missing switch branch into a compile error', () => {
@@ -145,15 +195,17 @@ describe('createLlmProvider', () => {
     // holding `openai` there — not `never` — and would not compile. Measured
     // by hand (tm 255.5), and for real by tm 479: adding `'anthropic'` to
     // `LLM_PROVIDERS` failed typecheck at every such `default` branch (the
-    // factory, the host rule, Copilot's two writers) until each had a case.
+    // factory, the host rule, Copilot's two writers) until each had a case —
+    // and again by tm 480 for `deepseek` and `moonshot` (plus the fixed
+    // processing location).
     expectTypeOf(unhandledLlmProvider).parameter(0).toEqualTypeOf<never>();
     expectTypeOf<Exclude<LlmProviderId, 'mock'>>().not.toEqualTypeOf<never>();
-    expectTypeOf<Exclude<LlmProviderId, 'mock' | 'openai' | 'anthropic'>>().toEqualTypeOf<never>();
+    expectTypeOf<
+      Exclude<LlmProviderId, 'mock' | 'openai' | 'anthropic' | 'deepseek' | 'moonshot'>
+    >().toEqualTypeOf<never>();
 
     // And at run time, for an id that reached it through an unchecked cast.
-    expect(() => unhandledLlmProvider('deepseek' as never)).toThrow(
-      'Unknown LLM_PROVIDER: deepseek',
-    );
+    expect(() => unhandledLlmProvider('gemini' as never)).toThrow('Unknown LLM_PROVIDER: gemini');
   });
 });
 
@@ -322,6 +374,83 @@ describe('llmEndpointProblem (NFR-C4)', () => {
     it('has a default base URL; openai has none', () => {
       expect(defaultLlmBaseUrl('anthropic')).toBe('https://api.anthropic.com');
       expect(defaultLlmBaseUrl('openai')).toBeNull();
+    });
+
+    it('still needs a declared region (tm 480 widened the parameter to null)', () => {
+      expect(llmEndpointProblem('anthropic', 'https://api.anthropic.com', null)).toBe(
+        'LLM_PROVIDER_REGION is required in production when LLM_PROVIDER=anthropic.',
+      );
+      expect(llmEndpointProblem('openai', 'https://us.api.openai.com/v1', null)).toBe(
+        'LLM_PROVIDER_REGION is required in production when LLM_PROVIDER=openai.',
+      );
+    });
+  });
+
+  describe('deepseek and moonshot (tm 480 · a fixed processing location)', () => {
+    const vendors = [
+      {
+        id: 'deepseek',
+        host: DEEPSEEK_API_HOST,
+        base: 'https://api.deepseek.com',
+        name: 'DeepSeek',
+        where: "in the People's Republic of China",
+      },
+      {
+        id: 'moonshot',
+        host: MOONSHOT_API_HOST,
+        base: 'https://api.moonshot.ai/v1',
+        name: 'Kimi (Moonshot)',
+        where: 'in Singapore',
+      },
+    ] as const;
+
+    it('defaults to the vendor API host, the only one production accepts, with no region', () => {
+      expect(DEEPSEEK_API_HOST).toBe('api.deepseek.com');
+      expect(MOONSHOT_API_HOST).toBe('api.moonshot.ai');
+      for (const vendor of vendors) {
+        expect(defaultLlmBaseUrl(vendor.id)).toBe(vendor.base);
+        expect(llmEndpointProblem(vendor.id, vendor.base, null)).toBeNull();
+        expect(llmEndpointProblem(vendor.id, vendor.base.toUpperCase(), null)).toBeNull();
+      }
+    });
+
+    it('refuses a declared region: the vendor processes requests outside every region', () => {
+      for (const vendor of vendors) {
+        for (const region of ['eu', 'us'] as const) {
+          expect(llmEndpointProblem(vendor.id, vendor.base, region)).toBe(
+            `LLM_PROVIDER_REGION must be left unset with LLM_PROVIDER=${vendor.id}: ${vendor.name} processes requests ${vendor.where}, outside every region this deployment serves, so LLM_PROVIDER_REGION=${region} would be a false claim. Workspaces covered by a BAA are refused AI while it is the provider.`,
+          );
+        }
+      }
+    });
+
+    it('refuses another host, the other vendor’s host and plain http', () => {
+      for (const vendor of vendors) {
+        expect(llmEndpointProblem(vendor.id, 'https://proxy.example.test/v1', null)).toBe(
+          `LLM_API_BASE_URL host proxy.example.test is not ${vendor.name}'s API host (${vendor.host}); production sends nowhere else for LLM_PROVIDER=${vendor.id}.`,
+        );
+        expect(llmEndpointProblem(vendor.id, 'https://api.moonshot.cn/v1', null)).toMatch(
+          /is not .* API host/,
+        );
+        expect(llmEndpointProblem(vendor.id, vendor.base.replace('https', 'http'), null)).toMatch(
+          /must use https/,
+        );
+      }
+      expect(llmEndpointProblem('deepseek', 'https://api.moonshot.ai/v1', null)).toMatch(
+        /not DeepSeek's API host/,
+      );
+      expect(llmEndpointProblem('moonshot', 'https://api.deepseek.com', null)).toMatch(
+        /not Kimi \(Moonshot\)'s API host/,
+      );
+    });
+
+    it('fixes their processing location outside every region; the others have none fixed', () => {
+      expect(fixedLlmProcessingRegion('deepseek')).toBe(OUTSIDE_REGIONS);
+      expect(fixedLlmProcessingRegion('moonshot')).toBe(OUTSIDE_REGIONS);
+      for (const id of ['mock', 'openai', 'anthropic'] as const) {
+        expect(fixedLlmProcessingRegion(id)).toBeNull();
+      }
+      expect(OUTSIDE_REGIONS).toBe('outside');
     });
   });
 });

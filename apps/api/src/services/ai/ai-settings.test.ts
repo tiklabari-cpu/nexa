@@ -164,6 +164,47 @@ describe('resolveAiConfig — the database first, then the environment', () => {
     expect(half.warnings).toEqual(['ai.llm names anthropic without a base URL and model']);
   });
 
+  it.each([
+    ['deepseek', 'https://api.deepseek.com'],
+    ['moonshot', 'https://api.moonshot.ai/v1'],
+  ] as const)(
+    'builds a stored %s row on the vendor host, processing outside every region whatever is stored (tm 480)',
+    (provider, host) => {
+      const row = llmRow({ provider, base_url: null, model: 'a-model', region: 'eu' });
+      const config = resolveAiConfig({ ...NO_STORED_AI_SETTINGS, llm: row }, ENV, ROOT);
+      expect(config.warnings).toEqual([]);
+      expect(config.llm).toMatchObject({ source: 'db', provider, region: 'outside' });
+      expect(config.llm.options).toEqual({
+        openai: null,
+        [provider]: { baseUrl: host, model: 'a-model', fastModel: null, apiKey: KEY },
+      });
+    },
+  );
+
+  it('reports the environment’s deepseek / moonshot as processing outside every region (tm 480)', () => {
+    for (const provider of ['deepseek', 'moonshot'] as const) {
+      const settings = { baseUrl: 'https://x.test', model: 'env-model', apiKey: KEY };
+      const config = resolveAiConfig(
+        NO_STORED_AI_SETTINGS,
+        {
+          ...ENV,
+          LLM_PROVIDER: provider,
+          LLM_PROVIDER_REGION: 'eu',
+          llm: { openai: null, [provider]: settings },
+        },
+        ROOT,
+      );
+      expect(config.llm).toMatchObject({
+        source: 'env',
+        provider,
+        region: 'outside',
+        model: 'env-model',
+      });
+    }
+    // Everyone else keeps the declared region, or the process's own.
+    expect(resolveAiConfig(NO_STORED_AI_SETTINGS, ENV, ROOT).llm.region).toBe('eu');
+  });
+
   it('uses the environment’s key for a stored row without one, and falls back whole without either', () => {
     const keyless = { ...NO_STORED_AI_SETTINGS, llm: llmRow({ api_key_ciphertext: null }) };
     const withEnvKey = resolveAiConfig(keyless, { ...ENV, LLM_API_KEY: 'sk-env-only-key' }, ROOT);
@@ -264,6 +305,53 @@ describe('aiSettingsProblems — what a write is refused for', () => {
     expect(aiSettingsProblems({ llm: us, embedding: null }, pilot)).toEqual([
       expect.stringMatching(/^llm\.region must equal SIYAHTUS_REGION \(eu\)/),
     ]);
+  });
+
+  describe('deepseek and moonshot (tm 480)', () => {
+    const vendor = (
+      provider: 'deepseek' | 'moonshot',
+      overrides: Partial<StoredAiLlm> = {},
+    ): StoredAiLlm =>
+      llmRow({ provider, base_url: null, model: 'a-model', region: null, ...overrides });
+
+    it('need a model, and neither a base URL nor a region — in production and under the pilot', () => {
+      for (const provider of ['deepseek', 'moonshot'] as const) {
+        for (const env of [dev, production, pilot]) {
+          expect(aiSettingsProblems({ llm: vendor(provider), embedding: null }, env)).toEqual([]);
+        }
+        expect(
+          aiSettingsProblems({ llm: vendor(provider, { model: null }), embedding: null }, dev),
+        ).toEqual([`llm: model required for provider ${provider}.`]);
+      }
+    });
+
+    it('refuse a stored region and any host but the vendor’s in production; a dev box may point anywhere', () => {
+      expect(
+        aiSettingsProblems(
+          { llm: vendor('deepseek', { region: 'eu' }), embedding: null },
+          production,
+        ),
+      ).toEqual([
+        expect.stringMatching(
+          /^llm: LLM_PROVIDER_REGION must be left unset with LLM_PROVIDER=deepseek/,
+        ),
+      ]);
+      expect(
+        aiSettingsProblems(
+          { llm: vendor('moonshot', { base_url: 'https://api.moonshot.cn/v1' }), embedding: null },
+          production,
+        ),
+      ).toEqual([expect.stringMatching(/^llm: .*not Kimi \(Moonshot\)'s API host/)]);
+      expect(
+        aiSettingsProblems(
+          {
+            llm: vendor('moonshot', { base_url: 'http://127.0.0.1:9/v1', region: 'us' }),
+            embedding: null,
+          },
+          dev,
+        ),
+      ).toEqual([]);
+    });
   });
 
   describe('anthropic (tm 479)', () => {

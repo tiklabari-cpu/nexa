@@ -126,7 +126,9 @@ export async function writeEnhancedText(
     case 'mock':
       return { text: enhanceText(text, mode), usage: { inputTokens: 0, outputTokens: 0 } };
     case 'openai':
-    case 'anthropic': {
+    case 'anthropic':
+    case 'deepseek':
+    case 'moonshot': {
       const prompt = buildEnhancePrompt(text, mode);
       // A draft is at most 10 000 characters, so with the default ceiling this
       // never fires; an operator who lowered it below that gets a 503, not a

@@ -47,7 +47,9 @@ import {
 import {
   defaultLlmBaseUrl,
   embeddingEndpointProblem,
+  fixedLlmProcessingRegion,
   llmEndpointProblem,
+  type ProcessingRegion,
 } from './provider/provider-hosts.js';
 
 /** The `platform_settings` keys this module reads and writes. */
@@ -299,8 +301,12 @@ export interface ResolvedLlmConfig {
   source: 'db' | 'env';
   provider: LlmProviderId;
   options: LlmProviderOptions;
-  /** Where the inference runs — what the NFR-C4 gate compares a workspace with. */
-  region: Region;
+  /**
+   * Where the inference runs — what the NFR-C4 gate compares a workspace with:
+   * the declared region, or `outside` every region for DeepSeek and Kimi
+   * (`fixedLlmProcessingRegion`, tm 480), whatever was declared.
+   */
+  region: ProcessingRegion;
   model: string | null;
   timeoutMs: number;
   maxOutputTokens: number;
@@ -325,12 +331,20 @@ export interface ResolvedAiConfig {
 }
 
 function envLlm(env: AiEnv): ResolvedLlmConfig {
+  const { openai, anthropic, deepseek, moonshot } = env.llm;
   return {
     source: 'env',
     provider: env.LLM_PROVIDER,
     options: env.llm,
-    region: env.LLM_PROVIDER_REGION ?? env.SIYAHTUS_REGION,
-    model: env.llm.openai?.model ?? env.llm.anthropic?.model ?? env.LLM_MODEL ?? null,
+    region:
+      fixedLlmProcessingRegion(env.LLM_PROVIDER) ?? env.LLM_PROVIDER_REGION ?? env.SIYAHTUS_REGION,
+    model:
+      openai?.model ??
+      anthropic?.model ??
+      deepseek?.model ??
+      moonshot?.model ??
+      env.LLM_MODEL ??
+      null,
     timeoutMs: env.LLM_TIMEOUT_MS,
     maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
   };
@@ -384,10 +398,11 @@ export function resolveAiConfig(
   let llm = envLlm(env);
   if (stored.llm) {
     const row = stored.llm;
+    const declared = row.region ?? env.SIYAHTUS_REGION;
     const base = {
       source: 'db' as const,
       provider: row.provider,
-      region: row.region ?? env.SIYAHTUS_REGION,
+      region: fixedLlmProcessingRegion(row.provider) ?? declared,
       model: row.model,
       timeoutMs: row.timeout_ms ?? env.LLM_TIMEOUT_MS,
       maxOutputTokens: row.max_output_tokens ?? env.LLM_MAX_OUTPUT_TOKENS,
@@ -413,9 +428,22 @@ export function resolveAiConfig(
               model: row.model,
               fastModel: row.model_fast,
               apiKey: opened.key,
-              region: base.region,
+              region: declared,
               effort,
               fallback,
+            },
+          },
+        };
+      } else if (row.provider === 'deepseek' || row.provider === 'moonshot') {
+        llm = {
+          ...base,
+          options: {
+            openai: null,
+            [row.provider]: {
+              baseUrl,
+              model: row.model,
+              fastModel: row.model_fast,
+              apiKey: opened.key,
             },
           },
         };
@@ -496,12 +524,15 @@ export type AiRuleEnv = Pick<Env, 'isProduction' | 'PILOT_MODE' | 'SIYAHTUS_REGI
  * tenant API would refuse in its environment cannot arrive through the panel:
  *
  * - a remote provider names a base URL, a model and a region — `anthropic`
- *   may leave the base URL out: Anthropic's API host (tm 479);
+ *   may leave the base URL out: Anthropic's API host (tm 479); `deepseek` and
+ *   `moonshot` (tm 480) may leave it out too and name no region: where they
+ *   process requests is fixed outside every region;
  * - in production the base URL is https and the OpenAI regional host of that
  *   region — never `api.openai.com` — or Anthropic's API host with a region
- *   it can pin (`us`) (`provider-hosts.ts`);
+ *   it can pin (`us`), or DeepSeek's / Kimi's API host with no region
+ *   (`provider-hosts.ts`);
  * - in production under `PILOT_MODE=true`, never `mock`, and the region is
- *   `SIYAHTUS_REGION`.
+ *   `SIYAHTUS_REGION` — except for `deepseek` and `moonshot`, which have none.
  *
  * Outside production the host is not checked, so a test or a dev box can
  * point at a local fake. The embedding width is fixed by the schema type.
@@ -520,20 +551,23 @@ export function aiSettingsProblems(
       name: 'llm',
       row: llm,
       defaultBaseUrl: llm && llm.provider !== 'mock' ? defaultLlmBaseUrl(llm.provider) : null,
-      check: (baseUrl: string, region: Region) =>
+      // DeepSeek and Kimi (tm 480): a fixed processing location, so no region.
+      fixedRegion: llm ? fixedLlmProcessingRegion(llm.provider) !== null : false,
+      check: (baseUrl: string, region: Region | null) =>
         llm && llm.provider !== 'mock' ? llmEndpointProblem(llm.provider, baseUrl, region) : null,
     },
     {
       name: 'embedding',
       row: embedding,
       defaultBaseUrl: null,
-      check: (baseUrl: string, region: Region) =>
-        embedding && embedding.provider !== 'mock'
+      fixedRegion: false,
+      check: (baseUrl: string, region: Region | null) =>
+        embedding && embedding.provider !== 'mock' && region
           ? embeddingEndpointProblem(embedding.provider, baseUrl, region)
           : null,
     },
   ] as const;
-  for (const { name, row, defaultBaseUrl, check } of parts) {
+  for (const { name, row, defaultBaseUrl, fixedRegion, check } of parts) {
     if (!row) continue;
     if (row.provider === 'mock') {
       if (pilot) {
@@ -544,7 +578,10 @@ export function aiSettingsProblems(
       continue;
     }
     const missing = (['base_url', 'model', 'region'] as const).filter(
-      (field) => !row[field] && !(field === 'base_url' && defaultBaseUrl),
+      (field) =>
+        !row[field] &&
+        !(field === 'base_url' && defaultBaseUrl) &&
+        !(field === 'region' && fixedRegion),
     );
     if (missing.length > 0) {
       problems.push(`${name}: ${missing.join(', ')} required for provider ${row.provider}.`);
@@ -552,12 +589,12 @@ export function aiSettingsProblems(
     }
     const baseUrl = row.base_url ?? defaultBaseUrl!;
     if (env.isProduction) {
-      const problem = check(baseUrl, row.region!);
+      const problem = check(baseUrl, row.region);
       if (problem) problems.push(`${name}: ${problem}`);
     } else if (!isUrl(baseUrl)) {
       problems.push(`${name}.base_url is not a URL.`);
     }
-    if (pilot && row.region !== env.SIYAHTUS_REGION) {
+    if (pilot && !fixedRegion && row.region !== env.SIYAHTUS_REGION) {
       problems.push(
         `${name}.region must equal SIYAHTUS_REGION (${env.SIYAHTUS_REGION}) in production when PILOT_MODE=true: every workspace is filed there.`,
       );

@@ -204,6 +204,65 @@ when only the chat model moves; the embedding space is the same.
 Rolling back from Claude is a provider switch like any other: the previous `LLM_*` lines (or
 the panel's previous row) and a restart. Nothing stored depends on the chat model.
 
+## Moving the model to DeepSeek or Kimi (Moonshot)
+
+Added in tm 480 (K51, ADR §14). Like Claude, either replaces only the **chat** model:
+`EMBEDDING_PROVIDER` stays `openai` (or `mock`, which answers knowledge questions much worse),
+independent of the chat provider. Steps 1–2 do not change.
+
+**Where the data goes — read this first.** DeepSeek processes and stores data in the People's
+Republic of China; Kimi's international platform (Moonshot AI Pte. Ltd.) in Singapore. Both are
+outside the US and the EU, and no region can be declared for them. So:
+
+- [ ] Every workspace **covered by a BAA** (HIPAA scope) gets no AI while either is the
+      provider: each AI request is refused with 403 `not_allowed` and an audit entry
+      `compliance.ai_region_blocked` (`provider_region: outside`). Workspaces without a BAA
+      keep their AI. Check the covered workspaces before switching.
+- [ ] The privacy policy's list of sub-processors has to name the provider and the country —
+      that is the owner's legal step, not code (ADR §14.2 has the sources).
+- [ ] The root panel says nothing about the data location (the owner's decision); this runbook
+      and ADR §14 are where it is written down.
+
+The checklist:
+
+- [ ] An account on the vendor's platform with a key and a balance or spend limit. DeepSeek is
+      prepaid: an exhausted balance answers 402, which the api treats as permanent
+      (`quota_exhausted`, no retry). Kimi answers `exceeded_current_quota_error` the same way.
+      Keys are per platform: a key from Kimi's China platform (`api.moonshot.cn`) does not work
+      on the international one, and production accepts only `api.moonshot.ai`.
+- [ ] The env lines (names only; the owner picks the models). **No `LLM_PROVIDER_REGION`:**
+      production refuses one for these two providers.
+
+  ```
+  LLM_PROVIDER=deepseek              # or moonshot (Kimi)
+  LLM_MODEL=<model id>               # e.g. a DeepSeek or Kimi model the owner chooses
+  # LLM_MODEL_FAST=<model id>        # classifying and summarising calls; unset = LLM_MODEL
+  LLM_API_KEY=<from the vendor>
+  # LLM_API_BASE_URL unset → https://api.deepseek.com (no /v1) or https://api.moonshot.ai/v1,
+  #   the only host production accepts for each
+  ```
+
+- [ ] Reasoning. Choose a model that answers without long reasoning where the vendor offers
+      one. DeepSeek's current models think by default; the adapter switches that off on every
+      request (`thinking: disabled`). Kimi's K3 models always reason; the adapter asks for the
+      least (`reasoning_effort: low`), and the reasoning still counts against
+      `LLM_MAX_OUTPUT_TOKENS`. On Kimi, start at 1024 and watch for `llm.failed` /
+      `no_answer` / `length` with the hint that names `LLM_MAX_OUTPUT_TOKENS`.
+- [ ] Structured output (the AI features that ask for JSON — understanding, knowledge answers,
+      question kinds, guidance checks, cluster titles). DeepSeek has JSON mode only: the schema
+      travels in the prompt and every reply is validated, an invalid one retried once. Kimi
+      gets `json_schema` first; a model that refuses it is logged once as
+      `llm.json_schema_unsupported` and moved to JSON mode for the life of the process.
+- [ ] Restart the api as in step 3. A refusal to boot names the key; the ones only these two
+      have: `LLM_PROVIDER_REGION` set, and a base URL that is not the vendor's API host.
+- [ ] Or from the root panel (Settings › AI › Model): provider "DeepSeek" or "Kimi (Moonshot)",
+      leave the base URL empty, model, key — there is no region field for them. "Test the
+      connection" sends one small request.
+- [ ] Watch the log: `llm.completed` per call; `llm.retry` on 429 / 5xx; DeepSeek's
+      `insufficient_system_resource` finish is retried as an outage.
+
+Rolling back is a provider switch like any other; nothing stored depends on the chat model.
+
 ## Rolling back
 
 - **The AI is wrong or too expensive:** the pilot cannot fall back to the mock — `PILOT_MODE=true`

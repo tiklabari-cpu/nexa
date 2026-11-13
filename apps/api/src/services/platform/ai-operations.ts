@@ -62,11 +62,14 @@ const TEST_REQUEST: Omit<LlmCompletionRequest, 'timeoutMs'> = {
 
 /**
  * The test's reply ceiling for a provider whose models think before they
- * answer and count that thinking against it (anthropic, tm 479): five tokens
- * could be spent thinking, and the test would report a working key as
- * `no_answer`. Still a few hundred tokens at most.
+ * answer and count that thinking against it (anthropic, tm 479; moonshot —
+ * Kimi's K3 models always reason, tm 480): five tokens could be spent
+ * thinking, and the test would report a working key as `no_answer`. Still a
+ * few hundred tokens at most. DeepSeek is not here: its adapter switches
+ * thinking off.
  */
 export const AI_TEST_THINKING_MAX_OUTPUT_TOKENS = 256;
+const THINKING_PROVIDERS: ReadonlySet<LlmProviderId> = new Set(['anthropic', 'moonshot']);
 
 /** How long the re-embedding lock lives without a refresh. */
 const REEMBED_LOCK_MS = 120_000;
@@ -91,7 +94,7 @@ export interface AiOperationsOptions {
   env: AiEnv;
   rootKey: string;
   logger: LlmLogger & AiBudgetLogger;
-  /** How the remote adapters (`openai`, `anthropic`) reach the network — a test's recorder. */
+  /** How the remote adapters (`openai`, `anthropic`, `deepseek`, `moonshot`) reach the network — a test's recorder. */
   fetchImpl?: typeof fetch;
   now?: () => number;
 }
@@ -173,7 +176,7 @@ export class PlatformAiOperations {
         const provider = createLlmProvider(config.llm.provider, config.llm.options, runtime);
         const request: LlmCompletionRequest = {
           ...TEST_REQUEST,
-          ...(provider.id === 'anthropic'
+          ...(THINKING_PROVIDERS.has(provider.id)
             ? { maxOutputTokens: AI_TEST_THINKING_MAX_OUTPUT_TOKENS }
             : {}),
           timeoutMs: config.llm.timeoutMs,

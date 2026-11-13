@@ -346,6 +346,43 @@ describe('platform AI settings (tm 389.17)', () => {
     for (const trace of traces(KEY_ONE)) expect(tenantLog.text).not.toContain(trace);
   });
 
+  it('switches a running tenant API from the stub to Kimi from the panel: no base URL, no region, processing outside every region (tm 480)', async () => {
+    expect(tenant.app.aiProviders.config().llm.provider).toBe('mock');
+    const saved = await ok(
+      put({ llm: { provider: 'moonshot', model: 'kimi-k3', api_key: KEY_ONE } }),
+    );
+    expect(saved['llm']).toMatchObject({
+      provider: 'moonshot',
+      base_url: null,
+      model: 'kimi-k3',
+      region: null,
+      api_key_last4: KEY_ONE.slice(-4),
+    });
+
+    const started = Date.now();
+    while (
+      tenant.app.aiProviders.config().llm.provider !== 'moonshot' &&
+      Date.now() - started < 5_000
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    expect(tenant.app.aiProviders.llm('visitor').id).toBe('moonshot');
+    // The residency gate's view: outside every region, so a BAA-covered
+    // workspace is refused (`hipaa-constraints.test.ts`) and others are not.
+    expect(tenant.app.aiProviders.inference().llm).toEqual({ id: 'moonshot', region: 'outside' });
+
+    const before = tenantNet.calls.length;
+    await expect(tenantCall()).resolves.toMatchObject({ text: 'OK' });
+    const [sent] = tenantNet.calls.slice(before);
+    expect(sent!.url).toBe('https://api.moonshot.ai/v1/chat/completions');
+    expect(authorization(sent!.init)).toBe(`Bearer ${KEY_ONE}`);
+    expect(JSON.parse(String(sent!.init.body))).toMatchObject({
+      model: 'kimi-k3',
+      reasoning_effort: 'low',
+    });
+    for (const trace of traces(KEY_ONE)) expect(tenantLog.text).not.toContain(trace);
+  });
+
   it('refuses a remote provider without base URL, model or region, any width but 1536, and an unknown field', async () => {
     const missing = await put({ llm: { provider: 'openai', api_key: KEY_ONE } });
     expect(missing.statusCode).toBe(400);
@@ -527,6 +564,24 @@ describe('platform AI settings (tm 389.17)', () => {
       expect(platformNet.calls[0]!.url).toBe('https://api.anthropic.com/v1/messages');
       expect(JSON.parse(String(platformNet.calls[0]!.init.body))).toMatchObject({
         max_tokens: 256,
+      });
+    });
+
+    it('tests a stored DeepSeek model on its own host with a few tokens: thinking is off (tm 480)', async () => {
+      await ok(put({ llm: { provider: 'deepseek', model: 'deepseek-flash', api_key: KEY_ONE } }));
+      const result = await ok(test('llm'));
+      expect(result).toMatchObject({
+        provider: 'deepseek',
+        source: 'db',
+        model: 'deepseek-flash',
+        ok: true,
+        error: null,
+      });
+      expect(platformNet.calls).toHaveLength(1);
+      expect(platformNet.calls[0]!.url).toBe('https://api.deepseek.com/chat/completions');
+      expect(JSON.parse(String(platformNet.calls[0]!.init.body))).toMatchObject({
+        max_tokens: 5,
+        thinking: { type: 'disabled' },
       });
     });
 

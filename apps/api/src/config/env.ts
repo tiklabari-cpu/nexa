@@ -25,6 +25,7 @@ import { RETRIEVAL_THRESHOLD } from '../services/ai/knowledge-service.js';
 import {
   defaultLlmBaseUrl,
   embeddingEndpointProblem,
+  fixedLlmProcessingRegion,
   llmEndpointProblem,
 } from '../services/ai/provider/provider-hosts.js';
 import { SIEM_PROVIDERS } from '../services/audit/siem-target.js';
@@ -919,6 +920,11 @@ export const envSchema = z.object({
    * `anthropic` is the Claude adapter (tm 479, `anthropic-llm-provider.ts`):
    * `LLM_MODEL` and `LLM_API_KEY`, with `LLM_API_BASE_URL` defaulting to
    * Anthropic's API host and `LLM_EFFORT` / `LLM_ANTHROPIC_FALLBACK` below.
+   * `deepseek` and `moonshot` (Kimi) are their own adapters (tm 480,
+   * `deepseek-llm-provider.ts`, `moonshot-llm-provider.ts`): `LLM_MODEL` and
+   * `LLM_API_KEY`, the base URL defaulting to the vendor's API host, and no
+   * `LLM_PROVIDER_REGION` — they process requests outside every region this
+   * build serves (`provider-hosts.ts`), so BAA-covered workspaces get no AI.
    */
   LLM_PROVIDER: z.enum(LLM_PROVIDERS).default('mock'),
   /**
@@ -927,6 +933,8 @@ export const envSchema = z.object({
    * the only honest default: a deployment pointing at a model service somewhere
    * else has to say so, because a workspace under a signed BAA may not have its
    * content inferred outside its own region. See services/ai/inference.ts.
+   * Left unset for `deepseek` and `moonshot`, whose processing location is
+   * fixed outside every region (tm 480); production refuses one for them.
    */
   LLM_PROVIDER_REGION: z.enum(REGIONS).optional(),
   /**
@@ -935,7 +943,8 @@ export const envSchema = z.object({
    * `services/ai/provider/provider-hosts.ts`); the schema only asks for a URL,
    * so a developer can point it anywhere locally. For `anthropic` it is the
    * host root (the SDK adds `/v1/messages`) and may be left unset:
-   * `https://api.anthropic.com`.
+   * `https://api.anthropic.com`. `deepseek` and `moonshot` may leave it unset
+   * too: `https://api.deepseek.com` (no `/v1`), `https://api.moonshot.ai/v1`.
    */
   LLM_API_BASE_URL: z.string().url().optional(),
   /** The model id. The operator's choice; the code names none. */
@@ -1689,13 +1698,17 @@ function productionProblems(env: z.infer<typeof envSchema>): string[] {
   // requests actually go to. Key names only, never values — as above.
   // `anthropic` has a default base URL (its one API host, tm 479), so only
   // its other three keys are required; the default is checked like a set one.
+  // `deepseek` and `moonshot` (tm 480) have one too, and no region to declare:
+  // where they process requests is fixed outside every region, so a declared
+  // `LLM_PROVIDER_REGION` is refused (`llmEndpointProblem`) rather than required.
   if (env.LLM_PROVIDER !== 'mock') {
     const defaultBaseUrl = defaultLlmBaseUrl(env.LLM_PROVIDER);
+    const fixedRegion = fixedLlmProcessingRegion(env.LLM_PROVIDER) !== null;
     const required = [
       ...(defaultBaseUrl ? [] : (['LLM_API_BASE_URL'] as const)),
       'LLM_MODEL',
       'LLM_API_KEY',
-      'LLM_PROVIDER_REGION',
+      ...(fixedRegion ? [] : (['LLM_PROVIDER_REGION'] as const)),
     ] as const;
     for (const key of required) {
       if (!env[key]) {
@@ -1706,8 +1719,12 @@ function productionProblems(env: z.infer<typeof envSchema>): string[] {
       problems.push('LLM_API_KEY still holds its development placeholder value.');
     }
     const baseUrl = env.LLM_API_BASE_URL ?? defaultBaseUrl;
-    if (baseUrl && env.LLM_PROVIDER_REGION) {
-      const endpoint = llmEndpointProblem(env.LLM_PROVIDER, baseUrl, env.LLM_PROVIDER_REGION);
+    if (baseUrl && (fixedRegion || env.LLM_PROVIDER_REGION)) {
+      const endpoint = llmEndpointProblem(
+        env.LLM_PROVIDER,
+        baseUrl,
+        env.LLM_PROVIDER_REGION ?? null,
+      );
       if (endpoint) problems.push(endpoint);
     }
   }
@@ -1854,9 +1871,13 @@ function productionProblems(env: z.infer<typeof envSchema>): string[] {
     // they were filed in — silently, because the residency check only refuses
     // HIPAA-scoped workspaces. A stub runs in this process and is its region
     // by construction, so only a real provider is compared. A region left
-    // unset is already named above, so it is not named twice.
+    // unset is already named above, so it is not named twice. DeepSeek and
+    // Kimi (tm 480) are out of this rule: they declare no region — one set for
+    // them is refused above — and the owner allowed them, out of region, for
+    // every workspace the BAA gate does not refuse (2026-11-13).
     if (
       env.LLM_PROVIDER !== 'mock' &&
+      fixedLlmProcessingRegion(env.LLM_PROVIDER) === null &&
       env.LLM_PROVIDER_REGION &&
       env.LLM_PROVIDER_REGION !== env.SIYAHTUS_REGION
     ) {
@@ -2003,10 +2024,24 @@ function mailOptions(env: z.infer<typeof envSchema>): MailerOptions {
  * three of its keys are present, and `createLlmProvider` refuses a `null`.
  * `anthropic` (tm 479) the same with two keys — model and key; its base URL
  * defaults to Anthropic's API host and its region to this process's own, as
- * `LLM_PROVIDER_REGION` does for the residency gate.
+ * `LLM_PROVIDER_REGION` does for the residency gate. `deepseek` and
+ * `moonshot` (tm 480) the same with model and key, the base URL defaulting to
+ * the vendor's API host.
  */
 function llmOptions(env: z.infer<typeof envSchema>): LlmProviderOptions {
   const { LLM_API_BASE_URL, LLM_MODEL, LLM_API_KEY } = env;
+  if (env.LLM_PROVIDER === 'deepseek' || env.LLM_PROVIDER === 'moonshot') {
+    const settings =
+      LLM_MODEL && LLM_API_KEY
+        ? {
+            baseUrl: LLM_API_BASE_URL ?? defaultLlmBaseUrl(env.LLM_PROVIDER)!,
+            model: LLM_MODEL,
+            fastModel: env.LLM_MODEL_FAST ?? null,
+            apiKey: LLM_API_KEY,
+          }
+        : null;
+    return { openai: null, [env.LLM_PROVIDER]: settings };
+  }
   if (env.LLM_PROVIDER === 'anthropic') {
     if (!LLM_MODEL || !LLM_API_KEY) return { openai: null, anthropic: null };
     const { effort, fallback } = readAnthropicTuning(env);

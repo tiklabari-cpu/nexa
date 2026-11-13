@@ -130,6 +130,15 @@ export const LLM_EMPTY_LENGTH_HINT =
 export const LLM_ANTHROPIC_EMPTY_LENGTH_HINT =
   'the output limit ran out before any text; Claude models think before they answer and that thinking counts against LLM_MAX_OUTPUT_TOKENS, so raise LLM_MAX_OUTPUT_TOKENS or lower LLM_EFFORT';
 
+/**
+ * {@link LLM_EMPTY_LENGTH_HINT} for `LLM_PROVIDER=moonshot` (tm 480): Kimi's
+ * current (K3) models always reason first — the adapter already asks for the
+ * least reasoning (`reasoning_effort: low`) — and the reasoning counts against
+ * the ceiling, so raising it is the operator's one lever.
+ */
+export const LLM_MOONSHOT_EMPTY_LENGTH_HINT =
+  'the output limit ran out before any text; Kimi models reason before they answer and that reasoning counts against LLM_MAX_OUTPUT_TOKENS, so raise LLM_MAX_OUTPUT_TOKENS';
+
 export class LlmProviderError extends Error {
   override readonly name = 'LlmProviderError';
   readonly kind: LlmFailureKind;

@@ -72,16 +72,45 @@ describe('HIPAA scope constraints (C4-e)', () => {
   let outOfRegion: TestServer;
   /** The same US deployment with an in-region provider — the allowing shape. */
   let inRegion: TestServer;
+  /**
+   * The same US deployment on DeepSeek (tm 480), which processes requests
+   * outside every region this build serves — even with a region written down
+   * for it. Its network is a recorder: nothing leaves the process.
+   */
+  let deepseek: TestServer;
+  const deepseekCalls: string[] = [];
 
   beforeAll(async () => {
     owner = ownerClient();
     appRole = new PrismaClient({ datasourceUrl: APP_URL });
     outOfRegion = await startTestServer({ SIYAHTUS_REGION: 'us', LLM_PROVIDER_REGION: 'eu' });
     inRegion = await startTestServer({ SIYAHTUS_REGION: 'us' });
+    deepseek = await startTestServer(
+      {
+        SIYAHTUS_REGION: 'us',
+        // Declared, and ignored: the vendor's location is not a declaration.
+        LLM_PROVIDER_REGION: 'us',
+        LLM_PROVIDER: 'deepseek',
+        LLM_MODEL: 'deepseek-flash',
+        LLM_API_KEY: 'sk-test-only-not-a-credential-deepseek',
+      },
+      {
+        llmFetch: (async (input: string | URL | Request) => {
+          deepseekCalls.push(String(input));
+          return new Response(
+            JSON.stringify({
+              choices: [{ message: { content: 'OK' }, finish_reason: 'stop' }],
+              usage: { prompt_tokens: 1, completion_tokens: 1 },
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          );
+        }) as typeof fetch,
+      },
+    );
   });
 
   afterAll(async () => {
-    await Promise.all([outOfRegion.close(), inRegion.close()]);
+    await Promise.all([outOfRegion.close(), inRegion.close(), deepseek.close()]);
     await Promise.all([owner.$disconnect(), appRole.$disconnect()]);
   });
 
@@ -90,6 +119,7 @@ describe('HIPAA scope constraints (C4-e)', () => {
     mailDir = await mkdtemp(join(tmpdir(), 'siyahtus-hipaa-'));
     await clearRateLimits(outOfRegion.app);
     await clearRateLimits(inRegion.app);
+    await clearRateLimits(deepseek.app);
   });
 
   afterEach(async () => {
@@ -412,6 +442,56 @@ describe('HIPAA scope constraints (C4-e)', () => {
 
       expect(palette.statusCode).toBe(200);
       expect(await blockedEntries(covered.licenseId)).toHaveLength(0);
+    });
+
+    it('refuses a covered workspace on DeepSeek, whose processing is outside every region (tm 480 · NFR-C4)', async () => {
+      const covered = await seedUsWorkspace('cov-deepseek', { baaSigned: true });
+      expect(deepseek.app.aiProviders.inference().llm).toEqual({
+        id: 'deepseek',
+        region: 'outside',
+      });
+
+      const responses = await Promise.all([
+        deepseek.post('/palette/ai-query', { query: 'how many chats' }, auth(covered.token)),
+        deepseek.post('/skills/compile', { instruction: 'reply with hello' }, auth(covered.token)),
+      ]);
+      for (const response of responses) {
+        expect(response.statusCode).toBe(403);
+        const body = response.json() as {
+          error: { type: string; details?: { region: string; provider_region: string } };
+        };
+        expect(body.error.type).toBe('not_allowed');
+        expect(body.error.details).toEqual({ region: 'us', provider_region: 'outside' });
+      }
+      const entries = await blockedEntries(covered.licenseId);
+      expect(entries).toHaveLength(2);
+      expect(entries[0]!.metadata).toMatchObject({
+        provider: 'deepseek',
+        provider_kind: 'llm',
+        provider_region: 'outside',
+      });
+      expect(deepseekCalls).toEqual([]);
+    });
+
+    it('lets an uncovered workspace use the same surfaces on DeepSeek (tm 480 · NFR-C4)', async () => {
+      // The owner's decision (2026-11-13): the provider is allowed, out of
+      // region, for every workspace the agreement does not cover.
+      const plain = await seedUsWorkspace('pln-deepseek', { baaSigned: false });
+
+      const palette = await deepseek.post(
+        '/palette/ai-query',
+        { query: 'how many chats' },
+        auth(plain.token),
+      );
+      const compile = await deepseek.post(
+        '/skills/compile',
+        { instruction: 'reply with hello' },
+        auth(plain.token),
+      );
+
+      expect(palette.statusCode).toBe(200);
+      expect(compile.statusCode).toBe(200);
+      expect(await blockedEntries(plain.licenseId)).toHaveLength(0);
     });
 
     it('refuses before the handler does any work', async () => {

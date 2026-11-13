@@ -39,12 +39,17 @@ import type { Env } from '../../config/env.js';
 import { ApiError } from '../../lib/api-error.js';
 import { readHipaaScope } from '../../lib/hipaa.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import { fixedLlmProcessingRegion, type ProcessingRegion } from './provider/provider-hosts.js';
 
 export interface InferenceProvider {
   /** Which implementation answers — the value `LLM_PROVIDER` or `EMBEDDING_PROVIDER` names. */
   id: Env['LLM_PROVIDER'] | Env['EMBEDDING_PROVIDER'];
-  /** Where that implementation physically runs the inference. */
-  region: Region;
+  /**
+   * Where that implementation physically runs the inference: a region this
+   * build serves, or `outside` all of them (DeepSeek, Kimi — tm 480), which
+   * serves no workspace's region.
+   */
+  region: ProcessingRegion;
 }
 
 /**
@@ -54,11 +59,20 @@ export interface InferenceProvider {
  * stub: it runs wherever the API runs. `LLM_PROVIDER_REGION` exists so a
  * deployment that points at a model service elsewhere has to *say so*, rather
  * than the default quietly asserting something false about a remote endpoint.
+ *
+ * A provider whose processing location is the vendor's fact rather than a
+ * declaration (DeepSeek, Kimi — `fixedLlmProcessingRegion`, tm 480) has that
+ * location whatever `LLM_PROVIDER_REGION` says: a region written down for it
+ * would otherwise be the one thing the gate trusts.
  */
 export function resolveInferenceProvider(
   env: Pick<Env, 'LLM_PROVIDER' | 'LLM_PROVIDER_REGION' | 'SIYAHTUS_REGION'>,
 ): InferenceProvider {
-  return { id: env.LLM_PROVIDER, region: env.LLM_PROVIDER_REGION ?? env.SIYAHTUS_REGION };
+  return {
+    id: env.LLM_PROVIDER,
+    region:
+      fixedLlmProcessingRegion(env.LLM_PROVIDER) ?? env.LLM_PROVIDER_REGION ?? env.SIYAHTUS_REGION,
+  };
 }
 
 /**

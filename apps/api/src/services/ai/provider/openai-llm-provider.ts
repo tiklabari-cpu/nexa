@@ -9,6 +9,11 @@
  * `s3-store.ts`), so every test of this file runs without a provider and
  * without a key.
  *
+ * Since tm 480 the request loop described below lives in
+ * `chat-completions-transport.ts`, shared with the DeepSeek and Kimi adapters;
+ * this file is the OpenAI dialect on top of it (body, error table, the
+ * `json_schema` → prompt fallback). The behaviour did not change.
+ *
  * ## Tier and structured output (tm 283.1 · ADR §6a)
  *
  * - `model` is `LLM_MODEL` for `tier: 'default'` and `LLM_MODEL_FAST` for
@@ -60,120 +65,54 @@
  * {@link LLM_SECRET_LOG_PATHS} covers the other way the key could reach a line
  * — somebody logging the configuration.
  */
-import pino from 'pino';
 import { LLM_SECRET_LOG_PATHS } from '../../../lib/log-redact.js';
-import { CircuitBreaker, type CircuitPermit } from './circuit-breaker.js';
-import { LLM_EMPTY_LENGTH_HINT, LlmProviderError } from './llm-error.js';
+import {
+  ChatCompletionsTransport,
+  jsonSchemaInstruction,
+  readChatCompletion,
+  readPromptCompletionUsage,
+  type ChatCompletionsOptions,
+  type CompletionReading,
+} from './chat-completions-transport.js';
 import type {
   LlmCompletion,
   LlmCompletionRequest,
   LlmProvider,
   LlmTier,
-  LlmUsage,
   OpenAiSettings,
 } from './llm-provider.js';
-import {
-  classifyHttpFailure,
-  equalJitterBackoffMs,
-  HEADER_SAFE,
-  isCount,
-  isRecord,
-  networkCode,
-  openAiEndpointUrl,
-  readCapped,
-  readProblem,
-  ResponseTooLarge,
-  retryAfterMs,
-  SAFE_CODE,
-  SAFE_REQUEST_ID,
-  safeToken,
-} from './openai-http.js';
+import { classifyHttpFailure, openAiEndpointUrl } from './openai-http.js';
 
 // Moved to `openai-http.ts` when the embedding adapter needed them too
 // (tm 255.7); still exported from here, where 255.6 published them.
 export { classifyHttpFailure, OPENAI_QUOTA_CODES, retryAfterMs } from './openai-http.js';
 
-/**
- * Attempts per call, first included. Three, like the mail carrier and the
- * webhook burst: a customer is waiting, so what a retry can ride out is a blip.
- */
-export const LLM_MAX_ATTEMPTS = 3;
-export const LLM_RETRY_BACKOFF_BASE_MS = 1_000;
-export const LLM_RETRY_BACKOFF_CAP_MS = 8_000;
-
-/**
- * The least time an attempt is started with. A request given less could not
- * finish a completion, and it would still be billed for whatever the model
- * generated before the abort.
- */
-export const LLM_MIN_ATTEMPT_MS = 1_000;
-
-/** Consecutive failed calls, for reasons that are the provider's, that open the circuit. */
-export const LLM_CIRCUIT_FAILURE_THRESHOLD = 5;
-/** How long an open circuit refuses calls before letting one probe through. */
-export const LLM_CIRCUIT_OPEN_MS = 30_000;
-
-/**
- * Ceiling on a success body. A reply is at most `LLM_MAX_OUTPUT_TOKENS`
- * (≤ 16,384) tokens — a few tens of kilobytes of JSON — so a mebibyte is room
- * for any real completion and a cap on anything else.
- */
-export const LLM_MAX_RESPONSE_BYTES = 1_048_576;
-/** Ceiling on an error body: only `error.code` and `error.type` are read from it. */
-const PROBLEM_MAX_BYTES = 65_536;
+// The retry loop, its constants and its logger moved to
+// `chat-completions-transport.ts` when DeepSeek and Kimi needed the same
+// transport (tm 480); still exported from here, where 255.6 published them.
+export {
+  defaultLlmLogger,
+  jsonSchemaInstruction,
+  LLM_CIRCUIT_FAILURE_THRESHOLD,
+  LLM_CIRCUIT_OPEN_MS,
+  LLM_MAX_ATTEMPTS,
+  LLM_MAX_RESPONSE_BYTES,
+  LLM_MIN_ATTEMPT_MS,
+  LLM_RETRY_BACKOFF_BASE_MS,
+  LLM_RETRY_BACKOFF_CAP_MS,
+  llmFailureFields,
+  llmRetryBackoffMs,
+  type LlmLogger,
+} from './chat-completions-transport.js';
 
 /**
  * Where the key would sit if anyone logged the configuration or a request.
  * Kept with every other provider credential in `lib/log-redact.ts` (tm 255.9),
- * which the server's `redact.paths` spreads; used here by {@link defaultLlmLogger}.
+ * which the server's `redact.paths` spreads; used by `defaultLlmLogger`.
  */
 export { LLM_SECRET_LOG_PATHS };
 
-/** The narrow log surface the adapter needs — satisfied by Fastify's logger and by pino. */
-export interface LlmLogger {
-  debug(details: Record<string, unknown>, message: string): void;
-  info(details: Record<string, unknown>, message: string): void;
-  warn(details: Record<string, unknown>, message: string): void;
-  error(details: Record<string, unknown>, message: string): void;
-}
-
-/** For a process with no Fastify logger to hand in. Stderr, like the mail carrier's. */
-export function defaultLlmLogger(): LlmLogger {
-  return pino(
-    {
-      base: { component: 'llm' },
-      redact: { paths: LLM_SECRET_LOG_PATHS, censor: '[redacted]' },
-    },
-    pino.destination(2),
-  );
-}
-
-export interface OpenAiLlmProviderOptions {
-  /** How requests leave the process. Injected by every test; the global `fetch` otherwise. */
-  fetchImpl?: typeof fetch;
-  logger?: LlmLogger;
-  /** Attempts per call; {@link LLM_MAX_ATTEMPTS} by default. */
-  maxAttempts?: number;
-  circuit?: { failureThreshold?: number; openMs?: number };
-  /** Injectable so tests do not actually wait. */
-  sleep?: (ms: number) => Promise<void>;
-  /** The jitter's source, in [0, 1). */
-  random?: () => number;
-  now?: () => number;
-}
-
-/**
- * Wait before the attempt after `attempt`. "Equal jitter": half of the
- * exponential step (1 s, 2 s, 4 s, capped at 8 s) is fixed and half is random —
- * random so the customers one 429 turned away do not all return in the same
- * millisecond, half fixed so a retry is never immediate.
- */
-export function llmRetryBackoffMs(attempt: number, random: () => number = Math.random): number {
-  return equalJitterBackoffMs(attempt, random, {
-    baseMs: LLM_RETRY_BACKOFF_BASE_MS,
-    capMs: LLM_RETRY_BACKOFF_CAP_MS,
-  });
-}
+export type OpenAiLlmProviderOptions = ChatCompletionsOptions;
 
 /**
  * The chat endpoint under `LLM_API_BASE_URL`, or an error for the operator —
@@ -187,30 +126,11 @@ export function chatCompletionsUrl(baseUrl: string): string {
   });
 }
 
-type AttemptResult =
-  | { ok: true; completion: LlmCompletion }
-  | {
-      ok: false;
-      error: LlmProviderError;
-      retryAfterMs: number | null;
-      /** The request field the provider objected to (`error.param`), when it said. */
-      param?: string | null;
-    };
-
 /**
  * How a structured request is sent: with `response_format` (`json_schema`),
  * or on the plain-JSON path with the schema in the prompt (`prompt`).
  */
 export type StructuredMode = 'json_schema' | 'prompt';
-
-/**
- * The plain-JSON path's instruction (ADR §6a.4.1), appended to the system
- * prompt. The schema is the caller's, so it is safe to send; it says nothing
- * about the conversation.
- */
-export function jsonSchemaInstruction(schema: unknown): string {
-  return `Reply with exactly one JSON object and nothing else — no prose, no code fence. It must match this JSON Schema:\n${JSON.stringify(schema)}`;
-}
 
 /** The request body for one mode. Serialised once per mode: every attempt in it sends the same bytes. */
 export function chatCompletionBody(
@@ -238,363 +158,76 @@ export function chatCompletionBody(
   });
 }
 
-const defaultSleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+/** OpenAI's completion: `prompt_tokens` / `completion_tokens`, `refusal`, `stop`. */
+const OPENAI_READING: CompletionReading = { usage: readPromptCompletionUsage };
 
 export class OpenAiLlmProvider implements LlmProvider {
   readonly id = 'openai' as const;
-  readonly #endpoint: string;
-  readonly #model: string;
-  readonly #fastModel: string;
   /**
    * Models that refused `response_format: json_schema` (ADR §6a.4.1). Per
    * instance, which is per process: a model gains the feature on the provider's
    * side, and a restart is when this process would find out.
    */
   readonly #noJsonSchema = new Set<string>();
-  readonly #apiKey: string;
-  readonly #fetch: typeof fetch;
-  readonly #log: LlmLogger;
-  readonly #maxAttempts: number;
-  readonly #openMs: number;
-  readonly #breaker: CircuitBreaker;
-  readonly #sleep: (ms: number) => Promise<void>;
-  readonly #random: () => number;
-  readonly #now: () => number;
+  readonly #transport: ChatCompletionsTransport<StructuredMode>;
 
   constructor(settings: OpenAiSettings, options: OpenAiLlmProviderOptions = {}) {
     // Configuration errors fail at boot, where an operator reads them, rather
     // than as a failed call on the first customer message.
-    this.#endpoint = chatCompletionsUrl(settings.baseUrl);
-    if (!HEADER_SAFE.test(settings.apiKey)) {
-      // A stray newline from an .env edit would otherwise surface as a "network"
-      // failure on every call, retried and counted against the provider.
-      throw new Error('LLM_API_KEY contains whitespace or characters an HTTP header cannot carry.');
-    }
-    this.#model = settings.model;
-    this.#fastModel = settings.fastModel || settings.model;
-    this.#apiKey = settings.apiKey;
-    this.#fetch = options.fetchImpl ?? fetch;
-    this.#log = options.logger ?? defaultLlmLogger();
-    this.#maxAttempts = Math.max(1, options.maxAttempts ?? LLM_MAX_ATTEMPTS);
-    this.#sleep = options.sleep ?? defaultSleep;
-    this.#random = options.random ?? Math.random;
-    this.#now = options.now ?? Date.now;
-    this.#openMs = options.circuit?.openMs ?? LLM_CIRCUIT_OPEN_MS;
-    this.#breaker = new CircuitBreaker({
-      failureThreshold: options.circuit?.failureThreshold ?? LLM_CIRCUIT_FAILURE_THRESHOLD,
-      openMs: this.#openMs,
-      now: this.#now,
-    });
+    const endpoint = chatCompletionsUrl(settings.baseUrl);
+    this.#transport = new ChatCompletionsTransport<StructuredMode>(
+      {
+        provider: this.id,
+        endpoint,
+        apiKey: settings.apiKey,
+        model: settings.model,
+        fastModel: settings.fastModel ?? null,
+      },
+      {
+        structuredMode: (model) => (this.#noJsonSchema.has(model) ? 'prompt' : 'json_schema'),
+        body: chatCompletionBody,
+        classify: classifyHttpFailure,
+        read: (text, meta) => readChatCompletion(text, meta, OPENAI_READING),
+        // A model without structured outputs answers `json_schema` with a 400
+        // whose `param` is `response_format`; the same call goes on with the
+        // schema in the prompt, at once.
+        fallback: (model, mode, failure, problem) => {
+          if (
+            mode !== 'json_schema' ||
+            failure.kind !== 'bad_request' ||
+            problem?.param !== 'response_format'
+          ) {
+            return null;
+          }
+          this.#noJsonSchema.add(model);
+          return {
+            mode: 'prompt',
+            event: 'llm.json_schema_unsupported',
+            message:
+              'the model refused response_format json_schema; its schema goes in the prompt from now on',
+          };
+        },
+      },
+      options,
+    );
   }
 
   /** Where the circuit stands — for tests and for anyone deciding what to show an operator. */
   get circuitState(): 'closed' | 'open' | 'half_open' {
-    return this.#breaker.state;
+    return this.#transport.circuitState;
   }
 
-  async complete(request: LlmCompletionRequest): Promise<LlmCompletion> {
-    const permit = this.#breaker.acquire();
-    if (!permit) {
-      // Debug, not warn: the opening was logged once as an error, and a line per
-      // refused call while the window lasts would bury it.
-      this.#log.debug(
-        { ...this.#where(this.modelFor(request.tier), request), event: 'llm.short_circuited' },
-        'llm circuit open, provider not called',
-      );
-      throw new LlmProviderError('circuit_open');
-    }
-
-    let outcome: 'healthy' | 'faulty' = 'healthy';
-    try {
-      return await this.#call(request);
-    } catch (error) {
-      if (error instanceof LlmProviderError && error.providerFault) outcome = 'faulty';
-      throw error;
-    } finally {
-      this.#settle(permit, outcome);
-    }
+  complete(request: LlmCompletionRequest): Promise<LlmCompletion> {
+    return this.#transport.send(request);
   }
 
   /** The model a tier is answered by (ADR §6a.5). */
   modelFor(tier: LlmTier = 'default'): string {
-    return tier === 'fast' ? this.#fastModel : this.#model;
+    return this.#transport.modelFor(tier);
   }
 
   /** Whether `model` has been seen refusing `json_schema` — for tests and an operator's question. */
   structuredOutputsRefusedBy(model: string): boolean {
     return this.#noJsonSchema.has(model);
   }
-
-  async #call(request: LlmCompletionRequest): Promise<LlmCompletion> {
-    const model = this.modelFor(request.tier);
-    const where = this.#where(model, request);
-    const started = this.#now();
-    const deadline = started + request.timeoutMs;
-    const controller = new AbortController();
-    let expired = false;
-    const timer = setTimeout(() => {
-      expired = true;
-      controller.abort();
-    }, request.timeoutMs);
-
-    let mode: StructuredMode | null = null;
-    if (request.responseFormat) mode = this.#noJsonSchema.has(model) ? 'prompt' : 'json_schema';
-    let body = chatCompletionBody(request, model, mode);
-
-    try {
-      for (let attempt = 1; ; attempt += 1) {
-        this.#log.debug({ ...where, event: 'llm.attempt', attempt }, 'llm request');
-        const result = await this.#attempt(body, controller.signal, () => expired);
-
-        if (result.ok) {
-          const { usage } = result.completion;
-          this.#log.info(
-            {
-              ...where,
-              event: 'llm.completed',
-              attempts: attempt,
-              durationMs: this.#now() - started,
-              inputTokens: usage.inputTokens,
-              outputTokens: usage.outputTokens,
-            },
-            'llm answered',
-          );
-          return result.completion;
-        }
-
-        const failure = result.error;
-        failure.attempts = attempt;
-        const fields = { ...where, attempt, ...llmFailureFields(failure) };
-
-        if (
-          mode === 'json_schema' &&
-          failure.kind === 'bad_request' &&
-          result.param === 'response_format'
-        ) {
-          // Remembered whether or not there is time to try again: the next call
-          // for this model goes straight to the plain-JSON path either way.
-          this.#noJsonSchema.add(model);
-          mode = 'prompt';
-          body = chatCompletionBody(request, model, mode);
-          const retrying =
-            attempt < this.#maxAttempts && this.#now() + LLM_MIN_ATTEMPT_MS <= deadline;
-          this.#log.warn(
-            { ...fields, event: 'llm.json_schema_unsupported', retrying },
-            'the model refused response_format json_schema; its schema goes in the prompt from now on',
-          );
-          if (retrying) continue;
-        }
-        const delayMs = this.#retryDelay(failure, attempt, result.retryAfterMs, deadline);
-        if (delayMs !== null) {
-          this.#log.warn(
-            { ...fields, event: 'llm.retry', delayMs },
-            'llm attempt failed, retrying',
-          );
-          await this.#sleep(delayMs);
-          continue;
-        }
-
-        // Error when the provider is failing — what an operator is paged for;
-        // warn when the provider answered and the request was the problem.
-        const level = failure.providerFault ? 'error' : 'warn';
-        this.#log[level](
-          { ...fields, event: 'llm.failed', durationMs: this.#now() - started },
-          'llm call failed',
-        );
-        throw failure;
-      }
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  /** How long to wait before the next attempt, or `null` when this failure ends the call. */
-  #retryDelay(
-    failure: LlmProviderError,
-    attempt: number,
-    retryAfter: number | null,
-    deadline: number,
-  ): number | null {
-    if (!failure.transient || attempt >= this.#maxAttempts) return null;
-    const delay = Math.max(llmRetryBackoffMs(attempt, this.#random), retryAfter ?? 0);
-    return this.#now() + delay + LLM_MIN_ATTEMPT_MS <= deadline ? delay : null;
-  }
-
-  async #attempt(
-    body: string,
-    signal: AbortSignal,
-    expired: () => boolean,
-  ): Promise<AttemptResult> {
-    let response: Response;
-    try {
-      response = await this.#fetch(this.#endpoint, {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${this.#apiKey}`,
-          'content-type': 'application/json',
-          accept: 'application/json',
-        },
-        body,
-        // Refused, not followed: the next hop would receive the conversation,
-        // and nobody configured it.
-        redirect: 'manual',
-        signal,
-      });
-    } catch (error) {
-      return failed(
-        expired()
-          ? new LlmProviderError('timeout')
-          : new LlmProviderError('network', { code: networkCode(error) }),
-      );
-    }
-
-    const status = response.status;
-    const requestId = safeToken(response.headers.get('x-request-id'), SAFE_REQUEST_ID);
-
-    if (status >= 200 && status < 300) {
-      let text: string;
-      try {
-        text = await readCapped(response, LLM_MAX_RESPONSE_BYTES);
-      } catch (error) {
-        if (expired()) return failed(new LlmProviderError('timeout', { status, requestId }));
-        if (error instanceof ResponseTooLarge) {
-          return failed(
-            new LlmProviderError('bad_response', { status, requestId, reason: 'too_large' }),
-          );
-        }
-        return failed(
-          new LlmProviderError('network', { status, requestId, code: networkCode(error) }),
-        );
-      }
-      return readCompletion(text, { status, requestId });
-    }
-
-    // Every other status is a failure; the body only refines which one. It is
-    // read — capped — either way, so the connection is released.
-    const problem = await readProblem(response, PROBLEM_MAX_BYTES);
-    const kind = classifyHttpFailure(status, problem);
-    return {
-      ok: false,
-      param: problem.param,
-      error: new LlmProviderError(kind, {
-        status,
-        requestId,
-        code: problem.code ?? problem.type,
-        ...(kind === 'bad_response'
-          ? { reason: status >= 300 && status < 400 ? 'redirect' : 'status' }
-          : {}),
-      }),
-      retryAfterMs: retryAfterMs(response.headers.get('retry-after'), this.#now()),
-    };
-  }
-
-  #settle(permit: CircuitPermit, outcome: 'healthy' | 'faulty'): void {
-    const transition = this.#breaker.release(permit, outcome);
-    if (transition === 'opened') {
-      this.#log.error(
-        {
-          ...this.#where(this.#model),
-          event: 'llm.circuit_opened',
-          probe: permit.probe,
-          consecutiveFailures: this.#breaker.consecutiveFailures,
-          openMs: this.#openMs,
-        },
-        'llm circuit opened: calls fail fast and go to a human until the window ends',
-      );
-    } else if (transition === 'closed') {
-      this.#log.info(
-        { ...this.#where(this.#model), event: 'llm.circuit_closed' },
-        'llm circuit closed: the probe was answered',
-      );
-    }
-  }
-
-  /**
-   * What every line about a call carries: the model and, for a call that is not
-   * a plain default one, its tier and the structured output it asked for — by
-   * name; the schema is the caller's and the reply is never logged.
-   */
-  #where(model: string, request?: LlmCompletionRequest): Record<string, unknown> {
-    return {
-      provider: this.id,
-      model,
-      ...(request?.tier === 'fast' ? { tier: 'fast' } : {}),
-      ...(request?.responseFormat ? { format: request.responseFormat.name } : {}),
-    };
-  }
-}
-
-function failed(error: LlmProviderError): AttemptResult {
-  return { ok: false, error, retryAfterMs: null };
-}
-
-/**
- * A 2xx body read as a chat completion. The shape is checked field by field —
- * the body is whatever the far end sent — and a reply is only an answer when
- * the model finished on its own (`stop`), refused nothing and wrote something.
- */
-function readCompletion(
-  text: string,
-  meta: { status: number; requestId: string | null },
-): AttemptResult {
-  const malformed = (reason: string) =>
-    failed(new LlmProviderError('bad_response', { ...meta, reason }));
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    return malformed('not_json');
-  }
-  if (!isRecord(parsed)) return malformed('shape');
-
-  // The bill is part of the answer: tm 255.9 meters these, and a completion
-  // that does not say what it cost cannot be counted.
-  const usage = readUsage(parsed['usage']);
-  const choices: unknown = parsed['choices'];
-  const choice: unknown = Array.isArray(choices) ? choices[0] : undefined;
-  const message: unknown = isRecord(choice) ? choice['message'] : undefined;
-  if (!usage || !isRecord(choice) || !isRecord(message)) return malformed('shape');
-  const finish = choice['finish_reason'];
-  const content = message['content'];
-  const refusal = message['refusal'];
-  if (typeof finish !== 'string' || !(content == null || typeof content === 'string')) {
-    return malformed('shape');
-  }
-
-  const unanswered = (reason: string, hint?: string) =>
-    failed(new LlmProviderError('no_answer', { ...meta, reason, usage, hint: hint ?? null }));
-  // `length` is a reply cut off at max_completion_tokens; `content_filter` and
-  // anything else are not a finished reply either. Cut off before any text at
-  // all is the configuration's failure, not the question's: said in the log.
-  if (finish === 'length' && !(typeof content === 'string' && content.trim())) {
-    return unanswered('length', LLM_EMPTY_LENGTH_HINT);
-  }
-  if (finish !== 'stop') return unanswered(safeToken(finish, SAFE_CODE) ?? 'finish_reason');
-  if (typeof refusal === 'string' && refusal.trim()) return unanswered('refusal');
-  const answer = typeof content === 'string' ? content.trim() : '';
-  if (!answer) return unanswered('empty');
-
-  return { ok: true, completion: { text: answer, usage } };
-}
-
-function readUsage(value: unknown): LlmUsage | null {
-  if (!isRecord(value)) return null;
-  const input = value['prompt_tokens'];
-  const output = value['completion_tokens'];
-  return isCount(input) && isCount(output) ? { inputTokens: input, outputTokens: output } : null;
-}
-
-/** What a log line says about a failure — shared with the Anthropic adapter (tm 479). */
-export function llmFailureFields(error: LlmProviderError): Record<string, unknown> {
-  return {
-    kind: error.kind,
-    transient: error.transient,
-    ...(error.status ? { status: error.status } : {}),
-    ...(error.code ? { code: error.code } : {}),
-    ...(error.reason ? { reason: error.reason } : {}),
-    ...(error.requestId ? { requestId: error.requestId } : {}),
-    ...(error.hint ? { hint: error.hint } : {}),
-  };
 }

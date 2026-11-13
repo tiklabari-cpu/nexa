@@ -101,11 +101,17 @@ export const settings: Messages = {
   'settings.ai.provider.mock': 'Yerleşik taklit (mock)',
   'settings.ai.provider.openai': 'OpenAI',
   'settings.ai.provider.anthropic': 'Anthropic (Claude)',
+  'settings.ai.provider.deepseek': 'DeepSeek',
+  'settings.ai.provider.moonshot': 'Kimi (Moonshot)',
   'settings.ai.baseUrl': 'Temel URL',
   'settings.ai.baseUrl.hint':
     'Üretimde: yanındaki bölgenin OpenAI bölgesel adresi — asla api.openai.com değil.',
   'settings.ai.baseUrl.hint.anthropic':
     'Boş bırakın: https://api.anthropic.com, üretimin kabul ettiği tek adres. Adresin kendisi, /v1 olmadan.',
+  'settings.ai.baseUrl.hint.deepseek':
+    'Boş bırakın: https://api.deepseek.com, üretimin kabul ettiği tek adres.',
+  'settings.ai.baseUrl.hint.moonshot':
+    'Boş bırakın: https://api.moonshot.ai/v1, üretimin kabul ettiği tek adres.',
   'settings.ai.model': 'Model adı',
   'settings.ai.modelFast': 'Hızlı model',
   'settings.ai.modelFast.hint': 'Sınıflandırma ve özetleme. Boş: yukarıdaki model.',
@@ -133,6 +139,7 @@ export const settings: Messages = {
   'settings.ai.apiKey.tooShort': 'Bir anahtar en az 8 karakterdir.',
   'settings.ai.required': 'Uzak bir sağlayıcı temel URL, model adı ve bölge ister.',
   'settings.ai.required.anthropic': 'Claude bir model adı ve bölge ister.',
+  'settings.ai.required.model': 'Bu sağlayıcı bir model adı ister.',
   'settings.ai.embedding.changeWarning':
     'Yeni bir embedding sağlayıcısı ya da modeli, bilgi tabanının yeniden gömülmesi demektir; o zamana kadar sorular taşınmış bilgiden yanıtlanır.',
   'settings.ai.caps.title': 'Günlük tavanlar (token)',

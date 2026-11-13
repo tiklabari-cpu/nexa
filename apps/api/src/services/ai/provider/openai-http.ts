@@ -27,7 +27,7 @@ export const OPENAI_QUOTA_CODES: ReadonlySet<string> = new Set([
   'insufficient_quota',
 ]);
 
-/** The failures an HTTP status can say by itself — a subset of both adapters' kinds. */
+/** The failures an HTTP status can say by itself — a subset of every adapter's kinds. */
 export type HttpFailureKind =
   | 'rate_limited'
   | 'quota_exhausted'
@@ -44,11 +44,18 @@ export function classifyHttpFailure(
   problem: { code: string | null; type: string | null },
 ): HttpFailureKind {
   if (status === 429) {
-    const quota = [problem.code, problem.type].some(
-      (value) => value !== null && OPENAI_QUOTA_CODES.has(value),
-    );
-    return quota ? 'quota_exhausted' : 'rate_limited';
+    return problemSays(problem, OPENAI_QUOTA_CODES) ? 'quota_exhausted' : 'rate_limited';
   }
+  return statusFailureKind(status);
+}
+
+/**
+ * What a status says when the vendor's own table has nothing more specific —
+ * the part of every vendor's table that is HTTP's, not the vendor's (tm 480
+ * lifted it out of {@link classifyHttpFailure} for DeepSeek's and Kimi's).
+ */
+export function statusFailureKind(status: number): HttpFailureKind {
+  if (status === 429) return 'rate_limited';
   // 408 is the server saying it gave up waiting, which RFC 9110 lets a client repeat.
   if (status >= 500 || status === 408) return 'unavailable';
   if (status === 401) return 'auth';
@@ -57,6 +64,14 @@ export function classifyHttpFailure(
   if (status >= 400) return 'bad_request';
   // A 3xx — refused rather than followed — or anything else that is not an answer.
   return 'bad_response';
+}
+
+/** Whether the error body's `code` or `type` is one of `values`. */
+export function problemSays(
+  problem: { code: string | null; type: string | null },
+  values: ReadonlySet<string>,
+): boolean {
+  return [problem.code, problem.type].some((value) => value !== null && values.has(value));
 }
 
 /**

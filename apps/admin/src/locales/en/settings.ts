@@ -102,11 +102,17 @@ export const settings: Messages = {
   'settings.ai.provider.mock': 'Built-in stub (mock)',
   'settings.ai.provider.openai': 'OpenAI',
   'settings.ai.provider.anthropic': 'Anthropic (Claude)',
+  'settings.ai.provider.deepseek': 'DeepSeek',
+  'settings.ai.provider.moonshot': 'Kimi (Moonshot)',
   'settings.ai.baseUrl': 'Base URL',
   'settings.ai.baseUrl.hint':
     'In production: the OpenAI regional host of the region beside it — never api.openai.com.',
   'settings.ai.baseUrl.hint.anthropic':
     'Leave empty for https://api.anthropic.com, the only host production accepts. The host itself, without /v1.',
+  'settings.ai.baseUrl.hint.deepseek':
+    'Leave empty for https://api.deepseek.com, the only host production accepts.',
+  'settings.ai.baseUrl.hint.moonshot':
+    'Leave empty for https://api.moonshot.ai/v1, the only host production accepts.',
   'settings.ai.model': 'Model name',
   'settings.ai.modelFast': 'Fast model',
   'settings.ai.modelFast.hint': 'Classifying and summarising. Empty: the model above.',
@@ -133,6 +139,7 @@ export const settings: Messages = {
   'settings.ai.apiKey.tooShort': 'A key is at least 8 characters long.',
   'settings.ai.required': 'A remote provider needs a base URL, a model name and a region.',
   'settings.ai.required.anthropic': 'Claude needs a model name and a region.',
+  'settings.ai.required.model': 'This provider needs a model name.',
   'settings.ai.embedding.changeWarning':
     'A new embedding provider or model means the knowledge base has to be re-embedded; until then, questions are answered from the knowledge already moved.',
   'settings.ai.caps.title': 'Daily caps (tokens)',

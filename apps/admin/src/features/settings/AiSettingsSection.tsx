@@ -38,18 +38,32 @@ import {
 /** The embedding width the schema fixes (`knowledge_chunks.embedding vector(1536)`). */
 export const EMBEDDING_WIDTH = 1536;
 
-type Choice = 'env' | 'mock' | 'openai' | 'anthropic';
+type Choice = 'env' | 'mock' | 'openai' | 'anthropic' | 'deepseek' | 'moonshot';
 type Region = '' | 'eu' | 'us';
 
 /**
- * What each part may be set to. Claude (`anthropic`, tm 479) writes replies only — Anthropic has
- * no embedding endpoint, so the embedding model stays on OpenAI or the stub.
+ * What each part may be set to. Claude (`anthropic`, tm 479), DeepSeek and Kimi (`moonshot`,
+ * tm 480) write replies only — none of them is an embedding provider here, so the embedding
+ * model stays on OpenAI or the stub.
  */
-const LLM_CHOICES = ['env', 'mock', 'openai', 'anthropic'] as const;
+const LLM_CHOICES = ['env', 'mock', 'openai', 'anthropic', 'deepseek', 'moonshot'] as const;
 const EMBEDDING_CHOICES = ['env', 'mock', 'openai'] as const;
 
-/** A provider reached over the network — it needs a key and, except Claude, a base URL. */
-const isRemote = (choice: Choice): boolean => choice === 'openai' || choice === 'anthropic';
+/** A provider reached over the network — it needs a key and, except OpenAI, has a default host. */
+const isRemote = (choice: Choice): boolean => choice !== 'env' && choice !== 'mock';
+
+/**
+ * DeepSeek and Kimi (tm 480): where they run is the vendor's, not a setting, so the form has no
+ * region for them and sends none. Only the provider's name is shown (owner, 2026-11-13).
+ */
+const hasNoRegion = (choice: Choice): boolean => choice === 'deepseek' || choice === 'moonshot';
+
+/** The base URL hint: OpenAI's regional rule, or the vendor's one host that an empty field means. */
+const BASE_URL_HINT: Partial<Record<Choice, string>> = {
+  anthropic: 'settings.ai.baseUrl.hint.anthropic',
+  deepseek: 'settings.ai.baseUrl.hint.deepseek',
+  moonshot: 'settings.ai.baseUrl.hint.moonshot',
+};
 
 /** What happens to the stored key on save. */
 export interface KeyEdit {
@@ -148,7 +162,7 @@ export function requestOf(draft: AiDraft, reason: string): PlatformAiSettingsReq
             base_url: orNull(llm.baseUrl),
             model: orNull(llm.model),
             model_fast: orNull(llm.modelFast),
-            region: llm.region === '' ? null : llm.region,
+            region: llm.region === '' || hasNoRegion(llm.choice) ? null : llm.region,
             timeout_ms: intOrNull(llm.timeoutMs),
             max_output_tokens: intOrNull(llm.maxOutputTokens),
             ...keyField(llm.key),
@@ -193,12 +207,13 @@ export function draftProblems(
   draft: AiDraft,
 ): Array<'llm' | 'embedding' | 'key' | 'caps' | 'prices'> {
   const problems: Array<'llm' | 'embedding' | 'key' | 'caps' | 'prices'> = [];
-  // Claude's base URL may stay empty: the server uses Anthropic's API host (tm 479).
+  // Only OpenAI needs a base URL: the others default to their API host (tm 479, tm 480).
+  // DeepSeek and Kimi have no region to choose.
   const remote = (part: { choice: Choice; baseUrl: string; model: string; region: Region }) =>
     isRemote(part.choice) &&
     ((part.choice === 'openai' && part.baseUrl.trim() === '') ||
       part.model.trim() === '' ||
-      part.region === '');
+      (part.region === '' && !hasNoRegion(part.choice)));
   if (
     remote(draft.llm) ||
     !positiveInt(draft.llm.timeoutMs) ||
@@ -450,6 +465,7 @@ function PartFields({
   const id = (field: string) => `settings-ai-${part}-${field}`;
   const remote = isRemote(draft.choice);
   const claude = draft.choice === 'anthropic';
+  const region = !hasNoRegion(draft.choice);
   return (
     <fieldset className="flex flex-col gap-3 rounded-md border border-border p-3">
       <legend className="px-1 text-sm font-semibold">{title}</legend>
@@ -482,11 +498,11 @@ function PartFields({
       </div>
       {draft.choice !== 'env' && (
         <>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className={cn('grid gap-3', region ? 'sm:grid-cols-3' : 'sm:grid-cols-2')}>
             <TextField
               id={id('base-url')}
               label={t('settings.ai.baseUrl')}
-              hint={t(claude ? 'settings.ai.baseUrl.hint.anthropic' : 'settings.ai.baseUrl.hint')}
+              hint={t(BASE_URL_HINT[draft.choice] ?? 'settings.ai.baseUrl.hint')}
               value={draft.baseUrl}
               onChange={(value) => onChange({ baseUrl: value })}
             />
@@ -496,29 +512,31 @@ function PartFields({
               value={draft.model}
               onChange={(value) => onChange({ model: value })}
             />
-            <div>
-              <label htmlFor={id('region')} className="text-sm font-medium">
-                {t('settings.ai.region')}
-              </label>
-              <select
-                id={id('region')}
-                value={draft.region}
-                onChange={(event) => onChange({ region: event.target.value as Region })}
-                {...(claude ? { 'aria-describedby': `${id('region')}-hint` } : {})}
-                className={FIELD_CLASS}
-              >
-                {(['', 'eu', 'us'] as const).map((region) => (
-                  <option key={region || 'none'} value={region}>
-                    {t(`settings.ai.region.${region || 'none'}`)}
-                  </option>
-                ))}
-              </select>
-              {claude && (
-                <p id={`${id('region')}-hint`} className="mt-1 text-xs text-content-secondary">
-                  {t('settings.ai.region.hint.anthropic')}
-                </p>
-              )}
-            </div>
+            {region && (
+              <div>
+                <label htmlFor={id('region')} className="text-sm font-medium">
+                  {t('settings.ai.region')}
+                </label>
+                <select
+                  id={id('region')}
+                  value={draft.region}
+                  onChange={(event) => onChange({ region: event.target.value as Region })}
+                  {...(claude ? { 'aria-describedby': `${id('region')}-hint` } : {})}
+                  className={FIELD_CLASS}
+                >
+                  {(['', 'eu', 'us'] as const).map((region) => (
+                    <option key={region || 'none'} value={region}>
+                      {t(`settings.ai.region.${region || 'none'}`)}
+                    </option>
+                  ))}
+                </select>
+                {claude && (
+                  <p id={`${id('region')}-hint`} className="mt-1 text-xs text-content-secondary">
+                    {t('settings.ai.region.hint.anthropic')}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
           {remote && (
             <ApiKeyField
@@ -530,7 +548,13 @@ function PartFields({
           )}
           {invalid && (
             <p role="alert" className="text-xs text-danger">
-              {t(claude ? 'settings.ai.required.anthropic' : 'settings.ai.required')}
+              {t(
+                claude
+                  ? 'settings.ai.required.anthropic'
+                  : region
+                    ? 'settings.ai.required'
+                    : 'settings.ai.required.model',
+              )}
             </p>
           )}
           {children}

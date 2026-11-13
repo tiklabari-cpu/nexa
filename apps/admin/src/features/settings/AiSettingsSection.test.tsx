@@ -207,6 +207,94 @@ describe('Settings › AI — the model and its key', () => {
     );
   });
 
+  it.each([
+    [
+      'deepseek',
+      'DeepSeek',
+      'Leave empty for https://api.deepseek.com, the only host production accepts.',
+    ],
+    [
+      'moonshot',
+      'Kimi (Moonshot)',
+      'Leave empty for https://api.moonshot.ai/v1, the only host production accepts.',
+    ],
+  ] as const)(
+    'offers %s for the model only, by name alone, with no region and no word on where data goes (tm 480)',
+    async (provider, label, hint) => {
+      const fake = await open();
+      const form = await aiForm();
+      const model = within(form).getByRole('group', { name: 'Model' });
+      const embedding = within(form).getByRole('group', { name: 'Embedding model' });
+      expect(
+        within(embedding)
+          .getAllByRole('option')
+          .map((option) => option.textContent),
+      ).not.toContain(label);
+      // The option says the provider's name and nothing else (owner, 2026-11-13).
+      expect(within(model).getByRole('option', { name: label })).toHaveTextContent(
+        new RegExp(`^${label.replace(/[()]/g, '\\$&')}$`),
+      );
+
+      await user().selectOptions(within(model).getByLabelText('Provider'), provider);
+      expect(within(model).getByRole('option', { name: label })).toHaveProperty('selected', true);
+      // Where the vendor runs is not a setting: no region field, and no text about data location.
+      expect(within(model).queryByLabelText('Region')).toBeNull();
+      expect(model.textContent ?? '').not.toMatch(
+        /China|Chin|Singapore|outside|region|data|veri|bölge|ABD|AB dışı|US\/EU/i,
+      );
+      expect(within(model).getByLabelText('Base URL')).toHaveAccessibleDescription(hint);
+
+      const save = within(form).getByRole('button', { name: 'Save AI settings' });
+      expect(within(model).getByText('This provider needs a model name.')).toHaveAttribute(
+        'role',
+        'alert',
+      );
+      expect(save).toBeDisabled();
+      await user().type(within(model).getByLabelText('Model name'), 'a-model');
+      await user().type(within(model).getByLabelText('API key'), KEY);
+      expect(save).toBeEnabled();
+      await user().click(save);
+      await confirm(`Moving the model to ${label}`);
+
+      await vi.waitFor(() =>
+        expect(sent(fake, 'PUT', '/settings/ai')).toEqual([
+          {
+            reason: `Moving the model to ${label}`,
+            llm: {
+              provider,
+              base_url: null,
+              model: 'a-model',
+              model_fast: null,
+              region: null,
+              timeout_ms: null,
+              max_output_tokens: null,
+              api_key: KEY,
+            },
+            embedding: null,
+            caps: null,
+            prices: null,
+          },
+        ]),
+      );
+    },
+  );
+
+  it('sends no region for DeepSeek even when one was picked for OpenAI before the switch (tm 480)', async () => {
+    const fake = await open();
+    const form = await aiForm();
+    const model = within(form).getByRole('group', { name: 'Model' });
+    await user().selectOptions(within(model).getByLabelText('Provider'), 'openai');
+    await user().selectOptions(within(model).getByLabelText('Region'), 'us');
+    await user().selectOptions(within(model).getByLabelText('Provider'), 'deepseek');
+    await user().type(within(model).getByLabelText('Model name'), 'deepseek-flash');
+    await user().type(within(model).getByLabelText('API key'), KEY);
+    await user().click(within(form).getByRole('button', { name: 'Save AI settings' }));
+    await confirm('Moving the model to DeepSeek');
+    await vi.waitFor(() => expect(sent(fake, 'PUT', '/settings/ai')).toHaveLength(1));
+    const [body] = sent(fake, 'PUT', '/settings/ai') as Array<{ llm: { region: unknown } }>;
+    expect(body!.llm.region).toBeNull();
+  });
+
   it('holds the save back while a remote model lacks its region, a key is too short, or the caps are half filled', async () => {
     await open();
     const form = await aiForm();

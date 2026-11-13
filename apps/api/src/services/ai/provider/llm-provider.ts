@@ -33,9 +33,11 @@
  */
 import type { Region } from '@siyahtus/types';
 import { AnthropicLlmProvider } from './anthropic-llm-provider.js';
+import { DeepSeekLlmProvider } from './deepseek-llm-provider.js';
 import type { JsonSchema } from './json-schema.js';
 import { LlmProviderError } from './llm-error.js';
 import { MockLlmProvider } from './mock-llm-provider.js';
+import { MoonshotLlmProvider } from './moonshot-llm-provider.js';
 import { OpenAiLlmProvider, type LlmLogger } from './openai-llm-provider.js';
 
 /**
@@ -43,9 +45,12 @@ import { OpenAiLlmProvider, type LlmLogger } from './openai-llm-provider.js';
  * adapter (ADR §3 — "OpenAI-compatible" layers were checked one by one and none
  * is a drop-in), and `createLlmProvider`'s switch refuses to compile until the
  * value has a branch. `anthropic` (tm 479 · ADR §13) is the first value added
- * that way: the native Messages API through the official SDK.
+ * that way: the native Messages API through the official SDK. `deepseek` and
+ * `moonshot` (Kimi; tm 480 · ADR §14) speak the OpenAI request shape and are
+ * still their own values and adapters, on the transport the OpenAI adapter
+ * shares (`chat-completions-transport.ts`).
  */
-export const LLM_PROVIDERS = ['mock', 'openai', 'anthropic'] as const;
+export const LLM_PROVIDERS = ['mock', 'openai', 'anthropic', 'deepseek', 'moonshot'] as const;
 export type LlmProviderId = (typeof LLM_PROVIDERS)[number];
 
 /**
@@ -224,10 +229,27 @@ export interface AnthropicSettings {
   fallback: boolean;
 }
 
+/**
+ * The settings `LLM_PROVIDER=deepseek` and `LLM_PROVIDER=moonshot` read
+ * (tm 480) — OpenAI's four, gathered into `env.llm.deepseek` /
+ * `env.llm.moonshot` on `anthropic`'s terms: `null` unless the provider is
+ * the one named and its model and key are present. The base URL may be left
+ * unset: it is then the vendor's API host (`provider-hosts.ts`
+ * `defaultLlmBaseUrl`), the only one production accepts. No region: where
+ * these two process requests is the vendor's fact, not a setting
+ * (`provider-hosts.ts` `fixedLlmProcessingRegion`).
+ */
+export type DeepSeekSettings = OpenAiSettings;
+export type MoonshotSettings = OpenAiSettings;
+
 export interface LlmProviderOptions {
   openai: OpenAiSettings | null;
   /** Absent means `null`: only an `anthropic` configuration carries it. */
   anthropic?: AnthropicSettings | null;
+  /** Absent means `null`: only a `deepseek` configuration carries it. */
+  deepseek?: DeepSeekSettings | null;
+  /** Absent means `null`: only a `moonshot` configuration carries it. */
+  moonshot?: MoonshotSettings | null;
 }
 
 /**
@@ -272,6 +294,16 @@ export function createLlmProvider(
         throw new Error('LLM_PROVIDER=anthropic needs LLM_MODEL and LLM_API_KEY.');
       }
       return new AnthropicLlmProvider(options.anthropic, runtime);
+    case 'deepseek':
+      if (!options.deepseek) {
+        throw new Error('LLM_PROVIDER=deepseek needs LLM_MODEL and LLM_API_KEY.');
+      }
+      return new DeepSeekLlmProvider(options.deepseek, runtime);
+    case 'moonshot':
+      if (!options.moonshot) {
+        throw new Error('LLM_PROVIDER=moonshot needs LLM_MODEL and LLM_API_KEY.');
+      }
+      return new MoonshotLlmProvider(options.moonshot, runtime);
     default:
       return unhandledLlmProvider(id);
   }

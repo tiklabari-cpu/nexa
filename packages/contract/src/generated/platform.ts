@@ -5121,10 +5121,13 @@ export interface components {
      *     never returned. `anthropic` (Claude, tm 479) may leave `base_url`
      *     `null` — Anthropic's API host, the only one production accepts — and
      *     pins inference per request, which it can do for `us` only.
+     *     `deepseek` and `moonshot` (Kimi, tm 480) may leave `base_url` `null`
+     *     too (the vendor's API host) and store no `region`: where they process
+     *     requests is fixed outside every region the deployment serves.
      */
     PlatformAiLlmSettings: {
       /** @enum {string} */
-      provider: 'mock' | 'openai' | 'anthropic';
+      provider: 'mock' | 'openai' | 'anthropic' | 'deepseek' | 'moonshot';
       base_url: string | null;
       model: string | null;
       /** @description The model a `fast` call uses (classifying, summarising); `null` — `model`. */
@@ -5222,7 +5225,7 @@ export interface components {
     };
     PlatformAiLlmInput: {
       /** @enum {string} */
-      provider: 'mock' | 'openai' | 'anthropic';
+      provider: 'mock' | 'openai' | 'anthropic' | 'deepseek' | 'moonshot';
       base_url?: string | null;
       model?: string | null;
       model_fast?: string | null;
@@ -5261,7 +5264,7 @@ export interface components {
       /** @enum {string} */
       target: 'llm' | 'embedding';
       /** @enum {string} */
-      provider: 'mock' | 'openai' | 'anthropic';
+      provider: 'mock' | 'openai' | 'anthropic' | 'deepseek' | 'moonshot';
       /** @enum {string} */
       source: 'db' | 'env';
       model: string | null;

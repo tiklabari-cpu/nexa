@@ -40,6 +40,26 @@ describe('resolveInferenceProvider', () => {
       }),
     ).toEqual({ id: 'mock', region: 'eu' });
   });
+
+  it('places deepseek and moonshot outside every region, whatever LLM_PROVIDER_REGION claims (tm 480 · NFR-C4)', () => {
+    for (const id of ['deepseek', 'moonshot'] as const) {
+      for (const declared of [undefined, 'us', 'eu'] as const) {
+        const provider = resolveInferenceProvider({
+          LLM_PROVIDER: id,
+          SIYAHTUS_REGION: 'us',
+          LLM_PROVIDER_REGION: declared,
+        });
+        expect(provider).toEqual({ id, region: 'outside' });
+        // It leaves every workspace's region: a covered one is refused, an
+        // uncovered one keeps its AI — the owner's decision of 2026-11-13.
+        for (const workspaceRegion of ['eu', 'us'] as const) {
+          expect(inferenceLeavesRegion(provider, workspaceRegion)).toBe(true);
+          expect(inferenceAllowed({ provider, workspaceRegion, hipaaScope: true })).toBe(false);
+          expect(inferenceAllowed({ provider, workspaceRegion, hipaaScope: false })).toBe(true);
+        }
+      }
+    }
+  });
 });
 
 describe('resolveEmbeddingInferenceProvider (tm 255.7)', () => {

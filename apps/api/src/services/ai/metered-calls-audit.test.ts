@@ -88,6 +88,10 @@ const ALLOWED: Readonly<Record<string, Allowance>> = {
     why: 'the root panel’s connection test (tm 389.17): one completion reserved on the deployment’s row first (reserveDeployment) and settled after; its embedding goes through MeteredEmbeddings.embedForDeployment',
     holds: /budget\.reserveDeployment\(\s*'llm'/,
   },
+  'services/ai/provider/llm-smoke.ts': {
+    calls: 2,
+    why: 'the owner’s live smoke (tm 481, `llm:smoke`): three tiny calls a person starts by hand with their own key, from a shell or `docker compose run` — not part of any process that serves, no database or budget to count against; it lives under src only so its unit test runs',
+  },
   'routes/onboarding.ts': {
     calls: 1,
     why: 'onboarding.complete(): the setup checklist, not a model',

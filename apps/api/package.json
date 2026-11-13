@@ -18,6 +18,7 @@
     "test": "tsx scripts/run-sharded.ts vitest run --passWithNoTests",
     "test:unit": "tsx scripts/with-test-datastores.ts vitest run --passWithNoTests --dir src",
     "test:integration": "tsx scripts/run-sharded.ts vitest run --passWithNoTests --dir test/integration",
+    "llm:smoke": "tsx scripts/llm-smoke.ts",
     "mock-idp": "tsx scripts/mock-idp-server.ts",
     "mock-smtp": "tsx scripts/mock-smtp-server.ts",
     "db:generate": "prisma generate",

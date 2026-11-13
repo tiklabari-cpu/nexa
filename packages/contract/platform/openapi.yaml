@@ -3535,7 +3535,9 @@ components:
         The model settings as stored. `null` in a field is "not set here" —
         for `timeout_ms` and `max_output_tokens` the environment's value
         (`LLM_TIMEOUT_MS`, `LLM_MAX_OUTPUT_TOKENS`) applies. The key itself is
-        never returned.
+        never returned. `anthropic` (Claude, tm 479) may leave `base_url`
+        `null` — Anthropic's API host, the only one production accepts — and
+        pins inference per request, which it can do for `us` only.
       required:
         [
           provider,
@@ -3548,7 +3550,7 @@ components:
           api_key_last4,
         ]
       properties:
-        provider: { type: string, enum: [mock, openai] }
+        provider: { type: string, enum: [mock, openai, anthropic] }
         base_url: { type: ["string", "null"] }
         model: { type: ["string", "null"] }
         model_fast:
@@ -3678,7 +3680,7 @@ components:
       required: [provider]
       additionalProperties: false
       properties:
-        provider: { type: string, enum: [mock, openai] }
+        provider: { type: string, enum: [mock, openai, anthropic] }
         base_url: { type: ["string", "null"], maxLength: 500 }
         model: { type: ["string", "null"], minLength: 1, maxLength: 200 }
         model_fast: { type: ["string", "null"], minLength: 1, maxLength: 200 }
@@ -3745,7 +3747,7 @@ components:
       required: [target, provider, source, model, ok, latency_ms, error]
       properties:
         target: { type: string, enum: [llm, embedding] }
-        provider: { type: string, enum: [mock, openai] }
+        provider: { type: string, enum: [mock, openai, anthropic] }
         source: { type: string, enum: [db, env] }
         model: { type: ["string", "null"] }
         ok: { type: boolean }

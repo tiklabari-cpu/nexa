@@ -31,6 +31,8 @@
  * no workspace to check it against, and a second copy of the rule is a copy
  * that can disagree.
  */
+import type { Region } from '@siyahtus/types';
+import { AnthropicLlmProvider } from './anthropic-llm-provider.js';
 import type { JsonSchema } from './json-schema.js';
 import { LlmProviderError } from './llm-error.js';
 import { MockLlmProvider } from './mock-llm-provider.js';
@@ -40,10 +42,49 @@ import { OpenAiLlmProvider, type LlmLogger } from './openai-llm-provider.js';
  * Closed, like `MAIL_PROVIDERS`: a new vendor is a new value *and* its own
  * adapter (ADR §3 — "OpenAI-compatible" layers were checked one by one and none
  * is a drop-in), and `createLlmProvider`'s switch refuses to compile until the
- * value has a branch.
+ * value has a branch. `anthropic` (tm 479 · ADR §13) is the first value added
+ * that way: the native Messages API through the official SDK.
  */
-export const LLM_PROVIDERS = ['mock', 'openai'] as const;
+export const LLM_PROVIDERS = ['mock', 'openai', 'anthropic'] as const;
 export type LlmProviderId = (typeof LLM_PROVIDERS)[number];
+
+/**
+ * `LLM_EFFORT` (tm 479): how hard a Claude model thinks before it answers —
+ * its `output_config.effort`. Current Claude models cannot switch thinking
+ * off; effort is the control. `low` by default: a support reply, not research.
+ */
+export const LLM_EFFORTS = ['low', 'medium', 'high'] as const;
+export type LlmEffort = (typeof LLM_EFFORTS)[number];
+export const DEFAULT_LLM_EFFORT: LlmEffort = 'low';
+
+/**
+ * `LLM_EFFORT` and `LLM_ANTHROPIC_FALLBACK` as the Anthropic adapter takes
+ * them (tm 479): unset is `low` and on. A value that is neither is a
+ * `problem` — which `parseEnv` refuses at boot only while
+ * `LLM_PROVIDER=anthropic`, so a stray value cannot stop a deployment that
+ * does not use Claude; everywhere else it reads as the default.
+ */
+export function readAnthropicTuning(raw: {
+  LLM_EFFORT?: string | undefined;
+  LLM_ANTHROPIC_FALLBACK?: string | undefined;
+}): { effort: LlmEffort; fallback: boolean; problems: string[] } {
+  const problems: string[] = [];
+  let effort = DEFAULT_LLM_EFFORT;
+  if (raw.LLM_EFFORT !== undefined) {
+    const named = LLM_EFFORTS.find((candidate) => candidate === raw.LLM_EFFORT);
+    if (named) effort = named;
+    else problems.push(`LLM_EFFORT must be one of ${LLM_EFFORTS.join(', ')}.`);
+  }
+  let fallback = true;
+  if (raw.LLM_ANTHROPIC_FALLBACK !== undefined) {
+    if (raw.LLM_ANTHROPIC_FALLBACK === 'true' || raw.LLM_ANTHROPIC_FALLBACK === 'false') {
+      fallback = raw.LLM_ANTHROPIC_FALLBACK === 'true';
+    } else {
+      problems.push('LLM_ANTHROPIC_FALLBACK must be true or false.');
+    }
+  }
+  return { effort, fallback, problems };
+}
 
 /** A turn of the conversation handed to the model. The system prompt is separate. */
 export interface LlmMessage {
@@ -162,8 +203,31 @@ export interface OpenAiSettings {
   apiKey: string;
 }
 
+/**
+ * The settings `LLM_PROVIDER=anthropic` reads (tm 479), gathered into
+ * `env.llm.anthropic` on `openai`'s terms: `null` unless the provider is
+ * `anthropic` and its model and key are present. The base URL may be left
+ * unset — it is then `https://api.anthropic.com`, the one host production
+ * accepts.
+ */
+export interface AnthropicSettings {
+  /** The host root; the SDK appends `/v1/messages`. */
+  baseUrl: string;
+  model: string;
+  fastModel?: string | null;
+  /** A secret. Never logged, never echoed into an error message. */
+  apiKey: string;
+  /** Where inference must run — `us` is sent as `inference_geo`; `eu` cannot be pinned. */
+  region: Region;
+  effort: LlmEffort;
+  /** `LLM_ANTHROPIC_FALLBACK`: re-run a declined request on Anthropic's recommended fallback model. */
+  fallback: boolean;
+}
+
 export interface LlmProviderOptions {
   openai: OpenAiSettings | null;
+  /** Absent means `null`: only an `anthropic` configuration carries it. */
+  anthropic?: AnthropicSettings | null;
 }
 
 /**
@@ -203,6 +267,11 @@ export function createLlmProvider(
         throw new Error('LLM_PROVIDER=openai needs LLM_API_BASE_URL, LLM_MODEL and LLM_API_KEY.');
       }
       return new OpenAiLlmProvider(options.openai, runtime);
+    case 'anthropic':
+      if (!options.anthropic) {
+        throw new Error('LLM_PROVIDER=anthropic needs LLM_MODEL and LLM_API_KEY.');
+      }
+      return new AnthropicLlmProvider(options.anthropic, runtime);
     default:
       return unhandledLlmProvider(id);
   }

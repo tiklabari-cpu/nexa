@@ -101,9 +101,12 @@ export const settings: Messages = {
   'settings.ai.provider.env': 'As the environment says',
   'settings.ai.provider.mock': 'Built-in stub (mock)',
   'settings.ai.provider.openai': 'OpenAI',
+  'settings.ai.provider.anthropic': 'Anthropic (Claude)',
   'settings.ai.baseUrl': 'Base URL',
   'settings.ai.baseUrl.hint':
     'In production: the OpenAI regional host of the region beside it — never api.openai.com.',
+  'settings.ai.baseUrl.hint.anthropic':
+    'Leave empty for https://api.anthropic.com, the only host production accepts. The host itself, without /v1.',
   'settings.ai.model': 'Model name',
   'settings.ai.modelFast': 'Fast model',
   'settings.ai.modelFast.hint': 'Classifying and summarising. Empty: the model above.',
@@ -111,6 +114,8 @@ export const settings: Messages = {
   'settings.ai.region.none': 'Not set',
   'settings.ai.region.eu': 'EU',
   'settings.ai.region.us': 'US',
+  'settings.ai.region.hint.anthropic':
+    'Claude keeps inference in the US when US is chosen. It cannot be held in the EU: production refuses EU for Claude.',
   'settings.ai.timeout': 'Timeout (ms)',
   'settings.ai.maxOutputTokens': 'Reply limit (tokens)',
   'settings.ai.limits.hint': 'Empty: the environment’s LLM_TIMEOUT_MS and LLM_MAX_OUTPUT_TOKENS.',
@@ -127,6 +132,7 @@ export const settings: Messages = {
   'settings.ai.apiKey.cancel': 'Cancel',
   'settings.ai.apiKey.tooShort': 'A key is at least 8 characters long.',
   'settings.ai.required': 'A remote provider needs a base URL, a model name and a region.',
+  'settings.ai.required.anthropic': 'Claude needs a model name and a region.',
   'settings.ai.embedding.changeWarning':
     'A new embedding provider or model means the knowledge base has to be re-embedded; until then, questions are answered from the knowledge already moved.',
   'settings.ai.caps.title': 'Daily caps (tokens)',

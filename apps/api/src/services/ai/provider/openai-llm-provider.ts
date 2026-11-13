@@ -365,7 +365,7 @@ export class OpenAiLlmProvider implements LlmProvider {
 
         const failure = result.error;
         failure.attempts = attempt;
-        const fields = { ...where, attempt, ...failureFields(failure) };
+        const fields = { ...where, attempt, ...llmFailureFields(failure) };
 
         if (
           mode === 'json_schema' &&
@@ -586,7 +586,8 @@ function readUsage(value: unknown): LlmUsage | null {
   return isCount(input) && isCount(output) ? { inputTokens: input, outputTokens: output } : null;
 }
 
-function failureFields(error: LlmProviderError): Record<string, unknown> {
+/** What a log line says about a failure — shared with the Anthropic adapter (tm 479). */
+export function llmFailureFields(error: LlmProviderError): Record<string, unknown> {
   return {
     kind: error.kind,
     transient: error.transient,

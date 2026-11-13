@@ -37,8 +37,13 @@ import { MeteredEmbeddings } from '../ai/metered-embeddings.js';
 import { billedOnFailure, llmEstimateUsage } from '../ai/metered-llm.js';
 import { createEmbeddingProvider } from '../ai/provider/create-embedding-provider.js';
 import { EmbeddingProviderError } from '../ai/provider/embedding-error.js';
+import type { EmbeddingProviderId } from '../ai/provider/embedding-provider.js';
 import { LlmProviderError } from '../ai/provider/llm-error.js';
-import { createLlmProvider, type LlmCompletionRequest } from '../ai/provider/llm-provider.js';
+import {
+  createLlmProvider,
+  type LlmCompletionRequest,
+  type LlmProviderId,
+} from '../ai/provider/llm-provider.js';
 import type { LlmLogger } from '../ai/provider/openai-llm-provider.js';
 import { embeddingSpaceOf, type PlatformAiReembedStatus } from './ai-settings.js';
 
@@ -55,6 +60,14 @@ const TEST_REQUEST: Omit<LlmCompletionRequest, 'timeoutMs'> = {
   maxOutputTokens: 5,
 };
 
+/**
+ * The test's reply ceiling for a provider whose models think before they
+ * answer and count that thinking against it (anthropic, tm 479): five tokens
+ * could be spent thinking, and the test would report a working key as
+ * `no_answer`. Still a few hundred tokens at most.
+ */
+export const AI_TEST_THINKING_MAX_OUTPUT_TOKENS = 256;
+
 /** How long the re-embedding lock lives without a refresh. */
 const REEMBED_LOCK_MS = 120_000;
 const REEMBED_REFRESH_MS = 30_000;
@@ -63,7 +76,7 @@ const REEMBED_RECORD_TTL_S = 7 * 24 * 3600;
 
 export interface AiConnectionTestResult {
   target: AiTestTarget;
-  provider: 'mock' | 'openai';
+  provider: LlmProviderId | EmbeddingProviderId;
   source: 'db' | 'env';
   model: string | null;
   ok: boolean;
@@ -78,7 +91,7 @@ export interface AiOperationsOptions {
   env: AiEnv;
   rootKey: string;
   logger: LlmLogger & AiBudgetLogger;
-  /** How the `openai` adapters reach the network — a test's recorder. */
+  /** How the remote adapters (`openai`, `anthropic`) reach the network — a test's recorder. */
   fetchImpl?: typeof fetch;
   now?: () => number;
 }
@@ -158,7 +171,13 @@ export class PlatformAiOperations {
     try {
       if (target === 'llm') {
         const provider = createLlmProvider(config.llm.provider, config.llm.options, runtime);
-        const request: LlmCompletionRequest = { ...TEST_REQUEST, timeoutMs: config.llm.timeoutMs };
+        const request: LlmCompletionRequest = {
+          ...TEST_REQUEST,
+          ...(provider.id === 'anthropic'
+            ? { maxOutputTokens: AI_TEST_THINKING_MAX_OUTPUT_TOKENS }
+            : {}),
+          timeoutMs: config.llm.timeoutMs,
+        };
         // The stub runs in this process and answers only the product's own
         // prompts: building it is the whole test.
         if (provider.id !== 'mock') {

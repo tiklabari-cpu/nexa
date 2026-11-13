@@ -122,6 +122,14 @@ export interface LlmFailureDetails {
 export const LLM_EMPTY_LENGTH_HINT =
   'the output limit ran out before any text; a reasoning model spends LLM_MAX_OUTPUT_TOKENS on reasoning, so choose a non-reasoning chat model for LLM_MODEL or raise LLM_MAX_OUTPUT_TOKENS';
 
+/**
+ * {@link LLM_EMPTY_LENGTH_HINT} for `LLM_PROVIDER=anthropic` (tm 479): a
+ * current Claude model always thinks first and its thinking counts against
+ * `max_tokens`, so "choose a non-reasoning model" is not an option there.
+ */
+export const LLM_ANTHROPIC_EMPTY_LENGTH_HINT =
+  'the output limit ran out before any text; Claude models think before they answer and that thinking counts against LLM_MAX_OUTPUT_TOKENS, so raise LLM_MAX_OUTPUT_TOKENS or lower LLM_EFFORT';
+
 export class LlmProviderError extends Error {
   override readonly name = 'LlmProviderError';
   readonly kind: LlmFailureKind;

@@ -100,9 +100,12 @@ export const settings: Messages = {
   'settings.ai.provider.env': 'Ortam ne diyorsa',
   'settings.ai.provider.mock': 'Yerleşik taklit (mock)',
   'settings.ai.provider.openai': 'OpenAI',
+  'settings.ai.provider.anthropic': 'Anthropic (Claude)',
   'settings.ai.baseUrl': 'Temel URL',
   'settings.ai.baseUrl.hint':
     'Üretimde: yanındaki bölgenin OpenAI bölgesel adresi — asla api.openai.com değil.',
+  'settings.ai.baseUrl.hint.anthropic':
+    'Boş bırakın: https://api.anthropic.com, üretimin kabul ettiği tek adres. Adresin kendisi, /v1 olmadan.',
   'settings.ai.model': 'Model adı',
   'settings.ai.modelFast': 'Hızlı model',
   'settings.ai.modelFast.hint': 'Sınıflandırma ve özetleme. Boş: yukarıdaki model.',
@@ -110,6 +113,8 @@ export const settings: Messages = {
   'settings.ai.region.none': 'Ayarlı değil',
   'settings.ai.region.eu': 'AB',
   'settings.ai.region.us': 'ABD',
+  'settings.ai.region.hint.anthropic':
+    'ABD seçilince Claude çıkarımı ABD’de tutar. AB’de tutulamaz: üretim Claude için AB’yi reddeder.',
   'settings.ai.timeout': 'Zaman aşımı (ms)',
   'settings.ai.maxOutputTokens': 'Yanıt sınırı (token)',
   'settings.ai.limits.hint': 'Boş: ortamın LLM_TIMEOUT_MS ve LLM_MAX_OUTPUT_TOKENS değerleri.',
@@ -127,6 +132,7 @@ export const settings: Messages = {
   'settings.ai.apiKey.cancel': 'Vazgeç',
   'settings.ai.apiKey.tooShort': 'Bir anahtar en az 8 karakterdir.',
   'settings.ai.required': 'Uzak bir sağlayıcı temel URL, model adı ve bölge ister.',
+  'settings.ai.required.anthropic': 'Claude bir model adı ve bölge ister.',
   'settings.ai.embedding.changeWarning':
     'Yeni bir embedding sağlayıcısı ya da modeli, bilgi tabanının yeniden gömülmesi demektir; o zamana kadar sorular taşınmış bilgiden yanıtlanır.',
   'settings.ai.caps.title': 'Günlük tavanlar (token)',

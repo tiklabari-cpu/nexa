@@ -230,7 +230,8 @@ export async function writeConversationSummary(
   switch (id) {
     case 'mock':
       return { text: summariseConversation(turns), usage: { inputTokens: 0, outputTokens: 0 } };
-    case 'openai': {
+    case 'openai':
+    case 'anthropic': {
       const { prompt, transcript } = buildSummaryPrompt(turns, options);
       if (transcript.total === 0) {
         return {

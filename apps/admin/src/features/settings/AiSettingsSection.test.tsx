@@ -150,6 +150,63 @@ describe('Settings › AI — the model and its key', () => {
     });
   });
 
+  it('offers Claude for the model only, saves it without a base URL, and explains the host and the region (tm 479)', async () => {
+    const fake = await open();
+    const form = await aiForm();
+    const model = within(form).getByRole('group', { name: 'Model' });
+    const embedding = within(form).getByRole('group', { name: 'Embedding model' });
+    expect(
+      within(embedding)
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).not.toContain('Anthropic (Claude)');
+
+    await user().selectOptions(within(model).getByLabelText('Provider'), 'anthropic');
+    expect(within(model).getByRole('option', { name: 'Anthropic (Claude)' })).toHaveProperty(
+      'selected',
+      true,
+    );
+    expect(within(model).getByLabelText('Base URL')).toHaveAccessibleDescription(
+      'Leave empty for https://api.anthropic.com, the only host production accepts. The host itself, without /v1.',
+    );
+    expect(within(model).getByLabelText('Region')).toHaveAccessibleDescription(
+      'Claude keeps inference in the US when US is chosen. It cannot be held in the EU: production refuses EU for Claude.',
+    );
+    const save = within(form).getByRole('button', { name: 'Save AI settings' });
+    expect(within(model).getByText('Claude needs a model name and a region.')).toHaveAttribute(
+      'role',
+      'alert',
+    );
+    expect(save).toBeDisabled();
+    await user().type(within(model).getByLabelText('Model name'), 'claude-opus-5-5');
+    await user().selectOptions(within(model).getByLabelText('Region'), 'us');
+    await user().type(within(model).getByLabelText('API key'), KEY);
+    expect(save).toBeEnabled();
+    await user().click(save);
+    await confirm('Moving the model to Claude');
+
+    await vi.waitFor(() =>
+      expect(sent(fake, 'PUT', '/settings/ai')).toEqual([
+        {
+          reason: 'Moving the model to Claude',
+          llm: {
+            provider: 'anthropic',
+            base_url: null,
+            model: 'claude-opus-5-5',
+            model_fast: null,
+            region: 'us',
+            timeout_ms: null,
+            max_output_tokens: null,
+            api_key: KEY,
+          },
+          embedding: null,
+          caps: null,
+          prices: null,
+        },
+      ]),
+    );
+  });
+
   it('holds the save back while a remote model lacks its region, a key is too short, or the caps are half filled', async () => {
     await open();
     const form = await aiForm();

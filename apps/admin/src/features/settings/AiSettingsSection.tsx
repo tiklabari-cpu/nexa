@@ -38,8 +38,18 @@ import {
 /** The embedding width the schema fixes (`knowledge_chunks.embedding vector(1536)`). */
 export const EMBEDDING_WIDTH = 1536;
 
-type Choice = 'env' | 'mock' | 'openai';
+type Choice = 'env' | 'mock' | 'openai' | 'anthropic';
 type Region = '' | 'eu' | 'us';
+
+/**
+ * What each part may be set to. Claude (`anthropic`, tm 479) writes replies only — Anthropic has
+ * no embedding endpoint, so the embedding model stays on OpenAI or the stub.
+ */
+const LLM_CHOICES = ['env', 'mock', 'openai', 'anthropic'] as const;
+const EMBEDDING_CHOICES = ['env', 'mock', 'openai'] as const;
+
+/** A provider reached over the network — it needs a key and, except Claude, a base URL. */
+const isRemote = (choice: Choice): boolean => choice === 'openai' || choice === 'anthropic';
 
 /** What happens to the stored key on save. */
 export interface KeyEdit {
@@ -58,7 +68,13 @@ export interface AiDraft {
     maxOutputTokens: string;
     key: KeyEdit;
   };
-  embedding: { choice: Choice; baseUrl: string; model: string; region: Region; key: KeyEdit };
+  embedding: {
+    choice: (typeof EMBEDDING_CHOICES)[number];
+    baseUrl: string;
+    model: string;
+    region: Region;
+    key: KeyEdit;
+  };
   caps: {
     llmWorkspace: string;
     llmGlobal: string;
@@ -177,9 +193,12 @@ export function draftProblems(
   draft: AiDraft,
 ): Array<'llm' | 'embedding' | 'key' | 'caps' | 'prices'> {
   const problems: Array<'llm' | 'embedding' | 'key' | 'caps' | 'prices'> = [];
+  // Claude's base URL may stay empty: the server uses Anthropic's API host (tm 479).
   const remote = (part: { choice: Choice; baseUrl: string; model: string; region: Region }) =>
-    part.choice === 'openai' &&
-    (part.baseUrl.trim() === '' || part.model.trim() === '' || part.region === '');
+    isRemote(part.choice) &&
+    ((part.choice === 'openai' && part.baseUrl.trim() === '') ||
+      part.model.trim() === '' ||
+      part.region === '');
   if (
     remote(draft.llm) ||
     !positiveInt(draft.llm.timeoutMs) ||
@@ -270,6 +289,7 @@ function AiSettingsForm({
           <PartFields
             part="llm"
             title={t('settings.ai.llm.title')}
+            choices={LLM_CHOICES}
             source={settings.source.llm}
             draft={draft.llm}
             last4={settings.llm?.api_key_last4 ?? null}
@@ -306,6 +326,7 @@ function AiSettingsForm({
           <PartFields
             part="embedding"
             title={t('settings.ai.embedding.title')}
+            choices={EMBEDDING_CHOICES}
             source={settings.source.embedding}
             draft={draft.embedding}
             last4={settings.embedding?.api_key_last4 ?? null}
@@ -406,6 +427,7 @@ function AiSettingsForm({
 function PartFields({
   part,
   title,
+  choices,
   source,
   draft,
   last4,
@@ -415,16 +437,19 @@ function PartFields({
 }: {
   part: 'llm' | 'embedding';
   title: string;
+  choices: readonly Choice[];
   source: 'db' | 'env';
   draft: { choice: Choice; baseUrl: string; model: string; region: Region; key: KeyEdit };
   last4: string | null;
   invalid: boolean;
-  onChange: (patch: Partial<AiDraft['llm']> & Partial<AiDraft['embedding']>) => void;
+  /** `choice` is one of `choices` — the select offers nothing else. */
+  onChange: (patch: Partial<Omit<AiDraft['llm'], 'choice'>> & { choice?: Choice }) => void;
   children?: ReactNode;
 }): ReactElement {
   const t = useTranslate();
   const id = (field: string) => `settings-ai-${part}-${field}`;
-  const remote = draft.choice === 'openai';
+  const remote = isRemote(draft.choice);
+  const claude = draft.choice === 'anthropic';
   return (
     <fieldset className="flex flex-col gap-3 rounded-md border border-border p-3">
       <legend className="px-1 text-sm font-semibold">{title}</legend>
@@ -448,7 +473,7 @@ function PartFields({
           onChange={(event) => onChange({ choice: event.target.value as Choice })}
           className={cn(FIELD_CLASS, 'max-w-sm')}
         >
-          {(['env', 'mock', 'openai'] as const).map((choice) => (
+          {choices.map((choice) => (
             <option key={choice} value={choice}>
               {t(`settings.ai.provider.${choice}`)}
             </option>
@@ -461,7 +486,7 @@ function PartFields({
             <TextField
               id={id('base-url')}
               label={t('settings.ai.baseUrl')}
-              hint={t('settings.ai.baseUrl.hint')}
+              hint={t(claude ? 'settings.ai.baseUrl.hint.anthropic' : 'settings.ai.baseUrl.hint')}
               value={draft.baseUrl}
               onChange={(value) => onChange({ baseUrl: value })}
             />
@@ -479,6 +504,7 @@ function PartFields({
                 id={id('region')}
                 value={draft.region}
                 onChange={(event) => onChange({ region: event.target.value as Region })}
+                {...(claude ? { 'aria-describedby': `${id('region')}-hint` } : {})}
                 className={FIELD_CLASS}
               >
                 {(['', 'eu', 'us'] as const).map((region) => (
@@ -487,6 +513,11 @@ function PartFields({
                   </option>
                 ))}
               </select>
+              {claude && (
+                <p id={`${id('region')}-hint`} className="mt-1 text-xs text-content-secondary">
+                  {t('settings.ai.region.hint.anthropic')}
+                </p>
+              )}
             </div>
           </div>
           {remote && (
@@ -499,7 +530,7 @@ function PartFields({
           )}
           {invalid && (
             <p role="alert" className="text-xs text-danger">
-              {t('settings.ai.required')}
+              {t(claude ? 'settings.ai.required.anthropic' : 'settings.ai.required')}
             </p>
           )}
           {children}

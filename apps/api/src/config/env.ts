@@ -16,9 +16,14 @@ import {
   EMBEDDING_PROVIDERS,
   type EmbeddingProviderOptions,
 } from '../services/ai/provider/embedding-provider.js';
-import { LLM_PROVIDERS, type LlmProviderOptions } from '../services/ai/provider/llm-provider.js';
+import {
+  LLM_PROVIDERS,
+  readAnthropicTuning,
+  type LlmProviderOptions,
+} from '../services/ai/provider/llm-provider.js';
 import { RETRIEVAL_THRESHOLD } from '../services/ai/knowledge-service.js';
 import {
+  defaultLlmBaseUrl,
   embeddingEndpointProblem,
   llmEndpointProblem,
 } from '../services/ai/provider/provider-hosts.js';
@@ -911,6 +916,9 @@ export const envSchema = z.object({
    * is the chat adapter (tm 255.6, `services/ai/provider/openai-llm-provider.ts`)
    * and needs the three `LLM_API_*`/`LLM_MODEL` keys below; without them it
    * refuses to boot rather than quietly running the stub (`createLlmProvider`).
+   * `anthropic` is the Claude adapter (tm 479, `anthropic-llm-provider.ts`):
+   * `LLM_MODEL` and `LLM_API_KEY`, with `LLM_API_BASE_URL` defaulting to
+   * Anthropic's API host and `LLM_EFFORT` / `LLM_ANTHROPIC_FALLBACK` below.
    */
   LLM_PROVIDER: z.enum(LLM_PROVIDERS).default('mock'),
   /**
@@ -925,7 +933,9 @@ export const envSchema = z.object({
    * The provider's `/v1` base URL. Its host has to be the regional host that
    * matches `LLM_PROVIDER_REGION` in production (`productionProblems`,
    * `services/ai/provider/provider-hosts.ts`); the schema only asks for a URL,
-   * so a developer can point it anywhere locally.
+   * so a developer can point it anywhere locally. For `anthropic` it is the
+   * host root (the SDK adds `/v1/messages`) and may be left unset:
+   * `https://api.anthropic.com`.
    */
   LLM_API_BASE_URL: z.string().url().optional(),
   /** The model id. The operator's choice; the code names none. */
@@ -947,6 +957,28 @@ export const envSchema = z.object({
    * reason. Its value is never logged, echoed or written anywhere but `.env`.
    */
   LLM_API_KEY: z.string().min(1).optional(),
+  /**
+   * How hard a Claude model thinks before it answers — `low`, `medium` or
+   * `high`, sent as `output_config.effort` (tm 479). Read only while
+   * `LLM_PROVIDER=anthropic`: unset is `low` (a support reply, not research);
+   * any other value refuses the boot then, and is ignored for every other
+   * provider (`readAnthropicTuning`). Not a secret.
+   */
+  LLM_EFFORT: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.string().optional(),
+  ),
+  /**
+   * `LLM_PROVIDER=anthropic` only (tm 479): `true` (the default) sends
+   * `fallbacks: 'default'`, so a request a Claude model's safety classifier
+   * declines is re-run by Anthropic on the model it recommends for that
+   * refusal; `false` lets the refusal stand (the conversation goes to a
+   * human). Anything else refuses the boot while `anthropic` is the provider.
+   */
+  LLM_ANTHROPIC_FALLBACK: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.string().optional(),
+  ),
   /**
    * How long one inference may take before it is abandoned. Handed to the
    * provider on every call (`LlmCompletionRequest.timeoutMs`).
@@ -1655,9 +1687,12 @@ function productionProblems(env: z.infer<typeof envSchema>): string[] {
   // which is true for the stub and an unchecked claim about anyone else
   // (NFR-C4 · ADR §7). The declaration is then checked against the host the
   // requests actually go to. Key names only, never values — as above.
+  // `anthropic` has a default base URL (its one API host, tm 479), so only
+  // its other three keys are required; the default is checked like a set one.
   if (env.LLM_PROVIDER !== 'mock') {
+    const defaultBaseUrl = defaultLlmBaseUrl(env.LLM_PROVIDER);
     const required = [
-      'LLM_API_BASE_URL',
+      ...(defaultBaseUrl ? [] : (['LLM_API_BASE_URL'] as const)),
       'LLM_MODEL',
       'LLM_API_KEY',
       'LLM_PROVIDER_REGION',
@@ -1670,12 +1705,9 @@ function productionProblems(env: z.infer<typeof envSchema>): string[] {
     if (env.LLM_API_KEY?.startsWith('dev-only-')) {
       problems.push('LLM_API_KEY still holds its development placeholder value.');
     }
-    if (env.LLM_API_BASE_URL && env.LLM_PROVIDER_REGION) {
-      const endpoint = llmEndpointProblem(
-        env.LLM_PROVIDER,
-        env.LLM_API_BASE_URL,
-        env.LLM_PROVIDER_REGION,
-      );
+    const baseUrl = env.LLM_API_BASE_URL ?? defaultBaseUrl;
+    if (baseUrl && env.LLM_PROVIDER_REGION) {
+      const endpoint = llmEndpointProblem(env.LLM_PROVIDER, baseUrl, env.LLM_PROVIDER_REGION);
       if (endpoint) problems.push(endpoint);
     }
   }
@@ -1969,9 +2001,28 @@ function mailOptions(env: z.infer<typeof envSchema>): MailerOptions {
  * `env.llm` — the single assembly of `LlmProviderOptions` (tm 255.5), on
  * `mailOptions`' terms: `openai` is `null` unless it is the provider and all
  * three of its keys are present, and `createLlmProvider` refuses a `null`.
+ * `anthropic` (tm 479) the same with two keys — model and key; its base URL
+ * defaults to Anthropic's API host and its region to this process's own, as
+ * `LLM_PROVIDER_REGION` does for the residency gate.
  */
 function llmOptions(env: z.infer<typeof envSchema>): LlmProviderOptions {
   const { LLM_API_BASE_URL, LLM_MODEL, LLM_API_KEY } = env;
+  if (env.LLM_PROVIDER === 'anthropic') {
+    if (!LLM_MODEL || !LLM_API_KEY) return { openai: null, anthropic: null };
+    const { effort, fallback } = readAnthropicTuning(env);
+    return {
+      openai: null,
+      anthropic: {
+        baseUrl: LLM_API_BASE_URL ?? defaultLlmBaseUrl('anthropic')!,
+        model: LLM_MODEL,
+        fastModel: env.LLM_MODEL_FAST ?? null,
+        apiKey: LLM_API_KEY,
+        region: env.LLM_PROVIDER_REGION ?? env.SIYAHTUS_REGION,
+        effort,
+        fallback,
+      },
+    };
+  }
   if (env.LLM_PROVIDER !== 'openai' || !LLM_API_BASE_URL || !LLM_MODEL || !LLM_API_KEY) {
     return { openai: null };
   }
@@ -2148,6 +2199,17 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
     throw new Error(
       "Invalid environment:\n  DATABASE_REPLICA_URL connects as the table owner while DATABASE_APP_URL does not: Postgres exempts owners from row level security, so report queries on the replica would return every tenant's rows.",
     );
+  }
+
+  // Every environment, but only while Claude is the provider (tm 479): an
+  // effort or fallback value the adapter cannot send is a configuration that
+  // would otherwise run on a default nobody chose. For any other provider the
+  // two keys are not read and cannot stop a boot.
+  if (env.LLM_PROVIDER === 'anthropic') {
+    const { problems } = readAnthropicTuning(env);
+    if (problems.length > 0) {
+      throw new Error(`Invalid environment:\n${problems.map((p) => `  ${p}`).join('\n')}`);
+    }
   }
 
   const appsLive = resolveAppsLive(env);

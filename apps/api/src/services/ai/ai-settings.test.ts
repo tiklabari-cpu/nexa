@@ -127,6 +127,43 @@ describe('resolveAiConfig — the database first, then the environment', () => {
     });
   });
 
+  it('builds a stored anthropic row: the default host when none is stored, the row’s region, the environment’s effort and fallback (tm 479)', () => {
+    const row = llmRow({
+      provider: 'anthropic',
+      base_url: null,
+      model: 'claude-opus-5-5',
+      model_fast: 'claude-haiku-5-5',
+      region: 'us',
+    });
+    const config = resolveAiConfig(
+      { ...NO_STORED_AI_SETTINGS, llm: row },
+      { ...ENV, LLM_EFFORT: 'medium', LLM_ANTHROPIC_FALLBACK: 'false' },
+      ROOT,
+    );
+    expect(config.warnings).toEqual([]);
+    expect(config.llm).toMatchObject({ source: 'db', provider: 'anthropic', region: 'us' });
+    expect(config.llm.options).toEqual({
+      openai: null,
+      anthropic: {
+        baseUrl: 'https://api.anthropic.com',
+        model: 'claude-opus-5-5',
+        fastModel: 'claude-haiku-5-5',
+        apiKey: KEY,
+        region: 'us',
+        effort: 'medium',
+        fallback: false,
+      },
+    });
+    // Without a model it is not a configuration, whatever the default host.
+    const half = resolveAiConfig(
+      { ...NO_STORED_AI_SETTINGS, llm: { ...row, model: null } },
+      ENV,
+      ROOT,
+    );
+    expect(half.llm.source).toBe('env');
+    expect(half.warnings).toEqual(['ai.llm names anthropic without a base URL and model']);
+  });
+
   it('uses the environment’s key for a stored row without one, and falls back whole without either', () => {
     const keyless = { ...NO_STORED_AI_SETTINGS, llm: llmRow({ api_key_ciphertext: null }) };
     const withEnvKey = resolveAiConfig(keyless, { ...ENV, LLM_API_KEY: 'sk-env-only-key' }, ROOT);
@@ -227,5 +264,46 @@ describe('aiSettingsProblems — what a write is refused for', () => {
     expect(aiSettingsProblems({ llm: us, embedding: null }, pilot)).toEqual([
       expect.stringMatching(/^llm\.region must equal SIYAHTUS_REGION \(eu\)/),
     ]);
+  });
+
+  describe('anthropic (tm 479)', () => {
+    const claude = (overrides: Partial<StoredAiLlm> = {}) =>
+      llmRow({
+        provider: 'anthropic',
+        base_url: null,
+        model: 'claude-opus-5-5',
+        region: 'us',
+        ...overrides,
+      });
+
+    it('needs a model and a region but no base URL', () => {
+      expect(aiSettingsProblems({ llm: claude(), embedding: null }, dev)).toEqual([]);
+      expect(aiSettingsProblems({ llm: claude(), embedding: null }, production)).toEqual([]);
+      expect(
+        aiSettingsProblems({ llm: claude({ model: null, region: null }), embedding: null }, dev),
+      ).toEqual(['llm: model, region required for provider anthropic.']);
+    });
+
+    it('refuses eu and any host but Anthropic’s in production, and lets a dev box point anywhere', () => {
+      expect(
+        aiSettingsProblems({ llm: claude({ region: 'eu' }), embedding: null }, production),
+      ).toEqual([
+        expect.stringMatching(
+          /^llm: LLM_PROVIDER_REGION=eu cannot be kept with LLM_PROVIDER=anthropic/,
+        ),
+      ]);
+      expect(
+        aiSettingsProblems(
+          { llm: claude({ base_url: 'https://proxy.example.test' }), embedding: null },
+          production,
+        ),
+      ).toEqual([expect.stringMatching(/^llm: .*not Anthropic's API host/)]);
+      expect(
+        aiSettingsProblems(
+          { llm: claude({ base_url: 'http://127.0.0.1:9', region: 'eu' }), embedding: null },
+          dev,
+        ),
+      ).toEqual([]);
+    });
   });
 });
